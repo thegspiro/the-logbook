@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.
@@ -622,14 +623,6 @@ const runPreflight = (
   return { headerRow, total: dataRecords.length, valid, invalid };
 };
 
-const escapeCell = (value: string): string => {
-  // Spreadsheet applications can execute cells beginning with these characters
-  // as formulas. A leading apostrophe makes the value literal when the CSV is
-  // opened in a spreadsheet while leaving the user-supplied text visible.
-  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safeValue) ? `"${safeValue.replace(/"/g, '""')}"` : safeValue;
-};
-
 /**
  * The rejected rows, with spreadsheet formula prefixes neutralized and the
  * reasons in a leading column.
@@ -640,23 +633,8 @@ const escapeCell = (value: string): string => {
  * and because it holds only the failures, re-uploading cannot collide with the
  * members that imported successfully.
  */
-const buildErrorReport = (headerRow: string[], issues: RowIssue[]): string => {
-  const header = ['errorReason', ...headerRow].map(escapeCell).join(',');
-  const rows = issues.map((issue) => [issue.reasons.join(' | '), ...issue.cells].map(escapeCell).join(','));
-  return [header, ...rows].join('\r\n');
-};
-
-const downloadCsv = (contents: string, filename: string): void => {
-  const blob = new Blob([contents], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
-};
+const buildErrorReport = (headerRow: string[], issues: RowIssue[]): string =>
+  buildCsv([['errorReason', ...headerRow], ...issues.map((issue) => [issue.reasons.join(' | '), ...issue.cells])]);
 
 const ImportMembers: React.FC = () => {
   const navigate = useNavigate();
@@ -935,9 +913,9 @@ const ImportMembers: React.FC = () => {
   };
 
   const downloadTemplate = () => {
-    const exampleRow = TEMPLATE_HEADERS.map((h) => escapeCell(TEMPLATE_EXAMPLE[h]));
+    const exampleRow = TEMPLATE_HEADERS.map((h) => TEMPLATE_EXAMPLE[h]);
 
-    downloadCsv([TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n'), 'member-import-template.csv');
+    downloadCsv(buildCsv([TEMPLATE_HEADERS, exampleRow]), 'member-import-template.csv');
 
     toast.success('Template downloaded!');
   };

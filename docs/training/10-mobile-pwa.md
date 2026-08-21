@@ -744,7 +744,7 @@ Sarah taps **Check Out**, selects herself as the borrower (her name is pre-fille
 
 > **Corrected 2026-08-12.** The item detail page has **no Check Out button**.
 > Its actions are Back, Print Barcode and (for a manager) Edit. A checkout is
-> made against a _member_, from **Inventory Admin > Members > Assign** — which
+> made against a _member_, from **Gear Admin > Members > Assign** — which
 > is why the walkthrough above has Sarah select herself as the borrower.
 
 ### Part 3: Offline Training Submission (Afternoon — No Signal)

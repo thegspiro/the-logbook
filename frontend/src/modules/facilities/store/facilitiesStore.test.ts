@@ -15,7 +15,8 @@ const mockArchiveFacility = vi.fn();
 const mockRestoreFacility = vi.fn();
 const mockGetMaintenanceRecords = vi.fn();
 const mockGetInspections = vi.fn();
-const mockGetDashboardCounts = vi.fn();
+const mockGetFacilitiesPage = vi.fn();
+const mockGetDashboard = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
@@ -33,13 +34,13 @@ vi.mock('../../../services/api', () => ({
     restoreFacility: (...args: unknown[]) => mockRestoreFacility(...args) as unknown,
     getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
     getInspections: (...args: unknown[]) => mockGetInspections(...args) as unknown,
-    getDashboardCounts: (...args: unknown[]) => mockGetDashboardCounts(...args) as unknown,
+    getFacilitiesPage: (...args: unknown[]) => mockGetFacilitiesPage(...args) as unknown,
+    getDashboard: (...args: unknown[]) => mockGetDashboard(...args) as unknown,
   },
 }));
 
 // Import store AFTER mocks
 import { useFacilitiesStore } from './facilitiesStore';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
 
 const mockFacility = {
   id: 'f1',
@@ -64,6 +65,7 @@ describe('facilitiesStore', () => {
     vi.clearAllMocks();
     useFacilitiesStore.setState({
       facilities: [],
+      facilitiesTotal: 0,
       facilityTypes: [],
       facilityStatuses: [],
       maintenanceTypes: [],
@@ -158,14 +160,15 @@ describe('facilitiesStore', () => {
 
   describe('loadDashboardStats', () => {
     it('uses unpaginated API counts instead of list lengths', async () => {
-      mockGetFacilities.mockResolvedValue([mockFacility, mockFacility2]);
-      mockGetMaintenanceRecords.mockResolvedValue([]);
-      mockGetInspections.mockResolvedValue([]);
-      mockGetDashboardCounts.mockResolvedValue({
+      mockGetFacilitiesPage.mockResolvedValue({ items: [mockFacility, mockFacility2], total: 125, skip: 0, limit: 24 });
+      mockGetDashboard.mockResolvedValue({
         totalFacilities: 125,
         operationalFacilities: 98,
         overdueMaintenance: 17,
         upcomingInspections: 9,
+        overdueMaintenanceRecords: [],
+        upcomingInspectionRecords: [],
+        recentMaintenanceCompletions: [],
       });
 
       await useFacilitiesStore.getState().loadDashboardStats();
@@ -178,30 +181,31 @@ describe('facilitiesStore', () => {
       });
     });
 
-    it('lists a today-dated inspection as upcoming, matching the backend count date semantics', async () => {
-      mockGetFacilities.mockResolvedValue([]);
-      mockGetMaintenanceRecords.mockResolvedValue([]);
-      mockGetInspections.mockResolvedValue([
-        {
-          id: 'insp-today',
-          facilityId: 'f1',
-          title: 'Annual fire inspection',
-          nextInspectionDate: getTodayLocalDate(),
-        },
-        { id: 'insp-past', facilityId: 'f1', title: 'Last year', nextInspectionDate: '2020-01-01' },
-        { id: 'insp-far', facilityId: 'f1', title: 'Beyond 30 days', nextInspectionDate: '2999-01-01' },
-      ]);
-      mockGetDashboardCounts.mockResolvedValue({
+    it('uses server-provided previews with facility names', async () => {
+      mockGetFacilitiesPage.mockResolvedValue({ items: [], total: 1, skip: 0, limit: 24 });
+      mockGetDashboard.mockResolvedValue({
         totalFacilities: 1,
         operationalFacilities: 1,
         overdueMaintenance: 0,
         upcomingInspections: 1,
+        overdueMaintenanceRecords: [],
+        upcomingInspectionRecords: [
+          {
+            id: 'insp-upcoming',
+            facilityId: 'f1',
+            facilityName: 'Station 1',
+            title: 'Annual fire inspection',
+            nextInspectionDate: '2026-08-21',
+          },
+        ],
+        recentMaintenanceCompletions: [],
       });
 
       await useFacilitiesStore.getState().loadDashboardStats();
 
-      const stats = useFacilitiesStore.getState().dashboardStats;
-      expect(stats?.upcomingInspections.map((i) => i.id)).toEqual(['insp-today']);
+      expect(useFacilitiesStore.getState().dashboardStats?.upcomingInspections).toEqual([
+        expect.objectContaining({ id: 'insp-upcoming', facilityName: 'Station 1' }),
+      ]);
     });
   });
 

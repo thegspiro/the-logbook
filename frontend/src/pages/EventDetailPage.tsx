@@ -46,6 +46,7 @@ import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModa
 import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
+import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -76,9 +77,28 @@ const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
   'series_end_reminder_sent',
 ]);
 
-/** True when the column holds anything the Event Details card would draw. */
-const hasVisibleCustomFields = (fields: Record<string, unknown>): boolean =>
-  Object.keys(fields).some((key) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key));
+const DISPLAYED_TRAINING_FIELD_KEYS = [
+  'course_name',
+  'course_code',
+  'credit_hours',
+  'training_type',
+  'instructor',
+  'issuing_agency',
+  'expiration_months',
+  'issues_certification',
+  'auto_create_records',
+] as const;
+
+/** True when the column holds anything the details card would draw. */
+const hasVisibleCustomFields = (event: Event): boolean => {
+  const fields = event.custom_fields;
+  if (!fields) return false;
+
+  return (
+    Object.keys(fields).some((key) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key)) ||
+    (event.event_type === EventTypeEnum.TRAINING && DISPLAYED_TRAINING_FIELD_KEYS.some((key) => Boolean(fields[key])))
+  );
+};
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -608,18 +628,9 @@ export const EventDetailPage: React.FC = () => {
       String(r.guest_count ?? 0),
       r.checked_in ? 'Yes' : 'No',
       r.checked_in_at ? formatDateTime(r.checked_in_at, tz) : '',
-      (r.notes || '').replace(/"/g, '""'),
+      r.notes || '',
     ]);
-    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_attendance.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadCsv(buildCsv([headers, ...rows]), `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_attendance.csv`);
   };
 
   // Compute series navigation (prev/next occurrence)
@@ -1077,7 +1088,7 @@ export const EventDetailPage: React.FC = () => {
                 the column being non-empty drew an empty purple card for any
                 event the scheduler had touched, since its bookkeeping keys
                 count towards the length but never render. */}
-            {event.custom_fields && hasVisibleCustomFields(event.custom_fields) && (
+            {event.custom_fields && hasVisibleCustomFields(event) && (
               <div className="bg-theme-surface rounded-lg border-l-4 border-purple-600 p-6 shadow-sm backdrop-blur-xs">
                 <div className="mb-4 flex items-center">
                   <svg

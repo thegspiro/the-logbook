@@ -20,6 +20,7 @@ import type {
   SwapRequestCreate,
   SwapRequestReview,
   SwapRequestFilters,
+  PaginatedResponse,
   TimeOffCreate,
   TimeOffReview,
   TimeOffFilters,
@@ -608,9 +609,9 @@ export const schedulingService = {
   },
 
   // Swap Requests
-  async getSwapRequests(params?: SwapRequestFilters): Promise<SchedulingSwapRequest[]> {
-    const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });
-    return asArray(response.data);
+  async getSwapRequests(params?: SwapRequestFilters): Promise<PaginatedResponse<SchedulingSwapRequest>> {
+    const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', { params });
+    return response.data;
   },
   async createSwapRequest(data: SwapRequestCreate): Promise<SchedulingSwapRequest> {
     const response = await api.post<SchedulingSwapRequest>('/scheduling/swap-requests', data);
@@ -625,9 +626,9 @@ export const schedulingService = {
   },
 
   // Time Off
-  async getTimeOffRequests(params?: TimeOffFilters): Promise<SchedulingTimeOffRequest[]> {
-    const response = await api.get<SchedulingTimeOffRequest[]>('/scheduling/time-off', { params });
-    return asArray(response.data);
+  async getTimeOffRequests(params?: TimeOffFilters): Promise<PaginatedResponse<SchedulingTimeOffRequest>> {
+    const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', { params });
+    return response.data;
   },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
     const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);

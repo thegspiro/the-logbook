@@ -183,7 +183,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <div className="card-secondary hscroll flex space-x-1 p-1">
+        <div className="segmented-group-secondary hscroll flex space-x-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}

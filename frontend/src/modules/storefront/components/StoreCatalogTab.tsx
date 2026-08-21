@@ -90,7 +90,7 @@ export const StoreCatalogTab: React.FC = () => {
             <div key={product.id} className="card-secondary p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="text-theme-text-primary truncate text-sm font-semibold">{product.name}</h3>
+                  <h3 className="text-theme-text-primary line-clamp-2 text-sm font-semibold">{product.name}</h3>
                   <p className="text-theme-text-muted text-xs">
                     {product.category ?? 'Uncategorized'}
                     {product.sku ? ` · ${product.sku}` : ''}

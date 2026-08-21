@@ -151,6 +151,27 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.getByText('0/1')).toBeInTheDocument();
   });
 
+  it('does not submit caption rows as unchecked items', async () => {
+    const user = userEvent.setup();
+    const templateWithCaption = template({ quantityOnTruck: 4 });
+    templateWithCaption.compartments[0].items.push({
+      ...templateWithCaption.compartments[0].items[0],
+      id: 'ti-caption',
+      name: 'Confirm the seal is intact before continuing.',
+      sortOrder: 1,
+      checkType: 'text',
+    });
+    renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={templateWithCaption as never} />);
+
+    await user.click(await screen.findByDisplayValue('4'));
+    await user.click(screen.getByRole('button', { name: 'Submit Report' }));
+
+    await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
+    const payload = mockSubmitCheck.mock.calls[0][1];
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0].template_item_id).toBe('ti-1');
+  });
+
   it('states the carry-over once rather than on every row', async () => {
     render({ quantityOnTruck: 4 });
     await screen.findByDisplayValue('4');

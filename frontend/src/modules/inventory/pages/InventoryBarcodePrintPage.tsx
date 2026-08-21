@@ -1006,7 +1006,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
                 <Settings2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Settings</span>
+                <span className="sr-only sm:not-sr-only">Settings</span>
               </button>
               <button
                 onClick={() => {

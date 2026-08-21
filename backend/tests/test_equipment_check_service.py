@@ -183,6 +183,208 @@ class TestStandaloneTemplateVisibility:
         mock_db.commit.assert_not_awaited()
 
 
+class TestAuthoritativeCheckTiming:
+    """Stored timing comes from the selected template, never the request."""
+
+    async def test_shift_check_discards_timing_that_differs_from_template(
+        self, service, mock_db
+    ):
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = MagicMock(
+            id="shift-1", shift_officer_id="manager-1", apparatus_id=None
+        )
+        mock_db.execute.return_value = shift_result
+        template = MagicMock(id="tmpl-1", check_timing="end_of_shift")
+
+        # Stop after template selection: the request value must not be read or
+        # rejected, because the public request schema no longer exposes it.
+        with (
+            patch.object(
+                service, "_resolve_templates", AsyncMock(return_value=[template])
+            ),
+            patch.object(service, "_validate_and_snapshot_submission"),
+            patch.object(
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
+            ),
+            patch.object(
+                service,
+                "complete_incomplete_check",
+                AsyncMock(return_value=MagicMock()),
+            ) as complete,
+        ):
+            existing = MagicMock(id="check-1", overall_status="incomplete")
+            existing_result = MagicMock()
+            existing_result.scalars.return_value.first.return_value = existing
+            mock_db.execute.side_effect = [shift_result, existing_result]
+            await service.submit_check(
+                "shift-1",
+                "org-1",
+                "manager-1",
+                {
+                    "template_id": "tmpl-1",
+                    "check_timing": "start_of_shift",
+                    "items": [{"status": "pass"}],
+                },
+            )
+
+        assert "check_timing" not in complete.await_args.kwargs["data"]
+
+    async def test_standalone_check_stores_template_timing(self, service, mock_db):
+        template = MagicMock(
+            id="tmpl-1",
+            is_active=True,
+            apparatus_id=None,
+            check_timing="end_of_shift",
+        )
+        template_result = MagicMock()
+        template_result.scalars.return_value.first.return_value = template
+        mock_db.execute.return_value = template_result
+        stored = []
+        mock_db.add = MagicMock(side_effect=stored.append)
+
+        with (
+            patch.object(
+                service,
+                "_load_template_items_map",
+                AsyncMock(return_value={"item-1": MagicMock()}),
+            ),
+            patch.object(
+                service, "_compute_check_status", return_value=(1, 1, 0, "pass")
+            ),
+            patch.object(service, "_create_check_items", AsyncMock()),
+            patch.object(service, "_update_apparatus_deficiency", AsyncMock()),
+            patch.object(service, "get_check", AsyncMock(return_value=MagicMock())),
+        ):
+            await service.submit_standalone_check(
+                "org-1",
+                "user-1",
+                {
+                    "template_id": "tmpl-1",
+                    "items": [
+                        {
+                            "template_item_id": "item-1",
+                            "item_name": "SCBA",
+                            "status": "pass",
+                        }
+                    ],
+                },
+            )
+
+        assert stored[0].check_timing == "end_of_shift"
+
+    async def test_completion_repairs_legacy_timing_from_template(
+        self, service, mock_db
+    ):
+        item = MagicMock(
+            template_item_id="item-1",
+            status="not_checked",
+            is_expired=False,
+            required_quantity=None,
+            quantity_found=None,
+            level_reading=None,
+            notes=None,
+            serial_found=None,
+            lot_found=None,
+            expiration_found=None,
+            expiration_date=None,
+        )
+        check = MagicMock(
+            id="check-1",
+            checked_by="user-1",
+            overall_status="incomplete",
+            template_id="tmpl-1",
+            check_timing="start_of_shift",
+            items=[item],
+        )
+        check_result = MagicMock()
+        check_result.scalars.return_value.first.return_value = check
+        template_result = MagicMock()
+        template_result.scalars.return_value.first.return_value = MagicMock(
+            check_timing="end_of_shift"
+        )
+        mock_db.execute.side_effect = [check_result, template_result]
+
+        with (
+            patch.object(
+                service,
+                "_load_checkable_template_items",
+                AsyncMock(return_value={"item-1": MagicMock()}),
+            ),
+            patch.object(service, "get_check", AsyncMock(return_value=check)),
+            patch.object(
+                service, "_apply_found_values_to_template", return_value=False
+            ),
+            patch.object(service, "_resolve_expiration", return_value=None),
+        ):
+            await service.complete_incomplete_check(
+                "check-1",
+                "org-1",
+                "user-1",
+                {"items": [{"template_item_id": "item-1", "status": "pass"}]},
+            )
+
+        assert check.check_timing == "end_of_shift"
+        assert check.overall_status == "pass"
+
+
+class TestShiftCheckCompletionStatus:
+    """A row is complete only after it has left the draft state."""
+
+    @pytest.mark.parametrize(
+        ("overall_status", "expected_completed"),
+        [
+            pytest.param(None, False, id="missing"),
+            pytest.param("incomplete", False, id="incomplete"),
+            pytest.param("pass", True, id="passing"),
+            pytest.param("fail", True, id="failing"),
+        ],
+    )
+    async def test_get_shift_check_status_uses_canonical_completion_predicate(
+        self, service, mock_db, overall_status, expected_completed
+    ):
+        shift = SimpleNamespace(id="shift-1")
+        template = SimpleNamespace(
+            id="tmpl-1",
+            name="End check",
+            check_timing="end_of_shift",
+            assigned_positions=[],
+            compartments=[],
+        )
+        check = None
+        if overall_status is not None:
+            check = SimpleNamespace(
+                template_id="tmpl-1",
+                overall_status=overall_status,
+                checked_by=None,
+                checked_at=None,
+                total_items=2,
+                completed_items=1 if overall_status == "incomplete" else 2,
+                failed_items=1 if overall_status == "fail" else 0,
+            )
+
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        checks_result = MagicMock()
+        checks_result.scalars.return_value.all.return_value = [check] if check else []
+        mock_db.execute.side_effect = [shift_result, checks_result]
+
+        with (
+            patch.object(
+                service,
+                "_resolve_templates",
+                new_callable=AsyncMock,
+                return_value=[template],
+            ),
+            patch.object(
+                service, "_get_user_name_map", new_callable=AsyncMock, return_value={}
+            ),
+        ):
+            summaries = await service.get_shift_check_status("shift-1", "org-1")
+
+        assert summaries[0]["is_completed"] is expected_completed
+        assert summaries[0]["overall_status"] == overall_status
+
+
 class TestUpdateItemCompartmentValidation:
     """update_item must validate a reassigned compartment_id in-org — moving an
     item to a foreign compartment transfers it (with the caller's content) into
@@ -343,6 +545,10 @@ class TestSubmitCheckResumeOverride:
                 "_resolve_templates",
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
             ),
+            patch.object(service, "_validate_and_snapshot_submission"),
+            patch.object(
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
+            ),
             patch.object(
                 service,
                 "complete_incomplete_check",
@@ -377,6 +583,10 @@ class TestSubmitCheckResumeOverride:
                 service,
                 "_resolve_templates",
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
+            ),
+            patch.object(service, "_validate_and_snapshot_submission"),
+            patch.object(
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
             ),
             patch.object(
                 service,
@@ -414,8 +624,9 @@ class TestFailureAlertDetails:
                 "_resolve_templates",
                 AsyncMock(return_value=[MagicMock(id="tmpl-1")]),
             ),
+            patch.object(service, "_validate_and_snapshot_submission"),
             patch.object(
-                service, "_load_template_items_map", AsyncMock(return_value={})
+                service, "_load_checkable_template_items", AsyncMock(return_value={})
             ),
             patch.object(service, "_create_check_items", AsyncMock(return_value=[])),
             patch.object(service, "_update_apparatus_deficiency", AsyncMock()),

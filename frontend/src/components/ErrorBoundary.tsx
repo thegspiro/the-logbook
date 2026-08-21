@@ -7,6 +7,7 @@
 
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { errorTracker } from '../services/errorTracking';
+import { sanitizePath } from '../services/errorReporting';
 
 interface Props {
   children: ReactNode;
@@ -31,6 +32,11 @@ function isChunkLoadError(error: Error): boolean {
     msg.includes('loading css chunk') ||
     msg.includes('importing a module script failed')
   );
+}
+
+function sanitizeDiagnosticUrl(href: string): string {
+  const url = new URL(href, window.location.origin);
+  return `${url.origin}${sanitizePath(url.pathname)}`;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -62,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({
       error,
       errorInfo,
-      occurredAtUrl: window.location.href,
+      occurredAtUrl: sanitizeDiagnosticUrl(window.location.href),
       occurredAt: new Date().toISOString(),
     });
 
@@ -100,7 +106,7 @@ export class ErrorBoundary extends Component<Props, State> {
     const errorText = [
       `Error: ${this.state.error?.toString()}`,
       `\nComponent Stack: ${this.state.errorInfo?.componentStack}`,
-      `\nURL: ${this.state.occurredAtUrl ?? window.location.href}`,
+      `\nURL: ${this.state.occurredAtUrl ?? sanitizeDiagnosticUrl(window.location.href)}`,
       `\nTime: ${this.state.occurredAt ?? new Date().toISOString()}`,
     ].join('');
 

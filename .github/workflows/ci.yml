@@ -119,17 +119,40 @@ jobs:
       # no longer had.
       #
       # Fails on a docstring that names different permissions than the code
-      # enforces, or that claims a permission the route does not require at all.
-      # The 189 routes that under-document (code enforces a permission, docstring
-      # says only "Authentication required") are reported as warnings and do not
-      # fail the build; when that backlog reaches zero, add --strict here.
+      # enforces, that claims a permission the route does not require at all, or
+      # — since 2026-08-18, under --strict — that under-documents by saying only
+      # "Authentication required" while a permission is enforced.
+      #
+      # --strict is on because the backlog it was waiting for reached zero. Most
+      # of it was never a backlog: of the 189 routes reported, 163 were already
+      # documented in the "**Permissions required:**" spelling the script's regex
+      # did not match, and 8 more enforced their permission through a body
+      # authorizer the script only learned to read at the same time. That gap
+      # was not merely a miscount — a docstring the regex cannot see contributes
+      # no permissions, so it could never produce a `mismatch`, and those 202
+      # routes were silently exempt from the check itself. Widening it surfaced
+      # two real docstring/enforcement disagreements that had been invisible.
+      # The genuine remainder, 22 routes, were documented rather than waived.
+      #
+      # Keep it strict. The backlog existed because warnings accumulate; an
+      # error has to be dealt with by whoever caused it.
       #
       # Pure stdlib ast — no import of the application, so it cannot be broken
       # by a missing runtime dependency.
       - name: Check endpoint permission docs match enforcement
         if: "!cancelled()"
         working-directory: .
-        run: python3 scripts/check_endpoint_permissions.py
+        run: python3 scripts/check_endpoint_permissions.py --strict
+
+      # The repo-root scripts are themselves CI gates, and a gate that silently
+      # stops checking is the failure mode they exist to prevent. Every case in
+      # test_check_endpoint_permissions.py is a way that checker was wrong
+      # before 2026-08-18, each in the direction that made an unchecked route
+      # look fine. Stdlib unittest, no dependencies, well under a second.
+      - name: Run repo-root script tests
+        if: "!cancelled()"
+        working-directory: .
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
 
       # The frontend half of the same problem. APPLICATION_PAGES.md is what
       # support and the training guides answer "who can see this page?" from,
@@ -259,6 +282,37 @@ jobs:
           coverage report \
             --include="app/api/*,app/services/*,app/core/*,app/utils/*" \
             --fail-under=35
+
+      # docs/DATABASE_SCHEMA.md is GENERATED from app/models/, and on a fresh
+      # install those models *are* the schema — main.py's _fast_path_init()
+      # calls create_all() and stamps Alembic at head, so nothing replays the
+      # migration chain. That makes this file the reference a reader trusts
+      # for what a new deployment actually receives.
+      #
+      # Nothing verified it was current, and it drifted: by 2026-08-17 it was
+      # missing a whole table (driver_exceptions, 17 columns), the `medical`
+      # member of the item_type enum, and 4 columns across two other tables —
+      # three merges' worth, found by hand during a documentation pass rather
+      # than by any check.
+      #
+      # A missing table is the dangerous kind of stale: a reader has no way to
+      # detect it. A wrong column type at least contradicts something; an
+      # absent table just reads as "we don't have one".
+      #
+      # This runs here rather than in backend-lint because the generator
+      # imports the application, and only this job installs requirements.txt.
+      # It costs a couple of seconds against a tree that is already built.
+      - name: Check generated schema docs are current
+        if: "!cancelled()"
+        run: |
+          python scripts/generate_schema_docs.py
+          if ! git diff --exit-code --stat -- ../docs/DATABASE_SCHEMA.md; then
+            echo "::error file=docs/DATABASE_SCHEMA.md::Generated schema docs are stale."
+            echo "A change under backend/app/models/ altered the schema without regenerating"
+            echo "the reference. Run this from backend/ and commit the result:"
+            echo "    python scripts/generate_schema_docs.py"
+            exit 1
+          fi
 
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})
@@ -640,6 +694,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate production PWA artifacts
+        run: node scripts/validate-pwa.mjs
+
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
@@ -699,6 +756,11 @@ jobs:
       # read, so skipping it saves the run without losing any coverage.
       - name: Run E2E tests
         run: npx playwright test --project=chromium --grep-invert @screenshots
+
+      # Unlike the suite above, this builds and serves dist: service-worker
+      # registration is deliberately disabled on Vite's development server.
+      - name: Run production PWA smoke test
+        run: npm run test:pwa
 
       - name: Upload Playwright report
         if: failure()

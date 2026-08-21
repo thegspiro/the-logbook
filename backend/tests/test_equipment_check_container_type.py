@@ -5,10 +5,27 @@ backward-compatibility coercion for rows created before the column existed.
 """
 
 from app.schemas.equipment_check import (
+    CheckItemResultSubmit,
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
 )
+
+
+def test_check_item_accepts_full_nested_storage_path():
+    """Valid compartment segments remain valid when combined into a path."""
+    parent_name = "p" * 200
+    child_name = "c" * 200
+    storage_path = f"{parent_name} › {child_name}"
+
+    payload = CheckItemResultSubmit(
+        template_item_id="item-1",
+        compartment_name=storage_path,
+        item_name="Monitor",
+        status="pass",
+    )
+
+    assert payload.compartment_name == storage_path
 
 
 class TestContainerTypeSchemas:

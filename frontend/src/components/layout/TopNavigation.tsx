@@ -297,6 +297,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
   const notificationsActive = isActive('/notifications');
   const accountActive = isActive('/account');
+  const activeDestination = navItems
+    .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
+    .filter((item) => item.path !== '#' && isActive(item.path))
+    .sort((a, b) => b.path.length - a.path.length)[0];
 
   return (
     <>
@@ -546,6 +550,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
           {mobileMenuOpen && (
             <nav id="mobile-menu" className="pb-4 md:hidden" aria-label="Mobile navigation">
               <div ref={mobileMenuRef} className="flex flex-col space-y-1">
+                {activeDestination && (
+                  <div className="bg-theme-surface-hover text-theme-text-primary mb-2 rounded-lg px-3 py-3">
+                    <span className="text-theme-text-muted block text-[10px] font-bold tracking-widest uppercase">
+                      Current
+                    </span>
+                    <span className="text-sm font-semibold">{activeDestination.label}</span>
+                  </div>
+                )}
                 {navItems.map((item) => {
                   // Filter sub-items by permission
                   const visibleSubItems = item.subItems?.filter(

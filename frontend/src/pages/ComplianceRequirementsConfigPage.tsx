@@ -469,7 +469,7 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="card hscroll flex gap-1 p-1">
+      <div className="segmented-group hscroll flex gap-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}

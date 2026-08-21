@@ -18,6 +18,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    existing_tables = set(sa.inspect(op.get_bind()).get_table_names())
+
+    if "push_subscriptions" in existing_tables:
+        # Web Push originally shipped with revision id 20260807_0001.  A
+        # database which applied that short-lived revision already has this
+        # table, but Alembic now interprets its stamp as the sibling officers
+        # migration.  Repair that skipped side before continuing the graph.
+        if "organization_officers" not in existing_tables:
+            _create_organization_officers()
+        return
+
     op.create_table(
         "push_subscriptions",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -68,6 +79,52 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_push_subscriptions_user_id"), "push_subscriptions", ["user_id"]
+    )
+
+
+def _create_organization_officers() -> None:
+    """Create the sibling table skipped by the legacy duplicate revision."""
+    op.create_table(
+        "organization_officers",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(
+            "organization_id",
+            sa.String(36),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("office_key", sa.String(50), nullable=False),
+        sa.Column(
+            "user_id",
+            sa.String(36),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("display_name", sa.String(200), nullable=True),
+        sa.Column("title", sa.String(150), nullable=True),
+        sa.Column("email", sa.String(320), nullable=True),
+        sa.Column("phone", sa.String(50), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_by",
+            sa.String(36),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.UniqueConstraint(
+            "organization_id", "office_key", name="uq_org_officer_org_office"
+        ),
     )
 
 

@@ -12,7 +12,7 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 4. [Categories](#categories)
 5. [Individual vs Pool Items](#individual-vs-pool-items)
 6. [Variant Groups](#variant-groups)
-7. [Equipment Kits](#equipment-kits)
+7. [Gear Kits](#gear-kits)
 8. [Member Size Preferences](#member-size-preferences)
 9. [Issuance Allowances](#issuance-allowances)
 10. [Equipment Request Fulfillment](#equipment-request-fulfillment)
@@ -28,8 +28,8 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 20. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
 21. [Departure Clearance](#departure-clearance)
 22. [Members Inventory View (Admin)](#members-inventory-view-admin)
-23. [Inventory Admin Hub](#inventory-admin-hub)
-24. [Equipment Kits Admin Page](#equipment-kits-admin-page)
+23. [Gear Admin Hub](#gear-admin-hub)
+24. [Gear Kits Admin Page](#gear-kits-admin-page)
 25. [Variant Groups Admin Page](#variant-groups-admin-page)
 26. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
 27. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
@@ -46,7 +46,7 @@ Key pages in the inventory module:
 | Page                | URL                        | Description                                                              |
 | ------------------- | -------------------------- | ------------------------------------------------------------------------ |
 | **Items List**      | `/inventory`               | Browse all equipment and supplies with search, filters, and sorting      |
-| **My Equipment**    | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                 |
+| **My Issued Gear**    | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                 |
 | **Item Detail**     | `/inventory/items/:id`     | Full item record with barcode, history, maintenance, and NFPA compliance |
 | **Storage Areas**   | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area)        |
 | **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages  |
@@ -187,7 +187,7 @@ The **Categories** tab organizes items into groups. Common categories include:
 
 **Creating Categories (Admin):**
 
-1. Navigate to **Inventory Admin > Manage Inventory**.
+1. Navigate to **Gear Admin > Manage Inventory**.
 2. Click **Add Category**.
 3. Enter the category name and description.
 4. Save.
@@ -234,7 +234,7 @@ Variant groups link related items that differ only in size or style — for exam
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin > Items**.
+1. Navigate to **Gear Admin > Items**.
 2. Click **Create Variant Group**.
 3. Enter the base product name (e.g., "Globe ATHLETIX Turnout Coat").
 4. Add variants with their sizes and styles:
@@ -255,7 +255,7 @@ Variant groups link related items that differ only in size or style — for exam
 
 ---
 
-## Equipment Kits
+## Gear Kits
 
 Equipment kits bundle multiple inventory items into a named package for streamlined issuance — for example, a "New Recruit PPE Kit" containing a coat, pants, helmet, gloves, and boots.
 
@@ -263,7 +263,7 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin > Items**.
+1. Navigate to **Gear Admin > Items**.
 2. Click **Create Equipment Kit**.
 3. Enter the kit name and description.
 4. Add component items by searching for existing inventory items.
@@ -291,12 +291,12 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 
 Members can record their preferred uniform and PPE sizes, making equipment ordering and kit issuance faster and more accurate. Sizes are edited in the **Size Preferences** modal, which works in two modes:
 
-- **Self-service** — a member edits their own sizes from **My Equipment** (`/inventory/my/size-preferences`).
+- **Self-service** — a member edits their own sizes from **My Issued Gear** (`/inventory/my/size-preferences`).
 - **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, requires `inventory.manage`).
 
 ### Recording Size Preferences
 
-1. Open the **Size Preferences** modal (from My Equipment, or from a member's row on the Members Inventory page). The title reads "My Sizes" or "Sizes — {member name}".
+1. Open the **Size Preferences** modal (from My Issued Gear, or from a member's row on the Members Inventory page). The title reads "My Sizes" or "Sizes — {member name}".
 2. Fill in any of the nine fields (all optional):
    - Shirt Size and Shirt Style
    - Pant Waist and Pant Inseam
@@ -328,7 +328,7 @@ When creating a new uniform or PPE item that comes in multiple sizes and styles,
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin > Items** and click **Add Item**
+1. Navigate to **Gear Admin > Items** and click **Add Item**
 2. Fill in the base item details (name, category, description)
 3. Switch on **Generate Sizes & Styles**. The switch appears only on a _new_
    item whose category is a uniform, PPE, tool or equipment type — it is
@@ -374,7 +374,7 @@ All 16 items are linked under a single variant group and share the base descript
 Each variant is its own row in the items list, with its size, style and colour
 shown as capsules in the **Variant** column — pictured under
 [Variant Capsules](#variant-capsules). To see the whole group at once, with a
-stock quantity per size and colour, open it on **Inventory Admin > Variant
+stock quantity per size and colour, open it on **Gear Admin > Variant
 Groups**; that grid is pictured under
 [Stock Matrix on Variant Groups Page](#stock-matrix-on-variant-groups-page).
 
@@ -402,7 +402,7 @@ An **issuance allowance** caps how many units of a category a member may receive
 
 ### Creating an Allowance
 
-1. Navigate to **Inventory Admin** and open **Issuance Allowances** (or go directly to `/inventory/admin/allowances`).
+1. Navigate to **Gear Admin** and open **Issuance Allowances** (or go directly to `/inventory/admin/allowances`).
 2. Click **New Allowance**.
 3. Fill in the form:
    - **Category** _(required)_ — the inventory category the cap applies to. (This field is locked when editing.)
@@ -441,7 +441,7 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 
 **Required Permission:** `inventory.manage`
 
-Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Equipment Requests** and click **Fulfill**.
+Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Gear Requests** and click **Fulfill**.
 
 - The page opens on **Pending**, which is the review queue. Approved and
   fulfilled requests are behind the status filter — switch it to **All** to see
@@ -458,7 +458,7 @@ Once an equipment request has been **approved**, a quartermaster can **fulfill**
 
 > **Note:** Fulfillment is **not** reversible by re-running it — each fulfill action creates a new issuance/checkout/assignment. Only requests in the **Approved** state can be fulfilled, which prevents accidentally fulfilling the same request twice.
 
-![Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
+![Gear Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
 
 ---
 
@@ -480,7 +480,7 @@ When available stock drops to or below the reorder point, the item appears on th
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin > Reorder** (`/inventory/admin/reorder`).
+1. Navigate to **Gear Admin > Reorder** (`/inventory/admin/reorder`).
 2. Click **Create Reorder Request**.
 3. Select the item to reorder.
 4. Enter the requested quantity and any notes.
@@ -562,7 +562,7 @@ starting from the item or from the person.
 
 **From the member** — kitting somebody out, several items at once:
 
-1. Go to **Inventory Admin > Members Equipment**.
+1. Go to **Gear Admin > Members Equipment**.
 2. Click **Assign** on their row.
 3. Scan each item, or type a name, barcode, serial or asset tag and press
    **Enter**. Items stack up in a list with a quantity each, and anything added
@@ -614,13 +614,13 @@ For items that are temporarily loaned (not permanently assigned), use the checko
 For events or training sessions where multiple items need to be processed at once, use batch operations.
 
 Both batch screens start from a **member**, not from a list of items — you pick
-the person on **Inventory Admin > Members Equipment** and the screen then works
+the person on **Gear Admin > Members Equipment** and the screen then works
 on their gear. There is no separate "Batch Checkout" or "Batch Return" entry in
 the admin menu.
 
 ### Batch Checkout
 
-1. Go to **Inventory Admin > Members Equipment**.
+1. Go to **Gear Admin > Members Equipment**.
 2. Click **Assign** on the member's row.
 3. Scan each item, or type a name, barcode, serial or asset tag and press
    **Enter**. Each addition appears in a staged list with its own quantity.
@@ -630,7 +630,7 @@ Each item is processed individually — if one item fails (e.g., already checked
 
 ### Batch Return
 
-1. Go to **Inventory Admin > Members Equipment**.
+1. Go to **Gear Admin > Members Equipment**.
 2. Click **Return** on the member's row. Everything they hold is listed and
    selected, with **Select All** / **Deselect All** above it.
 3. For each item, set the return condition (excellent, good, fair, poor, damaged).
@@ -648,7 +648,7 @@ Scanning is **inside the assign and return flows**, not a lookup screen of its
 own. You choose the person and what you are doing first, then scan; there is no
 "scan an item and pick an action afterwards" step.
 
-1. Go to **Inventory Admin > Members Equipment** (or **Assign Items** from the
+1. Go to **Gear Admin > Members Equipment** (or **Assign Items** from the
    items list, which asks who first).
 2. Click **Assign** or **Return** on the member's row.
 3. Click **Start Camera** and hold the barcode or QR code up to it. Each
@@ -720,7 +720,7 @@ Track maintenance schedules and history for equipment:
 
 ### Viewing Maintenance Due
 
-Navigate to **Inventory Admin** and check the **Maintenance Due** section for items that need servicing.
+Navigate to **Gear Admin** and check the **Maintenance Due** section for items that need servicing.
 
 ### Creating a Maintenance Record
 
@@ -875,6 +875,20 @@ trucks") is the supply worklist at **Scheduling → Supply**; see
 | An Add Several line names an item that already exists    | Skipped and reported. The rest of the list is still created                                                                       |
 | A CSV field contains a comma                             | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                 |
 | A lot has no expiration date                             | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up            |
+| Editing "On hand" on a **lot-stocked** item              | _(2026-08-17)_ The field is no longer editable. It shows the lot figure and points you to **Receive delivery**, because the count comes from the lots — typing into the old box wrote a number nothing displayed, returned a success toast, and left the figure unchanged |
+
+### CSV Import: Supplier Names _(2026-08-17)_
+
+When a CSV's `Vendor` cell names a supplier that is not on file, the row still
+imports and the name is kept as free text. The import result now reports those
+names so you can attach them afterwards from the Vendors screen — with three
+corrections that change what you see:
+
+| Scenario                                                    | Behavior                                                                                                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The CSV spells one supplier three ways (`Gals`, `gals`, `GALS`) | Reported **once**, showing the first spelling seen. Attach handles all three in one pass, so listing them separately implied three pieces of work       |
+| A row fails to import (duplicate serial, pool item with no quantity) | Its supplier name is **not** reported. The name used to be banked before the row was written, so a failed import sent you to Attach for rows that never existed |
+| The name matches a **deactivated** supplier                 | It **links to that supplier** rather than being reported as unmatched. Vendor creation rejects inactive duplicates, so the old advice was a dead end. Deactivating a supplier deliberately keeps every existing link — purchase history for equipment still in service is why the record exists |
 
 ---
 
@@ -897,7 +911,7 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin**.
+1. Navigate to **Gear Admin**.
 2. Click **Create Departure Clearance** for the departing member.
 3. The system generates a list of all items assigned to or checked out by the member.
 4. For each line item, choose a **disposition**:
@@ -922,7 +936,7 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 
 ---
 
-## Equipment Requests
+## Gear Requests
 
 Members can request equipment checkouts, pool issuances, or new purchases through the equipment request workflow.
 
@@ -1032,7 +1046,7 @@ For SCBA items, additional fields track:
 
 **Required Permission:** `inventory.manage`
 
-Navigate to **Inventory Admin > Members** to see a per-member view of all equipment assignments across the department.
+Navigate to **Gear Admin > Members** to see a per-member view of all equipment assignments across the department.
 
 This view shows:
 
@@ -1074,11 +1088,11 @@ This is especially useful on mobile during equipment distribution events where y
 
 ---
 
-## Inventory Admin Hub
+## Gear Admin Hub
 
 **Required Permission:** `inventory.manage`
 
-The Inventory Admin Hub (`/inventory/admin`) is the central navigation page for all inventory management functions. It has been redesigned with grouped sections for easier navigation.
+The Gear Admin hub (`/inventory/admin`) is the central navigation page for all inventory management functions. It has been redesigned with grouped sections for easier navigation.
 
 ### Layout
 
@@ -1090,8 +1104,8 @@ The hub is organized into three sections:
    - **Checkouts** — Active checkout count and overdue count
 
 2. **Grouped Navigation Cards** — Remaining admin functions organized by purpose:
-   - **Inventory Management** — Items, Pool Items, Categories, Maintenance, Equipment Kits, Variant Groups
-   - **Requests & Workflows** — Equipment Requests (with pending count badge), Return Requests, Write-Off Requests, Reorder Requests
+   - **Inventory Management** — Items, Pool Items, Categories, Maintenance, Gear Kits, Variant Groups
+   - **Requests & Workflows** — Gear Requests (with pending count badge), Return Requests, Write-Off Requests, Reorder Requests
    - **Tools** — CSV Import, Label Printing, Storage Areas
 
 3. **Low Stock Alerts** — Banner showing items below reorder threshold with category breakdown
@@ -1106,11 +1120,11 @@ The hub is organized into three sections:
 
 ---
 
-## Equipment Kits Admin Page
+## Gear Kits Admin Page
 
 **Required Permission:** `inventory.manage`
 
-Navigate to **Inventory Admin > Equipment Kits** (`/inventory/admin/kits`) to manage reusable kit templates — named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance.
+Navigate to **Gear Admin > Gear Kits** (`/inventory/admin/kits`) to manage reusable kit templates — named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance.
 
 ### Creating a Kit
 
@@ -1147,7 +1161,7 @@ Navigate to **Inventory Admin > Equipment Kits** (`/inventory/admin/kits`) to ma
 
 **Required Permission:** `inventory.manage`
 
-Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-groups`) to manage item variant groups — groupings that link related items differing by size, color, or style (e.g., "Structural Coat" available in sizes S through 4XL).
+Navigate to **Gear Admin > Variant Groups** (`/inventory/admin/variant-groups`) to manage item variant groups — groupings that link related items differing by size, color, or style (e.g., "Structural Coat" available in sizes S through 4XL).
 
 ### Creating a Variant Group
 
@@ -1208,7 +1222,7 @@ FF Garcia currently has the following items assigned:
 
 When FF Garcia's status is changed to **Retired** by the membership officer, the system automatically generates a property return report. Lt. Park also manually creates the departure clearance:
 
-1. Navigates to **Inventory Admin**
+1. Navigates to **Gear Admin**
 2. Clicks **Create Departure Clearance**
 3. Selects **Tom Garcia** from the member dropdown
 4. The system populates the clearance with all 7 items/issuances currently held by FF Garcia
@@ -1523,7 +1537,7 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 | WebSocket 403 on inventory page                      | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection.                                                                                                                                 |
 | Charges not appearing on returned items              | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes.                                                                                                    |
 | Pool item cost recovery amount wrong                 | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit.                                                                                                                                  |
-| Return request stuck in pending                      | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                 |
+| Return request stuck in pending                      | Admin must approve return requests in Gear Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                 |
 | Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                 |
 | Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                 |
 | Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`.                                                            |
@@ -1545,7 +1559,7 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 
 ---
 
-## Inventory Admin Hub Redesign (2026-03-22)
+## Gear Admin Hub Redesign (2026-03-22)
 
 The inventory admin dashboard has been redesigned with **grouped card sections** and prominent navigation cards, replacing the previous flat list layout.
 
@@ -1557,8 +1571,8 @@ its own figure — and then the rest of the pages in three groups:
 
 | Group                    | Pages                                                                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **Inventory Management** | Pool Items, Categories, Equipment Kits, Variant Groups, Issuance Allowances, Impact Planner, Maintenance, Storage Areas |
-| **Requests & Workflows** | Equipment Requests, Return Requests, Charges, Write-Offs, Reorder Requests, Expiring on Apparatus                       |
+| **Inventory Management** | Pool Items, Categories, Gear Kits, Variant Groups, Issuance Allowances, Impact Planner, Maintenance, Storage Areas |
+| **Requests & Workflows** | Gear Requests, Return Requests, Charges, Write-Offs, Reorder Requests, Expiring on Apparatus                       |
 | **Tools**                | Import / Export, Department Store                                                                                       |
 
 Only the cards with something outstanding carry a count — Reorder Requests
@@ -1570,7 +1584,7 @@ shows how many are pending, the rest are plain links.
 
 Two new dedicated admin pages have been added:
 
-**Equipment Kits** (`/inventory/admin/kits`):
+**Gear Kits** (`/inventory/admin/kits`):
 
 - Create, edit, and delete equipment kits
 - View kit components and their quantities
@@ -1607,11 +1621,11 @@ stock are not shown to a non-admin at all.
 
 The **item list** is not scoped, and is not meant to be — `inventory.view` is
 what lets a member browse the department's catalogue in order to request from it.
-A member's own kit lives on **My Equipment**, which is the page to open to see
+A member's own kit lives on **My Issued Gear**, which is the page to open to see
 what somebody actually holds: their permanent assignments, checkouts, issued
 consumables and pending requests, each with a Request Return action.
 
-![My Equipment as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
+![My Issued Gear as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
 
 > **Edge case:** Users with `inventory.manage` (or `settings.manage`) see the department's figures rather than their own. The scoping applies only to users without those permissions.
 
@@ -1754,7 +1768,7 @@ Inventory items that belong to a variant group now display compact **colored pil
 - **Purple capsule** — Color (e.g., "Navy", "White")
 - **Amber capsule** — Style (e.g., "Regular", "Long")
 
-These capsules appear on inventory item cards across all pages: Items List, Item Detail, My Equipment, Pool Items, and Variant Groups. They provide an at-a-glance understanding of which variant an item represents without opening the detail view.
+These capsules appear on inventory item cards across all pages: Items List, Item Detail, My Issued Gear, Pool Items, and Variant Groups. They provide an at-a-glance understanding of which variant an item represents without opening the detail view.
 
 ![The inventory items list with size, colour and style capsules on the variant items](./images/05-53-items-variant-capsules.png)
 
@@ -1808,9 +1822,9 @@ The page is pictured under [Label printing](#label-printing) above.
 
 ## Quick-Assign from Admin Hub (2026-06-09)
 
-The Inventory Admin Hub now includes a **quick "Assign to Member" action** for streamlined equipment distribution:
+The Gear Admin hub now includes a **quick "Assign to Member" action** for streamlined equipment distribution:
 
-1. Navigate to **Inventory Admin** (`/inventory/admin`)
+1. Navigate to **Gear Admin** (`/inventory/admin`)
 2. Click **Assign to Member** in the hub header
 3. **Select a member** — use the member picker modal (search by name or scan a member ID badge)
 4. **Scan or search for items** — the inventory scan modal opens in checkout mode. Scan barcodes with a camera or type item names/serials to find items
@@ -1964,7 +1978,7 @@ The **Impact Planner** at `/inventory/admin/impact-planner` allows quartermaster
 
 **Required Permission:** `inventory.manage`
 
-1. Navigate to **Inventory Admin > Impact Planner**
+1. Navigate to **Gear Admin > Impact Planner**
 2. **Filter the roster**: Select which members to analyze using the filter panel:
    - **Statuses**: Active, Inactive, etc.
    - **Ranks**: Firefighter, Captain, etc.

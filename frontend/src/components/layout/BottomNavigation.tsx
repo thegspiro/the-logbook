@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { Home, Calendar, Clock, GraduationCap, Menu, Users, FileText, Store } from 'lucide-react';
+import { Home, Calendar, Clock, GraduationCap, Menu, Users, FileText, Store, BookOpen, Settings } from 'lucide-react';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { prefetchRoute } from '../../utils/routePrefetch';
+import { useAuthStore } from '../../stores/authStore';
 
 /**
  * Event that asks whichever navigation component is mounted (side or top) to
@@ -20,13 +21,13 @@ interface TabDef {
   icon: React.ElementType;
   /** Module key this tab belongs to; omitted for always-available tabs. */
   module?: string;
+  permission?: string;
 }
 
 /**
- * Candidate tabs in priority order. The first four available ones are shown,
- * followed by "More" — five is the practical maximum before labels stop fitting
- * on a 320px phone. Modules a department has switched off drop out and the next
- * candidate moves up, so the bar is never left with a dead slot.
+ * Destinations and slot fallbacks are deliberately separate.  This prevents a
+ * module toggle from shifting every item to its left, which made muscle-memory
+ * navigation unreliable.
  */
 const TAB_CANDIDATES: TabDef[] = [
   { label: 'Home', path: '/dashboard', icon: Home },
@@ -36,9 +37,41 @@ const TAB_CANDIDATES: TabDef[] = [
   { label: 'Training', path: '/training/my-training', icon: GraduationCap, module: 'training' },
   { label: 'Members', path: '/members', icon: Users },
   { label: 'Documents', path: '/documents', icon: FileText },
+  { label: 'Learning', path: '/learning', icon: BookOpen },
+  { label: 'Settings', path: '/settings', icon: Settings, permission: 'settings.manage' },
 ];
 
-const MAX_TABS = 4;
+export const BOTTOM_NAV_STORAGE_KEY = 'logbook.bottom-navigation.v1';
+const DEFAULT_MEMBER_SLOTS = [
+  ['/events', '/members', '/documents'],
+  ['/scheduling', '/training/my-training', '/learning'],
+  ['/store', '/documents', '/members'],
+];
+
+function readPreferredSlots(isAdministrator: boolean): string[][] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(BOTTOM_NAV_STORAGE_KEY) ?? 'null');
+    if (Array.isArray(value)) {
+      const selected = value.slice(0, 3).map((path) => (typeof path === 'string' ? path : ''));
+      return DEFAULT_MEMBER_SLOTS.map((fallbacks, index) => [selected[index] ?? '', ...fallbacks]);
+    }
+  } catch {
+    // Corrupt or unavailable browser storage simply restores policy defaults.
+  }
+  const defaults = isAdministrator
+    ? [
+        ['/events', '/members'],
+        ['/settings', '/scheduling', '/training/my-training'],
+        ['/store', '/documents'],
+      ]
+    : DEFAULT_MEMBER_SLOTS;
+  try {
+    localStorage.setItem(BOTTOM_NAV_STORAGE_KEY, JSON.stringify(defaults.map(([path]) => path)));
+  } catch {
+    // Navigation remains usable when persistence is unavailable.
+  }
+  return defaults;
+}
 
 interface BottomNavigationProps {
   /** Hidden while the on-screen keyboard is up, where it would otherwise sit
@@ -50,8 +83,27 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
   const navigate = useNavigate();
   const location = useLocation();
   const { isModuleOn } = useEnabledModules();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
 
-  const tabs = TAB_CANDIDATES.filter((t) => !t.module || isModuleOn(t.module)).slice(0, MAX_TABS);
+  const available = TAB_CANDIDATES.filter(
+    (tab) => (!tab.module || isModuleOn(tab.module)) && (!tab.permission || checkPermission(tab.permission))
+  );
+  const availableByPath = new Map(available.map((tab) => [tab.path, tab]));
+  const used = new Set<string>(['/dashboard']);
+  const slots = readPreferredSlots(checkPermission('settings.manage')).map((priorities) => {
+    const path = priorities.find((candidate) => availableByPath.has(candidate) && !used.has(candidate));
+    if (path) used.add(path);
+    return path ? availableByPath.get(path) : undefined;
+  });
+  // A slot whose entire fallback chain is unavailable gets the first remaining
+  // safe destination rather than becoming a dead button.
+  const resolvedSlots = slots.map((tab) => {
+    if (tab) return tab;
+    const fallback = available.find((item) => !used.has(item.path));
+    if (fallback) used.add(fallback.path);
+    return fallback;
+  });
+  const tabs = [availableByPath.get('/dashboard'), ...resolvedSlots].filter((tab): tab is TabDef => Boolean(tab));
 
   const isActive = (path: string) => {
     const base = path.split('?')[0] ?? path;

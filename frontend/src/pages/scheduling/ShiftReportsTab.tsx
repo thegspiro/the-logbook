@@ -1390,7 +1390,7 @@ export const ShiftReportsTab: React.FC = () => {
     <div className="space-y-6">
       {/* View Toggle */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="card hscroll flex flex-1 items-center gap-1 p-1 sm:flex-none">
+        <div className="segmented-group hscroll flex flex-1 items-center gap-1 sm:flex-none">
           <button
             onClick={() => setViewMode('my-reports')}
             className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${

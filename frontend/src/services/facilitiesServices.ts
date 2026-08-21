@@ -71,6 +71,37 @@ export interface FacilityDashboardCounts {
   upcomingInspections: number;
 }
 
+export interface FacilityDashboardMaintenancePreview {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  description?: string;
+  dueDate?: string;
+  completedDate?: string;
+  updatedAt?: string;
+}
+
+export interface FacilityDashboardInspectionPreview {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  title: string;
+  nextInspectionDate: string;
+}
+
+export interface FacilityDashboardSummary extends FacilityDashboardCounts {
+  overdueMaintenanceRecords: FacilityDashboardMaintenancePreview[];
+  upcomingInspectionRecords: FacilityDashboardInspectionPreview[];
+  recentMaintenanceCompletions: FacilityDashboardMaintenancePreview[];
+}
+
+export interface FacilityPage {
+  items: Facility[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 export interface MaintenanceRecordCreate {
   facility_id: string;
   maintenance_type_id?: string;
@@ -518,6 +549,21 @@ export const facilitiesService = {
   },
   async getDashboardCounts(): Promise<FacilityDashboardCounts> {
     const response = await api.get<FacilityDashboardCounts>('/facilities/dashboard-counts');
+    return response.data;
+  },
+  async getDashboard(): Promise<FacilityDashboardSummary> {
+    const response = await api.get<FacilityDashboardSummary>('/facilities/dashboard');
+    return response.data;
+  },
+  async getFacilitiesPage(params?: {
+    facility_type_id?: string;
+    status_id?: string;
+    is_archived?: boolean;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<FacilityPage> {
+    const response = await api.get<FacilityPage>('/facilities/page', { params });
     return response.data;
   },
   async getFacility(facilityId: string): Promise<Facility> {

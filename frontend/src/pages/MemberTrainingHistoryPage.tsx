@@ -363,7 +363,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('csv')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
                 CSV
@@ -371,7 +371,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('pdf')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
                 PDF
@@ -383,7 +383,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     '_blank'
                   )
                 }
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
                 Print Record
               </button>
@@ -481,7 +481,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="divide-theme-surface-border min-w-full divide-y">
+              <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
                 <thead className="bg-theme-surface-secondary">
                   <tr>
                     <th
@@ -531,7 +531,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 <tbody className="divide-theme-surface-border divide-y">
                   {filteredTrainings.map((training) => (
                     <tr key={training.id} className="hover:bg-theme-surface-hover transition-colors">
-                      <td className="px-6 py-4">
+                      <td data-label="Course" className="px-6 py-4">
                         <div>
                           <div className="text-theme-text-primary font-medium">{training.course_name}</div>
                           {training.course_code && (
@@ -544,14 +544,16 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td className="text-theme-text-secondary px-6 py-4 text-sm capitalize">
+                      <td data-label="Type" className="text-theme-text-secondary px-6 py-4 text-sm capitalize">
                         {training.training_type?.replace('_', ' ') || '-'}
                       </td>
-                      <td className="text-theme-text-secondary px-6 py-4 text-sm">
+                      <td data-label="Date" className="text-theme-text-secondary px-6 py-4 text-sm">
                         {formatDate(training.completion_date || training.scheduled_date, tz)}
                       </td>
-                      <td className="text-theme-text-secondary px-6 py-4 text-sm">{training.hours_completed || 0}</td>
-                      <td className="px-6 py-4 text-sm">
+                      <td data-label="Hours" className="text-theme-text-secondary px-6 py-4 text-sm">
+                        {training.hours_completed || 0}
+                      </td>
+                      <td data-label="Expires" className="px-6 py-4 text-sm">
                         <span
                           className={
                             isExpired(training)
@@ -564,7 +566,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           {formatDate(training.expiration_date, tz)}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td data-label="Status" className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           <span
                             className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
@@ -585,10 +587,10 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td data-label="Files" className="px-6 py-4">
                         <button
                           onClick={() => setAttachmentRecord(training)}
-                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 text-sm print:hidden"
+                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-11 items-center gap-1.5 px-2 text-sm print:hidden"
                         >
                           <Paperclip className="h-4 w-4" />
                           Files

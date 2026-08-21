@@ -47,26 +47,24 @@ interface RouteCheck {
    * arbitrary values and are deliberately exempt there.
    */
   maxTinyText: number;
-  /**
-   * Renders only layout chrome under the E2E mock — the permission gate hides
-   * the body, or the endpoints it needs are not mocked. Not a defect here, but
-   * it does mean this route proves less than the others.
-   */
-  chromeOnly?: boolean;
 }
 
-const ROUTES: RouteCheck[] = [
+const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/training/admin?page=dashboard&tab=compliance', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/events/1/monitoring', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
@@ -79,14 +77,19 @@ const ROUTES: RouteCheck[] = [
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/forms', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/analytics', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/messages', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
-  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/messages', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/profile', maxSmallTargets: 0, maxTinyText: 0 },
 ];
+
+// Useful when diagnosing one newly exposed permission-gated body locally;
+// omitted in CI and normal runs, where the complete ratchet always executes.
+const routeFilter = process.env.MOBILE_ROUTE_FILTER;
+const ROUTES = routeFilter ? ALL_ROUTES.filter(({ path }) => path.includes(routeFilter)) : ALL_ROUTES;
 
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
 const PHONE = { width: 390, height: 844 };
@@ -97,8 +100,9 @@ const MIN_FONT_PX = 12;
 
 interface Measurement {
   crashed: boolean;
-  overflow: boolean;
   scrollWidth: number;
+  overflowExamples: string[];
+  invalidScrollRegions: string[];
   textLength: number;
   totalTargets: number;
   smallTargets: number;
@@ -115,6 +119,7 @@ test.describe('mobile presentation', () => {
 
     const crashed: string[] = [];
     const overflowed: string[] = [];
+    const invalidScrollRegions: string[] = [];
     const tapBudgetBusted: string[] = [];
     const textBudgetBusted: string[] = [];
     const blank: string[] = [];
@@ -122,7 +127,7 @@ test.describe('mobile presentation', () => {
 
     for (const route of ROUTES) {
       await page.goto(route.path);
-      await page.waitForLoadState('networkidle').catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
       await page.waitForTimeout(400);
 
       const m: Measurement = await page.evaluate(
@@ -130,7 +135,7 @@ test.describe('mobile presentation', () => {
           const doc = document.documentElement;
           const isVisible = (el: Element) => {
             const b = el.getBoundingClientRect();
-            return b.width > 0 && b.height > 0;
+            return b.width > 0 && b.height > 0 && b.right > 0 && b.left < doc.clientWidth;
           };
 
           const targets = [
@@ -157,12 +162,55 @@ test.describe('mobile presentation', () => {
             (el) => isVisible(el) && !!el.textContent?.trim() && parseFloat(getComputedStyle(el).fontSize) < minFont
           );
 
+          // Intentionally wide tables, charts, timelines, and tab strips opt
+          // out at their nearest boundary with data-mobile-scroll-region.
+          // Everything else must fit: checking descendant rectangles catches
+          // clipped controls even when an ancestor hides the page overflow and
+          // documentElement.scrollWidth therefore still equals the viewport.
+          const viewportWidth = document.documentElement.clientWidth;
+          const overflowing = [...document.body.querySelectorAll('*')].filter((el) => {
+            if (!isVisible(el) || el.closest('[data-mobile-scroll-region]')) return false;
+            const b = el.getBoundingClientRect();
+            return b.left < -1 || b.right > viewportWidth + 1;
+          });
+
+          const describe = (el: Element) => {
+            const b = el.getBoundingClientRect();
+            const name = (
+              el.getAttribute('aria-label') ||
+              el.getAttribute('title') ||
+              (el as HTMLElement).innerText ||
+              el.tagName
+            )
+              .trim()
+              .replace(/\s+/g, ' ')
+              .slice(0, 48);
+            const identity = [
+              el.tagName.toLowerCase(),
+              el.id ? `#${el.id}` : '',
+              ...[...el.classList].slice(0, 2).map((className) => `.${className}`),
+            ].join('');
+            return `${identity} "${name}" [left=${Math.round(b.left)}, right=${Math.round(b.right)}, width=${Math.round(b.width)}]`;
+          };
+
+          const invalidScrollRegions = [...document.querySelectorAll('[data-mobile-scroll-region]')]
+            .filter(isVisible)
+            .flatMap((el) => {
+              const failures: string[] = [];
+              const overflowX = getComputedStyle(el).overflowX;
+              if (overflowX !== 'auto' && overflowX !== 'scroll') failures.push(`overflow-x is ${overflowX}`);
+              if (!el.getAttribute('aria-label')?.trim() && !el.getAttribute('aria-labelledby')?.trim()) {
+                failures.push('has no accessible label');
+              }
+              if ((el as HTMLElement).tabIndex !== 0) failures.push('is not keyboard focusable');
+              return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
+            });
+
           return {
             crashed: document.body.innerText.includes('Oops! Something went wrong'),
-            // A page wider than the viewport means something is not fitting: a
-            // fixed pixel width, an unwrapped row, a table with no scroller.
-            overflow: doc.scrollWidth > doc.clientWidth + 1,
             scrollWidth: doc.scrollWidth,
+            overflowExamples: overflowing.slice(0, 8).map(describe),
+            invalidScrollRegions,
             textLength: document.body.innerText.trim().length,
             totalTargets: targets.length,
             smallTargets: small.length,
@@ -180,7 +228,14 @@ test.describe('mobile presentation', () => {
       );
 
       if (m.crashed) crashed.push(route.path);
-      if (m.overflow) overflowed.push(`${route.path} (${m.scrollWidth}px wide)`);
+      if (m.overflowExamples.length) {
+        overflowed.push(
+          `${route.path} (page scroll width ${m.scrollWidth}px):\n    ${m.overflowExamples.join('\n    ')}`
+        );
+      }
+      if (m.invalidScrollRegions.length) {
+        invalidScrollRegions.push(`${route.path}:\n    ${m.invalidScrollRegions.join('\n    ')}`);
+      }
       if (m.smallTargets > route.maxSmallTargets) {
         tapBudgetBusted.push(
           `${route.path}: ${m.smallTargets} under ${MIN_TAP}px, budget ${route.maxSmallTargets}` +
@@ -192,7 +247,7 @@ test.describe('mobile presentation', () => {
       }
       // Reported, not asserted: under the E2E mock a page can legitimately be
       // empty, so this cannot distinguish "no data" from "rendered nothing".
-      if (!route.chromeOnly && m.textLength < 600) blank.push(route.path);
+      if (m.textLength < 600) blank.push(route.path);
 
       table.push(
         [
@@ -201,7 +256,7 @@ test.describe('mobile presentation', () => {
           `tap ${String(m.smallTargets).padStart(2)}/${String(m.totalTargets).padEnd(3)}`,
           `tiny ${String(m.tinyText).padStart(2)}`,
           `text ${String(m.textLength).padStart(5)}`,
-          route.chromeOnly ? '(chrome only)' : '',
+          m.smallExamples.join(', '),
         ].join('  ')
       );
     }
@@ -212,7 +267,8 @@ test.describe('mobile presentation', () => {
     }
 
     expect(crashed, 'routes that hit the ErrorBoundary').toEqual([]);
-    expect(overflowed, 'routes wider than the viewport').toEqual([]);
+    expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
+    expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
     expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);
     expect(textBudgetBusted, `routes that grew text under ${MIN_FONT_PX}px`).toEqual([]);
   });

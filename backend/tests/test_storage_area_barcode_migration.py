@@ -24,11 +24,16 @@ _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 _MATCHES = sorted(_VERSIONS.glob("*_backfill_storage_area_barcodes.py"))
 assert len(_MATCHES) == 1, f"expected exactly one migration, found {_MATCHES}"
 MIGRATION = _MATCHES[0]
+_RECONCILIATIONS = sorted(_VERSIONS.glob("*_reconcile_storage_area_barcodes.py"))
+assert (
+    len(_RECONCILIATIONS) == 1
+), f"expected exactly one reconciliation migration, found {_RECONCILIATIONS}"
+RECONCILIATION = _RECONCILIATIONS[0]
 
 
-def _load_migration():
+def _load_migration(path=MIGRATION):
     spec = importlib.util.spec_from_file_location(
-        "backfill_storage_area_barcodes", MIGRATION
+        "backfill_storage_area_barcodes", path
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -81,8 +86,8 @@ def _seed(engine, areas, orgs, *, area_rows, org_rows):
             )
 
 
-def _run(engine, direction: str):
-    module = _load_migration()
+def _run(engine, direction: str, path=MIGRATION):
+    module = _load_migration(path)
     with engine.connect() as conn:
         ctx = MigrationContext.configure(conn)
         with Operations.context(ctx):
@@ -259,3 +264,46 @@ class TestDowngrade:
         _run(engine, "downgrade")
 
         assert _barcodes(engine)["a1"] == "SA-000001"
+
+
+class TestRevisionCollisionReconciliation:
+    def test_backfills_an_install_already_stamped_at_the_colliding_revision(
+        self, engine, tables
+    ):
+        areas, orgs = tables
+        _seed(
+            engine,
+            areas,
+            orgs,
+            org_rows=[("org-1", {})],
+            area_rows=[
+                {"id": "used", "organization_id": "org-1", "barcode": "SA-000001"},
+                {"id": "missing", "organization_id": "org-1"},
+            ],
+        )
+
+        # This models a database where Alembic skipped the original backfill
+        # because the old vendor migration had already stamped 20260816_0002.
+        _run(engine, "upgrade", RECONCILIATION)
+
+        assert _barcodes(engine)["missing"] == "SA-000002"
+        assert _settings(engine, "org-1")["storage_area_barcode"] == {
+            "prefix": "SA-",
+            "next_number": 3,
+        }
+
+    def test_is_a_no_op_after_the_original_backfill(self, engine, tables):
+        areas, orgs = tables
+        _seed(
+            engine,
+            areas,
+            orgs,
+            org_rows=[("org-1", {})],
+            area_rows=[{"id": "a1", "organization_id": "org-1"}],
+        )
+
+        _run(engine, "upgrade")
+        before = (_barcodes(engine), _settings(engine, "org-1"))
+        _run(engine, "upgrade", RECONCILIATION)
+
+        assert (_barcodes(engine), _settings(engine, "org-1")) == before
