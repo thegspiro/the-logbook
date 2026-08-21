@@ -288,7 +288,9 @@ class CheckItemResultSubmit(BaseModel):
     """A single item result in a check submission."""
 
     template_item_id: str
-    compartment_name: str = Field(..., max_length=200)
+    # Nested containers are submitted as their full storage path. Each path
+    # segment may be 200 characters, so the combined snapshot is unbounded.
+    compartment_name: str
     item_name: str = Field(..., max_length=200)
     check_type: Optional[str] = Field(None, max_length=30)
     # "not_applicable" is a real answer, not a fault: a tool legitimately off
