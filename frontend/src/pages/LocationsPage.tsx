@@ -1470,7 +1470,7 @@ export default function LocationsPage() {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
-          <DialogPanel onClose={() => setShowStationModal(false)} className="w-full max-w-md">
+          <DialogPanel onClose={() => setShowStationModal(false)} className="modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
@@ -1578,7 +1578,7 @@ export default function LocationsPage() {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
-          <DialogPanel onClose={() => setShowRoomModal(false)} className="w-full max-w-md">
+          <DialogPanel onClose={() => setShowRoomModal(false)} className="modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}

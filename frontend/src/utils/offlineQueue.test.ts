@@ -134,7 +134,11 @@ describe('offlineQueue', () => {
       await enqueueCheck('shift-2', payload, []);
       expect(await pendingCount()).toBe(2);
 
-      await dequeueCheck((await listPendingChecks())[0]!.id);
+      // `?? ''` rather than a non-null assertion: an empty id dequeues nothing,
+      // so an unexpectedly empty queue fails on the count below instead of
+      // throwing somewhere less informative.
+      const [firstPending] = await listPendingChecks();
+      await dequeueCheck(firstPending?.id ?? '');
       expect(await pendingCount()).toBe(1);
     });
   });
