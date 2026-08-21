@@ -358,10 +358,16 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                sortedApplicants.map((applicant) => {
+                sortedApplicants.map((applicant, rowIndex) => {
                   const statusColor = APPLICANT_STATUS_COLORS[applicant.status];
                   const statusLabel = APPLICANT_STATUS_LABELS[applicant.status];
                   const isSelected = selected.has(applicant.id);
+                  // The menu is absolutely positioned inside `overflow-x-auto`,
+                  // which forces overflow-y to `auto` and clips it, and inside
+                  // the card's `overflow-hidden`, which clips it with no scroll
+                  // at all. Opening upward on the last rows keeps it within the
+                  // table's own box, where neither ancestor can cut it off.
+                  const menuOpensUp = rowIndex >= sortedApplicants.length - 3 && sortedApplicants.length > 3;
 
                   return (
                     <tr
@@ -446,7 +452,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="popover-panel absolute top-full right-0 z-10 mt-1 w-40 py-1">
+                          <div
+                            className={`popover-panel absolute right-0 z-10 w-40 py-1 ${
+                              menuOpensUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                            }`}
+                          >
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);
