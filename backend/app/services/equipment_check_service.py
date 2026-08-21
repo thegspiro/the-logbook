@@ -551,9 +551,9 @@ class EquipmentCheckService:
     ) -> Optional[tuple[List[CheckTemplateItem], bool]]:
         """Validate and insert a batch atomically, returning it in input order.
 
-        Stable IDs derived from the org, compartment, key and input position form
-        the retry ledger without requiring a separate table. A repeated key must
-        describe the identical request; it then returns the original rows.
+        A durable request fingerprint and stable item IDs make retries safe. A
+        repeated key must describe the identical request; it then returns the
+        original rows.
         """
         compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
