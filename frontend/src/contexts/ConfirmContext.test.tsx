@@ -93,6 +93,23 @@ describe('ConfirmProvider', () => {
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(false));
   });
 
+  it('answers no and closes the dialog if the requesting component unmounts', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ConfirmProvider>
+        <Asker onResult={onResult} />
+      </ConfirmProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText('Delete this room?')).toBeInTheDocument();
+
+    rerender(<ConfirmProvider>New screen</ConfirmProvider>);
+
+    await waitFor(() => expect(onResult).toHaveBeenCalledWith(false));
+    expect(screen.queryByText('Delete this room?')).not.toBeInTheDocument();
+  });
+
   it('answers no to a question that a second one replaces', async () => {
     const user = userEvent.setup();
     renderAsker({ onResult });

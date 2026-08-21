@@ -640,6 +640,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate production PWA artifacts
+        run: node scripts/validate-pwa.mjs
+
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
@@ -699,6 +702,11 @@ jobs:
       # read, so skipping it saves the run without losing any coverage.
       - name: Run E2E tests
         run: npx playwright test --project=chromium --grep-invert @screenshots
+
+      # Unlike the suite above, this builds and serves dist: service-worker
+      # registration is deliberately disabled on Vite's development server.
+      - name: Run production PWA smoke test
+        run: npm run test:pwa
 
       - name: Upload Playwright report
         if: failure()
