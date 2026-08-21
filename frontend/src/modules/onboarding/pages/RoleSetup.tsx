@@ -1052,7 +1052,7 @@ const PositionSetup: React.FC = () => {
             if (e.key === 'Escape') setShowCustomModal(false);
           }}
         >
-          <div ref={dialogRef} className="modal-panel w-full max-w-md p-6">
+          <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md p-6">
             <h3 id="custom-position-modal-title" className="text-theme-text-primary mb-4 text-xl font-bold">
               Create Custom Position
             </h3>

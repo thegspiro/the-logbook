@@ -51,7 +51,7 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
       aria-labelledby="extend-election-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div ref={dialogRef} className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="extend-election-modal-title" className="text-theme-text-primary text-lg font-medium">
             Extend Election Time

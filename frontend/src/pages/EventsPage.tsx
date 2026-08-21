@@ -1313,7 +1313,7 @@ export const EventsPage: React.FC = () => {
           aria-label="Import Events from CSV"
         >
           <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
-          <DialogPanel onClose={handleCloseImportModal} className="relative mx-4 w-full max-w-lg p-6">
+          <DialogPanel onClose={handleCloseImportModal} className="modal-panel-scroll relative mx-4 w-full max-w-lg p-6">
             <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Import Events from CSV</h3>
 
             {!importResult ? (
@@ -1470,7 +1470,7 @@ export const EventsPage: React.FC = () => {
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
           <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
-          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="relative mx-4 w-full max-w-md p-6">
+          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="modal-panel-scroll relative mx-4 w-full max-w-md p-6">
             <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>
