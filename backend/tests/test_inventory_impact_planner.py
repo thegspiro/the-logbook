@@ -115,7 +115,6 @@ def _prefs(uid, **kwargs):
 
 
 class TestFormatNeededSize:
-
     def test_none_prefs_or_field(self):
         assert InventoryService._format_needed_size(None, "shirt") is None
         assert InventoryService._format_needed_size(_prefs("u"), None) is None
@@ -165,7 +164,6 @@ class TestFormatNeededSize:
 
 
 class TestAnalyzeImpact:
-
     @pytest.mark.asyncio
     async def test_aggregates_sizes_and_related_holdings(self, service, mock_db):
         org_id = str(uuid4())
@@ -331,7 +329,6 @@ class TestAnalyzeImpact:
 
 
 class TestNormalizeSizeKey:
-
     def test_alias_canonicalisation(self):
         assert InventoryService._normalize_size_key("3XL") == "xxxl"
         assert InventoryService._normalize_size_key("XXXL") == "xxxl"
@@ -347,7 +344,6 @@ class TestNormalizeSizeKey:
 
 
 class TestItemStockSizeValue:
-
     def test_prefers_standard_size_skips_custom(self):
         # 'custom' sentinel falls through to the free-text size
         assert (
@@ -366,7 +362,6 @@ class TestItemStockSizeValue:
 
 
 class TestStockAndCostBySize:
-
     @pytest.mark.asyncio
     async def test_pool_and_individual_counts(self, service, mock_db):
         items = [
@@ -406,7 +401,6 @@ class TestStockAndCostBySize:
 
 
 class TestAnalyzeImpactStockAware:
-
     @pytest.mark.asyncio
     async def test_shortfall_nets_demand_against_stock(self, service, mock_db):
         org_id = str(uuid4())
@@ -514,7 +508,6 @@ class TestAnalyzeImpactStockAware:
 
 
 class TestReplacementAware:
-
     @pytest.mark.asyncio
     async def test_worn_and_expired_count_as_needing(self, service, mock_db):
         org_id = str(uuid4())
@@ -592,7 +585,6 @@ class TestReplacementAware:
 
 
 class TestCreateReorderFromPlan:
-
     @pytest.mark.asyncio
     async def test_creates_one_reorder_per_size_with_shortfall(self, service, mock_db):
         org_id = str(uuid4())
@@ -674,7 +666,6 @@ class TestCreateReorderFromPlan:
 
 
 class TestBulkIssueFromPlan:
-
     @pytest.mark.asyncio
     async def test_issues_to_needing_members_and_skips(self, service, mock_db):
         org_id = str(uuid4())
@@ -749,7 +740,6 @@ class TestBulkIssueFromPlan:
 
 
 class TestRequestMemberSizes:
-
     @pytest.mark.asyncio
     async def test_notifies_only_missing_size_members(self, service, mock_db):
         org_id = str(uuid4())
@@ -793,7 +783,6 @@ class TestRequestMemberSizes:
 
 
 class TestAllowanceAware:
-
     @pytest.mark.asyncio
     async def test_flags_members_at_or_over_cap(self, service, mock_db):
         org_id = str(uuid4())
@@ -869,6 +858,45 @@ class TestAllowanceAware:
         assert result["members"][0]["over_allowance"] is True
 
     @pytest.mark.asyncio
+    async def test_only_primary_role_allowance_is_used(self, service, mock_db):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        org_wide = SimpleNamespace(
+            id="a-org",
+            role_id=None,
+            max_quantity=5,
+            period_type="career",
+        )
+        secondary_role = SimpleNamespace(
+            id="a-secondary",
+            role_id="pos-secondary",
+            max_quantity=1,
+            period_type="career",
+        )
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result([org_wide, secondary_role]),
+            # The query orders positions by descending priority, so primary is
+            # first. A secondary-role allowance must not override org-wide.
+            _rows_result([("u1", "pos-primary"), ("u1", "pos-secondary")]),
+            _rows_result([("item-1",)]),
+            _rows_result([("u1", 1)]),
+        ]
+
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={
+                "stock_category_id": cat_id,
+                "allowance_aware": True,
+            },
+            include_contact=False,
+        )
+
+        assert result["members_over_allowance"] == 0
+        assert result["members"][0]["over_allowance"] is False
+
+    @pytest.mark.asyncio
     async def test_no_allowance_defined_no_flags(self, service, mock_db):
         org_id = str(uuid4())
         users = [_user("u1", "Amy", "Adams")]
@@ -895,7 +923,6 @@ class TestAllowanceAware:
 
 
 class TestSavedPlans:
-
     @pytest.mark.asyncio
     async def test_create_plan(self, service, mock_db):
         mock_db.flush = AsyncMock()
@@ -962,7 +989,6 @@ class TestSavedPlans:
 
 
 class TestImpactPlanPdf:
-
     def _data(self, **overrides):
         data = {
             "total_members": 2,
@@ -1103,7 +1129,6 @@ class TestImpactPlanPdf:
 
 
 class TestImpactPlannerOptions:
-
     @pytest.mark.asyncio
     async def test_options_shape(self, service, mock_db):
         org_id = str(uuid4())
