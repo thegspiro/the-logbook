@@ -30,12 +30,17 @@ export interface ConfirmOptions {
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
+type RequestConfirmFn = (options: ConfirmOptions, signal: AbortSignal) => Promise<boolean>;
 
-const ConfirmContext = createContext<ConfirmFn | null>(null);
+const ConfirmContext = createContext<RequestConfirmFn | null>(null);
+const missingProviderMessage =
+  'useConfirm must be used within a ConfirmProvider (mounted at the app root, and in test render helpers)';
 
 interface PendingConfirm {
   options: ConfirmOptions;
   resolve: (confirmed: boolean) => void;
+  signal: AbortSignal;
+  abortHandler: () => void;
 }
 
 export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,17 +58,40 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
     []
   );
 
-  const confirm = useCallback<ConfirmFn>(
-    (options) =>
+  const confirm = useCallback<RequestConfirmFn>(
+    (options, signal) =>
       new Promise<boolean>((resolve) => {
+        if (signal.aborted) {
+          resolve(false);
+          return;
+        }
+
         pendingRef.current?.resolve(false);
-        setPending({ options, resolve });
+        const request: PendingConfirm = {
+          options,
+          signal,
+          abortHandler: () => {
+            if (pendingRef.current === request) {
+              request.resolve(false);
+              pendingRef.current = null;
+              setPending(null);
+            }
+          },
+          resolve: (confirmed) => {
+            signal.removeEventListener('abort', request.abortHandler);
+            resolve(confirmed);
+          },
+        };
+        signal.addEventListener('abort', request.abortHandler, { once: true });
+        pendingRef.current = request;
+        setPending(request);
       }),
     []
   );
 
   const settle = useCallback((confirmed: boolean) => {
     pendingRef.current?.resolve(confirmed);
+    pendingRef.current = null;
     setPending(null);
   }, []);
 
@@ -95,11 +123,25 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useConfirm(): { confirm: ConfirmFn } {
-  const confirm = useContext(ConfirmContext);
-  if (!confirm) {
-    throw new Error(
-      'useConfirm must be used within a ConfirmProvider (mounted at the app root, and in test render helpers)'
-    );
+  const requestConfirm = useContext(ConfirmContext);
+  const controllerRef = useRef(new AbortController());
+
+  useEffect(() => {
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    return () => controller.abort();
+  }, []);
+
+  const confirm = useCallback<ConfirmFn>(
+    (options) => {
+      if (!requestConfirm) throw new Error(missingProviderMessage);
+      return requestConfirm(options, controllerRef.current.signal);
+    },
+    [requestConfirm]
+  );
+
+  if (!requestConfirm) {
+    throw new Error(missingProviderMessage);
   }
   return { confirm };
 }
