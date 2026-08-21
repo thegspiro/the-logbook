@@ -79,6 +79,18 @@ describe('Modal', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
+  it('keeps long form content in a dedicated scrolling region', () => {
+    render(<Modal {...defaultProps} footer={<button>Save</button>} />);
+
+    const panel = screen.getByTestId('modal-panel');
+    const content = screen.getByTestId('modal-content');
+    const footer = screen.getByTestId('modal-footer');
+
+    expect(panel).toHaveClass('flex-col', 'overflow-hidden');
+    expect(content).toHaveClass('modal-content');
+    expect(footer).toHaveClass('modal-footer', 'shrink-0');
+  });
+
   it('does not render footer section when not provided', () => {
     render(<Modal {...defaultProps} />);
     expect(screen.queryByTestId('modal-footer')).not.toBeInTheDocument();
@@ -151,6 +163,16 @@ describe('Modal', () => {
     expect(document.body.style.overflow).toBe('hidden');
 
     unmount();
-    expect(document.body.style.overflow).toBe('unset');
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('removes the page mask completely when closed', () => {
+    const { rerender } = render(<Modal {...defaultProps} />);
+    expect(screen.getByTestId('modal-backdrop')).toBeInTheDocument();
+
+    rerender(<Modal {...defaultProps} isOpen={false} />);
+
+    expect(screen.queryByTestId('modal-backdrop')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
   });
 });

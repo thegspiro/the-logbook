@@ -229,7 +229,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="divide-theme-surface-border min-w-full divide-y">
+            <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
               <thead>
                 <tr>
                   <th
@@ -267,21 +267,24 @@ const EventCheckInMonitoringPage: React.FC = () => {
               <tbody className="divide-theme-surface-border divide-y">
                 {stats.recent_check_ins.map((activity) => (
                   <tr key={activity.user_id} className="hover:bg-theme-surface-hover">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
                       <div className="text-theme-text-primary text-sm font-medium">{activity.user_name}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Email" className="px-6 py-4 whitespace-nowrap">
                       <div className="text-theme-text-secondary text-sm">{activity.user_email}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs leading-5 font-semibold text-green-800 dark:bg-green-500/20 dark:text-green-400">
                         {activity.rsvp_status}
                       </span>
                     </td>
-                    <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Guests" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
                       {activity.guest_count}
                     </td>
-                    <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                    <td
+                      data-label="Checked in"
+                      className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap"
+                    >
                       {formatTimeAgo(activity.checked_in_at)}
                     </td>
                   </tr>
