@@ -950,7 +950,12 @@ export const EventsPage: React.FC = () => {
 
         {/* Filter Tabs */}
         <div className="border-theme-surface-border -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
-          <nav className="-mb-px flex scrollbar-thin space-x-4 overflow-x-auto pb-px sm:space-x-8" aria-label="Tabs">
+          <nav
+            className="-mb-px flex scrollbar-thin space-x-4 overflow-x-auto pb-px sm:space-x-8"
+            data-mobile-scroll-region
+            aria-label="Event filters"
+            tabIndex={0}
+          >
             {filterTabs.map((filter) => (
               <button
                 key={filter}
