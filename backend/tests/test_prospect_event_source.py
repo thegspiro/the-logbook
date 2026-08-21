@@ -4,7 +4,7 @@ Prospects-by-source-event tests.
 Covers the "which applicants did this event bring in" filter shared by the
 event detail card and the pipeline board's "came from" dropdown:
 
-- ``list_prospects(event_id=...)`` narrows through ``prospect_event_links``
+- ``list_prospects(event_id=...)`` narrows through explicit source metadata
 - ``list_source_events`` counts distinct applicants and scopes to the org
 - the endpoint refuses an event id belonging to another organization
 
@@ -27,6 +27,11 @@ def _compiled(db) -> str:
     return str(statement.compile(compile_kwargs={"literal_binds": False}))
 
 
+def _compiled_params(db) -> dict:
+    statement = db.execute.await_args_list[-1].args[0]
+    return statement.compile().params
+
+
 def _list_db():
     """A session whose execute() serves both the count and the data query."""
     db = AsyncMock()
@@ -38,15 +43,14 @@ def _list_db():
 
 
 class TestListProspectsByEvent:
-    async def test_event_id_filters_through_the_link_table(self):
+    async def test_event_id_filters_through_source_metadata(self):
         db = _list_db()
         await MembershipPipelineService(db).list_prospects(
             organization_id="org-1", event_id="event-1"
         )
         sql = _compiled(db)
-        assert "prospect_event_links" in sql
-        # Still org-scoped: the link table carries no organization_id of its
-        # own, so the prospect scope is the only tenancy boundary here.
+        assert "source_event_id" in _compiled_params(db).values()
+        assert "prospect_event_links" not in sql
         assert "prospective_members.organization_id" in sql
 
     async def test_without_event_id_no_link_join(self):
@@ -74,6 +78,21 @@ class TestListSourceEvents:
         db = self._rows_db([])
         await MembershipPipelineService(db).list_source_events("org-1")
         assert "count(distinct" in _compiled(db).lower()
+
+    async def test_uses_source_metadata_not_general_event_links(self):
+        db = self._rows_db([])
+        await MembershipPipelineService(db).list_source_events("org-1")
+        sql = _compiled(db)
+        assert "source_event_id" in _compiled_params(db).values()
+        assert "prospect_event_links" not in sql
+
+    async def test_excludes_hidden_prospects(self):
+        db = self._rows_db([])
+        await MembershipPipelineService(db).list_source_events(
+            "org-1", exclude_prospect_ids={"private-prospect"}
+        )
+        sql = _compiled(db)
+        assert "prospective_members.id NOT IN" in sql
 
     async def test_serializes_enum_event_type_to_its_value(self):
         started = datetime(2026, 9, 1, 18, 0, tzinfo=timezone.utc)
@@ -142,6 +161,27 @@ class TestEndpointOrgScoping:
                 hidden_prospect_ids=set(),
             )
         assert exc.value.status_code == 404
+
+    async def test_source_events_passes_hidden_prospects_to_service(self):
+        from app.api.v1.endpoints.membership_pipeline import (
+            list_prospect_source_events,
+        )
+
+        db = AsyncMock()
+        user = MagicMock(organization_id="org-1")
+        with patch(
+            "app.api.v1.endpoints.membership_pipeline.MembershipPipelineService"
+        ) as service_cls:
+            service_cls.return_value.list_source_events = AsyncMock(return_value=[])
+            await list_prospect_source_events(
+                db=db,
+                current_user=user,
+                hidden_prospect_ids={"private-prospect"},
+            )
+
+        service_cls.return_value.list_source_events.assert_awaited_once_with(
+            "org-1", exclude_prospect_ids={"private-prospect"}
+        )
 
     async def test_passes_an_in_org_event_through_to_the_service(self):
         from app.api.v1.endpoints.membership_pipeline import list_prospects
