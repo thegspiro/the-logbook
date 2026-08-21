@@ -7634,7 +7634,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `check_id` | VARCHAR(36) | no | FK, IDX |  | → `shift_equipment_checks.id` ON DELETE CASCADE |
 | `template_item_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_items.id` ON DELETE SET NULL |
-| `compartment_name` | VARCHAR(200) | no |  |  |  |
+| `compartment_name` | TEXT | no |  |  |  |
 | `item_name` | VARCHAR(200) | no |  |  |  |
 | `check_type` | VARCHAR(30) | yes |  |  |  |
 | `status` | VARCHAR(30) | no |  |  |  |
