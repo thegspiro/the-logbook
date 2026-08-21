@@ -24,10 +24,11 @@ import { DialogPanel } from '../../../components/ux/DialogPanel';
 
 interface Props {
   facilityId: string;
-  canManage: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
-export default function MaintenanceSection({ facilityId, canManage }: Props) {
+export default function MaintenanceSection({ facilityId, canEdit, canDelete }: Props) {
   const tz = useTimezone();
   const {
     records: filtered,
@@ -56,7 +57,7 @@ export default function MaintenanceSection({ facilityId, canManage }: Props) {
     <div className="card">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">Maintenance Records</h2>
-        {canManage && (
+        {canEdit && (
           <button
             onClick={() => openCreate()}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -164,9 +165,9 @@ export default function MaintenanceSection({ facilityId, canManage }: Props) {
                     {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                   </div>
                 </div>
-                {canManage && (
+                {(canEdit || canDelete) && (
                   <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    {!record.isCompleted && (
+                    {canEdit && !record.isCompleted && (
                       <button
                         onClick={() => {
                           void handleComplete(record);
@@ -178,24 +179,28 @@ export default function MaintenanceSection({ facilityId, canManage }: Props) {
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <button
-                      onClick={() => openEdit(record)}
-                      title="Edit"
-                      aria-label="Edit record"
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleDelete(record);
-                      }}
-                      title="Delete"
-                      aria-label="Delete record"
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => openEdit(record)}
+                        title="Edit"
+                        aria-label="Edit record"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          void handleDelete(record);
+                        }}
+                        title="Delete"
+                        aria-label="Delete record"
+                        className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -204,9 +209,9 @@ export default function MaintenanceSection({ facilityId, canManage }: Props) {
         )}
       </div>
 
-      {canManage && showModal && (
+      {canEdit && showModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {

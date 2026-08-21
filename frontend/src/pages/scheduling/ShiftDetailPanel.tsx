@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import {
   X,
   Users,
@@ -46,7 +47,7 @@ import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
-import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
+import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
@@ -61,6 +62,8 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
+import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
@@ -68,6 +71,7 @@ import { AssignmentActions } from './AssignmentActions';
 import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
+import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -76,6 +80,10 @@ interface ShiftDetailPanelProps {
 }
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initialShift, onClose, onRefresh }) => {
+  // Mounted only while open. Takes the mobile bottom bar off the drawer, whose
+  // full-height panel otherwise runs behind it.
+  useOverlaySurface();
+
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
@@ -87,6 +95,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     loadMembers,
     platoonsEnabled,
     requireEndOfShiftChecks,
+    callTrackingMode,
     loadSettings,
   } = useSchedulingStore();
   useEffect(() => {
@@ -243,8 +252,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const positionOptions: [string, string][] = useMemo(
     () =>
       hasApparatusPositions
-        ? apparatusPositions.map((p) => {
-            const name = typeof p === 'string' ? p : p.position;
+        ? apparatusPositions.map(({ position: name }) => {
             return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as [string, string];
           })
         : Object.entries(POSITION_LABELS),
@@ -734,11 +742,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   }, [equipmentCheckSummaries]);
 
   const hasIncompleteEquipmentChecks = useMemo(() => {
-    return endOfShiftChecks.some((c) => !c.isCompleted);
+    return endOfShiftChecks.some((c) => !isShiftCheckCompleted(c));
   }, [endOfShiftChecks]);
 
   const completedEquipmentChecks = useMemo(() => {
-    return endOfShiftChecks.filter((c) => c.isCompleted);
+    return endOfShiftChecks.filter(isShiftCheckCompleted);
   }, [endOfShiftChecks]);
 
   /**
@@ -1107,7 +1115,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
               const understaffed = target > 0 && activeAssignments.length < target;
               const outstandingStartChecks = equipmentCheckSummaries.filter(
-                (c) => c.checkTiming === 'start_of_shift' && !c.isCompleted
+                (c) => c.checkTiming === 'start_of_shift' && !isShiftCheckCompleted(c)
               ).length;
               return (
                 <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
@@ -1224,8 +1232,29 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </div>
           )}
 
+          {/* Close-out. A department that records call counts rather than
+              incidents gets the three-step wizard, which saves each step as it
+              goes; everyone else keeps the single checklist below unchanged. */}
+          {showFinalizeChecklist && callTrackingMode === 'count_only' && (
+            <ShiftCloseoutWizard
+              shiftId={shift.id}
+              unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
+              tz={tz}
+              outstandingChecks={endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length}
+              requireChecks={requireEndOfShiftChecks}
+              onCancel={() => setShowFinalizeChecklist(false)}
+              onFinalized={() => {
+                setShowFinalizeChecklist(false);
+                // Mirrors handleFinalize: refresh the panel's own copy of the
+                // shift and let the parent list re-read it too.
+                void schedulingService.getShift(shift.id).then(setShift);
+                onRefresh?.();
+              }}
+            />
+          )}
+
           {/* Finalize Checklist */}
-          {showFinalizeChecklist && (
+          {showFinalizeChecklist && callTrackingMode !== 'count_only' && (
             <div className="space-y-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
               <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                 <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
@@ -1248,9 +1277,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         Must fix before close-out: end-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. Complete
-                        them, or override below with a reason that goes on the record.
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
+                        pending. Complete them, or override below with a reason that goes on the record.
                       </p>
                     </div>
                   </div>
@@ -1269,9 +1298,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         End-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. The
-                        shift will close with them outstanding.
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
+                        pending. The shift will close with them outstanding.
                       </p>
                     </div>
                   </div>
@@ -2337,7 +2366,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {showQR && (
                 <div className="border-theme-surface-border mt-2 inline-block rounded-lg border bg-white p-4">
                   <QRCodeSVG
-                    value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
+                    value={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
                     size={200}
                     level="M"
                     includeMargin
@@ -2357,6 +2386,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Print QR Card
                   </button>
                 </div>
+              )}
+              {showQR && (
+                <NfcTagWriter
+                  url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
+                  targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                  actionNoun="shift check-in"
+                />
               )}
             </div>
           )}
@@ -2390,7 +2426,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
             const isOfficer = user?.id === shift.shift_officer_id;
             const showReportBtn = shiftEnded && (isOfficer || canManage);
-            const showChecklistLink = equipmentCheckSummaries.some((s) => !s.isCompleted);
+            const showChecklistLink = equipmentCheckSummaries.some((s) => !isShiftCheckCompleted(s));
 
             if (!showReportBtn && !showChecklistLink) return null;
 
@@ -2436,16 +2472,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   {/* Inline status summary — always visible */}
                   {(() => {
                     const passed = equipmentCheckSummaries.filter(
-                      (s) => s.isCompleted && s.overallStatus === 'pass'
+                      (s) => isShiftCheckCompleted(s) && s.overallStatus === 'pass'
                     ).length;
                     const failed = equipmentCheckSummaries.filter(
-                      (s) => s.isCompleted && s.overallStatus !== 'pass'
+                      (s) => isShiftCheckCompleted(s) && s.overallStatus !== 'pass'
                     ).length;
                     const inProgress = equipmentCheckSummaries.filter(
-                      (s) => !s.isCompleted && s.completedItems > 0
+                      (s) => !isShiftCheckCompleted(s) && s.completedItems > 0
                     ).length;
                     const notStarted = equipmentCheckSummaries.filter(
-                      (s) => !s.isCompleted && s.completedItems === 0
+                      (s) => !isShiftCheckCompleted(s) && s.completedItems === 0
                     ).length;
                     return (
                       <span className="ml-1 flex items-center gap-1.5">
@@ -2496,7 +2532,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           >
                             <div className="flex items-center justify-between">
                               <p className="text-theme-text-primary text-sm font-medium">{summary.templateName}</p>
-                              {summary.isCompleted ? (
+                              {isShiftCheckCompleted(summary) ? (
                                 summary.overallStatus === 'pass' ? (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
                                     <Check className="h-3 w-3" /> Pass

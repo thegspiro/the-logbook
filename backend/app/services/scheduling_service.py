@@ -13,12 +13,13 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
+from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
 from app.models.training import (
     AssignmentStatus,
@@ -51,6 +52,7 @@ from app.models.user import (
     User,
     user_positions,
 )
+from app.services.call_tracking_service import CallTrackingService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
 from app.utils.apparatus_ref import (
@@ -58,6 +60,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
+from app.utils.positions import normalize_stored_positions
 
 
 def _position_label(position) -> str:
@@ -318,6 +321,9 @@ class SchedulingService:
         - ``["officer", "emt"]`` → ``[{"position": "officer", "required": True}, ...]``
         - ``[{"position": "officer", "required": True}, ...]`` → pass-through
         - Event metadata dicts (flat_positions / resources) → expanded
+
+        Display only. Saving this output would flatten an event template's
+        metadata into seats — use ``app.utils.positions`` on a write path.
         """
         if not positions:
             return []
@@ -352,17 +358,6 @@ class SchedulingService:
                             result.append({"position": name, "required": True})
                 return result
         return []
-
-    @staticmethod
-    def _resolve_template_positions(positions: Any) -> Optional[List[str]]:
-        """Extract a flat list of position strings (legacy helper).
-
-        Delegates to ``normalize_positions`` and strips structure.
-        """
-        slots = SchedulingService.normalize_positions(positions)
-        if not slots:
-            return None
-        return [s["position"] for s in slots]
 
     # ============================================
     # Enrichment Helpers
@@ -702,6 +697,10 @@ class SchedulingService:
                         and apparatus_min_staffing is not None
                     ):
                         shift_data["min_staffing"] = apparatus_min_staffing
+            if "positions" in shift_data:
+                shift_data["positions"] = normalize_stored_positions(
+                    shift_data["positions"]
+                )
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -1367,6 +1366,11 @@ class SchedulingService:
             if requalify_error:
                 return None, requalify_error
 
+            if "positions" in update_data:
+                update_data["positions"] = normalize_stored_positions(
+                    update_data["positions"]
+                )
+
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
                     setattr(shift, key, value)
@@ -1904,6 +1908,12 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            tracking = await CallTrackingService(self.db).get_settings(
+                str(organization_id)
+            )
+            if tracking.get("mode") != CallTrackingMode.DETAILED:
+                return None, "Detailed call records are disabled for this organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
@@ -1996,6 +2006,10 @@ class SchedulingService:
             self.db, apparatus_id, organization_id
         ):
             return None, "Apparatus not found"
+        if "positions" in template_data:
+            template_data["positions"] = normalize_stored_positions(
+                template_data["positions"]
+            )
         return await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
@@ -2037,6 +2051,10 @@ class SchedulingService:
             self.db, apparatus_id, organization_id
         ):
             return None, "Apparatus not found"
+        if "positions" in update_data:
+            update_data["positions"] = normalize_stored_positions(
+                update_data["positions"]
+            )
         return await self._crud_update(template, update_data)
 
     async def delete_template(
@@ -2447,9 +2465,14 @@ class SchedulingService:
                     apparatus_id=getattr(template, "apparatus_id", None),
                     platoon=shift_platoon,
                     color=shift_color,
-                    positions=self._resolve_template_positions(
+                    # Structured slots, not bare strings: this writer is how
+                    # a recurring pattern fills the calendar, so stripping the
+                    # required flag here would re-seed the legacy shape after
+                    # the migration and quietly promote every optional seat.
+                    positions=self.normalize_positions(
                         getattr(template, "positions", None)
-                    ),
+                    )
+                    or None,
                     min_staffing=getattr(template, "min_staffing", None),
                     created_by=created_by,
                 )
@@ -3621,12 +3644,37 @@ class SchedulingService:
 
         # Paginated results
         query = (
-            query.order_by(ShiftSwapRequest.created_at.desc()).offset(skip).limit(limit)
+            query.order_by(
+                case(
+                    (ShiftSwapRequest.status == SwapRequestStatus.PENDING, 0), else_=1
+                ),
+                ShiftSwapRequest.created_at.desc(),
+                ShiftSwapRequest.id.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
         )
         result = await self.db.execute(query)
         swap_requests = result.scalars().all()
 
         return swap_requests, total
+
+    async def get_swap_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[SwapRequestStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftSwapRequest], int]:
+        """Get only swaps in which ``user_id`` is a participant.
+
+        Member-facing callers should use this method rather than accepting an
+        optional client filter on the organization-wide query.
+        """
+        return await self.get_swap_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
 
     async def get_swap_request_by_id(
         self, request_id: UUID, organization_id: UUID
@@ -3639,6 +3687,23 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def get_swap_request_for_user_by_id(
+        self, request_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftSwapRequest]:
+        """Get a swap only when ``user_id`` is its requester or target."""
+        result = await self.db.execute(
+            select(ShiftSwapRequest)
+            .where(ShiftSwapRequest.id == str(request_id))
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
+            .where(
+                or_(
+                    ShiftSwapRequest.requesting_user_id == str(user_id),
+                    ShiftSwapRequest.target_user_id == str(user_id),
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def review_swap_request(
         self,
         request_id: UUID,
@@ -3647,7 +3712,11 @@ class SchedulingService:
         status: SwapRequestStatus,
         reviewer_notes: Optional[str] = None,
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Review (approve/deny) a shift swap request"""
+        """Review (approve/deny) a shift swap request.
+
+        This is a manager-review workflow, not participant acceptance: neither
+        the requester nor a targeted participant may review the request.
+        """
         try:
             swap_request = await self.get_swap_request_by_id(
                 request_id, organization_id
@@ -3657,6 +3726,17 @@ class SchedulingService:
 
             if swap_request.status != SwapRequestStatus.PENDING:
                 return None, "Swap request is no longer pending"
+
+            # Enforce separation of duties before mutating either the request
+            # or its assignments. A target participant's agreement, if a
+            # dedicated acceptance workflow is added, must remain distinct
+            # from the manager approval performed by this endpoint.
+            if str(reviewer_id) == str(swap_request.requesting_user_id):
+                return None, "Requesters cannot review their own swap requests"
+            if swap_request.target_user_id and str(reviewer_id) == str(
+                swap_request.target_user_id
+            ):
+                return None, "Target participants cannot manager-review swap requests"
 
             swap_request.status = status
             swap_request.reviewed_by = reviewer_id
@@ -3804,11 +3884,32 @@ class SchedulingService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(ShiftTimeOff.start_date.asc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(
+                case((ShiftTimeOff.status == TimeOffStatus.PENDING, 0), else_=1),
+                ShiftTimeOff.created_at.desc(),
+                ShiftTimeOff.id.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         time_off_requests = result.scalars().all()
 
         return time_off_requests, total
+
+    async def get_time_off_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[TimeOffStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftTimeOff], int]:
+        """Get only ``user_id``'s time-off requests for member-facing reads."""
+        return await self.get_time_off_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
 
     async def get_time_off_by_id(
         self, time_off_id: UUID, organization_id: UUID
@@ -3818,6 +3919,18 @@ class SchedulingService:
             select(ShiftTimeOff)
             .where(ShiftTimeOff.id == str(time_off_id))
             .where(ShiftTimeOff.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_time_off_for_user_by_id(
+        self, time_off_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftTimeOff]:
+        """Get a time-off request only when it belongs to ``user_id``."""
+        result = await self.db.execute(
+            select(ShiftTimeOff)
+            .where(ShiftTimeOff.id == str(time_off_id))
+            .where(ShiftTimeOff.organization_id == str(organization_id))
+            .where(ShiftTimeOff.user_id == str(user_id))
         )
         return result.scalar_one_or_none()
 
@@ -3841,6 +3954,11 @@ class SchedulingService:
 
             if time_off.status != TimeOffStatus.PENDING:
                 return None, "Time-off request is no longer pending"
+
+            # Check before changing fields or cancelling assignments so a
+            # rejected self-review leaves the request completely pending.
+            if str(reviewer_id) == str(time_off.user_id):
+                return None, "Requesters cannot review their own time-off requests"
 
             time_off.status = status
             time_off.approved_by = reviewer_id
@@ -5124,8 +5242,7 @@ class SchedulingService:
         return sum(
             1
             for s in summaries
-            if s.get("check_timing") == "end_of_shift"
-            and (not s.get("is_completed") or s.get("overall_status") == "incomplete")
+            if s.get("check_timing") == "end_of_shift" and not s.get("is_completed")
         )
 
     async def finalize_shift(
@@ -5136,6 +5253,10 @@ class SchedulingService:
         manual_hours: Optional[List[Dict[str, Any]]] = None,
         override_incomplete_checks: bool = False,
         pass_down_notes: Optional[str] = None,
+        reported_call_count: Optional[int] = None,
+        reported_call_types: Optional[Dict[str, int]] = None,
+        member_call_counts_in: Optional[Dict[str, int]] = None,
+        attach_call_ids: Optional[List[str]] = None,
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Mark a shift as finalized after officer review.
 
@@ -5146,6 +5267,15 @@ class SchedulingService:
         ``manual_hours`` is an optional list of
         ``{"user_id": str, "hours": float}`` dicts that create attendance
         records for members who did not check in/out.
+
+        Call volume comes from one of two places depending on the org's
+        ``call_tracking.mode``. In ``detailed`` mode it is derived from the
+        per-incident ``ShiftCall`` rows, as it always has been. In
+        ``count_only`` mode the officer reports a number at close-out and it is
+        recorded as PII-free ``OrgCall``/``OrgCallResponse`` rows, which then
+        become the source of truth for the snapshot — so re-finalizing cannot
+        wipe a typed number back to zero the way a bare
+        ``COUNT(ShiftCall)`` would.
 
         When the org enables ``require_end_of_shift_checks``, finalization is
         rejected while any end-of-shift equipment check is outstanding, unless
@@ -5164,15 +5294,30 @@ class SchedulingService:
             if shift.end_time and shift.end_time > now:
                 return None, "Cannot finalize a shift that has not ended"
 
+            # One org fetch serves both the equipment-check enforcement below
+            # and the call-tracking mode further down. Reading it twice was a
+            # redundant round-trip on a path that already does several.
+            org = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == str(organization_id))
+                )
+            ).scalar_one_or_none()
+            # Imported here rather than at module scope, matching the sibling
+            # call site above: a top-level import closes the cycle.
+            from app.services.shift_eligibility_service import (
+                ShiftEligibilityService,
+            )
+
+            eligibility = ShiftEligibilityService(self.db)
+            count_only = (
+                eligibility.get_call_tracking_settings(org).get("mode")
+                == CallTrackingMode.COUNT_ONLY
+                if org
+                else False
+            )
+
             # Enforce end-of-shift equipment checks when the org requires it.
             if not override_incomplete_checks:
-                org = (
-                    await self.db.execute(
-                        select(Organization).where(
-                            Organization.id == str(organization_id)
-                        )
-                    )
-                ).scalar_one_or_none()
                 require_checks = bool(
                     ((org.settings or {}) if org else {})
                     .get("scheduling", {})
@@ -5233,13 +5378,42 @@ class SchedulingService:
                     open_att.duration_minutes = max(int(delta.total_seconds() / 60), 0)
             await self.db.flush()
 
-            # Snapshot call count
-            call_result = await self.db.execute(
-                select(func.count(ShiftCall.id)).where(
-                    ShiftCall.shift_id == str(shift_id)
+            # Snapshot call count. Which source is authoritative depends on
+            # how the department tracks calls — see the docstring.
+            call_service = CallTrackingService(self.db)
+
+            if count_only:
+                # Attach to calls another unit already logged *before*
+                # recording our own, so a shared call is counted toward the
+                # total instead of being duplicated alongside it.
+                for call_id in attach_call_ids or []:
+                    ok, attach_err = await call_service.attach_response(
+                        str(call_id), shift, str(organization_id)
+                    )
+                    if not ok:
+                        return None, attach_err
+
+                if reported_call_count is not None:
+                    _, call_err = await call_service.record_shift_calls(
+                        shift=shift,
+                        organization_id=str(organization_id),
+                        total_calls=reported_call_count,
+                        type_counts=reported_call_types,
+                        recorded_by=finalized_by_user_id,
+                    )
+                    if call_err:
+                        return None, call_err
+
+                shift.call_count = await call_service.shift_response_count(
+                    str(shift_id)
                 )
-            )
-            shift.call_count = call_result.scalar() or 0
+            else:
+                call_result = await self.db.execute(
+                    select(func.count(ShiftCall.id)).where(
+                        ShiftCall.shift_id == str(shift_id)
+                    )
+                )
+                shift.call_count = call_result.scalar() or 0
 
             # Snapshot total hours from attendance duration
             hours_result = await self.db.execute(
@@ -5252,17 +5426,39 @@ class SchedulingService:
                 round(float(total_min) / 60.0, 1) if total_min > 0 else 0.0
             )
 
-            # Snapshot per-member call counts onto attendance records
-            member_call_counts = await self.compute_member_call_counts(shift_id)
+            # Snapshot per-member call counts onto attendance records.
+            #
+            # Member credit is its own quantity, never the shift's number
+            # restated: a member who came on at 0300 was not on the 2200 call.
+            # It is equally never summed back into a department total — with a
+            # four-person crew that multiplies every call by four.
             att_result = await self.db.execute(
                 select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift_id))
             )
-            for att in att_result.scalars().all():
-                att.call_count = member_call_counts.get(str(att.user_id), 0)
+            attendance_rows = att_result.scalars().all()
+
+            if count_only:
+                # No per-incident rows exist to attribute from, so everyone on
+                # the shift is credited with the apparatus's calls unless the
+                # officer adjusted them down for a late arrival or early out.
+                overrides = member_call_counts_in or {}
+                for att in attendance_rows:
+                    override = overrides.get(str(att.user_id))
+                    att.call_count = (
+                        min(int(override), shift.call_count)
+                        if override is not None
+                        else shift.call_count
+                    )
+            else:
+                member_call_counts = await self.compute_member_call_counts(shift_id)
+                for att in attendance_rows:
+                    att.call_count = member_call_counts.get(str(att.user_id), 0)
 
             shift.is_finalized = True
             shift.finalized_at = now
             shift.finalized_by = finalized_by_user_id
+            # The wizard is done; a reopened shift starts it over.
+            shift.closeout_step = None
             if pass_down_notes is not None:
                 shift.pass_down_notes = pass_down_notes.strip() or None
 
@@ -5300,6 +5496,261 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    # ============================================
+    # Resumable close-out
+    # ============================================
+
+    async def get_closeout_state(
+        self, shift_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Everything the close-out wizard needs, in one round trip.
+
+        Serves the resume point alongside the current saved values, so a phone
+        that locked on step 2 reopens where it was rather than at step 1.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return None, "Shift not found"
+
+        call_service = CallTrackingService(self.db)
+        tracking = await call_service.get_settings(str(organization_id))
+
+        att_rows = (
+            (
+                await self.db.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == str(shift_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        # Assigned members who never checked in have no attendance row, so a
+        # list built from attendance alone leaves them off the close-out
+        # entirely — no hours, no call credit, and no way for the officer to
+        # notice. They are listed with empty times for the officer to fill in;
+        # saving step 1 creates the row. This is what the old checklist's
+        # manual-hours field was for.
+        assigned_ids = (
+            (
+                await self.db.execute(
+                    select(ShiftAssignment.user_id).where(
+                        ShiftAssignment.shift_id == str(shift_id),
+                        # Only those who actually took the shift. Excluding
+                        # just CANCELLED left DECLINED, PENDING and NO_SHOW on
+                        # the roster, and a member listed there gets an
+                        # attendance row and the apparatus's full call count by
+                        # default — crediting calls to people who never worked.
+                        ShiftAssignment.assignment_status.in_(
+                            [
+                                AssignmentStatus.ASSIGNED,
+                                AssignmentStatus.CONFIRMED,
+                            ]
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        attended_ids = {str(a.user_id) for a in att_rows if a.user_id}
+        missing_ids = [str(u) for u in assigned_ids if str(u) not in attended_ids]
+
+        name_map = await self._get_user_name_map(
+            [str(a.user_id) for a in att_rows if a.user_id] + missing_ids
+        )
+
+        members = []
+        combined_minutes = 0
+        for uid in missing_ids:
+            members.append(
+                {
+                    "user_id": uid,
+                    "user_name": name_map.get(uid, ""),
+                    "checked_in_at": None,
+                    "checked_out_at": None,
+                    "hours": 0.0,
+                    "call_count": None,
+                    # Nothing was recorded at all, which the wizard flags the
+                    # same way as a missing check-out: something to fill in.
+                    "missing_checkout": True,
+                }
+            )
+        for att in att_rows:
+            minutes = int(att.duration_minutes or 0)
+            combined_minutes += minutes
+            members.append(
+                {
+                    "user_id": str(att.user_id),
+                    "user_name": name_map.get(str(att.user_id), ""),
+                    "checked_in_at": att.checked_in_at,
+                    "checked_out_at": att.checked_out_at,
+                    "hours": round(minutes / 60.0, 2) if minutes else 0.0,
+                    # NULL means "never asked", which the wizard shows as the
+                    # apparatus count rather than as a deliberate zero.
+                    "call_count": att.call_count,
+                    "missing_checkout": att.checked_in_at is not None
+                    and att.checked_out_at is None,
+                }
+            )
+        members.sort(key=lambda m: m["user_name"])
+
+        # Deliberately empty. `list_calls_in_window` costs two queries on every
+        # close-out GET, and nothing consumes the result: claiming another
+        # unit's call has no UI yet, so no client can send `attach_call_ids`.
+        # The field stays on the response so the contract does not change when
+        # the picker lands — it is served empty until something can use it.
+        attachable: List[Dict[str, Any]] = []
+
+        return {
+            "shift_id": str(shift_id),
+            "is_finalized": bool(shift.is_finalized),
+            # Resume point. Finalized shifts report 0 — the wizard is done, and
+            # reopening deliberately restarts it.
+            "closeout_step": (
+                0 if shift.is_finalized else int(shift.closeout_step or 0)
+            ),
+            "call_tracking_mode": tracking.get("mode"),
+            "call_types": tracking.get("call_types", []),
+            "members": members,
+            # "Combined hours" and not "hours": summed across the crew, it is
+            # several times the length of the shift and reads as a mistake
+            # without the word.
+            "combined_hours": round(combined_minutes / 60.0, 2),
+            "reported_call_count": await call_service.shift_response_count(
+                str(shift_id)
+            ),
+            "reported_call_types": await call_service.shift_type_counts(str(shift_id)),
+            "attachable_calls": attachable,
+        }, None
+
+    async def save_closeout_attendance(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        entries: List[Dict[str, Any]],
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Step 1 — record when each member was actually on.
+
+        Writes the real attendance rows rather than staging a draft, so the
+        hours are correct the moment they are saved even if the officer never
+        reaches the last step.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return None, "Shift not found"
+        if shift.is_finalized:
+            return None, "Shift is already finalized — reopen it to make changes"
+
+        existing = {
+            str(a.user_id): a
+            for a in (
+                (
+                    await self.db.execute(
+                        select(ShiftAttendance).where(
+                            ShiftAttendance.shift_id == str(shift_id)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        }
+
+        for entry in entries:
+            uid = str(entry["user_id"])
+            att = existing.get(uid)
+            if att is None:
+                # A client-supplied id must not pull a user from another org
+                # onto this shift. This admits any member of the caller's org,
+                # which is deliberate: the close-out is also how an officer
+                # records someone who worked the shift but never checked in.
+                if not await self._user_in_org(uid, organization_id):
+                    return None, "One or more members are not in your organization"
+                att = ShiftAttendance(
+                    id=generate_uuid(),
+                    shift_id=str(shift_id),
+                    user_id=uid,
+                )
+                self.db.add(att)
+                existing[uid] = att
+
+            checked_in = entry.get("checked_in_at")
+            checked_out = entry.get("checked_out_at")
+            if checked_in and checked_out and checked_out <= checked_in:
+                return None, (
+                    "A member cannot be recorded as leaving before they arrived"
+                )
+            att.checked_in_at = checked_in
+            att.checked_out_at = checked_out
+            if checked_in and checked_out:
+                minutes = int((checked_out - checked_in).total_seconds() / 60)
+                if minutes > 48 * 60:
+                    return None, "A single shift cannot exceed 48 hours"
+                att.duration_minutes = max(minutes, 0)
+            else:
+                att.duration_minutes = None
+
+        shift.closeout_step = max(int(shift.closeout_step or 0), 1)
+        await self.db.commit()
+        return await self.get_closeout_state(shift_id, organization_id)
+
+    async def save_closeout_calls(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        reported_call_count: Optional[int] = None,
+        reported_call_types: Optional[Dict[str, int]] = None,
+        attach_call_ids: Optional[List[str]] = None,
+        recorded_by: Optional[str] = None,
+        count_provided: bool = False,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Step 2 — record how many calls the apparatus ran.
+
+        The rows written here are the department's real call record before the
+        shift is finalized, which is correct: the calls happened, and
+        ``record_shift_calls`` reconciles rather than appends, so a later
+        correction moves the number instead of doubling it. Note the
+        consequence: an officer who saves this step and abandons the wizard has
+        already moved the department's call-volume report, which carries no
+        preliminary marker of its own.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return None, "Shift not found"
+        if shift.is_finalized:
+            return None, "Shift is already finalized — reopen it to make changes"
+
+        call_service = CallTrackingService(self.db)
+        for call_id in attach_call_ids or []:
+            ok, err = await call_service.attach_response(
+                str(call_id), shift, str(organization_id)
+            )
+            if not ok:
+                return None, err
+
+        # Three states, three behaviours (CLAUDE.md pitfall #1): an omitted
+        # field leaves the record alone, an explicit null is the officer saying
+        # "we did not track it" and must clear whatever a previous answer left
+        # behind, and a number is reconciled to. Treating null as "skip" kept
+        # the old rows, so a shift corrected back to untracked still reported
+        # its previous total.
+        if count_provided:
+            _, err = await call_service.record_shift_calls(
+                shift=shift,
+                organization_id=str(organization_id),
+                total_calls=reported_call_count or 0,
+                type_counts=reported_call_types,
+                recorded_by=recorded_by,
+            )
+            if err:
+                return None, err
+
+        shift.closeout_step = max(int(shift.closeout_step or 0), 2)
+        await self.db.commit()
+        return await self.get_closeout_state(shift_id, organization_id)
 
     async def reopen_shift(
         self,

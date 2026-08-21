@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**244 tables · 4224 columns · 796 foreign keys**
+**246 tables · 4239 columns · 801 foreign keys**
 
 ---
 
@@ -103,6 +103,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`audit_log_checkpoints`](#audit_log_checkpoints) | `AuditLogCheckpoint` | 13 | Periodic integrity checkpoints for audit logs |
 | [`audit_logs`](#audit_logs) | `AuditLog` | 18 | Tamper-proof audit log entries |
 | [`audit_ship_state`](#audit_ship_state) | `AuditShipState` | 5 | High-water mark for off-host audit-log shipping. |
+
+### Call_Tracking
+
+<sub>`app/models/call_tracking.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`org_call_responses`](#org_call_responses) | `OrgCallResponse` | 6 | One apparatus responding to one call. |
+| [`org_calls`](#org_calls) | `OrgCall` | 8 | One call the department ran, counted once no matter how many units went. |
 
 ### Compliance Configuration
 
@@ -501,7 +510,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
 | [`shift_time_off`](#shift_time_off) | `ShiftTimeOff` | 12 | Member request for time off / unavailability. |
-| [`shifts`](#shifts) | `Shift` | 28 | Shift model (Framework) |
+| [`shifts`](#shifts) | `Shift` | 29 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
@@ -1663,6 +1672,62 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `last_shipped_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
+
+## Call_Tracking
+
+### `org_call_responses`
+
+**OrgCallResponse** · `app/models/call_tracking.py`
+
+> One apparatus responding to one call. The join that makes dedup work: N of these against a single ``OrgCall`` is N units on one call, which counts as **one** for the department and **one run each** for the units.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `call_id` | VARCHAR(36) | no | FK, IDX |  | → `org_calls.id` ON DELETE CASCADE |
+| `shift_id` | VARCHAR(36) | yes | FK, IDX |  | → `shifts.id` ON DELETE SET NULL |
+| `apparatus_id` | VARCHAR(36) | yes | IDX |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_call_response_apparatus` (`organization_id`, `apparatus_id`)
+- `ix_org_call_responses_apparatus_id` (`apparatus_id`)
+- `ix_org_call_responses_call_id` (`call_id`)
+- `ix_org_call_responses_organization_id` (`organization_id`)
+- `ix_org_call_responses_shift_id` (`shift_id`)
+
+**Constraints**
+
+- UNIQUE `uq_call_response_apparatus` (`call_id`, `apparatus_id`)
+
+### `org_calls`
+
+**OrgCall** · `app/models/call_tracking.py`
+
+> One call the department ran, counted once no matter how many units went. Deliberately minimal — see the module docstring for what is excluded and why. ``call_type`` is a slug into the org's own configured type list (``scheduling.call_tracking.call_types``), never a free-text label: types get renamed, and a stored label orphans last year's history the moment somebody fixes a typo in settings.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `call_date` | DATE | no | IDX |  |  |
+| `call_type` | VARCHAR(50) | yes |  |  |  |
+| `source` | VARCHAR(20) | no |  | `manual` |  |
+| `external_ref` | VARCHAR(100) | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `idx_org_call_org_date` (`organization_id`, `call_date`)
+- `ix_org_calls_call_date` (`call_date`)
+- `ix_org_calls_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_org_call_external_ref` (`organization_id`, `external_ref`)
 
 ## Compliance Configuration
 
@@ -7772,6 +7837,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `open_to_all_members` | BOOL | no |  | `0` |  |
 | `call_count` | INTEGER | yes |  |  |  |
 | `total_hours` | FLOAT | yes |  |  |  |
+| `closeout_step` | INTEGER | yes |  |  |  |
 | `is_finalized` | BOOL | no |  | `0` |  |
 | `finalized_at` | DATETIME | yes |  |  |  |
 | `finalized_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -8637,7 +8703,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (297 references)
+### → `users` (298 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8834,6 +8900,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `nfpa_item_compliance` | `created_by` | NO ACTION | yes |
 | `notification_logs` | `recipient_id` | SET NULL | yes |
 | `notification_rules` | `created_by` | NO ACTION | yes |
+| `org_calls` | `created_by` | SET NULL | yes |
 | `organization_officers` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `user_id` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
@@ -8939,7 +9006,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (193 references)
+### → `organizations` (195 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9072,6 +9139,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `notification_logs` | `organization_id` | CASCADE | no |
 | `notification_rules` | `organization_id` | CASCADE | no |
 | `operational_ranks` | `organization_id` | CASCADE | no |
+| `org_call_responses` | `organization_id` | CASCADE | no |
+| `org_calls` | `organization_id` | CASCADE | no |
 | `organization_officers` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
@@ -9294,6 +9363,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_step_progress` | `prospect_id` | CASCADE | no |
 | `screening_records` | `prospect_id` | CASCADE | yes |
 
+### → `shifts` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+
 ### → `training_requirements` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -9318,18 +9400,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `issuance_allowances` | `category_id` | CASCADE | no |
 | `item_variant_groups` | `category_id` | SET NULL | yes |
 | `reorder_requests` | `category_id` | SET NULL | yes |
-
-### → `shifts` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
 ### → `training_records` (7 references)
 
@@ -9862,6 +9932,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `notification_logs` | `rule_id` | SET NULL | yes |
+
+### → `org_calls` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `org_call_responses` | `call_id` | CASCADE | no |
 
 ### → `public_portal_api_keys` (1 references)
 

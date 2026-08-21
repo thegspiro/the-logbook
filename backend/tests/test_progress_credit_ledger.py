@@ -64,6 +64,27 @@ def _svc(db):
 
 
 class TestApplyCredit:
+    async def test_unprivileged_actor_cannot_credit_another_member(self):
+        progress = _progress()
+        progress.enrollment = SimpleNamespace(user_id="member-1")
+        db = RecordingSession([_one(progress)])
+        svc = _svc(db)
+
+        result, error = await svc.apply_requirement_credit(
+            progress_id=progress.id,
+            organization_id=uuid4(),
+            source_type=ProgressCreditSource.TRAINING_SESSION,
+            source_id="sess-1",
+            units=5.0,
+            acting_user_id="events-manager",
+            can_manage=False,
+        )
+
+        assert result is None
+        assert error == "You are not authorized to update this training progress"
+        assert db.added == []
+        svc.update_requirement_progress.assert_not_awaited()
+
     async def test_first_apply_records_ledger_and_accrues_units(self):
         progress = _progress(value=10.0)
         db = RecordingSession([_one(progress), _one(None)])
@@ -85,6 +106,10 @@ class TestApplyCredit:
         svc.update_requirement_progress.assert_awaited_once()
         updates = svc.update_requirement_progress.await_args.kwargs["updates"]
         assert updates.progress_value == 15.0  # 10 existing + 5 accrued
+        assert (
+            svc.update_requirement_progress.await_args.kwargs["enforce_prerequisites"]
+            is False
+        )
 
     async def test_duplicate_source_is_noop(self):
         progress = _progress(value=10.0)
@@ -145,6 +170,10 @@ class TestApplyCredit:
         assert db.added[0].phase_after_id == "phase-2"
         updates = svc.update_requirement_progress.await_args.kwargs["updates"]
         assert updates.status == "completed"
+        assert (
+            svc.update_requirement_progress.await_args.kwargs["enforce_prerequisites"]
+            is True
+        )
 
     async def test_missing_progress_returns_error(self):
         db = RecordingSession([_one(None)])
@@ -222,6 +251,10 @@ class TestRevokeCredit:
         assert db.deleted == [credit]
         updates = svc.update_requirement_progress.await_args.kwargs["updates"]
         assert updates.progress_value == 10.0  # 15 - 5
+        assert (
+            svc.update_requirement_progress.await_args.kwargs["enforce_prerequisites"]
+            is False
+        )
 
     async def test_revoke_floors_at_zero(self):
         progress = _progress(value=3.0)

@@ -22,6 +22,9 @@ export const NATIVE_BARCODE_FORMATS = ['code_128', 'code_39', 'ean_13', 'ean_8',
 
 export const HAS_BARCODE_DETECTOR = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
+const HTTPS_CAMERA_UNAVAILABLE_MESSAGE =
+  'Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan.';
+
 /**
  * Open a video-only stream while asking mobile browsers for the rear camera.
  *
@@ -51,7 +54,7 @@ export function getCameraUnavailableReason(): string | null {
     !navigator.mediaDevices ||
     typeof navigator.mediaDevices.getUserMedia !== 'function'
   ) {
-    return 'Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan.';
+    return HTTPS_CAMERA_UNAVAILABLE_MESSAGE;
   }
   return null;
 }
@@ -77,6 +80,12 @@ export function describeCameraError(error: unknown): string {
   // Error, so read its standard `name` field structurally.
   const name =
     typeof error === 'object' && error !== null && 'name' in error && typeof error.name === 'string' ? error.name : '';
+  const message = error instanceof Error ? error.message : '';
+
+  // The scanner creates this error itself when browser camera APIs are absent.
+  // Preserve that trusted guidance without exposing arbitrary browser wording.
+  if (name === 'Error' && message === HTTPS_CAMERA_UNAVAILABLE_MESSAGE) return message;
+
   switch (name) {
     case 'NotAllowedError':
     case 'SecurityError':

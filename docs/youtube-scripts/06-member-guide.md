@@ -193,6 +193,28 @@ this narration walks. The demo seeder produces both.]**
 > "If you don't have your phone, a Captain or officer with manage access can
 > manually check you in."
 
+**[SCREEN: An Android phone held against an NFC sticker on a wall, then the
+check-in page opening by itself. Real phone, real tag — this cannot be faked
+convincingly. — ADDED 2026-08-19]**
+
+> "Some stations have started putting up NFC tags instead. If yours has, you
+> don't scan anything — just hold your phone against the sticker and the
+> check-in page opens on its own. Handy in a dark bay, or with gloves on, where
+> a camera is exactly the thing that won't cooperate."
+
+**[SCREEN: The Events page with Tap Tag pressed, scan armed.]**
+
+> "One quirk worth knowing. If The Logbook is already open on your screen,
+> Android won't hand the tag over to it — so nothing happens. Use **Tap Tag** on
+> the Events page instead: press it, then hold the phone to the tag."
+
+**[CALLOUT: "NFC: Chrome on Android only. iPhone users, scan the QR code — it
+works everywhere."]**
+
+> "And to be straight with you about it: this is an Android thing. iPhones can't
+> do it in a browser, and neither can a laptop. If that's you, nothing's broken
+> — scan the QR code, same as always."
+
 ### PAST EVENTS & YOUR HISTORY (7:30 – 8:30)
 
 **[SCREEN: Navigate to Past Events tab (PastEventsTab)]**

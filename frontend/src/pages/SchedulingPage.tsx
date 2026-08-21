@@ -37,6 +37,7 @@ import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import SchedulingHeader from './scheduling/SchedulingHeader';
+import { NfcTapButton } from '../components/nfc/NfcTapButton';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import('./scheduling/MyShiftsTab'));
@@ -542,11 +543,7 @@ const SchedulingPage: React.FC = () => {
       }
 
       const selectedApparatus = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
-      const apparatusPositions = selectedApparatus?.positions?.map((position) =>
-        typeof position === 'string'
-          ? { position, required: true }
-          : { position: position.position, required: position.required !== false }
-      );
+      const apparatusPositions = selectedApparatus?.positions;
       const templatePositions = resolveTemplatePositions(template.positions);
       const shiftPositions = apparatusPositions?.length ? apparatusPositions : templatePositions;
 
@@ -603,7 +600,7 @@ const SchedulingPage: React.FC = () => {
             canManage && activeTab === 'schedule' ? (
               <button
                 onClick={() => setShowCreateShift(true)}
-                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
+                className="flex min-h-11 w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 <span>Create Shift</span>
@@ -750,6 +747,7 @@ const SchedulingPage: React.FC = () => {
                   </button>
                 </div>
                 <div className="flex items-center space-x-2">
+                  <NfcTapButton />
                   <button
                     onClick={() => setCurrentDate(new Date())}
                     className="rounded-lg px-3 py-1.5 text-sm text-violet-700 transition-colors hover:bg-violet-500/10 max-md:min-h-[44px] dark:text-violet-400"
@@ -1445,8 +1443,8 @@ const SchedulingPage: React.FC = () => {
                                   Positions on {selected.unit_number}:
                                 </p>
                                 <div className="flex flex-wrap gap-1.5">
-                                  {selected.positions.map((pos, i) => {
-                                    const name = typeof pos === 'string' ? pos : pos.position;
+                                  {selected.positions.map((slot, i) => {
+                                    const name = slot.position;
                                     return (
                                       <span
                                         key={i}

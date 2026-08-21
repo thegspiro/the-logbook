@@ -1,9 +1,10 @@
-# August 12–16, 2026 workflow updates
+# August 12–19, 2026 workflow updates
 
 This lesson is the operator-facing companion to the
 [six-day change audit](../CHANGE_AUDIT_2026-08-10_TO_16.md), its
-[three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md), and the
-[August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md). It explains what
+[three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md), the
+[August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md), and the
+[August 17–19 audit](../CHANGE_AUDIT_2026-08-17_TO_19.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
@@ -321,301 +322,183 @@ substitute your reverse-proxy hostname. Details in the
 
 ---
 
-# August 16–17, 2026 workflow updates
+# August 17–19 changes
 
-Companion to the [August 16–17 change audit](../CHANGE_AUDIT_2026-08-16_TO_17.md).
-This section covers a 24-hour window that added three anti-brute-force
-controls, tightened one permission in a way that **removes access somebody
-already had**, and fixed a set of defects members will notice on the
-dashboard, the Minutes page and the shift board.
+Three things landed in this window that change what somebody does at a
+keyboard: a way to record call volume without an incident-reporting system, a
+rebuilt shift close-out, and NFC tags. A fourth — a pre-upgrade configuration
+check — changes what an administrator does at a terminal.
 
-> **Read this first if you administer the system:** the Platoon Management
-> page now requires `scheduling.manage`. Everything else in this window either
-> adds capability or fixes something that was wrong; this is the one change
-> that takes something away.
+## Counting calls without an incident-reporting system
 
-## Signing in: three new defences, two of them optional
+**Who this is for:** a department that does not run an RMS and still has to
+report call volume for grants, ISO, apparatus replacement, or a staffing case.
 
-Nothing here changes how a member signs in on a good day. All three matter on
-a bad one.
+**Switch it on:** Scheduling → Settings → General → _Shift close-out rules_ →
+**Record a call count at close-out**. It applies immediately.
 
-**Suspicious-IP throttling is on by default.** The system already slowed down
-rapid attempts from one address and locked an account after five failures.
-Neither stops a *spray* — an attacker trying two common passwords against a
-thousand of your members' usernames never trips either, because no single
-account is tried more than twice and the overall pace stays slow. The new
-control counts failed attempts from one address **across every account** and
-blocks that address for 15 minutes once it passes 50 failures in an hour.
+**Tell your officers first.** It changes what they see at 0700 the same
+morning: the familiar close-out checklist is replaced by a three-step wizard.
 
-**Edge cases worth knowing before somebody calls you about it:**
+Full lesson: [Counting Calls Without an
+RMS](./03-scheduling.md#counting-calls-without-an-rms-2026-08-18).
 
-- **A whole station can share one public address.** Ordinary typos accumulate
-  against it. A *fully successful* sign-in from that address clears its tally,
-  so normal use keeps it clear — but a correct password alone does not clear
-  it. If your members sign in with MFA, the tally clears when they finish the
-  challenge, not when they type the password.
-- **Clearing the tally does not lift a block already in force.** A member who
-  signs in successfully during someone else's block still waits it out.
-- **A large department behind one address should check the threshold.** Fifty
-  failures per hour is generous for most, but "most" is not "all."
-- The block is keyed on the address only. No member is named in it.
+### The one thing to get right before quoting a number
 
-**Breached-password rejection is optional and off.** When enabled, setting a
-password checks it against public breach corpora. A password like
-`Firetruck2024!` passes every complexity rule the system enforces and is in
-those corpora, which is exactly what an attacker tries first.
+The report labels the figure **Unit Responses**, not **Total Calls**, and the
+difference is real. Two units that closed out independently each reported their
+own call, and nothing yet links them to one incident — so an MVA that Engine 5
+and Medic 1 both ran counts twice.
 
-- **What leaves your building:** five characters of a scrambled version of the
-  password. Not the password, not the whole scramble, and nothing identifying
-  the member.
-- **It needs outbound internet.** If your deployment cannot make outbound
-  requests, leave it off — turning it on in that situation does not error, it
-  simply accepts every password (and logs that it could not check).
-- **If the service is slow or down, the password is accepted.** That is
-  deliberate: a third-party outage must not stop your department from setting
-  passwords during an incident. Every other rule still applies.
-- **The refusal will not tell the member how many times the password leaked.**
-  That number would help an attacker and helps the member not at all — they
-  need a different password either way.
+**Do not put that figure in a grant application as a department call count.**
+Reconcile mutual responses by hand until the cross-unit feature ships.
 
-**Human challenge (CAPTCHA) is optional and off.** It covers the two forms
-anyone on the internet can reach: **public form submission** and **forgot
-password**.
+### What is deliberately not collected
 
-- **It fails closed.** If the challenge provider is unreachable, those two
-  forms refuse submissions until it recovers. That is the opposite of the
-  password check above, on purpose — nothing else stands behind these forms.
-- **Turning it on without a secret key enforces nothing** and logs an error.
-  So "I ticked the box" is not the same as "it is running." Check that
-  challenges actually appear before assuming you are covered.
-- **If the challenge never appears after you enable it**, that is almost
-  always the browser blocking the widget, not a broken key. Confirm the
-  provider is one of the three supported ones and that you restarted the
-  backend after the change.
-- **Guest check-in deliberately has no challenge.** It is reached by scanning a
-  QR code on a station display; asking someone standing in the firehouse to
-  identify traffic lights is hostile and buys nothing.
+No address, no patient or caller identity, no narrative, no response times, no
+readable CAD number. Those are the fields that make a call record protected
+health information, and there is nowhere in the feature to enter one. Departments
+that need incident-level records need an incident module, not a call counter.
 
-> **[SCREENSHOT NEEDED — the forgot-password page with a rendered challenge
-> widget above the Submit button, in a deployment with `CAPTCHA_ENABLED=true`
-> and a valid site key. Caption which provider is pictured, because the widget
-> looks different for each of the three.]**
->
-> **[SCREENSHOT NEEDED — the public form submission page with the same widget,
-> after a rejected submission, showing the widget reset. Tokens are
-> single-use, so this is the state a member actually hits when a submission
-> fails validation and they try again.]**
->
-> **[SCREENSHOT NEEDED — the change-password screen showing the
-> breached-password refusal. Requires `BREACHED_PASSWORD_CHECK_ENABLED=true`
-> and a known-leaked test password. Caption that the message deliberately does
-> not state a breach count.]**
+**Edge cases:** calls the officer cannot classify go in the wizard's **Not
+categorised** row — the total is the sum of the rows, so leaving them out
+records a smaller shift rather than an unclassified remainder; 100 calls is the
+per-shift ceiling; renaming a call type does not disturb history, but deleting
+one leaves its past calls unclassified, and a rename is **not** reflected in the
+Call Volume report, which prints the internal slug. Blank and `0` read as
+different answers while the form is open, but they are not distinguishable once
+saved — both record no calls, so no report can tell a quiet tour from an
+unanswered question.
 
-## Scheduling: who can see the roster
+**Officers already signed in must reload** before their next close-out: a
+session opened before the toggle was flipped still shows the old checklist,
+which never asks for a call count, so a shift closed from that tab finalizes
+with none recorded.
 
-Two changes, both about the same thing — the platoon roster is staffing
-information, not a member directory, because **it is derived from who is on
-approved leave**.
+## Shift close-out is now three screens, and it saves as you go
 
-**Platoon Management (`/scheduling/platoons`) now requires
-`scheduling.manage`.** It previously required `scheduling.view`, which every
-signed-in member holds implicitly — so the department-wide list of who is on
-which platoon was readable by anyone with an account.
+For departments recording a call count. Same **Close out shift** button, same
+permissions.
 
-**A shift's hold-over/availability roster is now restricted** to schedulers
-(`scheduling.assign` or `scheduling.manage`) and to **the officer named on
-that shift**. Everyone else opens the shift and sees everything except the
-roster.
+1. **When was everyone actually on** — times, combined crew hours, anyone
+   flagged for a missing check-out, and anyone assigned who never checked in
+2. **How many calls** — one row per call type; the total is calculated from the
+   rows and cannot be typed into
+3. **Confirm each member's credit** — seeded from the apparatus count, adjust
+   anyone who came on late
 
-**Edge cases:**
+**Each step saves when you press Next.** A phone that locks at 0700 reopens on
+the screen it left rather than at the beginning.
 
-- A shift officer sees the roster **for their own shift only** — the authority
-  comes from being named on that shift, not from a permission.
-- Members are not shown an empty box with an error. The rest of the shift —
-  time, apparatus, who is assigned, check-in state — is unchanged.
-- **Anyone who used Platoon Management before and does not hold
-  `scheduling.manage` will now get a permission error.** This is the one thing
-  in this release that will generate a support call. Grant `scheduling.manage`
-  to the roles that need the department roster.
+**Edge cases:** reopening a finalized shift restarts the wizard; declined,
+pending and no-show crew are not listed; you cannot lower the count below the
+calls this shift shares with another unit; correcting a shift's date or
+apparatus afterwards moves its calls with it; a member credited with fewer calls
+than the apparatus ran gets a count but not call types, because which calls they
+were on is not knowable.
 
-> **[SCREENSHOT NEEDED — the shift detail page as a scheduler, roster
-> populated, beside the same shift viewed by an ordinary member with the
-> roster absent. Two captures, captioned as the pair. Use a demo department
-> with at least one member on approved leave so the difference is visible.]**
+Full lesson: [The three-step close-out
+wizard](./03-scheduling.md#the-three-step-close-out-wizard-2026-08-19).
 
-![Platoon Management refusing a member who does not hold scheduling.manage](./images/19-01-platoons-permission-error.png)
+## NFC tags: events, admin hours, and shift check-in
 
-Two scheduling defects were also fixed:
+A reusable sticker replaces reprinting a QR sheet per event, and needs no
+camera — which is the part that fails in a dark bay or with gloves on.
 
-- **Deleted members were being staffed onto generated shifts.** A member who
-  had been removed or anonymized could still be placed on shifts generated
-  from a platoon rotation.
-- **The Patterns tab could crash outright** on a pattern whose stored
-  configuration held a malformed platoon list. It now renders that list as
-  empty rather than taking the tab down.
+**Write a tag** from the page that already shows the QR code:
 
-## Driving: the EVOC block now holds everywhere
+| Page                                          | Tag opens                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| Event → **QR Code**                           | that event's check-in                                                 |
+| Admin Hours → a category's QR code            | that category's clock-in                                              |
+| Shift detail → the apparatus QR block         | shift check-in for that truck                                         |
+| **Check-In QR Codes** (`/locations/qr-codes`) | shift check-in — this is where you write a whole fleet in one sitting |
 
-The driver requirement introduced on August 16 had five ways around it. All
-five are closed, and the differences are worth stating because they change who
-can be seated:
+**Read a tag** by holding the phone to it — or, if the app is already open on
+screen, with **Tap Tag** on the Events page, My Admin Hours, or the scheduling
+calendar. Android only hands a tag to the browser when the app is _not_ in the
+foreground, which is the gap Tap Tag fills.
 
-- **A certification is judged against the shift's date, not today.** A card
-  that expires next week does not qualify anyone to drive a shift the week
-  after. This means a driver who is legal today can be refused for a future
-  shift — that is correct, not a bug.
-- **Recurring pattern generation no longer bypasses the block.** It used to
-  write assignments directly, so a pattern would seat an uncertified driver on
-  every occurrence it generated. It now leaves that seat **empty** and reports
-  the skip, rather than failing the whole generation run.
-- **Changing a shift's apparatus or date rechecks the drivers already on it.**
-  Previously you could seat a driver on a shift with no apparatus and then set
-  the apparatus.
-- **Two chiefs reviewing the same exception request at once** no longer both
-  succeed with the later one quietly winning.
-- **All of a member's certifications count, not just the highest.** A member
-  holding a cumulative Level 3 plus a non-cumulative Level 4 used to be
-  refused for a Level 2 apparatus.
-- **Retiring an apparatus removes the exception written for it.** Previously
-  the exception survived with its apparatus reference emptied, which is
-  indistinguishable from a blanket fleet-wide grant — so retiring a truck
-  silently widened a driver's authorization. The approval remains in the audit
-  log.
+> **[SCREENSHOT NEEDED — the admin hours category QR page with the NFC tag
+> writer beside the QR code]**
 
-> **[SCREENSHOT NEEDED — the driver-seat refusal at assignment time, showing
-> the reason and the "request an exception" affordance in the same place the
-> block happens.]**
->
-> **[SCREENSHOT NEEDED — the chief's exception review screen with a pending
-> request, showing the justification, restrictions and validity window
-> fields.]**
->
-> **[SCREENSHOT NEEDED — a generated pattern result reporting a skipped driver
-> seat. This is the state that proves generation no longer silently seats an
-> uncertified driver.]**
+**Requirements: Chrome on Android, over HTTPS.** Not iPhone, not desktop, not a
+plain-`http://` LAN deployment. Where it is unavailable the controls are absent
+or explain which of the two conditions is missing. QR still works everywhere.
 
-## Applicants: one form submission advances one applicant
+**Prefer the apparatus tag over a shift tag** for anything mounted: the
+apparatus code resolves when it is tapped rather than naming a shift, so one
+sticker serves the life of the truck. A shift-keyed tag dies when that shift
+ends. Tell members to check the shift named on the check-in page before
+confirming — the resolver takes the truck's earliest open shift dated today,
+which on a two-shift day is not the one currently running.
 
-If a pipeline stage is a **form submission** stage with auto-advance turned on,
-submitting that form used to advance **every** applicant sitting on that stage
-— not just the person who submitted it. A single returned form could push a
-whole cohort forward.
+**Room kiosk display codes cannot be tagged, deliberately.** A kiosk code is a
+check-in credential for an unauthenticated screen; a sticker in a public hallway
+hands it to whoever walks past.
 
-Only the applicant who submitted advances now, and the history entry records
-which submission caused it.
+**An unrecognized tag does nothing.** The app follows only links pointing back
+at your own Logbook and only to check-in pages it knows. Anything else leaves
+the scan waiting with a message.
 
-**Also on the pipeline:** signing off a stage now requires a role **the stage
-actually asked for**. Previously any member could record their own position as
-an approval on any applicant's workflow, with notes of their choosing, and
-receive the applicant's full record back in the response. A stage configured
-with *no* approver roles is now refused rather than completing and advancing
-the applicant outright.
+## Before you upgrade: check the configuration first
 
-**Edge case:** if you have a stage in production with no approver roles
-configured, it will now refuse sign-off instead of passing everyone through.
-That stage was never doing what its name implied — configure its approvers.
+A configuration problem is normally found when the container refuses to boot —
+which means finding it by losing the service. Ask first:
 
-> **[SCREENSHOT NEEDED — a form-submission pipeline stage's configuration
-> showing the auto-advance checkbox, with a caption noting the advance is now
-> bound to the submitting applicant. Reuse the existing stage-config capture
-> only if it already shows the checkbox.]**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
 
-## Fixes members will see immediately
+`0` means it starts, `1` means it does not and lists what is blocking, `2` means
+a value is malformed.
 
-- **Meeting cards showed "0 attendees · 0 action items"** on the Minutes page
-  over meetings whose detail view listed eight attendees and two action items.
-  The cards now show real counts.
-- **A renewed certification no longer grounds you.** The dashboard readiness
-  line read your whole training history, so a member who renewed EMT-B had
-  both the lapsed old record and the valid new one — and it counted the lapsed
-  one. Permanently. For having renewed. Only your newest credential per course
-  counts now.
-- **Screenings and certifications are judged on the same 60-day window.**
-  Screenings were being read against a 30-day window, so a screening lapsing
-  in 45 days read as fine beside a certification at the same distance that
-  read as a condition. A screening lapsing **today** now counts too.
-- **If the screening data fails to load, the readiness line says so** instead
-  of leaving yesterday's "Clear to respond" on screen while claiming
-  screenings were checked.
-- **A readiness verdict driven only by a screening now links to the department
-  feed**, not the training page, which has nothing to say about a screening.
-- **Editing "On hand" on a lot-tracked medical supply did nothing** — the box
-  wrote a number the page does not display, the count coming from the lots. It
-  now shows the lot figure and points you to **Receive delivery**.
-- **Impact Planner PDF exports** no longer corrupt or fail when a member's name
-  or your department name contains a `<` or `&`.
-- **CSV gear import** reports supplier names it could not match more honestly:
-  spelling variants of one name are listed once rather than three times, names
-  are only listed once their row actually imported, and a name matching a
-  **deactivated** supplier now links to it instead of sending you to a form
-  that would reject it.
-- **Force refresh (Settings → App) refuses to run when the server is
-  unreachable** and says so. Running it offline used to delete the app's only
-  offline copy and reload into nothing — bricking an installed app until
-  signal returned. The member most likely to tap it is the one whose app looks
-  wrong, who is often the one out of signal.
+**Two details matter.** Use `--build`, or you are checking the image you are
+replacing rather than the one you are deploying. And pass the same `-f` files
+your deployment uses, or Compose evaluates only the base development settings
+and answers about a configuration nobody runs.
 
-![Meeting cards showing real attendee and action-item counts](./images/19-02-minutes-card-counts.png)
+`--compose PATH` goes further and names settings your compose file **drops** —
+values sitting in `.env` that never reach the container. Those used to become
+defaults silently, which is how production ends up running a development
+setting with nothing on screen to say so.
 
-> **[SCREENSHOT NEEDED — Settings → App → Force refresh showing the
-> "server unreachable, nothing was changed" refusal with the button
-> re-enabled. Capture with the backend stopped, not with the device offline —
-> `navigator.onLine` is not what the check uses.]**
->
-> **[SCREENSHOT NEEDED — the dashboard readiness line reading "Clear, with
-> conditions" for a member holding one renewed certification and one screening
-> inside the 60-day window. Caption that the renewed certification is not what
-> produced the condition — that is the exact confusion the fix addressed.]**
+> **[SCREENSHOT NEEDED — two terminal captures side by side: `python -m
+app.preflight` exiting 0 on a good configuration, and exiting 1 on a broken
+> one with the blocking items listed]**
 
-## Behind the scenes (no screen changes)
+## Sign-in hardening
 
-- **Exception tracebacks no longer include local variable values.** On a
-  password-set or token-verification frame those values are the credential
-  itself, written into a log file kept for 30 days.
-- **Onboarding runs in two browser tabs can no longer overwrite each other's
-  security token.** Clients still holding the old cookie are migrated
-  automatically.
-- **Low-stock and expiring-supply alerts no longer mix domains.** An EMS supply
-  officer's alert email used to contain the full gear table — item names,
-  categories and counts the system refuses them on screen. Recipients are now
-  grouped by what they may see, and someone holding both grants gets **one**
-  complete email rather than two partial ones. The text-message version
-  carries only a count and says so.
-- **Copying a finalized event no longer produces a copy that looks finalized**
-  and skips its own attendance-validation prompt.
-- **Reopening a finalized shift restores its re-finalization reminder**, which
-  had been suppressed permanently.
-- **Event-request date fields** no longer display the previous day for
-  departments west of UTC.
+- **Breached-password rejection** (optional, off by default). Only the first
+  five characters of the password's hash ever leave the server. If the lookup
+  service is down the password change **still goes through** — the check is
+  supplementary, and complexity, history, MFA and lockout all still apply.
+- **A human challenge (CAPTCHA)** can be required on the two internet-facing
+  forms. If _its_ provider is down, the submission is **rejected** — there is no
+  other control behind it, so accepting unverified traffic during an outage is
+  exactly what an attacker wants.
+- **Lockout messages are generic by default.** Saying "this account is locked"
+  confirms the account exists and tells an attacker their spray is landing.
+- **A per-IP throttle** counts failed attempts across _all_ accounts. Account
+  lockout is per-user, so one password tried against a thousand accounts never
+  trips it; this is the control that does.
 
-## Upgrade notes for administrators (August 16–17)
+## Privacy notice and terms rewritten
 
-**Run `alembic upgrade head`.** Two schema changes landed —
-`20260816_0008` (`driver_exceptions`: chief-approved exceptions to the EVOC
-driver requirement) and `20260816_0009` (columns supporting reversible training
-completions).
+Both pages were rewritten to state up front that **the department, not the
+platform, controls member data**. The print layouts were rebuilt and both pages
+went through an accessibility pass.
 
-**If you pulled `main` between roughly 17:30 and 18:50 UTC on 2026-08-17, pull
-again before migrating.** Two branches both extended the chain at the same
-point, five pull requests each wrote a repair for it, and all five merged
-within the hour — leaving four heads and two files claiming the same revision
-id, which makes the migrations directory refuse to load. The repair is on
-`main` now and the chain has a single head again. **No database recovery is
-needed**: the broken state prevented migration rather than corrupting anything.
+> **[SCREENSHOT NEEDED — the rewritten `/privacy` page header showing the
+> department-control statement above the fold]**
 
-**Permission to regrant:** `scheduling.manage`, for whoever needs Platoon
-Management.
+## Upgrade notes for administrators (August 17–19)
 
-**Optional controls to consider:** `CAPTCHA_ENABLED` (fails closed — a provider
-outage refuses public form and password-reset submissions) and
-`BREACHED_PASSWORD_CHECK_ENABLED` (needs outbound HTTPS; fails open). Both are
-described in the
-[security configuration reference](../../wiki/Configuration-Security.md).
-
-**If you front the application with a reverse proxy on a different origin and
-enable CAPTCHA**, make sure the `X-Captcha-Token` header survives it. It is in
-the application's own allowlist; a proxy keeping its own list needs the same
-entry, or every challenged submission fails verification with no useful error.
-
-Full technical detail in the
-[August 16–17 change audit](../CHANGE_AUDIT_2026-08-16_TO_17.md).
+- **Two migrations**: `82bdcb3b1e64` (the call tables) and `2827079fd66c` (the
+  close-out resume point). Both additive, neither backfilling. Back up, confirm
+  `alembic heads` returns exactly one, then `alembic upgrade head`.
+- **Nothing changes for a department that ignores the new setting.** Call
+  logging keeps working exactly as it does today; the absence of the setting
+  means current behaviour, not "off".
+- **Run the preflight check before the restart**, per the section above.

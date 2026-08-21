@@ -35,6 +35,8 @@ interface FieldDefinition {
 interface ResourceSectionProps<T extends { id: string }> {
   title: string;
   emptyMessage: string;
+  /** Create affordance — backend accepts facilities.create/edit/manage. */
+  canCreate: boolean;
   /** Create/update affordances — backend accepts facilities.edit or facilities.manage. */
   canEdit: boolean;
   /** Delete affordance — backend accepts facilities.manage only. */
@@ -52,6 +54,7 @@ interface ResourceSectionProps<T extends { id: string }> {
 function ResourceSection<T extends { id: string }>({
   title,
   emptyMessage,
+  canCreate,
   canEdit,
   canDelete,
   fields,
@@ -129,7 +132,7 @@ function ResourceSection<T extends { id: string }>({
         <h2 className="text-theme-text-primary text-sm font-semibold">
           {title} {!isLoading && `(${items.length})`}
         </h2>
-        {canEdit && (
+        {canCreate && (
           <button
             onClick={() => {
               setEditingId(null);
@@ -145,7 +148,7 @@ function ResourceSection<T extends { id: string }>({
       </header>
 
       <div className="p-4">
-        {canEdit && showForm && (
+        {showForm && (editingId ? canEdit : canCreate) && (
           <div className="bg-theme-surface-hover/50 mb-5 grid grid-cols-1 gap-3 rounded-lg p-4 sm:grid-cols-2">
             {fields.map((field) => (
               <div key={field.key}>
@@ -277,7 +280,9 @@ interface SectionProps {
   facilityId: string;
   /** facilities.manage — delete affordances. */
   canManage: boolean;
-  /** facilities.edit or facilities.manage — create/update affordances (mirrors backend gates). */
+  /** facilities.create, facilities.edit, or facilities.manage — create affordances. */
+  canCreate: boolean;
+  /** facilities.edit or facilities.manage — update affordances (mirrors backend gates). */
   canEdit: boolean;
 }
 
@@ -398,7 +403,7 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
   );
 }
 
-export function UtilitiesSection({ facilityId, canManage, canEdit }: SectionProps) {
+export function UtilitiesSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
   // Stable per facilityId — an inline closure would re-trigger the section's
   // fetch effect on every completed request (infinite refetch loop).
   const load = useCallback(() => facilitiesService.getUtilityAccounts({ facility_id: facilityId }), [facilityId]);
@@ -406,6 +411,7 @@ export function UtilitiesSection({ facilityId, canManage, canEdit }: SectionProp
     <ResourceSection<UtilityAccount>
       title="Utilities"
       emptyMessage="No utility accounts have been added."
+      canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canManage}
       load={load}
@@ -445,19 +451,20 @@ export function UtilitiesSection({ facilityId, canManage, canEdit }: SectionProp
           <p className="text-theme-text-muted text-xs">
             {text(item.providerName)} · Account {text(item.accountNumber)}
           </p>
-          <UtilityReadings accountId={item.id} canEdit={canEdit} />
+          <UtilityReadings accountId={item.id} canEdit={canCreate || canEdit} />
         </>
       )}
     />
   );
 }
 
-export function AccessKeysSection({ facilityId, canManage, canEdit }: SectionProps) {
+export function AccessKeysSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getAccessKeys({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<AccessKey>
       title="Access Keys"
       emptyMessage="No keys or credentials are tracked."
+      canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canManage}
       load={load}
@@ -505,12 +512,13 @@ export function AccessKeysSection({ facilityId, canManage, canEdit }: SectionPro
   );
 }
 
-export function ShutoffsSection({ facilityId, canManage, canEdit }: SectionProps) {
+export function ShutoffsSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getShutoffLocations({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<ShutoffLocation>
       title="Shutoff Locations"
       emptyMessage="No utility shutoffs are documented."
+      canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canManage}
       load={load}
@@ -554,12 +562,13 @@ export function ShutoffsSection({ facilityId, canManage, canEdit }: SectionProps
   );
 }
 
-export function CapitalProjectsSection({ facilityId, canManage, canEdit }: SectionProps) {
+export function CapitalProjectsSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getCapitalProjects({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<CapitalProject>
       title="Capital Projects"
       emptyMessage="No capital projects are tracked."
+      canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canManage}
       load={load}
@@ -613,12 +622,13 @@ export function CapitalProjectsSection({ facilityId, canManage, canEdit }: Secti
   );
 }
 
-export function InsuranceSection({ facilityId, canManage, canEdit }: SectionProps) {
+export function InsuranceSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getInsurancePolicies({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<InsurancePolicy>
       title="Insurance"
       emptyMessage="No insurance policies are tracked."
+      canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canManage}
       load={load}
@@ -673,12 +683,13 @@ export function InsuranceSection({ facilityId, canManage, canEdit }: SectionProp
   );
 }
 
-export function OccupantsSection({ facilityId, canManage, canEdit }: SectionProps) {
+export function OccupantsSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getOccupants({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<Occupant>
       title="Occupants"
       emptyMessage="No occupants or units are assigned."
+      canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canManage}
       load={load}

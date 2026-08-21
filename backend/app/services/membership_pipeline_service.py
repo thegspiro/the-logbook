@@ -933,7 +933,9 @@ class MembershipPipelineService:
             # the unique index is the concurrency boundary. A simultaneous
             # public submission may win after our SELECT, in which case return
             # that durable application rather than surfacing a database 500.
-            existing = await self._find_active_prospect_by_email(organization_id, email)
+            existing = await self._find_active_prospect_by_email(
+                organization_id, email, current_read=True
+            )
             if existing:
                 await self._notify_duplicate_application(existing, organization_id)
                 return existing
@@ -1605,6 +1607,8 @@ class MembershipPipelineService:
         step_type: str,
         provider_key: str,
         provider_value: str,
+        reference_config_key: str,
+        event_reference: str,
         completed_by: str,
         action_result: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, str]]:
@@ -1612,9 +1616,10 @@ class MembershipPipelineService:
 
         Finds an active prospect in the org whose email matches one of
         ``emails`` and whose current step is of ``step_type`` configured with
-        ``config[provider_key] == provider_value`` (e.g. a meeting step using
-        Cal.com when an applicant books, or a document step using Documenso
-        when they finish signing), then completes that step.
+        ``config[provider_key] == provider_value`` and whose configured
+        template/event reference matches the webhook. Requiring the reference
+        prevents a different booking or document involving the same email from
+        completing the stage.
 
         Returns ``{"prospect_id", "step_id"}`` on success, or None when nothing
         matched (unknown email, wrong current stage, or already advanced) — a
@@ -1622,6 +1627,9 @@ class MembershipPipelineService:
         """
         normalized = {e.strip().lower() for e in emails if e and e.strip()}
         if not normalized:
+            return None
+        event_reference = event_reference.strip()
+        if not event_reference:
             return None
 
         query = (
@@ -1653,6 +1661,15 @@ class MembershipPipelineService:
             if step_type_value != step_type:
                 continue
             if (step.config or {}).get(provider_key) != provider_value:
+                continue
+            expected_reference = str(
+                (step.config or {}).get(reference_config_key) or ""
+            ).strip()
+            # Cal.com stages store the public booking URL, while webhooks send
+            # the event-type slug. Documenso template IDs compare directly.
+            expected_reference = expected_reference.rstrip("/").split("/")[-1]
+            expected_reference = expected_reference.split("?", 1)[0]
+            if not expected_reference or expected_reference != event_reference:
                 continue
             await self.complete_step(
                 prospect_id=str(prospect.id),
@@ -3387,7 +3404,7 @@ class MembershipPipelineService:
         return await self._find_active_prospect_by_email(organization_id, email)
 
     async def _find_active_prospect_by_email(
-        self, organization_id: str, email: str
+        self, organization_id: str, email: str, *, current_read: bool = False
     ) -> Optional[ProspectiveMember]:
         """Return an existing active/pending prospect with the given email.
 
@@ -3399,7 +3416,7 @@ class MembershipPipelineService:
         without this the duplicate path answered **500** instead of returning
         the existing applicant, which is the whole point of detecting one.
         """
-        result = await self.db.execute(
+        query = (
             select(ProspectiveMember)
             .where(
                 and_(
@@ -3424,6 +3441,11 @@ class MembershipPipelineService:
             .order_by(ProspectiveMember.created_at)
             .limit(1)
         )
+        if current_read:
+            # MySQL locking reads use the latest committed state rather than
+            # the REPEATABLE READ snapshot established by the preflight query.
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalars().first()
 
     async def _notify_duplicate_application(

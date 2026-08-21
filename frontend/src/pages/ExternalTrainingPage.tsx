@@ -63,7 +63,7 @@ interface CreateProviderModalProps {
 }
 
 const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const dialogRef1 = useDialog<HTMLDivElement>({ onClose });
+  const dialogRef1 = useDialog<HTMLDivElement>({ isOpen, onClose });
 
   const [step, setStep] = useState<'type' | 'details'>('type');
   const [formData, setFormData] = useState<ExternalTrainingProviderCreate>({
@@ -117,7 +117,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-provider-title"
@@ -585,7 +585,7 @@ interface EditProviderModalProps {
 }
 
 const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider, onClose, onSuccess }) => {
-  const dialogRef2 = useDialog<HTMLDivElement>({ onClose });
+  const dialogRef2 = useDialog<HTMLDivElement>({ isOpen: isOpen && Boolean(provider), onClose });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -656,7 +656,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-provider-title"
@@ -846,7 +846,7 @@ interface MappingsModalProps {
 }
 
 const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, providerId, providerName }) => {
-  const dialogRef3 = useDialog<HTMLDivElement>({ onClose });
+  const dialogRef3 = useDialog<HTMLDivElement>({ isOpen, onClose });
 
   const [activeTab, setActiveTab] = useState<'categories' | 'users'>('categories');
   const [categoryMappings, setCategoryMappings] = useState<ExternalCategoryMapping[]>([]);
@@ -885,7 +885,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
     setSavingMappingId(mapping.id);
     try {
       const updated = await externalTrainingService.updateCategoryMapping(providerId, mapping.id, {
-        internal_category_id: internalCategoryId,
+        internal_category_id: internalCategoryId || null,
         is_mapped: Boolean(internalCategoryId),
       });
       setCategoryMappings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
@@ -907,7 +907,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mappings-modal-title"

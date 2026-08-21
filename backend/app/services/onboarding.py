@@ -26,6 +26,7 @@ from app.models.onboarding import OnboardingStatus
 from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.services.auth_service import AuthService
+from app.utils.positions import normalize_stored_positions
 
 
 class OnboardingService:
@@ -853,9 +854,13 @@ class OnboardingService:
             if not unit_number:
                 continue
 
-            positions = [
-                str(p).strip() for p in (unit.get("positions") or []) if str(p).strip()
-            ]
+            positions = normalize_stored_positions(
+                [
+                    str(p).strip()
+                    for p in (unit.get("positions") or [])
+                    if str(p).strip()
+                ]
+            )
 
             record = BasicApparatus(
                 id=generate_uuid(),

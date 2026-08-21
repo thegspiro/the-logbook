@@ -381,7 +381,7 @@ const FormsPage: React.FC = () => {
               onClick={() => {
                 void loadData();
               }}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover min-h-11 min-w-11 rounded-lg p-2 transition-colors"
               aria-label="Refresh forms"
             >
               <RefreshCw className="h-5 w-5" aria-hidden="true" />
@@ -452,7 +452,7 @@ const FormsPage: React.FC = () => {
             onClick={() => setActiveTab('forms')}
             role="tab"
             aria-selected={activeTab === 'forms'}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`min-h-11 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'forms' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
@@ -462,7 +462,7 @@ const FormsPage: React.FC = () => {
             onClick={() => setActiveTab('templates')}
             role="tab"
             aria-selected={activeTab === 'templates'}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`min-h-11 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'bg-red-600 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -474,7 +474,7 @@ const FormsPage: React.FC = () => {
             onClick={() => setActiveTab('submissions')}
             role="tab"
             aria-selected={activeTab === 'submissions'}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`min-h-11 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'submissions'
                 ? 'bg-red-600 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary'

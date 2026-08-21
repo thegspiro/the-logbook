@@ -5,6 +5,10 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './src/e2e',
+  // The PWA spec requires a production build and service-worker-enabled test
+  // server. It has its own playwright.pwa.config.ts; running it here against
+  // `npm run dev` leaves navigator.serviceWorker.ready pending until timeout.
+  testIgnore: 'pwa.spec.ts',
 
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -19,11 +23,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [
-    ['html'],
-    ['list'],
-    ['json', { outputFile: 'test-results/results.json' }],
-  ],
+  reporter: [['html'], ['list'], ['json', { outputFile: 'test-results/results.json' }]],
 
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {

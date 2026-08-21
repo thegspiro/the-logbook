@@ -20,9 +20,15 @@ import type {
   SwapRequestCreate,
   SwapRequestReview,
   SwapRequestFilters,
+  PaginatedResponse,
   TimeOffCreate,
   TimeOffReview,
   TimeOffFilters,
+  CallTypeOption,
+  CloseoutState,
+  CloseoutAttendanceEntry,
+  CloseoutCallsPayload,
+  MemberCallCredit,
   ShiftTemplateCreate,
   ShiftTemplateUpdate,
   ShiftPatternCreate,
@@ -155,6 +161,11 @@ export interface SchedulingFeatureSettings {
   restrict_checkin_to_assigned: boolean;
   /** Block seating a driver who lacks the apparatus's required EVOC level. */
   enforce_evoc: boolean;
+  /**
+   * How the department records call volume. Absent means `detailed` — the
+   * behaviour every existing organisation already has.
+   */
+  call_tracking?: { mode: string; call_types: CallTypeOption[] } | null;
 }
 
 export interface PlatoonMember {
@@ -218,7 +229,7 @@ export interface ShiftTemplateRecord {
   end_time_of_day: string;
   duration_hours: number;
   color?: string;
-  positions?: string[] | EventTemplatePositions;
+  positions?: Array<string | PositionSlot> | EventTemplatePositions;
   min_staffing: number;
   category?: string;
   apparatus_type?: string;
@@ -249,6 +260,33 @@ export function normalizePositions(positions: unknown[] | null | undefined): Pos
     }
     return { position: String(p), required: true };
   });
+}
+
+/**
+ * Return a shift with both seat lists normalized to `PositionSlot[]`.
+ *
+ * A shift's `positions` is untyped JSON on the backend (`List[Any]`), and both
+ * `ShiftCreate.positions` and rows written before the required/optional flag
+ * existed carry bare strings. Consumers treat the field as `PositionSlot[]` —
+ * the structured position editor spreads each entry, so a string reaches the
+ * database as `{0:'o',1:'f',…}` — so the shape is settled once here, at the
+ * boundary, rather than at each of the dozen call sites.
+ */
+function normalizeShift<T extends { positions?: unknown; apparatus_positions?: unknown }>(shift: T): T {
+  if (!shift) return shift;
+  return {
+    ...shift,
+    ...(shift.positions != null ? { positions: normalizePositions(shift.positions as unknown[]) } : {}),
+    ...(shift.apparatus_positions != null
+      ? { apparatus_positions: normalizePositions(shift.apparatus_positions as unknown[]) }
+      : {}),
+  };
+}
+
+/** Same treatment for an apparatus record, whose seat list is the same JSON. */
+function normalizeApparatus<T extends { positions?: unknown }>(apparatus: T): T {
+  if (!apparatus || apparatus.positions == null) return apparatus;
+  return { ...apparatus, positions: normalizePositions(apparatus.positions as unknown[]) };
 }
 
 export function resolveTemplatePositions(positions: ShiftTemplateRecord['positions']): PositionSlot[] {
@@ -361,22 +399,22 @@ export const schedulingService = {
       '/scheduling/shifts',
       { params }
     );
-    return response.data;
+    return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
 
   async createShift(data: ShiftCreate): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>('/scheduling/shifts', data);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async getShift(shiftId: string): Promise<ShiftRecord> {
     const response = await api.get<ShiftRecord>(`/scheduling/shifts/${shiftId}`);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async updateShift(shiftId: string, data: ShiftUpdate): Promise<ShiftRecord> {
     const response = await api.patch<ShiftRecord>(`/scheduling/shifts/${shiftId}`, data);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async deleteShift(shiftId: string): Promise<void> {
@@ -395,7 +433,7 @@ export const schedulingService = {
 
   async cancelShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/cancel`, reason ? { reason } : {});
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async finalizeShift(
@@ -405,6 +443,7 @@ export const schedulingService = {
       override_incomplete_checks?: boolean;
       override_reason?: string;
       pass_down_notes?: string;
+      member_call_counts?: MemberCallCredit[];
     }
   ): Promise<ShiftRecord> {
     const body: Record<string, unknown> = {};
@@ -414,13 +453,39 @@ export const schedulingService = {
       if (opts.override_reason) body.override_reason = opts.override_reason;
     }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
+    if (opts?.member_call_counts?.length) body.member_call_counts = opts.member_call_counts;
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
+    return normalizeShift(response.data);
+  },
+
+  // -- Resumable close-out -------------------------------------------------
+
+  async getCloseoutState(shiftId: string): Promise<CloseoutState> {
+    const response = await api.get<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout`);
+    return response.data;
+  },
+
+  async saveCloseoutAttendance(shiftId: string, entries: CloseoutAttendanceEntry[]): Promise<CloseoutState> {
+    const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/attendance`, { entries });
+    return response.data;
+  },
+
+  async saveCloseoutCalls(shiftId: string, payload: CloseoutCallsPayload): Promise<CloseoutState> {
+    const body: Record<string, unknown> = {};
+    // null is meaningful here — it clears a previously reported count — so this
+    // checks for undefined rather than using a falsy guard, which would also
+    // drop a legitimate zero.
+    if (payload.reported_call_count !== undefined) {
+      body.reported_call_count = payload.reported_call_count;
+    }
+    if (payload.reported_call_types) body.reported_call_types = payload.reported_call_types;
+    const response = await api.patch<CloseoutState>(`/scheduling/shifts/${shiftId}/closeout/calls`, body);
     return response.data;
   },
 
   async reopenShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/reopen`, reason ? { reason } : {});
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   async getShiftHandoff(
@@ -436,7 +501,7 @@ export const schedulingService = {
     const params: Record<string, string> = {};
     if (weekStart) params.week_start = weekStart;
     const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeShift);
   },
 
   async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
@@ -444,7 +509,7 @@ export const schedulingService = {
     if (year) params.year = year;
     if (month) params.month = month;
     const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeShift);
   },
 
   async getSummary(): Promise<SchedulingSummary> {
@@ -459,7 +524,7 @@ export const schedulingService = {
     limit?: number;
   }): Promise<{ shifts: ShiftRecord[]; total: number }> {
     const response = await api.get<{ shifts: ShiftRecord[]; total: number }>('/scheduling/my-shifts', { params });
-    return response.data;
+    return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
 
   async getMyAssignments(): Promise<Assignment[]> {
@@ -522,7 +587,7 @@ export const schedulingService = {
   // Active shift lookup
   async getActiveShiftForApparatus(apparatusId: string): Promise<ShiftRecord> {
     const response = await api.get<ShiftRecord>(`/scheduling/apparatus/${apparatusId}/active-shift`);
-    return response.data;
+    return normalizeShift(response.data);
   },
 
   // Shift Check-In / Check-Out
@@ -544,9 +609,9 @@ export const schedulingService = {
   },
 
   // Swap Requests
-  async getSwapRequests(params?: SwapRequestFilters): Promise<SchedulingSwapRequest[]> {
-    const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });
-    return asArray(response.data);
+  async getSwapRequests(params?: SwapRequestFilters): Promise<PaginatedResponse<SchedulingSwapRequest>> {
+    const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', { params });
+    return response.data;
   },
   async createSwapRequest(data: SwapRequestCreate): Promise<SchedulingSwapRequest> {
     const response = await api.post<SchedulingSwapRequest>('/scheduling/swap-requests', data);
@@ -561,9 +626,9 @@ export const schedulingService = {
   },
 
   // Time Off
-  async getTimeOffRequests(params?: TimeOffFilters): Promise<SchedulingTimeOffRequest[]> {
-    const response = await api.get<SchedulingTimeOffRequest[]>('/scheduling/time-off', { params });
-    return asArray(response.data);
+  async getTimeOffRequests(params?: TimeOffFilters): Promise<PaginatedResponse<SchedulingTimeOffRequest>> {
+    const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', { params });
+    return response.data;
   },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
     const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);
@@ -642,15 +707,15 @@ export const schedulingService = {
   // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
   async getBasicApparatus(params?: { is_active?: boolean }): Promise<BasicApparatusRecord[]> {
     const response = await api.get<BasicApparatusRecord[]>('/scheduling/apparatus', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeApparatus);
   },
   async createBasicApparatus(data: BasicApparatusCreate): Promise<BasicApparatusRecord> {
     const response = await api.post<BasicApparatusRecord>('/scheduling/apparatus', data);
-    return response.data;
+    return normalizeApparatus(response.data);
   },
   async updateBasicApparatus(apparatusId: string, data: BasicApparatusUpdate): Promise<BasicApparatusRecord> {
     const response = await api.patch<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}`, data);
-    return response.data;
+    return normalizeApparatus(response.data);
   },
   async deleteBasicApparatus(apparatusId: string): Promise<void> {
     await api.delete(`/scheduling/apparatus/${apparatusId}`);
@@ -659,7 +724,7 @@ export const schedulingService = {
   // --- Apparatus Options (unified vehicle picker for templates) ---
   async getApparatusOptions(): Promise<ApparatusOptionsResponse> {
     const response = await api.get<ApparatusOptionsResponse>('/scheduling/apparatus-options');
-    return response.data;
+    return { ...response.data, options: asArray(response.data?.options).map(normalizeApparatus) };
   },
 
   // --- Shift Signup (member self-service) ---
@@ -683,7 +748,7 @@ export const schedulingService = {
     apparatus_id?: string;
   }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeShift);
   },
 
   // --- Shift Calls / Runs ---

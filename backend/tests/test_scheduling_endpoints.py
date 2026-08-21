@@ -88,6 +88,16 @@ class TestEndpointPermissions:
         ), "Route /swap-requests/{request_id}/review POST not found"
         assert any("require_permission" in d or "scheduling" in d for d in deps)
 
+    def test_qualification_roster_requires_officer_permission(self):
+        """Baseline scheduling viewers must not see members' training records."""
+        deps = self._get_route_deps("/eligibility/roster", "GET")
+
+        assert deps is not None, "Route /eligibility/roster GET not found"
+        assert deps == [
+            "get_db",
+            "PermissionChecker(scheduling.manage,training.view_all,training.manage)",
+        ]
+
 
 class TestPlatoonRosterPermissions:
     """The hold-over roster must not disclose member availability broadly."""

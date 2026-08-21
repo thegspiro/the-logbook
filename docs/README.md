@@ -12,8 +12,21 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🔄 Recent-change handoff
 
+**[Three-day change and connection audit — 2026-08-17 through 2026-08-19](./CHANGE_AUDIT_2026-08-17_TO_19.md)**
+is the current release handoff. It covers PII-free call volume tracking and the
+resumable shift close-out wizard (two migrations, two new tables, one new
+column), the cross-module NFC tag surface, the configuration preflight tool, the
+rewritten privacy notice, the red-team security batch, and the CI fix for an
+`apt-get` stall that had been letting the backend suite report _skipped_ rather
+than failed. It carries the new data model, what the call tables deliberately do
+not hold, the end-to-end data paths, the edge cases, and the screenshot / YouTube
+disposition.
+
+**[August 15–16 audit](./CHANGE_AUDIT_2026-08-15_TO_16.md)** covers the window
+immediately before it.
+
 **[Six-day change and connection audit — 2026-08-10 through 2026-08-16](./CHANGE_AUDIT_2026-08-10_TO_16.md)**
-is the current release handoff. It carries what the three-day frame could not
+was the previous release handoff. It carries what the three-day frame could not
 show: every route added across the window with its real permission gate, the
 full 28-revision Alembic route from `20260809_0002` to the then-head
 `20260814_0004` with its
@@ -372,17 +385,22 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Step-by-step deployment guide for all supported methods
     - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Proxmox, Synology, Unraid)
 
-13. **[DOCKER-BUILD-PUBLISH.md](./DOCKER-BUILD-PUBLISH.md)**
+13. **[UPGRADING.md](./UPGRADING.md)**
+    - Read before pulling a new version into a running deployment
+    - How to check a configuration with `python -m app.preflight` before restarting
+    - Changes that can stop an existing deployment from starting, and both ways out
+
+14. **[DOCKER-BUILD-PUBLISH.md](./DOCKER-BUILD-PUBLISH.md)**
     - Building Docker images and publishing them to GitHub Container Registry (ghcr.io)
 
-14. **[PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md)**
+15. **[PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md)**
     - Port layouts used by each deployment method and how to change them
 
-15. **[ALEMBIC_MIGRATIONS.md](./ALEMBIC_MIGRATIONS.md)**
+16. **[ALEMBIC_MIGRATIONS.md](./ALEMBIC_MIGRATIONS.md)**
     - Migration revision tracking — consult before creating a new migration
     - Prevents revision-ID collisions and broken `down_revision` chains
 
-16. **[EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md)**
+17. **[EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md)**
     - DNS records (SPF, DKIM, DMARC) and SMTP configuration for reliable email delivery to Gmail, Microsoft 365, and other providers
 
 ---

@@ -297,7 +297,7 @@ function LocationSetupWizard({
 
   /* ── Render ── */
   return (
-    <div className="modal-overlay flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div className="modal-overlay z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <DialogPanel
         onClose={() => onDismiss?.()}
         className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden"
@@ -1463,7 +1463,7 @@ export default function LocationsPage() {
       {/* Station Modal */}
       {showStationModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
@@ -1571,7 +1571,7 @@ export default function LocationsPage() {
       {/* Room Modal */}
       {showRoomModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {

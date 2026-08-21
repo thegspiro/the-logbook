@@ -6,6 +6,21 @@
  */
 
 // ============================================
+// NFC Tag Targets
+// ============================================
+/**
+ * The destinations an NFC tag is allowed to point at. Every entry has a
+ * matching spec in `constants/nfc.ts`; a tag naming anything else is refused
+ * rather than followed, so this list is the whole reachable surface.
+ */
+export const NfcTagTarget = {
+  EVENT_CHECK_IN: 'event-check-in',
+  ADMIN_HOURS_CLOCK_IN: 'admin-hours-clock-in',
+  SHIFT_CHECK_IN: 'shift-check-in',
+} as const;
+export type NfcTagTarget = (typeof NfcTagTarget)[keyof typeof NfcTagTarget];
+
+// ============================================
 // User / Member Status
 // ============================================
 export const UserStatus = {

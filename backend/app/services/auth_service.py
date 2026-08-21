@@ -179,11 +179,10 @@ class AuthService:
             logger.warning("Authentication failed for login attempt")
             return None, "Incorrect username or password"
 
-        # Check if account is locked. By default (ACCOUNT_LOCKOUT_REVEAL) tell
-        # the user it's a temporary lock and roughly how long remains, so they
-        # stop retrying a lock that is otherwise disguised as a wrong password.
-        # Set ACCOUNT_LOCKOUT_REVEAL=False for the strict anti-enumeration
-        # behaviour (generic message that never confirms the account exists).
+        # Check if account is locked. The default strict anti-enumeration path
+        # returns the same generic response as every other credential failure.
+        # Trusted, private deployments can explicitly enable the friendlier
+        # account-revealing message with ACCOUNT_LOCKOUT_REVEAL=True.
         locked_until = (
             user.locked_until.replace(tzinfo=timezone.utc)
             if user.locked_until and user.locked_until.tzinfo is None

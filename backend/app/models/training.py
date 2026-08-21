@@ -2904,7 +2904,9 @@ class Shift(Base):
     color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
 
     # Staffing (from template)
-    positions = Column(JSON)  # ["officer", "firefighter", "firefighter", ...]
+    # Canonical form: [{"position": "officer", "required": True}, ...] — one
+    # entry per seat. See app/utils/positions.py.
+    positions = Column(JSON)
     min_staffing = Column(Integer)
 
     # Notes
@@ -2924,6 +2926,15 @@ class Shift(Base):
     # Summary totals — computed on finalization, also served live via API
     call_count = Column(Integer, nullable=True)
     total_hours = Column(Float, nullable=True)
+
+    # How far the officer got through the close-out wizard. NULL/0 = not
+    # started, 1 = attendance times saved, 2 = calls saved; finalizing clears
+    # it. Each step writes its real records as it goes — attendance rows, call
+    # rows — so this marker only says where to resume, never what was entered.
+    # Without it a phone locking on step 2 sends the officer back to step 1,
+    # and a shift with a genuine zero calls is indistinguishable from one whose
+    # count was never asked for.
+    closeout_step = Column(Integer, nullable=True)
 
     # Finalization — officer formally closes the shift after review
     is_finalized = Column(Boolean, default=False, nullable=False, server_default="0")
@@ -3141,9 +3152,10 @@ class ShiftTemplate(Base):
     color = Column(String(7))  # Hex color for calendar display
 
     # Staffing
-    positions = Column(
-        JSON
-    )  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
+    # Canonical form: [{"position": "officer", "required": True}, ...] — see
+    # app/utils/positions.py. Event-category templates instead store event
+    # metadata here ({"event_type", "resources", "flat_positions"}).
+    positions = Column(JSON)
     min_staffing = Column(Integer, default=1)
 
     # Categorization
@@ -3486,9 +3498,9 @@ class BasicApparatus(Base):
         String(50), nullable=False, default="engine", server_default="engine"
     )
     min_staffing = Column(Integer, default=1)
-    positions = Column(
-        JSON
-    )  # List of position strings e.g. ["officer", "driver", "firefighter"]
+    # Canonical form: [{"position": "officer", "required": True}, ...] — see
+    # app/utils/positions.py.
+    positions = Column(JSON)
     is_active = Column(Boolean, default=True)
 
     # Timestamps

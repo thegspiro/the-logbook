@@ -17,6 +17,8 @@ import { formatDate, formatTime, formatDateCustom } from '../../utils/dateFormat
 import { getErrorMessage } from '../../utils/errorHandling';
 import { REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
 
+const REQUESTS_PAGE_SIZE = 20;
+
 export const RequestsTab: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
@@ -26,7 +28,21 @@ export const RequestsTab: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
+  const [swapTotal, setSwapTotal] = useState(0);
+  const [timeOffTotal, setTimeOffTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // The API enforces this scope; keep the member UI defensive as well so a
+  // stale cache or accidentally broadened response cannot expose another
+  // member's request details.
+  const visibleSwapRequests = canManage
+    ? swapRequests
+    : swapRequests.filter(
+        (request) => request.requesting_user_id === currentUser?.id || request.target_user_id === currentUser?.id
+      );
+  const visibleTimeOffRequests = canManage
+    ? timeOffRequests
+    : timeOffRequests.filter((request) => request.user_id === currentUser?.id);
 
   // Review modal
   const [reviewing, setReviewing] = useState<{ type: 'swap' | 'timeoff'; id: string } | null>(null);
@@ -43,21 +59,55 @@ export const RequestsTab: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> | undefined = statusFilter ? { status: statusFilter } : undefined;
+      const params = {
+        ...(statusFilter ? { status: statusFilter as RequestStatus } : {}),
+        skip: 0,
+        limit: REQUESTS_PAGE_SIZE,
+      };
       const [swaps, timeOff] = await Promise.all([
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
       ]);
       // Swap requests are now enriched server-side with shift dates and start
       // times — no need to fetch individual shifts (fixes N+1 query).
-      setSwapRequests(swaps);
-      setTimeOffRequests(timeOff);
+      setSwapRequests(swaps.items);
+      setSwapTotal(swaps.total);
+      setTimeOffRequests(timeOff.items);
+      setTimeOffTotal(timeOff.total);
     } catch {
       toast.error('Failed to load requests');
     } finally {
       setLoading(false);
     }
   }, [statusFilter]);
+
+  const loadMore = async () => {
+    setLoading(true);
+    try {
+      const common = statusFilter ? { status: statusFilter as RequestStatus } : {};
+      if (activeView === 'swaps') {
+        const page = await schedulingService.getSwapRequests({
+          ...common,
+          skip: swapRequests.length,
+          limit: REQUESTS_PAGE_SIZE,
+        });
+        setSwapRequests((current) => [...current, ...page.items]);
+        setSwapTotal(page.total);
+      } else {
+        const page = await schedulingService.getTimeOffRequests({
+          ...common,
+          skip: timeOffRequests.length,
+          limit: REQUESTS_PAGE_SIZE,
+        });
+        setTimeOffRequests((current) => [...current, ...page.items]);
+        setTimeOffTotal(page.total);
+      }
+    } catch {
+      toast.error('Failed to load more requests');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     void loadData();
@@ -142,19 +192,31 @@ export const RequestsTab: React.FC = () => {
     <div className="space-y-6">
       {/* Tab + Filter Bar */}
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div className="bg-theme-input-bg flex rounded-lg p-1">
+        <div className="bg-theme-input-bg flex rounded-lg p-1" role="tablist" aria-label="Request type">
           <button
-            onClick={() => setActiveView('swaps')}
+            type="button"
+            role="tab"
+            aria-selected={activeView === 'swaps'}
+            onClick={() => {
+              setActiveView('swaps');
+              void loadData();
+            }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <ArrowLeftRight className="h-4 w-4" /> <span className="hidden sm:inline">Swap Requests</span>
-            <span className="sm:hidden">Swaps</span> ({swapRequests.length})
+            <span className="sm:hidden">Swaps</span> ({swapTotal})
           </button>
           <button
-            onClick={() => setActiveView('timeoff')}
+            type="button"
+            role="tab"
+            aria-selected={activeView === 'timeoff'}
+            onClick={() => {
+              setActiveView('timeoff');
+              void loadData();
+            }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
-            <CalendarOff className="h-4 w-4" /> Time Off ({timeOffRequests.length})
+            <CalendarOff className="h-4 w-4" /> Time Off ({timeOffTotal})
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -184,7 +246,7 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : activeView === 'swaps' ? (
         /* Swap Requests */
-        swapRequests.length === 0 ? (
+        visibleSwapRequests.length === 0 ? (
           <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
             <ArrowLeftRight className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
             <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No swap requests</h3>
@@ -196,7 +258,7 @@ export const RequestsTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {swapRequests.map((req) => {
+            {visibleSwapRequests.map((req) => {
               const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
                 <div key={req.id} className="card p-4 sm:p-5">
@@ -331,7 +393,7 @@ export const RequestsTab: React.FC = () => {
           </div>
         )
       ) : /* Time Off Requests */
-      timeOffRequests.length === 0 ? (
+      visibleTimeOffRequests.length === 0 ? (
         <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
           <CalendarOff className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No time-off requests</h3>
@@ -343,7 +405,7 @@ export const RequestsTab: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {timeOffRequests.map((req) => {
+          {visibleTimeOffRequests.map((req) => {
             const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
             return (
               <div key={req.id} className="card p-4 sm:p-5">
@@ -449,10 +511,20 @@ export const RequestsTab: React.FC = () => {
         </div>
       )}
 
+      {!loading &&
+        ((activeView === 'swaps' && swapRequests.length < swapTotal) ||
+          (activeView === 'timeoff' && timeOffRequests.length < timeOffTotal)) && (
+          <div className="flex justify-center">
+            <button type="button" className="btn-secondary" onClick={() => void loadMore()}>
+              Load more {activeView === 'swaps' ? 'swap' : 'time-off'} requests
+            </button>
+          </div>
+        )}
+
       {/* Review Modal */}
       {reviewing && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Review request"

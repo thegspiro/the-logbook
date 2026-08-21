@@ -451,6 +451,39 @@ Several features are specifically designed for mobile use:
 
 This is the most common mobile interaction — members scan QR codes at events and shift changes.
 
+### NFC Tag Check-In (Android only) _(2026-08-18)_
+
+Where a station has mounted an NFC tag, you can check in by holding your phone
+near it instead of scanning anything. No camera, which matters in a dark bay or
+with gloves on.
+
+1. Hold the back of your phone against the tag
+2. Android opens The Logbook's check-in page
+3. Tap **Confirm Check-In**
+
+**If the app is already open on screen, that will not happen** — Android only
+hands a tag off to the browser when the app is not in the foreground. Use **Tap
+Tag** in the app instead: it is on the Events page, My Admin Hours, and the
+scheduling calendar. Press it, then hold the phone to the tag.
+
+Tags exist for three things today: **event check-in**, **admin hours clock-in**,
+and **shift check-in** on an apparatus.
+
+> **[SCREENSHOT NEEDED — a phone holding against a mounted NFC tag on an
+> apparatus, and the resulting shift check-in page naming the unit, date and
+> hours. Two frames or one composite]**
+
+**This is Chrome on Android, over HTTPS, and nothing else.** iPhone cannot do
+it; Safari does not implement Web NFC and no iOS browser does. A desktop cannot
+do it. A department running on plain `http://` over the LAN cannot do it — the
+browser only exposes NFC on a secure connection. Where NFC is unavailable the
+buttons simply are not there, and the QR code is the way in.
+
+**An unrecognized tag will not take you anywhere.** The app only follows links
+that point back at your own Logbook, and only to check-in pages it recognizes.
+A tag somebody else wrote leaves the scan waiting with a message rather than
+opening whatever it says.
+
 ### Member ID Scanning (Inventory Checkout)
 
 1. Navigate to **Inventory > Members** on your phone

@@ -2,7 +2,7 @@
 
 **[🏠 Home](Home)**
 
-**[Recent changes (Aug 16–17, 2026)](Recent-Changes-2026-08-16-to-17)**
+**[Recent changes (Aug 17–19, 2026)](Recent-Changes-2026-08-17-to-19)**
 [· Aug 10–16 rollup](Recent-Changes-2026-08-10-to-16)
 [· Aug 15–16 detail](Recent-Changes-2026-08-15-to-16)
 [· Aug 12–14 detail](Recent-Changes-2026-08-12-to-14)
@@ -47,8 +47,7 @@
 - [Admin Hours](Module-Admin-Hours)
 - [Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)
 - [Apparatus](Module-Apparatus)
-- [Inventory (Gear & Uniforms)](Module-Inventory)
-- [Medical Supplies](Module-Medical-Supplies)
+- [Inventory](Module-Inventory)
 - [Grants & Fundraising](Module-Grants-Fundraising)
 - [Finance](../docs/FINANCE_MODULE.md)
 - [Meeting Minutes](../docs/MEETING_MINUTES_MODULE.md)

@@ -28,6 +28,7 @@ from app.models.training import (
     TrainingEffectivenessEvaluation,
     TrainingRecord,
     TrainingRequirement,
+    TrainingSession,
     TrainingStatus,
     TrainingType,
     XAPIStatement,
@@ -440,11 +441,33 @@ class TrainingEffectivenessService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure every optional training reference belongs to the tenant."""
+        references = (
+            ("training_record_id", TrainingRecord, True),
+            ("training_session_id", TrainingSession, False),
+            ("course_id", TrainingCourse, False),
+        )
+        for field, model, self_owned in references:
+            reference_id = data.get(field)
+            if reference_id is None:
+                continue
+            conditions = [
+                model.id == reference_id,
+                model.organization_id == organization_id,
+            ]
+            if self_owned:
+                conditions.append(model.user_id == data["user_id"])
+            result = await self.db.execute(select(model.id).where(*conditions))
+            if result.scalar_one_or_none() is None:
+                raise ValueError(f"Invalid {field}")
+
     async def create_evaluation(
         self, organization_id: str, data: dict
     ) -> TrainingEffectivenessEvaluation:
         """Create a training effectiveness evaluation"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         # Calculate knowledge gain if pre/post scores provided
         pre = data.get("pre_assessment_score")
         post = data.get("post_assessment_score")

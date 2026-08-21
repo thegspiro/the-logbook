@@ -373,6 +373,17 @@ Finalize is blocked]**
 
 **[CALLOUT: "Accountability, on every shift"]**
 
+> **SHOOTING NOTE — added 2026-08-19.** This short shows the **single finalize
+> checklist**, which is what a department on per-incident call logging sees. A
+> department with **Record a call count at close-out** switched on gets a
+> three-step wizard instead, and the override lives on its **last step** rather
+> than in this dialog.
+>
+> Shoot it on a detailed-mode department, which keeps this take correct as
+> filmed. If you would rather cover both, the wizard version is the same beat on
+> a different screen — but do not mix the two in one short; the point of a
+> 50-second clip is that the viewer recognises their own screen immediately.
+
 ---
 
 ## SHORT 8K: Download Everything The Logbook Knows About You
@@ -1093,3 +1104,50 @@ dates. The lots sheet opens.]**
 > "Test the new sign before you leave the room—and destroy the old one."
 
 **Production:** Use non-sensitive demo rooms. Do not show a live reusable code long enough for viewers to scan.
+
+## SHORT 8AG: Tap Instead of Scan
+
+**Target Length:** 45–55 seconds
+**Added:** 2026-08-19
+
+**[0:00 — SCREEN: Close-up, a phone held flat against a small NFC sticker on an
+apparatus dashboard. The check-in page opens on its own. No narration over the
+first two seconds — let the tap land.]**
+
+> "No camera. No scanning. Hold your phone against the tag and you're on the
+> check-in page."
+
+**[0:10 — SCREEN: An officer on `/locations/qr-codes`, tapping **Write NFC tag**
+on an apparatus card, holding a blank tag to the phone, moving to the next
+card.]**
+
+> "Officers write them from the same page that already prints your QR codes.
+> One card per apparatus — so you can do a whole fleet from a box of blank tags
+> in one sitting."
+
+**[0:25 — SCREEN: Highlight the apparatus card's tag URL, then a shift changing
+over and the same tag still resolving.]**
+
+> "Write the **apparatus** tag, not a shift tag. It resolves to whichever shift
+> is running when someone taps it, so one sticker lasts the life of the truck.
+> A tag tied to one shift is dead the moment that shift ends."
+
+**[0:38 — SCREEN: The app already open in the foreground; nothing happens on
+tap. Then **Tap Tag** pressed on the Events page, and the tap works.]**
+
+> "One quirk: if the app's already open on screen, Android won't hand the tag
+> over. Use **Tap Tag** in the app instead."
+
+**[CALLOUT: "Chrome on Android, over HTTPS. Everyone else: the QR code still
+works."]**
+
+**Production:** Needs a **real Android phone and a real NFC tag** — this cannot
+be captured in the screenshot harness or faked in a mockup, and anyone who has
+used NFC will spot a staged shot immediately. Shoot over HTTPS; the buttons do
+not render on a plain-`http://` LAN deployment.
+
+**Do not** shoot this on a room kiosk card. Room display codes are deliberately
+not taggable — that code is a check-in credential for an unauthenticated
+screen, and a sticker in a public hallway hands it to whoever walks past. The
+button only appears on apparatus cards, and showing a viewer hunting for it on a
+room card teaches the wrong thing.

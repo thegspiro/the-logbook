@@ -6,19 +6,19 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                              |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                         |
-| `/login`                               | Login                  | User authentication                                                      |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                   |
-| `/reset-password`                      | Reset Password         | Password reset form                                                      |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)           |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                     |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                       |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_ |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department-configurable text                      |
-| `/terms`                               | Terms of Service       | Public terms of use; department-configurable text                        |
+| URL                                    | Page                   | Description                                                                                          |
+| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                     |
+| `/login`                               | Login                  | User authentication                                                                                  |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                               |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                  |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                       |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                 |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                   |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                                            |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                             |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text   |
 
 > **The guest check-in page is addressed through the room's display code**, not
 > through the event alone, so the backend can resolve the department without a
@@ -30,42 +30,49 @@ Complete reference of all pages in the application, organized by module.
 > room; otherwise it renders a "sign-in is not available" state. See
 > **Events → Check-In Settings** below.
 
-> **Public routes sit outside `AppLayout`** and therefore do not inherit its background. Until 2026-08-08 the public form page, ballot voting page and the prospective-member application-status page painted `bg-theme-surface-secondary` — a **translucent** token in dark mode, designed to composite over `AppLayout`'s gradient — so they rendered over the browser's bare white canvas: white-on-white labels with dark inputs. `body` now carries the themed gradient, and these pages use the same gradient utility as `LoginPage`. **Any new public route must use the gradient utility, not a surface token.** Print styles force a white body background, so printed output is unaffected.
+> **Public routes sit outside `AppLayout`** and therefore do not inherit its background. Until 2026-08-08 the public form page, ballot voting page and the prospective-member application-status page painted `bg-theme-surface-secondary` — a **translucent** token in dark mode, designed to composite over `AppLayout`'s gradient — so they rendered over the browser's bare white canvas: white-on-white labels with dark inputs. The **root element (`html`)** now carries the themed gradient — moved there from `body` on 2026-08-15 so it also covers the browser's stable scrollbar gutter — and these pages use the same gradient utility as `LoginPage`. **Any new public route must use the gradient utility, not a surface token.** Print styles force a white background on `html` and `body`, so printed output is unaffected.
 
 ---
 
 ## Onboarding
 
-| URL                                    | Page                  | Description                                                                              |
-| -------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------- |
-| `/onboarding`                          | Onboarding Check      | Entry point / status check                                                               |
-| `/onboarding/start`                    | Organization Setup    | Step 1 - create organization                                                             |
-| `/onboarding/navigation-choice`        | Navigation Choice     | Choose navigation layout                                                                 |
-| `/onboarding/email-platform`           | Email Platform        | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)   |
-| `/onboarding/email-config`             | Email Configuration   | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials) |
-| `/onboarding/file-storage`             | File Storage          | Choose file storage provider                                                             |
-| `/onboarding/file-storage-config`      | File Storage Config   | Configure file storage                                                                   |
-| `/onboarding/authentication`           | Authentication        | Choose auth method                                                                       |
-| `/onboarding/it-team`                  | IT Team & Backup      | IT team & backup access setup                                                            |
-| `/onboarding/positions`                | Position Setup        | Configure positions (formerly roles)                                                     |
-| `/onboarding/modules`                  | Module Selection      | Choose which modules to enable                                                           |
-| `/onboarding/modules/:moduleId/config` | Module Config         | Configure individual module                                                              |
-| `/onboarding/system-owner`             | System Owner Creation | Create initial system owner account                                                      |
-| `/onboarding/security-check`           | Security Check        | Security verification                                                                    |
-| `/onboarding/stations`                 | Station Setup         | Create the department's stations                                                         |
-| `/onboarding/apparatus`                | Apparatus Setup       | Create the department's apparatus                                                        |
-| `/onboarding/complete`                 | Setup Complete        | Confirmation / hand-off into the app                                                     |
+| URL                                    | Page                     | Description                                                                                    |
+| -------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `/onboarding`                          | Onboarding Check         | Entry point / status check                                                                     |
+| `/onboarding/start`                    | Organization Setup       | Step 1 - create organization                                                                   |
+| `/onboarding/navigation-choice`        | Navigation Choice        | Choose navigation layout                                                                       |
+| `/onboarding/email-platform`           | Email Platform           | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)         |
+| `/onboarding/email-config`             | Email Configuration      | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials)       |
+| `/onboarding/file-storage`             | File Storage             | Choose file storage provider                                                                   |
+| `/onboarding/file-storage-config`      | File Storage Config      | Configure file storage                                                                         |
+| `/onboarding/authentication`           | Authentication           | Choose auth method                                                                             |
+| `/onboarding/it-team`                  | IT Team & Backup         | IT team & backup access setup                                                                  |
+| `/onboarding/positions`                | Position Setup           | Configure positions (formerly roles)                                                           |
+| `/onboarding/modules`                  | Module Selection         | Choose which modules to enable                                                                 |
+| `/onboarding/module-selection`         | Module Selection (alias) | Renders the same page as `/onboarding/modules` — **not** a redirect, so the URL stays as typed |
+| `/onboarding/modules/:moduleId/config` | Module Config            | Configure individual module                                                                    |
+| `/onboarding/system-owner`             | System Owner Creation    | Create initial system owner account                                                            |
+| `/onboarding/security-check`           | Security Check           | Security verification                                                                          |
+| `/onboarding/stations`                 | Station Setup            | Create the department's stations                                                               |
+| `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |
+| `/onboarding/complete`                 | Setup Complete           | Confirmation / hand-off into the app                                                           |
 
 > **Completed setup cannot be replayed** _(2026-08-08)_. Once onboarding is
 > finished, the station and apparatus setup endpoints refuse further writes, so a
 > retained link cannot be used to add stations or apparatus after the fact.
+
+> **`/onboarding/module-selection` is an alias, not a redirect**
+> _(corrected 2026-08-16)_. It was listed below as redirecting to
+> `/onboarding/modules`; in fact both routes render `<ModuleOverview />`
+> directly, so a member who follows an old link stays on the old URL rather than
+> being moved to the current one. Found by
+> `scripts/check_route_permissions.py`.
 
 **Legacy redirects:**
 
 - `/onboarding/department` → `/onboarding/start`
 - `/onboarding/roles` → `/onboarding/positions`
 - `/onboarding/admin-user` → `/onboarding/system-owner`
-- `/onboarding/module-selection` → `/onboarding/modules`
 
 ---
 
@@ -124,11 +131,12 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ## Prospective Members
 
-| URL                             | Page                         | Permission                                           |
-| ------------------------------- | ---------------------------- | ---------------------------------------------------- |
-| `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage`                         |
-| `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage`                         |
-| `/application-status/:token`    | Public Application Status    | None (token-based; see the public-routes note above) |
+| URL                                           | Page                         | Permission                                           |
+| --------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
+| `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
+| `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
+| `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
 
 > **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice naming the real total. Column headers count only the cards that loaded, so a stage on a truncated board can read low — the table view is the accurate one at that size.
 >
@@ -140,13 +148,13 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ## Apparatus
 
-| URL                   | Page             | Permission    |
-| --------------------- | ---------------- | ------------- |
-| `/apparatus`          | Apparatus List   | Authenticated |
-| `/apparatus/new`      | Add Apparatus    | Authenticated |
-| `/apparatus/:id`      | Apparatus Detail | Authenticated |
-| `/apparatus/:id/edit` | Edit Apparatus   | Authenticated |
-| `/apparatus-basic`    | Apparatus Basic  | Authenticated |
+| URL                   | Page             | Permission                                   |
+| --------------------- | ---------------- | -------------------------------------------- |
+| `/apparatus`          | Apparatus List   | `apparatus.view` **OR** `apparatus.manage`   |
+| `/apparatus/new`      | Add Apparatus    | `apparatus.create` **OR** `apparatus.manage` |
+| `/apparatus/:id`      | Apparatus Detail | `apparatus.view` **OR** `apparatus.manage`   |
+| `/apparatus/:id/edit` | Edit Apparatus   | `apparatus.edit` **OR** `apparatus.manage`   |
+| `/apparatus-basic`    | Apparatus Basic  | Authenticated                                |
 
 > `/apparatus-basic` is a lightweight alternative used when the full Apparatus module is disabled.
 
@@ -215,10 +223,10 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ## Locations (when Facilities module is off)
 
-| URL                   | Page                 | Permission                                    |
-| --------------------- | -------------------- | --------------------------------------------- |
-| `/locations`          | Locations Management | Authenticated                                 |
-| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` |
+| URL                   | Page                 | Permission                                                            |
+| --------------------- | -------------------- | --------------------------------------------------------------------- |
+| `/locations`          | Locations Management | Authenticated                                                         |
+| `/locations/qr-codes` | Check-In QR Codes    | `locations.manage` **OR** `facilities.manage` **OR** `apparatus.view` |
 
 > Manages stations, addresses, and rooms for use by events, training, QR code check-in, and other modules. Each room gets a unique kiosk display code for tablet-based QR check-in. The Check-In QR Codes page is a printable directory of every kiosk QR code, grouped by station/facility (available in both Locations and Facilities modes), plus apparatus shift check-in codes when the Scheduling module is enabled.
 
@@ -226,18 +234,20 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 > **The QR directory is restricted, unlike the rest of Locations** _(corrected 2026-08-16)_. This page was previously listed here as Authenticated; it is not. The route is registered by the Facilities module (so it resolves in both Locations and Facilities modes) behind `locations.manage` **OR** `facilities.manage`. The restriction is the point: a kiosk display code is a check-in credential, so a bulk directory of every room's code is a different object from any one room's QR. Regenerating a display code invalidates the previous one, and codes are tenant-bound.
 
+> **`apparatus.view` also opens it** _(documented 2026-08-18)_. The page carries apparatus shift check-in codes as well as room kiosk codes, and an apparatus code is a permanent id-based URL rather than a bearer credential — there is nothing in it to leak. Room kiosk codes are redacted by the backend for anyone without `locations.manage` or `facilities.manage`, so those cards simply do not render for an apparatus-only viewer.
+
 ---
 
 ## Facilities (when Facilities module is on)
 
-| URL                       | Page                       | Permission        |
-| ------------------------- | -------------------------- | ----------------- |
-| `/facilities`             | Facilities Dashboard       | `facilities.view` |
-| `/facilities/:id`         | Facility Detail            | `facilities.view` |
-| `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` |
-| `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` |
+| URL                       | Page                       | Permission                                   |
+| ------------------------- | -------------------------- | -------------------------------------------- |
+| `/facilities`             | Facilities Dashboard       | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/:id`         | Facility Detail            | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` **OR** `facilities.manage` |
 
-> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent maintenance completions, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in; standalone Locations may reference a Facility but do not create or update Facility Rooms. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
 ---
 
@@ -320,11 +330,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Manual Shift Report _(2026-04-11)_
 
-| URL                             | Page                           | Permission        |
-| ------------------------------- | ------------------------------ | ----------------- |
-| `/training/manual-shift-report` | Manual Shift Report            | `training.manage` |
-| `/training/log-shift`           | Log Shift                      | `training.manage` |
-| `/training/compliance-config`   | Compliance Requirements Config | `settings.manage` |
+| URL                           | Page                           | Permission                                   |
+| ----------------------------- | ------------------------------ | -------------------------------------------- |
+| `/training/log-shift`         | Log Shift                      | `training.manage`                            |
+| `/training/compliance-config` | Compliance Requirements Config | `compliance.manage` **OR** `settings.manage` |
+
+> **`/training/manual-shift-report` was listed here and does not exist**
+> _(corrected 2026-08-16)_. No route declares it; `/training/log-shift` is the
+> page that logs a shift manually. Found by
+> `scripts/check_route_permissions.py`.
 
 > **Manual entry settings look empty when the feature is off** — everything below
 > the enable checkbox on the **ManualEntrySettingsPanel** is conditional on it.
@@ -356,39 +370,42 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                        | Page                 | Permission    |
-| -------------------------- | -------------------- | ------------- |
-| `/inventory`               | Inventory Items List | Authenticated |
-| `/inventory/my-equipment`  | My Issued Gear         | Authenticated |
-| `/inventory/items/:id`     | Item Detail          | Authenticated |
-| `/inventory/storage-areas` | Storage Areas        | Authenticated |
+| URL                        | Page                         | Permission         |
+| -------------------------- | ---------------------------- | ------------------ |
+| `/inventory`               | Inventory Items List         | Authenticated      |
+| `/inventory/items`         | Inventory Items List (alias) | Authenticated      |
+| `/inventory/my-equipment`  | My Equipment                 | Authenticated      |
+| `/inventory/items/:id`     | Item Detail                  | Authenticated      |
+| `/inventory/storage-areas` | Storage Areas                | `inventory.manage` |
 
-### Gear Admin Hub (`/inventory/admin`)
+### Inventory Admin Hub (`/inventory/admin`)
 
 Requires `inventory.manage` permission. Dashboard with summary stats (total items, low stock, overdue checkouts, pending requests) and navigation to admin sub-pages.
 
-### Gear Admin Pages
+### Inventory Admin Pages
 
 | URL                               | Page                      | Permission         |
 | --------------------------------- | ------------------------- | ------------------ |
 | `/inventory/admin`                | Admin Dashboard           | `inventory.manage` |
+| `/inventory/admin/setup`          | Inventory Setup           | `inventory.manage` |
 | `/inventory/admin/items`          | Manage Items              | `inventory.manage` |
 | `/inventory/admin/pool`           | Pool Items                | `inventory.manage` |
 | `/inventory/admin/categories`     | Categories                | `inventory.manage` |
 | `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage` |
 | `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
 | `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
+| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage` |
 | `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
-| `/inventory/admin/requests`       | Gear Requests        | `inventory.manage` |
+| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
 | `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
 | `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
-| `/inventory/admin/kits`           | Gear Kits Management | `inventory.manage` |
+| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts`            | Active Checkouts          | `inventory.manage` |
 | `/inventory/import`               | CSV Import                | `inventory.manage` |
-| `/inventory/admin/kits`           | Gear Kits            | `inventory.manage` |
+| `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage` |
 | `/inventory/print-labels`         | Barcode Label Printing    | Authenticated      |
 
@@ -403,7 +420,48 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 >
 > **The Qty column reads from in-date lots** for any item that has them, labelled "in-date lots" so it is not mistaken for the pool figure beside it, and the CSV export carries the same number in a **Ready Lot Stock** column. `InventoryItem.quantity` is not maintained for lot-stocked consumables — receiving a lot does not touch it and an equipment-check swap decrements only the lot — so the grid used to report whatever the number happened to be when the item was created. An item whose lots have all expired reads as **zero**, not as its stale quantity.
 
+> **Inventory Setup** (`/inventory/admin/setup`) _(documented 2026-08-18)_ is the
+> guided first-run workflow. Adding an item usefully requires four things to
+> exist first, in order — a room, a storage area inside it, a category (which
+> decides what fields the item form shows), and only then the item — and
+> nothing on the admin hub said so. A new quartermaster met the item form
+> first, found three empty dropdowns, and left them empty; the resulting record
+> cannot be found on a shelf, never appears in a low-stock alert, and has no
+> inspection cycle. This page puts the four steps in dependency order on one
+> screen and carries each answer into the next. Any step can be skipped — a
+> department that already has rooms is not made to re-declare them — and each
+> step links to its full admin page, which remains the place to do the work at
+> volume.
+
 > The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The **Issuance Allowances** page (`/inventory/admin/allowances`) configures per-category issue limits by role and period (annual/career/one-time). The **Impact Planner** (`/inventory/admin/impact-planner`) scopes a prospective new issue: filter the roster to see who is impacted and the sizes needed, net demand against on-hand stock for the quantity to buy, estimate cost, then act on it (draft reorders, bulk-issue stock, request missing sizes, export PDF/CSV, save named plans). Member uniform/PPE sizing is captured via the **Size Preferences** modal — members edit their own (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
+
+---
+
+## Medical Supplies _(documented 2026-08-18)_
+
+| URL                            | Page               | Permission                                       |
+| ------------------------------ | ------------------ | ------------------------------------------------ |
+| `/medical-supplies`            | Medical Supplies   | `inventory.view_medical` **OR** `inventory.view` |
+| `/medical-supplies/categories` | Medical Categories | `inventory.view_medical` **OR** `inventory.view` |
+
+> The EMS side of the department's stock, on its own pages so it can be run by
+> its own officer. Gear and uniforms live under **Inventory** and never appear
+> here. The list opens on what expires rather than on a full item count: dated
+> stock is what goes wrong quietly, and an officer checking in wants to know
+> what is about to lapse before they want an inventory figure.
+
+> **An item is medical because of its category** — there is no item-type field.
+> That is why `/medical-supplies/categories` exists as a page of its own and why
+> it has no type picker: everything created there is medical by construction.
+
+> **Both grants open these pages, and that is deliberate.** The route mirrors
+> the API's OR check rather than gating on the narrow permission alone. A
+> department that runs one supply line grants `inventory.view`; one that
+> appointed an EMS supply officer grants only `inventory.view_medical`. Gating
+> on the narrow permission by itself would bounce the first group off a page the
+> API would have served them — a redirect to the dashboard with no explanation.
+> The shared list lives in `MEDICAL_VIEW_PERMISSIONS` in the module's
+> `routes.tsx` so the two routes cannot drift apart.
 
 ---
 
@@ -431,17 +489,47 @@ Tab-based interface with the following views:
 
 ### Scheduling Admin Pages (2026-03-19)
 
-| URL                           | Page                       | Permission          |
-| ----------------------------- | -------------------------- | ------------------- |
-| `/scheduling/templates`       | Shift Templates Management | `scheduling.manage` |
-| `/scheduling/patterns`        | Shift Pattern Management   | `scheduling.manage` |
-| `/scheduling/reports`         | Scheduling Reports         | `scheduling.manage` |
-| `/scheduling/settings`        | Scheduling Settings        | `scheduling.manage` |
-| `/scheduling/platoons`        | Platoon Management         | Authenticated       |
-| `/scheduling/checkin`         | Shift Check-In             | Authenticated       |
-| `/scheduling/supply/expiring` | Expiring Supply Items      | Authenticated       |
+| URL                           | Page                          | Permission                                                                  |
+| ----------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| `/scheduling/templates`       | Shift Templates Management    | `scheduling.manage`                                                         |
+| `/scheduling/patterns`        | Shift Pattern Management      | `scheduling.manage`                                                         |
+| `/scheduling/reports`         | Scheduling Reports            | `scheduling.manage`                                                         |
+| `/scheduling/settings`        | Scheduling Settings           | `scheduling.manage`                                                         |
+| `/scheduling/platoons`        | Platoon Management            | `scheduling.manage`                                                         |
+| `/scheduling/qualifications`  | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage`          |
+| `/scheduling/checkin`         | Shift Check-In                | Authenticated                                                               |
+| `/scheduling/supply/expiring` | Expiring Supply Items         | `equipment_check.view` **OR** `inventory.manage` **OR** `scheduling.manage` |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
+
+> **`/scheduling/checkin` accepts `?shift=<id>` or `?apparatus=<id>`**
+> _(2026-08-18)_. Prefer the **apparatus** form for anything physically mounted:
+> it resolves at scan/tap time rather than naming a shift, so one sticker on the
+> truck serves every shift. A shift-keyed URL is dead the moment that shift
+> ends. **`get_active_shift_for_apparatus` is not a "currently running"
+> lookup**: it takes the _earliest-starting_ non-finalized shift dated today,
+> else one whose `end_time` is within the last two hours, else the next
+> upcoming — with no start/end window check and no `status == cancelled`
+> exclusion. Two shifts on one apparatus in a day, or a stale un-finalized row,
+> therefore resolve to the wrong shift; `ShiftCheckInPage` names the unit, date
+> and hours before the member confirms. `buildShiftCheckInUrl`
+> takes `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call
+> site; `shift` is read first when both are present.
+
+#### Position Qualification Roster (`/scheduling/qualifications`) _(documented 2026-08-18)_
+
+Answers "who is cleared to drive?" in one screen rather than one apparatus
+operator tab at a time. Shift-position eligibility is OR'd from three
+independent sources — rank, completed training, and the organization's
+open-position list — so a member can hold a position for a reason their
+profile does not show; the roster names the source next to each member. A
+second tab lists **driver exceptions**: members whose rank alone clears them
+to sign up as a driver with no EVOC certification behind it.
+
+> **Training permissions open it, not just scheduling ones.** The screen is a
+> training-compliance view as much as a scheduling one, so `training.view_all`
+> and `training.manage` admit a training officer who holds no scheduling
+> grant.
 
 > **Tab clicks now write `?tab=`** _(2026-08-09)_. Until this was fixed, clicking
 > any tab on `/scheduling` selected it and immediately snapped back to
@@ -492,23 +580,98 @@ Sections are defined in
 
 > The **Shift Reports** section links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports. It is a section navigator of its own eight sections, not a page of three cards.
 
+#### Shift Close-Out — two different screens _(2026-08-19)_
+
+Close-out is reached the same way in both cases — **Close out shift** on the
+shift detail panel, visible to `scheduling.manage` or the shift's own officer,
+on a past shift that is neither finalized nor cancelled. What opens depends on
+one organization setting, **Scheduling → Settings → General → Shift close-out
+rules → Record a call count at close-out**
+(`scheduling.call_tracking.mode`):
+
+| Mode                 | What opens                                      | Notes                                                                     |
+| -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `detailed` (default) | The single finalize checklist, unchanged        | Calls are logged per incident as `ShiftCall` rows                         |
+| `count_only`         | The three-step **close-out wizard**             | The officer reports a number; no incident detail is collected or accepted |
+| `off`                | The single finalize checklist, no call question |                                                                           |
+
+The wizard's three steps each save as they advance, so an interrupted close-out
+resumes rather than restarting:
+
+| Step | Question                              | Writes                                                                                                          |
+| ---- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1    | When was each member actually on?     | `PATCH /scheduling/shifts/{id}/closeout/attendance` → `ShiftAttendance` times; `shifts.closeout_step = 1`       |
+| 2    | How many calls did the apparatus run? | `PATCH /scheduling/shifts/{id}/closeout/calls` → `org_calls` + `org_call_responses`; `shifts.closeout_step = 2` |
+| 3    | Confirm each member's credit          | `POST /scheduling/shifts/{id}/finalize` → `ShiftAttendance.call_count`, `shifts.call_count`                     |
+
+> **The wizard replaces the checklist, so it carries everything the checklist
+> could do** — the end-of-shift-check override (still gated on a logged reason,
+> still audited as `shift_finalized_check_override`) and pass-down notes. Without
+> them a count-only department that enforces equipment checks could never close a
+> shift at all.
+
+> **The total on step 2 is derived from the per-type rows and is read-only.**
+> There is exactly one source for the number. A design with both a total field
+> and a breakdown needs a reconciliation rule per direction, and the downward one
+> was missing — revising a count down left the old total on screen, and that is
+> what got saved.
+
+> **Reopening a finalized shift restarts the wizard at step 1.**
+> `shifts.closeout_step` is cleared on finalize, and a finalized shift reports
+> step 0 regardless.
+
 ### Equipment Check Pages (2026-03-19)
 
-| URL                                                 | Page                             | Permission                                                                |
-| --------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                       |
-| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                             |
-| `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory`                   | Apparatus Inventory              | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                                 | Page                             | Permission                                                                   |
+| --------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
+| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `scheduling.manage`                                                          |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `scheduling.manage`                                                          |
+| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                          |
+| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                                |
+| `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.manage`       |
+| `/scheduling/apparatus-inventory`                   | Apparatus Inventory              | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view`    |
+| `/scheduling/equipment`                             | Fleet Board                      | any of `equipment_check.view`, `scheduling.manage`                           |
+| `/scheduling/equipment/checks`                      | Check Log                        | any of `equipment_check.submit`, `equipment_check.view`, `scheduling.manage` |
+| `/scheduling/equipment/:apparatusId`                | Apparatus Detail                 | any of `equipment_check.view`, `scheduling.manage`                           |
 
 > The **Template Builder** provides a drag-and-drop interface for creating structured checklists with nested compartments and multiple check types (pass/fail, quantity, level, date/lot, reading). Its quick-add bar searches the inventory catalog as you type, so **adding a position and linking it to a catalog item are one act** _(2026-08-10)_ — and the toolbar carries a linked/unlinked count, because everything the supply screens can do hangs off `inventory_item_id`. For checklists that already exist there is a reviewed bulk pass that proposes a catalog item for every unlinked position; **only exact name matches are pre-selected**, since "Oxygen Mask" scores high against both the adult and the pediatric mask. The **Reports** page has three tabs: Compliance Dashboard, Failure/Deficiency Log, and Item Trend History with CSV and PDF export.
+
+#### Fleet Board (`/scheduling/equipment`) _(documented 2026-08-18)_
+
+The front door for equipment checks, organised around the apparatus rather than
+the checklist assignment — "is E-1 good?" is the question an officer arrives
+with, and the older checklist grid could not answer it because one truck's state
+was spread across several cards, a separate inventory page, and an admin-only
+report. A member's own due checks stay on the page as a strip at the top, ranked
+so an overdue check cannot read as one due next Tuesday.
+
+#### Apparatus Detail (`/scheduling/equipment/:apparatusId`) _(documented 2026-08-18)_
+
+One rig, four tabs, each of which used to be a different page: today's checks,
+what it carries (Apparatus Inventory), what is wrong or expiring with it
+(Supply, plus a failure log only admins could reach), and whether it has been
+getting checked at all. Nothing new is added here — the existing surfaces are
+gathered behind the apparatus they were always about.
+
+#### Check Log (`/scheduling/equipment/checks`) _(documented 2026-08-18)_
+
+Expected-versus-actual check history, in two views over one dataset: a **grid**
+of apparatus against duty days, read by colour, for "is the pattern okay?"; and
+a chronological **log** for "what happened on that one?". Rows for checks that
+_did not happen_ are the reason the page exists — the stored checks alone can
+only ever report 100% completion, so the server reconstructs the expected side
+and a missed check arrives as an entry with no check id. The same component runs
+scoped to a single apparatus as the Check log tab of Apparatus Detail.
+
+> **Crew-level, unlike the rest of the fleet pages.** `equipment_check.submit`
+> opens the Check Log because the server narrows a member without
+> `equipment_check.view` to their own checks rather than returning 403 — the
+> route matches what the API will actually serve.
 
 #### Expiring on Apparatus (`/scheduling/supply/expiring`) _(documented 2026-08-10)_
 
 The supply officer's worklist. Reached from **Scheduling → Supply** (the tile
-carries a count badge) and from the **Gear Admin hub**. Lists checklist
+carries a count badge) and from the **Inventory Admin Hub**. Lists checklist
 positions that are expiring, expired, short of target, or reported used, each with
 the ready replacement stock behind it.
 
@@ -579,34 +742,39 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Medical Screening (2026-03-13)
 
-| URL                  | Page              | Permission               |
-| -------------------- | ----------------- | ------------------------ |
-| `/medical-screening` | Medical Screening | `medical_screening.view` |
+| URL                  | Page              | Permission        |
+| -------------------- | ----------------- | ----------------- |
+| `/medical-screening` | Medical Screening | **Authenticated** |
+
+> **The route is not permission-gated, though this table said it was**
+> _(corrected 2026-08-16, found by `scripts/check_route_permissions.py`)_. Every
+> other module wraps its routes in `<ProtectedRoute requiredPermission=…>`;
+> `getMedicalScreeningRoutes()` returns a bare `<Route>`, so any signed-in member
+> can open the page.
+>
+> **What actually protects the data is the API**, which enforces
+> `medical_screening.view` on every read — so a member without it gets an empty
+> or erroring screen rather than PHI, the same server-side-redaction pattern the
+> skills-testing print routes use. This is therefore a defence-in-depth and UX
+> gap rather than a disclosure: the member sees a broken page instead of a clean
+> "not authorized". **Adding the route gate would match every other module** and
+> is recorded in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) for an
+> owner decision, since it changes who can reach the URL.
 
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
 
 ---
 
-## Medical Supplies (2026-08-16)
-
-| URL                            | Page              | Permission                                    |
-| ------------------------------ | ----------------- | --------------------------------------------- |
-| `/medical-supplies`            | Medical Supplies  | `inventory.view_medical` **or** `inventory.view` |
-| `/medical-supplies/categories` | Medical Categories | `inventory.view_medical` **or** `inventory.view` |
-
-> EMS consumables held as **dated lots** rather than one flat count, on their own page rather than mixed into the gear catalog. Opens on what is expiring, with an all-supplies tab, category management, an add-supply form, and a receive-delivery form that books a whole shipment as one dated lot per item line. Writes require `inventory.manage_medical` **or** `inventory.manage`.
->
-> **The permission check is an OR on every route**, so a department running one supply line is unaffected — its quartermaster holds the broad grant and reaches medical stock exactly as before. A department that splits the job appoints an **EMS Supply Officer**, who holds the medical permissions plus the whole `equipment_check.*` set and has no access to gear or uniforms.
->
-> Availability is controlled per organization via the `medical_supplies` key in `enabled_modules` (**off by default**). Full documentation: [docs/MEDICAL_SUPPLIES_MODULE.md](./docs/MEDICAL_SUPPLIES_MODULE.md).
-
----
-
 ## Compliance Requirements Configuration (2026-03-13)
 
-| URL                  | Page                           | Permission        |
-| -------------------- | ------------------------------ | ----------------- |
-| `/compliance/config` | Compliance Requirements Config | `settings.manage` |
+| URL                           | Page                           | Permission                                   |
+| ----------------------------- | ------------------------------ | -------------------------------------------- |
+| `/training/compliance-config` | Compliance Requirements Config | `compliance.manage` **OR** `settings.manage` |
+
+> **This was listed as `/compliance/config`, which is the API path, not a page**
+> _(corrected 2026-08-16)_. `GET`/`PUT /compliance/config` is what the screen
+> calls; the screen itself is `/training/compliance-config`. Found by
+> `scripts/check_route_permissions.py`.
 
 > Configure organization-wide compliance thresholds (percentage or all-required), create compliance profiles targeting specific membership types and roles, schedule automated compliance reports (monthly, quarterly, yearly) with email delivery, and generate on-demand reports. Linked from the compliance officer dashboard.
 
@@ -624,9 +792,9 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Forms
 
-| URL      | Page             | Permission    |
-| -------- | ---------------- | ------------- |
-| `/forms` | Forms Management | Authenticated |
+| URL      | Page             | Permission     |
+| -------- | ---------------- | -------------- |
+| `/forms` | Forms Management | `forms.manage` |
 
 ---
 
@@ -651,17 +819,17 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Reports
 
-| URL        | Page    | Permission    |
-| ---------- | ------- | ------------- |
-| `/reports` | Reports | Authenticated |
+| URL        | Page    | Permission     |
+| ---------- | ------- | -------------- |
+| `/reports` | Reports | `reports.view` |
 
 ---
 
 ## Integrations
 
-| URL             | Page         | Permission    |
-| --------------- | ------------ | ------------- |
-| `/integrations` | Integrations | Authenticated |
+| URL             | Page         | Permission        |
+| --------------- | ------------ | ----------------- |
+| `/integrations` | Integrations | `settings.manage` |
 
 > _(2026-04-11)_ The Integrations page now includes **Salesforce CRM** as a connectable integration. Configuration requires `integrations.manage` permission. Features: OAuth 2.0 connection, bidirectional sync (members↔contacts, training→tasks, events→events), configurable field mappings, webhook-based real-time updates, and sync history dashboard. Supports both production and sandbox Salesforce environments.
 
@@ -807,20 +975,91 @@ lot's number or expiration date require `equipment_check.manage` or
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                 | Prints                  | Permission        |
-| ----------------------------------- | ----------------------- | ----------------- |
-| `/members/print-labels`             | Member labels           | Authenticated     |
-| `/members/:userId/id-card`          | Member ID card          | Authenticated     |
-| `/members/scan`                     | Member badge scanner    | Authenticated     |
-| `/prospective-members/print-labels` | Applicant badges        | Authenticated     |
-| `/inventory/print-labels`           | Inventory labels        | Authenticated     |
-| `/apparatus/print-labels`           | Apparatus labels        | Authenticated     |
-| `/facilities/print-labels`          | Facility / room labels  | Authenticated     |
-| `/training/print/member`            | Member training history | Authenticated     |
-| `/training/print/program`           | Training program        | Authenticated     |
-| `/training/print/compliance`        | Compliance matrix       | `training.manage` |
-| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated     |
-| `/scheduling/shift-reports/print`   | Shift report            | Authenticated     |
+| URL                                 | Prints                  | Permission                                   |
+| ----------------------------------- | ----------------------- | -------------------------------------------- |
+| `/members/print-labels`             | Member labels           | `members.view`                               |
+| `/members/:userId/id-card`          | Member ID card          | Authenticated                                |
+| `/members/scan`                     | Member badge scanner    | `users.view` **OR** `members.manage`         |
+| `/prospective-members/print-labels` | Applicant badges        | `prospective_members.view`                   |
+| `/inventory/print-labels`           | Inventory labels        | Authenticated                                |
+| `/apparatus/print-labels`           | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
+| `/facilities/print-labels`          | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
+| `/training/print/member`            | Member training history | Authenticated                                |
+| `/training/print/program`           | Training program        | Authenticated                                |
+| `/training/print/compliance`        | Compliance matrix       | `training.manage`                            |
+| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated                                |
+| `/scheduling/shift-reports/print`   | Shift report            | Authenticated                                |
+
+---
+
+## NFC Tags — a cross-module surface _(2026-08-18)_
+
+Not a page. NFC is a second way in to a check-in that already has a QR code, so
+it appears **on the QR pages** rather than getting screens of its own. A station
+can mount one reusable sticker instead of reprinting a sheet per event, and a
+member taps it — no camera, which is the part that fails in a dark apparatus bay
+or with gloves on.
+
+### Where the writer appears
+
+| Page                                    | Writes a tag pointing at             | Component                                     |
+| --------------------------------------- | ------------------------------------ | --------------------------------------------- |
+| `/events/:id/qr-code`                   | `/events/:id/check-in`               | `NfcTagWriter`                                |
+| `/admin-hours/categories/:id/qr-code`   | that category's clock-in URL         | `NfcTagWriter`                                |
+| Shift detail panel → QR block           | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriter`                                |
+| `/locations/qr-codes` (apparatus cards) | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriteButton` (compact, toast feedback) |
+
+### Where the reader appears
+
+**Tap Tag** (`NfcTapButton`) reads a tag while the app is already open, and
+routes by what the tag _says_ rather than by where the button lives. It is on
+the **Events** page, **My Admin Hours**, and the **scheduling calendar**. It
+exists for the case Android does not cover on its own: with the app in the
+foreground the OS does not hand a URL tag off to the browser, so a member
+holding a phone they are already using would otherwise have to close the app to
+use the tag.
+
+### What a tag may point at
+
+`TAG_TARGETS` in `constants/nfc.ts`, keyed by `NfcTagTarget` in
+`constants/enums.ts`, is the whole reachable surface — adding a module means
+adding one spec, not another parser, and what a tag may point at stays
+reviewable in one place.
+
+> **A tag is untrusted input.** Anyone with a phone can write one, so the
+> payload is on par with a scanned QR code rather than with configuration.
+> `parseNfcTagPath` resolves it against the app's own origin and rejects
+> anything that does not land back on that exact origin — which also disposes of
+> `javascript:` and `data:`, whose origin parses as `"null"`. It returns the
+> **rebuilt** route, never the raw string, so a tap hands react-router a
+> fixed-shape path instead of assigning an attacker-supplied URL to
+> `window.location`. An unrecognized tag leaves the scan armed and says so
+> rather than navigating somewhere unintended.
+
+> **Only spec-named query parameters may carry an id.** Shift check-in is
+> `?shift=` or `?apparatus=`, so refusing every query parameter would have made
+> it untaggable. Each named value is validated against the same id pattern as a
+> path segment, only the first valid one survives, and the route is rebuilt from
+> those pieces — a tag cannot smuggle `?next=` past the parser by hanging it off
+> an otherwise legitimate route.
+
+> **`/display/:code` is deliberately not taggable.** It is a public,
+> unauthenticated kiosk screen keyed by a non-guessable code. Writing that code
+> to a tag anyone can read hands it to whoever walks past, and sending a member's
+> phone to a wall display is not a check-in. A test asserts it stays rejected,
+> and the same rule hides the **Write NFC tag** button on room kiosk cards while
+> showing it on the apparatus cards beside them.
+
+> **Web NFC is Android-Chromium only, and requires a secure context.** The two
+> compact controls — **Tap Tag** and the `/locations/qr-codes` **Write NFC tag**
+> button — render nothing where the API is absent, rather than offering a
+> control that cannot work. The full `NfcTagWriter` panel instead prints _why_,
+> because two very different failures present identically as a missing
+> `NDEFReader`: an insecure origin (plain HTTP over a LAN IP — browsers expose
+> Web NFC only in a secure context) versus a browser that never shipped the API.
+> Without that split an iPhone user and an admin on `http://` both see "NFC
+> unavailable" and neither learns what to do about it. QR remains the universal
+> path; NFC is strictly an addition.
 
 ---
 

@@ -496,6 +496,7 @@ class TrainingSessionService:
         training_session_id: UUID,
         organization_id: UUID,
         finalized_by: UUID,
+        can_manage_training: bool = False,
     ) -> Tuple[Optional[TrainingApproval], Optional[str]]:
         """
         Finalize a training session after the event ends
@@ -644,7 +645,7 @@ class TrainingSessionService:
         # Feed the pipeline after the approval+records commit — the real updater
         # commits internally, so it must run outside the transaction above.
         await self._apply_pipeline_updates(
-            pipeline_updates, organization_id, finalized_by
+            pipeline_updates, organization_id, finalized_by, can_manage_training
         )
 
         # Notify training officers only when their confirmation is required;
@@ -829,6 +830,7 @@ class TrainingSessionService:
         approval_notes: Optional[str],
         approved_by: UUID,
         organization_id: UUID,
+        can_manage_training: bool = False,
     ) -> Tuple[bool, Optional[str]]:
         """
         Submit training approval and update training records
@@ -907,7 +909,7 @@ class TrainingSessionService:
         # Feed the pipeline after the approval+records commit — the real updater
         # commits internally, so it must run outside the atomic block above.
         await self._apply_pipeline_updates(
-            pipeline_updates, organization_id, approved_by
+            pipeline_updates, organization_id, approved_by, can_manage_training
         )
 
         return True, None
@@ -968,7 +970,9 @@ class TrainingSessionService:
             and not training_session.requirement_id
         ):
             category_requirement_ids = await self._resolve_category_requirement_ids(
-                training_session.program_id, training_session.category_id
+                training_session.program_id,
+                training_session.category_id,
+                training_session.phase_id,
             )
 
         # Process each attendee
@@ -1106,11 +1110,12 @@ class TrainingSessionService:
         return pipeline_updates
 
     async def _resolve_category_requirement_ids(
-        self, program_id: str, category_id: str
+        self, program_id: str, category_id: str, phase_id: Optional[str]
     ) -> List[str]:
         """HOURS requirement ids in ``program_id`` whose training requirement is
-        tagged with ``category_id`` — used to advance category-linked (rather than
-        requirement-linked) sessions.
+        tagged with ``category_id`` and belongs to ``phase_id`` — used to advance
+        category-linked (rather than requirement-linked) sessions. A null phase
+        only matches program-level requirements, never requirements in a phase.
 
         Restricted to HOURS requirements on purpose: a session credits *hours*,
         so fanning those hours out to a COURSES/SHIFTS/CALLS requirement would
@@ -1131,6 +1136,8 @@ class TrainingSessionService:
             )
             .where(
                 ProgramRequirement.program_id == str(program_id),
+                ProgramRequirement.phase_id
+                == (str(phase_id) if phase_id is not None else None),
                 TrainingRequirement.category_ids.contains([str(category_id)]),
                 TrainingRequirement.requirement_type == RequirementType.HOURS,
             )
@@ -1142,6 +1149,7 @@ class TrainingSessionService:
         updates: List[Tuple[str, str, str, float, str]],
         organization_id: UUID,
         verified_by: UUID,
+        can_manage_training: bool = False,
     ) -> None:
         """Apply queued session→pipeline progress updates after the approval has
         committed. Each update commits independently; a failure on one is logged
@@ -1155,6 +1163,7 @@ class TrainingSessionService:
                 organization_id=organization_id,
                 verified_by=verified_by,
                 session_id=session_id,
+                can_manage_training=can_manage_training,
             )
 
     async def _apply_pipeline_progress(
@@ -1166,6 +1175,7 @@ class TrainingSessionService:
         organization_id: UUID,
         verified_by: UUID,
         session_id: str,
+        can_manage_training: bool = False,
     ) -> None:
         """
         Advance a member's linked pipeline requirement when a program-linked
@@ -1213,6 +1223,12 @@ class TrainingSessionService:
                 units=float(hours_completed),
                 verified_by=verified_by,
                 applied_by=verified_by,
+                # Session lifecycle routes require events.manage, not
+                # training.manage. Carry the real actor into the progress
+                # updater so an event manager is never elevated to a trusted
+                # system caller for training-pipeline writes.
+                acting_user_id=verified_by,
+                can_manage=can_manage_training,
             )
             if error:
                 logger.error(

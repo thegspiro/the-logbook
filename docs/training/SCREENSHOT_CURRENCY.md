@@ -1,144 +1,147 @@
 # Screenshot currency
 
-## Capture run 2026-08-18 — two applied, and why the other 47 were not
+## Flagged by the 2026-08-17 → 08-19 changes
 
-A full stack was stood up (MariaDB, Redis, API, dev server, seeded demo
-department) and the pipeline run end to end.
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
 
-### Applied and verified
+Two things landed that invalidate existing captures rather than merely adding
+new ones: **shift close-out is a different screen** for departments recording a
+call count, and **four QR pages gained an NFC control in their action row**.
 
-- `19-01-platoons-permission-error` — Platoon Management refusing a member
-  without `scheduling.manage`, shot as the member. Verified by opening the
-  image: the Access Denied page under a member's sidebar, which is the point.
-  An admin capture would have shown the working page and taught the opposite of
-  the caption.
-- `19-02-minutes-card-counts` — the Minutes card grid reading **8 attendees ·
-  2 action items** and **4 attendees · 0 action items**. Verified by opening
-  the image; the non-zero counts are the whole subject, since these cards read
-  zeros over real data until 2026-08-17.
+### REPLACE — existing images now show a screen that no longer matches
 
-Both are the first entries in `manifest.mjs` for guide 19, which had none.
+Each of these is in a guide today and is wrong, incomplete, or newly ambiguous.
+Listed with the file so a re-capture run can target them.
 
-### The run refreshed 105 images that were reverted
+| Image                                                        | Guide  | Why                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03-45-finalize-checklist.png`                               | 03     | Still correct for a **detailed**-mode department, and now ambiguous without saying so. The guide has been given a note above the image; the image itself needs a caption change, and the count-only wizard needs shooting alongside it rather than replacing it |
+| `03-32-settings-general-closeout.png`                        | 03     | The _Shift close-out rules_ block gained **Record a call count at close-out**. The current shot predates it, so a reader looking for the toggle will conclude their build does not have it                                                                      |
+| `03-14-scheduling-reports.png`                               | 03     | If the demo department is switched to count-only for the new captures, the Call Volume card relabels. Verify which mode this was shot in and caption it                                                                                                         |
+| `04-04-event-qr-code.png`                                    | 04     | The page gained **Write to an NFC tag** below the QR code. The current shot is missing a control the guide now describes                                                                                                                                        |
+| `03-08-calls-runs-section.png`                               | 03     | Correct, and now conditional — Calls / Runs does not exist for a count-only department. Needs a caption saying which mode it shows                                                                                                                              |
+| Check-In QR Codes directory (guide 06, `#check-in-qr-codes`) | 06     | Apparatus cards gained **Write NFC tag** in the action row. There is **no captured image of this page at all**; the new marker below covers it                                                                                                                  |
+| Shift detail QR block (guide 03)                             | 03     | The NFC writer now sits beneath the QR code. No dedicated capture exists; covered by the marker below                                                                                                                                                           |
+| `17-01-privacy-choices.png`                                  | 17     | `/privacy` and `/terms` were rewritten on 2026-08-17 with a new print stylesheet. Any capture of either page predates the rewrite                                                                                                                               |
+| `00-04-dashboard-overview.png`, `00-20-member-dashboard.png` | 00, 10 | Only if shot at a narrow viewport — the week strip and alert list now collapse on a phone. Desktop captures are unaffected                                                                                                                                      |
+| Login page (guides 00, 03 of the YouTube set)                | 00     | Only for departments with `CAPTCHA_ENABLED`. The challenge widget is new on the two internet-exposed forms and appears in no capture                                                                                                                            |
 
-`capture.mjs` walks the whole manifest, so a plain run re-shot 105 already-filled
-images against this demo department. **They were reverted rather than committed.**
-They fill no outstanding placeholder, and this file's own standard is that a
-capture is not current until somebody has opened it and checked it against its
-caption — 105 unopened images would have been a large diff asserting exactly the
-verification that had not happened.
+### SCREENSHOT NEEDED (new captures)
 
-Re-shooting deliberately, guide by guide, with the images actually reviewed, is
-worth doing; it is a different task from filling the gaps.
+These are marked in the guides as `**[SCREENSHOT NEEDED — …]**` and counted by
+`status_report.py`. Repeated here with the demo-data state each one needs,
+because that is what a capture run has to set up and the marker cannot carry.
 
-### Why the remaining 47 are still open
+**Guide 03 — scheduling (6 markers)**
 
-Only some of these are waiting on effort. The distinction matters, because a
-tracker that lists an impossible shot beside an unwritten one invites somebody
-to keep retrying the first.
+- **Settings → General → _Shift close-out rules_** with **Record a call count at
+  close-out** switched on and its explanatory paragraph legible.
+  _Demo data:_ none beyond the toggle.
+- **Close-out wizard step 1 — attendance.** _Demo data:_ a **four-person crew on
+  a 24-hour tour**, so the combined-hours figure reads ~96 and visibly is not
+  the shift length; at least one member with a missing check-out; at least one
+  assigned member who never checked in, showing empty times.
+- **Close-out wizard step 2 — calls.** _Demo data:_ two or three type rows
+  filled (e.g. EMS 3, Fire 1) with the derived total showing 4 and rendered
+  read-only. This is the screen that teaches "the rows are the only source" and
+  the read-only styling has to be visible.
+- **Close-out wizard step 3 — confirmation.** _Demo data:_ the same crew, credit
+  seeded from the apparatus count, **one member adjusted downward** for a late
+  arrival, plus the pass-down notes field.
+- **Close-out with outstanding end-of-shift checks.** _Demo data:_
+  `require_end_of_shift_checks` on, one check outstanding, showing the warning,
+  the override checkbox, and the reason field it requires.
+- **Reports → Call Volume in count-only mode**, showing **Unit Responses / Avg
+  Responses/Day / Peak Responses** and the footnote. **Caption it against the
+  detailed-mode version** — the whole point is that the labels differ, and a
+  lone capture teaches neither. Two things not to imply in that caption
+  _(added 2026-08-19)_: detailed mode's "Total Calls" is **also** not an
+  incident count (it sums per-trainee shift completion reports), and there is
+  **no per-apparatus breakdown on this screen** to frame — the API returns
+  `by_apparatus_runs` and the renderer ignores it, so do not treat its absence
+  as a mis-seeded capture. See `KNOWN_LIMITATIONS.md` SCHED-15 / SCHED-16.
 
-| Class | Count | What is actually needed |
-| --- | ---: | --- |
-| **No manifest entry yet** | ~30 | Ordinary work: a `manifest.mjs` entry with the right route and `prepare` steps. The seeded department already supports most of them. This is the bulk, and the tractable part. |
-| **Needs seed data that does not exist** | 5 | The driver-block trio (refusal at assignment, chief's exception review, a generated pattern reporting a skipped seat) needs an apparatus with a required EVOC level and a driver who lacks it. Also an overdue equipment issue, and a stock ledger whose arithmetic the caption can verify. |
-| **Needs a second account or a paired capture** | 4 | Profile with `members.view` vs `users.view`; the candidate list as member vs manager; the shift roster as scheduler vs member. Two contexts, captioned as a pair — the manifest supports `auth`, so this is doable, just not a single shot. |
-| **Needs external credentials** | 4 | The two CAPTCHA widget shots need a real provider site key; the breached-password refusal needs outbound access to the HIBP range API; the Salesforce readiness preview needs a connected org. None can be faked without publishing a screenshot of something the product does not do. |
-| **Needs a pre-onboarding stack** | 2 | The wizard-after-browser-restart pair can only be shot before onboarding completes. A seeded department has completed it, so this needs its own throwaway stack — the one case where the standard demo environment is the wrong environment. |
-| **Explicitly manual** | 1 | `10-mobile-pwa.md` asks for an annotated capture (44px tap targets marked up). The marker says "manual annotation"; no pipeline produces it. |
-| **Blocked on a product gap** | 1 | The store-order shot: the seeder cannot create one because there is no open order window, which it reports as blocked rather than working around. |
+**Guide 04 — events (3 markers)**
 
-### Pipeline fixes made during the run
+- **`/events/:id/qr-code` mid-write**, showing the "hold a tag to your phone"
+  state rather than the idle button.
+- **Tap Tag on the Events page, scan armed**, waiting for a tag.
+- **Tap Tag after reading an unrecognized tag** — the explanatory message with
+  the scan still armed. This is the security behaviour, and a reader will not
+  believe "it just doesn't navigate" without seeing it.
 
-- **`apply_placeholders.py` left a stray `>` under a replaced marker.** Where
-  two requests are stacked in one quote, `block_end` deliberately leaves the
-  bare `>` between them — consuming it is how the first replacement used to
-  swallow its siblings. But once the request above becomes an image, that
-  separator is a quoted empty line directly under it, and the next marker's
-  blockquote opens with a blank first line. It is now demoted to a real blank
-  line, which is what separates an image from a quote.
-- **`seed_demo_data.py` could not create the public event request.** Intake
-  became opt-in on 2026-08-17 and a closed department answers 404 exactly like
-  a missing one, so the seeder failed against an organization that plainly
-  existed. It opts in first now — and doing so surfaced that the setting could
-  not be written at all, which is fixed separately in the events schema.
-- **`seed_demo_data.py` fought the product over EVOC levels.** A new
-  organization is seeded with four (`EVOC1`–`EVOC4`) by the product itself; the
-  seeder's blueprint guarded on `code` while the backend enforces uniqueness on
-  `level_number`, so it 400'd, the step failed, and no apparatus got a required
-  EVOC level — leaving the driver-eligibility feature inert and `03-52` with
-  nothing to photograph. It now returns what is already there.
-- **`status_report.py` counted three syntax examples as outstanding work** —
-  see the entry below.
+**Guide 06 — apparatus & facilities (1 marker)**
 
----
+- **`/locations/qr-codes` on a phone**, an apparatus card mid-write with its
+  action row showing Copy URL / Download PNG / Regenerate / **Write NFC tag**.
+  Shoot it on a phone, not desktop: that is where the button is usable, and the
+  card grid is the thing being described.
 
-## Flagged by the 2026-08-16 → 08-17 changes
+**Guide 10 — mobile (1 marker)**
 
-Full reason and data-path context in
-[`../CHANGE_AUDIT_2026-08-16_TO_17.md`](../CHANGE_AUDIT_2026-08-16_TO_17.md).
-Nothing in this section is a verified capture — each item stays open until the
-image is opened and checked against its caption.
+- **A phone held against a mounted NFC tag on an apparatus**, and the resulting
+  shift check-in page naming the unit, date and hours. Two frames or one
+  composite. Note the camera-viewfinder caveat below does **not** apply — no
+  viewfinder is involved.
 
-### REPLACE — the pictured screen changed, the image on file is now wrong
+**Guide 19 — release changes (3 markers)**
 
-These are **not** missing captures. An image is applied in a guide today and no
-longer shows what the guide says it shows, which is worse than a placeholder:
-the reader has no reason to doubt it.
+- **Admin hours category QR page** with the NFC tag writer beside the QR code.
+- **`python -m app.preflight`**, two terminal captures side by side: exit 0 on a
+  good configuration, exit 1 on a broken one with the blocking items listed.
+- **The rewritten `/privacy` header**, showing the department-control statement
+  above the fold.
 
-| Image | Guide | Why it is now wrong |
-| --- | --- | --- |
-| Any Minutes-page card capture (`04-*`, the meeting card grid) | 04 | The cards rendered **"0 attendees · 0 action items"** over meetings that had both. Every capture taken before 2026-08-17 shows the zeros as if they were the data. Re-shoot against the seeded department, which now populates `/meetings` with an approved business meeting (attendees, motions, open action items), a draft board meeting, and a pending public event request on the Requests tab. |
-| Shift detail showing a populated hold-over / availability roster | 03 | The roster is now returned only to `scheduling.assign`, `scheduling.manage`, or the shift's own officer. A capture taken from a member account will no longer reproduce, and one taken from a scheduler account is only half the story — the guide now teaches the **pair**. |
-| Platoon Management (`/scheduling/platoons`) | 03 | Its permission moved from `scheduling.view` to `scheduling.manage`. Any capture whose caption or surrounding text implies a member can reach it is now teaching a permission error. |
-| Medical Supplies → edit supply, for a **lot-stocked** item | 05 | The "On hand" input is gone for lot-stocked items, replaced by the lot figure and a pointer to **Receive delivery**. A capture showing an editable box teaches an edit that silently did nothing. |
-| Dashboard readiness line, if the pictured member holds a renewed certification | 00 | The verdict counted the lapsed row of a renewed pair, so a "Not clear to respond" capture may be picturing the defect rather than the rule. Re-shoot or confirm the pictured member has no renewed credential. |
-| Any Settings → App capture that shows Force refresh without the unreachable-server state | 10 | Not wrong, but incomplete — the refusal path is now the more instructive frame. See the capture request below rather than replacing the existing one. |
+### Capture constraints for this batch
 
-### SCREENSHOT NEEDED — new screens and states with no capture
+**Four of the six guide-03 captures are now automated** _(2026-08-19)_ —
+`03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,
+`03-76-closeout-step2-calls` and `03-77-closeout-step3-confirm`. They run
+against a dedicated fixture the seeder builds: a past **24-hour tour with four
+crew**, one member checked in but never out, and one assigned member with no
+attendance row at all. Both of those last two are states no other seeded shift
+carries, because `_seed_shift_attendance` checks every past crew fully in and
+out — right for every other shift, useless for this one.
 
-- **Challenge widget on forgot-password** — requires `CAPTCHA_ENABLED=true`
-  with a valid site key. Caption which of the three providers is pictured; the
-  widget looks materially different for each, so an uncaptioned shot will read
-  as wrong to two-thirds of readers.
-- **Challenge widget on public form submission, after a rejected submission**,
-  showing the widget reset. Tokens are single-use, so this is the state a
-  member actually hits when a submission fails validation and they retry.
-- **Breached-password refusal** on the change-password screen. Requires
-  `BREACHED_PASSWORD_CHECK_ENABLED=true` and a known-leaked test password.
-  Caption that the message deliberately omits the breach count.
-- **Shift detail, scheduler vs. member** — the roster pair described above.
-  Seed at least one member on approved leave so the availability distinction
-  is visible.
-- **Permission error at `/scheduling/platoons`** for a member holding only
-  `scheduling.view`.
-- **Driver-seat refusal at assignment time**, showing the reason and the
-  request-an-exception affordance in the same place the block happens.
-- **Chief's driver-exception review screen** with a pending request —
-  justification, restrictions, validity window.
-- **Pattern generation result reporting a skipped driver seat.** This is the
-  state that proves generation no longer silently seats an uncertified driver;
-  a successful generation screenshot cannot show it.
-- **Force refresh refusing on an unreachable server**, button re-enabled.
-  **Capture with the backend stopped, not with the device offline** — the
-  check fetches `/version.json` rather than trusting `navigator.onLine`, so an
-  offline device may produce a different frame than the one being documented.
-- **Minutes page cards with populated counts** — this is the replacement for
-  the row in the table above, not an additional capture.
-- **Dashboard readiness "Clear, with conditions"** for a member with one
-  renewed certification and one screening inside the 60-day window. Caption
-  that the renewed certification is *not* what produced the condition — that
-  is the exact confusion the fix addressed.
+Three things about that group are worth knowing before editing it:
 
-### Explicitly NOT flagged
+- **Each shot forces the organization's call-tracking mode**, and
+  `03-45-finalize-checklist` forces it back. The mode decides which of two
+  entirely different close-out screens renders, either shot may run first, and a
+  shot that inherited the wrong mode would still **succeed** — it would just
+  write the wrong picture under the right filename. This is the same
+  self-healing rule `capture.mjs` applies to `navigationLayout`.
+- **Each shot walks the wizard from step 1.** The server remembers how far the
+  last run advanced (`shifts.closeout_step`) and reopens there, so without the
+  rewind a second capture run would open at step 3 and the "step 1" shot would
+  quietly contain step 3.
+- **Nothing clicks "Close out shift".** That finalizes, and a finalized shift
+  will not reopen the wizard — one capture run would spend the fixture for every
+  run after it. If the fixture is ever finalized by hand, the seeder says so and
+  refuses to reuse it rather than silently building a second one.
 
-- **Guest check-in captures are unaffected.** The challenge is deliberately
-  not applied there, so no guest check-in image needs re-shooting for CAPTCHA.
-- **Sign-in page captures are unaffected.** Suspicious-IP throttling adds no
-  UI; a blocked address gets the existing rate-limit response.
-- **Impact Planner PDF captures** are unaffected unless the pictured
-  department or member name contains `<` or `&`, which no seeded name does.
+**Two of the six are still manual, with the specific blocker for each:**
 
----
+- **Close-out with outstanding end-of-shift checks.** Needs
+  `require_end_of_shift_checks` on _and_ a shift with an outstanding check.
+  Equipment-check templates resolve by apparatus type and the demo department
+  writes its checklists for **engines**, while the close-out fixture is
+  deliberately a Medic — putting it on an engine would let it race
+  `03-45-finalize-checklist` for the same shift. Closing this needs either an
+  engine-typed second fixture or a medic checklist template in the seed.
+- **Reports → Call Volume in count-only mode.** Needs actual `org_calls` rows,
+  and the fixture has none: calls are written by the wizard, and the wizard
+  shots deliberately stop short of finalizing. Closing this needs the seeder to
+  POST `PATCH /scheduling/shifts/{id}/closeout/calls` against a _second_ past
+  shift — one the wizard captures do not use, so the two do not fight over
+  `closeout_step`.
+
+**The NFC captures cannot be automated at all.** Web NFC does not exist in the
+headless Chromium the harness drives, and it is not exposed over `http://`
+either. They are manual captures on a real Android phone, like the
+camera-viewfinder shots recorded under the 2026-08-12 entry below, and they must
+not be added to `manifest.mjs`.
 
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 

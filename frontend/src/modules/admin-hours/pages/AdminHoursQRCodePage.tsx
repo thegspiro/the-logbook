@@ -11,6 +11,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { adminHoursCategoryService } from '../services/api';
 import type { AdminHoursQRData } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { NfcTagWriter } from '../../../components/nfc/NfcTagWriter';
+import { buildAdminHoursClockInUrl } from '../../../constants/nfc';
 
 const AdminHoursQRCodePage: React.FC = () => {
   const { categoryId } = useParams<{ categoryId: string }>();
@@ -42,11 +44,6 @@ const AdminHoursQRCodePage: React.FC = () => {
     void fetchData();
   }, [fetchData]);
 
-  const getClockInUrl = () => {
-    if (!categoryId) return '';
-    return `${window.location.origin}/admin-hours/${categoryId}/clock-in`;
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -70,7 +67,7 @@ const AdminHoursQRCodePage: React.FC = () => {
 
   if (!qrData) return null;
 
-  const clockInUrl = getClockInUrl();
+  const clockInUrl = categoryId ? buildAdminHoursClockInUrl(categoryId) : '';
 
   return (
     <div className="mx-auto min-h-screen max-w-4xl p-6">
@@ -132,6 +129,12 @@ const AdminHoursQRCodePage: React.FC = () => {
               <li>Scan the same QR code again when done to clock out</li>
             </ol>
           </div>
+
+          {clockInUrl && (
+            <div className="print:hidden">
+              <NfcTagWriter url={clockInUrl} targetLabel={qrData.categoryName} actionNoun="clock-in" />
+            </div>
+          )}
         </div>
       </div>
 

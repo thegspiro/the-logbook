@@ -96,23 +96,31 @@ Scheduling API calls go through the module-scoped service in `frontend/src/modul
 
 Core shift record representing a single scheduled shift.
 
-| Field              | Type     | Description                                    |
-| ------------------ | -------- | ---------------------------------------------- |
-| `id`               | UUID     | Primary key                                    |
-| `organization_id`  | UUID     | FK to organizations                            |
-| `shift_date`       | Date     | The date of the shift                          |
-| `start_time`       | DateTime | Shift start time                               |
-| `end_time`         | DateTime | Shift end time (nullable)                      |
-| `template_id`      | UUID     | FK to shift_templates (nullable)               |
-| `apparatus_id`     | UUID     | FK to apparatus/basic_apparatus (nullable)     |
-| `station_id`       | UUID     | FK to locations (nullable)                     |
-| `shift_officer_id` | UUID     | FK to users (nullable)                         |
-| `status`           | String   | scheduled, in_progress, completed, cancelled   |
-| `notes`            | Text     | Optional notes                                 |
-| `activities`       | JSON     | What happened during shift                     |
-| `color`            | String   | Template color for calendar display (nullable) |
-| `attendee_count`   | Integer  | Computed count of confirmed attendees          |
-| `min_staffing`     | Integer  | Minimum staffing (enriched from apparatus)     |
+| Field              | Type     | Description                                      |
+| ------------------ | -------- | ------------------------------------------------ |
+| `id`               | UUID     | Primary key                                      |
+| `organization_id`  | UUID     | FK to organizations                              |
+| `shift_date`       | Date     | The date of the shift                            |
+| `start_time`       | DateTime | Shift start time                                 |
+| `end_time`         | DateTime | Shift end time (nullable)                        |
+| `template_id`      | UUID     | FK to shift_templates (nullable)                 |
+| `apparatus_id`     | UUID     | FK to apparatus/basic_apparatus (nullable)       |
+| `station_id`       | UUID     | FK to locations (nullable)                       |
+| `shift_officer_id` | UUID     | FK to users (nullable)                           |
+| `status`           | String   | scheduled, in_progress, completed, cancelled     |
+| `notes`            | Text     | Optional notes                                   |
+| `activities`       | JSON     | What happened during shift                       |
+| `color`            | String   | Template color for calendar display (nullable)   |
+| `attendee_count`   | Integer  | Computed count of confirmed attendees            |
+| `min_staffing`     | Integer  | Minimum staffing (enriched from apparatus)       |
+| `call_count`       | Integer  | Snapshotted at finalization (nullable)           |
+| `closeout_step`    | Integer  | Close-out resume point (nullable) _(2026-08-19)_ |
+
+> **`closeout_step` carries no entered data.** `0`/NULL = not started, `1` =
+> attendance saved, `2` = calls saved. The close-out wizard writes real records
+> as it advances, so this column only says which screen to reopen on. It is
+> cleared on finalize, and a finalized shift reports `0` regardless — reopening
+> deliberately restarts the wizard.
 
 ### ShiftAssignment
 
@@ -128,6 +136,48 @@ Links a member to a shift with a specific position.
 | `assigned_by`       | UUID     | Who made the assignment                                                                |
 | `confirmed_at`      | DateTime | When member confirmed                                                                  |
 | `notes`             | Text     | Optional notes                                                                         |
+
+### OrgCall _(2026-08-18)_
+
+One call the department ran, counted **once** no matter how many units went.
+Only written by departments on `count_only` call tracking.
+
+| Field             | Type     | Description                                                       |
+| ----------------- | -------- | ----------------------------------------------------------------- |
+| `id`              | UUID     | Primary key                                                       |
+| `organization_id` | UUID     | FK to organizations, CASCADE                                      |
+| `call_date`       | **Date** | Date only — a timestamp would let response times be reconstructed |
+| `call_type`       | String   | Slug into the org's own type list (nullable = unclassified)       |
+| `source`          | String   | `manual` \| `dispatch` \| `derived`; not a DB enum                |
+| `external_ref`    | String   | Dispatch's own id; never displayed. Unique per org                |
+| `created_at`      | DateTime |                                                                   |
+| `created_by`      | UUID     | FK to users, SET NULL                                             |
+
+### OrgCallResponse _(2026-08-18)_
+
+One apparatus responding to one call — the join that makes deduplication work.
+N of these against a single `OrgCall` is N units on one call, which counts as
+**one** for the department and **one run each** for the units.
+
+| Field             | Type     | Description                                                                             |
+| ----------------- | -------- | --------------------------------------------------------------------------------------- |
+| `id`              | UUID     | Primary key                                                                             |
+| `organization_id` | UUID     | FK to organizations, CASCADE                                                            |
+| `call_id`         | UUID     | FK to org_calls, CASCADE                                                                |
+| `shift_id`        | UUID     | FK to shifts, **SET NULL** — deleting a shift must not reduce historical volume         |
+| `apparatus_id`    | UUID     | **Polymorphic, no FK** — resolved via `utils/apparatus_ref`, like `shifts.apparatus_id` |
+| `created_at`      | DateTime |                                                                                         |
+
+Unique on `(call_id, apparatus_id)`: a unit responds to a given call once.
+Without it, re-finalizing a shift would add a second run to the apparatus's
+tally every time an officer corrected a number.
+
+> **What these tables deliberately do not hold:** no address, no cross streets,
+> no patient or caller identity, no narrative, no dispatch/on-scene/clear times,
+> and no CAD incident number for display. Enforced by absence — there is no
+> parameter to pass one to and no column to land it in. A department that wants
+> incident-level records wants an incident module, behind its own consent and
+> access-control story.
 
 ### ShiftTemplate
 
@@ -318,7 +368,52 @@ joins `Shift` to `ShiftAttendance` so each row embeds `shift_date`,
 
 ```
 GET    /api/v1/scheduling/shifts/{id}/calls         # Get calls during shift
+GET    /api/v1/scheduling/calls/{call_id}           # Get one call
+PATCH  /api/v1/scheduling/calls/{call_id}           # Update a call
+DELETE /api/v1/scheduling/calls/{call_id}           # Delete a call
 ```
+
+### Shift Close-Out _(2026-08-19)_
+
+```
+GET    /api/v1/scheduling/shifts/{id}/closeout              # Wizard state + resume point
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/attendance   # Step 1 — who was on, and when
+PATCH  /api/v1/scheduling/shifts/{id}/closeout/calls        # Step 2 — how many calls
+POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm and close
+```
+
+All four require `scheduling.manage` **or** being the shift's own officer
+(`_authorize_shift_management`). Each step writes as it advances, so an
+interrupted close-out resumes rather than restarting.
+
+`GET …/closeout` → `CloseoutStateResponse`:
+
+| Field                                         | Meaning                                                                                                                    |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `closeout_step`                               | `0` not started, `1` attendance saved, `2` calls saved                                                                     |
+| `call_tracking_mode`                          | `detailed` \| `count_only` \| `off`                                                                                        |
+| `call_types`                                  | The org's own `{slug, label}` list                                                                                         |
+| `members`                                     | Assigned + attended crew, with times, hours, credit, `missing_checkout`                                                    |
+| `combined_hours`                              | Summed across the crew — "combined" because it is several times the shift's length and reads as a mistake without the word |
+| `reported_call_count` / `reported_call_types` | Redisplay for a resumed or reopened shift                                                                                  |
+| `attachable_calls`                            | **Served empty** — see the note below                                                                                      |
+
+`PATCH …/closeout/calls` accepts `reported_call_count`,
+`reported_call_types`, `attach_call_ids`. `null` for the count is meaningful
+(it clears a previously reported figure) and is distinguished from an omitted
+field by `count_provided`, so a client that only attaches calls does not wipe a
+count it never mentioned.
+
+`POST …/finalize` additionally accepts `manual_hours`, `member_call_counts`,
+`override_incomplete_checks` + `override_reason` (audited as
+`shift_finalized_check_override`), and `pass_down_notes`.
+
+> **`attachable_calls` is deliberately empty.** Claiming another unit's call has
+> no UI yet, so nothing can send `attach_call_ids` from the browser, and
+> `list_calls_in_window` would cost two queries on every close-out GET for a
+> list nothing reads. The field stays on the response so the contract does not
+> change when the picker lands. See **SCHED-10** in
+> [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#scheduling-module).
 
 ### Basic Apparatus
 
@@ -390,6 +485,50 @@ A slide-out panel that appears when clicking a shift on the calendar:
 - **Open positions**: Available positions members can sign up for
 - **Calls/incidents**: Calls that occurred during the shift
 - **Actions**: Sign up (members), assign members (admins), remove assignments (admins)
+- **Check-in QR + NFC** _(2026-08-18)_: the apparatus check-in code, built by
+  `buildShiftCheckInUrl({ apparatusId })` so it resolves to whichever shift is
+  running when it is used, with an NFC tag writer beneath it
+- **Close out shift** _(2026-08-19)_: on a past, unfinalized, uncancelled shift,
+  for `scheduling.manage` or the shift's officer. Opens the single finalize
+  checklist, or the three-step close-out wizard when the department records a
+  call count — see below
+
+### Call volume tracking and the close-out wizard _(2026-08-19)_
+
+One organization setting decides which close-out screen opens:
+**Scheduling → Settings → General → Shift close-out rules → Record a call count
+at close-out**, stored as `scheduling.call_tracking.mode` in the organization's
+settings JSON alongside `scheduling.call_tracking.call_types`.
+
+| Mode                 | Close-out screen                            | Where call volume comes from       |
+| -------------------- | ------------------------------------------- | ---------------------------------- |
+| `detailed` (default) | Single finalize checklist                   | Per-incident `ShiftCall` rows      |
+| `count_only`         | Three-step wizard                           | `org_calls` / `org_call_responses` |
+| `off`                | Single finalize checklist, no call question | Not tracked                        |
+
+**A missing setting reads as `detailed`, never `off`.** Defaulting absence to
+disabled would silently stop call logging for every existing installation on
+upgrade, and nobody connects a missing year of call volume back to a deploy
+(CLAUDE.md pitfall #19). `ShiftEligibilityService.get_call_tracking_settings`
+is the resolver, and it degrades a malformed `call_types` list to the built-in
+nine rather than raising — an exception there would take out close-out for the
+whole department over one hand-edited entry.
+
+**Three quantities, three code paths, and they are not supposed to reconcile:**
+
+| Quantity               | Source                          | Note                                                                                                                                                                     |
+| ---------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Department call volume | distinct `OrgCall` rows         | One call is one call however many units rolled                                                                                                                           |
+| Apparatus runs         | `OrgCallResponse` rows per unit | A 400-call department can hold 380 engine runs and 240 medic runs                                                                                                        |
+| Member credit          | `ShiftAttendance.call_count`    | A member who came on at 0300 was not on the 2200 call — and it is never summed back into a department total, which with a four-person crew multiplies every call by four |
+
+`GET /scheduling/reports/call-volume` reads **one** source and never mixes them;
+reading both and adding them would count every call twice for an org that has
+used each mode in turn. The count-only branch sets `counts_unit_responses`, and
+the renderer relabels **Total Calls → Unit Responses**, **Avg Calls/Day → Avg
+Responses/Day**, **Peak Calls → Peak Responses**, with a footnote — because
+until the attach picker lands, two units on one incident are counted twice, and
+calling that "calls" overstates the department's volume.
 
 ### ApparatusBasicPage
 
@@ -1842,6 +1981,7 @@ looked, this was broken_ — computed from the most recent check per
 (apparatus, template), so a fault fixed the next morning stops being reported.
 Assignment, repair and verification tracking would need a real
 `equipment_deficiencies` table and is not part of this change.
+
 ## Driver Qualification: EVOC Administration & Position Roster (2026-08-16)
 
 Two gaps closed on the same chain: EVOC levels were modelled and enforced but

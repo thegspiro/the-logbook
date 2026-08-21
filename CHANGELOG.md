@@ -7,550 +7,609 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> **Older entries are archived by month** under
-> [`docs/changelog/`](docs/changelog/). This file carries the current month;
-> when August closes it is archived the same way. Nothing was rewritten in the
-> move except link paths.
->
-> [July 2026](docs/changelog/2026-07.md)  ·  [June 2026](docs/changelog/2026-06.md)  ·  [May 2026](docs/changelog/2026-05.md)  ·  [April 2026](docs/changelog/2026-04.md)  ·  [March 2026](docs/changelog/2026-03.md)  ·  [February 2026](docs/changelog/2026-02.md)
-
-### Events: public request intake could not actually be turned on (2026-08-18)
+### Navigation: browser tabs now identify the current page (2026-08-20)
 
 **Fixed**
 
-- **The EV-5 opt-in had no writer.** `accept_public_requests` and
-  `public_daily_limit` were added to `EVENT_SETTINGS_DEFAULTS` and the public
-  intake endpoint gated on them, but neither was declared on
-  `RequestPipelineUpdate`. Pydantic drops undeclared fields silently, so
-  `PATCH /events/settings` deep-merged an empty dict: **the write never
-  happened and the caller got a `200`.**
+- **Every authenticated page kept the app's generic startup title.** Page
+  navigation now derives the browser-tab and history title from the page's
+  visible `h1`, including headings that arrive after an asynchronous load.
+  During navigation the old page title is cleared immediately, so a slow or
+  heading-less destination never masquerades as the page the user just left.
+  This makes multiple Logbook tabs distinguishable and gives screen-reader
+  users the same page identity already exposed by the route announcement.
 
-  The settings screen sends exactly that payload, then reads
-  `accept_public_requests` back out of the unchanged response to choose its
-  toast — so an administrator enabling intake was told *"Your public request
-  form is now closed."* The control looked like one they kept mis-clicking.
-  Public intake could not be enabled at all, by any path.
-
-  Found while standing up the screenshot stack: the seeder's public
-  event-request step failed with `404 Organization not found` against an
-  organization that plainly existed. **That 404 is correct** — a closed
-  department is deliberately indistinguishable from a missing one, so the
-  endpoint cannot be used as an oracle for which departments accept requests.
-  The bug was that there was no way to open it.
-
-  This is the inverse of Pitfall #19: not a switch with no reader, but a switch
-  with no writer. Both present identically — stored state that nothing can
-  move, behind a UI that says otherwise.
-
-  `public_daily_limit` is `ge=1`, not `ge=0`: a zero ceiling would accept
-  nothing while the toggle still read as open, which is a confusing way to
-  spell what `accept_public_requests: false` says plainly.
-
-  The regression test is **structural** rather than field-by-field — any key
-  added to the `request_pipeline` defaults from now on must also be settable,
-  or it is stored-but-unwritable in exactly this way.
-
-### Documentation gates: two that were not gating (2026-08-18)
+### Mobile: the bottom navigation no longer sits on top of open dialogs (2026-08-20)
 
 **Fixed**
 
-- **202 routes were exempt from the endpoint permission check.**
-  `check_endpoint_permissions.py` compares each route's docstring against the
-  permissions it enforces, and its regex read only one of the **two** spellings
-  in use: `Requires permission:` (428 uses) but not `Permissions required:`
-  (202 uses). That was worse than a miscount. A docstring the regex cannot see
-  contributes **no** documented permissions, so it could never produce a
-  `mismatch` — it fell into `understated`, a warning that does not fail the
-  build. Those 202 routes could have named a permission the route did not
-  enforce, indefinitely, while CI stayed green and reported them as merely
-  under-documented. Widening the regex surfaced **two real
-  docstring/enforcement disagreements** that had been invisible.
-- **The checker read only the signature, so eight routes looked undefended.**
-  Enforcement lives in two places: a `Depends(require_permission(...))`
-  dependency, and — where the permission is not the only way in — a helper
-  called in the route body. The officer named on a shift may manage its crew,
-  attendance, calls, finalization and cancellation **without**
-  `scheduling.assign` / `scheduling.manage`, and that check needs the loaded
-  shift row, so it cannot be a dependency. Reading only the signature reported
-  those routes as `undefended` — the script's most alarming finding, and here
-  entirely wrong. **Anyone "fixing" the report by adding the dependency would
-  have removed the shift officer's access.** Body authorizers are now read,
-  including the permission a helper hardcodes internally, resolved from the
-  helper's own definition so the mapping cannot drift.
-- **A wrapped permission list lost everything after the wrap.** Four
-  alternatives do not fit on one line inside an indented docstring; the capture
-  stopped at the newline, which reads as a `mismatch` against a docstring that
-  is complete and correct. Continuation now stops at a blank line, a new
-  emphasis block, or a sentence end, so prose below the list cannot contribute
-  tokens.
-- **`docs/DATABASE_SCHEMA.md` had no drift gate.** It is generated from
-  `app/models/`, and on a fresh install those models **are** the schema —
-  `_fast_path_init()` calls `create_all()` and stamps Alembic at head, so
-  nothing replays the migration chain. Nothing verified the file was current,
-  and it had drifted across three merges: a whole table (`driver_exceptions`,
-  17 columns) plus 21 columns were missing. A missing table is the dangerous
-  kind of stale, because a reader has no way to detect it. CI now regenerates
-  and fails on a diff.
+- **A dialog's buttons could not be tapped on a phone.** The bottom navigation
+  is `fixed bottom-0 z-50` and `AppLayout` renders it after the page content, so
+  at equal z-index it painted _over_ any open dialog rather than under it — and
+  no dialog reserved room for it. Measured at 390x844 with each dialog scrolled
+  to its end: a taller-than-viewport dialog buried its action row 40px behind
+  the bar, and on a notched phone — where `pb-[env(safe-area-inset-bottom)]`
+  grows the bar by the home indicator, which no dialog knows about — even a
+  `max-h-[90dvh]` dialog lost 32px. `elementFromPoint` returned the nav in every
+  covered case, so the buttons were **untappable rather than merely clipped**,
+  and the tap navigated the page out from under the dialog. Creating a shift on
+  a phone was the worst case.
+- **The bar is now hidden for as long as any overlay is open**, rather than
+  padding ~93 dialogs around it. That also settles a second defect the padding
+  approach would have left standing: the bar sat above the scrim undimmed and
+  fully clickable while `aria-modal="true"` claimed everything outside the
+  dialog was inert.
+- **`useOverlaySurface` owns the registration stack**, and `useDialog` joins it,
+  so every dialog already routing through that hook is covered without opting
+  in. The two drawers that never adopted `useDialog` register directly; their
+  full-height panels ran behind the bar too. The stack is deliberately separate
+  from `useDialog`'s `openDialogs`, which owns Escape routing and the body
+  scroll lock — a drawer joining _that_ one would leave it non-empty when a
+  dialog above it closed, and the lock, released only by the last dialog out,
+  would never be released at all.
+- **`--bottom-nav-height` is zeroed inside overlay subtrees**, so an in-dialog
+  `action-bar-safe` / `pb-safe` stops reserving height for a bar that is no
+  longer rendered and floating the buttons above a band of dead space. Page-level
+  action bars sit outside those subtrees and keep the allowance, because the bar
+  is still on screen for them.
+
+### CI: an unbounded `apt-get` was silently skipping the backend suite (2026-08-19)
+
+**Fixed**
+
+- **A merge reached `main` on 2026-08-19 with no backend test having run, and
+  nothing red to react to.** `sudo apt-get update && sudo apt-get install -y
+libmagic1` — an unbounded network operation with no timeout and no retry, run
+  in six separate job instances — stalled for 19m26s on a single
+  `noble-security InRelease` fetch and consumed the entire 20-minute budget of
+  both **Backend Unit Tests** and **Backend Security Scan**. Because the
+  integration and contract matrices sit behind `needs: backend-test`, they were
+  then reported **skipped** rather than failed. The same stall took out
+  **Frontend E2E** via `playwright install --with-deps`, which shells out to the
+  same apt machinery.
+- **`.github/scripts/install-system-deps.sh` replaces the bare form**, with two
+  defences in order of preference: do nothing when the library is already
+  loadable (the `ubuntu-latest` image ships `libmagic.so.1`, so the apt call was
+  pure risk for no benefit), and when one genuinely is missing, retry under
+  **one overall deadline covering every attempt** — 240s total, not 180s per
+  command, because three attempts at a per-command timeout totals ~18.75 minutes
+  and would recreate the exhaustion the script exists to prevent.
+- **The presence check is on the SONAME, not the package name**, and that is
+  load-bearing. Ubuntu 24.04 renamed the package to `libmagic1t64` in the
+  64-bit-`time_t` transition, so `dpkg -s libmagic1` reports "not installed" on a
+  runner that has the library — a package-name check would take the apt path
+  every single time and defeat the first defence entirely. `python-magic`
+  resolves through `ctypes.util.find_library("magic")`, so the SONAME is also
+  the thing that actually has to be true.
 
 **Changed**
 
-- **The endpoint permission check runs with `--strict`.** The 189-route
-  "under-documentation backlog" was mostly not a backlog — 163 were documented
-  in the unread spelling and 8 more enforced through a body authorizer. The
-  genuine remainder, **22 routes** across `users.py`, `roles.py` and
-  `elections.py`, were documented rather than waived, so the count is zero and
-  under-documentation now fails the build. Warnings accumulate; an error has to
-  be dealt with by whoever caused it.
-- Those 22 docstrings also lost an older, narrower `Requires \`x\` permission.`
-  line that named fewer permissions than the route accepts — 18 in total, now
-  replaced by one complete statement each.
+- **`.github/actions/backend-db-setup` is now the single copy of the backend
+  database setup.** `backend-test-integration` and `backend-test-contract` ran
+  the same six steps duplicated verbatim, including a 15-line Python heredoc
+  encoding production's startup behaviour — two copies of that is how one of
+  them silently stops matching `main.py`. The heredoc itself moved to
+  `backend/scripts/repair_schema.py`. A job's `services:` and `env:` blocks are
+  job-level keys and Actions supports no YAML anchors, so the MySQL/Redis
+  service definitions remain duplicated by necessity.
+- Every CI job has a timeout, so a hung step fails instead of hanging.
+
+### Scheduling: a shift close-out that survives a locked phone (2026-08-19)
 
 **Added**
 
-- `scripts/test_check_endpoint_permissions.py` — 10 regression tests, one per
-  way the checker was wrong, each in the direction that made an unchecked route
-  look fine. Includes the inverse case: an **unrecognised** helper must not
-  read as protection, or a genuine `undefended` finding would become a silent
-  pass. Repo-root script tests now run in CI.
+- **A three-step close-out wizard** replaces the single finalize checklist for
+  departments recording a call count. **Close out shift** on the shift detail
+  panel opens it: step 1 is when each member was actually on, step 2 is how many
+  calls the apparatus ran, step 3 confirms the credit each member takes away.
+- **Each step saves as it advances** — `PATCH /scheduling/shifts/{id}/closeout/attendance`,
+  then `.../closeout/calls` — so a phone that locks at 0700 in an apparatus bay
+  resumes where it left off instead of starting over. `GET
+/scheduling/shifts/{id}/closeout` returns everything the wizard needs plus
+  `closeout_step`, and the server decides the entry screen; nothing is held only
+  in component state.
+- **`shifts.closeout_step`** (new column, `20260819_0900_2827079fd66c`) carries
+  **no entered data** — the wizard writes real records as it goes — only where
+  to resume. A finalized shift reports step 0, and reopening deliberately
+  restarts the wizard.
 
-### Documentation: the Medical Supplies module is documented (2026-08-18)
+**The call count has exactly one source: the per-type rows.** The total is
+derived from them and rendered read-only. An earlier design had a total input
+_and_ a breakdown, each claiming to own the number, which needed a
+reconciliation rule per direction — the downward one was missing, so revising a
+count down left the total stranded at its old value and that stale figure was
+what got saved. `closeoutMath.ts` holds the arithmetic on its own, because these
+are the calculations that were repeatedly got wrong while prototyping and each
+mistake produced a plausible number rather than an error.
 
-**Documentation**
+**Fixed while reviewing the branch, before any of it shipped**
 
-- **The module shipped 2026-08-16 with no reference documentation at all.** It
-  appeared in no `docs/*_MODULE.md`, nowhere in `wiki/`, not in
-  `APPLICATION_PAGES.md`, and its `ems_supply_officer` role and
-  `inventory.view_medical` / `inventory.manage_medical` permissions were in no
-  role or permission reference. A department appointing an EMS supply officer
-  had nothing to hand them.
-- Added [`docs/MEDICAL_SUPPLIES_MODULE.md`](docs/MEDICAL_SUPPLIES_MODULE.md)
-  and `wiki/Module-Medical-Supplies.md`, covering the module toggle, the two
-  domain-scoped permissions and the OR check that keeps single-supply-line
-  departments unaffected, the EMS Supply Officer role, the domain boundary
-  (**404 not 403** on a cross-domain id, so the endpoint is not an existence
-  oracle over the gear catalog), lot-based on-hand, the per-domain alert
-  audiences, both migrations, and the edge-case table.
-- Registered it in `APPLICATION_PAGES.md`, `ROLE_SYSTEM_README.md`,
-  `docs/README.md`, `wiki/Home.md` and the wiki sidebar.
+- **The feature was unreachable.** Nothing in the frontend ever wrote
+  `call_tracking.mode`, so no department could reach `count_only` and the wizard
+  never rendered for anyone. The toggle now lives in Scheduling → Settings →
+  General → _Shift close-out rules_, and sends the org's existing call types back untouched so
+  enabling it cannot wipe them.
+- **A count-only org enforcing end-of-shift checks could never close a shift.**
+  The wizard replaced the finalize checklist, which was the only UI that could
+  send `override_incomplete_checks`, and dropped pass-down notes with it.
+  Replacing a screen means carrying everything it could do; both are back, with
+  the override still gated on a logged reason.
+- **A fresh close-out credited the whole crew zero calls.** Credits seed from
+  the apparatus count, which is 0 before any count exists, and the
+  preserve-the-officer's-edit branch then treated that seed as an answer and
+  pinned it there. A seeded value and a typed one are indistinguishable by
+  value, so the draft now tracks whether the officer actually changed it. Every
+  existing test entered mid-flow with a count already stored, which is exactly
+  why none of them caught it.
+- **Members who never checked in were invisible** — no hours, no credit, and no
+  way for the officer to notice. Assigned members are now listed with empty
+  times to fill in, which is what the old checklist's manual-hours field was for.
+- **The roster listed people who never worked the shift.** It excluded only
+  `CANCELLED` assignments, so `DECLINED`, `PENDING` and `NO_SHOW` members were
+  shown — and every listed member gets an attendance row and the apparatus's
+  full call count by default. Narrowed to `ASSIGNED` and `CONFIRMED`.
+- **Re-hydrating after a save discarded a per-member credit the officer had
+  already adjusted** — silently, and only for the member they had singled out.
+- **Counts against a call type an admin later removed** stayed in the payload,
+  invisible but counted, and came back as an unknown-slug error with no field to
+  clear.
+- **Enabling count-only did not take effect until a reload.** `loadSettings` is a
+  once-per-session cache, so an admin who switched the toggle on kept seeing the
+  old checklist — which never asks for a count — while the backend had already
+  moved and would finalize with none recorded.
 
-**Fixed**
-
-- **The 2026-08-16 gear renames left instructions pointing at navigation items
-  that no longer exist.** `docs/training/00-getting-started.md` told a reader to
-  "navigate to **My Equipment** under **Inventory**" — both renamed (**My Issued
-  Gear** under **Gear & Uniforms**). 74 label references were corrected across
-  11 documents, plus four lines of narration in YouTube script 06.
-  **If that chapter is already recorded, the audio is wrong** and is flagged in
-  `SCRIPT_CURRENCY`. Dated historical notes and the changelog were deliberately
-  left alone — rewriting them would falsify the record of what the screens were
-  called at the time. `My Equipment Checklists` is a different, still-current
-  scheduling screen and is untouched.
-
-### Scheduling: the platoon roster is staffing information, not a directory (2026-08-17)
-
-**Security**
-
-- **A shift's platoon roster is no longer returned to every member.**
-  `GET /scheduling/shifts/{id}` carried `platoon_roster` — the hold-over list
-  of who is available, which is derived from **who is on approved leave**.
-  Every authenticated member could read it, because the shift detail endpoint
-  is gated on `scheduling.view`, which is implicit for all members. It now
-  requires `scheduling.assign`, `scheduling.manage`, or being the shift's own
-  `shift_officer_id`; everyone else gets an empty list and the roster is not
-  fetched at all. General shift details — time, apparatus, assignments,
-  check-in state — are unchanged for everyone.
-- **Platoon Management moved from `scheduling.view` to `scheduling.manage`.**
-  `GET /scheduling/platoons/overview` is the department-wide roster: every
-  platoon, every member in it, plus the unassigned bucket. `scheduling.view`
-  never gated it meaningfully. **Anyone who reached `/scheduling/platoons`
-  with only `scheduling.view` will now get a permission error** — grant
-  `scheduling.manage` to the roles that legitimately need it.
-
-**Fixed**
-
-- **Deleted members were being staffed onto generated platoon shifts.**
-  Generation filtered `User.status == "active"`, but `status` and `is_active`
-  are different columns — a soft-deleted or anonymized member can still carry
-  a `status` of `active`. It filters `User.is_active` now.
-- **The Patterns tab crashed on a malformed platoon list.**
-  `schedule_config` is unvalidated JSON; a non-array `platoons` value (or an
-  array holding non-strings) reached `.map()` and took the whole tab down.
-  Non-string entries are filtered out and a missing or non-array value reads
-  as empty.
-
-### Auth: three controls between the brute-force gaps (2026-08-16 → 08-17)
-
-**Security / Added**
-
-- **Challenge-response (CAPTCHA) on the two internet-exposed forms** —
-  public form submission and forgot-password. Both are reachable by anyone and
-  were defended only by rate limiting, a honeypot and a daily cap: controls
-  that raise the cost of automation without ever requiring a human, so a bot
-  pacing itself under the limit still got through. Turnstile, hCaptcha and
-  reCAPTCHA are all supported — operators do not share constraints, and the
-  first two offer accessible challenges without a Google dependency. Off by
-  default (`CAPTCHA_ENABLED`).
-
-  **This control fails closed**, the opposite of the breached-password check
-  below. That asymmetry is the point: there, complexity rules and password
-  history still guard the account when the lookup is skipped, so an outage
-  costs a supplementary signal. Here there is no fallback, and accepting
-  unverified traffic during an outage is exactly the state an attacker wants —
-  one they can bring about by attacking the provider or waiting for a bad day.
-  An operator who cannot accept that availability tradeoff should leave the
-  feature off rather than run it bypassable.
-
-  Decisions worth keeping:
-
-  - **Enabling it without a secret logs an error and enforces nothing**,
-    rather than rejecting every public submission. A half-finished setup
-    should not read as an outage.
-  - **The token rides in an `X-Captcha-Token` header**, so verification is a
-    pure dependency that runs before body parsing and needs no schema changes.
-    The header is in the CORS allowlist; a reverse proxy with its own header
-    allowlist needs the same entry.
-  - **Enabling it widens the CSP** for the configured provider's widget
-    origins. Without that the browser blocks the script and iframe, and the
-    failure presents as "the challenge never appears" rather than as anything
-    naming the CSP. With CAPTCHA off the policy is byte-for-byte unchanged,
-    `frame-src` included. A new provider needs an entry in **both**
-    `_VERIFY_URLS` and `_WIDGET_ORIGINS`.
-  - **Rejections are generic.** The provider's error codes separate "bad
-    secret" from "token already redeemed" from "forged", which is a map of
-    what to probe.
-  - **The frontend mirrors the server's decision** rather than making its own,
-    and treats an unreachable config endpoint as "not required" — the server
-    still enforces independently, so that cannot bypass a live challenge,
-    while the opposite default would make every anonymous form unsubmittable.
-  - **Tokens are single-use**, so a rejected submission resets the widget
-    instead of replaying a token the provider already burned.
-  - **Deliberately not applied to guest check-in**, which is reached by
-    scanning a QR code on a station display — a challenge there is hostile to
-    someone standing in a firehouse.
-
-  `GET /api/v1/auth/captcha-config` is unauthenticated by necessity (its
-  callers have no session) and is registered in the endpoint-auth allowlist
-  with that reasoning. It returns the provider and the **public** site key,
-  never the secret, and reports `enabled: false` when CAPTCHA is switched on
-  but misconfigured — matching what the server actually enforces.
-
-- **Passwords that appear in known breach corpora are rejected.**
-  "Firetruck2024!" clears every rule the platform enforces — length, all four
-  character classes, no sequences, not in the hardcoded common-passwords list
-  — and sits in public breach corpora, which is exactly what credential
-  stuffing tries first. The hardcoded list covers a few dozen of the hundreds
-  of millions that have leaked.
-
-  Checked via the Have I Been Pwned range API under **k-anonymity**: the
-  password is SHA-1'd locally and only the **first five hex characters** of
-  the hash are sent. The provider returns every suffix sharing that prefix and
-  the match is made in-process, so it never sees the password, its full hash,
-  or which suffix was being asked about. (That SHA-1 is the corpus's lookup
-  index, not a storage decision — password storage is bcrypt/Argon2,
-  elsewhere. It is marked `usedforsecurity=False`, which is a declaration
-  rather than a suppression and also keeps the call working on FIPS builds.)
-
-  **The check fails open, deliberately:** an unreachable or slow provider, an
-  HTTP error, or an unparseable body all accept the password. This is
-  supplementary to complexity rules, password history, MFA and lockout, and a
-  third-party outage must not stop a department setting passwords during an
-  incident. The degradation is logged so operators can alert on it.
-
-  **The rejection message omits the breach count.** A precise count is a free
-  oracle over the corpus for anyone who can reach a password form, and it
-  tells the member nothing they can act on — they need a different password
-  either way.
-
-  Wired into all five paths that set a password: registration, self-service
-  change, reset-by-token, admin user creation, and admin reset. Off by default
-  (`BREACHED_PASSWORD_CHECK_ENABLED`), since it needs outbound network access
-  some deployments do not permit.
-
-- **Suspicious-IP throttling** (`app/core/suspicious_ip.py`). The per-IP rate
-  limit caps burst speed and the per-account lockout caps guesses against one
-  user, but a spray slips between them: one IP trying two passwords each
-  against a thousand usernames stays under 5/min and never reaches
-  `MAX_LOGIN_ATTEMPTS` on any single account, because no account is tried more
-  than twice. This counts **failed** attempts per IP across **all** accounts
-  over a long window and blocks the IP once the total crosses the threshold.
-
-  Two security-relevant defaults, both load-bearing:
-
-  - **A fully successful sign-in clears the IP's counter**, so a shared NAT
-    egress (station computers, where ordinary typos accumulate) does not drift
-    into a block. The clear happens only after **full** authentication, never
-    on a correct password alone — otherwise an attacker holding one leaked
-    password for an MFA-protected account could zero the tally at will.
-  - **Clearing never lifts an already-active block**, for the same reason.
-
-  Wired into `/login` and `/mfa/login`, **including the pre-verification
-  challenge rejections**, which resolve no account and so would otherwise be
-  the one unmetered door into the auth surface. Redis-backed and shared across
-  workers, degrading to a per-process counter that is capped and evicted per
-  Pitfall #9. On by default (`SUSPICIOUS_IP_THROTTLE_ENABLED`) at 50 failures
-  per hour per IP with a 15-minute block.
-
-**Fixed**
-
-- **The auth rate limiter's documented fallback was unreachable (CI-11).**
-  `check_rate_limit` asked `is_rate_limited` for the Redis verdict with
-  `fail_closed=False` and a comment saying it would fall back to the in-memory
-  limiter on error. It never did: the helper catches its own exceptions and
-  returns `False` ("not limited") unless `raise_on_error` is set, so the outer
-  `except` → in-memory path could not be reached. In the window where Redis is
-  connected but a command transiently fails, the request was limited by
-  **neither** backend. The sibling `public_rate_limit` helper already passed
-  the flag; the auth path did not.
-- **Loguru no longer prints local variables in tracebacks.** `diagnose=False`
-  is now set on all three sinks — JSON, console and the rotating file. On a
-  password-set or token-verification frame those locals are the credential
-  itself, written to disk with 30-day retention and shipped wherever logs are
-  shipped.
-
-### Fixes: exposure, correctness and crash paths (2026-08-17)
-
-**Security**
-
-- **A form submission advanced only the prospect who submitted it.**
-  `FormsService._auto_advance_pipeline_step` found *every* active prospect
-  parked on the auto-advancing step and completed the step for all of them —
-  so one applicant returning a form advanced the whole cohort behind it. It is
-  now bound to the submission's own prospect
-  (`ProspectiveMember.form_submission_id == submission.id`), and the audit
-  row records `form_submission_id` so the cause of an advance is legible
-  afterwards.
-- **Impact-plan PDFs escape untrusted text.** ReportLab's `Paragraph` parses a
-  mini-HTML dialect, so an organization name, a filter parameter, a member's
-  full name or a contact string containing `<` or `&` was interpreted as
-  markup — corrupting or failing the render, on text under a member's own
-  control. All four are escaped now. Cells drawn as plain strings (membership
-  number, rank, station) were never affected.
-- **Stock alerts no longer cross domains.** Widening low-stock and
-  expiring-supply recipients to medical-only officers handed them a single
-  rendered table built from *every* row — gear item names, categories and
-  counts the API refuses them by design. Mailing the data is the same
-  disclosure as serving it. Recipients are now grouped by the domains they may
-  actually see and each group receives only its own rows; someone holding both
-  grants lands in the two-domain group and gets **one** complete email rather
-  than two partial ones. Expiring lots are fetched per domain. The
-  deployed-on-apparatus sections stay with every recipient — that is checklist
-  content governed by `equipment_check.*`, a different permission axis — and
-  the SMS carries only a count, so it is not split, and says so.
-- **`/approve-step` now checks that the stage asked for the role.** The route
-  is deliberately not manager-gated: the caller's only authority is that the
-  stage requests a role they hold. The service checked only that they hold the
-  submitted role, so any member could write their own position into any
-  prospect's workflow, with arbitrary notes, receiving the full prospect
-  record back — and a stage with no configured approvers left nothing
-  "missing", completing and advancing the prospect outright. Unrequested roles
-  are rejected, and a stage with no approver roles configured is refused. The
-  manager route rejects unrequested roles too, since recording one files
-  misleading sign-off evidence.
-- **The frontend's email header-injection guard was case-sensitive.**
-  `isValidEmailSecure` rejected `%0a`/`%0d` with a case-sensitive
-  `includes()`; RFC 3986 prefers uppercase hex, so `%0A` — the canonical
-  spelling, and the one an attacker is most likely to send — went straight
-  through. The backend's equivalent check is unaffected: it lowercases the
-  address before testing.
-- **The onboarding CSRF token moved from an origin-wide cookie to tab-scoped
-  `sessionStorage`,** so two concurrent onboarding tabs can no longer
-  overwrite each other's token. A client still holding the legacy cookie has
-  it adopted into the tab and the cookie retired; a stray cookie with **no
-  session id behind it** is ignored rather than adopted as a credential. Both
-  migration paths are covered by tests, because one-time migration code fails
-  silently once the deploy needing it has rolled past.
-
-**Fixed**
-
-- **Meeting cards showed "0 attendees · 0 action items"** over meetings whose
-  detail view showed eight and two. `MeetingResponse` declared both counts and
-  `MinutesPage` rendered them, but the list query loaded no children. Two
-  grouped `COUNT()`s now populate them — totals, not loaded rows, since totals
-  are all that is rendered. The demo seeder also populates `/meetings` (the
-  Minutes page was rebuilt onto it while the seeder still filled the older
-  `/minutes-records` model, so a real record sat behind a "No Meeting Minutes"
-  empty state).
-- **A renewed certification grounded the member permanently.** The dashboard
-  readiness verdict read `my-training`, which returns a *history* — a member
-  who renewed EMT-B has both the lapsed 2024 row and the valid 2026 one, and
-  the verdict counted the lapsed one: "Not clear to respond", forever, for
-  having done the right thing. Only the newest credential per course is
-  considered, by both the verdict and the "Needs you" filter.
-- **Screenings were judged on a narrower window than certifications** — the
-  backend's `expiring_soon_count` covers 30 days while the readiness window is
-  60, so a screening lapsing in 45 days read as current beside a certification
-  at the same distance that read as a condition. The verdict reads
-  `days_until_next_expiration` against its own window, which also catches one
-  lapsing **today** (excluded by the backend's `0 < days` bound).
-- **A failed screening refresh kept stale counts**, leaving a scope note still
-  claiming screenings were checked and a member who had since gone overdue
-  still reading "Clear to respond". It clears now.
-- **A screening-only verdict opened the training page**, which has nothing to
-  say about a screening. Those members go to the department feed.
-- **Driver/EVOC enforcement had five ways around it.** Certification expiry is
-  judged on the **shift's** date, not today — scheduling is forward-looking,
-  and a card that lapses before the shift does not qualify anyone to drive it.
-  Pattern generation wrote assignments directly and bypassed the block
-  entirely (a recurring pattern would seat an uncertified driver on every
-  occurrence); it now checks each driver seat, leaves the seat empty rather
-  than failing the whole run, and reports the skip. A shift edit that moves
-  `apparatus_id` or `shift_date` revalidates the drivers already on it —
-  otherwise the block was side-stepped by seating a driver on an
-  apparatus-less shift and then setting the apparatus. Concurrent chief
-  reviews are settled by a conditional `UPDATE` rather than both committing
-  with the later write deciding silently. **Every** certification a member
-  holds is considered, not just the highest: cumulative Level 3 plus
-  non-cumulative Level 4 was refused for a Level 2 apparatus.
-  `driver_exceptions.apparatus_id` is now `ON DELETE CASCADE` — a `SET NULL`
-  left a grant for one retired unit indistinguishable from a blanket one,
-  silently widening it to the whole fleet; the audit log retains the approval.
-- **Editing "On hand" on a lot-stocked medical supply did nothing.** The field
-  writes `quantity`, but a lot-stocked item's count comes from its lots — the
-  ledger the page and summary actually display. A manager could change the
-  box, get a success toast, and watch the number stay put. The field is
-  replaced for such items by the lot figure and a pointer to **Receive
-  delivery**, and `quantity` is left out of the payload entirely rather than
-  sent as a null that would clear a column nothing shows.
-- **The medical-supplies migration's downgrade destroyed pre-existing grants.**
-  It removed the medical and `equipment_check` permissions unconditionally,
-  including ones a department had granted by hand long before the migration —
-  while the comment above it claimed the opposite.
-- **Copying an event carried its finalized marker.** Duplication and
-  rolling-series extension stripped the older lifecycle markers but not
-  `attendance_finalized`, so a copy of a finalized event looked finalized and
-  never got its own validation prompt. The key list is a single shared
-  constant on the event model now, applied at both copy sites.
-- **Reopening a finalized shift left `validation_notification_sent` set,** so
-  the post-shift task skipped it forever and nobody was reminded to
-  re-finalize.
-- **Date-only event-request values were stamped UTC midnight**, displaying the
-  previous day for every negative-offset department. They are anchored to
-  midnight in the organization's timezone.
-- **CSV vendor import reported three pieces of work for one.** Unmatched names
-  were deduplicated on the exact string while matching, the cleanup list and
-  Attach-all compare case-folded — so "Gals", "gals" and "GALS" were listed
-  separately although Attach handles all three in one pass. Keyed on the fold
-  now, displaying the first spelling seen. A name is recorded only once its
-  row actually imported (`create_item` still rejects rows the CSV parse
-  accepted — duplicate serial, pool item with no quantity — so a failed import
-  sent the reader to Attach for rows that were never written). And a name
-  matching a **deactivated** vendor now links to it rather than being reported
-  as unmatched: vendor creation rejects inactive duplicates, so the advice was
-  a dead end.
-- **The migration validator handed out single-parent guidance for a forked
-  chain.** "New migrations set `down_revision = X`" was printed once per head,
-  naming two parents that cannot both be right; following either extends one
-  branch and leaves the fork in place.
-
-### Migrations: four pull requests each repaired the same fork (2026-08-17)
-
-**Fixed**
-
-- **The Alembic chain is one head again: `8050e5a61f34`.**
-  `20260816_0006` (shift-finalization backfill) and `20260816_0007` (email
-  preference unification) both revise `20260816_0005` — two branches open at
-  once. Five pull requests independently noticed the fork and each wrote a
-  merge for it; **all five merged within the hour**, so the repair became the
-  fork. `main` was left with four heads and two files claiming revision id
-  `20260816_0008`, which makes the versions directory unloadable: `alembic
-  upgrade head` fails outright, a fresh install cannot migrate, and the
-  head-count tests fail on every open pull request.
-
-  - `20260816_0008_merge_finalization_and_email_prefs.py` was **deleted**. The
-    duplicate id has to be resolved for Alembic to load either revision, and
-    this file is a no-op merge — the only member of the set whose removal has
-    no schema consequence. The driver-exceptions revision keeps the id.
-  - The two redundant no-op merges (`71d86eba9a9e`, `bb34f8937c89`) were
-    **kept**: a deployment may already have stamped them, and deleting a
-    recorded revision strands that database at an id its chain no longer
-    contains.
-  - One merge revision names all four surviving heads as parents. Alembic runs
-    each ancestor exactly once however many merge paths reach it.
-
-  Backend suite after the repair: 5,092 passed, 2 skipped. **If you pulled
-  `main` between roughly 17:30 and 18:50 UTC on 2026-08-17, pull again** — the
-  broken state prevented migration rather than corrupting anything.
-
-### Public API: token parameters declare their alphabet (2026-08-17)
-
-**Fixed**
-
-- **`GET /api/public/v1/application-status/{token}` rejected schema-compliant
-  requests.** The published schema constrained the token's length but not its
-  alphabet, so the contract fuzzer generated arbitrary Unicode;
-  percent-encoding is byte-oriented and lossy for anything that will not
-  round-trip through UTF-8, so a string of ten characters arrived as eight and
-  tripped `min_length=10`. These are `secrets.token_urlsafe` values, so
-  base64url is the truth about them and declaring the pattern makes the
-  published schema honest. The finance approval-by-token parameter carries the
-  identical hazard and is covered too.
-- **The calendar feed's token is deliberately left alone.** It answers `404`
-  for a malformed token rather than `422`, so it cannot trip the check, and
-  adding a pattern would turn that into a `422` — leaking "wrong format" apart
-  from "not found" on a public feed.
-
-### Dependencies (2026-08-17)
-
-**Changed**
-
-- `bcrypt` 4.3.0 → **5.0.0** (major); the python-minor-patch group (12
-  packages); the npm-minor-patch group (4 packages).
-- **`typescript` bumped 5.9.3 → 7.0.2 in `frontend/package.json`,** which
-  collapses the two-install arrangement documented in CLAUDE.md: `typescript`
-  and `typescript-native` now resolve to the same 7.0.2. `typescript-eslint`
-  still caps its peer at `<6.1.0`, and the tree resolves only because npm
-  auto-installed a second TypeScript (5.9.3) at the repository root as a
-  **peer** dependency. CI is green, so nothing is broken today — but the
-  arrangement went from declared to incidental, and the linter's compiler is
-  no longer pinned by anything the repository controls. Recorded as **BUILD-1**
-  in [KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md); CLAUDE.md has been
-  corrected to describe the current state rather than the intended one.
-
-**Documentation**
-
-- **TESTING.md now says how to install Stryker before telling anyone to run
-  it.** `stryker.pilot.json` and `vitest.stryker.config.ts` were committed
-  without the packages — Stryker was installed with `--no-save`, so after a
-  fresh `npm ci` the documented command could never have worked. Worse than an
-  unpinned download: `stryker` is an unrelated registry package (last
-  published as `stryker@1.0.1`, the pre-scoped name), so `npx` offers to fetch
-  *that* and never reads the config. The packages are deliberately kept out of
-  `package.json` — `@stryker-mutator/core` pulls a transitive `qs` advisory
-  through `typed-rest-client` with no released fix, taking `npm audit` from 0
-  findings to 2 moderate for every developer, which is a poor trade for a
-  diagnostic CI never runs. The pinned install line, both invocation forms,
-  the sandbox cleanup, and the reason `vitest.stryker.config.ts` narrows the
-  runner are all recorded there.
-
-### Tests: guards that fail instead of vanishing (2026-08-16 → 08-17)
-
-**Changed**
-
-- **Eighteen backend guards skipped themselves when their subject moved.**
-  `test_changelog_fixes.py` checks are written against tracked paths —
-  `errorHandling.ts`, `portal.py`, `main.py`, the Makefile,
-  `alembic/versions` — so "file not found" does not mean "not applicable", it
-  means someone moved the file. A guard that retires itself exactly when its
-  subject is renamed is worse than no guard: CI stays green and nobody learns
-  the check stopped running. Several assert on **frontend** TypeScript by
-  reading it as text, so a routine frontend refactor was enough to disarm
-  them. They now assert the path exists, with a message saying to repoint it.
-  Three more skipped on an empty migrations glob, which would let the
-  chain-integrity checks pass over an empty set.
-- **`test_push_service.py` imports `py_vapid` through
-  `pytest.importorskip`.** It ships with `pywebpush`, which is optional (Web
-  Push is gated behind `PUSH_ENABLED`) and whose wheel does not build on every
-  platform. A failed module-level import is a **collection** error and pytest
-  aborts the whole session on one, so a developer without that optional
-  dependency got 0 tests rather than 4,535.
+### Scheduling: PII-free call volume for departments without an RMS (2026-08-18)
 
 **Added**
 
-- Coverage for the shared axios factory every module's auth depends on; the
-  API cache's TTL boundaries and eviction ordering; onboarding storage and the
-  API client transport; the onboarding utility modules (validation 0 → 100%,
-  security 0 → 100%, errorHandler 0 → 93.4%, module 5.6% → 12.2%); and the
-  offline queue, the one path where a defect loses field data.
+- **A department that does not run incident reporting can now answer "how many
+  calls did we run, and what did each apparatus go on?"** — the question grant
+  applications, ISO ratings, apparatus replacement cases and staffing cases all
+  need. Two new tables, `org_calls` and `org_call_responses`
+  (`20260818_1200_82bdcb3b1e64`), and a new org setting
+  `scheduling.call_tracking.{mode, call_types}`.
+- **Three modes.** `detailed` keeps per-incident `ShiftCall` logging and is the
+  default for every existing organization; `count_only` asks the officer for a
+  number at close-out and nothing else; `off` does not ask. A missing setting
+  reads as `detailed`, never `off` — defaulting absence to disabled would
+  silently stop call logging for every installation on upgrade, and nobody
+  connects a missing year of call volume back to a deploy (pitfall #19).
+- **Nine seeded call types** (fire, EMS, MVA, rescue, hazmat, service, alarm /
+  good intent, mutual aid, other) for a department that has not defined its own.
+  The **slug** is stored and permanent; the label is display-only and may be
+  renamed freely — storing the label would orphan last year's history the first
+  time somebody fixed a typo in settings.
+
+**What is deliberately not collected.** No address, no cross streets, no patient
+or caller identity, no narrative, no dispatch/on-scene/clear times, and no CAD
+incident number for display. Those are the fields that make a call record
+PHI/PII, and collecting them is what the department declined to do. This is
+enforced **by absence** — there is no parameter to pass one to and no column to
+land it in — and `test_incident_detail_is_not_accepted` pins it. `call_date` is
+a **date, not a timestamp**, because a timestamp would let response times be
+reconstructed, which is the first step back toward an incident record.
+A department that wants incident-level records wants an incident module, behind
+its own consent and access-control story.
+
+**Why a call row exists at all, rather than an integer on the shift.** Two
+integers cannot be deduplicated. When Engine 5 reports 5 runs and Medic 1
+reports 3, nothing in those numbers says whether they were on the same MVA or on
+eight unrelated calls, so a department total summed from per-unit counts
+double-counts every mutual response. `OrgCall` is the shared thing both units
+point at. Three quantities, three code paths, and they are **not supposed to
+reconcile**:
+
+| Quantity               | Source                          | Note                                                              |
+| ---------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| Department call volume | distinct `OrgCall` rows         | One call is one call however many units rolled                    |
+| Apparatus runs         | `OrgCallResponse` rows per unit | A 400-call department can hold 380 engine runs and 240 medic runs |
+| Member credit          | `ShiftAttendance.call_count`    | A member who came on at 0300 was not on the 2200 call             |
+
+**Changed**
+
+- **`GET /scheduling/reports/call-volume` names the figure honestly.** It reads
+  **one** source and never mixes them — count-only orgs from `org_calls`,
+  detailed orgs from the records feeding `ShiftCompletionReport`, because
+  reading both and adding them would count every call twice for an org that has
+  used each mode in turn. The count-only branch sets `counts_unit_responses`,
+  and the renderer relabels **Total Calls → Unit Responses**, **Avg Calls/Day →
+  Avg Responses/Day**, **Peak Calls → Peak Responses**, with a footnote. Where
+  two units on one incident are still counted twice, calling the number "calls"
+  overstates the department's volume; "unit responses" is true either way.
+- **`POST /scheduling/shifts/{id}/finalize`** accepts `reported_call_count`,
+  `reported_call_types`, `member_call_counts` and `attach_call_ids`.
+  `attach_call_ids` claims a call another unit already logged, and attachment
+  runs **before** this shift's own reconciliation so a shared call counts toward
+  the total instead of being duplicated alongside it.
+
+**Edge cases that are behaviour, not accidents**
+
+- **`null` and `0` are different facts and are stored differently.** `null` is
+  "we did not track it"; `0` is a department reporting a quiet tour. A report
+  that conflates them understates quiet nights as missing data.
+- **A tally short of the total pads with unclassified** rather than rejecting.
+  Requiring it to reconcile exactly would teach officers to invent a type at
+  0700 to get the close-out to submit. A tally longer than the total is
+  truncated, and zero-valued entries are ignored.
+- **Lowering the total below the shift's already-shared calls is refused**, with
+  a message naming the count and telling the officer to detach first — detaching
+  is an explicit act, not something a lowered number should do behind their back.
+- **Shared calls survive re-finalization.** Only calls this shift solely owns are
+  reconciled; rebuilding every call from scratch on each finalize would delete
+  the other unit's response along with it, dropping their run from the record the
+  first time this officer corrected a typo.
+- **A corrected shift drags its calls with it.** Editing the shift's date, or
+  reassigning it to another apparatus, after step 2 was saved re-dates and
+  re-attributes the surviving rows. Before this fix the totals stayed right while
+  the daily and per-apparatus reports pointed at the wrong day and the wrong truck.
+- **Per-member call _types_ are not invented.** Types are recorded only when the
+  member was on every call. A trainee credited with one call on a shift of one
+  EMS and one fire was previously always assigned "EMS" — an alphabetical prefix
+  — and `create_report` then spent that invented type against type-specific
+  requirements.
+- **100 calls per shift is a hard cap.** An officer closing out a shift is
+  reporting a tour, not a year; a department genuinely running more has an RMS
+  and is not using count-only mode.
+- **Malformed `call_types` JSON degrades to the built-in list** rather than
+  raising — an exception there would take out shift close-out for the whole
+  department over one hand-edited entry. The sanitiser mirrors `CallTypeOption`'s
+  pattern and length bounds exactly; admitting merely "non-blank" let an
+  uppercase or over-long slug through the filter and fail schema construction,
+  taking out the settings endpoint with it.
+- **An apparatus-less shift dedupes on `shift_id`.** `apparatus_id == None`
+  compiles to `= NULL`, which is never true, so every attach inserted another
+  row: the unit's tally climbed on each save and the third raised.
+
+**Known gap.** The cross-unit attach picker has no UI yet, so
+`attachable_calls` is served **empty** on the close-out GET — deliberately; it
+costs two queries per request and nothing consumes it. The field stays on the
+response so the contract does not change when the picker lands. Until then two
+units closing out independently each report their own call, which is exactly why
+the report says _unit responses_. Recorded as **SCHED-10** in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md#scheduling-module).
+
+### Fleet tags: write a vehicle's check-in tag from the QR directory (2026-08-18)
+
+**Added**
+
+- **`/locations/qr-codes` can now program the tag as well as print the code.**
+  That page is already the department's directory of every check-in code, one
+  card per apparatus, so it is where a box of tags gets written for a fleet in
+  one sitting. **Write NFC tag** joins Copy URL / Download PNG / Regenerate in
+  each card's existing action row — no second card, no reflow of the grid.
+- `NfcTagWriteButton` is the compact form of the writer for rows of small
+  actions. Feedback goes through toasts rather than inline alerts on purpose:
+  the directory is a print-oriented grid of fixed-size cards, and an inline
+  status block would reflow every card beside it mid-write.
+- **A write failure raises a toast rather than passing silently.** With no
+  inline slot to report into, the alternative is a member discovering it by
+  tapping a dead sticker — a silent failure looks exactly like a tag that was
+  written.
+
+**Notes on what already worked**
+
+- **The vehicle tag → shift → member chain needed no new code.** A tag holding
+  `/scheduling/checkin?apparatus=<id>` resolves through
+  `get_active_shift_for_apparatus` (today's non-finalized shift, else one that
+  ended within two hours, else the next upcoming) and `member_check_in` writes
+  the `ShiftAttendance` row for the authenticated member. `ShiftCheckInPage`
+  names the unit, date and hours on screen so the member can see which truck
+  they were matched to before they confirm.
+- **Whether a non-rostered member may check in is already an org setting** —
+  `restrict_checkin_to_assigned`, off by default, toggled under Scheduling →
+  Settings, read by `member_check_in`, and covered by
+  `test_restrict_checkin_to_assigned`. Nothing here changes that behaviour.
+- **The button gates itself on `parseNfcTagPath`**, so it appears on apparatus
+  cards and not on the room kiosk cards beside them — those encode
+  `/display/{code}`, which the parser refuses by design. Offering to write a
+  tag no reader would honour is worse than offering nothing, so one rule now
+  governs both ends.
+
+### NFC tags work across modules, not just events (2026-08-18)
+
+**Added**
+
+- **Shift check-in and admin hours clock-in are now taggable**, alongside event
+  check-in. `/admin-hours/categories/:id/qr-code` gains the tag writer beside
+  its QR code, and the apparatus check-in QR on the shift detail panel does
+  too. **Tap Tag** — which routes by what the tag says rather than by where the
+  button lives — is now on the Events page, My Admin Hours, and the scheduling
+  calendar.
+- **Prefer an apparatus-keyed shift tag for anything physically mounted.**
+  `/scheduling/checkin?apparatus=` resolves at tap time rather than naming a
+  shift, so one tag on the truck serves every shift; a shift-keyed tag is dead
+  the moment that shift ends. `buildShiftCheckInUrl` takes `{ apparatusId }` or
+  `{ shiftId }` so the choice is explicit at the call site. _(Corrected
+  2026-08-19: this originally read "resolves to whichever shift is running",
+  which overstates `get_active_shift_for_apparatus` — it takes the
+  earliest-starting non-finalized shift dated today, checking neither the
+  start/end window nor `status == cancelled`. See `docs/KNOWN_LIMITATIONS.md`.)_
+
+**Changed**
+
+- **`parseEventTagPath` is now `parseNfcTagPath`, driven by a target registry**
+  (`TAG_TARGETS` in `constants/nfc.ts`, keyed by `NfcTagTarget` in
+  `constants/enums.ts`). It returns `{ target, path }` rather than a bare
+  string. Adding a module means adding one spec, not another parser — and the
+  registry is the whole reachable surface, so what a tag may point at stays
+  reviewable in one place.
+- **The parser handles query-string routes, which it previously stripped.**
+  Shift check-in is `/scheduling/checkin?shift=` or `?apparatus=`, so refusing
+  every query parameter would have made it untaggable. Rather than passing the
+  query through, a spec now _names_ the parameters that may carry an id: each
+  value is validated against the same id pattern as a path segment, only the
+  first valid one survives, and **the route is rebuilt from those pieces**. A
+  parameter the spec does not name is dropped, so a tag cannot smuggle `?next=`
+  past the parser by hanging it off a route that is otherwise legitimate.
+  `shift` is checked before `apparatus` because `ShiftCheckInPage` reads it
+  first — a parsed route has to mean what the page will do with it.
+- **`/display/:code` is deliberately not taggable.** It is a public,
+  unauthenticated kiosk screen for a tablet left in a room, keyed by a
+  non-guessable code. Writing that code to a tag anyone can read hands it to
+  whoever walks past, and sending a member's phone to a wall display is not a
+  check-in. There is a test asserting it stays rejected.
+- **The four remaining hand-built check-in URLs now go through the shared
+  builders** — `RoomQRCodesPage`, `ShiftCheckInPrintPage`, `ShiftDetailPanel`
+  and `AdminHoursQRCodePage` each assembled their own copy of a route the
+  parser has to recognize, which is exactly the drift that makes a tag scan as
+  valid in one place and unknown in another.
+- `NfcTagWriter` takes an `actionNoun` ("clock-in", "shift check-in"), so its
+  copy reads correctly outside events instead of calling everything check-in.
+
+### Events: NFC tags as a second way in to check-in (2026-08-18)
+
+**Added**
+
+- **A station can mount a reusable NFC sticker instead of reprinting a QR sheet
+  per event.** `/events/:id/qr-code` now offers **Write to an NFC tag**, which
+  encodes that event's check-in URL onto a blank tag via Web NFC. Members tap
+  the tag with their phone and land on the same
+  `/events/:id/check-in` page the QR code opens — no camera, which is the part
+  that fails in a dark apparatus bay or with gloves on.
+- **Tap Tag on the Events page** reads a tag while the app is already open, for
+  the case Android does not cover on its own: with the app in the foreground,
+  the OS does not hand a URL tag off to the browser, so a member holding a phone
+  they are already using would otherwise have to close the app to use the tag.
+
+**A tag is untrusted input, and is treated as such.** Anyone with a phone can
+write an NFC tag, so the payload read off one is on par with a scanned QR code
+rather than with configuration. `parseEventTagPath` in `constants/nfc.ts`
+resolves the payload against the app's own origin, rejects anything that does
+not land back on that exact origin — which also disposes of `javascript:` and
+`data:`, whose origin parses as `"null"` — and accepts only the two known event
+paths. It returns the **normalized** route, never the raw string, so a tap hands
+react-router a fixed-shape path instead of assigning an attacker-supplied URL to
+`window.location`. An unrecognized tag leaves the scan armed and says so rather
+than navigating somewhere unintended.
+
+**Notes**
+
+- Web NFC is Chrome-on-Android and secure-context only. `NDEFReader` is declared
+  in `types/webnfc.d.ts` as an optional property of `Window` rather than as a
+  global class, so the feature test is the only route to the constructor and an
+  unguarded `new NDEFReader()` fails to compile instead of throwing on a
+  member's phone.
+- Where NFC is unavailable, the QR code is unchanged and remains the primary
+  path. The writer collapses to one explanatory line rather than disappearing —
+  a chief planning a tag rollout is usually at a desktop, where the writer can
+  never run, and that page is the only place the capability is documented. The
+  reader button hides entirely, being a pure action with nothing to explain.
+- `getNfcUnavailableReason()` separates an insecure origin from a browser that
+  never shipped the API. Both present identically as a missing `NDEFReader`, and
+  an admin on plain HTTP over a LAN IP needs to be told which one they hit.
+- Both hooks abort through an `AbortController` on cancel and on unmount.
+  `NDEFReader.write()` does not resolve when called — it arms the radio and
+  stays pending until a tag is physically present — so without the abort, a
+  member who changes their mind leaves the device armed and the next tag that
+  passes near the phone is silently overwritten.
+
+### A dropped setting is now named instead of silently becoming a default (2026-08-18)
+
+**Added**
+
+- **`python -m app.preflight` reports whether a configuration can start,
+  without starting it.** Until now the first validation of a configuration was
+  the boot that ran on it, so a bad value was discovered by losing the service.
+  Run `docker compose run --rm backend python -m app.preflight` before
+  restarting: exit `0` means it starts, `1` lists what blocks it, `2` means a
+  value is malformed (an empty string for a boolean, which otherwise surfaces
+  as a pydantic traceback). Every blocking check is gated on production or
+  staging, so a development run proves nothing about production — `--as
+production` evaluates the same values under that environment, and a clean
+  development run now says so rather than printing a bare pass.
+
+- **Startup failures name which settings actually reached the process.** Once
+  pydantic applies defaults, "the operator set this to the default" and "this
+  never arrived" are the same value, so a blocked boot reported the effective
+  value and never the reason. `os.environ` still knows the difference, and a
+  blocked startup now prints it:
+
+  ```
+  SECURITY_ENFORCE_HTTPS   set in environment  'false'
+  SECURITY_REQUIRE_TLS     NOT PRESENT — using built-in default True
+  ```
+
+  with the reason a value goes missing: a Docker Compose `environment:` block
+  is a whitelist, and a variable absent from it cannot be set from `.env` at
+  all. The reported names are derived from the settings model, so a future
+  check that names its setting is covered without registering it anywhere.
+  Values of secrets are withheld; only presence is reported, and a value
+  pydantic loaded from a `.env` file is distinguished from a default rather
+  than reported as missing.
+
+**Fixed**
+
+- **Preflight no longer reports success for a TLS configuration that cannot
+  start.** A `DB_SSL_CA` / `REDIS_SSL_CA` path that does not resolve inside the
+  container produces no critical, but aborts startup in
+  `ssl.create_default_context`. Preflight now opens the referenced files and
+  fails with the path named, since the mistake is almost always a host path
+  given to a setting read inside the container.
+
+- **`--as` rejects an unrecognised environment.** Blocking checks run only for
+  production and staging, so a typo such as `--as produciton` ran none of them
+  and still reported success — silently certifying an unchecked configuration.
+
+- **`python -m app.preflight --compose PATH` names the settings a compose file
+  cannot pass through**, before an upgrade starts gating on one of them. The
+  authoritative list is read out of the security validators' own source rather
+  than kept as a list — a list is exactly what goes stale, and staleness is the
+  failure being guarded against. Aimed at hand-maintained compose files that
+  never receive changes from this repository, Unraid's Compose Manager
+  especially; run against the file behind the 2026-08-18 outage it reports
+  `SECURITY_REQUIRE_TLS` among the gaps.
+
+- **`docs/UPGRADING.md`** — read before pulling a new version into a running
+  deployment. Records the changes that can stop an existing deployment from
+  starting (`SECURITY_REQUIRE_TLS` defaulting true, `RATE_LIMIT_ENABLED`
+  becoming enforced) with both ways out of each, and requires an entry for any
+  future change that can block a boot. A fresh install passing is not evidence
+  for these: they only ever fail installations that already existed.
+
+### Production settings in `.env` now reach the backend container (2026-08-18)
+
+**Fixed**
+
+- **`docker-compose.yml` passed `ENVIRONMENT` through from `.env` but not the
+  settings that production mode then demands.** The backend service has no
+  `env_file` and its `environment:` block is an explicit whitelist, so a
+  variable missing from it could not be set from `.env` at all. Setting
+  `ENVIRONMENT=production` there put the backend into production mode — where
+  `SECURITY_ENFORCE_HTTPS`, `DB_SSL` and `REDIS_SSL` block startup — while
+  every knob that satisfies or waives those gates stayed unreachable. The
+  container crash-looped and editing `.env` did nothing, because the value
+  never arrived. `SECURITY_ENFORCE_HTTPS`, `SECURITY_REQUIRE_TLS`,
+  `SECURITY_ALLOW_UNVERIFIED_TLS`, `DB_SSL`, `DB_SSL_CA`, `REDIS_SSL`,
+  `REDIS_SSL_CA` and `VOTE_SIGNING_KEY` are now passed through, with defaults
+  matching the application's own. The production override sets its own values
+  and still wins on merge, so a hardened deployment is unchanged.
+
+- **`DEBUG`, `ENABLE_DOCS` and `TRUSTED_PROXY_IPS` were silently ignored the
+  same way.** `TRUSTED_PROXY_IPS` is the consequential one: behind a reverse
+  proxy or CDN, leaving it unset makes every request appear to originate from
+  the proxy's container IP, so geo-blocking silently does nothing and all
+  clients share a single rate-limit bucket. An operator who set it in `.env`
+  got that failure with no indication the value had been dropped.
+
+**Changed**
+
+- **The `SECURITY_ENFORCE_HTTPS` startup message no longer claims a protection
+  the code does not provide.** It said the flag was needed "to prevent cookies
+  and credentials from being sent over HTTP", but the flag has no reader
+  anywhere in the backend — nothing emits HSTS and no middleware redirects
+  `http://` to `https://`. The `Secure` attribute on auth cookies is set
+  independently by `COOKIE_SECURE`. The message now states what the flag
+  actually is — an attestation that TLS terminates in front of the app — and
+  points at `COOKIE_SECURE` for cookie behaviour. Actual enforcement remains
+  unimplemented and is left to a separate change.
+
+### Privacy notice and terms rewritten; department control stated up front (2026-08-17)
+
+**Changed**
+
+- **`/privacy` and `/terms` defaults now open with who controls the system.**
+  Both documents lead with a callout that the department holds full control of
+  the application and of the records in it, and that **access is based on the
+  reader's status within the department** — granted, narrowed, suspended, or
+  ended by the department under its own bylaws, SOPs, and membership policies
+  and applicable state and local law, with a change of status (probation,
+  leave, rank change, suspension, separation) changing access without prior
+  notice. The Logbook is named as the software, never as the party deciding
+  access. The old text said the department was the data controller and stopped
+  there, which is the wrong half of the sentence for the reader who most needs
+  it: the member whose access was just removed.
+
+- **The defaults now carry the sections a privacy review actually checks for.**
+  Added to the notice: a plain-language summary at the top (layered notice),
+  sources of information, public-records and legal disclosure — fire
+  departments are routinely subject to sunshine laws and the old text buried
+  this in one clause — monitoring / no expectation of privacy, breach
+  notification, members under 18 for junior and cadet programs, data location,
+  an explicit no-sale / no-advertising / no-automated-decisions statement, and
+  "changes to this notice". Added to the terms: confidentiality of other
+  members' information, department ownership of records created in the system,
+  personal-device duties, notification channels, enforcement and discipline, an
+  order-of-precedence clause putting department policy, agreements, and law
+  above the terms, and an explicit **not-for-emergencies** disclaimer. That last
+  one is not boilerplate — a member treating a member portal as an alerting
+  path is a safety problem, and nothing on the page previously said otherwise.
+
+- **Both pages show a "Last updated" date.** A notice with no revision date
+  cannot be reviewed or relied on, and annual review is an express CCPA
+  expectation. The built-in date is `DEFAULT_LEGAL_LAST_UPDATED` in
+  `LegalPage.tsx`, bumped whenever the default text changes. A department
+  publishing its own wording supplies `legal.last_updated`; when it does not,
+  no date is shown rather than the built-in one — the built-in date describes
+  the built-in text and would misdate custom wording.
+
+**Added**
+
+- `GET /api/public/v1/legal` returns `lastUpdated` from
+  `settings["legal"]["last_updated"]`.
+
+**Fixed**
+
+- **The public legal endpoint no longer trusts the shape of
+  `settings["legal"]`.** It is unvalidated JSON: a string where a dict was
+  expected raised `AttributeError` on `.get`, turning a hand-edited setting into
+  a 500 on a page anonymous visitors reach. Non-dict `legal`, non-string values,
+  and blank/whitespace text now all fall back to the built-in defaults, and
+  returned text is capped at 100,000 characters so a stray paste cannot make the
+  public response unbounded.
+
+- The privacy notice pointed readers at "the address on our security page" for
+  reporting security issues. There is no such page in the app; it now tells
+  members to notify a department administrator.
+
+**Docs**
+
+- `wiki/Security-Privacy.md`, `wiki/API-Reference.md`,
+  `docs/training/17-privacy-data-rights.md`, `docs/COMPLIANCE.md`, and
+  `APPLICATION_PAGES.md` updated. The member-facing training guide gains a
+  short "the part members ask about most" list, and both it and the wiki note
+  that custom text **replaces** a document wholesale rather than merging with
+  the defaults — so a department publishing its own wording must carry the
+  control and access language across itself.
+
+- The default text is written for a US fire-service deployment and is a
+  starting point, not legal advice; departments should have counsel review what
+  they publish.
+
+### Training: approval roster access is limited to training officers (2026-08-17)
+
+**Security / Fixed**
+
+- `GET /training/sessions/approve/{token}` now requires `training.manage`
+  instead of `events.manage`. The approval token remains organization-scoped,
+  but the response includes attendee names, email addresses, and attendance
+  timestamps that event-only roles must not be able to read.
+
+### Pull requests get a template, aimed at what CI cannot check (2026-08-17)
+
+**Added**
+
+- **`.github/pull_request_template.md`** — Summary, Changes, Testing, and a
+  short **Risk checks** list. The checks are deliberately not a restatement of
+  the CI gates: ESLint, typecheck, flake8, black, isort, the migration chain,
+  the endpoint-permission docs check and the coverage floors are already
+  enforced in `ci.yml`, and a box asking whether they passed only teaches a
+  reviewer to skip the block. Prettier is called out as the one gap — it runs
+  only in the lint-staged pre-commit hook, so a `--no-verify` commit lands
+  unformatted `.ts`/`.md` on main, which is exactly how `CHANGELOG.md` came to
+  fail `prettier --check` before this change.
+  The list otherwise covers the failures no job can catch by reading the
+  diff — a by-id query missing its `organization_id` filter, an update payload
+  that omits a cleared field so the old value survives behind a success toast, a
+  new PHI endpoint absent from `UNCACHEABLE_PREFIXES`, a setting stored with
+  nothing reading it, an unregistered seed migration, an export written with
+  bare `csv.writer`.
+- **Lines are deleted rather than ticked.** Every item names the pitfall it
+  guards and is meant to be removed when the diff does not touch it, so what
+  remains is a claim someone made rather than a block that arrives pre-checked.
+- Descriptions had also drifted into two house styles across recent PRs —
+  Motivation/Description/Testing and Summary/Changes/Implementation Details. One
+  template settles it, and `CONTRIBUTING.md` now points at it from the Pull
+  Request Process section.
 
 ### Events: public request intake is opt-in and spam-controlled (2026-08-17)
 
@@ -676,7 +735,6 @@ the existing `test_captcha.py`.
   tracks them — their medical screening compliance.
 
   Three rules keep it from overstating, and each is tested:
-
   - **It renders nothing when there is nothing to judge.** A member with no
     tracked certifications and no screening requirements is _unknown_, not
     clear, and a green verdict from an empty set asserts a clearance the
@@ -6199,6 +6257,7677 @@ catch-up:
 rows for segregation of duties, administrator continuity, need-to-know
 redaction, TLS verification enforcement, and the contract/E2E/container CI
 jobs, each linked to its evidence.
+
+### Compliance: ISO standards alignment — privacy, records, and operations (2026-07-31)
+
+A gap assessment against the ISO/IEC standards relevant to the platform
+(`docs/ISO_STANDARDS_ASSESSMENT.md`) and the implementation of its full
+roadmap. Departments can now demonstrate data-subject rights, records
+retention, and continuity practices that previously had no software support.
+
+**Added**
+
+- **Privacy pages** — public `/privacy` and `/terms` with substantive
+  fire-service defaults (PHI, emergency contacts, retention, member rights,
+  essential-cookies-only). Departments override the wording via organization
+  settings (`legal.privacy_policy` / `legal.terms_of_service`), served by an
+  anonymous, rate-limited `GET /api/public/v1/legal`. Custom text renders as
+  plain paragraphs, never HTML; multi-org installs get defaults only.
+- **Personal data export** (ISO/IEC 27701 portability, HIPAA right of
+  access) — `GET /users/me/data-export` returns everything the system holds
+  about the calling member as JSON: profile and emergency contacts, training
+  and certifications, shift/event/meeting attendance, admin hours, leaves,
+  medical screening, skill tests, dues, equipment custody, consents, and
+  evaluations about them. Self-scoped, audited, rate-limited (3/hour);
+  credentials, MFA secrets, and tokens are never exported. Audit history is
+  summarized rather than dumped. UI: Settings → Security → "Download my data".
+- **Member anonymization** (right to erasure) — `POST /users/{id}/anonymize`
+  for departed members: scrubs names, contacts, address, DOB, photo,
+  emergency contacts, credentials, MFA material and tokens; deletes sessions,
+  password history, and body-measurement rows; scrubs medical-screening
+  content (keeping status/dates as compliance proof), free-text reasons on
+  leaves/waivers/time-off, RSVP dietary and accessibility notes, and the
+  applicant-era prospect record (a full second copy of the member's PII).
+  Audit logs and election records are deliberately untouched — rewriting them
+  would be tampering. `users.anonymized_at` records the event.
+- **Consent tracking** (ISO/IEC 27701) — `user_consents` holds current state
+  per (member, type) for photo use, public roster listing, and SMS
+  notifications (TCPA express consent); every change is written to the
+  tamper-evident audit log as `consent_updated`, which is the immutable
+  consent ledger. `GET/PUT /users/me/consents`; UI: Settings → Security →
+  Privacy Choices. Never-asked fails closed — it is never treated as consent.
+- **Records retention schedules** (ISO 15489) — per-organization retention
+  per record class with safe defaults and minimum floors (message history,
+  notification logs, form submissions; platform-level blocked-access
+  telemetry via `RETENTION_BLOCKED_ATTEMPTS_DAYS`), enforced by a daily
+  `retention_enforcement` task. Admin API `GET/PUT
+/organizations/retention-policy`, audited. Documents and meeting minutes
+  are deliberately excluded from auto-deletion: destroying official records
+  stays a human decision under the department's own schedule.
+- **Audit-log retention enforcement** — `HIPAA_AUDIT_RETENTION_DAYS` (7
+  years) was declared but never applied. The weekly job now exports expired
+  rows to gzipped JSONL archives (`AUDIT_ARCHIVE_DIR`) before purging them.
+  Purges are checkpoint-aligned, refuse to run on a chain that fails
+  verification, and record a keyed HMAC attestation of the boundary so the
+  surviving chain still verifies while unsanctioned head deletions and forged
+  attestations still fail.
+- **Off-host audit-log shipping** — new `audit_log_ship` task (every 30
+  minutes, no-op unless configured) POSTs new audit rows to
+  `AUDIT_SHIP_WEBHOOK_URL` as HMAC-signed NDJSON batches. The hash chain
+  detects tampering; only an off-host copy survives table deletion. A durable
+  watermark (`audit_ship_state`) advances only on acknowledgment.
+- **Encryption key rotation** — decryption now tries the current
+  `ENCRYPTION_KEY` then each key in `ENCRYPTION_KEYS_LEGACY`, so a rotation
+  is safe at every step while new writes use the current key.
+  `scripts/rotate_encryption_key.py` drains a rotation (dry-run by default);
+  runbook in `docs/KEY_ROTATION.md`.
+- **Vulnerability disclosure endpoint** — RFC 9116
+  `/.well-known/security.txt`, configuration-driven via
+  `SECURITY_TXT_CONTACT` / `SECURITY_TXT_POLICY_URL` (ISO/IEC 29147).
+- **Backup sidecar with restore drills** (ISO 22301) — production compose
+  gains a `backup` service: nightly database + uploads + audit-archive
+  snapshots to a `backups` volume, retention pruning, and an automated
+  restore-verification drill every `VERIFY_EVERY_N_BACKUPS` runs that loads
+  the dump into a throwaway schema and asserts the schema came back
+  (`scripts/verify_backup.sh`). A failed drill keeps failing loudly nightly.
+- **CI supply-chain hardening** — `.github/dependabot.yml` (pip, npm,
+  actions, docker); `npm audit` now blocking at high severity; new
+  `secret-scan.yml` (gitleaks, full history, weekly + per-PR, with a
+  `.gitleaks.toml` allowlist covering the 122 triaged doc/test placeholders);
+  new `supply-chain.yml` (Trivy HIGH/CRITICAL dependency sweep + Syft SPDX
+  SBOM artifact).
+- **Coverage gates** — backend `pytest-cov` ratchet floors (unit 46%,
+  integration 44%) alongside the existing frontend ratchet, which was raised
+  to 53% lines / 40% functions / 44% branches / 51% statements.
+- **Accessibility test coverage** — axe checks expanded from a single
+  component to the shared UX library (ConfirmDialog, EmptyState, Pagination,
+  Breadcrumbs, Collapsible, ProgressSteps, Tooltip, Skeletons) and the public
+  legal pages.
+- **Documentation** — `docs/COMPLIANCE.md` (compliance hub: framework
+  overview, technical-control inventory as an audit evidence index, honest
+  gaps table), `docs/BACKUP.md`, `docs/KEY_ROTATION.md`,
+  `docs/ISO_STANDARDS_ASSESSMENT.md`, and `docs/policies/` (ISO 27001 policy
+  set + Statement of Applicability skeletons with `[DEPARTMENT: ...]`
+  placeholders).
+
+**Changed**
+
+- **react-router 6.30 → 8.3** across ~230 files. `react-router-dom` was
+  retired upstream at v7 (an unpatched re-export shim), so the app now
+  depends on the core `react-router` package; imports changed, the API did
+  not. Clears the v6 open-redirect/SSR-hydration advisories _and_ the v7
+  RSC-mode CSRF advisory. React bumped 19.2.4 → 19.2.8 for react-router 8's
+  peer range (root `overrides` moved with it to keep a single React copy).
+  `navigate()` returns a Promise from v7 onward, so ~280 fire-and-forget
+  call sites now use the repo's explicit `void` convention.
+  `npm audit --omit=dev` reports **zero vulnerabilities**.
+- **Removed `pysaml2` and `python-ldap`** — declared but never imported, so
+  pure CVE surface. Docs claiming SAML/LDAP SSO corrected (OIDC via
+  Google/Microsoft is what exists); the `LDAP_*` settings are marked inert
+  placeholders. Drops the LDAP build dependencies from CI and the two
+  pyopenssl `pip-audit` ignores that only existed because of pysaml2's cap.
+- Frontend production advisories fixed in-range: axios → 1.19.0,
+  dompurify → 3.4.12.
+- Audit retention archives moved to a persistent named volume — they were
+  written inside the backend container filesystem and would have been
+  destroyed on rebuild, despite being the only copy of purged audit history.
+- `docs/DEPLOYMENT.md` links repaired: `BACKUP.md` (referenced 3×) and
+  `COMPLIANCE.md` were linked but had never been written; `API.md`,
+  `MONITORING.md`, and a docs-relative `SECURITY.md` also pointed nowhere.
+
+**Fixed**
+
+- **`member_leaves_of_absence.end_date` was `NOT NULL` in the schema** while
+  the model documents `NULL` as "permanent leave" — recording a permanent
+  leave failed with IntegrityError 1048 on any real database
+  (migration `20260801_0013`).
+- The hardcoded 90-day `message_history_cleanup` task would have silently
+  overridden any organization's configured retention; it now delegates to the
+  retention service (default still 90 days, so behavior is unchanged for
+  departments that never configure it).
+- npm caching in CI pointed at `frontend/package-lock.json`, which does not
+  exist in this workspace layout (the lockfile is at the repo root).
+
+**Documentation**
+
+- Secondary-doc sweep for this batch: `CHANGELOG.md`, the wiki (new
+  **Security-Privacy** page plus updates to Overview, Audit Logging,
+  Encryption, HIPAA, API Reference, Database Schema, Environment,
+  Deployment-Production/Docker/Guide, Installation, Technology Stack, Home and
+  sidebar), a new training lesson **17 — Privacy & Your Data** with
+  cross-references from lessons 00 and 08, and YouTube scripts (a new privacy
+  chapter in script 03, member privacy/data-export coverage in script 06, and
+  Shorts 8K/8L).
+- **Corrected documentation that described features which do not exist:**
+  - The wiki documented **SAML 2.0 and LDAP/Active Directory sign-in with
+    configuration steps**. Neither is implemented; the pages now say so and
+    point at the OAuth/OIDC support that is real.
+  - `BACKUP_ENABLED` / `BACKUP_SCHEDULE` / `BACKUP_LOCATION` were documented
+    across six files (env examples, wiki, Unraid guides, a YouTube script) but
+    **no code has ever read them** — operators following those instructions
+    would have had no backups at all. Replaced with the variables the backup
+    sidecar actually uses (`BACKUP_TIME`, `BACKUP_RETENTION_DAYS`,
+    `VERIFY_EVERY_N_BACKUPS`).
+  - `React Router 6.x` in the tech stack (now 8.3).
+- Repaired broken documentation links, including pre-existing ones outside this
+  batch: `FAQ.md`, `SCALING.md`, `MULTI-REGION.md`, `ELECTION_SECURITY_AUDIT.md`,
+  `ONBOARDING_REVIEW.md`, `ASYNC_SQLALCHEMY_REVIEW.md`, `MEMBER_ID_CARD.md`,
+  two wrong relative paths in the Unraid wiki page, and two wiki links pointing
+  at pages that were never created.
+
+**Migrations**
+
+`20260801_0010` (audit checkpoint archival columns), `20260801_0011`
+(`audit_ship_state`), `20260801_0012` (`users.anonymized_at`),
+`20260801_0013` (leave `end_date` nullable fix), `20260801_0014`
+(`user_consents`).
+
+### Cleanup batch: deferred audit items, Pydantic v2 style, config docs (2026-07-31)
+
+**Fixed**
+
+- **Finance request numbers are now per-org and race-safe.** The
+  `request_number`/`report_number` columns carried a _global_ unique
+  constraint while numbers were generated per org — the first org to hold
+  `PR-2026-0001` blocked every other org's first purchase request of the
+  year — and the `count()+1` generator raced with itself and re-issued
+  numbers after deletions. Migration `20260801_0011` swaps in per-org
+  composite uniques; generation is MAX-of-suffix-based; creates go through
+  a SAVEPOINT-wrapped retry-on-conflict allocator. New
+  `TestRequestNumberAllocation` integration tests.
+
+**Changed**
+
+- **Equipment-check read endpoints are permission-gated (EC-7).** The five
+  check-flow reads (`get_check`, `get_shift_checks`, `get_item_history`,
+  `get_last_check_results`, `get_shift_checklists`) now require
+  `equipment_check.view` OR `equipment_check.submit` instead of bare
+  authentication. The default member position gains
+  `equipment_check.submit` (migration `20260801_0010` backfills existing
+  orgs), so member behavior is unchanged — but access is now revocable via
+  the position editor. `view` (which also opens the compliance/failure
+  reports) stays leadership-only.
+- **Member status changes follow a lifecycle state machine** (module
+  audit, roles #5 — previously any-to-any for a `members.manage` holder):
+  suspension resolves to reinstatement or termination, retired/dropped
+  members have explicit reinstatement paths, and ARCHIVED is reachable
+  only via the dedicated archive/reactivate endpoints. Blocked
+  transitions return 400 with the allowed targets listed. New unit suite
+  `test_member_status_transitions.py`.
+- **Pydantic v1 remnants migrated to v2 style**: `@validator` →
+  `@field_validator` (onboarding) and `class Config` →
+  `model_config = ConfigDict(...)` (onboarding, training schemas,
+  messages) — removes the deprecation warnings and the last v1-API
+  dependency ahead of Pydantic 3.
+- **Config/docs open decisions closed** (`docs/KNOWN_LIMITATIONS.md`):
+  the `SECRET_KEY` "guidance mismatch" was a misreading
+  (`openssl rand -hex 32` outputs 64 hex chars — README now says so);
+  `.env.example` already ships `ENVIRONMENT=development`; the unused
+  `VITE_WS_URL` / `VITE_ENABLE_PWA` variables are removed from
+  `vite-env.d.ts`, env examples, `frontend/setup.sh`, and all docs/wiki
+  pages (never read anywhere, same rationale as the `MODULE_*_ENABLED`
+  removal).
+
+### Documentation: secondary-doc sweep for the 2026-07-29 elections batch (2026-07-31)
+
+**Changed**
+
+- Brought the secondary documentation up to date with the merged elections
+  work (nomination phase, paper ballots + attestation, reminders/lifecycle
+  automation, feature toggles, printable ballot, clone, voter-roll freeze,
+  certified results, live turnout, tie policies, write-in merge) and the
+  audit-log `organization_id` column:
+  - `docs/training/14-elections.md` — seven new sections + expanded
+    settings/troubleshooting tables
+  - `docs/youtube-scripts/12-elections-deep-dive.md` — new Chapters 14–16
+    and Shorts 12l–12q; `07-secretary-administrative-guide.md` overview
+    updated
+  - `wiki/API-Reference.md` — new elections endpoint section; audit-log
+    org-scoping description updated to the `organization_id` column
+  - `wiki/Database-Schema.md` — elections/candidates/votes rows updated;
+    `manual_ballot_batches` + `manual_ballot_attestations` added;
+    `audit_logs` row documents `organization_id` and hash-chain v3
+  - `BALLOT_FORENSICS_GUIDE.md` — paper-ballot and write-in-merge
+    forensics, new audit event reference rows
+  - `docs/training/README.md` lesson index; `CLAUDE.md` FastAPI version
+
+### Dependencies: FastAPI/starlette upgrade pass (2026-07-30)
+
+**Changed**
+
+- **fastapi 0.129.0 → 0.141.1, starlette 0.52.1 → 1.3.1** (the 1.x line
+  carrying the security fixes pip-audit flagged; starlette is now pinned
+  explicitly for reproducibility).
+- **fastapi-mail 1.4.2 → 1.6.5** (lifts the `starlette<1` cap), pulling
+  **aiosmtplib → 5.1.2** (clears its advisory) and requiring
+  **cryptography → 49.0.0** and **email-validator → 2.3.0**.
+- **PyJWT 2.11.0 → 2.13.0** (six advisories). PyJWT 2.13 rejects empty
+  HMAC keys, so the test suite now sets a deterministic `SECRET_KEY` in
+  `conftest.py` (production already required one at startup).
+- **pydantic-settings → 2.14.2**, **pypdf → 6.14.2** (advisory fixes).
+- **schemathesis 3.38.5 → 4.24.3** (test dep; lifts its `starlette<1`
+  cap), which requires **pytest 8.4.2 → 9.0.3** (clearing pytest's own
+  advisory) plus **pytest-cov 7.1.0 / pytest-randomly 4.1.0 /
+  pytest-timeout 2.4.0** and **hypothesis 6.164.0**. Fixed a latent
+  no-op in the API contract tests the upgrade exposed: the health-check
+  regex pointed at `/api/v1/health` (the endpoint is `/health`), so
+  schemathesis 3.x silently generated zero tests for it.
+- **CI `pip-audit` is now blocking**: it audits the requirements set
+  (`-r requirements.txt`, so runner-image packages can't fail the build)
+  and passes clean with two documented deferrals — black 26 (major that
+  reformats the repo) and pyopenssl (capped `<24.3` upstream by
+  pysaml2). Tracked in `docs/KNOWN_LIMITATIONS.md`.
+
+### Audit log: organization_id column (2026-07-30)
+
+**Added / Changed**
+
+- **`audit_logs.organization_id`** (migration `20260801_0009`): audit rows
+  now carry their owning tenant. Stamped at write time — explicitly, or
+  auto-resolved from the acting user — and backfilled from `user_id` for
+  rows written before the column existed. Platform-level events (pre-auth
+  alerts, scheduled jobs with no acting user) stay NULL and are visible to
+  no organization.
+- **Hash chain version 3**: new rows include `organization_id` in the
+  keyed HMAC hash input, making tenant attribution tamper-proof. Versions
+  1/2 verify byte-identically without it, so the backfill never breaks
+  `verify_integrity`, and the existing no-downgrade guard prevents
+  stripping the org by rewriting a row as an older version.
+- **All audit read paths now filter the column directly** instead of
+  joining through the mutable `users` table or filtering `event_data` in
+  Python: the audit-log endpoints (list/stats/detail), the member
+  audit-history endpoint (closing the deferred ORU-9 users #6 item), the
+  compliance attestation history (closing the deferred officer #2 item),
+  and the security-monitoring failed-login stats. This also closes the
+  deferred SEC-9 robustness item and the cross-cutting audit-log
+  org-column dependency.
+
+### Elections: enhancement batch (2026-07-29)
+
+**Added**
+
+- **Printable ballot PDF** (`GET /elections/{id}/printable-ballot`): the
+  official blank paper ballot generated from the election itself —
+  positions in order, accepted candidates in ballot order, write-in
+  lines when allowed, and method-specific instructions — so the paper
+  in the room exactly matches the system. "Print Blank Ballots" button
+  on the election page (draft/nominations/open).
+- **Election cloning** (`POST /elections/{id}/clone`): "run it again"
+  for recurring officer elections — copies positions, eligibility
+  rules, voting method, quorum, reminders, and tie policy with new
+  dates and a fresh anonymity salt; optionally copies accepted
+  candidates. Never copies votes, tokens, attendees, or overrides.
+- **Voter-roll freeze at open** (migration `20260801_0008`): opening an
+  election snapshots the eligible roster (`eligible_roster_snapshot`),
+  so a mid-election membership change can neither add nor remove
+  voters and the turnout denominator is fixed and defensible.
+  Secretary overrides granted during the meeting still admit voters;
+  elections opened before this change (NULL snapshot) keep the legacy
+  live evaluation.
+- **Certified results package** (`GET /elections/{id}/certified-results`,
+  closed elections): the formal PDF for the meeting minutes — final
+  tallies with winners/ties flagged, turnout and quorum, the
+  paper-batch attestation trail (including voided and never-attested
+  batches), the integrity-verification outcome, and signature lines
+  for the certifying officers.
+- **Live turnout dashboard**: a meeting-night panel (with fullscreen)
+  showing ballots received vs eligible and a quorum progress bar,
+  auto-refreshing every 15 s. Candidate tallies stay sealed until
+  close.
+- **Explicit tie handling** (`tie_policy`, migration `20260801_0008`):
+  per-election policy for a most_votes tie — `co_winners` (legacy
+  default: all tied candidates win), `runoff`, `revote`, or
+  `chair_decides`. With any non-legacy policy the tie is flagged in
+  results (`is_tie` / `is_tied`), no winner is declared, a warning
+  banner explains the resolution, and closing with an unresolved tie
+  writes an `election_tie_detected` audit event.
+- **Write-in consolidation** (`POST /elections/{id}/write-ins/merge`,
+  migration `20260801_0008`): merge write-in spelling variants ("Bob
+  Baker" / "bob baker") under one candidate before certifying results.
+  Alias-based — signed vote rows are never mutated (signatures embed
+  candidate_id); results count merged variants under the target, and
+  the merge is audited. Only write-ins can be merge sources.
+
+### Elections: paper-ballot attestation (2026-07-29)
+
+**Added**
+
+- **Officer attestation of paper-ballot batches**: with the new org
+  setting `paper_ballot_attestations_required` (default **2**, range
+  0–3, in Election Settings → Features), a recorded paper batch starts
+  **pending** — signed and chained, but excluded from results and stats —
+  until that many officers _other than the recorder_ attest that the
+  entered counts match the physical tally
+  (`POST /elections/{id}/manual-ballots/{batch_id}/attest`). The
+  recorder can never attest their own batch and each officer counts
+  once (DB-enforced). Setting the requirement to 0 restores immediate
+  counting. Batches are first-class rows now (migration
+  `20260801_0007`, new single head: `manual_ballot_batches` +
+  `manual_ballot_attestations`), each snapshotting the requirement at
+  record time.
+- **Batch list with attestation trail**:
+  `GET /elections/{id}/manual-ballots` returns every batch with its
+  per-candidate totals, status (pending / confirmed / voided), recorder,
+  and attestations; the election page shows the panel with per-batch
+  Attest / Void actions (replacing the session-local "Void Last Paper
+  Batch" button).
+- **Unattested-at-close flagging**: an election that closes while a
+  batch is still pending keeps that batch out of the certified results
+  and writes a warning `election_manual_ballots_unattested_at_close`
+  audit event listing the batch ids. Attestation is only possible while
+  voting is open.
+
+### Elections: hardening pass (2026-07-29)
+
+**Added**
+
+- **Nominee notifications**: a third-party nominee now gets an email
+  ("You've been nominated for X — accept or decline", with the org-local
+  response deadline), and opening the nomination phase emails all active
+  members an announcement (member addresses in BCC). Both are
+  best-effort — a mail outage never blocks the nomination or the phase
+  change.
+- **Paper-ballot plausibility guard**: a batch that would push a
+  position's total ballots past eligible-voters × allowed-votes is
+  rejected with the counts in the error; an explicit, audited
+  `allow_over_count` override records it anyway (the UI reveals the
+  override checkbox only after the guard fires).
+- **Paper-ballot batch void**: every tally entry stamps its vote rows
+  with a shared `manual_batch_id` (migration `20260801_0006`, new single
+  head); `POST /{id}/manual-ballots/{batch_id}/void` soft-deletes the
+  whole batch in one audited action, and the election page offers "Void
+  Last Paper Batch".
+- **Manual/electronic transparency**: election stats now report
+  `manual_votes` / `electronic_votes` so paper-tally discrepancies are
+  visible at a glance.
+- **Reminder cooldown**: non-voter reminders (manual or automatic) are
+  rate-limited to one per hour per election.
+- **Superseded-token expiry**: after a reminder, a member's older unused
+  tokens are expired — but only when the new reminder email was
+  confirmed handed to the SMTP server, so a bounce can never strand a
+  voter with zero working ballot links.
+- **Org-local times in email**: reminder and nomination emails render
+  close/deadline times in the department's timezone instead of UTC.
+- **Nomination anti-spam**: a member may have at most 10 pending
+  third-party nominations outstanding per election.
+
+### Elections: per-department feature toggles (2026-07-29)
+
+**Added**
+
+- New **Features** section in Election Settings with four org-level
+  toggles, all ON by default so existing behavior is unchanged:
+  `nominations_enabled`, `paper_ballots_enabled`, `reminders_enabled`
+  (manual + automatic), and `auto_open_enabled` (scheduled opening).
+  Enforcement lives in the service layer — disabling a feature blocks its
+  endpoints (with a clear "enable it in Election Settings" message) and
+  the lifecycle task skips the corresponding automation; the UI hides the
+  affordances. Stored in `org.settings.election_features` (no migration
+  needed). Deliberately **not** toggleable: automatic closing at
+  `end_date` and nomination-deadline auto-close — closing finalizes
+  results and runs the anonymity IP/salt purge, and turning that off
+  would reintroduce the privacy gap; an in-flight nomination phase must
+  also always be closeable.
+
+### Elections: nomination phase + paper-ballot entry (2026-07-29)
+
+**Added**
+
+- **Nomination phase**: a draft positional election can enter a
+  `nominations` status (`POST /elections/{id}/open-nominations`). While
+  open, any member can nominate a member — or themselves — for a position
+  (`POST /elections/{id}/nominations`); third-party nominees appear as
+  _pending_ and must accept before they reach the ballot
+  (`.../nominations/{candidate_id}/accept` / `/decline` — nominee only;
+  declining removes the entry, with the audit log keeping the record).
+  Closing nominations returns the election to draft for ballot
+  finalization; setting `nomination_deadline` lets the `election_lifecycle`
+  task close the phase automatically. New Nominations tab on the election
+  page (member-facing during the phase), lifecycle stepper and workflow
+  tabs updated. Audited as `nominations_opened` / `nominations_closed` /
+  `nominations_auto_closed` / `candidate_nominated` /
+  `nomination_accepted` / `nomination_declined`.
+- **Paper-ballot entry**: `POST /elections/{id}/manual-ballots` records an
+  in-room paper tally as individual vote rows flagged `is_manual` and
+  attributed to the recording officer (`recorded_by`). Manual votes carry
+  no voter identity or dedup hash — the officer's attested count is the
+  source of truth — and are signed and chained like electronic votes, so
+  integrity verification covers the full mixed ballot box (the vote
+  signature now also covers the `is_manual` flag, so a stored paper vote
+  cannot be silently re-labeled). "Record Paper Ballots" action on open
+  elections. Audited as `election_manual_ballots_recorded`; corrections
+  use the existing soft-delete vote endpoint. Note: manual ballots count
+  in results/totals; identity-based turnout metrics cannot include them.
+- Migration `20260801_0005` (new single head): `elections.status` ENUM
+  gains `nominations`, plus `elections.nomination_deadline`,
+  `votes.is_manual`, `votes.recorded_by`.
+
+### Elections: non-voter reminders + lifecycle automation (2026-07-29)
+
+**Added**
+
+- **Remind non-voters** (`POST /elections/{id}/remind-non-voters`): sends a
+  reminder ballot email — with a fresh voting link — to eligible voters who
+  have not yet cast a vote. The server recomputes the non-voter list at send
+  time; members who already voted are never contacted. Prior unused tokens
+  deliberately stay valid (the vote dedup hash guarantees one vote per
+  member regardless of how many live links they hold, while expiring the old
+  token could disenfranchise a member whose reminder bounces). The election
+  detail page's existing "Remind Non-Voters" modal now uses this endpoint
+  instead of the client-composed send-ballot call.
+- **Automatic pre-close reminder**: new per-election setting
+  `reminder_hours_before_close` (create form: "Auto-Remind Non-Voters").
+  The lifecycle task sends exactly one automatic reminder once the window
+  opens; `reminder_sent_at` stamps any reminder (manual included) so
+  members never get a second automatic nudge.
+- **`election_lifecycle` scheduled task** (every 15 minutes): auto-closes
+  OPEN elections past `end_date` — votes are already rejected after
+  end_date, and closing is what runs result finalization, runoff creation,
+  and the anonymous-election IP purge / salt destruction, so an overdue
+  election left open was a privacy liability — and auto-opens DRAFT
+  elections at `start_date` when the creator explicitly enabled the new
+  `auto_open` flag (the real open_election path, so candidate validation
+  still applies). Audited as `election_auto_opened` / `election_auto_closed`
+  / `election_reminder_sent`.
+- Migration `20260801_0004` (new single head): `elections.auto_open`,
+  `reminder_hours_before_close`, `reminder_sent_at`.
+
+**Fixed**
+
+- A ballot re-send no longer erases the original send's recipient record:
+  `email_recipients` now merges rather than replaces, so the UI keeps
+  showing earlier recipients as "ballot sent".
+
+### Integration suites actually run — infrastructure + latent-bug fixes (2026-07-29)
+
+The first genuine CI executions of the DB-backed integration suites (never
+run anywhere before) surfaced test-infrastructure defects, schema drift, and
+four latent application bugs. Migration `20260801_0002` (new single head)
+widens two ENUM columns the model enums had outgrown.
+
+**Test infrastructure**
+
+- `conftest.db_session` now wraps every test in a connection-level
+  transaction the session joins via `join_transaction_mode="create_savepoint"`
+  — service-level `commit()` releases a savepoint instead of committing, and
+  teardown always rolls back. The old fixture committed on clean exit and let
+  service commits leak state across tests.
+- Tests and async fixtures now share the session-scoped event loop
+  (`asyncio_default_test_loop_scope = session`; pytest-asyncio 0.25 → 1.4.0,
+  pytest 8.3.4 → 8.4.2) — fixtures previously ran on the session loop while
+  tests got per-function loops, so loop-bound aiomysql connections were used
+  cross-loop (RuntimeError / NotImplementedError / closed-transaction
+  cascades).
+- Removed `await` on already-resolved async-fixture values in ten test files
+  (188 "object tuple/dict can't be used in 'await' expression" errors).
+- Raw-SQL election fixtures now supply every NOT NULL column that only has a
+  Python-side default, plus explicit timestamps (the chain-built tables have
+  no DB-level defaults for them).
+- Numerous test-vs-service drift fixes: inventory `created_by` args,
+  shift-completion signatures, scheduling swap fixtures (requester must be
+  assigned to the offered shift), finance fixture that persists a real
+  org + admin, event `list_events` dict rows, single-org onboarding rule in
+  facilities isolation tests, real `program_enrollments` row for the
+  enrollment-update test.
+
+**Round 4 — election integrity was cryptographically broken (never detectable until now)**
+
+- `verify_vote_integrity` could never pass on real data, for two independent
+  reasons, both invisible to mocked unit tests: (1) vote signatures were
+  computed **before flush**, covering `id=None`, while verification recomputes
+  them with the real id; (2) signatures covered `voted_at.isoformat()` of an
+  aware, microsecond-bearing datetime that MySQL DATETIME stores at second
+  precision and returns naive. Votes now carry an explicit id from
+  construction, `voted_at` is second-precision UTC, and the signature
+  canonicalizes the timestamp. Signatures written before this change will
+  still fail verification — they always did.
+- The audit log's hash chain failed verification for roughly half of all
+  rows: the hash input zeroed microseconds but the stored DATETIME(0)
+  **rounds** them, so a row written at :12.7s verified against :13. The
+  stored timestamp is now second-precision from the start.
+- `event_rsvps` capacity check counted the RSVP being created (Query-invoked
+  autoflush), waitlisting the Nth attendee instead of the (N+1)th.
+- Migration `20260801_0003` (new single head) adds the
+  `DEFAULT CURRENT_TIMESTAMP` DDL the election models declare but the chain
+  never created — without it every service-created row (runoff elections,
+  runoff candidates, votes, tokens) failed with MySQL error 1364.
+- Normalized UUID-object binds against `String(36)` columns to strings
+  (`get_categories`, election token/runoff constructors) — the codebase
+  convention, and the empirical fix for by-org/by-id lookups returning
+  empty on the CI driver stack.
+
+**Latent application bugs found by the new suites**
+
+- `OrganizationService._resolve_module_settings` filtered `OnboardingStatus`
+  by a nonexistent `organization_id` column — the fallback crashed with
+  `AttributeError` whenever it executed. It now matches the singleton row by
+  recorded `organization_name` (fail closed on mismatch).
+- `FinanceService.get_approval_records` ordered by `created_at` (1-second
+  resolution — always tied for records created together), making the
+  "current pending step" nondeterministic. Now ordered by the chain's
+  `step_order`.
+- `EventService.finalize_event_attendance` subtracted naive DB datetimes
+  from aware ones; both operands are now normalized to UTC.
+- `MembershipPipelineService.get_pipeline`/`get_prospect` returned stale
+  identity-map relationship collections within a session; they now use
+  `populate_existing` so advance/complete logic sees committed steps.
+- Migration `20260801_0002`: `event_rsvps.status` lacked `waitlisted` and
+  `inventory_notification_queue.action_type` lacked `retired` in chain-built
+  databases (model enums gained values no migration ever added) — waitlist
+  RSVPs and write-off notifications failed with MySQL error 1265.
+
+### CI restored to green + elections deferred items closed (2026-07-29)
+
+CI on `main` had been red for at least five merges (Backend Lint, Backend
+Unit Tests, Frontend Tests, Backend Security Scan), which also skipped the
+Backend Integration Tests job on every run — none of the election integration
+suites had ever executed in CI. This change fixes every failing job, then
+closes the four remaining deferred elections items. Migration
+`20260801_0001` adds `voting_tokens.eligible_positions` (new single head).
+
+**CI restoration**
+
+- **Backend Lint**: fixed an E231 inside an f-string that only flake8 on
+  Python 3.13 (CI's version) can see (PEP 701 tokenization).
+- **Backend Unit Tests**: repaired 26 pre-existing failures + 3 fixture
+  timeouts across nine suites — mock drift after org-scoping changes
+  (fundraising, member leave, RSVP waitlist, struggling member, QR check-in),
+  outdated fail-open expectations vs. deliberate fail-closed contracts
+  (documents access, inventory XC-1), a documented `security_alerts` schema
+  exemption, and a DB-backed suite missing its `integration` marker
+  (org-template export, which hung to timeout in the DB-less unit job).
+- **Backend Security Scan**: cleared all 7 Bandit medium findings — a
+  central https-scheme guard for the email-test helpers' `urlopen` calls
+  (B310) and hardened SOQL escaping (backslash-before-quote) + identifier
+  validation for the Salesforce sync (B608). Bumped every app-pinned
+  dependency with a compatible security fix (authlib, cryptography + msal,
+  Pillow, pypdf, python-multipart, aiomysql, requests, click, python-dotenv);
+  the remaining pip-audit findings need major upgrades (starlette is capped
+  by the fastapi pin) so that step is now informational — tracked in
+  `docs/KNOWN_LIMITATIONS.md` → Dependencies.
+- **Frontend Tests**: all 2,003 tests pass — the job failed only on
+  aspirational 80% coverage thresholds; they are now a ratchet floor set
+  just under measured coverage (~54% lines) so the gate blocks regressions
+  instead of every build.
+
+**Elections — deferred items closed**
+
+- **Latent bug**: a manager's test ballot blocked their real ballot — the
+  app-level duplicate checks didn't filter `is_test` while the dedup hash
+  namespaces it. (Caught only because the integration job had never run.)
+- **ELEC-6 residual**: voter-action audit events no longer record an IP for
+  anonymous elections (`_audit_ip`). Audit rows are hash-chained, so rows
+  written before this change keep their IPs — a write-time fix is the only
+  sound one.
+- **R-D3 — ballot tokens out of URLs**: the emailed link now carries the
+  token in the URL **fragment** (`/ballot#token=…`, never sent to any
+  server); the voting page scrubs it from the address bar and calls the new
+  `POST /elections/ballot/lookup` (token in body, election + candidates in
+  one round-trip). The two GET read endpoints are removed. Old `?token=`
+  links keep working until they expire.
+- **R-D4 — position eligibility on token ballots**: eligible positions are
+  snapshotted on the token at send time (`eligible_positions`), enforced at
+  vote time (with a candidate-position fallback against bypass), and used to
+  filter the ballot view; members eligible for no position are skipped with
+  a reason.
+- **R-D5 — method-aware token voting**: approval and ranked-choice elections
+  now work by email ballot — checkbox multi-select and per-candidate rank
+  selects in the UI, `candidate_ids`/`rankings` payload forms on the bulk
+  endpoint, and `cast_vote_with_token` mirroring the authenticated path's
+  per-candidate/per-rank duplicate rules (`vote_rank` accepted and stored).
+
+### Security: elections review — ballot eligibility enforcement, roster leak, test ballots, runoffs, multi-vote methods (2026-07-28)
+
+Full security & correctness review of the elections module (findings recorded
+in `docs/module-audit/elections.md`, R-1…R-10; closes audit items ELEC-3,
+ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
+`voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
+
+**Security**
+
+- **Per-ballot-item eligibility is enforced at vote submission.** Restrictions
+  (`eligible_voter_types`, `require_attendance`) were only checked when ballot
+  emails were sent, so any token holder could vote on restricted items (e.g.
+  life-member-only bylaw votes) by POSTing their ids. The eligible item set is
+  now snapshotted on each voting token at issue time and enforced on
+  submission; the public ballot endpoint returns only the voter's eligible
+  items; the authenticated path now runs the same per-position/item checks.
+- **Public `GET /elections/ballot` no longer leaks the member roster.** It
+  returned the full election record — attendee names, eligible-voter list,
+  email recipients, creator — to anyone holding (or forwarded) a ballot link.
+  Now returns a minimal ballot view (`BallotElectionResponse`).
+- **Test ballots no longer cast real votes.** `Vote.is_test` was never set;
+  "send test ballot" issued a normal token whose votes counted in results and
+  consumed the manager's real vote slot. Test tokens are now flagged and their
+  votes excluded from results/stats/rosters with a namespaced dedup input.
+- **Fabricated attendance blocked**: `attendees` removed from the election
+  create schema — check-ins must use the audited attendee endpoints.
+- **Rollback guard**: reopening a closed anonymous election with recorded
+  votes is refused (the salt destroyed at close would otherwise let prior
+  voters vote again undetected).
+- **`/elections/settings` route permission-gated** (`elections.manage`).
+
+**Correctness**
+
+- **Runoffs now trigger on early close** — the runoff check previously hit the
+  results-visibility gate and silently skipped whenever an election was closed
+  before its scheduled end date (the normal end-of-meeting flow).
+- **Approval and ranked-choice voting fixed** — both were rejected at the
+  dedup and app-check layers; votes now carry a method-aware dedup
+  discriminator (legacy hash unchanged for single-vote elections), the
+  authenticated bulk endpoint is truly atomic with a typed payload, and the
+  ballot UI submits approvals/rankings in one atomic call.
+- **Quorum/turnout denominators exclude non-voting membership tiers** (a
+  percentage quorum could fail even at 100% eligible turnout); override
+  members counted back in.
+- **Vote receipts returned to voters** (single + bulk token paths), making
+  the public verify-receipt endpoint usable end-to-end.
+- **Ballot preview and the real ballot now share one eligibility source of
+  truth** (`annotate_ballot_items_for_user`).
+- Positionless token votes no longer blocked by unrelated positioned votes;
+  missing `is_test` filters added to runoff tally/stats/non-voters; blank
+  election page for non-managers fixed; exact candidate↔ballot-item matching;
+  `GET /elections` list excluded from the API cache.
+
+**Follow-up (practical-workflow review, 2026-07-28)**
+
+- **Runoffs inherit the parent's full rule set** — quorum, position
+  eligibility, meeting/event link, attendees, and voter overrides were all
+  dropped when the runoff was auto-created, and anonymous runoffs got **no
+  anonymity salt** (voter hashes keyed with an empty string — pre-computable,
+  defeating SEC-12 for every runoff round). Runoffs now inherit the rules and
+  generate a fresh salt of their own.
+- **Same-meeting runoffs actually work** — `open_election` now clamps a
+  future `start_date` to the open time (previously a runoff opened at the
+  meeting rejected every vote with "Election has not started yet" for an
+  hour, and the UI had no way to edit a draft's dates) and refuses to open an
+  election whose end date already passed. New **Edit Dates** modal on draft
+  elections (start + end, Start Now, 15-min/30-min/1-hour/1-day quick
+  durations).
+
+**Security: elections known-limitations resolved (2026-07-28)**
+
+- **Voting tokens hashed at rest (ELEC-5).** Tokens were stored and compared
+  in plaintext — database read access yielded live ballot credentials. Only
+  SHA-256 hashes are stored now; the raw token exists solely in the emailed
+  ballot link, and lookups hash the presented value. Migration
+  `20260731_0001` hashes existing rows in place (idempotent hex guard), so
+  in-flight links keep resolving. Downgrade is a deliberate no-op (one-way).
+- **Anonymous-vote IP metadata purged at close (ELEC-6).** Per-vote
+  IP/user-agent stayed forever and forensics returned a full per-IP vote
+  map — de-anonymizable in a small department. Closing an anonymous
+  election now erases per-vote IP/user-agent alongside the anonymity salt
+  (audited as `ip_metadata_purged`; live ballot-stuffing detection is
+  unaffected while voting is open), and forensics exposes only the
+  thresholded `suspicious_ips` set plus `unique_ip_count` /
+  `ip_metadata_purged`. Residual (documented): the audit log still records
+  an IP per vote event.
+- **Cloudflare email attachments implemented.** The Cloudflare Email
+  Sending API supports base64 attachments (5 MiB total-message cap);
+  `EmailService` now sends them instead of silently dropping — so
+  pre-meeting package emails arrive with their PDF on every backend.
+  Over-budget attachments are skipped with a warning.
+
+**Feature: Pre-Meeting Package (2026-07-28)**
+
+- Secretaries can generate a print-ready **pre-meeting package PDF** for
+  annual/special meetings — linked-meeting details and agenda, election
+  configuration (voting method, victory condition, quorum, proxies,
+  runoffs), full ballot preview with candidates and statements, and the
+  voter-eligibility roster. Two privacy variants: _member_ (eligible-voter
+  names + counts) and _full_ (adds per-member ineligibility reasons and
+  overrides — leadership detail, not broadcast department-wide).
+- Email flow with a **fully editable recipient list**: prefill from
+  leadership or the eligible-voter roster, remove anyone, add outside
+  addresses; recipients are BCC'd; PDF attached. Or **download-only** —
+  grab either variant from the election page and distribute it yourself.
+- New endpoints (`elections.manage`): `GET /{id}/package-recipients`,
+  `GET /{id}/package-pdf?variant=member|full`, `POST /{id}/send-package`.
+  Sends and downloads audit-logged. New reportlab renderer
+  (`app/utils/pre_meeting_package_pdf.py`), `PreMeetingPackageModal` on the
+  election detail page (available for draft and open elections).
+- Fixed along the way: `get_eligibility_roster` reported **zero eligible
+  voters for positional elections** (no ballot items) — eligibility for
+  those now follows election-level rules (voter list, tier voting rules,
+  overrides), fixing the in-app roster and the package alike.
+- Known limitation (documented in `KNOWN_LIMITATIONS.md`): the Cloudflare
+  email backend drops attachments, so package emails sent through it arrive
+  without the PDF — use the download-only flow there.
+
+**Docs** — full documentation sweep to match actual behavior: elections wiki
+page (correct endpoint paths, 2026-07-28 improvements section), training guide
+(voting-method tables, token expiry, double-vote semantics, rollback guard,
+receipt verification, early-close results visibility), events & meetings guide
+(vote-integrity and eligibility tables), ballot forensics guide (signature
+formula, rollback guard, test tokens, receipt reference), YouTube scripts
+(chief/secretary/member/shorts — replaced the nonexistent "certify results"
+flow with close-and-publish, added receipts and eligibility roster),
+`Database-Schema` wiki (real `votes`/`voting_tokens` tables — there is no
+"encrypted `ballots`" table), `Security-Overview` wiki (2026-07-28 review
+section), `Security-Audit-Logging` wiki (actual election audit events),
+`ALEMBIC_MIGRATIONS.md` (26 missing rows appended; head now `20260730_0001`),
+training README release note; `KNOWN_LIMITATIONS.md` rows for ELEC-3/ELEC-4
+marked resolved. New **Script 12 — "Creating, Running & Auditing Elections"**
+(full-lifecycle YouTube deep-dive incl. integrity/forensics) with edge-case
+shorts pack 12a–12j; registered in the series overview.
+
+### Security: zero-trust review — deployment posture, host/proxy trust, WebSocket sessions, cross-tenant FKs (2026-07-27)
+
+A zero-trust pass over the whole stack ("never trust, always verify"): nothing
+trusted by network location, client header, session state, or internal origin.
+All items below are fixed on branch `claude/zero-trust-security-review-cypp6z`.
+
+**Deployment posture (highest impact)**
+
+- **Production deployments now run in production posture.** The base
+  `docker-compose.yml` is a development configuration, and it hardcoded
+  `ENVIRONMENT: development`, silently overriding `.env` — so every documented
+  `docker compose up -d` path booted in development mode and skipped the startup
+  security gate (API docs public, HTTPS not enforced, auth-cookie `Secure` flag
+  off, DB/Redis plaintext, `/health/detailed` exposed). The base file now honors
+  `.env` (`${ENVIRONMENT:-development}`); production layers
+  `docker-compose.prod.yml`. `install.sh` deploys with the override and pins
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare
+  `docker compose` management commands stay hardened. `.env.example` now defaults
+  `ENVIRONMENT=development`.
+
+**Network trust (stop trusting client-supplied headers)**
+
+- **Host-header allowlist added.** Emailed ballot links were built from
+  `request.base_url` (the client-controlled `Host`), so a spoofed `Host` could
+  send members ballot links — with live voting tokens — pointing at an
+  attacker's domain. Ballot links are now built from `settings.FRONTEND_URL`, and
+  a new `TrustedHostMiddleware` (`TRUSTED_HOSTS`) rejects spoofed `Host` headers
+  (HTTP 400), making all Host-derived values safe to trust.
+- **Reverse-proxy trust fixed by default.** Behind the bundled proxy with the
+  empty `TRUSTED_PROXY_IPS` default, every request appeared to originate from the
+  proxy's container IP: geo-blocking silently did nothing and all clients shared
+  one rate-limit bucket (a global login DoS). `TRUSTED_PROXY_IPS` now accepts
+  CIDR ranges, and the production override defaults it to the private Docker
+  ranges so the bundled proxy is trusted and real client IPs resolve from
+  `X-Forwarded-For`.
+
+**Assume-breach: revocable sessions**
+
+- **Inventory WebSocket honors session revocation.** The socket authenticated
+  with a bare token decode, skipping the token-type and server-side session
+  checks every HTTP request enforces, so a logged-out / password-changed /
+  refresh token kept streaming org events until expiry. It now authenticates
+  through `AuthService.get_user_from_token` (token-type + `UserSession` store +
+  idle timeout).
+
+**Multi-tenant isolation (continuation of the module audit)**
+
+- **Shared `assert_in_org` helper.** The audit's recurring XC-1 pattern
+  (client-supplied FK ids stored without an in-org check) was previously fixed
+  with per-service ad-hoc checkers; a single fail-closed
+  [`assert_in_org`/`is_in_org`](backend/app/utils/org_scoping.py) helper now
+  exists so new create/update paths validate FKs uniformly.
+- **Cross-tenant leaks closed:** elections (`meeting_id`/`event_id` were
+  client-settable and re-pointed reads leaked another org's attendee roster +
+  meeting metadata; candidate `user_id` now validated), apparatus operators (a
+  foreign `user_id` leaked member PII via the eager-loaded `user`), membership
+  pipeline (a step's foreign `form_id` could mutate/delete another org's form),
+  and inventory (a foreign `category_id` failed _open_ and leaked the category
+  name on export — now fails closed).
+
+**Injection**
+
+- **CSV/formula-injection closed in two more exporters.** The NFIRS state
+  submission and the annual compliance export wrote member-influenced free-text
+  cells with a raw CSV writer, so a value like `=HYPERLINK(...)` executed when a
+  recipient opened the file. Both now use the formula-safe writers; a new
+  `SafeDictCsvWriter` covers the dict-based NFIRS export.
+
+**TLS**
+
+- **DB/Redis TLS verification warning.** `DB_SSL`/`REDIS_SSL` without a CA
+  (`DB_SSL_CA`/`REDIS_SSL_CA`) encrypt but do not verify the server certificate
+  (CERT_NONE) — no protection against an active man-in-the-middle. Startup now
+  warns; set the CA path for full protection.
+
+### Removed: dead `MODULE_*_ENABLED` deployment flags (2026-07-27)
+
+Removed the `MODULE_TRAINING_ENABLED` / `MODULE_COMPLIANCE_ENABLED` /
+`MODULE_SCHEDULING_ENABLED` / `MODULE_ELECTIONS_ENABLED` (etc.) environment
+variables from the Docker composes, installers (`universal-install.sh`,
+`setup-env.py`, `unraid-setup.sh`), the Unraid Community Apps template, and the
+documentation. The backend never read them — all API routers register
+unconditionally — so they only misled operators into thinking they toggled
+features. Module availability is controlled **per organization** at runtime via
+the organization's settings (`enabled_modules`).
+
+### Security: multi-tenant isolation audit — cross-tenant write/read fixes across modules (2026-07-25)
+
+A rotating, module-by-module security audit (see
+[`docs/module-audit/`](docs/module-audit/PROGRESS.md)) following the July
+red-team review. Each module was checked for tenant-isolation (IDOR/BOLA), broken
+access control, injection, and correctness. The fixes below are all applied;
+open decisions that need an owner are collected in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+
+**Cross-tenant writes closed (highest impact)**
+
+- **Elections — voting eligibility is now enforced.** `cast_vote` computed voter
+  eligibility but never checked the result, so any authenticated member could
+  vote in a draft/closed election, outside the voting window, or while not on a
+  restricted eligible-voter list. The eligibility gate is now enforced (the proxy
+  and token voting paths already enforced it).
+- **Elections — candidate edits/deletes are org-scoped.** `update_candidate` /
+  `delete_candidate` fetched the target by path id without an organization check,
+  so an admin in one department could edit or delete another department's
+  candidates. Both now verify the election belongs to the caller's organization.
+- **Equipment check — apparatus deficiency flag can no longer be flipped across
+  departments.** A standalone check accepted a caller-supplied `apparatus_id` and
+  toggled that apparatus's out-of-service/deficiency state with no org check;
+  this could mark another department's apparatus deficient or clear a real
+  deficiency. The update is now org-scoped and the id is validated on submit.
+- **Equipment check — template item data can no longer be overwritten across
+  departments;** the ready-stock lot **swap now requires a manage permission**
+  (it previously required only being logged in); and template cloning now
+  validates the target apparatus is in-org.
+- **Meetings/Minutes — cross-department template leak closed.** Creating minutes
+  with a foreign `template_id` alongside custom sections persisted that id and
+  leaked another department's header/footer template config into the response and
+  the published document. The template is now validated in-org.
+- **Membership pipeline — foreign FK validation.** Creating a prospect with a
+  foreign `pipeline_id` leaked another department's pipeline step configuration
+  in the response; creating a leave of absence didn't verify the member belonged
+  to the department. Both are now validated in-org.
+- **Forms — public-submission integrations validate their targets.** A public
+  equipment-assignment form could assign an in-department item to a
+  submitter-supplied member from **another** department, and an event-registration
+  form could RSVP against another department's event. Both integration processors
+  now verify the referenced member/item/event belongs to the form's department
+  before writing.
+- **Grants/Fundraising — donation and expenditure totals can no longer be
+  corrupted across departments.** Recording a donation or grant expenditure with
+  a campaign / donor / budget-line id belonging to **another** department silently
+  overwrote that department's campaign progress, donor lifetime-giving, or budget
+  spend. Those references are now validated in-department before the totals
+  recompute (which is itself now department-scoped). Also fixed: a donation saved
+  without an explicit payment status was omitted from campaign/donor totals until
+  a later edit. A grant application referencing a funding `opportunity_id` from
+  another department (which leaked that opportunity's fields and drove task
+  generation) is now validated in-department as well.
+- **Admin Hours — manual time entries now always require officer approval, and
+  the stale-session cleanup stays within your department.** A manually entered
+  time record (member-supplied start/end times) previously auto-approved itself
+  for categories that don't require approval — letting a member self-credit
+  fabricated or backdated compliance hours; manual entries now always start
+  Pending review, with a future-time check and a 24-hour cap. The "close stale
+  clock-ins" action was also scoping across all departments and now affects only
+  the caller's department (the nightly cleanup job is unchanged).
+- **Training/Reports — a few screens that could show more than they should are
+  tightened.** The "expiring certifications" member view returned the whole
+  department's certification records (numbers, scores) to any member; it now
+  shows a member only their own (officers still see everyone). Creating a
+  training record now always verifies the member belongs to your department, and
+  an external-provider user-mapping screen no longer reveals another department's
+  member name/email. A department-overview report count was also inadvertently
+  tallying meeting action items across all departments and is now scoped to yours.
+- **Events — a location from another department can no longer be attached to an
+  event.** Creating or updating an event with a `location_id` belonging to
+  **another** department disclosed that location's details and silently defeated
+  its room double-booking check; the location is now validated in-department. The
+  public event-request notification email now escapes the submitter-supplied
+  contact name (HTML-injection hardening), and an RSVP-series lookup that fetched
+  its anchor event without a department filter (a cross-department existence
+  oracle) is now scoped.
+- **Member creation can no longer be used to escalate privileges.** Creating a
+  member (`POST /users`) assigned the requested roles without the privilege
+  ceiling that the role-assignment endpoints already enforce, so a user with only
+  the "create member" permission could create an account with a password they
+  chose, attach a full-access ("System Owner"/wildcard) role, and log in as it —
+  taking over the whole department. Member creation now enforces the same ceiling:
+  you can only grant roles whose permissions are a subset of your own.
+- **A contact-visibility secretary can no longer rewrite authentication/SSO and
+  server secrets.** The full organization-settings update (`PATCH /settings`)
+  accepted the narrow "manage contact visibility" secretary permission, but its
+  body covers the auth/SSO provider, SMTP, file-storage, and module configuration
+  — so that secretary could inject an attacker-controlled OAuth client secret or
+  overwrite mail/storage credentials. That permission has been removed from the
+  full-settings route; it still works on its dedicated contact-info endpoint.
+- **Finance — a budget in another department can no longer be corrupted.**
+  Recording a purchase request, check request, or expense line item against a
+  `budget_id` belonging to **another** department previously incremented that
+  department's encumbered/spent totals on approval or payment (its budget was
+  never read back, so the corruption was silent). The budget update helpers are
+  now department-scoped, and a purchase/check/expense/budget that references a
+  budget, category, or fiscal year from another department is now rejected with
+  a clear error at save time instead of being stored.
+- **Scheduling — self-signup can no longer make a member the shift officer.**
+  Signing up for an "officer" position on an open shift previously ran the
+  manager-only auto-promotion logic and set the member as the shift's officer,
+  granting crew-wide authority over that shift; open-shift self-signup now skips
+  that promotion. Self-signup also now re-checks shift state, so a member can no
+  longer add themselves to a cancelled, finalized, or past-dated shift. The
+  shift-officer assignment is validated in-department on shift create/update (a
+  foreign user id can no longer be attached to a shift or minted an apparatus
+  assignment), and the member-hours report no longer joins member names/emails
+  without a department filter. Generating shifts from a recurring pattern is now
+  bounded to a maximum date range (≈ one year per call) so a single request can
+  no longer materialize an unbounded number of shifts (denial-of-service).
+
+**Data protection & correctness**
+
+- **Field encryption upgraded to AES-256-GCM.** Sensitive data at rest (PHI,
+  MFA secrets, integration/email/SSO credentials, evaluation notes) is now
+  encrypted with AES-256-GCM authenticated encryption — a stronger cipher than
+  the previous Fernet (AES-128-CBC + HMAC), and one where a tampered value fails
+  to decrypt (fails closed) rather than being read back. Existing encrypted data
+  written under the old scheme remains readable, so the upgrade needs no downtime
+  or data migration for correctness; a maintenance script
+  (`backend/scripts/reencrypt_to_aesgcm.py`, dry-run by default) re-encrypts
+  older rows to AES-256-GCM as a background step.
+- **Cached data no longer leaks between users on a shared device.** The in-memory
+  API response cache was only cleared when the logout request to the server
+  succeeded, so on a shared station a failed/expired logout could leave one
+  member's cached pages (dashboard, action items, training records) visible to
+  the next person who signed in on the same tab. The cache is now cleared
+  unconditionally on logout, at the start of every new sign-in, and when a token
+  refresh fails during onboarding (which previously skipped the reload that
+  clears it). Several more member-identifying endpoints (training compliance/
+  certification lists, skills-test results, event attendance history, notification
+  delivery logs, scheduled-email recipients) were also added to the never-cache
+  list.
+- **Public portal / integrations hardened.** The public-API key check no longer
+  crashes once a second API key exists (every key shared a constant lookup
+  prefix, which made the query return multiple rows and error out — it now
+  verifies each candidate). The public calendar (`.ics`) feed now escapes lone
+  carriage returns and the timezone header, closing a calendar-spoofing
+  injection where a stray control character in an event title/notes could inject
+  extra calendar entries. The public location-display code is validated against
+  an explicit ASCII pattern instead of a looser Unicode check.
+- **Onboarding / first-run setup hardened.** The factory reset could FK-fail (and
+  never complete) once a headquarters location had been created, because it
+  deleted users before the location that references them — it now removes the
+  location and facility first. During in-progress setup, a leaked/replayed
+  onboarding session can no longer create a second department or a second
+  full-access owner (both are now rejected), and the module/notification/role
+  configuration steps refuse to run once setup is complete. The first-run
+  `/start` and `/system-owner` endpoints are now rate-limited, the database
+  connectivity check no longer returns the raw driver error, and default
+  meeting-minutes templates no longer share a mutable sections list across
+  departments.
+- **Core infrastructure hardened.** Five more CSV exports (equipment-check
+  reports, inventory, finance transactions, admin-hours) now run through the
+  formula-injection-safe writer, so a member whose name/notes start with
+  `=`/`+`/`-`/`@` can no longer execute a formula on a responder's machine when
+  the export is opened. Database connection errors no longer risk logging the DB
+  password; a single department can no longer exhaust a worker by opening
+  unlimited live WebSocket connections (now capped per department); encrypted
+  fields that fail to decrypt for a real reason (wrong/rotated key) now surface
+  the error instead of silently returning ciphertext; JWTs without an expiry are
+  rejected; and a security-notification email now escapes its message. (An
+  inaccurate "AES-256" label was also corrected — the field encryption is Fernet
+  / AES-128-CBC with an HMAC integrity tag.)
+- **Security tooling hardened.** The in-memory security-monitoring trackers
+  (login attempts, API calls, sessions) now enforce their size cap on every
+  update instead of relying on a throttled sweep, so a credential-stuffing burst
+  from many IPs/accounts can no longer grow them without bound. The audit-log
+  integrity check now detects removal of entries from the **start** of the chain
+  (it anchors the first entry to the genesis hash), closing a gap where a
+  head-truncated chain still reported "verified." The client error-report
+  endpoint now caps the size of each troubleshooting step (previously only the
+  number of steps was limited, so a member could balloon rows), the audit-log
+  search escapes wildcard characters, and an error-type longer than the column
+  allows is now rejected cleanly instead of erroring on insert.
+- **Compliance exports and configuration are hardened.** Compliance profiles now
+  reject requirement, role, and admin-hours-category ids that belong to another
+  department (previously stored unvalidated, silently skewing a member's
+  compliance math). The annual compliance CSV export now neutralizes
+  spreadsheet-formula injection (a member whose name starts with `=`/`+`/`-`/`@`
+  can no longer run a formula on the officer's machine when the export is opened).
+  A member with no applicable requirements is now correctly counted as compliant
+  instead of "at risk" (which also understated the department's overall
+  percentage). Skills-result emails now escape member/template names, and the
+  compliance config rejects an at-risk threshold set above the compliant
+  threshold.
+- **Organization settings — SSO client secrets are no longer silently destroyed
+  or echoed back.** Saving the full settings back through `PATCH /settings` after
+  reading them (where secrets come back redacted as bullets) previously persisted
+  the bullet placeholder over the real SSO client secret, breaking login; the
+  redacted-placeholder preservation now covers the auth section too. Separately,
+  `PATCH /settings/auth` now redacts secrets in its response instead of echoing
+  them in plaintext, matching the email/file-storage endpoints.
+- **Module enablement no longer bleeds across departments.** A migration/safety-net
+  path resolved a department's enabled modules from an unscoped onboarding record
+  and could seed one department's module list from another's; the lookup is now
+  scoped to the department (and skipped when it can't be scoped safely).
+- **Self-service email changes reset verification** — updating your own email no
+  longer keeps the previous "verified" flag, and a self-save no longer falsely
+  reports the address as already in use.
+- **Documents — deleting a document now removes the file from disk** (previously
+  the database row was deleted but the potentially sensitive upload was left
+  behind), and two access-control checks that failed _open_ now fail _closed_
+  (an unresolved folder no longer grants access; an unknown/foreign upload folder
+  is now rejected).
+- **Inventory — item history no longer errors** for items with pool issuances (a
+  wrong column name raised a 500), and equipment requests validate the referenced
+  item is in-department.
+- **Facilities — a maintenance record without a type returns a clean validation
+  error** instead of a 500, and ~dead no-op code paths were removed.
+- **Leaves of absence — the edit endpoint now validates the date range** (start
+  ≤ end), matching the create endpoint.
+- **Email hardening — LIKE-search wildcards and an HTML email field are now
+  properly escaped** in several modules (meetings/minutes, inventory,
+  equipment-check, messaging test-email, grants donor/opportunity search, events
+  request-notification email).
+- **Smaller correctness/validation fixes:** manually-approved clock-outs now
+  stamp their approval timestamp (previously left blank — a gap in the approval
+  audit trail); numeric report filters (`year`, expiring-soon days) are coerced
+  safely so a bad value returns a clean error instead of a 500; and multi-select
+  form answers are validated against the field's defined options.
+- **Integrations SSRF hardening — outbound chat/Cal.com calls re-validate the
+  destination at send time.** The Slack/Discord/Teams notification senders and
+  the Cal.com client now re-check the target URL immediately before dispatch
+  (fail-closed), matching the generic-webhook path — closing a DNS-rebinding
+  window where a webhook host validated at save time could later resolve to an
+  internal address. The OAuth connect redirect also now URL-encodes its status
+  parameter.
+
+**Access control**
+
+- **Prospective-member records now require the prospective-members permission.**
+  The applicant read/detail/**document-download** routes (background checks, IDs,
+  DOB/address) previously also accepted the generic "View member list"
+  (`members.view`) permission, so any member with roster access could pull them
+  via the API. They now require `prospective_members.view`/`.manage` (the
+  permission the UI already required to open those pages). Election officers keep
+  access to applicant **election packages** through `elections.view`/`.manage`.
+- **Skills-test scores and evaluator notes are no longer visible to every
+  member.** The skills-test list and detail views returned every member's test
+  records — pass/fail, scores, and free-text examiner notes — to any logged-in
+  member, and let them target a specific member by id. A non-officer is now
+  confined to tests they took or evaluated; officers (training managers) keep the
+  full view, matching how the module already restricts test templates. The
+  fetch-a-template-by-id route now applies the same officer-only visibility the
+  template list uses.
+- **Member dues balances are no longer visible to everyone with finance read
+  access.** The dues list (`GET /finance/dues`) accepted a `user_id` filter with
+  no self-scoping, so any member holding the broad `finance.view` permission
+  could read any other member's dues balance and delinquency status. Non-managers
+  are now confined to their own dues; only a dues manager (`finance.manage`, the
+  permission that records and waives payments) can query across members. Members
+  still see their own dues.
+- **Marking an org-wide notification read now requires the manage permission.**
+  `POST /notifications/logs/{id}/read` performed an org-wide write but was gated
+  only by `notifications.view` (while the sibling "read all" already required
+  `.manage`); it now requires `notifications.manage` to match.
+- **Unpublished and executive-session minutes are no longer visible to all
+  members.** Meeting-minutes lists, detail, search, and dashboard stats now show
+  a member (holding only `minutes.view`) just the **approved, non-executive**
+  minutes; drafts, submitted/rejected minutes, and closed executive-session
+  minutes remain visible only to those with `minutes.manage` (the secretaries/
+  officers who already draft and approve them). No new permission or UI change
+  required.
+- **Security alerts are now scoped to the owning department.** Security-monitoring
+  alerts (brute-force, session-hijack, data-exfiltration, etc.) were stored in a
+  single global table with no owning tenant, so an admin in one department could
+  read **every** department's alerts — including source IPs, user ids, and prior/
+  current IPs and session ids — and could **acknowledge or resolve (suppress)**
+  another department's live security incidents. The alert table now carries an
+  `organization_id` (backfilled from each alert's user), populated when the alert
+  is raised; the alert list, security-status dashboard, and acknowledge/resolve
+  actions are all confined to the caller's department, and the status dashboard
+  no longer reports another tenant's external data-transfer destinations.
+  Platform-level pre-auth alerts (e.g. brute-force against the login page, which
+  have no owning department) are not shown in any single department's view.
+- **Audit-log tamper-evidence hardened against laundering.** The audit hash
+  chain has a recovery tool that recomputes hashes to repair a historical
+  computation bug. It previously recomputed **every** row's hash from the row's
+  current contents — so anyone with direct database write access could edit a
+  tamper-evident (keyed) entry and then run the recovery tool to "bless" the
+  edited data with a fresh valid hash, laundering the tamper. The tool now only
+  repairs the older legacy entries it was meant to fix; for a keyed entry it
+  refuses to overwrite the stored hash and instead reports the mismatch as a
+  genuine integrity signal to investigate. And because the audit chain spans all
+  departments, the recompute operation is now a break-glass action disabled by
+  default — it must be explicitly enabled by a server operator
+  (`AUDIT_ALLOW_CHAIN_REHASH`) rather than being triggerable by any department
+  admin with audit-export access. Read-only integrity verification and snapshot
+  creation are unchanged.
+- **Geo-blocking can now fail closed, and country rules are platform-scoped.**
+  Country-based access blocking is enforced at the network edge, before any
+  department context exists, using one shared geolocation database and one
+  global blocked-country list. Two hardening changes: (1) a new
+  `GEOIP_FAIL_CLOSED` option (off by default) blocks any address whose country
+  can't be determined — including when the geolocation database is missing or
+  corrupt, which previously disabled blocking silently across the whole app;
+  internal/LAN and explicitly allowlisted addresses are still let through so an
+  operator can always recover. (2) Because the blocked-country list applies to
+  every department at once, changing it at runtime through the admin API is now
+  disabled by default (`GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`) — the list is set
+  at deploy time via `BLOCKED_COUNTRIES` — so one department's admin can no
+  longer alter the shared blocklist for all tenants. Viewing the rules and
+  blocked-attempt logs is unchanged.
+- **Public-portal API auth hardened against a CPU-exhaustion DoS.** Public API
+  key verification uses bcrypt, which is deliberately slow. The per-IP rate
+  limit previously ran _after_ that verification, and because every key shared
+  the same lookup prefix, one unauthenticated request forced a bcrypt check
+  against every key in the system — so a flood of bogus-but-well-formed keys
+  could burn CPU with nothing throttling it. IP rate limiting now runs first,
+  before any database lookup or bcrypt work, and new API keys carry a selective
+  lookup prefix so verification checks a single candidate instead of all keys.
+  Existing keys upgrade to the selective prefix automatically the next time
+  they're used — no re-issue needed. No change to how integrators authenticate.
+- **Audit-log export no longer includes raw session identifiers.** The
+  compliance/backup export replaced each entry's raw `session_id` with a
+  non-reversible fingerprint — investigators can still group events by session,
+  but the live identifier is no longer handed to everyone with export access.
+  Integrity verification is unaffected (session id was never part of the tamper-
+  evidence hash). Also removed a dead internal allowlist helper.
+- **Public-portal request handling made lighter per request.** Authenticated
+  public API calls no longer write to the database on every single request (the
+  key's "last used" timestamp now updates at most once a minute), and the
+  per-request anomaly check uses one fewer database query. No behavior change for
+  integrators.
+- **Equipment checks: completing an incomplete check now re-applies the
+  auto-fail rule.** When an initial apparatus check is submitted, expired items
+  and items found below their required quantity are automatically marked failed.
+  Finishing a previously-incomplete check now applies that same rule, so a
+  safety-critical shortfall can no longer be recorded as passing just because it
+  was completed in two steps. Also: a shift completion report created without a
+  linked shift now verifies the named trainee belongs to the department, and the
+  report lookup is department-scoped at the query.
+- **Expense-report totals are computed reliably.** Adding a line item now
+  recomputes the report total from the persisted line items directly, fixing a
+  case where the running total could double-count or drift depending on load
+  timing.
+- **Membership IDs are now collision-safe under concurrency.** Auto-generated
+  membership numbers are minted under a row lock, so two members created at the
+  same instant can no longer receive the same ID, and the uniqueness retry is
+  bounded. Separately, partial saves of organization settings no longer wipe the
+  rest of a settings section (nested settings now merge), and an admin-update
+  permission check that referenced a non-existent permission name now uses the
+  correct one so "edit users" grants work as intended.
+- **Deleting a document folder now removes its files too.** Previously, deleting
+  a folder removed the folder and its documents from the database but left the
+  underlying uploaded files on disk. Folder deletion now cleans up the backing
+  files for every document in the folder and its sub-folders, matching how
+  single-document deletion already worked — so sensitive uploads aren't left
+  behind.
+- **Compliance report emails are safe against injected content.** The report
+  email now escapes the organization name, report type, and period label before
+  putting them in the HTML body, so a crafted organization name can't inject
+  markup into the recipient's mail client. The report type is also restricted to
+  the known values (monthly/annual).
+
+Aside from the tightened prospective-member access above, no user-facing feature
+changes. Full per-module findings, including lower-severity items left as flagged
+open decisions, are in [`docs/module-audit/`](docs/module-audit/PROGRESS.md).
+
+### Integrations & Finance: chat notifications, security detectors, and external approvals (2026-07-22)
+
+Built out three capabilities that were previously scaffolding:
+
+- **Chat notifications (Slack / Discord / Teams)** — when shifts or training
+  records are created, the department's configured chat integrations now receive
+  a formatted notification. Bulk operations (generating shifts from a pattern,
+  recording training for a group) send a single batched summary rather than one
+  message per row, so a chat channel can't be flooded.
+- **Security event detectors wired in** — repeated failed logins now raise a
+  brute-force signal, and attempts to grant a role/permission the actor doesn't
+  hold themselves raise a privilege-escalation signal, both recorded to the
+  security-monitoring log for review.
+- **External-approver finance flow** — a purchase/expense approval can be sent to
+  an approver by email with a one-time token link; the approver reviews and
+  approves/denies on a public page (`/finance/approvals/:token`) without needing a
+  Logbook account. Tokens are single-purpose and the page never exposes more than
+  the item under review.
+
+### Security: red-team review and full remediation (2026-07-21)
+
+An adversarial, application-wide security review (backend, frontend, middleware,
+public/webhook surface, deployment) followed by remediation of every HIGH,
+MEDIUM, and LOW finding. Full findings and the remediation matrix are in
+[`docs/security/RED_TEAM_REVIEW_2026-07.md`](docs/security/RED_TEAM_REVIEW_2026-07.md).
+
+**HIGH**
+
+- **Cross-tenant audit-log disclosure closed** — the security-monitoring audit
+  endpoints are now scoped to the caller's organization.
+- **Role/permission grant ceiling enforced** — a user can no longer grant a role
+  or permission they don't themselves hold (privilege-escalation ceiling).
+- **Rate-limiter DoS fixed** — the limiter keys on the real client IP
+  (proxy-aware) instead of a spoofable value.
+- **MFA hardened** — TOTP replay is blocked (last-used timestep) and repeated
+  failures lock out (brute-force protection).
+- **Audit hash-chain keyed** — the tamper-evident audit chain is now HMAC-keyed
+  with a versioned, no-downgrade guard.
+
+**MEDIUM / LOW** — PII/roster responses excluded from the client cache; XXE
+(defusedxml), PDF/ReportLab markup injection, and a raw SQL fragment fixed;
+auth hardening (Secure cookies, login-enumeration resistance, hashed MFA recovery
+codes, OAuth warning); config/deploy hardening (docs/debug off in prod, request
+body cap, production compose); CSRF no-cookie gap and distributed public-route
+rate limiting; refresh-token rotation grace; SSRF send-time re-validation
+(DNS-rebinding); webhook replay protection; public-form daily cap.
+
+**Dead-code cleanup** — removed 88 verified-unused items (unimported frontend
+files/modules, 39 dead exports, 36 backend functions), each confirmed with
+`tsc`/ESLint (frontend) and import-resolution + `pytest --collect-only` (backend).
+
+### Department Messaging: reliable delivery, acknowledgment tracking, and scheduling (2026-07-17)
+
+A pass over the internal Department Messages feature so announcements reliably
+reach the right members, leadership can prove who has seen mandatory notices, and
+the delivery/scheduling machinery can't be broken or abused by a single message.
+
+**Delivery that actually reaches people**
+
+- **Cross-channel escalation** — posting a message now fans it out to the
+  channels members watch: an in-app notification (bell inbox) for every targeted
+  member, an email for urgent or acknowledgment-required messages, and an SMS for
+  urgent messages (when the department has Twilio configured and the member has a
+  mobile number). Previously "urgent" only changed a badge color and was invisible
+  to anyone not already in the app. Escalation runs in the background so posting
+  stays instant, and each channel is best-effort so one failing channel never
+  blocks the others.
+- **Members can opt out per channel** — a new **Urgent Text Messages** toggle
+  joins **Email Notifications** in Settings → Notifications (and the profile
+  contact editor). The in-app notification is always delivered regardless.
+
+**Acknowledgment tracking and compliance**
+
+- **Acknowledgment stays pending until acknowledged** — an acknowledgment-required
+  message keeps counting as unread until the member actually acknowledges it, not
+  merely opens it.
+- **Who-has-not-acknowledged report** — officers get a per-recipient breakdown
+  with a real denominator (X of Y acknowledged / read), surfacing members who
+  still owe an acknowledgment. Message edits and acknowledgments are now
+  audit-logged.
+- **Soft delete preserves evidence** — deleting a message hides it from members
+  but keeps the read/acknowledgment records, so a deleted mandatory notice still
+  has its compliance trail. (A hard delete previously destroyed that evidence.)
+
+**Authoring improvements**
+
+- **Edit in place** — officers can edit a message's title, body, audience, flags,
+  and expiry instead of deleting and reposting.
+- **Scheduled send** — schedule a message to publish (and escalate) at a future
+  time; it stays hidden with a "Scheduled" badge until then. An already-published
+  message can't be moved back to a future time (which would re-send it).
+- **Clickable links** — URLs in a message body render as links in the inbox and
+  dashboard (safely — no HTML injection).
+- **Search, priority filter, and pagination** on the admin message list.
+- **Rename-safe role targeting** — role-targeted messages now follow the role's
+  identity, so renaming a role no longer silently stops delivery. Existing
+  messages are backfilled.
+
+**Correctness, safety, and abuse resistance**
+
+- **Accurate unread badge** — the dashboard badge uses the real unread count
+  instead of a capped preview, and the unread query no longer loads message bodies.
+- **Per-department escalation rate limit** — email/SMS escalation is throttled per
+  organization (fail-open, so real safety alerts still go out) so a runaway loop or
+  compromised admin can't blast the whole department across the metered channels.
+- **A single message can't break the batch** — the delivery path is fully guarded
+  and the scheduled-publish task isolates failures, so one bad message can't halt
+  delivery of the others.
+- Server-side validation of priority/target values, sanitized error responses, a
+  new `expires_at` index, and a fix for a concurrency bug in the test-email
+  response.
+
+### Scheduling: full shift lifecycle, personal calendars, automation, and safeguards (2026-07-16)
+
+A broad review of the scheduling/shift module, closing operational gaps from
+shift start-up through close-out, adding member-facing conveniences, and
+fixing several correctness and security issues.
+
+**Running a shift end-to-end**
+
+- **Per-shift officer authority** — the officer named on a shift can now manage
+  that shift's crew, attendance, calls, finalize, and cancellation without a
+  department-wide `scheduling.manage`/`assign` grant. Editing or deleting the
+  shift record itself still requires `scheduling.manage`. Previously "shift
+  officer" was only a label with no permissions.
+- **Live readiness panel** — the shift detail now shows, during the shift,
+  present-vs-assigned, staffing vs. target (with an understaffed flag), and any
+  outstanding start-of-shift equipment checks — instead of that state only
+  appearing inside the finalize dialog.
+- **Cancel a shift (instead of deleting it)** — shifts gain a lifecycle status
+  (scheduled/cancelled). Cancelling preserves the record and its history, marks
+  every active assignment cancelled, and notifies the assigned crew; a finalized
+  shift can't be cancelled. Cancelled shifts drop out of open-shift signup and
+  are shown struck-through with a badge.
+- **Reopen / unfinalize** — a permissioned, audit-logged way to reopen a
+  finalized shift for corrections and re-finalize it. Finalization is no longer
+  a dead end.
+- **Crew pass-down / handoff notes** — a structured note captured at
+  finalization, shown on the shift, and surfaced to the next crew on the same
+  apparatus via a handoff banner.
+
+**Close-out enforcement (opt-in)**
+
+- **Require end-of-shift equipment checks before finalizing** — previously this
+  "requirement" was a disabled button only; a direct API call finalized anyway.
+  `finalize_shift` now enforces it server-side when the department enables it
+  (`require_end_of_shift_checks`, off by default). The finalizing officer can
+  override with a reason that is written to the audit log. The feature is
+  surfaced (benefit-led) in the finalize flow and settings so departments
+  discover it.
+- **Restrict check-in to assigned members** (`restrict_checkin_to_assigned`,
+  off by default) — self check-in is rejected for members not rostered on the
+  shift (open shifts exempt), so attendance reflects the real crew.
+- **Understaffed shifts are flagged at finalize**, so running short is part of
+  the close-out record.
+
+**Member conveniences**
+
+- **Personal calendar (ICS) feed** — members subscribe to their shifts in
+  Google/Apple Calendar/Outlook via a private, token-protected URL
+  (`/api/public/v1/calendar/{token}.ics`). The token is created on demand and
+  can be rotated. New "Subscribe to my shifts" card on the My Shifts tab.
+- **Overtime / hours advisory** — an optional soft (non-blocking) warning when
+  an assignment or self-signup pushes a member's scheduled hours in a trailing
+  window over a department-configured cap (`max_hours_per_window`,
+  `hours_window_days`). Modeled on the existing EVOC driver warning.
+
+**Training integration**
+
+- **Training-position crew slots** — an officer can mark a crew-board seat as a
+  supervised training/rider slot and link it to the trainee's program and the
+  evaluating officer. On finalize, a draft completion report is created against
+  the linked program with the evaluator as reviewer, feeding the existing
+  shift-completion → training-progress pipeline.
+
+**Automation**
+
+- **Automatic shift generation** — a daily task keeps every active pattern
+  generating shifts out to a configurable horizon for departments that opt in
+  (`auto_generate_enabled`, `auto_generate_weeks`), so upcoming shifts appear
+  without pressing "generate". Idempotent per pattern.
+
+**Quick wins**
+
+- Per-shift **minimum-staffing override** in the shift edit form (was
+  template/apparatus-locked).
+- The **Platoons** admin page is now reachable from the Scheduling admin links
+  when platoon scheduling is enabled (previously only via a deep link).
+- The **Scheduling Officer** role now also holds `scheduling.swap` and
+  `scheduling.report`, so a station officer can approve swaps/time-off and open
+  compliance reports.
+
+**Correctness & security fixes**
+
+- **Advisories now actually reach the client** — `ShiftAssignmentResponse`
+  lacked `evoc_warnings`/`overtime_warnings` fields, so `response_model` was
+  silently stripping the EVOC and overtime warnings the endpoints attached.
+  Added the fields; both warnings now surface on assign and self-signup.
+- **No force-confirm on a member's behalf** (S4) — `update_assignment` can no
+  longer set an assignment to `confirmed`; confirmation stays self-only via the
+  dedicated confirm flow. Decline/cancel/no-show remain manageable.
+- **Global task runner locked down** (S8) — the `run-task` endpoint (which
+  iterates every organization) now requires a new wildcard-only
+  `system.run_tasks` permission instead of any single-org admin permission.
+- **Overnight shifts (C5)** — manually created/edited overnight shifts
+  (e.g. 19:00→07:00) now roll the end to the next day so the backend accepts
+  them.
+
+**Migrations**
+
+- `20260720_0001` — shift-assignment training-slot fields
+  (`is_training`, `training_program_id`, `training_evaluator_id`) and shift
+  lifecycle (`status`, `cancelled_at`, `cancelled_by`, `cancellation_reason`).
+- `20260721_0001` — per-user `calendar_feed_token`.
+- `20260722_0001` — shift `pass_down_notes`.
+
+### Training Pipelines: abuse safeguards, working alerts, and fixability (2026-07-16)
+
+A review of the whole training-program module, hardening how its many progress
+feeds work together and making mistakes easy to correct.
+
+**Abuse safeguards**
+
+- **Members can't self-complete their own requirements** — a member may still
+  mark a requirement in-progress, but only a training officer can set a numeric
+  progress value, record a test score, or mark a requirement complete/verified/
+  waived. Members log training through the self-report submission flow, which
+  routes to an officer. Previously a member could PATCH their own requirement to
+  100% and bypass review entirely.
+- **No self-approval of self-reported training** — a training officer can no
+  longer approve their own submission; a second officer must sign it off, so an
+  officer can't grant themselves hours or credit unchecked.
+- **Withdrawn/failed enrollments are never auto-resurrected** — the enrollment
+  rollup only auto-completes an enrollment that is still active, so a
+  withdrawn/failed member reaching 100% isn't silently flipped back to completed.
+- **Future-dated submissions rejected** and program-linked sessions only fan out
+  to hours-type requirements, closing two ways bogus credit could slip in.
+
+**Idempotency ledger — a training can't be double-credited**
+
+- The six pipeline feeds now record each accrual in a per-source credit ledger
+  keyed uniquely on (requirement progress, source type, source id). Re-processing
+  the same shift report, re-syncing the same external course, re-finalizing a
+  session, or re-approving a submission is an idempotent no-op — the same real
+  training can never be counted twice. The ledger also records the units each
+  source contributed, which is what makes clean reversal possible.
+
+**Alerts that actually fire**
+
+- **Struggling-member and deadline alerts are delivered** — these previously
+  computed who was behind but sent the notification to a mentor field that didn't
+  exist, so no one was ever told. Alerts now reach the member and their training
+  officers (resolved by role), throttled so a persistently-behind recruit isn't
+  re-alerted every weekly run. Pace/behind-schedule checks measure from the
+  current cycle, so a member fresh off a recert reset isn't flagged overdue on
+  day one.
+
+**Fixability — undo mistakes cleanly**
+
+- **Void a training record** (`DELETE /training/records/{id}`) — marks a
+  mistaken or duplicate record cancelled (kept for audit, never hard-deleted) and
+  un-applies any pipeline credit it produced.
+- **Reverse an approval**
+  (`POST /training/submissions/{id}/reverse-approval`) — voids the record the
+  approval spawned, un-applies the credit keyed on both the submission and the
+  record, and returns the submission to pending review to be re-decided.
+- Both are training.manage-gated and audit-logged, and build on the ledger so
+  the requirement math unwinds automatically instead of by hand.
+
+### Training Pipelines: end-to-end progression tracking (2026-07-14)
+
+Made training programs ("pipelines") work as a real enroll → progress → advance →
+complete loop, wiring the surrounding subsystems (sessions, skills tests,
+knowledge tests) into pipeline progress and giving members a view of their own
+progression.
+
+**Building & enrolling**
+
+- **Atomic pipeline build** — the create-pipeline wizard now builds a program with
+  all phases, requirements, and milestones in a single transaction
+  (`POST /training/programs/programs/build`); a failure part-way no longer leaves an
+  orphaned, half-built program. Program **code** and **version**, and a phase's
+  **"require officer approval to advance"** flag, are now persisted and returned
+  (they were previously dropped by the schemas).
+- **Enrollments tab** — the program detail page lists enrolled members by name with
+  progress (`GET /training/programs/programs/{id}/enrollments`), enroll via a
+  **searchable member picker** (no more raw user IDs), and **bulk enroll now blocks**
+  members who fail prerequisite or concurrent-enrollment rules (previously the gate
+  was bypassed and they were enrolled anyway).
+- **Eligibility-aware enroll picker** — the picker now prechecks who can actually be
+  enrolled (`GET /training/programs/programs/{id}/eligibility`) and defaults to
+  "Show eligible only". Members who are already enrolled, haven't completed a
+  prerequisite program, or are blocked by the no-concurrent-enrollment rule are shown
+  with the specific reason (and can be revealed by toggling the filter off) instead of
+  only failing on submit. Eligible members sort first. Target position/roles stay
+  advisory and never block.
+
+**Editing after creation**
+
+- **Inline pipeline editor** — a pipeline is no longer frozen once built. From the
+  program detail page (Overview), officers can edit the program's own details
+  (`PATCH /training/programs/programs/{id}`), and add / edit / reorder / delete
+  **phases** (`PATCH`, `POST …/phases/reorder`, `DELETE …/phases/{phase_id}`),
+  **requirements** (add, edit content, `POST …/requirements/reorder`, move between
+  phases, `DELETE …/requirements/{prog_req_id}`), and **milestones**
+  (`PATCH` / `DELETE …/milestones/{milestone_id}`). All gated by `training.manage`.
+- **Auto-clean on destructive edits** — deleting a phase or removing a requirement
+  clears only this program's enrolled members' progress for the affected items,
+  re-anchors anyone parked on a deleted phase to the first remaining phase, and
+  recomputes/re-advances them. Editing a requirement's numeric target (hours/shifts/
+  calls/course count) re-derives enrolled members' progress against the new target.
+- **Delete a whole pipeline** — a guarded "Delete" action
+  (`DELETE /training/programs/programs/{id}`) permanently removes a program and all
+  of its phases, requirements, milestones, and enrollments. The UI warns first
+  (naming the pipeline and its enrolled-member count) before deleting.
+
+**Enrollment & registry fixes**
+
+- **Concurrent enrollment is now a soft advisory, not a hard filter.** A member
+  already active in another program stays eligible to enroll (they may be in several
+  onboarding courses at once); the enroll picker just flags "Also enrolled in another
+  program". The hard block was removed from bulk-enroll (a duplicate enrollment in the
+  _same_ program is still rejected).
+- **Registry import fixed.** Importing from NFPA / NREMT / Pro Board returned
+  "imported 0" because the JSON files were resolved relative to the process working
+  directory; they're now anchored to the app package, so imports find their
+  requirements. The import toast also no longer shows a misleading green success on
+  zero — it reports the error, a neutral "already imported" note, or a real count.
+- **NREMT split into per-provider-level registries.** The single bundled NREMT import
+  is replaced by four individually-importable registries — **EMR, EMT, Advanced EMT
+  (AEMT), and Paramedic** — so a department imports only the level(s) it staffs. Each
+  carries that level's national recertification component (NCCR hours by topic area)
+  plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
+  advanced levels).
+- **Registry section categories — connect your courses to requirements.** Requirements
+  that distribute hours across topic-area sections (e.g. the NREMT levels' Airway /
+  Cardiology / Trauma / Medical / Operations) now actually link to something. Importing
+  such a requirement auto-creates a **training category per section** (matched by
+  registry code, deduped) and links the requirement to them. Tag a course, session, or
+  record with a section category and its hours count toward that requirement — the
+  compliance engine and the session→pipeline feed already credit category-matched
+  hours. Previously these sections resolved to nothing, so the requirement counted all
+  hours indiscriminately. The import picker now shows each requirement's sections, and
+  the result reports how many categories were created.
+- **Pick-and-choose registry import.** Clicking a registry no longer imports the whole
+  thing at once — it opens a picker that previews every requirement
+  (`GET …/requirements/registries/{name}/preview`) and lets the officer tick exactly
+  which to import (`POST …/import/{name}` with `registry_codes`). Requirements already
+  in the library are shown as "Imported" and locked out; the rest are pre-selected with
+  select-all/clear-all.
+- **Expanded NFPA registry.** Added seven more NFPA professional-qualification
+  standards as annual continuing-compliance requirements: Hazmat/WMD Responder (1072),
+  Technical Rescuer (1006), Fire Investigator (1033), Fire Inspector (1031), Fire &
+  Life Safety Educator/PIO (1035), Wildland Fire Fighter (1051), and Fire Department
+  Safety Officer (1521) — alongside the existing 1001/1002/1021/1041/1403/1500/1582.
+  Pro Board is unchanged.
+
+**Progress tracking**
+
+- **Progress-management UI** — officers open an enrolled member and, per requirement,
+  log numeric progress (hours/shifts/calls/courses), mark complete / in progress /
+  reopen, and verify (`PATCH /training/programs/progress/{id}`).
+- Marking any requirement **completed/verified/waived** now sets it to 100%, so
+  non-numeric types (**checklist, skills evaluation, certification, knowledge test**)
+  advance the rollup — previously only hours/shifts/calls moved progress.
+- **COURSES** requirements now compute progress (completed-course count over
+  required), auto-completing at 100%.
+- **Completion revert** — a completed enrollment reopens to _active_ if its progress
+  later drops below 100% (e.g. a new required requirement is added, or a value is
+  corrected down).
+
+**Recertification cycle (progress reset)**
+
+- **Manual reset** — for certifications that expire (e.g. NREMT's biennial recert),
+  an officer can clear accumulated progress and start a new cycle without
+  re-enrolling. In the progress modal, **Reset** on one requirement clears just that
+  item (`POST /training/programs/progress/{id}/reset`); **Start new cycle** resets
+  every requirement and returns the member to the first phase
+  (`POST /training/programs/enrollments/{id}/reset`). Both are confirmed and gated by
+  `training.manage`.
+- **Automatic reset on a stored deadline** — a pipeline can carry a recurring recert
+  cycle (Edit dialog): a cycle length in months plus an optional fixed calendar
+  anchor (reset month + day, e.g. March 30). Each enrollment tracks its
+  `next_recert_reset_at`; once it passes, the enrollment is reset for a new cycle and
+  the deadline advances. Resets apply lazily when the member's progress is opened (after
+  the view's permission check, never before), and `POST /training/programs/recert/run-due`
+  sweeps every past-due enrollment. That sweep now runs **daily at 5 AM** as a
+  registered scheduled task (`recert_resets` in `scheduled_tasks.py` — picked up by the
+  in-process scheduler and the documented crontab), so a member no one is watching still
+  resets on time. Only active/completed/expired members are auto-reset — a withdrawn,
+  failed, or on-hold member is never resurrected. Fields added by migration
+  `20260715_0001`.
+- **Reset notifications** — whenever a cycle resets (manual, on-view, or the sweep), the
+  member gets an in-app notification that their recertification cycle has started, with
+  the new deadline and a link to their progress; the assigned mentor is notified too.
+- **Audit trail** — resetting a requirement or a whole enrollment, withdrawing a member,
+  and running the recert sweep now write audit-log events (`log_audit_event`), matching
+  the rest of the training module. The withdrawal event records whether it was
+  self-service or officer-initiated.
+
+**Leaving a program**
+
+- **Self-service withdrawal** — a member can remove themselves from a program from
+  their progression view ("Leave program"), e.g. after stepping down from a
+  certification level they no longer need to maintain
+  (`POST /training/programs/enrollments/{id}/withdraw`; officers with
+  `training.manage` can withdraw anyone). The withdrawal is soft — the record is kept
+  for history but the enrollment leaves the member's active dashboard and stops
+  generating warnings, and they can be re-enrolled later. Reuses the existing
+  `WITHDRAWN` status (no migration).
+
+**Phases**
+
+- **Phase advancement** — enrollments auto-advance through consecutive complete phases
+  and stop at any phase flagged _requires officer approval_, which exposes a manual
+  **Advance to next phase** action (`POST /training/programs/enrollments/{id}/advance-phase`,
+  `force` to override the completeness check). The previously-unused phase-advancement
+  notification to the member and mentor is now sent.
+
+**Automatic feeds into pipeline progress**
+
+- **Training session attendance** now correctly advances the linked requirement —
+  percentage, completion, enrollment rollup, and phase advancement all run. (Previously
+  approving a program-linked session bumped a raw value but never computed the
+  percentage, so the pipeline showed 0%.) A session may link to a specific
+  **requirement**, or to a program + **category**, in which case it advances the
+  program's requirements tagged with that category.
+- **Certification-eligibility toggle** — a training session now carries a **"Counts
+  toward certification requirements"** flag (on by default; `counts_toward_certification`,
+  migration `20260716_0001`). Turn it off for a session that a certifying body (NFPA/NREMT)
+  wouldn't accept: attendance still creates the member's training record (they keep the
+  hours toward general compliance) but the session no longer feeds the linked
+  pipeline/certificate requirements, so ineligible hours don't inflate a certificate.
+- **External / synced courses → pipeline (opt-in)** — importing a training record from an
+  external provider (Vector Solutions, etc.) can advance the pipeline requirements it
+  satisfies by category, not just the compliance matrix. On import, for the member's
+  **active** enrollments, an HOURS requirement tagged with the record's category accrues
+  the record's hours and a COURSES requirement accrues one completion — routed through the
+  same updater as sessions, so percentage, auto-completion, rollup, and phase advancement
+  all run (`TrainingProgramService.credit_category_progress`, applied post-commit in
+  `bulk_import_records`). **A requirement only accepts imported credit when an officer opts
+  it in** via a new per-requirement `allows_external_credit` flag (off by default; migration
+  `20260717_0001`) — so a Vector "mobile radios" course never checks off a requirement the
+  department wants delivered in-house. When enabled, the same completion counts toward every
+  active program that requires the category; other requirement types are left for explicit
+  sign-off. The choice is **surfaced to the officer wherever a requirement is created or
+  edited** — the Requirements page, the create-pipeline wizard, and the pipeline requirement
+  editor each show a flagged callout (for hours/course requirements) that spells out the
+  current behavior and the toggle, so it's a deliberate decision rather than a hidden default.
+- **Officer applies self-reported training → pipeline** — a training officer can now credit
+  approved self-reported training toward a specific pipeline requirement, which is ideal for
+  **make-up sessions that had no scheduled training date**. It works two ways: when approving
+  a submission, the officer can pick a target program + requirement from the member's active
+  enrollments (`apply_to_program_id`/`apply_to_requirement_id` on the review), and an approved
+  submission can be applied **retroactively** from its card
+  (`POST /training/programs/apply-training-record`). Hours requirements gain the approved
+  hours, a course counts as one completion, and status-based requirements (certification /
+  skills / checklist / knowledge test) are marked complete — all through the real updater
+  (`TrainingProgramService.apply_training_to_requirement`), so rollup and phase advancement
+  run. Because it's an explicit officer sign-off, it bypasses the `allows_external_credit`
+  opt-in (which only gates the _automatic_ import feed). Audit-logged.
+- **Skills tests → pipeline** — a skill template carries a default **linked training
+  requirement** (each test inherits it, overridable per test via a new
+  `requirement_id` on `skill_templates`/`skill_tests`, migration
+  `20260714_0001`). Passing a non-practice test marks that requirement complete on the
+  candidate's active enrollment.
+- **Knowledge-test scoring** (lightweight) — an officer records a **pass/fail or score
+  percentage** on a `knowledge_test` requirement (`test_score` on the progress update).
+  Pass/fail is derived from the requirement's `passing_score` (default 70%); a pass
+  completes the requirement; **`max_attempts` is enforced** and attempt history is kept.
+  (A full online test-taking engine remains future work.)
+
+**Member-facing**
+
+- **Student progression view** (`/training/my-progress/:enrollmentId`, read-only) —
+  current phase ("You are here"), overall completion, time remaining / behind-schedule,
+  next milestones, and every requirement grouped by phase. Linked from _My Training_,
+  and now reachable in one tap from the dashboard's _My Training Progress_ widget
+  (the program card deep-links straight to its progression view).
+- **Numeric targets on requirements** — student requirement rows and the dashboard
+  "Next Steps" now show progress against the goal ("12 / 24 hrs", "2 / 3 shifts",
+  "1 / 4 courses", "Pass ≥ 70%"), with a mini fill bar on count-based items, instead
+  of a bare status. Status-only types (skills evaluation, certification, checklist)
+  keep just their status.
+- **Actionable "what to do next"** — each incomplete requirement now shows an
+  imperative hint keyed to its type ("Attend training sessions to log hours",
+  "Get signed off by an evaluator", "Pass the written test", …) on the progression
+  view and in the dashboard "Next Steps", so a student sees _how_ to advance, not
+  just the requirement's name. Completed requirements omit the hint.
+- **Requirement names now reach every progress view** — the program-requirement and
+  requirement-progress API responses carry the nested requirement, so the dashboard
+  widget, officer progress modal, and student progression view show the requirement's
+  real name/type instead of a generic "Requirement" label or a truncated ID.
+
+**Attendance**
+
+- **Soft phase gate** — RSVP and self check-in warn (and let the member proceed with an
+  override) when they sign up for a program-linked training session whose phase is ahead
+  of their current phase. Endpoints accept `?override=true` and return HTTP 409 with a
+  `{ "warning_type": "phase_gate", "message": … }` detail otherwise. Non-enrolled members
+  and officer-driven check-ins are never gated.
+
+**Editing & starter templates**
+
+- **Editable "Required" toggle** — a program requirement can be switched between
+  **Required** and **Optional** after creation from the program overview
+  (`PATCH /training/programs/programs/{program_id}/requirements/{program_requirement_id}`,
+  `training.manage`). Toggling it recomputes every active member's progress and
+  re-checks phase advancement, since the set of completion-counting items changed.
+  Members without `training.manage` see the label read-only.
+- **Built-in sample templates** — a "Start from a sample template" gallery on the
+  **Templates** tab offers three real-world-aligned starting points a training officer
+  can add with one click (`GET /training/programs/sample-templates`,
+  `POST /training/programs/sample-templates/{key}/instantiate`): a **Firefighter recruit
+  school** (NFPA 1001 Firefighter I & II + Hazmat Awareness/Operations + IFSAC/Pro Board
+  certification), an **EMT recruit school** (NREMT modules + clinical internship +
+  cognitive/psychomotor exams), and a **New-member orientation** (department
+  familiarization + mandatory annual compliance — HIPAA, OSHA Bloodborne Pathogens,
+  Hazard Communication, harassment prevention — + department-specific onboarding).
+  Adding one replays the atomic build into the org as an editable, department-owned
+  template.
+
+### Documenso & Cal.com Integrations (2026-07-13)
+
+**New integrations**
+
+- **Documenso** (open-source DocuSign alternative) and **Cal.com** (open-source
+  Calendly alternative) added to the integrations catalog. Both connect with an
+  encrypted API token/key, support Documenso Cloud / Cal.com Cloud or a
+  self-hosted instance via an SSRF-validated base URL, and expose a
+  test-connection check.
+
+**Membership pipeline**
+
+- A **Meeting** stage can use a **Cal.com** booking link so applicants
+  self-schedule; a **Document Upload** stage can collect a **Documenso**
+  e-signature instead of a file upload. Both options appear only when the
+  integration is connected (otherwise a "Connect it" deep-link is shown).
+- The public application-status page surfaces the current stage's action — a
+  **Schedule** button (Cal.com) or a signing note (Documenso). Booking URLs are
+  guarded to http(s) on both server and client.
+
+**Close the loop (webhooks + auto-advance)**
+
+- New verified public webhook receivers
+  (`POST /api/public/v1/webhooks/{documenso,calcom}/{integration_id}`, mirroring
+  the Salesforce webhook: per-IP rate limit, mandatory secret/signature
+  verification, audit logging). A completed signature (`DOCUMENT_COMPLETED`) or a
+  new booking (`BOOKING_CREATED`) auto-advances the matching prospect's stage,
+  correlated by signer/attendee email. Cal.com uses an HMAC-SHA256 body
+  signature (`X-Cal-Signature-256`); Documenso accepts a shared-secret header
+  (`X-Documenso-Secret`) or an HMAC signature.
+- The connect dialog gained a Webhook Secret field and displays the callback URL
+  to paste into each provider.
+
+**Beyond membership**
+
+- New `GET /api/v1/integrations/calcom/bookings` endpoint and a **Bookings**
+  panel on the Cal.com card listing upcoming bookings.
+
+**Docs**: new [Documenso](wiki/Integration-Documenso.md) and
+[Cal.com](wiki/Integration-Calcom.md) wiki references; expanded
+[Integrations](docs/training/16-integrations.md) and
+[Prospective Members](docs/training/15-prospective-members.md) training guides.
+
+### Mobile UX, Barcode Scanning & Design-System CSS (2026-07-11)
+
+**Barcode / QR scanning (mobile field use)**
+
+- **Rear-camera selection made reliable**: the scanner now hands html5-qrcode a
+  `facingMode: environment` constraint when no camera label clearly identifies
+  the rear camera, instead of defaulting to the first device — which on phones
+  with empty or localized labels frequently selected the _front_ camera.
+- **Flashlight (torch) toggle**: a feature-detected flashlight button appears in
+  the scanner when the camera supports it, for scanning gear in dim apparatus
+  bays. Works on both the native `BarcodeDetector` and html5-qrcode paths.
+- **Scan-success feedback**: a brief green flash plus a haptic pulse
+  (`navigator.vibrate` on Android; the flash carries the cue on iOS) confirms
+  each capture, so users scanning with gloves at arm's length aren't left
+  guessing.
+- **Native BarcodeDetector verified before use**: `getSupportedFormats()` is
+  checked so Android builds that expose the API but support none of our formats
+  fall back to html5-qrcode instead of silently scanning nothing.
+- **Clearer camera errors and a responsive scan box**: an actionable "requires
+  HTTPS" message on insecure origins (where the camera APIs are absent), and a
+  scan region that fits the live viewfinder instead of a fixed 250px box.
+
+**Barcode / QR generation & printing**
+
+- **Digital ID card**: the barcode no longer overflows narrow phones (long
+  membership numbers scale to fit) and the QR gained its quiet zone for reliable
+  phone-to-phone scanning.
+- **Check-in QR card no longer force-prints**: opening it on a phone to view the
+  code no longer throws the user into the OS print dialog; auto-print now only
+  fires from the explicit "Print QR Card" action, and a missing apparatus shows
+  an error instead of a broken code.
+- **Label printing on mobile**: label previews scroll horizontally instead of
+  overflowing, barcode SVGs are width-constrained, and the print action falls
+  back to the server-generated PDF on touch devices (mobile Safari prints blank
+  from a hidden iframe).
+
+**Mobile interface**
+
+- **Overflow fixes**: `viewport-fit=cover` (so safe-area CSS actually applies on
+  notched phones), horizontally-scrollable tab bars, a non-overflowing date
+  range picker, and dense analytics charts that scroll with a legible minimum
+  bar width.
+- **Pull-to-refresh** is now available app-wide via a layout-level gesture that
+  pages opt into (Dashboard, Members, Events, Inventory), replacing the
+  Dashboard-only implementation.
+- **Touch ergonomics**: row/table actions that were revealed only on hover now
+  work on touch; sub-44px tap targets were enlarged; numeric fields trigger a
+  number-pad keyboard; date/time inputs no longer zoom on iOS; and sticky/fixed
+  bottom action bars clear the home indicator.
+- **Tooltips** open on tap and auto-dismiss on touch devices.
+
+**Performance**
+
+- Scanner/barcode/drag-and-drop libraries (~465 KB) no longer load at the login
+  screen — they were being pulled into the eager bundle by unused module-barrel
+  re-exports; they now load on demand with their pages. Non-critical images are
+  lazy-loaded.
+
+**Design-system CSS**
+
+- Recurring mobile patterns are consolidated into shared `@utility` classes
+  (`tab-scroll`, `hscroll`, `pb-safe`, `action-bar-safe`) instead of ad-hoc
+  inline classes, and the stylesheet was formatted with Prettier, grouped with
+  section headers, and documented with usage notes.
+
+### Training Requirement Templates & Create Form (2026-07-08)
+
+- **Fixed templates that applied to nobody**: three of the four built-in
+  requirement templates set `applies_to_all: false` with no member targeting,
+  which the compliance filter treats as matching no one — requirements created
+  from them never appeared in any member's compliance view. The create form
+  now also blocks saving any requirement that would apply to nobody.
+- **Template selection pre-fills the create form** instead of saving
+  immediately, so officers review hours, due dates, and assignment first.
+- **Template data corrected and expanded to ten templates**: NREMT EMT
+  recertification corrected to 40 hours per 2-year cycle, CPR/BLS to a 2-year
+  certification cycle; added NFPA 1500 safety training, OSHA bloodborne
+  pathogens refresher (29 CFR 1910.1030), HIPAA privacy & security awareness
+  (45 CFR 164.530(b)), SCBA fit test/respiratory protection checklist
+  (29 CFR 1910.134), one-time NIMS/ICS certification courses, and a
+  probationary-member onboarding checklist. Standards-based templates carry
+  NFPA/NREMT/OSHA/HIPAA/FEMA source attribution with the standard or CFR
+  citation as registry code.
+- **Create form supports all requirement types**: per-type quantity fields
+  (course list, shifts, calls, checklist items, passing score/max attempts)
+  with client-side validation mirroring the backend validator — previously
+  only hours were collected, so other types failed with a generic 422. The
+  backend-supported `knowledge_test` type was added to the type dropdown.
+- **Duplicate copies all fields**: duplicating a requirement previously
+  dropped shifts/calls/skills/checklist/passing-score/registry fields,
+  failing validation or silently losing data.
+
+### Dead-Code Cleanup (2026-07-03)
+
+Codebase-wide review for deprecated/unused code (training module excluded — it
+was reviewed separately). Only items verified to have zero live callers were
+removed.
+
+- **Removed ~1,900 lines of orphan/deprecated code**: two never-imported backend
+  services (`onboarding_session.py`, which also carried a duplicate
+  `OnboardingSessionModel`, and `integration_services/notification_dispatcher.py`),
+  nine dead frontend files (superseded `DepartmentInfo` onboarding page, a
+  duplicate top-level `types/minutes.ts`, `security-init.ts`, an unwired
+  `InlineConfirmAction` UX component, four unused hooks, and a dead
+  `MinutesDetailPage` re-export shim), and several `@deprecated` exports with no
+  importers (temp-token no-op getters, superseded onboarding API methods, and
+  redundant `RoleSetup`/`AdminUserCreation` barrel aliases).
+- **Dropped 14 dead columns** (migration `20260703_0001`) that were defined on
+  models but never read or written: `audit_logs.{sensitive_data_encrypted,
+server_id, process_id}`, `audit_log_checkpoints.{verification_status,
+verification_details}`, `users.email_verified_at`, `prospects.{application_date,
+converted_to_user_id, converted_at}` (conversion tracking superseded by the
+  membership-pipeline module), `sessions.device_info`, `donations.{receipt_sent_at,
+thank_you_sent_at}`, `ip_exceptions.cidr_range`, and
+  `blocked_access_attempts.request_headers`. Paired live booleans (`email_verified`,
+  `receipt_sent`, `thank_you_sent`) were kept. The migration guards each drop with
+  an existence check and discovers the auto-named FK on `converted_to_user_id` via
+  the inspector.
+- **Removed 38 unused Pydantic schema classes** (no importers, not used as
+  `response_model`, base class, or nested field) across `schemas/{reports,
+inventory, apparatus, membership_pipeline, public_portal, finance, integration,
+document, minute, user, election, equipment_check, forms, grant, location,
+operational_rank}.py` — including the dead "report aggregate" cluster in
+  `reports.py` (`MemberRosterReport`/`TrainingSummaryReport`/`EventAttendanceReport`
+  and their entry sub-schemas). Pure code deletion, no DB impact.
+- **Consolidated the duplicate `schemas/document.py` into `schemas/documents.py`.**
+  The two modules defined same-named `DocumentCreate`/`DocumentUpdate`/`DocumentResponse`
+  classes for the same `documents` table — a footgun where an import's shape
+  depended on which module it came from. The `document.py` classes are a distinct
+  projection (the minutes-publish flow renames columns: `name`→`title`,
+  `file_type`→`mime_type`, `uploaded_by`→`created_by`), so they were moved into
+  `documents.py` under clear names (`PublishedDocumentResponse`,
+  `ServiceDocumentCreate/Update`, `ServiceFolderCreate/Update`) rather than merged
+  field-for-field, and the two importers (`document_service.py`, `minutes.py`) were
+  updated. `document.py` was deleted. No API behavior change.
+- **Removed 9 superseded `DocumentService` CRUD methods** (~170 lines) —
+  `create`/`update`/`delete` folder & document, `get_folder`,
+  `get_folder_document_count`, `list_documents`. `DocumentService` is only
+  instantiated for the minutes-publish flow (`publish_minutes`), whose call
+  chain never reaches these; the document CRUD surface is owned by the plural
+  `DocumentsService`. Also removed the now-orphaned `Service*Create/Update`
+  schemas and the dead-method test cases (keeping the HTML-render / timezone
+  tests). `PublishedDocumentResponse` and the minutes-publish flow are unchanged.
+- Forward-looking config stubs (S3/Azure/GCS storage, LDAP) and legacy
+  **data-format** handlers were intentionally left in place.
+
+### Training Module — Security Review & Hardening (2026-07-02)
+
+A full security review of the training module (endpoints, services, models,
+schemas, and frontend) closed several cross-tenant and input-handling gaps and
+resolved a set of schema/data-integrity inconsistencies.
+
+#### Cross-tenant access fixes (IDOR / tenancy)
+
+- **Training approval is now an authenticated, org-scoped officer action.** `POST /training/sessions/approve/{token}` previously required only a valid session — any authenticated user in any organization who obtained a (emailed, forwardable) approval token could finalize another org's training session, forging `TrainingRecord` rows and overriding check-in/out times. It now requires `events.manage` **and** binds the token lookup to the caller's `organization_id`. The companion `GET /training/sessions/approve/{token}` (which returns attendee names/emails) was made consistent — same permission and org scoping — instead of being an unauthenticated token-only endpoint. (`events.manage` matches the rest of the training-session lifecycle: `create`/`finalize` are also `events.manage`.)
+- **Submission review/update/delete are org-scoped in the service layer.** `TrainingSubmissionService.get_submission` now filters by `organization_id`, so `POST /training/submissions/{id}/review` (and update/delete) can no longer act on another org's submission by ID. Previously only the read endpoint compensated with a manual org check; the review path had none
+- **External-import target users are validated against the caller's org.** `POST …/imports/{import_id}/import` and `…/imports/bulk` no longer trust the `user_id` in the request/mapping — a new `_verify_user_in_org` guard ensures a forged/mismatched user ID can't stamp a completed training record onto a member of another organization
+- **xAPI actor lookup is org-scoped.** `XAPIService.ingest_statement` matches the actor email within the caller's organization only, preventing a statement (and the training record it later produces) from attaching to a same-email user in a different org
+- **Program enrollment validates the enrolled user's org** (`enroll_member` / `bulk_enroll_members`)
+
+#### Input handling & data protection
+
+- **SSRF protection on external training providers.** Provider `api_base_url` is now validated with `validate_integration_url()` (HTTPS-only, blocks private/loopback/link-local IPs and cloud-metadata hosts) both when a provider is created/updated and again before every server-side request in the sync service. Upstream connection/category-sync errors are passed through `safe_error_detail()` instead of echoing raw exception text back to the client
+- **CSV formula-injection protection.** All training report exports (individual, bulk, compliance, hours-summary, certification) now write through a new `SafeCsvWriter` (`app/utils/csv_export.py`) that neutralizes cells beginning with `=`, `+`, `-`, `@`, tab, or CR — these exports carry attacker-influenceable free-text (course names, instructors, synced provider fields) and are opened in Excel/Sheets
+- **Enum validation at the schema boundary.** `training_type`, `status`, and `frequency` request fields (typed as plain strings for client compatibility) now validate — and lowercase — against the model enums via a shared `validate_enum_value` helper (`app/schemas/enum_validation.py`), returning a clean `422` instead of a `500` at DB flush. The JSON program-import path coerces the same enum fields
+- **Attachment download is confined to the attachment directory.** `GET …/records/{id}/attachments/{index}/download` resolves the stored path with `os.path.realpath` and rejects anything outside `TRAINING_ATTACHMENT_DIR` (defense-in-depth against a future path-traversal via the attachments JSON column)
+- **Negative-value guards** on self-report submission create and officer overrides (hours/credit hours)
+
+#### Frontend
+
+- **Per-member training endpoints excluded from the client API cache.** Added `/training/compliance-summary/`, `/training/requirements/progress/`, `/training/competency/`, `/training/recertification/tasks/`, `/training/module-config/my-training`, `/training/programs/enrollments/`, and `/training/instructors/qualifications` to `UNCACHEABLE_PREFIXES` (HIPAA cache rule + shorter authorization-revocation window)
+- **Print routes gated.** `/training/print/member` and `/training/print/program` are now wrapped in `<ProtectedRoute>` (were auth-only via the backend), matching the compliance print page
+
+#### Schema & data-integrity fixes
+
+- **Reconciled the two divergent schemas for the `training_requirements` table.** The "Enhanced" requirement schemas (`schemas/training_program.py`, used by `/training/programs/requirements`) disagreed with the base schemas (`schemas/training.py`): `required_courses`/`required_skills` are now `List[str]` (flat arrays of id strings, matching the model columns and the compliance evaluator's `str(course_id) in required_courses` membership test — the previous `List[Dict]` form never matched); `required_roles` is `List[str]` (role slugs — the previous `List[UUID]` type would crash the response serializer on a slug value); and `applies_to_all` defaults to `True`, matching the model column and base schema so the same table isn't created with conflicting defaults depending on which endpoint is used. The frontend already sent `string[]` and an explicit `applies_to_all`, so existing clients are unaffected
+- **Training-record scores may be point totals, not just percentages.** `TrainingRecord.score`/`passing_score` drop the `le=100` cap (keep `ge=0`), per the model column's documented "percentage or points" intent — a raw score like 145/150 was previously rejected with a 422. The requirement-level `passing_score` (a knowledge-test percentage threshold) keeps its 0–100 bound
+- **Actor/audit foreign keys are now `ON DELETE SET NULL`** (migration `20260702_0001`). All 28 audit references in the training module (`created_by`, `updated_by`, `approved_by`, `reviewed_by`, `verified_by`, `finalized_by`, `enrolled_by`, `mapped_by`, `initiated_by`, `granted_by`, `evaluated_by`, `evaluator_id`, `last_evaluator_id`) were bare `ForeignKey("users.id")` with no `ondelete`, defaulting to MySQL RESTRICT — deleting a user who had ever touched the training module failed with FK error 1451. They now clear the actor link (preserving the historical record) on user deletion. `skill_checkoffs.evaluator_id` was additionally relaxed from NOT NULL so SET NULL is legal. The migration discovers the existing MySQL auto-named constraints via the inspector at run time, drops them, and recreates each with `ON DELETE SET NULL`
+
+#### Repo maintenance surfaced during the review
+
+- Re-parented migration `20260622_0001` onto `20260618_0200` to restore a single Alembic head
+- Allowlisted `auth.py:mfa_login` in the endpoint auth-coverage test (the second factor of login is pre-auth by design, gated by the short-lived `mfa_pending` token)
+
+### Onboarding, MFA & Password Policy Fixes (2026-06-25)
+
+- **Onboarding guard restored**: The render gate that blocks access to the application until onboarding is complete was inadvertently removed during the MFA merge. Restored so unauthenticated users cannot bypass the initial setup wizard
+- **Password minimum-age policy bypass**: Mandatory password changes (e.g., admin-forced reset, first-login) were being blocked by the password minimum-age policy, preventing users from changing their password when required. The minimum-age check now skips enforcement when `must_change_password` is set
+- **EMT position in onboarding**: The "EMT" position is now included in the default Operational Ranks template during onboarding, matching the 9 standard shift positions used elsewhere in the scheduling module
+- **Login block until configured**: The `/login` page is now blocked with a setup prompt until the application has completed initial configuration (organization created, admin user set up). Prevents confusion when accessing a fresh installation before onboarding
+
+### Inventory Impact Planner — Demand Forecasting & Bulk Operations (2026-06-22)
+
+- **Impact Planner page** at `/inventory/admin/impact-planner` (`inventory.manage`) allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations (issue, reorder, size requests) from a single analysis. Targets a filtered subset of the roster (by status, rank, station, membership type, position) and analyzes who needs a given item category, broken down by size
+- **Stock-aware shortfall analysis**: when both a `size_field` and `stock_category_id` are provided, the planner queries on-hand pool stock per size, calculates `shortfall = max(0, needing - on_hand)` per size, and surfaces the purchase quantity needed — not just what members need, but what must actually be ordered
+- **Cost estimation**: items with `replacement_cost` or `purchase_price` feed per-size unit costs into the shortfall analysis, producing `estimated_cost = shortfall × unit_cost` per size and a total purchase cost estimate across all sizes
+- **One-click reorder generation** (`POST /api/v1/inventory/impact-planner/reorder`): re-runs the analysis server-side (tamper-proof), creates one `ReorderRequest` per size with shortfall > 0, pre-fills vendor/urgency/unit cost/note (e.g., "Generated from impact plan (Shirt Medium): 7 needed, 3 on hand"), all in PENDING status for quartermaster review. Returns `{created_count, total_quantity, reorder_ids}`
+- **Replacement-aware targeting**: when `replacement_aware=true` with a `related_category_id`, the planner checks each member's held items for serviceability (condition, NFPA retirement). Members with only worn-out/expired items are flagged `needs_replacement=true` and counted in the purchase total. UI badges them as "Replace" vs "Needs item" separately
+- **Bulk-issue from planner** (`POST /api/v1/inventory/impact-planner/issue`): iterates each member who needs the item, looks up their size preference, finds the first available pool item matching that size in the stock category, issues 1 unit via `issue_from_pool()`, decrements on-hand. Skips members without size on file, no matching stock, or over their allowance (with reasons logged). Returns `{issued_count, skipped_count}` with per-member detail
+- **Saved/named plans** (`inventory_impact_plans` table, migration `20260622_0001`): the entire filter set (statuses, ranks, size_field, stock_category_id, replacement_aware, allowance_aware, etc.) can be saved with a human name and description for reuse. CRUD via `GET`/`POST`/`PATCH`/`DELETE /api/v1/inventory/impact-planner/plans`. Use cases: annual uniform refresh, seasonal PPE cycle, onboarding kits
+- **Allowance-aware warnings**: when `allowance_aware=true`, the planner queries `IssuanceAllowance` records for the category, calculates each member's `issued_this_period`, flags members at or over their `max_quantity` as `over_allowance=true`. Bulk-issue skips them with reason "Allowance exceeded". UI shows an "over allowance" badge
+- **Request sizes from members** (`POST /api/v1/inventory/impact-planner/request-sizes`): identifies members who need the item but have no size on file, sends each an in-app notification directing them to `/inventory/my-equipment` to add their `MemberSizePreferences`. Returns `{notified_count}`
+- **Printable PDF summary** (`POST /api/v1/inventory/impact-planner/pdf`): generates a branded PDF with org name, analysis date, filter parameters, size breakdown table, and optionally contact columns (email/phone) based on org visibility settings. Returns `application/pdf` attachment
+- **Carried cost estimate**: when generating reorder requests from a plan, the estimated unit cost from the analysis is carried onto each reorder request so the quartermaster sees the projected cost in the approval workflow
+- **Privacy compliance**: member contact info (email, phone) in the planner respects `org.settings.contact_info_visibility`, mirroring the member-list endpoint's privacy controls. "Unknown" sized members are bucketed and sorted last; reorder generation skips them (can't order for unknown sizes)
+- **Real-time updates**: bulk operations publish `inventory_changed` events via WebSocket so other connected users see updates immediately
+
+**New API Endpoints:**
+
+| Method   | Path                                               | Description                                                                    |
+| -------- | -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `GET`    | `/api/v1/inventory/impact-planner/options`         | Filter options (statuses, ranks, stations, positions, categories, size fields) |
+| `POST`   | `/api/v1/inventory/impact-planner`                 | Analyze impact of a prospective issue                                          |
+| `GET`    | `/api/v1/inventory/impact-planner/plans`           | List saved plans for the organization                                          |
+| `POST`   | `/api/v1/inventory/impact-planner/plans`           | Save a new plan with its filter set                                            |
+| `PATCH`  | `/api/v1/inventory/impact-planner/plans/{plan_id}` | Update a saved plan                                                            |
+| `DELETE` | `/api/v1/inventory/impact-planner/plans/{plan_id}` | Delete a saved plan                                                            |
+| `POST`   | `/api/v1/inventory/impact-planner/reorder`         | Generate reorder requests from shortfall analysis                              |
+| `POST`   | `/api/v1/inventory/impact-planner/issue`           | Bulk-issue on-hand stock to members who need it                                |
+| `POST`   | `/api/v1/inventory/impact-planner/request-sizes`   | Send size-request notifications to members                                     |
+| `POST`   | `/api/v1/inventory/impact-planner/pdf`             | Generate printable PDF summary                                                 |
+
+**New Database Table:**
+
+| Table                    | Columns                                                                                    | Description                    |
+| ------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------ |
+| `inventory_impact_plans` | `id`, `organization_id`, `name`, `description`, `filters` (JSON), `created_by`, timestamps | Saved impact planner scenarios |
+
+**Edge Cases:**
+
+| Scenario                                           | Behavior                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Member with no size preference                     | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation                |
+| Size labels with different casing ("S" vs "small") | Normalized for matching                                                            |
+| Stock category with varying costs per size         | Average unit cost used for estimation                                              |
+| Bulk-issue exhausts stock mid-run                  | Issues what's available; remaining members skipped with "no matching stock" reason |
+| Allowance check on member with no matching rule    | Org-wide rule (role_id=NULL) applies; if none exists, no limit enforced            |
+| Plan filters reference deleted rank/station        | Analysis runs with remaining valid filters; deleted values silently ignored        |
+| Replacement-aware with no NFPA tracking            | Falls back to condition-based serviceability check                                 |
+| PDF with contact visibility set to "hidden"        | Email and phone columns omitted from PDF                                           |
+| Reorder from plan with zero shortfall              | No reorder requests created; returns `created_count: 0`                            |
+
+---
+
+### Onboarding & Login Hardening (2026-06-25)
+
+- **`/login` is now blocked until the app is configured.** On mount the login page calls `GET /api/v1/onboarding/status`; when `needs_onboarding` is true it redirects to `/onboarding` instead of rendering the sign-in form (an unconfigured install has no accounts to sign into). A spinner is shown while the check is in flight so the form never flashes before the redirect; if the status check fails the page falls back to rendering normally. This closes the gap where a user could reach `/login` directly and bypass the Welcome splash (`frontend/src/pages/LoginPage.tsx`, regression-tested in `LoginPage.test.tsx`)
+- **First-login forced password change is no longer blocked by the minimum-password-age policy.** A user created by an admin (or self-registration, or an admin reset with `force_change`) carries `must_change_password=True` together with a fresh `password_changed_at`. The HIPAA minimum-password-age check (`HIPAA_MINIMUM_PASSWORD_AGE_DAYS`, default 1) previously rejected their _required_ first change with "Password was changed recently…", trapping the user until an admin reset. `AuthService.change_password` now **skips the minimum-age check when `must_change_password` is set**; normal (voluntary) changes still enforce it, so the anti-cycling protection is preserved rather than weakened (`backend/app/services/auth_service.py`, tested in `backend/tests/test_password_min_age.py`)
+- **EMT added to the onboarding "Operational Ranks" position template.** The setup wizard's operational-rank list (Fire Chief → Firefighter) was missing EMT even though the backend already seeds `emt` in `DEFAULT_RANKS` and lists it as an operational role slug. EMT is now a selectable operational rank in **Set Up Positions & Permissions**, with a distinct medical icon (`frontend/src/modules/onboarding/pages/RoleSetup.tsx`)
+- **Optional modules now show a clear "Enabled" state.** In the onboarding **Choose Your Modules** step, an enabled optional module's button turns solid green with a check and reads "Enabled" (and the card gains a green border/ring), instead of looking identical to a not-yet-enabled module. Adds `aria-pressed` for screen readers (`frontend/src/modules/onboarding/pages/ModuleOverview.tsx`)
+
+### Inventory — Impact Planner (2026-06-23)
+
+- **New Quartermaster planning tool** at `/inventory/admin/impact-planner` (`inventory.manage`) for scoping a prospective new issue (e.g. a new department jacket) end-to-end. Filter the roster by status, membership type, rank, station, and corporate position; each matched member shows the size they need (from `member_size_preferences`), whether they already hold a comparable item (active assignment or pool issuance in a chosen category), and gated contact details. New table `inventory_impact_plans` and migration `20260622_0001`
+- **Stock-aware shortfall**: with a stock category + size field, per-size demand is netted against available on-hand stock (pool `quantity − quantity_issued`; available individual units) to show the exact quantity to purchase. Sizes are matched on a normalized key (drops boot-width/parenthetical notes; canonicalizes alpha-size aliases like `3XL`↔`XXXL`, `Medium`↔`M`). Members with no size on file can't be matched and carry their full demand to the shortfall
+- **Cost estimate**: per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback for sizes with no priced items)
+- **Replacement-aware** (opt-in, with a related category): members whose only held items are worn (poor/damaged/out-of-service) or past NFPA retirement count as needing a replacement rather than being excluded
+- **Allowance-aware** (opt-in, with a stock category): flags members at/over their per-category `issuance_allowances` cap before a bulk issue would skip them (role-specific allowance beats org-wide; batched, not per-member)
+- **Act on the plan**: `POST /inventory/impact-planner/reorder` drafts one pending, pre-priced reorder request per shortfall size; `POST …/issue` bulk-issues matching on-hand pool stock via the existing `issue_from_pool` flow (respects allowances, reports skips with reasons, publishes an `inventory_changed` WebSocket event); `POST …/request-sizes` sends an in-app notification to members with no size on file linking to self-service preferences
+- **Share & reuse**: `POST …/pdf` streams a print-ready PDF summary (reportlab); the member list exports to CSV client-side; named plans are saved/loaded via `GET/POST/PATCH/DELETE …/plans`
+- **Endpoints**: `GET …/options`, `POST /inventory/impact-planner` (analyze), `…/reorder`, `…/issue`, `…/request-sizes`, `…/pdf`, and `…/plans[/{id}]` — all `inventory.manage`. The analyze filter set is reused by reorder/issue/pdf and stored verbatim by saved plans
+- **Privacy**: `analyze`/`pdf` resolve member contact visibility from the org's `contact_info_visibility` settings (enabled + per-field email/phone/mobile), matching the member list, rather than exposing contact info on permission alone
+- **UI/UX**: filter panel with multi-select groups, summary stat cards, a horizontal-bar size breakdown, a sortable + mobile-responsive impacted-member table, skeleton/empty states, and inline reorder/issue/request-sizes actions. Frontend page `modules/inventory/pages/ImpactPlannerPage.tsx`; service methods on `inventoryService`. Covered by backend unit tests, frontend component tests, and a Playwright E2E spec
+
+### Two-Factor Authentication — TOTP (2026-06-19)
+
+- **App-based MFA (TOTP)** is now fully implemented end-to-end. Members enroll from **Settings → Security** (`MfaSettingsCard`): the backend issues a secret + `otpauth://` provisioning URI rendered as a QR code, the member confirms with a 6-digit code, and a one-time set of **recovery codes** is shown (displayed once, stored hashed). Secret and recovery codes are encrypted at rest (Fernet via `encrypt_data`/`decrypt_data`); no migration was needed (existing `mfa_secret`/`mfa_backup_codes` model fields)
+- **Login challenge**: when an account has MFA enabled, `POST /auth/login` no longer issues session cookies — it returns `{ mfa_required: true, mfa_token }` (a short-lived pending token). The client completes the second step at `POST /auth/mfa/login` with the `mfa_token` plus either a TOTP `code` or a `recovery_code`; only then are full session cookies issued. TOTP verification accepts the current step ±30 s for clock drift; a consumed recovery code is removed from the stored set
+- **Org-wide requirement (admin)**: a department can require MFA for everyone via **Settings → Authentication** (`MfaPolicyCard`, `GET`/`PUT /auth/mfa/policy`, stored in `org.settings`). Enforcement is **server-side** in `get_current_user` — an un-enrolled member is blocked from all but the enrollment/session paths until they set up MFA, and `/auth/me` surfaces `mfa_enrollment_required` so the frontend can force the setup flow (`ProtectedRoute` redirect). The org policy check is skipped for already-enrolled users to avoid a per-request query
+- **Admin MFA reset (lost device)**: an administrator (`users.create`/`members.manage`) can reset a member's MFA via a **Reset MFA** action on the Members admin page or `POST /users/{user_id}/reset-mfa` (org-scoped, rate-limited, audit-logged `admin_mfa_reset`). It clears the member's secret/recovery codes and revokes their sessions so they re-enroll cleanly; admins can't reset their own MFA this way
+- **Self-service recovery-code regeneration**: members can mint a fresh set of recovery codes from **Settings → Security** (`POST /auth/mfa/recovery-codes`, requires a current TOTP code; the new set replaces the old and is shown once). The Security card also warns when codes are running low (≤3) or exhausted
+- **Account-security notifications**: enabling, disabling, regenerating codes, or an admin reset now notifies the affected member ("if this wasn't you, contact an administrator"). The in-app notification is written synchronously in the request transaction; the email is dispatched to a FastAPI background task (its own DB session) so SMTP I/O never blocks the response. New `app/utils/security_notifications.py` helper; failures never block the security action
+- **Backend**: new `app/services/mfa_service.py` (`generate_secret`, `provisioning_uri`, `verify_totp`, `generate_recovery_codes`, `normalize_recovery_code`), `create_mfa_pending_token` in `core/security.py`, MFA endpoints in `auth.py` (`/mfa/login`, `/mfa/setup`, `/mfa/verify-setup`, `/mfa/disable`, `/mfa/status`, `/mfa/policy`), and `MFALogin`/`MFAPolicy` schemas. **Frontend**: `authService` MFA methods, `authStore` MFA challenge state (`completeMfaLogin`/`cancelMfa`), and the two-factor step on `LoginPage`
+
+### Shift Scheduling — Platoon Rotations, Leave Integration & Hold-Over Roster (2026-06-19)
+
+- **Platoon membership is now a person-level attribute** (`User.platoon`, migration `20260618_0100`), matching how fire departments actually staff: each member belongs to a platoon (A/B/C, etc.) and the schedule is built from that membership rather than ad-hoc per-shift assignment. Members see their platoon on their profile/assignments; managers assign it from the member admin UI with a one-click control + card badge
+- **Multi-platoon rotation generation** follows the fire-service standard: every platoon runs the same cycle offset by `i × cycle_length / num_platoons` days (24/48 → offsets 0/1/2; Kelly 9-day → 0/3/6; 48/96 → 0/2/4), so the platoons tile to exactly one on-duty platoon per day. Verified the offset math tiles cleanly for the common presets
+- **Leave is connected to shift generation**: generated platoon shifts reflect the platoon's _actual_ makeup — a member on approved leave is omitted from the shifts they'd otherwise staff, and approving leave cancels the member's conflicting generated shifts. The **shift detail** view shows a **hold-over roster** of available members (same org, not on leave, not already assigned) with a **one-click Assign** so a supervisor can fill a gap or hold a member over. The shift's platoon is stored on the row (`Shift.platoon`, migration `20260618_0200`)
+- **Department toggle (opt-in)**: the entire platoon system is **off by default** and enabled per-org via `org.settings["scheduling"]["platoons_enabled"]`. When off, the scheduling module behaves exactly as before (no platoon fields/roster surfaced)
+- **Department platoon overview & bulk assignment**: a new **Platoon Management** page (`/scheduling/platoons`, linked from Settings → Platoons) shows every platoon and the unassigned bucket with their members, and lets a manager bulk-assign members to a platoon (or clear it) in one request. Endpoints `GET /scheduling/platoons/overview` (`scheduling.view`) and `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`, org-scoped/IDOR-safe, audit `platoon_bulk_assigned`)
+
+### Security & Tenancy Hardening (2026-06-19)
+
+- **Training IDOR / tenancy fixes**: `GET /training/submissions/{id}` now checks the org boundary first, then owner-or-`training.manage` (was leaking other members' submissions to any same-org member); waiver create, bulk record create, and historical-import confirm now validate every `user_id` against an org-scoped member set instead of trusting the client; `GET /training/records` confines non-officers to their own records
+- **Shift swap-request validation** tightened so a swap can only target valid, in-org shifts/members
+- **Public event-request abuse controls**: `POST /event-requests/public` now uses the real client IP (`get_client_ip`, XFF + trusted-proxy aware) for abuse tracking and is behind a **per-IP rate limit** (`check_ip_rate_limit`, 10/min)
+- **`must_change_password` is now enforced server-side**: `get_current_user` blocks a flagged user from all but the password-change/session paths until they change it (previously only the frontend honored the flag)
+- Assorted documentation and build fixes surfaced during the review loop (see `docs/review-log.md`)
+
+### Cross-Module Barcode Label Printing (2026-06-10)
+
+- Barcode-label printing is now a **shared, module-neutral system** so any module can print labels with its own per-position remembered printer. Backend: `app/utils/label_renderer.py` (the `LabelSpec` + Avery-sheet/thermal renderer, extracted from inventory), `app/services/label_service.py` (per-module spec-builder registry + the per-position/per-module preset, moved off `InventoryService`), and generic endpoints `app/api/v1/endpoints/labels.py`: `POST /labels/generate`, `POST /labels/preview`, and `GET`/`PUT /label-preset/{module}` (each gated by the module's view permission)
+- **Wired for** inventory, **apparatus**, **prospective-members (outreach)**, **facilities**, and **membership**, each mapping its own records to a label (apparatus → unit/asset tag, prospect → applicant badge from the status token, facility → facility number, member → membership number). Frontend: a reusable `components/labels/LabelPrintPage.tsx` + `services/labelService.ts`, mounted by thin per-module routes at `/{module}/print-labels?ids=…` (apparatus, facilities, prospective-members, members). The existing inventory print page is unchanged
+- **Reachable from each list page**: Members and Prospective Members get a bulk **Print Badges** button on their selection bar; Apparatus gets a per-row **Print label** action; Facilities gets a header **Print Labels** button (prints all). Each navigates to its module's `/print-labels` page with the chosen ids
+- The label-printer preset remains **per-position and per-module** (`positions.settings["label_presets"][module]`); generation is read-only for the preview and the generic path (no barcode writes), while inventory's own print page keeps assigning sequential barcodes
+
+### Inventory — Per-Position, Per-Module Label Printer Preference (2026-06-10)
+
+- The barcode label print page remembers the chosen **printer/size per position and per module**, so a role's printer choice follows whoever fills it (on any computer) and can differ by area of the app — the Quartermaster's _inventory_ printer, the apparatus team's _apparatus_ printer, the outreach team's printer, etc. Stored on the member's highest-priority position in a new nullable `positions.settings` JSON column, namespaced by module: `settings["label_presets"][module]`. Resolved via the existing primary-position lookup. Migration `20260610_0002`
+- **Endpoints**: `GET /inventory/label-preset` (returns `{ preset, custom_width, custom_height, position_id, module }`, `preset` null when unset) and `PUT /inventory/label-preset` (`{ preset, custom_width?, custom_height? }`) — both `inventory.view`, scoped to the `inventory` module. Saving one module's preset preserves the position's other modules' presets. The frontend loads the position preset on mount (overriding the local default), debounces saves, and keeps a `localStorage` copy as an instant/offline fallback. An org-wide setting was deliberately avoided so multi-section departments aren't forced onto one printer
+
+### Inventory — Issuance Allowances, Member Size Preferences & Request Fulfillment (2026-06-09)
+
+#### Issuance Allowances — Per-Category Issue Limits
+
+- **New concept (now wired end-to-end)**: an **issuance allowance** caps how many units of a category a member may receive in a period (e.g., "3 job shirts per year per firefighter"). Configured on the new **Allowances** admin page at `/inventory/admin/allowances` (requires `inventory.manage`). The `issuance_allowances` table existed since `20260304_0300`; this change adds the admin UI, enforcement, and audit logging on top of it
+- **Table** `issuance_allowances`: `organization_id` (FK, indexed), `category_id` (FK to `inventory_categories`, indexed), `role_id` (FK to `positions`, **NULL = applies to all members**), `max_quantity` (Integer, non-negative), `period_type` (`annual` | `career` | `one_time`, default `annual`), `is_active`, `created_by`, timestamps. **Unique constraint** `(organization_id, category_id, role_id)` — one rule per org/category/role
+- **Enforcement** (`InventoryService.issue_from_pool`): before a pool issuance, `_enforce_issuance_allowance()` resolves the member's **highest-priority position** (`_get_primary_role_id`, ordered by `priority DESC`) and calls `check_allowance()`. Only **POOL-tracked** items in the category count toward the total. `annual` counts issuances since Jan 1 (UTC) of the current year; `career`/`one_time` count all-time. A category with no configured allowance is **unlimited** (`max_quantity = -1`)
+- **Admin override**: quartermasters can pass `override_allowance=true` on issue/fulfill to bypass the cap for documented exceptions
+- **Endpoints**: `POST/PUT/DELETE /inventory/allowances[/{id}]` (now audit-logged: `issuance_allowance_created` / `_updated` / `_deleted`); `GET /inventory/allowances/check/{user_id}/{category_id}` returns `{ max_quantity, issued_this_period, remaining, period_type }`
+
+#### Member Size Preferences — Uniform & PPE Sizing
+
+- **New `SizePreferencesModal` UI + endpoints** on top of the existing `member_size_preferences` table (one row per user, `user_id` unique+indexed: `shirt_size`, `shirt_style`, `pant_waist`, `pant_inseam`, `jacket_size`, `boot_size`, `boot_width`, `glove_size`, `hat_size`, plus a `custom_sizes` JSON column)
+- **Two modes** via `SizePreferencesModal`: self-service (member edits their own) and admin (quartermaster edits a specific member). Size/style options come from new `STANDARD_SIZES`, `SHOE_SIZES`, and `GARMENT_STYLES` constants
+- **Endpoints**: `GET/PUT /inventory/my/size-preferences` (self, login required) and `GET /inventory/members/{user_id}/size-preferences` (`inventory.view`) / `PUT` (`inventory.manage`). A member with no saved sizes returns **404** (expected — the form opens blank). Empty form fields are coerced to `undefined` so blanks are never stored
+
+#### Equipment Request Fulfillment
+
+- **`PUT /inventory/requests/{request_id}/fulfill`** (`inventory.manage`) turns an **approved** request into a real record. Routing by the item's tracking type: POOL → pool issuance (allowance-checked unless overridden); INDIVIDUAL + checkout request → checkout; INDIVIDUAL otherwise → assignment
+- **New `equipment_requests` columns** (migration `20260604_0100`): `fulfilled_by` (FK users, SET NULL, nullable), `fulfilled_at`, `fulfillment_type` (`issuance`|`checkout`|`assignment`), `fulfillment_reference_id` (the created record's id) — so the UI can trace request → fulfillment. The request lifecycle now has a terminal `fulfilled` state instead of dead-ending at `approved`
+- **Edge case**: fulfillment is **not idempotent** — each call creates a new issuance/checkout/assignment, so re-fulfilling an already-fulfilled request double-issues (guarded by the `APPROVED`-status check; admins should not re-run on a `FULFILLED` request)
+
+#### Other Inventory Changes
+
+- **Barcodes assigned at creation, one sequential scheme** (migrations `20260604_0200`, `20260610_0001`): previously `get_items` lazily generated a missing barcode and **committed it during a GET** (a read path issuing writes, bad for the stale-while-revalidate cache). Barcodes are now assigned at item-creation time using a single **per-organization sequential** scheme — `<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, … The prefix and running counter live in `organizations.settings["barcode"]` (mirroring the membership-number scheme); the org row is locked `FOR UPDATE` for the read-increment so concurrent creates get distinct numbers, and the per-org unique constraint on `inventory_items.barcode` is the backstop. Item creation, variant generation, and the label backfill all share `_next_sequential_barcode()`. Migration `20260610_0001` reassigns every existing item a sequential barcode, seeds each org's counter, and **merges the two open Alembic heads** (`20260604_0001` + `20260604_0200`) so `alembic upgrade head` is unambiguous again. The leftover on-read generation in `get_item_by_id` was also removed
+- **NFPA 1851 inspection detail**: structured Ch. 6–8 results are now persisted to the existing `nfpa_inspection_details` table (one-to-one with a maintenance record) — `inspection_level`, the assessment booleans (`thermal_damage`, `moisture_barrier`, `seam_integrity`, `reflective_trim`, `closure_systems`, `liner_integrity`), `contamination_level`, SCBA fields (`facepiece_seal`, `regulator_function`, `low_air_alarm`, `cylinder_pressure`), and a `recommendation`. Written only when `nfpa_inspection` data is supplied to `update_maintenance_record()`
+- **Soft-delete** endpoints for taxonomy: `DELETE /inventory/categories/{id}` (blocked if the category still has active items), `DELETE /inventory/variant-groups/{id}`, `DELETE /inventory/kits/{id}` — all set `active = False` and audit-log
+- **Write-off cascade**: retiring/writing-off an item now notifies every current holder (assigned user + all open pool issuees) and closes their records (`OUT_OF_SERVICE`), without restoring written-off stock to `quantity`
+- **Pagination**: `GET /inventory/items/{id}/issuances` now accepts `skip`/`limit` (default 50, max 200)
+- **Cache safety (HIPAA/PII)**: `apiCache.ts` adds `/inventory/users/`, `/inventory/checkout/`, `/inventory/members-summary`, `/inventory/members/`, `/inventory/my/`, and `/inventory/charges` to `UNCACHEABLE_PREFIXES` (member rosters, size measurements, and cost-recovery data are never cached)
+- **Responsive tables**: a new `.rwd-table` CSS utility collapses inventory admin tables to stacked, labeled cards under 768px (single markup, no duplicate desktop/mobile renders)
+
+**Edge Cases:**
+
+| Scenario                                     | Behavior                                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Category has no allowance configured         | Unlimited (`max_quantity = -1`); issuance never blocked                                         |
+| Member holds multiple positions              | Highest-priority position (`priority DESC`) selects the applicable allowance                    |
+| Issuance would exceed allowance              | Blocked with a message stating remaining vs. requested; admin may set `override_allowance=true` |
+| Member has no saved size preferences         | `GET` returns 404; the modal opens blank (not an error)                                         |
+| Deleting a category with active items        | `400` — soft-delete refused to avoid orphaning inventory                                        |
+| Re-fulfilling an already-`FULFILLED` request | Refused (status check); only `APPROVED` requests can be fulfilled                               |
+| Writing off an item held by members          | All holders notified; their assignment/issuance records closed; stock not restored              |
+
+**Files Changed:**
+
+| Layer             | Files                                                                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Migrations        | `20260604_0100_add_equipment_request_fulfillment_fields.py`, `20260604_0200_backfill_inventory_item_barcodes.py`                                                                                              |
+| Backend service   | `services/inventory_service.py` — allowance enforcement, size-pref upsert, request fulfillment, write-off cascade, NFPA detail                                                                                |
+| Backend endpoints | `api/v1/endpoints/inventory.py` — allowances CRUD audit, size-pref + fulfill + soft-delete routes, issuance pagination                                                                                        |
+| Backend models    | `models/inventory.py` — `IssuanceAllowance`, `MemberSizePreferences`, `NFPAInspectionDetail`, `EquipmentRequest` fulfillment fields                                                                           |
+| Frontend          | `modules/inventory/pages/AllowancesPage.tsx` (new), `components/SizePreferencesModal.tsx` (new), `routes.tsx`, `types/index.ts` (size constants), `services/inventoryService.ts`, `services/eventServices.ts` |
+| Cross-cutting     | `utils/apiCache.ts` (PII prefixes), `styles/index.css` (`.rwd-table`)                                                                                                                                         |
+
+### Scheduling — Shift Call Logging, Exact Open-Shift Staffing & Query Batching (2026-06-09)
+
+#### Shift Call / Run Logging
+
+- **New `ShiftCallsSection`** on the shift detail panel lets officers (`scheduling.manage`) log the calls/runs a crew responded to during a shift. Each call captures `incident_type` (required), `incident_number`, `dispatched_at` / `on_scene_at` / `cleared_at` (UTC, shown in org timezone), `cancelled_en_route`, `medical_refusal`, an optional `responding_members` array, and `notes`
+- **Endpoints** (`/scheduling`): `GET`/`POST /shifts/{shift_id}/calls`, `GET`/`PATCH`/`DELETE /calls/{call_id}`. Frontend contracts: `ShiftCallRecord`, `ShiftCallCreate`, `ShiftCallUpdate`
+- **Edge cases**: the section is read-only once a shift is finalized (`canManage` is gated by `!shift.is_finalized`); optional fields are trimmed to `undefined` (never empty strings); deleting the call currently being edited closes the form
+
+#### Exact Open-Shift Staffing
+
+- **`GET /scheduling/open-shifts`** now delegates to `SchedulingService.get_open_shifts()` / `filter_shifts_with_open_positions()`, which determine "open" by **actual staffing** rather than a fixed page: a shift is open if a required named position is unfilled, or (when no named positions) the active assignment count is below `min_staffing` (falling back to the apparatus default). Only `ASSIGNED`/`CONFIRMED` assignments count; the window is capped at `max_candidates=500`
+- **Fix**: previously, fully-staffed shifts could fill a 50-row page and push genuinely-open shifts out of view. Shifts the requesting member is already actively assigned to are excluded in the same single assignment scan
+
+#### Performance — Composite Index & N+1 Elimination
+
+- **New composite index** `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)` (migration `20260604_0001`, which also **merges the two open Alembic heads** `20260528_0002` and `20260503_0002`). The ORM mirror lives in `models/training.py` `ShiftAssignment.__table_args__`
+- **Batched scheduled tasks** (`scheduled_tasks.py`): `run_post_shift_validation`, `run_shift_reminders`, `run_end_of_shift_checklist_reminders`, `run_end_of_shift_summary`, and `run_shift_auto_checkout` now batch-load officers, attendance, assignments, reports, equipment checks, and apparatus names once per batch (was ~6 queries per shift) and cache end-of-shift templates **per apparatus**
+- **New batch helpers**: `MemberLeaveService.get_active_leaves_for_users()` (one query for many users; `end_date IS NULL` = permanent leave) and `EquipmentCheckService._checklists_for_shift()` (reuses a pre-loaded check map). The training-compliance report batches per-user position-slug lookups into a single query
+- **`StarRating`** now renders read-only when `onChange` is omitted (adds `max`/`label` props); shift-report constants moved from `modules/scheduling/components/shiftReportConstants.ts` to `modules/scheduling/constants/shiftReportConstants.ts`
+
+**Edge Cases:**
+
+| Scenario                                                                      | Behavior                                                                                         |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| A shift's required positions are all filled by `ASSIGNED`/`CONFIRMED` members | Not shown in open shifts                                                                         |
+| Shift has no named positions                                                  | "Open" when active count < `min_staffing` (apparatus default if unset)                           |
+| Many fully-staffed shifts in the window                                       | Open shifts no longer pushed out of a fixed page (staffing-based, capped at 500 candidates)      |
+| Apparatus module not installed                                                | `list_apparatus_options()` falls back to `BasicApparatus`; genuine query failures are now logged |
+| Permanent leave (`end_date IS NULL`)                                          | Treated as active for the whole rolling compliance window                                        |
+| Logging calls on a finalized shift                                            | Hidden — the calls section is read-only after finalization                                       |
+
+**Files Changed:**
+
+| Layer             | Files                                                                                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Migration         | `alembic/versions/20260604_0001_merge_heads_add_shift_assignment_status_index.py`                                                                          |
+| Backend models    | `models/training.py` — `ShiftAssignment` composite index                                                                                                   |
+| Backend services  | `services/scheduling_service.py`, `scheduled_tasks.py`, `equipment_check_service.py`, `member_leave_service.py`                                            |
+| Backend endpoints | `api/v1/endpoints/scheduling.py` — open-shifts refactor, apparatus fallback logging                                                                        |
+| Frontend          | `pages/scheduling/ShiftCallsSection.tsx` (new), `ShiftDetailPanel.tsx`, `MyChecklistsPage.tsx`, `modules/scheduling/{types,services,constants,components}` |
+
+### Security & Test Hardening — SSRF and Image-Upload Validators (2026-06-09)
+
+- **Image-upload validator** (`utils/image_validator.py`): an intentional `ImageValidationError` (unsupported type, blocked format) was being caught by each method's broad `except Exception` and re-wrapped into a misleading "Failed to detect file type" / "Invalid or corrupted image" message that surfaced to the client. The precise rejection reason now propagates (e.g., "Unsupported image type: image/gif. Only PNG and JPEG are allowed."). Added 21 tests covering magic-byte detection, blocked formats, EXIF stripping, decompression-bomb defense, size/dimension limits, square enforcement, and the `validate_logo_image` 400 wrapper
+- **SSRF URL validator** (`utils/url_validator.py`): added 17 tests for the previously-untested `allow_known_only` allowlist (including lookalike-suffix rejection such as `evildiscord.com`) and private/reserved IP rejection across IPv4 and IPv6 families, split-horizon DNS, dev-only HTTP, DNS failures, and metadata-host blocking. Tightened pre-existing broad `pytest.raises(Exception)` assertions to specific types
+- **Files**: `backend/app/utils/image_validator.py`, `backend/tests/test_image_validator.py` (new), `backend/tests/test_integrations_security.py`
+
+### OAuth Sign-In (Google & Microsoft) and Compliance Evaluation Period (2026-05-29)
+
+#### Sign in with Google and Sign in with Microsoft — Link-Existing, Domain-Restricted SSO
+
+- **Two new OAuth login flows**: Members can sign in with an existing Google or Microsoft (Azure AD) account. Both are **link-existing-only** — they never auto-create users. A successful sign-in matches the verified IdP email to an existing, active, non-deleted user in the organization and binds the provider identity to that account on first use
+- **Backend routes** (`api/v1/endpoints/auth.py`): `GET /auth/oauth/google` and `GET /auth/oauth/microsoft` begin the flow (302 to the IdP consent screen, CSRF `state` stored in an httpOnly `oauth_state` cookie, `max_age=600`, `path=/api/v1/auth/`); `GET /auth/oauth/google/callback` and `GET /auth/oauth/microsoft/callback` validate `state`, exchange the code, cryptographically verify the ID token, resolve the user, set the auth cookies, and 302 to the SPA. A provider that is not fully configured returns **404** so its existence is never leaked
+- **ID-token verification**: Google ID tokens are verified for signature/audience via `google.oauth2.id_token.verify_oauth2_token` plus an issuer check (`accounts.google.com`). Microsoft tokens are decoded RS256 against the tenant JWKS with audience = `AZURE_AD_CLIENT_ID`, issuer = `{authority}/v2.0`, and an explicit `tid == AZURE_AD_TENANT_ID` check (**single-tenant lock**)
+- **Domain restriction (defense-in-depth)**: `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` (comma-separated; empty = no restriction) are enforced server-side in `resolve_user()`. Google additionally passes an `hd` hint to its consent screen when exactly one domain is configured
+- **New services** (`services/oauth_service.py`): `GoogleOAuthService` and `MicrosoftOAuthService` (each with `is_configured()`, `build_authorization_url()`, `exchange_code_for_idinfo()`, `_verify_id_token()`, `resolve_user()`), plus a shared `_link_existing_user()` helper that scopes the lookup to the single organization and binds `oauth_provider`/`oauth_subject` on first link
+- **New user columns**: `users.oauth_provider` (`String(50)`, nullable) and `users.oauth_subject` (`String(255)`, nullable, indexed `ix_users_oauth_subject`). `oauth_subject` stores the IdP's stable `sub` so accounts re-match even if the email later changes. Migration `20260528_0002_add_oauth_fields_to_users`
+- **New SPA landing page**: `OAuthCallbackPage` at `/auth/callback` hydrates the session via `loadUser()` and routes to the dashboard, or shows a failure card. `LoginPage` now reads `?error=<code>` from a failed redirect and maps it to a friendly message. The Google/Microsoft buttons and the `/auth/oauth-config` gating (button renders only when the provider is enabled **and** fully configured) were already present
+- **Audit logging**: each successful OAuth sign-in logs an `oauth_login` event (category `authentication`) with the provider and email
+
+**Edge Cases:**
+
+| Scenario                                                                                              | Behavior                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| User cancels at the IdP consent screen                                                                | Callback receives `error`; redirects to `/login?error=access_denied`                                                        |
+| Missing or mismatched CSRF `state` (cookie vs query)                                                  | `invalid_state`                                                                                                             |
+| Token exchange fails (network/HTTP/non-200)                                                           | `token_exchange_failed`; no `id_token` in response → `missing_id_token`                                                     |
+| ID token signature/audience/expiry invalid                                                            | `invalid_id_token`; Google wrong issuer → `invalid_issuer`                                                                  |
+| Microsoft token from a different tenant (`tid` mismatch)                                              | `invalid_tenant` — single-tenant lock                                                                                       |
+| Google email missing or `email_verified=false`                                                        | `unverified_email` (Microsoft has no verified flag; falls back to `preferred_username` if it contains `@`, else `no_email`) |
+| Email domain not in the configured allowlist                                                          | `domain_not_allowed`                                                                                                        |
+| No matching local user for the email                                                                  | `no_account` (never auto-creates)                                                                                           |
+| Matched user is inactive (`is_active=false`)                                                          | `inactive`                                                                                                                  |
+| Stored `oauth_subject` differs from incoming `sub`, or account already linked to a different provider | `account_conflict` (identity-takeover guard)                                                                                |
+| Provider not fully configured                                                                         | `GET /auth/oauth/<provider>` returns 404; `/oauth-config` reports it disabled so the button never renders                   |
+| Unexpected exception in the callback                                                                  | Logged server-side; generic `server_error`, internals never surfaced                                                        |
+| SPA callback page double-mounts (React StrictMode)                                                    | Guarded by `useRef` so `loadUser()` runs once                                                                               |
+
+**Files Changed:**
+
+| Layer           | Files                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| Backend routes  | `api/v1/endpoints/auth.py` — provider routes, callbacks, shared OAuth helpers, `/oauth-config` gating  |
+| Backend service | `services/oauth_service.py` — Google/Microsoft services + `_link_existing_user`                        |
+| Backend model   | `models/user.py` — `oauth_provider`, `oauth_subject`                                                   |
+| Backend config  | `core/config.py` — redirect-URI / allowed-domains / success-failure-redirect settings + domain helpers |
+| Migration       | `alembic/versions/20260528_0002_add_oauth_fields_to_users.py`                                          |
+| Frontend        | `pages/OAuthCallbackPage.tsx` (new), `App.tsx` (route), `pages/LoginPage.tsx` (`?error=` mapping)      |
+| Env examples    | `.env.example`, `.env.example.full`                                                                    |
+
+#### Compliance Evaluation Period — Org Default and Per-Requirement Override
+
+- **Org-level "Evaluation Period" toggle**: New `compliance_configs.include_current_month` (Boolean, NOT NULL, `server_default="1"`). When enabled (default), compliance counts the in-progress month; when disabled, evaluation stops at the **end of the prior month** so members aren't flagged non-compliant mid-month before they've had the chance to train. Migration `20260503_0001`
+- **Per-requirement override**: New `training_requirements.include_current_month` (Boolean, nullable). `NULL` inherits the org default; `true` always counts the current month; `false` always stops at prior month-end. Migration `20260503_0002`
+- **Pure resolution helpers** (`services/training_period.py`): `resolve_as_of_date(today, include_current_month)` returns `today` when including, else the last day of the previous month; `effective_include_current_month(requirement_value, org_default)` resolves the override. The resolved as-of date drives the requirement date window, waiver proration, and overdue checks, threaded through `training_compliance.py`, `TrainingService`, `CompetencyMatrixService`, `AnnualComplianceReportService`, and the compliance summary/matrix endpoints
+- **Deliberate exception**: certificate "expiring soon" lookahead always uses the real `date.today()` (not the resolved as-of date) so certs nearing expiry are still surfaced even when the current month is excluded
+- **Frontend**: an "Evaluation Period" checkbox on the Compliance Requirements **Thresholds** tab (org default) and an inherit / include / exclude `<select>` in the per-requirement modal
+
+**Edge Cases:**
+
+| Scenario                                         | Behavior                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Organization has no `compliance_configs` row     | Current month is included (legacy behavior preserved)                                       |
+| Requirement `include_current_month` is `NULL`    | Inherits the org default                                                                    |
+| Evaluation period excludes current month         | As-of date = last day of prior month; windows, proration, and overdue all key off that date |
+| Certificate expiring within the lookahead window | Still surfaced — cert-expiry checks always use real `today`                                 |
+
+**New Database Migrations:**
+
+| Migration                                                          | Description                                                              |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `20260528_0002_add_oauth_fields_to_users`                          | Adds `oauth_provider`, `oauth_subject` + index `ix_users_oauth_subject`  |
+| `20260503_0001_add_include_current_month_to_compliance_config`     | Adds `compliance_configs.include_current_month` (NOT NULL, default true) |
+| `20260503_0002_add_include_current_month_to_training_requirements` | Adds `training_requirements.include_current_month` (nullable)            |
+
+**New API Endpoints:**
+
+| Method | Path                                    | Description                                                            |
+| ------ | --------------------------------------- | ---------------------------------------------------------------------- |
+| `GET`  | `/api/v1/auth/oauth/google`             | Begin Google sign-in (302 to consent screen; 404 if not configured)    |
+| `GET`  | `/api/v1/auth/oauth/google/callback`    | Complete Google sign-in                                                |
+| `GET`  | `/api/v1/auth/oauth/microsoft`          | Begin Microsoft sign-in (302 to consent screen; 404 if not configured) |
+| `GET`  | `/api/v1/auth/oauth/microsoft/callback` | Complete Microsoft sign-in                                             |
+
+**New Frontend Routes:**
+
+| Route            | Page                | Description                                                                                            |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `/auth/callback` | `OAuthCallbackPage` | OAuth landing page; hydrates session via `loadUser()` then routes to dashboard or shows a failure card |
+
+---
+
+### Training — Record Exports, Attachments, Finalize Gating & Skills-Test Scoring (2026-05-24 — 2026-05-25)
+
+#### Member & Officer Training-Record Exports
+
+- **Member self-export**: New `GET /api/v1/training/module-config/my-training/export` lets a member export their own training history as CSV or PDF. Gated by the org `allow_member_report_export` flag (403 when disabled). Optional `start_date`/`end_date` query params; omitting `start_date` exports the full lifetime history
+- **Officer per-member & bulk exports**: `POST /api/v1/training/reports/export` (permission `training.manage`) gained a `member_records` report type for a combined export across all active members, plus `hours_summary` and `certification` CSV report types. `individual` exports require a `user_id` and are always org-scoped
+- **Date-range self-review UI**: `MyTrainingPage` adds CSV+PDF export buttons and a `DateRangePicker` (default last 12 months, clearable) that filters the visible history. `MemberTrainingHistoryPage` and the admin Reports tab (`TrainingEnhancementsTab`) add period selectors and member/bulk export buttons. New `utils/trainingPeriods.ts` provides month/quarter/year/lifetime period windows
+- **Report-type fallthrough guard**: Unknown CSV report types now raise an explicit 400 (`"Report type '…' is not supported for export."`) instead of silently returning the compliance report; PDF export is restricted to `individual`, `member_records`, and `compliance`. Bulk PDFs are merged with `pypdf`; an empty result still emits a valid single-page placeholder PDF
+- **Removed dead flag**: `TrainingSession.approval_required` — persisted and echoed but never read — was removed from the model, schemas, and frontend types. Migration `20260502_0004`. Session sign-off is governed solely by `require_completion_confirmation`
+
+#### Training-Record Attachments — Real Upload & Download
+
+- **Real attachment storage**: `POST /api/v1/training/records/{record_id}/attachments` now accepts a real multipart `file` upload (was a stub). Files are stored under `/app/uploads/training_attachments/{organization_id}/{uuid4().hex}{ext}` and metadata is appended to the `TrainingRecord.attachments` JSON column via `flag_modified()`
+- **Download endpoint**: New `GET /api/v1/training/records/{record_id}/attachments/{index}/download` streams the stored file with its original filename. The list endpoint now returns sanitized metadata only — server file paths are never exposed
+- **Access control**: A shared `_load_record_for_attachment` gate allows the record owner, or any holder of `training.manage` for other members' records; 404 if the record is not in the caller's org
+- **Validation**: max 25 MB; true MIME detected via `magic.from_buffer` (allowed: PDF, JPEG, PNG, GIF, WEBP, DOC, DOCX); server-generated filename prevents double-extension attacks; a commit failure deletes the orphaned file
+
+#### Finalize Gating, Check-In Promotion & Skills-Test Scoring
+
+- **`require_completion_confirmation` now actually gates finalize**: When the org flag is `false` (default), finalizing a training session immediately approves it and completes the records with no officer email round-trip; when `true`, the approval stays pending and training officers are notified
+- **No more duplicate check-in records on finalize**: `_finalize_training_records` now promotes the existing in-progress check-in record (matching `scheduled_date` OR `completion_date == event_date`, preferring the not-yet-completed one) instead of inserting a duplicate
+- **Skills-test scoring extracted & tested**: Pass/fail scoring moved verbatim into a pure `skills_testing_service.calculate_test_result(test, template)` and is now unit-tested. Scoring is point-based when score criteria exist, else the average of section-score percentages; passing requires `overall_score >= passing_percentage` and (if `require_all_critical`) all required non-statement criteria passed
+- **Compliance admin tabs wired**: `ComplianceOfficerDashboard` now takes its active tab from a prop (`TrainingAdminPage` passes the route segment), removing the duplicate internal tab bar
+- **NULL boolean coercion**: `manual_entry_enabled` and `manual_entry_require_apparatus` were added to `_BOOL_FIELD_DEFAULTS` so legacy config rows with NULL values no longer raise a 500 (which had blanked the Scheduling page)
+
+**Edge Cases:**
+
+| Scenario                                                                 | Behavior                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Member export requested but `allow_member_report_export` is off          | 403                                                                                                    |
+| Export `start_date` omitted                                              | No lower bound (lifetime); PDF period label reads "All time through {end_date}"                        |
+| Bulk PDF export with zero matching records                               | Valid single-page placeholder PDF ("No training records found for this period.")                       |
+| `certification` CSV record has no expiry / belongs to an inactive member | Status "No Expiration"; records for non-active members are skipped                                     |
+| Unknown report type requested                                            | Explicit 400 (no silent fallthrough to compliance report)                                              |
+| Attachment over 25 MB or disallowed MIME (magic-byte detected)           | 400                                                                                                    |
+| Attachment DB commit fails after file write                              | Orphaned file removed                                                                                  |
+| Attachment download index out of range / missing file on disk            | 404                                                                                                    |
+| `require_completion_confirmation=false`                                  | Records auto-complete on finalize; no token/notification                                               |
+| Check-in created an in-progress record (NULL `completion_date`)          | Promoted to completed, not duplicated                                                                  |
+| Skills test has no `section_results`                                     | Result is `(None, "fail")`; required section with no result also fails; statement criteria always pass |
+| Legacy `training_module_configs` row with NULL `manual_entry_*`          | Coerced to defaults (false / true), preventing a 500                                                   |
+
+**Files Changed:**
+
+| Layer             | Files                                                                                                                                                                                                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend endpoints | `api/v1/endpoints/training_module_config.py` (member export), `training_enhancements.py` (report export, attachments)                                                                                                                                                |
+| Backend services  | `services/training_enhancement_service.py` (export generators), `services/skills_testing_service.py` (new), `services/training_session_service.py` (finalize gating, check-in promotion)                                                                             |
+| Backend models    | `models/training.py` — removed `TrainingSession.approval_required`                                                                                                                                                                                                   |
+| Backend schemas   | `schemas/training_enhancements.py`, `schemas/training_session.py`, `schemas/training_module_config.py`                                                                                                                                                               |
+| Migration         | `alembic/versions/20260502_0004_drop_training_session_approval_required.py`                                                                                                                                                                                          |
+| Frontend          | `pages/MyTrainingPage.tsx`, `pages/MemberTrainingHistoryPage.tsx`, `pages/TrainingEnhancementsTab.tsx`, `pages/ComplianceOfficerDashboard.tsx`, `pages/TrainingAdminPage.tsx`, `utils/trainingPeriods.ts` (new), `services/trainingServices.ts`, `types/training.ts` |
+
+**New API Endpoints:**
+
+| Method | Path                                                                | Description                                       |
+| ------ | ------------------------------------------------------------------- | ------------------------------------------------- |
+| `GET`  | `/api/v1/training/module-config/my-training/export`                 | Member self-export (CSV/PDF, optional date range) |
+| `GET`  | `/api/v1/training/records/{record_id}/attachments/{index}/download` | Download a training-record attachment             |
+
+**New Database Migrations:**
+
+| Migration                                               | Description                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------- |
+| `20260502_0004_drop_training_session_approval_required` | Drops the unused `training_sessions.approval_required` column |
+
+---
+
+### Prospective Member Documents, Membership Coordinator Role & IP-Security Hardening (2026-05-28)
+
+#### Prospective Member Document Storage
+
+- **Documents are now actually stored**: `POST /api/v1/prospective-members/prospects/{prospect_id}/documents` changed from metadata-only to a real multipart upload (`file`, `document_type`, optional `step_id`). A new `GET …/documents/{document_id}/download` streams the file, and delete now removes the file from disk
+- **Org-scoped storage path**: Files are written to `/app/uploads/prospect-documents/{organization_id}/{prospect_id}/{uuid4().hex}{ext}` (mirroring event attachments) so documents are walkable per organization for export/accounting/purge. The path-validation base directory was fixed from `/uploads/` to `/app/uploads` (the actual volume mount) — a latent bug that had been rejecting valid paths
+- **Larger limit & validation**: upload limit raised from 10 MB to **50 MB**; true MIME validated via magic bytes (PDF, Word, JPEG, PNG, GIF); the server-generated random filename prevents double-extension attacks; download is guarded against path traversal via a realpath check
+
+#### "Membership Committee Chair" → "Membership Coordinator"
+
+- **Role renamed**: The default system position `membership_committee_chair` was renamed to `membership_coordinator` (display name "Membership Coordinator"). Migration `20260528_0001` performs an in-place `UPDATE positions`; because `user_positions` links by UUID, all existing assignments are preserved and the rename takes effect immediately (permissions are derived live on every request)
+- **Permissions unchanged**: the role keeps `prospective_members.manage`. References were updated across `core/permissions.py`, the seed script, and the onboarding module registry / role-setup templates
+
+#### IP-Security & GeoIP Hardening
+
+- **Spoof-proof client IP**: `get_client_ip()` was rewritten. Forwarded headers are only trusted when the direct peer is listed in `TRUSTED_PROXY_IPS`; the real client is taken as the **right-most** `X-Forwarded-For` hop that is not a trusted proxy (nginx appends the real peer, so a client-forged left-most value is never reached), falling back to `X-Real-IP` then the direct peer. The previous left-most parse was spoofable
+- **DB country-block rules drive the running GeoIP service**: New `IPSecurityService.sync_blocked_countries_to_geoip()` overlays `CountryBlockRule` rows onto the in-memory GeoIP block set (an explicit unblock rule overrides a `BLOCKED_COUNTRIES` config default). It runs at startup and on every rule change, making the DB the source of truth that survives restarts
+- **Multi-worker sync**: New `core/geoip_sync.py` publishes a best-effort `geoip:invalidate` message on Redis after each block/unblock; every worker runs a `GeoIPInvalidationListener` that re-syncs its in-memory set from the DB, so all uvicorn workers converge within seconds. If Redis is unavailable the listener no-ops and propagation defers to the next restart
+- **Startup warning**: in production/staging, if `GEOIP_ENABLED` is set but `TRUSTED_PROXY_IPS` is empty, a warning is logged that geo-blocking/allowlisting is effectively disabled behind a proxy
+
+**Edge Cases:**
+
+| Scenario                                                       | Behavior                                                                            |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Prospect document empty / over 50 MB                           | 400                                                                                 |
+| Prospect document MIME spoofed (magic bytes differ from claim) | Rejected; claimed vs detected logged                                                |
+| Prospect document DB write fails after file write              | On-disk file cleaned up (best-effort)                                               |
+| Prospect document delete when file already missing             | Deletion proceeds (DB row removed)                                                  |
+| Prospect document download path traversal attempt              | Blocked via realpath check (403); missing file → 404                                |
+| Role rename — existing assignments                             | Preserved (UUID-keyed `user_positions`); reversible downgrade                       |
+| `X-Forwarded-For` with a client-forged left-most entry         | Ignored; right-most untrusted hop used                                              |
+| No trusted proxies configured, or untrusted direct peer        | Forwarded headers ignored entirely; direct peer used                                |
+| GeoIP service not running / MaxMind DB absent                  | `sync_blocked_countries_to_geoip` returns empty; geo-blocking is a documented no-op |
+| Country-block rule precedence                                  | DB rules override config defaults; explicit unblock removes a config-default block  |
+| Redis unavailable during a block change                        | Publish is best-effort (never raises); each worker re-syncs on next restart         |
+| Unknown country for an IP                                      | Fail-open (allowed) by design                                                       |
+
+**Files Changed:**
+
+| Layer             | Files                                                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend endpoints | `api/v1/endpoints/membership_pipeline.py` (upload/download), `api/v1/endpoints/ip_security.py` (publish invalidation)                                 |
+| Backend services  | `services/membership_pipeline_service.py`, `services/ip_security_service.py` (`sync_blocked_countries_to_geoip`)                                      |
+| Backend core      | `core/geoip_sync.py` (new), `core/security_middleware.py` (`get_client_ip`), `core/permissions.py` (role rename), `main.py` (startup sync + listener) |
+| Migration         | `alembic/versions/20260528_0001_rename_membership_committee_chair_to_coordinator.py`                                                                  |
+| Frontend          | `modules/onboarding/config/moduleRegistry.ts`, `modules/onboarding/pages/RoleSetup.tsx` (role rename)                                                 |
+| Scripts / Env     | `scripts/seed_test_users.py`, `.env.example.full` (IP-security block)                                                                                 |
+
+**New API Endpoints:**
+
+| Method | Path                                                                                   | Description                                          |
+| ------ | -------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `POST` | `/api/v1/prospective-members/prospects/{prospect_id}/documents`                        | Upload a prospect document (multipart, real storage) |
+| `GET`  | `/api/v1/prospective-members/prospects/{prospect_id}/documents/{document_id}/download` | Download a prospect document                         |
+
+**New Database Migrations:**
+
+| Migration                                                        | Description                            |
+| ---------------------------------------------------------------- | -------------------------------------- |
+| `20260528_0001_rename_membership_committee_chair_to_coordinator` | Renames the default position slug/name |
+
+---
+
+### Volunteer Home "Now" Redesign, Offline Queue, Audit Log Admin & Cross-Org Hardening (2026-05-01 — 2026-05-02)
+
+#### Audit Log Admin View
+
+- **Admin-facing audit log**: New read API (`api/v1/endpoints/audit_logs.py`, permission `audit.view`): `GET /api/v1/audit-logs` (filterable, paginated), `GET /api/v1/audit-logs/stats`, `GET /api/v1/audit-logs/{log_id}`. Filters: `event_type`, `event_category`, `severity` (`info|warning|critical`), `user_id`, `search` (username or event-type substring), `start_date`, `end_date`, `skip`, `limit` (1–500)
+- **Org isolation**: audit rows are global (single system-wide hash chain), so the org view is scoped by joining through `users` (`AuditLog.user_id IN (org users)`); system events with NULL `user_id` are deliberately excluded
+- **Admin page**: New `/admin/audit-log` page (`AuditLogPage`, lazy-loaded, gated `audit.view`) with stat cards, a filter bar, an expandable table showing `event_data`, and severity badges. Nav entries added to side and top navigation
+
+#### Offline Queue for Training Submissions & RSVPs
+
+- **Real offline queue**: New `utils/genericOfflineQueue.ts` (IndexedDB `logbook-offline-generic` / `pendingMutations`) queues training submissions and event RSVPs when offline, returning an optimistic placeholder so the UI doesn't break. A `useOfflineSyncEngine` hook (mounted once in `AppLayout`) drains the queue on the `online` event and on mount, with a re-entrancy guard and success / permanent-failure toasts
+- **Per-item retry cap**: items are dropped after `GENERIC_QUEUE_MAX_RETRIES` (5) so a permanently-rejected request can't block the queue. A `pendingSyncStore` aggregates the generic, equipment-check, and shift-report queue counts; nav shows an "Offline · N pending" / "N pending sync" pill (click to retry)
+
+#### Volunteer Home "Now" Redesign
+
+- **Dashboard reframed around "now"**: personalized greeting + today's date, pill chips for the next shift/event, expired/expiring certs, unread notifications and overdue action items, a 60-day cert-expiry banner that names the soonest cert and deep-links to My Training, and a large "Log Training" primary card
+- **Upcoming events limited to 30 days**: the dashboard "Upcoming Events" count now applies `start_datetime < now + 30 days` (card relabeled "Next 30 days"), still excluding cancelled events. A redundant unread-count fetch was removed (count is maintained by the notification poller)
+- **Polish**: new deterministic `Avatar` component (photo or initials, color hashed from name); certifications on My Training now sort expired-first then by soonest expiry; real `EmptyState` adopted across Action Items, Member Training History, Review Submissions, and Skills Testing records; a one-tap high-contrast toggle and footer trust signals were added
+
+#### Notification Retry Hardening & Cross-Org Validation
+
+- **Notification circuit breaker**: `inventory_notification_service` now tracks `attempt_count` / `last_attempt_at` per queued record and abandons delivery after 5 failed attempts (marks processed, logs at ERROR), so the scheduler stops retrying and spamming logs. New columns via migration `20260502_0002`
+- **Locked-in DB defaults**: every boolean column on `training_module_configs` (25) and the new inventory-queue columns gained explicit `server_default`s (migration `20260502_0003`) so NULLs can't reappear; the `coerce_null_booleans` validator becomes defensive-only
+- **Cross-org validation tightened**: event-request status updates validate `assigned_to`/`event_id` against the caller's org; manager-added meeting attendees and attendance waivers verify the target user/meeting belong to the org (fixing a NOT-NULL `MeetingAttendee.organization_id` 500 and preventing meeting enumeration); manager RSVP overwrites are now audit-logged as `event_attendee_overwritten` (warning)
+
+**Edge Cases:**
+
+| Scenario                                                     | Behavior                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Training submission / RSVP made while offline                | Queued in IndexedDB; optimistic placeholder returned; synced on reconnect       |
+| Queued mutation permanently rejected                         | Dropped after 5 retries so it can't block the queue                             |
+| Queue count read fails                                       | Treated as 0 (`.catch(() => 0)`); `navigator` guarded for non-browser           |
+| Notification send fails repeatedly                           | Abandoned after 5 attempts, marked processed, logged at ERROR                   |
+| Dashboard upcoming-events 30-day boundary                    | `>= now` and `< now + 30 days`; cancelled events excluded                       |
+| Manager adds an attendee / waiver for a user outside the org | Rejected (404 / validation error)                                               |
+| Manager RSVP overwrites an existing response                 | Logged as `event_attendee_overwritten` (warning) with `overwrote_existing_rsvp` |
+| Cert with no expiry date in My Training sort                 | Sorted last (after expired and expiring)                                        |
+| Member avatar with no name                                   | Initials fall back to `?`; deterministic color per member                       |
+
+**Files Changed:**
+
+| Layer             | Files                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend endpoints | `api/v1/endpoints/audit_logs.py` (new), `api/v1/api.py`, `dashboard.py`, `event_requests.py`, `events.py`, `meetings.py`                                                                                                                                                                                                                                                                        |
+| Backend services  | `services/inventory_notification_service.py`, `services/attendance_dashboard_service.py`, `services/meetings_service.py`, `services/event_service.py`                                                                                                                                                                                                                                           |
+| Backend models    | `models/inventory.py` (`attempt_count`, `last_attempt_at`), `models/training.py` (boolean `server_default`s)                                                                                                                                                                                                                                                                                    |
+| Migrations        | `20260502_0002_add_attempt_tracking_to_inventory_notification_queue.py`, `20260502_0003_add_server_defaults_to_training_module_config_booleans.py`                                                                                                                                                                                                                                              |
+| Frontend          | `pages/AuditLogPage.tsx` (new), `pages/Dashboard.tsx`, `utils/genericOfflineQueue.ts` (new), `stores/pendingSyncStore.ts` (new), `hooks/useOfflineSyncEngine.ts` (new), `components/ux/Avatar.tsx` (new), `services/adminServices.ts`, `services/trainingServices.ts`, `services/eventServices.ts`, `components/TopNavigation.tsx`, `components/SideNavigation.tsx`, `modules/admin/routes.tsx` |
+
+**New API Endpoints:**
+
+| Method | Path                          | Description                                                  |
+| ------ | ----------------------------- | ------------------------------------------------------------ |
+| `GET`  | `/api/v1/audit-logs`          | List audit log entries (filterable, paginated; `audit.view`) |
+| `GET`  | `/api/v1/audit-logs/stats`    | Audit log totals by severity and category                    |
+| `GET`  | `/api/v1/audit-logs/{log_id}` | Single audit log entry                                       |
+
+**New Frontend Routes:**
+
+| Route              | Page           | Description                                 |
+| ------------------ | -------------- | ------------------------------------------- |
+| `/admin/audit-log` | `AuditLogPage` | Admin audit-log viewer (gated `audit.view`) |
+
+**New Frontend Components:**
+
+| Component      | Location                   | Description                                           |
+| -------------- | -------------------------- | ----------------------------------------------------- |
+| `AuditLogPage` | `pages/AuditLogPage.tsx`   | Audit-log viewer with stats, filters, expandable rows |
+| `Avatar`       | `components/ux/Avatar.tsx` | Photo-or-initials avatar with deterministic color     |
+
+**New Database Migrations:**
+
+| Migration                                                              | Description                                                     |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `20260502_0002_add_attempt_tracking_to_inventory_notification_queue`   | Adds `attempt_count`, `last_attempt_at`                         |
+| `20260502_0003_add_server_defaults_to_training_module_config_booleans` | Backfills NULLs and sets `server_default` on 25 boolean columns |
+
+---
+
+### Shift Scheduling — End-of-Shift Summaries, Trainee Follow-Up, Deep-Link Fixes & Past-Shift Surfacing (2026-04-28 — 2026-05-02)
+
+#### End-of-Shift Summaries & Trainee Report Follow-Up
+
+- **New `end_of_shift_summary` scheduled task** (every 30 min): for shifts whose `end_time` falls in the last `lookback_hours` (default 4), sends each attending active member an in-app + email summary of their hours, calls responded to (with call types), and a link to their completion report if filed. Per-member dispatch is idempotent via `shift.activities["member_summaries_sent"]`. Gated by `org.settings["shift_reports"]["member_summary"]` (`enabled`, `lookback_hours`, `require_finalized`)
+- **Finalized gate**: by default the summary only runs for finalized shifts (because `duration_minutes` is computed at check-out); an opt-in `require_finalized=false` mode sends a clearly-labeled "Preliminary Shift Summary" with figures marked subject to change
+- **New `trainee_report_escalation` scheduled task** (daily 08:00): reminds trainees about approved-but-unacknowledged shift completion reports older than `acknowledgment_days` (default 7), with in-app-only alerts to the filing officer and training officers. Rate-limited to `max_reminders` (default 3) tracked in `review_history`
+- **Low-rating officer alert**: when a shift report is approved with `performance_rating <= low_rating_threshold` (default 2/5, configurable; 0 disables) or with non-empty areas-for-improvement, training officers (excluding the filing officer) get an in-app alert
+- **Richer shift reminders**: reminders now include the apparatus, full active-member crew roster (capped at 8 with "+N more"), start-of-shift checklists, and a "Mark Arrival" button; email is now sent **by default** (`send_email` defaults true, opt out per org)
+
+#### Deep-Link Fixes & Past-Shift Surfacing
+
+- **Deep links now point at routes that exist**: check-in links corrected to `/scheduling/checkin?shift=<id>` (dropping the unused `?user=`), and report links corrected from the non-existent `/scheduling/reports/<id>` to `/scheduling?tab=shift-reports&report=<id>` (which `ShiftReportsTab` auto-expands)
+- **Past shifts surfaced**: `GET /api/v1/scheduling/my-attendance-history` gained `start_date`/`end_date` params and now joins Shift to embed `shift_date`/start/end and orders by shift date. `MyShiftsTab` honors `?view=past`, synthesizes "completed" entries for walk-on attendance with no assignment, and the dashboard Standby-hours card deep-links to the past view
+- **Hardening**: roster/reminder queries now filter `User.is_active` so deactivated members get no reminders and don't appear in others' rosters; the Scheduling page no longer blanks when the training-module-config fetch fails (logs a warning and defaults)
+
+**Edge Cases:**
+
+| Scenario                                                  | Behavior                                                                                                                |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Shift not yet finalized                                   | Skipped by the summary by default (would report 0 hours); `require_finalized=false` sends a labeled preliminary summary |
+| Summary already sent to a member                          | Skipped (idempotent via `activities["member_summaries_sent"]`)                                                          |
+| Trainee report already acknowledged, or within the window | Not escalated                                                                                                           |
+| Escalation reminder cap reached (`max_reminders`)         | No further reminders sent                                                                                               |
+| `low_rating_threshold = 0`                                | Low-rating trigger disabled; improvement-text trigger still fires                                                       |
+| Deactivated member                                        | Excluded from reminders and from other members' rosters                                                                 |
+| Walk-on attendance with no `ShiftAssignment` (past)       | Surfaced as a synthetic `completed` entry                                                                               |
+| Invalid `start_date`/`end_date` on attendance history     | 400 ("Use YYYY-MM-DD")                                                                                                  |
+| Training-module-config fetch fails on the Scheduling page | Warning logged; page still renders with defaults (no blank screen)                                                      |
+| Filing officer                                            | Excluded from the self-alert and escalation officer-recipient set                                                       |
+
+**Files Changed:**
+
+| Layer             | Files                                                                                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend endpoints | `api/v1/endpoints/scheduling.py` (`my-attendance-history` date params)                                                                                                                    |
+| Backend services  | `services/scheduled_tasks.py` (new summary + escalation tasks, richer reminders), `services/shift_completion_service.py` (low-rating alert)                                               |
+| Migration         | `alembic/versions/20260502_0001_backfill_training_config_null_booleans.py`                                                                                                                |
+| Frontend          | `pages/scheduling/MyShiftsTab.tsx`, `pages/scheduling/ShiftReportsTab.tsx`, `pages/Dashboard.tsx`, `pages/SchedulingPage.tsx`, `constants/enums.ts`, `modules/scheduling/services/api.ts` |
+
+**New Database Migrations:**
+
+| Migration                                              | Description                                          |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| `20260502_0001_backfill_training_config_null_booleans` | Backfills NULL booleans on `training_module_configs` |
+
+---
+
+### Cloudflare Email Service Integration (2026-04-26)
+
+#### Cloudflare Email Service — New Email Platform Option
+
+- **New platform: Cloudflare Email Service**: Added as a fifth email platform option alongside Gmail, Microsoft 365, Self-Hosted SMTP, and Other. Cloudflare Email Service sends transactional email via REST API — no SMTP server required. Domain DNS must be managed by Cloudflare. Currently in public beta at $0.35 per 1,000 messages
+- **Backend REST API sending path**: New `_cloudflare_send()` method in `EmailService` uses `httpx.AsyncClient` to call `POST /client/v4/accounts/{account_id}/email/sending/send`. Sends up to 5 requests concurrently via `asyncio.Semaphore`. Retries transient errors (429 rate limits, 5xx server errors) up to 3 times with exponential backoff (1s, 2s, 4s)
+- **Configuration**: New env vars `CLOUDFLARE_EMAIL_ENABLED`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` for global config. Org-level config via `cloudflare_account_id` and `cloudflare_api_token` fields in `EmailServiceSettings` (stored encrypted at rest, redacted in API responses)
+- **Connection testing**: New `test_cloudflare_email()` validates the API token via Cloudflare's `/user/tokens/verify` endpoint during onboarding and settings configuration
+- **Onboarding flow**: Cloudflare appears as a platform card (Cloud icon, orange gradient) in the Email Platform Choice step. Configuration form collects Account ID and API Token with setup instructions
+- **Settings page**: Cloudflare platform button and configuration fields added to Email Settings section under Administration > Organization Settings
+- **SSRF prevention**: Account ID validated against `[a-f0-9]{32}` regex before URL interpolation in both sending and testing paths
+- **Automatic DNS auth**: Cloudflare handles SPF, DKIM, and DMARC automatically when the domain is managed through Cloudflare DNS — no manual DNS record configuration required
+
+**Edge Cases:**
+
+| Scenario                                                  | Behavior                                                                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Attachments included with Cloudflare backend              | Warning logged; attachments omitted (Cloudflare REST API does not support file attachments)                                     |
+| `send_batch` called with Cloudflare as active backend     | Warning logged; falls back to SMTP path since `send_batch` uses pre-built MIME strings that Cloudflare's REST API cannot accept |
+| Cloudflare API returns 429 (rate limit)                   | Retries up to 3 times with exponential backoff (1s, 2s, 4s)                                                                     |
+| Cloudflare API returns 5xx (server error)                 | Retries up to 3 times with exponential backoff                                                                                  |
+| Invalid Account ID format (not 32-char hex)               | `ValueError` raised before any HTTP request is made                                                                             |
+| `EMAIL_ENABLED=false` but `CLOUDFLARE_EMAIL_ENABLED=true` | Email sending works — Cloudflare path bypasses the SMTP enabled check                                                           |
+| Org-level Cloudflare config with global SMTP fallback     | Org config takes priority; global SMTP is used only when org email is disabled                                                  |
+
+**Files Changed:**
+
+| Layer               | Files                                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend schemas     | `schemas/organization.py` — `cloudflare_account_id`, `cloudflare_api_token` fields, encryption, redaction                                    |
+| Backend config      | `core/config.py` — `CLOUDFLARE_EMAIL_ENABLED`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`                                               |
+| Backend service     | `services/email_service.py` — `_get_cloudflare_config()`, `_cloudflare_send()`, `_use_cloudflare`, updated `send_email()` and `send_batch()` |
+| Backend test helper | `api/v1/email_test_helper.py` — `test_cloudflare_email()`                                                                                    |
+| Backend onboarding  | `api/v1/onboarding.py` — platform validation, test dispatch, persistence mapping                                                             |
+| Frontend types      | `types/user.ts`, `modules/onboarding/types/index.ts`                                                                                         |
+| Frontend onboarding | `EmailPlatformChoice.tsx`, `EmailConfiguration.tsx`                                                                                          |
+| Frontend settings   | `EmailSettingsSection.tsx`                                                                                                                   |
+| Env examples        | `.env.example`, `.env.example.full`                                                                                                          |
+
+### Salesforce Integration, Vector Solutions Enhancements, Facilities & Membership Refactoring, Test Coverage Expansion (2026-04-10 — 2026-04-12)
+
+#### Salesforce CRM Integration
+
+- **Salesforce connection**: New integration for syncing department contacts and donors with Salesforce CRM. Configure via **Administration > Integrations** with Salesforce instance URL, client ID, and client secret. Supports OAuth 2.0 client credentials flow
+- **Bidirectional sync**: Full two-way synchronization between The Logbook members/donors and Salesforce contacts/accounts. Field mappings are configurable per organization. Sync direction options: push-only, pull-only, or bidirectional
+- **Webhook receiver**: Public endpoint receives Salesforce outbound messages for real-time updates. Validates Salesforce Organization ID and HMAC signatures. Processes Contact and Account object changes
+- **Sync status dashboard**: IntegrationsPage updated with Salesforce connection status, last sync timestamp, sync history, and manual sync trigger button
+- **Conflict resolution**: When records are modified on both sides between syncs, configurable strategies (Salesforce wins, Logbook wins, most recent wins) prevent data loss
+
+**Edge Cases:**
+
+| Scenario                                              | Behavior                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Salesforce API rate limit exceeded during sync        | Sync pauses, retries with exponential backoff, logs partial progress |
+| Webhook received for unmapped Salesforce object       | Event logged and skipped; no error returned to Salesforce            |
+| Member deleted in Logbook but exists in Salesforce    | Configurable: soft-delete in Salesforce or unlink without delete     |
+| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references          |
+| OAuth token expires mid-sync                          | Auto-refresh token and retry from the failed record                  |
+
+#### Vector Solutions Integration Enhancements
+
+- **Category catalog fetch**: New endpoint `GET /api/v1/training/external/providers/{id}/categories` fetches the full category catalog from Vector Solutions for upfront mapping before first sync. Frontend shows a mapping table where officers match external categories to internal training categories
+- **Credit hours column**: New `credit_hours` column on `external_training_imports` table stores the original credit hours from Vector Solutions (separate from the `hours` field which may be converted). Migration: `20260411_0100_add_credit_hours_to_external_training_imports`
+- **Improved type mapping**: External training records now correctly map Vector Solutions course types to internal training types during import, preserving certification data and auto-syncing completion records
+- **API spec compliance**: Fixed Vector Solutions API client to match their actual authentication flow (API key in header, not query parameter) and pagination format (offset-based, not cursor-based)
+
+**Edge Cases:**
+
+| Scenario                                          | Behavior                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Vector Solutions category has no internal mapping | Record imported with a "Unmapped" category flag; officer prompted to map        |
+| Credit hours differ from clock hours              | Both values stored; `credit_hours` used for CE credit, `hours` for compliance   |
+| Duplicate record detected during import           | Skipped with duplicate reason logged; deduplication uses member + course + date |
+
+#### National Registry (NREMT) Standard Linkage
+
+- **Registry code on training categories**: New `registry_code` column on `training_categories` links internal categories to NREMT National Continued Competency Requirement (NCCR) codes. Migration: `20260411_0200_add_registry_code_to_training_categories`
+- **NREMT hour distribution corrections**: Updated `nremt_requirements.json` to match official NREMT NCCR hour distributions for all certification levels (EMT, AEMT, Paramedic)
+- **NCCR terminology update**: Renamed "Cardiovascular" category to "Cardiology" to match official NREMT terminology
+- **Compliance auto-tracking**: Training records filed under categories with `registry_code` set automatically count toward the corresponding NCCR requirement, eliminating manual cross-referencing
+
+**Edge Cases:**
+
+| Scenario                                                           | Behavior                                                                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Category has registry_code but no matching NCCR requirement exists | Hours counted in category but not toward NCCR compliance; warning shown on compliance report    |
+| NREMT hour distribution updated after records already filed        | Existing records retain original credit; re-calculation available via compliance matrix refresh |
+
+#### Training Program Export/Import
+
+- **Export programs**: Officers can export training programs (including phases, requirements, milestones) as JSON packages for sharing between departments. Export accessible from the Training Programs page via a new **Export** button
+- **Import programs**: Departments can import shared program packages, which auto-create courses and requirements that don't already exist. Import flow validates the package structure and reports any conflicts
+- **Cross-department sharing**: Enables mutual aid training programs and standardized curricula across departments
+
+**Edge Cases:**
+
+| Scenario                                                     | Behavior                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Imported program references a course that already exists     | Existing course reused; no duplicate created                                    |
+| Imported program has a phase name matching an existing phase | New phase created with " (Imported)" suffix to avoid collision                  |
+| Export includes category registry codes                      | Registry codes included; importing department maps them to their own categories |
+
+#### Training Category Tracking Improvements
+
+- **Category on record creation**: Training record creation now properly captures and persists the training category, ensuring records appear in the correct NCCR buckets and compliance reports
+- **Category in reporting**: Fixed gaps where category data was lost between the event/session flow and the final training record, ensuring accurate compliance matrix calculations
+
+#### Manual Shift Report Page
+
+- **Standalone shift reporting**: New page at `/training/manual-shift-report` for departments that do not use the Scheduling module. Officers can file shift completion reports by manually entering shift data (date, apparatus, start/end times, crew members) instead of linking to a scheduled shift
+- **Apparatus selector**: Manual entry form includes an apparatus type dropdown that auto-populates relevant skills and tasks
+- **Start/end datetime fields**: Manual reports capture precise shift start and end times for accurate hours calculation
+- **Admin configuration**: New `ManualEntrySettingsPanel` on the Training Admin page lets administrators enable/disable manual shift entry and configure default apparatus types, skills, and tasks available in the manual form
+- **Route**: Added to training module routes, accessible to users with `training.manage` permission
+
+**Edge Cases:**
+
+| Scenario                                                  | Behavior                                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Manual report filed for a date that has a scheduled shift | Warning shown; officer can proceed (reports are independent)             |
+| Apparatus type has no skill/task mappings configured      | Form shows empty skills/tasks sections; officer can manually add entries |
+| Manual report with zero hours (same start/end time)       | Validation prevents submission; minimum 15-minute shift required         |
+
+#### Shift Completion Service Hardening
+
+- **20+ security and data integrity fixes**: Comprehensive hardening of the shift completion report pipeline for production readiness
+- **Submit-all-drafts scope**: Fixed `POST /api/v1/training/shift-reports/drafts/submit-all` to correctly scope draft submission to the current officer's reports only, preventing cross-officer draft submission
+- **Print button fix**: Restored broken print functionality on shift report cards in ShiftReportsTab
+- **Enrollment ID whitelist**: Draft-to-submitted transition now validates that the trainee still has an active enrollment before crediting program progress
+- **Draft regression guard**: Prevents re-creation of draft reports that were already submitted or reviewed
+
+#### Email Service & Audit Log Integrity
+
+- **Loguru format fix**: Fixed remaining `%d` format placeholders in email service to use Loguru's `{}` style, preventing "TypeError: not all arguments converted during string formatting" crashes
+- **Hash chain helper**: Extracted `_build_hash_data()` helper in `core/audit.py` to prevent drift between hash verification, creation, and rehashing operations. Previously, the hash chain could report false "compromised" results if field ordering differed between creation and verification
+- **Audit integrity verification**: Hash chain integrity checks now produce consistent results regardless of the order fields were added to audit log entries
+
+#### Facilities Module Refactoring
+
+- **Legacy page removal**: Deleted duplicate `FacilitiesPage.tsx`, `FacilityDetailPanel.tsx`, `InspectionsTab.tsx`, and `MaintenanceTab.tsx` from `pages/facilities/` — all functionality now lives in `modules/facilities/`
+- **Shared constants extracted**: New `modules/facilities/constants.ts` centralizes status colors, priority colors, maintenance type labels, inspection type labels, and system type options used across all facilities components
+- **Custom hooks**: Extracted `useInspectionForm` and `useMaintenanceForm` hooks from components to separate form state management from rendering, reducing component complexity
+- **Type consolidation**: Moved `types.ts` from `pages/facilities/` to `modules/facilities/types/facilities.ts` and re-exported from the module barrel
+- **Data integrity fixes**: Fixed nullable column handling and cascading delete behavior in facilities service
+- **Type safety**: Added proper TypeScript typing to all facilities components and store
+
+#### Membership & Prospective Members Module Improvements
+
+- **Drawer sub-components**: Extracted `ApplicantActionPanels`, `LinkedEventsSection`, and `ElectionPackageSection` from the monolithic `ApplicantDetailDrawer` for better maintainability
+- **ElectionPackageSection**: New component displays election ballot package information for applicants in the voting stage, showing ballot items, voting deadlines, and results
+- **LinkedEventsSection**: New component shows events linked to a prospective member (orientation sessions, interviews, ride-alongs) with event details and attendance status
+- **Stage color consolidation**: Pipeline stage colors centralized in `prospective-members/constants.ts` for consistent rendering across Kanban board, table view, and detail drawer
+- **Accessibility improvements**: Added ARIA labels, keyboard navigation, and focus management to the pipeline builder and Kanban board
+- **Security fixes**: Added FK indexes for membership pipeline tables (migration: `20260411_0100_add_membership_pipeline_fk_indexes`), preventing slow cascading queries on large pipelines
+- **Membership tier service**: Fixed edge cases in tier advancement logic for members transitioning from prospect to active status
+
+**Edge Cases:**
+
+| Scenario                                              | Behavior                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| Applicant linked to an election that is deleted       | Election reference cleared; "Election Removed" placeholder shown           |
+| Pipeline stage reorder while applicants are in-flight | Applicants retain their current stage; reorder only affects visual display |
+| Applicant has linked events from a disabled module    | Events section hidden; data preserved for when module is re-enabled        |
+
+#### Test Coverage Expansion
+
+- **39 pre-existing frontend test failures fixed** across 17 files — every existing test now passes
+- **7 store test assertion mismatches fixed**: admin-hours, apparatus, medical-screening, auth, and skills-testing stores
+- **New backend integration tests**:
+  - `test_election_voting_flow.py` — Complete election lifecycle from creation through vote casting and result certification
+  - `test_event_lifecycle.py` — Event creation, RSVP, check-in, and analytics pipeline
+  - `test_membership_pipeline_flow.py` — Prospect creation, stage advancement, and conversion to active member
+  - `test_training_compliance_integration.py` — Training record creation, requirement evaluation, and compliance matrix generation
+  - `test_shift_completion.py` — Comprehensive shift completion service tests (expanded)
+- **New frontend tests**:
+  - `facilitiesStore.test.ts` — Facilities store state management and API interactions
+  - `onboardingStore.test.ts` — Onboarding flow state and step validation
+  - `financeStore.test.ts` — Expanded from 25 to 75 tests with corrected assertions
+  - `trainingServices.test.ts` — Training service URL paths and response handling
+  - `inventoryService.test.ts` — Inventory service API contract validation
+- **ESLint cleanup**: Fixed all pre-existing ESLint errors across the codebase
+
+**New API Endpoints:**
+
+| Method | Path                                                  | Description                                                   |
+| ------ | ----------------------------------------------------- | ------------------------------------------------------------- |
+| `POST` | `/api/v1/integrations/salesforce/connect`             | Initialize Salesforce OAuth connection                        |
+| `POST` | `/api/v1/integrations/salesforce/disconnect`          | Disconnect Salesforce integration                             |
+| `POST` | `/api/v1/salesforce-sync/sync`                        | Trigger manual bidirectional Salesforce sync                  |
+| `GET`  | `/api/v1/salesforce-sync/status`                      | Get current sync status and history                           |
+| `PUT`  | `/api/v1/salesforce-sync/field-mappings`              | Update field mapping configuration                            |
+| `GET`  | `/api/v1/salesforce-sync/field-mappings`              | Get current field mappings                                    |
+| `POST` | `/api/public/salesforce/webhook`                      | Receive Salesforce outbound messages (public, HMAC-validated) |
+| `GET`  | `/api/v1/training/external/providers/{id}/categories` | Fetch external provider's category catalog                    |
+| `POST` | `/api/v1/training/programs/programs/{id}/export`      | Export training program as shareable JSON                     |
+| `POST` | `/api/v1/training/programs/import`                    | Import training program from JSON package                     |
+
+**New Frontend Routes:**
+
+| Route                           | Page                    | Description                                                  |
+| ------------------------------- | ----------------------- | ------------------------------------------------------------ |
+| `/training/manual-shift-report` | `ManualShiftReportPage` | Manual shift report entry for departments without scheduling |
+
+**New Frontend Components:**
+
+| Component                  | Location                                                            | Description                                   |
+| -------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `ManualShiftReportPage`    | `pages/training/ManualShiftReportPage.tsx`                          | Manual shift completion report form           |
+| `ManualEntrySettingsPanel` | `pages/training/ManualEntrySettingsPanel.tsx`                       | Admin config panel for manual shift entry     |
+| `ElectionPackageSection`   | `modules/prospective-members/components/ElectionPackageSection.tsx` | Election ballot info for pipeline applicants  |
+| `ApplicantActionPanels`    | `modules/prospective-members/components/ApplicantActionPanels.tsx`  | Action panels extracted from applicant drawer |
+| `LinkedEventsSection`      | `modules/prospective-members/components/LinkedEventsSection.tsx`    | Linked events display for prospective members |
+
+**New Database Migrations:**
+
+| Migration                                                     | Description                                               |
+| ------------------------------------------------------------- | --------------------------------------------------------- |
+| `20260411_0100_add_credit_hours_to_external_training_imports` | Adds `credit_hours` column to `external_training_imports` |
+| `20260411_0200_add_registry_code_to_training_categories`      | Adds `registry_code` column to `training_categories`      |
+| `20260411_0100_add_membership_pipeline_fk_indexes`            | Adds foreign key indexes to membership pipeline tables    |
+
+**New Schema Fields:**
+
+| Schema                   | Field                          | Type            | Description                                  |
+| ------------------------ | ------------------------------ | --------------- | -------------------------------------------- |
+| `ExternalTrainingImport` | `credit_hours`                 | `float \| None` | Original credit hours from external provider |
+| `TrainingCategory`       | `registry_code`                | `str \| None`   | NREMT NCCR registry code linkage             |
+| `TrainingModuleConfig`   | `manual_entry_enabled`         | `bool`          | Enable manual shift report entry             |
+| `TrainingModuleConfig`   | `manual_entry_apparatus_types` | `list[str]`     | Available apparatus types for manual entry   |
+
+---
+
+### Shift Report Redesign, Email Templates, Inventory Variants & Print Support (2026-04-07 — 2026-04-09)
+
+#### Shift Report Creation Redesign — Shift-First Batch Workflow
+
+- **Shift-first batch creation**: Officers now start by selecting a shift, then the system loads all crew members for that shift. Officers fill in shared data (hours, calls, call types) once, then add per-trainee evaluations (rating, skills, tasks, narrative) for members who need them. Non-trainees receive hours/calls credit only. Submits all reports in a single batch via `POST /api/v1/shift-completion-reports/batch`
+- **Batch create endpoint**: New `POST /api/v1/shift-completion-reports/batch` accepts a `BatchShiftReportCreate` payload with shared shift data and per-member evaluation arrays. Returns `{created, skipped}` counts
+- **By-shift lookup**: Officers can query all existing reports for a shift before creating new ones, preventing duplicate work
+- **Task defaults pre-population**: After selecting an apparatus type, Add Task dialog pre-populates from the apparatus-type task mapping. Previously selected task defaults remain visible after selection
+- **Score labels inline**: 1-5 skill score buttons now show descriptive label text next to them (Needs work, Developing, Competent, Proficient, Excellent) in addition to tooltips, improving readability in both ShiftReportPage and ShiftReportsTab
+- **Reviewer name on cards**: Shift completion report cards now display the reviewer's name (resolved via `reviewed_by` → `User` relationship) alongside the review status badge
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action button in all view modes (not just the Flagged tab)
+- **Server error messages in toasts**: Toast notifications now show actual server error messages from the API response instead of generic "Failed to submit" text, improving troubleshooting for officers
+- **Review comment UX**: Flagging a report now requires entering a reason (modal blocks submission without text). Reviewer name is displayed on the review badge
+
+#### Shift Report Offline Support
+
+- **Offline draft auto-save**: In-progress shift report forms are auto-saved to `localStorage` to prevent data loss from connectivity drops or accidental navigation. Stores shift ID, form data, crew selections, trainee evaluations, and crew remarks. Maximum 20 drafts retained with LRU eviction
+- **Offline submission queue**: When connectivity is lost during report submission, reports are queued in IndexedDB and automatically synced when connectivity returns. Uses the same architecture as the equipment check offline queue
+- **Draft management functions**: `saveDraft()`, `loadDraft()`, `deleteDraft()`, `listDrafts()`, `hasDraft()` for form state persistence
+- **Queue management functions**: `enqueueShiftReport()`, `listPendingReports()`, `dequeueShiftReport()`, `markReportRetry()`, `pendingReportCount()` for offline queue operations
+
+#### Shift Report Print Page
+
+- **Paper-formatted print page**: New route at `/scheduling/shift-reports/print` renders a letter-size (8.5" × 11") shift completion report formatted for printing with department branding, signature lines, and structured sections
+- **Auto-print trigger**: Page automatically opens the browser print dialog after loading
+- **Print from reports tab**: "Print" button on report cards in ShiftReportsTab navigates to the print page with the report ID as a query parameter
+
+#### Department-Level Shift Report Settings
+
+- **Granular toggles**: New department-level settings for controlling shift report behavior beyond the existing form section toggles. Stored in `training_module_configs` and `org.settings["shift_reports"]`
+- **Editable tag lists**: Skills and tasks per apparatus type are now managed via an `EditableTagList` component with inline add/remove UI, replacing the previous plain text display
+
+#### Training Record Print Pages
+
+- **Member training history print**: New route at `/training/print/member` renders a paper-formatted member training record for printing. Includes all training records, hours summary, certification status, and compliance indicators
+- **Program detail print**: New route at `/training/print/program` renders a training program with phases, requirements, milestones, and enrollment data formatted for paper
+- **Compliance matrix print**: New route at `/training/print/compliance` renders the department-wide compliance matrix (all members × all requirements) as a printable grid. Designed for annual reviews, audits, and regulatory filing. Requires `training.manage` permission
+- **Print buttons on source pages**: ComplianceMatrixTab, MemberTrainingHistoryPage, and PipelineDetailPage each have a new "Print" button that navigates to the corresponding print page
+
+#### Email Template System Improvements
+
+- **Template editor keyboard shortcut**: Ctrl+S / Cmd+S saves the current template without clicking the Save button
+- **Discard changes**: "Discard" button reverts unsaved editor changes to the last saved state
+- **Reset to default**: `POST /api/v1/email-templates/{id}/reset` restores a template's subject, HTML body, text body, and CSS to built-in defaults while preserving custom CC/BCC settings
+- **Test email**: `POST /api/v1/message-history/test-email` sends a test email using the current template content. Accepts optional `template_id` to test a specific template. Result is logged to message history
+- **Template search**: Searchable template list with filter-as-you-type in the TemplateList component
+- **Standardized email footers**: All email templates now include department contact information (phone, email, address) in the footer. Pulled from organization settings
+- **Global template variables**: `organization_website` and `login_url` available as Jinja2 variables in all email templates for consistent branding links
+- **`wrap_email_body()` helper**: New utility function that wraps inline HTML email content in the standard template structure (header, body, footer). Converts legacy inline HTML emails in scheduled tasks and scheduling service to use the template system
+- **Missing template types**: Added all missing email template types to both the frontend display map (TemplateList) and backend defaults (email_template_service), ensuring every template is visible and configurable
+
+#### Inventory Module — Variant Capsules, Stock Matrix & Filters
+
+- **Variant capsules component**: New `VariantCapsules` component displays size (blue), color (purple), and style (amber) as compact colored pill badges on inventory items. Used across InventoryItemsPage, ItemDetailPage, MyEquipmentPage, PoolItemsPage, and VariantGroupsPage
+- **Stock matrix on variant groups**: VariantGroupsPage redesigned with a stock matrix view showing all size × color × style combinations with per-variant quantity, total stock, and low-stock indicators
+- **Size/color/style filters on items page**: `GET /api/v1/inventory/items` now accepts `size`, `color`, and `style` query parameters for filtering inventory by variant attributes
+- **`getDisplayName()` helper**: Strips variant suffixes (` — size [— color] [— style]`) from item names for cleaner display in lists and cards
+
+#### Barcode Label Improvements
+
+- **Layout bug fixes**: Fixed label content overflowing on Dymo 30334 and Rollo 4×6 formats. Corrected quiet zone spacing on Code128 barcodes
+- **Content customization**: Label generation now supports customizable content fields — choose which fields (name, serial, asset tag, barcode, category, location) appear on labels. New `BarcodeLabelOptions` schema field on the generate request
+- **Print preview**: InventoryBarcodePrintPage now shows a live preview of label content before generating the PDF
+
+#### Equipment Check Improvements
+
+- **Incomplete checklist warning**: When a member submits an equipment check with unanswered items, a confirmation dialog warns about the incomplete state before allowing submission
+- **Reopen in-progress checks**: `PUT /api/v1/equipment-checks/checks/{id}/complete` allows completing remaining items on an incomplete check, enabling members to resume interrupted inspections
+- **MyChecklistsPage enhancements**: In-progress checks now show a "Resume" button alongside the completion percentage
+
+#### Branding & PWA
+
+- **App logo as default fallback**: SideNavigation, TopNavigation, and LoginPage now display the app logo (`/logo.png`) as default branding when no custom organization logo is configured
+- **PWA icons**: Added `apple-touch-icon.png`, `pwa-192x192.png`, and `pwa-512x512.png` to `frontend/public/` for proper PWA installation appearance on mobile devices
+- **Open Graph meta tags**: `frontend/index.html` now includes OG tags (`og:title`, `og:description`, `og:image`) for rich link previews when sharing the application URL
+- **Logo in documentation**: README.md and docs/README.md now display the project logo
+
+#### Code Quality & Refactoring
+
+- **Lint fix sweep**: Fixed pre-existing lint violations across 64 files (backend: F401 unused imports, F811 redefined names, E303 blank lines, W291 trailing whitespace; frontend: test assertion patterns, unused imports, type safety)
+- **Shared frontend components extracted**: `EditableTagList`, `ReportContentDisplay`, `StarRating`, `AssignmentActions`, `CrewBoardSlot`, `PositionEditor` extracted from large page components to reduce duplication. New `useLoadData` hook for common data-loading pattern
+- **Shared shift report constants**: `shiftReportConstants.ts` centralizes call types, default skills, default tasks, score labels, and status display mappings used across ShiftReportPage, ShiftReportsTab, and ShiftReportsSettingsPanel
+- **Backend service deduplication**: Extracted shared patterns in `scheduling_service.py`, `scheduled_tasks.py`, `equipment_check_service.py`, and `shift_completion_service.py` to reduce code duplication
+- **Email service simplification**: Extracted shared email patterns, fixed security issues (template injection vectors), and performance issues (redundant DB queries) in `email_service.py` and `email_template_service.py`
+- **Form types extraction**: Moved shared form type definitions from `inventoryService.ts` to dedicated `formTypes.ts`, removing dead code from the inventory service
+
+#### Bug Fixes (2026-04-07 — 2026-04-09)
+
+| Issue                                                        | Fix                                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `category_name` missing from `InventoryItem` interface       | Added to `eventServices.ts` type definition                                     |
+| JSX syntax error in `EmailTemplatesPage`                     | Fixed malformed JSX causing Docker build failure                                |
+| Null check failures in `ShiftReportsSettingsPanel`           | Added null guards for optional config values                                    |
+| Null check in `ProgramPrintPage`                             | Added fallback for nullable program fields                                      |
+| `exactOptionalPropertyTypes` violations in `ShiftReportsTab` | Fixed optional property assignments to use `undefined` explicitly               |
+| `notification_metadata` bug and JSON column mutations        | Fixed silent data loss from shallow-copy JSON mutations using `copy.deepcopy()` |
+| Banned date patterns in `TrainingEnhancementsTab`            | Replaced with timezone-aware `dateFormatting.ts` utilities                      |
+
+**New API Endpoints:**
+
+| Method | Path                                            | Description                                               |
+| ------ | ----------------------------------------------- | --------------------------------------------------------- |
+| `POST` | `/api/v1/shift-completion-reports/batch`        | Batch-create shift reports for all crew on a shift        |
+| `PUT`  | `/api/v1/equipment-checks/checks/{id}/complete` | Complete remaining items on an incomplete check           |
+| `POST` | `/api/v1/email-templates/{id}/reset`            | Reset email template to built-in defaults                 |
+| `POST` | `/api/v1/email-templates/{id}/preview`          | Preview rendered template with sample/live data           |
+| `POST` | `/api/v1/message-history/test-email`            | Send test email for SMTP verification or template preview |
+| `POST` | `/api/v1/inventory/items/create-variants`       | Create multiple size/color/style variant items at once    |
+
+**New Frontend Routes:**
+
+| Route                             | Page                      | Description                                                       |
+| --------------------------------- | ------------------------- | ----------------------------------------------------------------- |
+| `/scheduling/shift-reports/print` | `ShiftReportPrintPage`    | Paper-formatted shift completion report (letter-size, auto-print) |
+| `/training/print/member`          | `MemberTrainingPrintPage` | Paper-formatted member training records                           |
+| `/training/print/program`         | `ProgramPrintPage`        | Paper-formatted training program detail                           |
+| `/training/print/compliance`      | `CompliancePrintPage`     | Paper-formatted compliance matrix for audits                      |
+
+**New Frontend Components:**
+
+| Component                 | Location                                                 | Description                                                           |
+| ------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------- |
+| `VariantCapsules`         | `modules/inventory/components/VariantCapsules.tsx`       | Colored pill badges for size/color/style variant attributes           |
+| `EditableTagList`         | `modules/scheduling/components/EditableTagList.tsx`      | Inline add/remove tag list for skills and tasks                       |
+| `ReportContentDisplay`    | `modules/scheduling/components/ReportContentDisplay.tsx` | Renders shift report content sections (reusable across views)         |
+| `StarRating`              | `modules/scheduling/components/StarRating.tsx`           | Reusable star rating display component                                |
+| `AssignmentActions`       | `pages/scheduling/AssignmentActions.tsx`                 | Crew assignment action buttons (extracted from ShiftDetailPanel)      |
+| `CrewBoardSlot`           | `pages/scheduling/CrewBoardSlot.tsx`                     | Individual crew board position slot (extracted from ShiftDetailPanel) |
+| `PositionEditor`          | `pages/scheduling/PositionEditor.tsx`                    | Inline position editing component (extracted from ShiftDetailPanel)   |
+| `ShiftReportPrintPage`    | `pages/scheduling/ShiftReportPrintPage.tsx`              | Print-formatted shift report page                                     |
+| `MemberTrainingPrintPage` | `pages/training/MemberTrainingPrintPage.tsx`             | Print-formatted member training records                               |
+| `ProgramPrintPage`        | `pages/training/ProgramPrintPage.tsx`                    | Print-formatted training program detail                               |
+| `CompliancePrintPage`     | `pages/training/CompliancePrintPage.tsx`                 | Print-formatted compliance matrix                                     |
+
+**New Utility Modules:**
+
+| Module                    | Location                                               | Description                                                                           |
+| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `shiftReportDrafts`       | `utils/shiftReportDrafts.ts`                           | localStorage-based auto-save for in-progress shift report forms                       |
+| `shiftReportOfflineQueue` | `utils/shiftReportOfflineQueue.ts`                     | IndexedDB-backed offline queue for report submissions                                 |
+| `shiftReportConstants`    | `modules/scheduling/constants/shiftReportConstants.ts` | Centralized constants for shift report UI (call types, score labels, status mappings) |
+| `formTypes`               | `services/formTypes.ts`                                | Shared form type definitions extracted from inventoryService                          |
+
+**New Schema Fields:**
+
+| Schema                          | Field           | Type          | Description                                                    |
+| ------------------------------- | --------------- | ------------- | -------------------------------------------------------------- |
+| `ShiftCompletionReportResponse` | `reviewer_name` | `str \| None` | Resolved reviewer display name from `reviewed_by` relationship |
+| `BarcodeLabelOptions`           | (multiple)      | various       | Content customization fields for label generation              |
+| `EquipmentCheckCompleteItems`   | (payload)       | object        | Data for completing remaining items on incomplete checks       |
+
+**Edge Cases:**
+
+| Scenario                                                   | Behavior                                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Batch create with mixed trainee/non-trainee crew           | Non-trainees get hours/calls credit only; trainees get full evaluation data |
+| Batch create when reports already exist for some crew      | Existing reports are skipped; `skipped` count returned                      |
+| Offline report queued but connectivity returns before sync | Queue drains automatically on reconnection; no duplicate submissions        |
+| Draft auto-save exceeds 20 limit                           | Oldest draft evicted (LRU) to stay within limit                             |
+| Print page for report with redacted fields                 | Redacted fields show "[Redacted]" on printed output                         |
+| Template reset when custom CC/BCC configured               | CC/BCC preserved; only subject/body/CSS reset to defaults                   |
+| Test email with invalid SMTP                               | Error message returned with SMTP diagnostic details                         |
+| Variant capsules on item with no variant attributes        | Component returns null (no empty badges rendered)                           |
+| Stock matrix with zero stock across all variants           | Group shows "Out of Stock" banner; individual zeros are dimmed              |
+| Size/color/style filter with no matches                    | Empty results returned; filter state preserved                              |
+| Equipment check resume after items were modified           | Loads current template state; new items appear as unanswered                |
+| Compliance print page with 100+ members                    | Paginated across multiple printed pages with repeat headers                 |
+
+---
+
+### Skill Scoring, Batch Review & Security Hardening (2026-04-07)
+
+#### Skill Scoring (1-5) on Shift Completion Reports
+
+- **1-5 skill scoring**: Officers can now assign a numeric score (1-5) to each observed skill when filing shift completion reports. Scores flow through to `SkillCheckoff` records and feed the competency score history. The `SkillObservation` schema gains a new `score` field (`int | None`, ge=1, le=5)
+- **Score labels**: Descriptive labels appear as tooltips on score buttons and inline text in display views: 1=Needs work, 2=Developing, 3=Competent, 4=Proficient, 5=Excellent
+- **Unified color theme**: Score buttons use a consistent violet color scheme across both `ShiftReportPage` and `ShiftReportsTab` (previously red in ShiftReportPage)
+- **Shift date in review modal**: Review modal now shows the shift date alongside trainee and officer names for context
+
+#### Batch Review for Shift Reports
+
+- **Batch review endpoint**: New `POST /api/v1/training/shift-reports/batch-review` accepts up to 100 report IDs with a review status (approved/flagged) and optional reviewer notes. Returns `{reviewed: N, failed: N}` counts
+- **Batch review UI**: Checkboxes on report cards in the pending-review and flagged views, select-all toggle, and "Approve Selected" / "Flag Selected" action buttons
+- **Batch review schema**: New `BatchReviewRequest` Pydantic schema with `report_ids` (list[str], min 1, max 100), `review_status` (str), and `reviewer_notes` (optional str)
+
+#### Flagged Reports View
+
+- **Flagged tab**: New "Flagged" view in ShiftReportsTab showing reports that were flagged by reviewers for follow-up
+- **Flagged endpoint**: New `GET /api/v1/training/shift-reports/flagged` returns reports with `review_status=flagged` for the current organization
+- **Re-review capability**: Flagged reports can be re-reviewed and approved from the flagged view, allowing recovery of previously flagged reports
+
+#### Trainee and Officer Names on Reports
+
+- **Model relationships**: Added `trainee` and `officer` relationships on `ShiftCompletionReport` model linking to the `User` model
+- **Response schema**: Added `trainee_name` and `officer_name` fields to `ShiftCompletionReportResponse`, populated from the relationships
+- **Frontend types**: Added `trainee_name` and `officer_name` to the `ShiftCompletionReport` TypeScript interface
+- **Card display**: Report cards now show "Trainee Name — Date" in the header and the officer name in the card footer
+
+#### Report Content in Review Modal
+
+- **Full report display**: Review modal now renders the complete report content (hours, calls, rating, strengths, areas for improvement, narrative, skills with scores, tasks) so reviewers can see exactly what they are approving or flagging
+
+#### Skill Linkage Status in Apparatus Settings
+
+- **Skill linkage indicators**: The `ShiftReportsSettingsPanel` now shows color-coded tags for each apparatus-type skill indicating whether it matches a formal `SkillEvaluation` record in the training module
+  - Green tag: Skill name matches a SkillEvaluation — will track competency, create checkoffs, and progress pipeline requirements
+  - Amber tag: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
+- **Skill names endpoint**: New `GET /api/v1/training/module-config/skill-names` returns active SkillEvaluation names for the current organization
+- **Legend**: Explanatory legend at the bottom of the skills section explains the color coding
+
+#### Security Fixes
+
+- **Authorization bypass fix on `GET /shift-reports/{report_id}`**: Previously, any authenticated user in the same org could access any shift completion report by ID, exposing sensitive performance data (ratings, narratives, reviewer notes). Now enforces that the requester is the trainee, the filing officer, or has `training.manage` permission. Trainees see visibility-filtered data and `reviewer_notes` are always stripped for trainees. This was a HIPAA minimum-necessary violation
+- **Audit logging for shift reports**: All shift completion report operations now log audit events via `log_audit_event()`:
+  - `shift_report_created`: Officer files a report
+  - `shift_report_updated`: Officer updates a draft report
+  - `shift_report_reviewed`: Reviewer approves/flags/redacts a report
+  - `shift_report_acknowledged`: Trainee acknowledges a report
+  - `shift_reports_bulk_submitted`: Officer submits all drafts at once
+
+#### Bug Fixes (2026-04-07)
+
+- **Decimal TypeError in weekly calendar**: MySQL returns `Decimal` from `SUM()` aggregates. The `_enrich_shifts` helper divided that by a float literal, which Python rejects. Fixed by wrapping in `float()` before division
+- **Decimal TypeError in monthly calendar**: Same `Decimal`-to-float conversion fix applied to the monthly calendar endpoint
+- **`??` to `||` for optional form fields**: Replaced `??` (nullish coalescing) with `||` (logical OR) across 35 instances in prospective-members and apparatus modules to properly coerce empty strings to `undefined`, preventing 422 validation errors from Pydantic
+- **`ShiftCompletionReportCreate.shift_date` type**: Changed from optional to required in TypeScript types to match the backend Pydantic schema contract, preventing potential 422 errors
+- **Unused `LogOut` import**: Removed unused import from `MyShiftsTab` (F401 lint fix)
+- **`tsconfig.json` deprecation**: Added `ignoreDeprecations: "5.0"` to silence TS5101 for `baseUrl` (required for `@/*` path alias, deprecated in TS 7.0)
+- **`ShiftReportsTab` shift_date fallback**: Added fallback for `form.shift_date` to satisfy `noUncheckedIndexedAccess`
+- **Center-aligned numeric columns**: Trainee summary table numeric columns (hours, calls, avg rating) are now center-aligned to match their headers
+
+**New API Endpoints:**
+
+| Method | Path                                          | Description                                                   |
+| ------ | --------------------------------------------- | ------------------------------------------------------------- |
+| `POST` | `/api/v1/training/shift-reports/batch-review` | Batch approve/flag multiple reports (up to 100)               |
+| `GET`  | `/api/v1/training/shift-reports/flagged`      | Get flagged reports for follow-up review                      |
+| `GET`  | `/api/v1/training/module-config/skill-names`  | Get active SkillEvaluation names for skill linkage validation |
+
+**New Schema Fields:**
+
+| Schema                          | Field          | Type                | Description                                 |
+| ------------------------------- | -------------- | ------------------- | ------------------------------------------- |
+| `SkillObservation`              | `score`        | `int \| None` (1-5) | Numeric skill score for competency tracking |
+| `ShiftCompletionReportResponse` | `trainee_name` | `str \| None`       | Resolved trainee display name               |
+| `ShiftCompletionReportResponse` | `officer_name` | `str \| None`       | Resolved officer display name               |
+
+**New Pydantic Schemas:**
+
+| Schema               | Fields                                          | Description               |
+| -------------------- | ----------------------------------------------- | ------------------------- |
+| `BatchReviewRequest` | `report_ids`, `review_status`, `reviewer_notes` | Batch review request body |
+
+**Edge Cases:**
+
+| Scenario                                       | Behavior                                                                               |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Skill score outside 1-5 range                  | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error                                |
+| Batch review with >100 report IDs              | Rejected by `max_length=100` constraint                                                |
+| Batch review with mix of valid/invalid IDs     | Valid reports are reviewed; failed count returned separately                           |
+| Flagged report re-reviewed to approved         | Moves from flagged view to approved; triggers deferred pipeline progress if applicable |
+| Non-officer/non-trainee accessing report by ID | Returns 403 Forbidden unless user has `training.manage` permission                     |
+| Trainee accessing own report                   | Sees visibility-filtered data; `reviewer_notes` always stripped                        |
+| Skill name matching for linkage                | Case-sensitive exact match against SkillEvaluation.name                                |
+| No SkillEvaluation records in org              | All skills show amber "unlinked" tags                                                  |
+
+---
+
+### Shift Report Settings, Form Customization & Apparatus-Specific Skills (2026-04-04)
+
+- **Shift Reports Settings Panel**: New `ShiftReportsSettingsPanel` component in `modules/scheduling/components/` controls checklist timing windows (start/end of shift), post-shift validation settings (enabled, require_officer_report, validation_window_hours), and surfaces training module defaults (call types, skills, tasks). Accessible from **Scheduling > Settings > Shift Reports** and from the Shift Detail Panel settings link
+- **Report form section toggles**: 7 new `form_show_*` boolean columns on `training_module_configs` table control which optional sections appear on the shift completion report creation form. These are separate from the existing `show_*` visibility columns which control what trainees see after submission. Toggleable sections: performance rating, areas of strength, areas for improvement, officer narrative, skills observed, tasks performed, call types
+- **Per-apparatus-type skills and tasks mapping**: New `apparatus_type_skills` and `apparatus_type_tasks` JSON columns on `training_module_configs`. Maps apparatus types (engine, ladder, rescue, ambulance, etc.) to specific skills and tasks so the shift completion report form auto-populates relevant items based on the shift's assigned apparatus. Editable from ShiftReportsSettingsPanel with per-type accordion UI
+- **Customizable rating scale**: `rating_label`, `rating_scale_type` (stars/descriptive), and `rating_scale_labels` fields on module config allow departments to customize the performance rating display (e.g., custom labels per 1-5 level)
+- **Save as Draft button**: Officers can save incomplete shift completion reports as drafts via `save_as_draft: true` on the create schema. Drafts do not trigger pipeline progress. Officers return to drafts from the Drafts view in ShiftReportsTab
+- **Auto-filter trainee list**: When a shift report is linked to a shift, the trainee dropdown filters to only show members assigned to that shift. Falls back to full member list for ad-hoc reports
+- **Shift reports deep-linking**: Shift Reports tab connected between scheduling and training modules. Navigation from scheduling settings links directly to training shift reports and vice versa
+- **ShiftReportPage feature parity**: Standalone `/shift-report` page brought to full feature parity with the embedded ShiftReportsTab — same draft support, section toggles, apparatus-specific skills/tasks, and rating customization
+- **Training feedback defaults seeded**: Sample skills, tasks, and apparatus-type mappings auto-populated for new organizations via seed migration
+
+**New Frontend Components:**
+
+| Component                   | Location                                                      | Description                                                                    |
+| --------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `ShiftReportsSettingsPanel` | `modules/scheduling/components/ShiftReportsSettingsPanel.tsx` | Shift report and post-shift validation settings with training defaults display |
+
+**New Database Columns:**
+
+| Table                     | Column                            | Type              | Description                                                                           |
+| ------------------------- | --------------------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `training_module_configs` | `form_show_performance_rating`    | Boolean           | Toggle performance rating on report form                                              |
+| `training_module_configs` | `form_show_areas_of_strength`     | Boolean           | Toggle strengths section on report form                                               |
+| `training_module_configs` | `form_show_areas_for_improvement` | Boolean           | Toggle improvement section on report form                                             |
+| `training_module_configs` | `form_show_officer_narrative`     | Boolean           | Toggle narrative section on report form                                               |
+| `training_module_configs` | `form_show_skills_observed`       | Boolean           | Toggle skills section on report form                                                  |
+| `training_module_configs` | `form_show_tasks_performed`       | Boolean           | Toggle tasks section on report form                                                   |
+| `training_module_configs` | `form_show_call_types`            | Boolean           | Toggle call types section on report form                                              |
+| `training_module_configs` | `apparatus_type_skills`           | JSON              | Per-apparatus-type skill lists (e.g., engine → pump ops, hose deployment)             |
+| `training_module_configs` | `apparatus_type_tasks`            | JSON              | Per-apparatus-type task lists (e.g., engine → hydrant connection, drafting)           |
+| `training_module_configs` | `rating_label`                    | String            | Custom label for performance rating (default: "Performance Rating")                   |
+| `training_module_configs` | `rating_scale_type`               | String            | Rating display type: "stars" or "descriptive"                                         |
+| `training_module_configs` | `rating_scale_labels`             | JSON              | Custom labels per rating level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`)   |
+| `requirement_progress`    | `started_at`                      | DateTime(tz)      | Timestamp when requirement progress transitions to IN_PROGRESS                        |
+| `shift_equipment_checks`  | `shift_id`                        | String (nullable) | Made nullable to support standalone (ad-hoc) equipment checks without an active shift |
+
+**New Alembic Migrations:**
+
+| Revision        | Description                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `20260404_0100` | Make `shift_equipment_checks.shift_id` nullable for standalone checks                                     |
+| `20260404_0200` | Add `form_show_*` section toggle columns to `training_module_configs`                                     |
+| `20260404_0300` | Add `apparatus_type_skills` and `apparatus_type_tasks` JSON columns                                       |
+| `20260404_0400` | Add composite indexes on `shift_equipment_checks` and `shift_equipment_check_items` for query performance |
+| `20260404_0500` | Add `started_at` column to `requirement_progress`                                                         |
+
+**Edge Cases:**
+
+| Scenario                                           | Behavior                                                                                  |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Report form with all sections toggled off          | Only core fields (trainee, shift date, hours, calls) remain; form is still submittable    |
+| Apparatus type with no mapped skills               | Falls back to org-wide default skills list; if none configured, skills section is empty   |
+| Save as draft with missing required fields         | Draft saved successfully — validation deferred until final submission                     |
+| Trainee list filter with no shift linked           | Full member list shown (ad-hoc report mode)                                               |
+| Standalone equipment check (no shift)              | Check saved with `shift_id=NULL`; appears in reports but not linked to shift finalization |
+| Rating scale type "descriptive" with no labels     | Falls back to numeric display (1-5)                                                       |
+| Duplicate equipment check for same shift+apparatus | Prevented by composite unique constraint; returns descriptive error                       |
+| Equipment check with empty template (no items)     | Returns empty checklist; submission blocked with "No items to check" message              |
+
+### Bug Fixes (2026-04-04)
+
+- **Standalone checklist submission**: Made `shift_id` nullable in `shift_equipment_checks` table so members can perform ad-hoc equipment checks without an active shift (migration `20260404_0100`)
+- **Equipment check empty checklists**: Fixed bug where templates with no items produced empty check forms with no user feedback
+- **Equipment check status logic**: Corrected pass/fail status computation when items have mixed check types
+- **Equipment check duplicates**: Added composite unique constraint to prevent duplicate checks for the same shift + apparatus + timing combination
+- **Shift report submission with assignment but no attendance**: Fixed error when trainee has a shift assignment but no attendance record — the system now gracefully handles missing attendance data and allows manual hour entry
+- **Report shift_date validation**: Reports linked to a specific shift now validate that the report's `shift_date` matches the linked shift's actual date, preventing data mismatches
+- **Pipeline enrollment field name**: Fixed incorrect field name reference in enrollment lookups that caused 500 errors during pipeline progress updates
+- **Requirement progress started_at column**: Added missing `started_at` column that the training program service referenced when transitioning requirements to IN_PROGRESS status
+- **NotificationLog reserved attribute**: Renamed SQLAlchemy model attribute from `metadata` (reserved by SQLAlchemy Base) to `notification_metadata` on the `NotificationLog` model, fixing container startup crashes
+- **Post-shift validation UX**: Fixed notification card action buttons to correctly show "Start Checklist" during shift windows and "View Shift" outside them
+- **Notification deep-linking**: Fixed shift check notifications to link directly to the checklist page instead of the generic scheduling page
+- **Start-of-shift notification improvements**: Enriched notification metadata with checklist count and apparatus info for better context in notification cards
+- **Equipment check composite indexes**: Added database indexes on `(shift_id, template_id)` and `(check_id, template_item_id)` for query performance on large datasets
+
+### Training Admin Enhancements (2026-04-04)
+
+- **TrainingEnhancementsTab**: Wired up create modals for recertification pathways, instructor qualifications, effectiveness evaluations, and multi-agency sessions. Connected the effectiveness scoring section to the evaluation API
+- **Unused code cleanup**: Removed unused skill helper functions from ShiftReportPage
+
+### Frontend Architecture — Component Extraction (2026-04-03)
+
+Large-page components decomposed into focused, maintainable sub-components:
+
+- **EventDetailPage** (9 modals extracted): `EventCancelModal`, `EventCancelSeriesModal`, `EventCheckInModal`, `EventDeleteConfirmModal`, `EventEndConfirmModal`, `EventOverrideAttendanceModal`, `EventRSVPModal`, `EventRecordTimesModal`, `EventSaveTemplateModal` → `components/event-detail/`. Form state internalized in cancel/delete modals to reduce prop sprawl. Double-fetch on check-in removed
+- **ElectionDetailPage** (6 modals extracted): `BallotPreviewModal`, `DeleteElectionModal`, `ExtendElectionModal`, `RemindNonVotersModal`, `RollbackElectionModal`, `SendBallotEmailsModal` → `components/election-detail/`
+- **MemberProfilePage** (4 sections extracted): `AdminHoursSection`, `ContactInfoSection`, `EmergencyContactsSection`, `TrainingSection` → `components/member-profile/`
+- **SettingsPage** (4 sections extracted): `AuthSettingsSection`, `EmailSettingsSection`, `RanksSettingsSection`, `StorageSettingsSection` → `components/settings/`
+- **Dashboard** (2 components extracted): `DashboardStatCard`, `DashboardCardHeader` → `components/dashboard/`
+- **ShiftTemplatesPage** (3 modals + types extracted): `TemplateFormModal`, `PatternFormModal`, `GenerateShiftsModal`, `shiftTemplateTypes.ts` → `modules/scheduling/components/`
+- **StageConfigModal** (5 configs extracted): `AutomatedEmailConfig`, `ElectionVoteConfig`, `FormSubmissionConfig`, `MeetingConfig`, `ReferenceCheckConfig` → `components/stage-config/`
+
+**New Frontend Components:**
+
+| Component                      | Location                                                   | Description                           |
+| ------------------------------ | ---------------------------------------------------------- | ------------------------------------- |
+| `EventCancelModal`             | `components/event-detail/EventCancelModal.tsx`             | Cancel single event with reason       |
+| `EventCancelSeriesModal`       | `components/event-detail/EventCancelSeriesModal.tsx`       | Cancel recurring event series         |
+| `EventCheckInModal`            | `components/event-detail/EventCheckInModal.tsx`            | QR/manual check-in modal              |
+| `EventDeleteConfirmModal`      | `components/event-detail/EventDeleteConfirmModal.tsx`      | Delete event confirmation             |
+| `EventEndConfirmModal`         | `components/event-detail/EventEndConfirmModal.tsx`         | End event early confirmation          |
+| `EventOverrideAttendanceModal` | `components/event-detail/EventOverrideAttendanceModal.tsx` | Override attendance records           |
+| `EventRSVPModal`               | `components/event-detail/EventRSVPModal.tsx`               | RSVP management                       |
+| `EventRecordTimesModal`        | `components/event-detail/EventRecordTimesModal.tsx`        | Record check-in/out times             |
+| `EventSaveTemplateModal`       | `components/event-detail/EventSaveTemplateModal.tsx`       | Save event as template                |
+| `BallotPreviewModal`           | `components/election-detail/BallotPreviewModal.tsx`        | Preview ballot layout                 |
+| `DeleteElectionModal`          | `components/election-detail/DeleteElectionModal.tsx`       | Delete election confirmation          |
+| `ExtendElectionModal`          | `components/election-detail/ExtendElectionModal.tsx`       | Extend election voting period         |
+| `RemindNonVotersModal`         | `components/election-detail/RemindNonVotersModal.tsx`      | Send reminder to non-voters           |
+| `RollbackElectionModal`        | `components/election-detail/RollbackElectionModal.tsx`     | Rollback election status              |
+| `SendBallotEmailsModal`        | `components/election-detail/SendBallotEmailsModal.tsx`     | Send ballot email notifications       |
+| `AdminHoursSection`            | `components/member-profile/AdminHoursSection.tsx`          | Admin hours management tab            |
+| `ContactInfoSection`           | `components/member-profile/ContactInfoSection.tsx`         | Member contact information            |
+| `EmergencyContactsSection`     | `components/member-profile/EmergencyContactsSection.tsx`   | Emergency contacts management         |
+| `TrainingSection`              | `components/member-profile/TrainingSection.tsx`            | Training history and records          |
+| `AuthSettingsSection`          | `components/settings/AuthSettingsSection.tsx`              | Authentication settings               |
+| `EmailSettingsSection`         | `components/settings/EmailSettingsSection.tsx`             | Email configuration settings          |
+| `RanksSettingsSection`         | `components/settings/RanksSettingsSection.tsx`             | Rank management settings              |
+| `StorageSettingsSection`       | `components/settings/StorageSettingsSection.tsx`           | File storage settings                 |
+| `DashboardStatCard`            | `components/dashboard/DashboardStatCard.tsx`               | Reusable metric card for dashboard    |
+| `DashboardCardHeader`          | `components/dashboard/DashboardCardHeader.tsx`             | Reusable card header with icon        |
+| `TemplateFormModal`            | `modules/scheduling/components/TemplateFormModal.tsx`      | Create/edit shift template            |
+| `PatternFormModal`             | `modules/scheduling/components/PatternFormModal.tsx`       | Create/edit shift pattern             |
+| `GenerateShiftsModal`          | `modules/scheduling/components/GenerateShiftsModal.tsx`    | Bulk generate shifts from pattern     |
+| `AutomatedEmailConfig`         | `components/stage-config/AutomatedEmailConfig.tsx`         | Pipeline automated email stage config |
+| `ElectionVoteConfig`           | `components/stage-config/ElectionVoteConfig.tsx`           | Pipeline election vote stage config   |
+| `FormSubmissionConfig`         | `components/stage-config/FormSubmissionConfig.tsx`         | Pipeline form submission stage config |
+| `MeetingConfig`                | `components/stage-config/MeetingConfig.tsx`                | Pipeline meeting stage config         |
+| `ReferenceCheckConfig`         | `components/stage-config/ReferenceCheckConfig.tsx`         | Pipeline reference check stage config |
+
+### Frontend Pattern Consolidation — Shared Hooks, Modals & Components (2026-03-30)
+
+- **useEmailListInput hook**: New shared hook at `hooks/useEmailListInput.ts` consolidates duplicate email list input logic (add/remove/validate) from ScheduleEmailForm, TemplateEditor, and SchedulingNotificationsPanel. Provides `validateEmailList()`, `parseEmailList()`, and stateful `useEmailListInput()` for managed email list inputs
+- **APIKeysTab modal consolidation**: Replaced 3 custom modal implementations in APIKeysTab with the shared Modal component, gaining focus trapping, consistent escape/backdrop handling, and reduced code (-92 lines net)
+- **PipelineTable shared SortableHeader**: Replaced local SortableHeader implementation in PipelineTable with shared `components/ux/SortableHeader` component. Removed unused ChevronUp/ChevronDown/ChevronsUpDown icon imports
+- **SchedulingNotificationsPanel simplification**: Replaced 4 separate ccInput state variables and 8 add/remove handler functions with 4 `useEmailListInput` hook calls, reducing ~50 lines of boilerplate
+
+**New Shared Modules:**
+
+| File                                      | Purpose                                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `frontend/src/hooks/useEmailListInput.ts` | Reusable email list input hook with validation, add/remove, and state management |
+
+### Error Handling Standardization & Pagination (2026-03-30)
+
+- **safe_error_detail() coverage**: Replaced 7 raw error f-strings in `event_requests.py` with `safe_error_detail()` wrapper to prevent internal error detail leakage to clients
+- **Pagination added to operational_ranks**: `GET /api/v1/operational-ranks/ranks` now accepts PaginationParams with skip/limit
+- **Pagination added to training_sessions**: Calendar listing endpoint now accepts PaginationParams
+- **Pagination added to member_leaves**: `GET /api/v1/member-leaves` and `GET /api/v1/member-leaves/{user_id}` now accept PaginationParams with skip/limit filtering
+- **Pagination added to training_waivers**: `GET /api/v1/training-waivers` now accepts PaginationParams applied at the SQL level (offset/limit)
+- **Unused import cleanup**: Removed unused `EvocLevel` import in apparatus_service.py, `settings` import in scheduled_tasks.py
+
+### Audit Logging, Pagination & XSS Prevention (2026-03-29)
+
+- **HIPAA audit logging — medical screening**: Added `log_audit_event()` calls for medical screening requirement and record creation/update/delete operations with "medical" event category
+- **HIPAA audit logging — documents**: Added audit events for `document_uploaded` (filename, MIME type, file size) and `document_deleted` with appropriate severity levels
+- **HIPAA audit logging — membership pipeline**: Added audit events for pipeline created/deleted, prospect created/advanced/transferred including name and email in event metadata
+- **HIPAA audit logging — messages**: Added audit events for message creation and deletion
+- **Pagination — finance endpoints**: Added PaginationParams to 8 finance endpoints: `list_fiscal_years`, `list_budget_categories`, `list_budgets`, `list_approval_chains`, `list_purchase_requests`, `list_expense_reports`, `list_check_requests`, `list_member_dues`
+- **Pagination — grants endpoints**: Added PaginationParams to 4 grants endpoints: `list_opportunities`, `list_applications`, `list_budget_items`, `list_expenditures`
+- **Pagination — medical screening**: Added PaginationParams to `list_requirements` and `list_records`
+- **SimpleMarkdown component**: Replaced `dangerouslySetInnerHTML` in EventDetailPage with a new React-based SimpleMarkdown component (`utils/simpleMarkdown.ts`). Supports bold, italic, links, bullet lists, and newlines via token-based parsing. Safe URL validation allows only `http://`, `https://`, and `mailto:` schemes
+- **User model indexes**: Added composite index on `(organization_id, status, deleted_at)`, plus indexes on `created_at` and `last_login_at` for performance
+
+**New Frontend Components:**
+
+| Component        | Location                               | Description                                                          |
+| ---------------- | -------------------------------------- | -------------------------------------------------------------------- |
+| `SimpleMarkdown` | `frontend/src/utils/simpleMarkdown.ts` | React-based safe markdown renderer replacing dangerouslySetInnerHTML |
+
+**Edge Cases:**
+
+| Scenario                                                  | Behavior                                                       |
+| --------------------------------------------------------- | -------------------------------------------------------------- |
+| SimpleMarkdown with unsupported URL scheme (javascript:)  | URL not rendered as link; displayed as plain text              |
+| SimpleMarkdown with nested formatting (**bold _italic_**) | Outer formatting applied; nesting handled gracefully           |
+| Pagination with skip beyond total results                 | Returns empty array                                            |
+| Audit event logging failure                               | Logged at ERROR level but does not block the primary operation |
+
+### Shift Report Analytics — Officer & Trainee Dashboards (2026-03-29)
+
+- **Officer analytics dashboard**: New `GET /api/v1/training/shift-reports/officer-analytics` endpoint returns org-wide analytics: total reports, hours, calls, average rating, per-trainee breakdown table, status counts (draft/pending/approved/flagged), and monthly trend data. Rendered as card metrics + data table in ShiftReportsTab
+- **Trainee stats dashboard**: New `GET /api/v1/training/shift-reports/my-stats` endpoint returns individual trainee statistics: total reports, hours, calls, average rating, and monthly breakdown. Displayed in a personal stats card in ShiftReportsTab
+- **ShiftReportsTab multi-view**: ShiftReportsTab expanded with 5 view modes: my-reports (trainee's received reports), filed-by-me (officer's filed reports), pending-review, drafts, and create. View mode selector rendered as tab buttons
+- **Officer filed reports**: New `GET /api/v1/training/shift-reports/by-officer` endpoint returns all reports filed by the current officer
+- **Per-trainee drill-down**: New `GET /api/v1/training/shift-reports/trainee/{trainee_id}` and `/trainee/{trainee_id}/stats` endpoints for officer access to individual trainee report history and statistics
+
+**New API Endpoints:**
+
+| Method | Path                                                        | Description                                  |
+| ------ | ----------------------------------------------------------- | -------------------------------------------- |
+| `GET`  | `/api/v1/training/shift-reports/officer-analytics`          | Org-wide shift report analytics for officers |
+| `GET`  | `/api/v1/training/shift-reports/my-stats`                   | Individual trainee shift report statistics   |
+| `GET`  | `/api/v1/training/shift-reports/by-officer`                 | Reports filed by current officer             |
+| `GET`  | `/api/v1/training/shift-reports/trainee/{trainee_id}`       | Reports for specific trainee                 |
+| `GET`  | `/api/v1/training/shift-reports/trainee/{trainee_id}/stats` | Stats for specific trainee                   |
+
+**New Frontend Types:**
+
+| Type                      | Location            | Description                                                          |
+| ------------------------- | ------------------- | -------------------------------------------------------------------- |
+| `TraineeShiftStats`       | `types/training.ts` | Total reports, hours, calls, avg_rating, monthly breakdown           |
+| `MonthlyShiftData`        | `types/training.ts` | Per-month aggregation: month, reports, hours, calls                  |
+| `OfficerShiftAnalytics`   | `types/training.ts` | Org-wide totals + per-trainee table + status counts + monthly trend  |
+| `OfficerAnalyticsTrainee` | `types/training.ts` | Per-trainee row: trainee_id, name, reports, hours, calls, avg_rating |
+
+**Edge Cases:**
+
+| Scenario                          | Behavior                                                               |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| Officer with no filed reports     | Analytics dashboard shows zeroed metrics with "No reports yet" message |
+| Trainee with no received reports  | Stats card hidden; "No reports" empty state shown                      |
+| Monthly breakdown with gap months | Missing months not interpolated; chart shows only months with data     |
+| Status counts with no drafts      | Draft count shows 0; draft tab still accessible but empty              |
+
+### Elections Module Fixes — N+1 Queries, Schema Gaps & Report Pipeline (2026-03-29)
+
+- **N+1 query fix — \_sync_package_statuses()**: Batch-fetches candidate names in a single query instead of per-candidate lookups during package status synchronization
+- **N+1 query fix — get_eligibility_roster()**: Batch-computes voter hashes upfront with IN clause instead of per-user hash computation
+- **ForensicsResponse schema**: Replaced untyped `Dict[str, Any]` with properly typed nested models for `deleted_votes`, `voting_tokens`, `audit_log`, `anomaly_detection`, and `voting_timeline`
+- **bulkCastVotes response type**: Corrected from `{ success: boolean; votes_cast: number }` to `Vote[]` to match backend's `list[VoteResponse]` return type
+- **bulkCastVotes payload shape**: Fixed to `{ election_id, votes: [{position: candidate_id}] }` structure
+- **sendReport endpoint**: New `POST /api/v1/elections/{id}/send-report` endpoint sends formatted election results email to eligible voters
+- **verifyReceipt endpoint**: New `GET /api/v1/elections/{id}/verify-receipt` endpoint for public vote receipt verification with rate limiting
+- **PublishResultsPanel fix**: Connected to dedicated `/send-report` endpoint instead of misusing `sendBallotEmail`
+- **Frontend type additions**: New `ElectionReportResponse` and `VoteReceiptResponse` interfaces in `types/election.ts`
+
+**New API Endpoints:**
+
+| Method | Path                                    | Description                                     |
+| ------ | --------------------------------------- | ----------------------------------------------- |
+| `POST` | `/api/v1/elections/{id}/send-report`    | Email election results to eligible voters       |
+| `GET`  | `/api/v1/elections/{id}/verify-receipt` | Public vote receipt verification (rate-limited) |
+
+**Edge Cases:**
+
+| Scenario                                 | Behavior                                                        |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| verify-receipt with invalid receipt code | Returns 404 with generic "receipt not found" (no timing oracle) |
+| send-report for open election            | Blocked; only allowed for closed/certified elections            |
+| Bulk cast with mismatched position IDs   | Returns 422 with per-position validation errors                 |
+
+### Critical Bug Fixes — Security, Forms & Error Handling (2026-03-29)
+
+- **Analytics user_id spoofing fix (security)**: Changed analytics event endpoint from accepting `data.get("user_id")` to always using `current_user.id`, preventing privilege escalation where any authenticated user could log events as another user
+- **Analytics schema validation**: Replaced raw `dict` parameter with Pydantic `AnalyticsEventCreate` model with typed `event_type`, `event_id`, and `metadata` fields
+- **Form value coercion (~15 instances)**: Fixed `??` (nullish coalescing) → `||` (logical OR) on form string values across TemplatePreview, EmailTemplatesPage, ITTeamBackupAccess, NavigationChoice, ApplicantDetailDrawer, ProspectiveMembersPage, FormsPage, ReviewSubmissionsPage, and ShiftReportsTab to prevent 422 errors from empty string submission
+- **Meetings error handling**: Replaced 8 raw error f-strings in `meetings.py` with `safe_error_detail()` to prevent internal error detail leakage
+
+### Shift Completion Pipeline — End-to-End Enrichment (2026-03-28)
+
+- **Shift finalization workflow**: New `POST /api/v1/scheduling/shifts/{id}/finalize` endpoint. Validates shift has ended and equipment checks are complete, snapshots call_count and total_hours on the shift record, computes per-member call_count on ShiftAttendance records, sets `is_finalized=true` with `finalized_at` and `finalized_by`, and auto-creates draft ShiftCompletionReports for all attendees with active training program enrollments
+- **Finalized shift protection**: Finalized shifts cannot be edited or deleted. Shifts with associated completion reports cannot be deleted. API returns 400 with descriptive error messages
+- **Pre-finalization checklist (frontend)**: Modal validates end-of-shift equipment checks are complete before allowing finalization. Shows attendance count and call count summary. Disables finalize button if equipment checks incomplete
+- **Auto-populate trainee call data**: `GET /api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}` queries ShiftAttendance for duration and ShiftCall records for call count and call types. Returns `{hours_on_shift, calls_responded, call_types}` for pre-filling the report form
+- **Draft reports auto-created on finalization**: ShiftCompletionReports created with `review_status="draft"` during finalization do not trigger pipeline progress. Progress deferred until officer completes the draft and transitions to `approved` or `pending_review`
+- **Audit trail (data_sources)**: Each ShiftCompletionReport stores a `data_sources` JSON field tracking which fields were auto-populated from shift data vs manually entered (e.g., `{"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}`)
+- **Duplicate prevention**: Unique constraint on `(shift_id, trainee_id)` prevents duplicate reports. Attempting to create a second report returns a descriptive error
+- **Failure isolation**: Draft auto-creation logs per-trainee errors but continues processing remaining attendees
+- **Configurable call types, skills, and tasks**: ShiftCompletionReport now supports `skills_observed` (array of `{skill_name, demonstrated, notes, comment}`) and `tasks_performed` (array of `{task, description, comment}`) JSON fields for detailed performance tracking
+- **End-of-shift UX features**: Finalize button on ShiftDetailPanel for past unfinalised shifts. Auto-checkout of remaining attendees on finalization. Draft reports view in ShiftReportsTab for officers to complete auto-created drafts. Post-finalization notifications listing number of drafts created
+- **End-of-shift checklist reminders**: Enriched post-shift notifications include equipment check completion status and link to outstanding checklists
+- **Shift call_count and total_hours tracking**: New `call_count` (Integer) and `total_hours` (Float) columns on the `shifts` table snapshot aggregate values at finalization time
+- **Per-member call_count**: New `call_count` (Integer) column on `shift_attendance` table tracks each member's individual call participation count at finalization
+- **Call type matching for pipeline progress**: When updating requirement progress, call-type requirements match against the report's `call_types` array. Case-insensitive matching with breakdown tracking in `progress_notes`
+- **Report review workflow**: Officers can review reports via `POST /{report_id}/review` with `approved` or `flagged` status. Optional field redaction clears sensitive content before trainee visibility. Reviewer notes (EncryptedText) are never exposed to trainees
+- **Trainee acknowledgment**: Trainees acknowledge received reports via `POST /{report_id}/acknowledge` with optional comments. Timestamps recorded for compliance tracking
+- **Shift notification bug fixes**: Fixed apparatus type filter matching, deep-link URL construction, and notification metadata population for shift-related notifications
+
+**New API Endpoints:**
+
+| Method | Path                                                                   | Description                                                  |
+| ------ | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `POST` | `/api/v1/scheduling/shifts/{id}/finalize`                              | Finalize shift with data snapshots and draft report creation |
+| `GET`  | `/api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}` | Auto-populated report data preview                           |
+| `POST` | `/api/v1/training/shift-reports`                                       | Create shift completion report                               |
+| `PUT`  | `/api/v1/training/shift-reports/{report_id}`                           | Update draft report                                          |
+| `GET`  | `/api/v1/training/shift-reports/my-reports`                            | Trainee's approved reports                                   |
+| `GET`  | `/api/v1/training/shift-reports/drafts`                                | Auto-created drafts awaiting officer completion              |
+| `GET`  | `/api/v1/training/shift-reports/pending-review`                        | Reports awaiting review                                      |
+| `GET`  | `/api/v1/training/shift-reports/all`                                   | All org reports with filtering and pagination                |
+| `GET`  | `/api/v1/training/shift-reports/{report_id}`                           | Single report detail                                         |
+| `POST` | `/api/v1/training/shift-reports/{report_id}/acknowledge`               | Trainee acknowledges report                                  |
+| `POST` | `/api/v1/training/shift-reports/{report_id}/review`                    | Officer reviews report (approve/flag/redact)                 |
+
+**Data Model Changes:**
+
+| Table/Field                                | Change                              | Description                                                   |
+| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------- |
+| `shifts.call_count`                        | New column (Integer, nullable)      | Aggregate call count snapshot at finalization                 |
+| `shifts.total_hours`                       | New column (Float, nullable)        | Total attendance hours snapshot at finalization               |
+| `shifts.is_finalized`                      | New column (Boolean, default=False) | Finalization state flag                                       |
+| `shifts.finalized_at`                      | New column (DateTime, nullable)     | Finalization timestamp                                        |
+| `shifts.finalized_by`                      | New column (FK → users, nullable)   | Officer who finalized                                         |
+| `shift_attendance.call_count`              | New column (Integer, nullable)      | Per-member call participation count                           |
+| `shift_completion_reports`                 | New table                           | Full shift completion report with encrypted evaluation fields |
+| `shift_completion_reports.skills_observed` | JSON column                         | Array of `{skill_name, demonstrated, notes, comment}`         |
+| `shift_completion_reports.tasks_performed` | JSON column                         | Array of `{task, description, comment}`                       |
+| `shift_completion_reports.data_sources`    | JSON column                         | Audit trail tracking auto-populated vs manual fields          |
+| `shift_completion_reports.review_status`   | String column                       | `draft`, `pending_review`, `approved`, `flagged`              |
+| `shift_completion_reports.redacted_fields` | JSON column                         | List of field names redacted by reviewer                      |
+
+**New Frontend Types:**
+
+| Type                          | Location            | Description                                                    |
+| ----------------------------- | ------------------- | -------------------------------------------------------------- |
+| `ShiftCompletionReport`       | `types/training.ts` | Full report with evaluation, review, and acknowledgment fields |
+| `ShiftCompletionReportCreate` | `types/training.ts` | Report creation payload                                        |
+| `SkillObservation`            | `types/training.ts` | `{skill_name, demonstrated, notes, comment}`                   |
+| `TaskPerformed`               | `types/training.ts` | `{task, description, comment}`                                 |
+
+**Edge Cases:**
+
+| Scenario                                                     | Behavior                                                                          |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Finalize shift with incomplete end-of-shift equipment checks | Blocked with "Complete equipment checks before finalizing" error                  |
+| Finalize shift that hasn't ended yet                         | Blocked with "Shift must have ended before finalization" error                    |
+| Finalize already-finalized shift                             | Returns 400 "Shift is already finalized"                                          |
+| Delete finalized shift                                       | Returns 400 "Cannot delete a finalized shift"                                     |
+| Delete shift with completion reports                         | Returns 400 "Cannot delete a shift with completion reports"                       |
+| Duplicate report for same shift + trainee                    | Unique constraint error: "A report already exists for this trainee on this shift" |
+| Draft report auto-creation fails for one trainee             | Error logged; remaining trainees still get draft reports                          |
+| Draft → approved transition                                  | Triggers deferred pipeline progress update                                        |
+| Report review with field redaction                           | Specified fields cleared (set to null) before approval                            |
+| Trainee views report with reviewer_notes                     | reviewer_notes field never exposed to trainee                                     |
+| Call type requirement with specific types                    | Case-insensitive match: "Medical" matches "medical" call type                     |
+| Auto-populate preview for trainee not on shift               | Returns zeroed data with informational message                                    |
+| Shift with no ShiftCall records                              | calls_responded defaults to 0; call_types empty array                             |
+| Report filed without shift_id                                | Saved as ad hoc report; no auto-population available                              |
+| Visibility config hides performance_rating                   | Rating field hidden in trainee's my-reports view                                  |
+| Report review_required=true in org config                    | Reports created with `pending_review` status instead of `approved`                |
+
+### Notification Cards — Expandable UI, Pinned Sort, Deep-Linking & Metadata (2026-03-26)
+
+- **Expandable notification cards**: NotificationCard component redesigned with expand/collapse behavior. Cards show a summary preview when collapsed and full details when expanded. Smooth CSS transitions on expand
+- **Pinned-first sort**: Pinned notifications are sorted to the top of the notification list across all views (dashboard, inbox)
+- **Mark as read on collapse**: Notifications are marked as read when the card is collapsed (not when expanded), preventing accidental mark-as-read from quick glances
+- **Contextual CTAs**: Notification cards show context-aware action buttons based on notification type (e.g., "View Shift" for shift notifications, "Start Checklist" for equipment check reminders)
+- **Notification metadata**: New `metadata` JSON column on `notification_logs` table stores structured data (e.g., `shift_id`, `shift_date`, `checklist_count`) for rich card rendering without additional API calls
+- **Shift deep-linking**: Shift notifications link directly to the scheduling page with the shift pre-selected. Equipment check reminders link to the Equipment Checks tab via `?tab=equipment-checks` query parameter
+- **Time-aware checklist CTA**: Start-of-shift reminders show "Start Checklist" CTA only during the shift window; shows "View Shift" outside the window
+- **Scheduling page tab deep-linking**: SchedulingPage now supports `?tab=` query parameter for direct navigation to specific tabs (schedule, my-shifts, open-shifts, requests, equipment-checks)
+- **In-process scheduled task runner**: Backend `main.py` now includes a built-in asyncio-based scheduled task runner that replaces the need for external cron. Runs shift reminders, notification cleanup, and other periodic tasks within the FastAPI process
+- **Email service logging fix**: Fixed loguru format string errors in email_service.py that caused logging failures on email send success paths
+
+**New Data Model Changes:**
+
+| Table/Field                  | Change          | Description                                                                          |
+| ---------------------------- | --------------- | ------------------------------------------------------------------------------------ |
+| `notification_logs.metadata` | New JSON column | Stores structured notification context (shift_id, shift_date, checklist_count, etc.) |
+
+**New Migration:**
+
+- `20260326_0100_add_notification_metadata.py` — Adds `metadata` JSON column to `notification_logs`
+
+**Edge Cases:**
+
+| Scenario                                   | Behavior                                                                |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| Notification with no metadata              | Card renders in basic mode without deep-link CTAs                       |
+| Shift notification outside shift window    | Shows "View Shift" CTA instead of "Start Checklist"                     |
+| Multiple pinned notifications              | All pinned sorted to top; sub-sorted by creation date descending        |
+| Expand without collapsing                  | Notification remains unread until explicitly collapsed                  |
+| `?tab=` with invalid tab name              | Falls back to the default Schedule tab                                  |
+| Scheduled task runner on container restart | Tasks resume automatically; no duplicate sends due to idempotent checks |
+
+### Equipment Checks — Standalone Checks, Flat View, Text Type & Template Improvements (2026-03-25)
+
+- **Standalone equipment checks**: Equipment checks can now be performed outside of shifts. Members can navigate to the Equipment Checks tab and submit checks for any apparatus at any time, not just during assigned shifts
+- **Flat scrollable view**: Equipment check form redesigned from tabbed compartments to a single flat scrollable view with inline compartment headers and sub-compartments merged inline under their parents
+- **Text check type**: New "Text" check type changed from free-form text input to a read-only statement display. Used for instructional text or safety reminders within checklists (e.g., "Verify all compartment doors are secure before moving apparatus")
+- **Section headers**: Compartment-level section headers added within checklist templates. Styled as bold black text (not purple uppercase) for visual grouping without being confused with interactive elements
+- **is_header field**: Template items support `is_header: true` flag to designate items as section headers rather than checkable items. Section headers are displayed in bold black and are not included in pass/fail scoring
+- **Template clone fix**: Cloning a template now correctly copies `is_header` and `critical_minimum_quantity` fields that were previously lost during clone operations
+- **is_header NULL validation fix**: Pre-existing compartments with NULL `is_header` values no longer cause validation errors when loading templates
+- **Admin navigation**: Equipment Checks tab in scheduling now includes a link to template management for admin users, allowing direct navigation to create/edit templates without going through Settings
+- **Critical minimum quantity**: Items with `critical_minimum_quantity` set show a warning threshold. When the quantity falls below this value, the item is flagged as critical even if above the required minimum
+
+**Edge Cases:**
+
+| Scenario                                | Behavior                                                                   |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| Standalone check with no active shift   | Check is saved without shift association; appears in reports as "ad hoc"   |
+| Section header in check form            | Displayed as bold label; no pass/fail controls; not scored                 |
+| Template with NULL is_header values     | Treated as `false` (normal checkable item); no validation error            |
+| Clone template with section headers     | Headers correctly preserved in cloned template                             |
+| Sub-compartment items                   | Merged inline under parent compartment heading in flat view                |
+| Critical minimum below required minimum | Critical threshold must be ≤ required minimum; validation enforced on save |
+
+### Training — Record Categories, Virginia NCCR & EVOC Certification Levels (2026-03-24)
+
+- **Training record category tracking**: Training records now include a `category` field for classification (e.g., "Fire", "EMS", "Hazmat", "Rescue"). Categories align with state reporting requirements
+- **Virginia NCCR recertification standards**: Added Virginia National Continued Competency Requirements (NCCR) recertification standards including required categories and hour minimums per category
+- **EVOC certification levels**: EVOC (Emergency Vehicle Operations Course) certification levels integrated across training, apparatus, and scheduling modules. Members can track EVOC certification level (Basic, Intermediate, Advanced). Apparatus records show required EVOC level. Scheduling validates EVOC certification for driver/operator position assignments
+- **Training schema alignment**: Backend and frontend training record schemas aligned — added missing fields to training record schemas and bulk entry including `category`, `training_type`, and certification-related fields
+- **Bulk entry fields**: Bulk training record entry form now includes all available fields matching individual record creation
+
+**Data Model Changes:**
+
+| Table/Field                     | Change     | Description                                                |
+| ------------------------------- | ---------- | ---------------------------------------------------------- |
+| `training_records.category`     | New column | Training category classification (Fire, EMS, Hazmat, etc.) |
+| `users.evoc_level`              | New column | EVOC certification level (basic, intermediate, advanced)   |
+| `apparatus.required_evoc_level` | New column | Minimum EVOC level required to operate this apparatus      |
+
+**Edge Cases:**
+
+| Scenario                                 | Behavior                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| Training record with no category         | Defaults to null; not included in category-based compliance reports  |
+| EVOC level not set for member            | Member can still be assigned to driver position but warning is shown |
+| Apparatus with no required EVOC level    | No EVOC validation on driver assignments                             |
+| Virginia NCCR with incomplete categories | Missing categories flagged in compliance dashboard                   |
+
+### Elections — Event Attendee Import & Linked Election Display (2026-03-24)
+
+- **Import event attendees into election ballot list**: Election ballot recipients can now be populated from an event's attendee list. On the election detail page, officers can select a linked event and import its checked-in attendees as eligible voters
+- **Linked elections on event detail pages**: Event detail pages now show elections linked to the event with status badges and direct links
+- **Linked elections on minutes detail pages**: Meeting minutes detail pages show elections linked to the meeting with the same treatment
+- **Quick-link buttons on Upcoming Meetings**: Election detail page's Upcoming Meetings list now shows quick-link action buttons for faster meeting-to-election association
+- **Removed redundant Upcoming Meetings section**: Cleaned up duplicate Upcoming Meetings display on election detail page
+
+**Edge Cases:**
+
+| Scenario                           | Behavior                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| Event with no checked-in attendees | Import returns empty list with informational message                    |
+| Attendee already in ballot list    | Duplicate is skipped silently; import count reflects only new additions |
+| Election linked to cancelled event | Link preserved; event shows cancelled badge                             |
+| Minutes with no linked election    | No election section displayed                                           |
+
+### Apparatus — Badge Icon Rendering Fix (2026-03-25)
+
+- **Type and status badges fix**: Apparatus type and status badges were rendering Lucide icon component names as raw text (e.g., "Truck" instead of a truck icon). Fixed to render actual icon components
+
+### Navigation — Hardcoded Back Paths & Breadcrumbs (2026-03-24)
+
+- **Replace navigate(-1)**: All instances of `navigate(-1)` (browser back) replaced with hardcoded back paths across multiple modules. Prevents unexpected navigation when users arrive via deep links or external URLs
+- **Breadcrumbs added**: Breadcrumb navigation added to pages that previously relied on browser history for back navigation
+
+**Edge Cases:**
+
+| Scenario                           | Behavior                                                   |
+| ---------------------------------- | ---------------------------------------------------------- |
+| User arrives via deep link         | Back button navigates to parent page (not browser history) |
+| User navigates through breadcrumbs | Each breadcrumb links to the correct parent page           |
+
+### Print — Iframe-Based Chrome Label Printing (2026-03-24)
+
+- **Iframe-based printing**: Label printing now uses an iframe-based approach to force Chrome to respect `@page` size rules. Previously, Chrome would ignore custom page sizes in the print dialog, causing labels to print at letter size
+- **@page rule positioning**: Moved `@page` CSS rule to top level of the print stylesheet to ensure it's applied before Chrome's print dialog processes the page
+
+**Edge Cases:**
+
+| Scenario                            | Behavior                                                |
+| ----------------------------------- | ------------------------------------------------------- |
+| Non-Chrome browser                  | Falls back to standard print; @page rules work natively |
+| Printer without custom size support | Prints at closest available size with scaling           |
+
+### Alembic — Migration Head Merge (2026-03-25)
+
+- **Merge multiple Alembic heads**: Merged divergent migration branches (pinned notifications, notification metadata) into a single linear migration chain
+
+### App Startup — MySQL Readiness Fix (2026-03-24)
+
+- **Graceful startup when MySQL is not ready**: Fixed app crash during startup when MySQL container is still initializing. Alembic migration check now catches `OperationalError` and retries with exponential backoff
+- **Sync engine retry helper**: Extracted retry logic with `connect_timeout` for database connectivity checks during startup
+
+**Edge Cases:**
+
+| Scenario                      | Behavior                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| MySQL starts after app        | App retries migration check up to 5 times with backoff; starts normally once MySQL is ready |
+| MySQL permanently unreachable | App logs error and exits after retries exhausted                                            |
+
+### Scheduling — Bulk Actions, Staffing Visualization, Notifications & Bug Fixes (2026-03-24)
+
+- **Bulk confirm/decline on My Shifts**: When 2+ pending shift assignments exist, checkboxes appear on each shift card with "Select All" toggle, "Confirm All", and "Decline All" bulk action buttons. Optimistic UI updates with rollback on failure
+- **Inline approve/deny on Requests tab**: Swap and time-off request cards now show direct "Approve" and "Deny" buttons without opening a modal. "+ Notes" link opens the review modal for comments
+- **Staffing status visualization**: Shift cards display green CheckCircle2 icon when fully staffed. Crew info box shows staffing ratio (e.g., "4/4") with green/amber background. Staffing-based color tints override template colors (green for fully staffed, amber for understaffed)
+- **Position-first assignment flow**: ShiftDetailPanel crew board now shows position dropdown first (defaults to first open slot), member search below. "Assign" button directly on open slots pre-fills position
+- **Bulk assignment**: "Fill All Open" button when 2+ positions unfilled. Compact form with one member dropdown per position
+- **Unavailable member filtering**: New `GET /api/v1/scheduling/shifts/{id}/unavailable-members` endpoint consolidates members on leave, with time-off, or already assigned. Removed from assignment dropdowns
+- **Required/Optional position toggle**: Template position editor adds required/optional toggle per position. Violet badge when required, muted when optional. Data structure changed from `string[]` to `{position: string, required: boolean}[]`
+- **Shift assignment notifications**: In-app + optional email notification when a member is assigned to a shift. Settings in Scheduling Notifications Panel under "Shift Assignment Alerts"
+- **Start-of-shift reminders**: Scheduled task (30-minute interval) sends reminders to assigned members within configurable lookahead window (default 2 hours). Includes equipment checklist list for the shift's apparatus. Settings: enable toggle, lookahead hours, email toggle, CC emails. Stored in `org.settings.shift_reminders`
+- **Selected shift highlight**: Currently viewed shift highlighted with violet ring across all calendar views (week, mobile, month, list)
+- **Collapsible shift creation options**: Start/End Date shown first; Custom Times, Apparatus, Officer, and Notes behind a collapsible "Additional Options" section
+- **Searchable template dropdown**: Shows search input when >5 templates, filters by name/apparatus/category
+- **Open/Specific swap selector**: Two-card radio buttons replace single dropdown for swap type selection
+- **Time-off conflict warning**: Amber banner on shift detail listing conflicting time-off requests with dates
+- **Notification history link**: "Alerts" link on My Shifts tab filtered to `schedule_change` trigger type
+- **Equipment check inline status**: Badge counts (pass/fail/in-progress/pending) next to equipment check header. Action hints: "Start check → Go to Checklists tab" or "Continue check → N items remaining"
+- **Member hours report fix**: Service now queries `ShiftAssignment` joined with `Shift` instead of `ShiftAttendance` (clock-in records), returning scheduled shift hours. Added `first_name`/`last_name` to `MemberHoursReport` schema and frontend type
+- **Availability report fix**: New `get_availability_summary()` aggregates time-off/leave/assignment data per member instead of returning raw records
+- **Shift overlap false positive fix**: Open-ended shifts (no `end_time`) restricted to same `shift_date` instead of being treated as infinitely long
+- **UTC timezone in notifications fix**: Shift assignment, shift reminder, and inventory overdue notifications now convert times to org timezone before formatting
+- **Shift color parsing fix**: `getShiftTemplateColor()` extracts time portion after "T" split before parsing hour, fixing all shifts defaulting to indigo
+- **Notes form coercion fix**: Changed `editingNotesValue ?? undefined` to `editingNotesValue || undefined` to prevent 422 on empty notes
+- **Pattern generation 422 fix**: Removed redundant `pattern_id` from `GenerateShiftsRequest` body (already a URL path parameter)
+- **Shift card text color accessibility**: WCAG AA 4.5:1 contrast calculation for hex template colors. Iterative lightening/darkening based on dark/light mode
+- **Dark mode fixes**: Added `dark:` variants on all interactive elements (confirm/decline/cancel buttons, inline text, request review buttons) across scheduling views
+- **Mobile touch targets**: Increased from 36px to 44px (WCAG standard) on My Shifts and ShiftDetailPanel action buttons
+- **Code reduction**: Consolidated 33 → 23 useState hooks in ShiftDetailPanel. Extracted `INACTIVE_ASSIGNMENT_STATUSES` constant. Deduplicated shift enrichment via `_enrich_shift_dict()`
+
+**New API Endpoints:**
+
+| Method | Path                                                 | Description                                                |
+| ------ | ---------------------------------------------------- | ---------------------------------------------------------- |
+| `GET`  | `/api/v1/scheduling/shifts/{id}/unavailable-members` | Consolidated unavailable user IDs for assignment filtering |
+
+**Data Model Changes:**
+
+| Table/Field                          | Change        | Description                                                  |
+| ------------------------------------ | ------------- | ------------------------------------------------------------ |
+| `shift_templates.positions`          | Schema change | JSON changed from `string[]` to `{position, required}[]`     |
+| `shifts.activities`                  | New JSON key  | `start_reminder_sent` (Boolean) prevents duplicate reminders |
+| `email_template_types`               | Enum sync     | Added `shift_assignment`, `shift_reminder` types             |
+| `org.settings.shift_reminders`       | New JSON key  | `enabled`, `lookahead_hours`, `send_email`, `cc_emails`      |
+| `org.settings.scheduling_assignment` | New JSON key  | `notify_on_assignment`, `send_email`, `cc_emails`            |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+| --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
+
+### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
+
+- **Tabbed election detail workflow**: `ElectionWorkflowTabs` replaces monolithic detail page. Tabs: Ballot, Candidates, Eligibility, Overrides, Proxies, Attendance (draft/open), Cast Vote (open), Results (closed). WAI-ARIA Tabs pattern with roving tabindex
+- **Eligibility roster**: New `EligibilityRoster` component and `GET /api/v1/elections/{id}/eligibility-roster` endpoint. Color-coded rows (green/red/blue/muted), search + filter (All/Eligible/Ineligible/Voted/Override), expandable per-member rows showing per-ballot-item eligibility, ballot delivery indicator, ineligibility reasons
+- **Publish results panel**: One-click toggle to publish/hide results (`aria-pressed`). "Send Report" button emails results to eligible voters. Color-coded status indicators (green=closed, blue=open)
+- **Runoff chain visualization**: Horizontal timeline showing original → runoff 1 → runoff 2 elections. Each node: title, status, vote count, status icon. Current election highlighted with `aria-current="page"`
+- **Election summary cards**: 4-column dashboard metrics on elections list page: Active Elections, Need Attention (draft + expired), Completed, Total Votes Cast
+- **Election enums extracted to constants**: `VotingMethod`, `VictoryCondition`, `BallotChoice`, `RunoffType`, `QuorumType` added to `constants/enums.ts`. 50+ string literals replaced across 10+ files
+- **Backend validator deduplication**: 8 field validators consolidated into reusable `_validate_choice()` helper. `VALID_QUORUM_TYPES` extracted as constant
+- **Event type filter removed**: Elections can now be linked to any event type (not just business meetings)
+- **Accessibility**: WAI-ARIA Tabs pattern, `aria-expanded` on expandable rows, `aria-pressed` on toggle buttons, `aria-current` on runoff chain, keyboard navigation (Enter/Space)
+- **Department email generation**: New `DepartmentEmailSettings` schema with 4 format patterns (first.last, flast, firstlast, last.first). Auto-generated at member election/transfer. Uniqueness check with numeric suffix on collision. Personal email preserved in `User.personal_email`
+
+**New API Endpoints:**
+
+| Method | Path                                        | Description                                     |
+| ------ | ------------------------------------------- | ----------------------------------------------- |
+| `GET`  | `/api/v1/elections/{id}/eligibility-roster` | Full member eligibility breakdown for secretary |
+
+**New Frontend Components:**
+
+| Component              | Location                        | Description                               |
+| ---------------------- | ------------------------------- | ----------------------------------------- |
+| `ElectionWorkflowTabs` | `modules/elections/components/` | Tabbed navigation with dynamic visibility |
+| `EligibilityRoster`    | `modules/elections/components/` | Secretary eligibility dashboard           |
+| `PublishResultsPanel`  | `modules/elections/components/` | Post-election result publishing           |
+| `RunoffChain`          | `modules/elections/components/` | Multi-stage election timeline             |
+| `ElectionSummaryCards` | `modules/elections/components/` | Dashboard metrics cards                   |
+
+**New Enums (frontend):**
+
+| Enum               | Values                                                          |
+| ------------------ | --------------------------------------------------------------- |
+| `VotingMethod`     | `simple_majority`, `ranked_choice`, `approval`, `supermajority` |
+| `VictoryCondition` | `most_votes`, `majority`, `supermajority`, `threshold`          |
+| `BallotChoice`     | `approve`, `deny`, `abstain`, `write_in`                        |
+| `RunoffType`       | `top_two`, `eliminate_lowest`                                   |
+| `QuorumType`       | `none`, `percentage`, `count`                                   |
+
+**Data Model Changes:**
+
+| Table/Field                     | Change       | Description                                                        |
+| ------------------------------- | ------------ | ------------------------------------------------------------------ |
+| `org.settings.department_email` | New JSON key | `enabled`, `domain`, `format` for department email generation      |
+| `users.personal_email`          | New column   | Stores prospect's original email after department email assignment |
+
+**Edge Cases:**
+
+| Scenario                                                | Behavior                                          |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| Election linked to non-business-meeting event           | Now allowed — event type filter removed           |
+| Department email collision (john.smith@dept.org exists) | Appends numeric suffix: john.smith2@dept.org      |
+| Department email disabled                               | Uses prospect's personal email as primary         |
+| Tabs when election is cancelled                         | Only Ballot tab visible                           |
+| Results tab auto-select                                 | Auto-navigates to Results when election is closed |
+| Runoff chain with no parent                             | Shows single-node chain for standalone elections  |
+
+### Inventory — Storage Areas, Barcode Backfill, Item Detail & WebSocket Fix (2026-03-24)
+
+- **Storage area items display**: Storage Areas page now shows actual inventory items assigned to each area with expandable inline panels. Items display name, serial number, status, and condition with direct links to item detail pages
+- **Storage area item link fix**: Item links from storage areas now navigate to `/inventory/items/{id}` instead of dashboard
+- **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding them
+- **Barcode backfill**: Items created before auto-generation lazily receive barcodes (INV-XXXXXXXX format) on first fetch. No migration needed
+- **Admin items page improvements**: InventoryItemsPage readability and bug fixes
+- **WebSocket double-accept fix**: Guard `client_state` check before `accept()` to prevent `RuntimeError` in inventory WebSocket endpoint
+- **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` (incompatible with BrowserRouter). Kept `beforeunload` handler for browser close/refresh
+- **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
+
+**Edge Cases:**
+
+| Scenario                                           | Behavior                                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Item created before barcode auto-generation        | Barcode lazily generated on first fetch                                              |
+| Storage area with no items                         | Shows empty state message                                                            |
+| Item with no barcode or asset tag                  | Fields display `--` placeholder                                                      |
+| WebSocket connection already accepted              | Guard prevents second `accept()` call                                                |
+| Template builder navigation during unsaved changes | `beforeunload` fires on browser close; no in-app blocking (BrowserRouter limitation) |
+
+### Notifications — Batch Read, Badges, Polling & Dashboard Fixes (2026-03-24)
+
+- **Batch mark-all-read**: New `POST /api/v1/notifications/logs/read-all` endpoint marks all org notification logs as read in a single query
+- **Unread badge**: Bell icon (top nav) and Notifications link (side nav) show unread notification count badge. Shared Zustand store + `useNotificationPoller` hook initialized in AppLayout
+- **Smart polling**: Notification polling pauses when browser tab is hidden (Page Visibility API). Refetches immediately when tab becomes visible
+- **Pagination**: Notifications inbox uses "Load More" pagination (20 per page)
+- **Read filter**: "Show read" toggle to filter read/unread notifications. Improved empty states for filtered views
+- **Clear All fix**: Dashboard fetches only unread notifications (`include_read: false`). Cleared notifications no longer reappear on navigation
+- **Clickable dashboard notifications**: Notifications navigate to inbox if no `action_url` is set
+- **View All link fix**: "View All" navigates to `/notifications?tab=inbox` instead of bare `/notifications`
+- **Code cleanup**: Removed dead branches and simplified notification rendering logic
+
+**New API Endpoints:**
+
+| Method | Path                                  | Description                              |
+| ------ | ------------------------------------- | ---------------------------------------- |
+| `POST` | `/api/v1/notifications/logs/read-all` | Batch mark all notification logs as read |
+
+**Edge Cases:**
+
+| Scenario                                               | Behavior                               |
+| ------------------------------------------------------ | -------------------------------------- |
+| Tab hidden for extended period                         | Polling pauses; refetches on tab focus |
+| Clear All with no unread notifications                 | No-op; empty state displayed           |
+| Notification with `action_url` clicked on dashboard    | Navigates to `action_url`              |
+| Notification without `action_url` clicked on dashboard | Navigates to notifications inbox       |
+| Mark all read with 0 unread                            | Endpoint returns success; no DB writes |
+
+### Membership — Department Emails, Username Safety & Default Roles (2026-03-24)
+
+- **Department email generation at election**: When a prospect is elected to membership, the system generates a department email (e.g., john.smith@firedept.org) based on configurable format patterns. Four formats: `first.last`, `flast` (first-initial + last), `firstlast`, `last.first`. Collisions resolved with numeric suffix (john.smith2@firedept.org). Prospect's personal email preserved in `User.personal_email`
+- **Username collision handling**: `_generate_unique_username()` checks for existing usernames and appends incrementing suffixes (jsmith, jsmith1, jsmith2). Manual username validation also enforced
+- **Default member role**: All member creation paths (self-registration, admin creation, prospect transfer) now assign the default "member" role for baseline permissions
+- **`password_changed_at` set on creation**: All creation paths set `password_changed_at` to creation time so HIPAA password age checks work from day one. Self-registered users get `must_change_password=True`
+- **Membership ID auto-generation**: `generate_next_membership_id()` and `assign_next_membership_number()` added to OrganizationService. Previous membership numbers preserved on soft-delete and restored on reactivation
+- **Transfer UX improvements**: Department email generation integrated into transfer workflow
+
+**Data Model Changes:**
+
+| Table/Field                        | Change     | Description                                                      |
+| ---------------------------------- | ---------- | ---------------------------------------------------------------- |
+| `users.personal_email`             | New column | Stores personal email when department email becomes primary      |
+| `users.previous_membership_number` | New column | Preserves membership number on archive for reuse on reactivation |
+
+**Edge Cases:**
+
+| Scenario                                             | Behavior                                                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Department email disabled in org settings            | Uses prospect's personal email as primary                                              |
+| Username "jsmith" already exists                     | Generates "jsmith1", "jsmith2", etc.                                                   |
+| Reactivated member with previous membership number   | Previous number restored automatically                                                 |
+| Member soft-deleted then new member uses same number | Original number stored in `previous_membership_number`; new member gets next available |
+| Self-registered user without password change         | `must_change_password=True` forces change on first login                               |
+
+### WCAG Accessibility Improvements (2026-03-24)
+
+- **Color contrast fixes (75 components)**: Light-mode semantic colors (`text-{color}-400/300`) replaced with WCAG AA-compliant variants (`text-{color}-700 dark:text-{color}-400`). Dark mode appearance unchanged
+- **Color contrast utility**: New `utils/colorContrast.ts` with `hexToRgb()`, `rgbToHex()`, `relativeLuminance()`, `contrastRatio()`, `accessibleTextColor()`, `colorCardStyle()`. Ensures 4.5:1 contrast ratio across all themes
+- **Form accessibility**: `htmlFor`/`id` associations on ~24 form inputs. `aria-required="true"` on required fields. `fieldset`/`legend` wrapping radio button groups across 7 components
+- **Live regions**: `aria-live="assertive"` added to ~52 `role="alert"` elements. `role="status" aria-live="polite"` on loading spinners
+- **Focus rings**: Fixed `DateRangePicker` date input focus outlines
+- **Alt text**: Image previews in `FileDropzone` now include descriptive alt text
+- **Camera error handling improvements**: `MemberScanPage` surfaces scanner errors via `tryStartScanner` wrapper. `InventoryScanModal` uses `getErrorMessage()` instead of generic string. Errors stay visible (no auto-dismiss)
+
+**Edge Cases:**
+
+| Scenario                                | Behavior                                                         |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| High-contrast mode                      | Theme variables override; WCAG AAA (7:1) targeted where possible |
+| Dark mode with light hex color          | `accessibleTextColor()` iteratively lightens text until 4.5:1    |
+| Screen reader on expandable roster rows | `aria-expanded` state announced on focus                         |
+| Camera permission denied                | Clear error message; manual entry fallback available             |
+
+### Camera Scanning — Desktop & Cross-Browser Support (2026-03-22)
+
+- **Desktop camera scanning**: Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers by falling back to a user-facing camera when no environment-facing camera is detected. Previously limited to mobile devices
+- **Shared camera infrastructure**: Extracted reusable `useHtml5Scanner` hook, shared `scanner.ts` types, and `camera.ts` constants. All scanner consumers (InventoryScanModal, MemberIdScannerModal, MemberScanPage) share the same camera initialization, error handling, and resolution logic
+- **InventoryScanModal cross-browser support**: Inventory barcode scanning now works in all browsers via the shared scanner hook, not just those supporting the BarcodeDetector API
+
+**New Shared Modules:**
+
+| File                                    | Purpose                                                               |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| `frontend/src/hooks/useHtml5Scanner.ts` | Reusable HTML5 QR/barcode scanner hook with camera fallback logic     |
+| `frontend/src/types/scanner.ts`         | TypeScript types for scanner configuration and callbacks              |
+| `frontend/src/constants/camera.ts`      | Camera resolution presets, preferred facing modes, and error messages |
+
+**Edge Cases:**
+
+| Scenario                             | Behavior                                                    |
+| ------------------------------------ | ----------------------------------------------------------- |
+| No camera available                  | Displays a clear error message; does not silently fail      |
+| Desktop with only user-facing camera | Falls back to user-facing camera automatically              |
+| Browser without BarcodeDetector API  | Uses Html5-QRCode library as fallback for barcode detection |
+| Multiple cameras detected            | Prefers environment-facing, falls back to user-facing       |
+
+### Scheduling — Permission Fixes & Shift Signup Improvements (2026-03-22)
+
+- **Shift assignment permission fix**: Shift assignment UI was gated by `scheduling.manage_assignments` instead of the broader `scheduling.manage` — users with manage permission can now assign members to shifts
+- **Self-signup visibility fix**: Open Shifts tab fallback permission and self-signup button visibility corrected for members without admin permissions
+- **Calls/Incidents section removed**: Removed placeholder Calls/Incidents section from shift detail panel (feature not yet implemented)
+- **Dashboard shift cleanup**: "My Upcoming Shifts" on the dashboard now correctly hides declined and cancelled shift assignments
+- **Position editing in shift detail**: Officers can edit position assignments directly from the shift detail edit form without navigating elsewhere
+
+**Edge Cases:**
+
+| Scenario                                                              | Behavior                                      |
+| --------------------------------------------------------------------- | --------------------------------------------- |
+| User with `scheduling.manage` but not `scheduling.manage_assignments` | Can now assign members (permission broadened) |
+| Declined shift in "My Upcoming Shifts"                                | No longer displayed on dashboard              |
+| Cancelled shift in "My Upcoming Shifts"                               | No longer displayed on dashboard              |
+
+### Inventory — Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing (2026-03-22)
+
+- **Inventory admin hub redesign**: Admin dashboard redesigned with grouped card sections and prominent navigation cards, replacing the previous flat list layout
+- **Equipment Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles (create, edit, delete, view components)
+- **Variant Groups admin page**: New dedicated page at `/inventory/admin/variant-groups` for managing size/style variant groups
+- **Barcode printing ISO compliance**: Label generation aligned with ISO/IEC 15417 standards — correct quiet zones, minimum bar widths, and aspect ratios for reliable scanner readability
+- **Auto-rotation for thermal printers**: Roll-fed thermal printers (Dymo, Rollo) now auto-rotate labels to maximize print area when the label's long axis doesn't match the orientation
+- **Test print capability**: New "Test Print" button generates a sample label for verifying printer alignment before printing a full batch
+- **Unified label format catalog**: Frontend and backend now share the same label format definitions to prevent size mismatches between the UI preview and generated PDF
+- **Batch label limit**: Label generation now enforces a maximum batch size to prevent browser memory issues with large print jobs
+- **Inventory dashboard scoping**: Non-admin users now see only their own assigned equipment on the inventory dashboard, not the full department inventory
+- **Mobile FAB fix**: Mobile floating action button changed from "Export CSV" (admin action) to "Assign Items" for non-admin users
+
+**New Pages:**
+
+| URL                               | Page                      | Permission         |
+| --------------------------------- | ------------------------- | ------------------ |
+| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
+
+**Edge Cases:**
+
+| Scenario                              | Behavior                                                           |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| Barcode with insufficient quiet zone  | Labels now enforce ISO minimum quiet zones for scanner readability |
+| Dymo label in landscape orientation   | Auto-rotated to portrait for correct printing                      |
+| Label batch > limit                   | Capped with warning message; user can print in batches             |
+| Non-admin viewing inventory dashboard | Shows only personally assigned equipment                           |
+| Mobile user tapping FAB               | Shows "Assign Items" instead of admin-only "Export CSV"            |
+
+### Elections — Eligibility, Email Improvements & Meeting Integration (2026-03-22)
+
+- **Eligibility uses membership_type**: Election voter eligibility now correctly uses `User.membership_type` instead of role slugs, fixing incorrect voter filtering for departments with complex role structures
+- **Email recipient tracking**: `email_recipients` field now tracks only successfully sent ballots (not attempted sends), giving accurate delivery counts
+- **Election linked meeting filter**: Meeting dropdown on election pages now correctly shows only upcoming business meetings, not past ones
+- **Concurrent ballot sending fix**: Ballot email dispatch uses concurrent sending with proper error isolation — one failed send does not block remaining recipients
+- **Eligibility summary email**: Secretary receives a detailed summary after ballot dispatch listing sent count, skipped voters, and reasons for each skip
+- **Secretary-facing error messages**: Election errors now include actionable guidance (e.g., "No active members with email addresses found" instead of generic failure)
+- **Election report email**: New "Send Report Email" button on election detail page emails formatted round-by-round results to officers
+- **Business meetings section**: Election detail page now displays upcoming business meetings for linking elections to meeting records
+- **Code quality sweep**: Elections module refactored for code quality — removed dead code, fixed unused state variables, standardized error handling
+
+**Edge Cases:**
+
+| Scenario                                                   | Behavior                                                                          |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Member has role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items (eligibility follows membership_type) |
+| Email fails for one recipient                              | Loop continues; summary shows per-recipient delivery status                       |
+| Election linked to past meeting                            | Past meetings filtered out of dropdown; only upcoming shown                       |
+| No eligible voters after filtering                         | Returns descriptive error with reasons instead of false success                   |
+
+### Events — Recurring Event Series, End Event, Admin Hours Integration (2026-03-22)
+
+- **Rolling 12-month recurrence**: Recurring events can now use a rolling 12-month window that automatically extends the series forward, keeping future occurrences available without manual regeneration
+- **Delete series support**: Officers can now delete an entire recurring event series at once, with confirmation dialog showing the number of events that will be removed
+- **"End Event" button**: New bulk checkout feature — clicking "End Event" on the event detail page checks out all currently checked-in attendees at once, useful for events where individual checkout tracking isn't needed
+- **Compact event create form**: Event creation form redesigned with a 2-column grid layout, pairing related sections (date/time, location, settings) side-by-side for reduced scrolling
+- **Event-to-admin-hours integration**: Events can now be linked to admin hour tracking categories, automatically crediting attendance hours toward administrative compliance requirements
+- **Event deletion FK fix**: Fixed event deletion failing when linked meeting minutes existed — cascade now properly handles the `meeting_minutes` foreign key constraint
+- **Check-in monitoring consistency**: Fixed check-in monitoring page using different time window logic than the QR self-check-in page, causing valid check-ins to appear invalid on the monitoring dashboard
+- **Event request form publish status**: Event request forms now display their publish status badge on the Events Settings page, making it clear which forms are publicly accessible
+
+**Data Model Changes:**
+
+| Table                      | Change                         | Description                                               |
+| -------------------------- | ------------------------------ | --------------------------------------------------------- |
+| `events`                   | `rolling_recurrence` (Boolean) | Enables rolling 12-month recurrence window                |
+| `event_hour_mappings`      | New table                      | Maps event types to admin hour tracking categories        |
+| `admin_hours_requirements` | New table                      | Defines compliance requirements for admin hour categories |
+| `meeting_minutes`          | FK cascade update              | `event_id` FK now cascades on delete                      |
+
+**API Routes:**
+
+| Method   | Path                         | Description                            |
+| -------- | ---------------------------- | -------------------------------------- |
+| `DELETE` | `/api/v1/events/{id}/series` | Delete entire recurring event series   |
+| `POST`   | `/api/v1/events/{id}/end`    | Bulk checkout all checked-in attendees |
+
+**Edge Cases:**
+
+| Scenario                                     | Behavior                                                                     |
+| -------------------------------------------- | ---------------------------------------------------------------------------- |
+| Rolling recurrence with no end date          | Generates occurrences up to 12 months ahead, automatically refreshed         |
+| Delete series with some past events          | All events in series removed (past and future)                               |
+| "End Event" with no checked-in attendees     | No-op with informational message                                             |
+| Event linked to meeting minutes then deleted | Meeting minutes `event_id` set to null via cascade                           |
+| Admin hours integration with no mapping      | Event attendance not credited; mapping must be configured in Events Settings |
+
+### Notifications — Dashboard Clear/Dismiss & Department Messages (2026-03-22)
+
+- **Notification clear/dismiss buttons**: Dashboard notification cards now include clear and dismiss buttons, allowing users to manage their notification queue without navigating to the full notifications page
+- **Persistent department messages**: Administrators can create department-wide messages that persist until explicitly cleared by an admin. Regular users see the message but cannot dismiss it
+- **Notification channel filter**: Notifications page now includes a channel filter (email, in-app, SMS) for viewing notifications by delivery method
+- **Notifications page title**: Page title renamed for clarity
+
+**Data Model Changes:**
+
+| Table                 | Change                    | Description                               |
+| --------------------- | ------------------------- | ----------------------------------------- |
+| `department_messages` | `is_persistent` (Boolean) | Marks messages that only admins can clear |
+
+**Edge Cases:**
+
+| Scenario                                     | Behavior                                |
+| -------------------------------------------- | --------------------------------------- |
+| Non-admin trying to clear persistent message | Clear button not shown; message remains |
+| Admin clearing persistent message            | Clears for all users department-wide    |
+| Notification with multiple channels          | Appears in each channel's filter view   |
+
+### Email Deliverability — Gmail & Microsoft Compatibility (2026-03-22)
+
+- **Message-ID header**: All outgoing emails now include a proper `Message-ID` header, preventing Gmail from rejecting messages as spam
+- **Batch rate limiting**: Email sends are rate-limited per batch to avoid triggering Gmail and Microsoft bulk-send throttles
+- **Inline CSS**: Email templates now inline all CSS styles, since Gmail strips `<style>` tags — ensures consistent rendering across email clients
+- **SMTP connection reuse**: SMTP connections are reused within a batch send operation, improving performance for large recipient lists
+- **Admin email template support**: Administrators can now send emails using saved templates directly from the admin interface
+- **Gmail clipping fix**: Replaced base64-encoded logo data URIs with hosted image URLs, preventing Gmail from clipping long emails
+
+**Edge Cases:**
+
+| Scenario                         | Behavior                                              |
+| -------------------------------- | ----------------------------------------------------- |
+| Gmail with strict DKIM/SPF       | Message-ID header satisfies authentication checks     |
+| Batch > 50 recipients            | Rate-limited to avoid triggering bulk-send throttles  |
+| Email client without CSS support | Inline styles ensure consistent rendering             |
+| Logo image not accessible        | Falls back to text-only header with organization name |
+
+### Mobile Responsiveness — Dashboard & Inventory (2026-03-22)
+
+- **Main dashboard responsive redesign**: Dashboard layout adapts to phone and tablet screens with stacked cards, collapsible sections, and touch-friendly controls
+- **Inventory module mobile improvements**: Inventory pages (items list, admin hub, member equipment) redesigned for mobile with card layouts, floating action button, and optimized touch targets
+- **Non-inventory page improvements**: Scheduling, events, members, and settings pages received responsive improvements for consistent mobile experience
+
+### Equipment Check Template Builder — UX Improvements (2026-03-22)
+
+- **Template builder layout redesign**: Equipment check template builder reorganized for better visual hierarchy and workflow
+- **Equipment check preview**: New preview mode shows how the check form will appear to members before saving the template
+- **Save redirect fix**: Template builder now correctly redirects to the template list after saving instead of staying on the edit page
+- **MissingGreenlet error fix**: Fixed async database access error when loading compartment data in the template builder
+- **Input focus loss fix**: Fixed inputs in the template builder losing focus after each keystroke due to component re-rendering
+
+**Edge Cases:**
+
+| Scenario                      | Behavior                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| Preview with unsaved changes  | Preview reflects current form state, not last saved state                |
+| Template with no compartments | Preview shows empty state with "Add compartments to get started" message |
+| Rapid typing in item fields   | Focus maintained correctly after re-render fix                           |
+
+### Time Picker — Redesigned TimeQuarterHour Component (2026-03-22)
+
+- **Separate hour/minute/AM-PM selects**: `TimeQuarterHour` component redesigned with three separate dropdown selects (hour 1-12, minute 00/15/30/45, AM/PM) replacing the previous single text input
+- Applied across all time pickers: event forms, shift forms, scheduling templates
+
+### Bug Fixes (2026-03-22)
+
+- **Admin hours filter fix**: Fixed `??` (nullish coalescing) on filter values in admin hours page — replaced with `||` to properly coerce empty strings
+- **Cross-tenant proxy authorization**: Fixed race condition and cross-tenant data access bugs in proxy voting authorization
+- **JSON column mutation fixes**: Fixed three separate instances of SQLAlchemy JSON columns not persisting changes due to shallow copy mutations (attendee check-in, rollback history, election JSON data). All now use `copy.deepcopy()` pattern
+- **Rollback notification error handling**: Rollback notification failures no longer cause 500 errors after a successful rollback operation
+- **Audit event parameter fix**: Fixed `log_audit_event()` calls using incorrect parameter names across multiple endpoints
+- **Compartment CRUD MissingGreenlet**: Fixed async database access error in equipment check compartment CRUD endpoints
+
+### Code Quality (2026-03-22)
+
+- **26 frontend test failures fixed**: All pre-existing test failures across the frontend test suite resolved
+- **40 ESLint errors/warnings fixed**: Frontend ESLint output reduced from 40 errors/warnings to 0
+- **Backend formatter pass**: Applied Black and isort formatting fixes across the entire backend codebase
+- **Comment cleanup**: Removed comments that merely restate the code, per CLAUDE.md commenting guidelines
+- **InventoryAdminHub tests updated**: Tests updated to match the redesigned admin hub component
+
+### Equipment Check System — Full-Stack Vehicle & Equipment Inspections (2026-03-19)
+
+- **Equipment check template builder**: Admin UI for creating structured checklist templates with nested compartments and items. Supports 7 check types: `pass_fail`, `present`, `functional`, `quantity`, `level`, `date_lot`, `reading`. Templates can be assigned per-apparatus or per-apparatus-type with optional position-based assignment. Drag-and-drop reordering of compartments and items
+- **Vehicle check preset picker**: Pre-built templates for common vehicle inspection categories (engine, ladder, ambulance) that can be imported into the template builder
+- **Phone-first equipment check form**: Hybrid mobile/desktop form for submitting equipment checks during a shift. Collects item results with pass/fail, quantities, readings, expiration dates, serial/lot numbers, and optional photo attachments (up to 3 per item, auto-optimized to WebP)
+- **Equipment check reports page**: Three-tab reports interface — Compliance Dashboard (apparatus stats, pass rates, member compliance), Failure/Deficiency Log (paginated failures with filters), and Item Trend History (pass/fail trends by interval). Supports CSV and PDF export
+- **Apparatus deficiency flag**: Apparatus records now track `has_deficiency` and `deficiency_since` fields. Equipment check failures auto-set the deficiency flag; passing checks auto-clear it
+- **Failure notifications**: Failed equipment check items trigger in-app notifications (and optional email) to shift officers and configurable roles
+- **Inline serial/lot number updates**: Submitting a check with new serial or lot numbers updates the template item's stored values for future reference
+- **Photo attachments on check items**: Support for uploading photos per check item (JPEG, PNG, WebP), stored and served as optimized WebP
+
+**Data Model Changes:**
+
+| Table                         | New Columns/Tables                                        | Description                                                                                                   |
+| ----------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `equipment_check_templates`   | New table                                                 | Master template with name, timing (start/end of shift), type (equipment/vehicle/combined), assigned positions |
+| `check_template_compartments` | New table                                                 | Named sections within a template (nested via `parent_compartment_id`)                                         |
+| `check_template_items`        | New table                                                 | Individual check items with type, expiration tracking, serial/lot, quantity requirements                      |
+| `shift_equipment_checks`      | New table                                                 | Submitted check records linked to shifts                                                                      |
+| `shift_equipment_check_items` | New table                                                 | Individual item results within a submitted check                                                              |
+| `apparatus`                   | `has_deficiency` (Boolean), `deficiency_since` (DateTime) | Deficiency tracking from equipment checks                                                                     |
+
+**API Routes:**
+
+| Prefix                                                             | Description                                  |
+| ------------------------------------------------------------------ | -------------------------------------------- |
+| `POST /api/v1/equipment-checks/templates`                          | Template CRUD                                |
+| `POST /api/v1/equipment-checks/templates/{id}/compartments`        | Compartment management                       |
+| `POST /api/v1/equipment-checks/compartments/{id}/items`            | Item management                              |
+| `GET /api/v1/equipment-checks/shifts/{shift_id}/checklists`        | Get applicable checklists for a shift        |
+| `POST /api/v1/equipment-checks/shifts/{shift_id}/checks`           | Submit equipment check                       |
+| `GET /api/v1/equipment-checks/my-checklists`                       | Member's pending and recent checklists       |
+| `POST /api/v1/equipment-checks/checks/{id}/items/{item_id}/photos` | Photo upload                                 |
+| `GET /api/v1/equipment-checks/reports/*`                           | Compliance, failures, trends, CSV/PDF export |
+
+**Edge Cases:**
+
+- Templates with `template_type: vehicle` show the vehicle check preset picker; `equipment` templates show standard items
+- Empty compartments are allowed (for future item population)
+- Expired items (`has_expiration: true` with past `expiration_date`) auto-fail regardless of the submitted result
+- Items below `required_quantity` auto-fail
+- A single failed item marks the entire apparatus as deficient; the flag clears only when a subsequent full check passes all items
+- Photo uploads are limited to 3 per item per check; larger files are rejected (max 10 MB each)
+- Position-based assignment means only members assigned to those positions see the checklist on their shift
+
+### Scheduling Module — Position Eligibility, Admin Sub-Pages & Timezone Fixes (2026-03-19)
+
+- **Shift position eligibility system**: Operational ranks now define `eligible_positions` — a list of shift positions each rank is qualified for. When signing up for open shifts, members only see positions their rank allows. Dashboard shift signup validates against eligibility. Existing ranks backfilled with default eligible positions via migration
+- **Rank eligible positions UI redesign**: Settings page shows a clear matrix of ranks × positions with toggle controls
+- **Scheduling admin sub-pages**: Admin tabs (Templates, Patterns, Reports, Settings) extracted into dedicated routed pages under `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/settings` with back navigation and `ProtectedRoute` gating
+- **Shift settings tabbed sub-navigation**: Settings page reorganized into tabbed sections for better organization
+- **Structured position slots**: Shifts now define required and optional position slots with decline notifications
+- **Open slot visibility**: When members decline or are removed, open slots are shown for re-assignment
+- **Position editing in shift detail**: Officers can edit position assignments directly in the shift detail edit form
+- **Dashboard shift display fixes**: Dashboard no longer shows shifts the user already signed up for, hides declined/cancelled shifts from "My Upcoming Shifts", and fixes the 422 error from sending invalid `general` position on signup
+- **Shift signup re-enrollment**: Members who previously cancelled can now re-sign up for the same shift
+- **Attendee count fix**: Cancelled and no-show assignments no longer inflate the displayed attendee count
+- **Shift timezone fixes**: Fixed naive local times being sent as UTC when creating shifts from the scheduling page. Fixed template-based shift generation ignoring org timezone. Fixed naive datetime construction across 7 backend services
+- **UTC response schema refactor**: Introduced `UTCResponseBase` class — all scheduling response schemas inherit from it to automatically stamp naive datetimes with UTC timezone markers
+
+**Data Model Changes:**
+
+| Table               | New Columns                           | Description                                        |
+| ------------------- | ------------------------------------- | -------------------------------------------------- |
+| `operational_ranks` | `eligible_positions` (JSON)           | List of shift positions this rank is qualified for |
+| `shift_assignments` | `position_slot_id` (String, nullable) | Links assignment to a structured position slot     |
+
+**New Pages:**
+
+| URL                                                 | Page                             | Permission               |
+| --------------------------------------------------- | -------------------------------- | ------------------------ |
+| `/scheduling/templates`                             | Scheduling Templates             | `scheduling.manage`      |
+| `/scheduling/patterns`                              | Scheduling Patterns              | `scheduling.manage`      |
+| `/scheduling/reports`                               | Scheduling Reports               | `scheduling.manage`      |
+| `/scheduling/settings`                              | Scheduling Settings              | `scheduling.manage`      |
+| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage` |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `equipment_check.manage` |
+
+**Edge Cases:**
+
+- Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
+- Dashboard signup button only appears for shifts with open positions the member's rank qualifies for
+- Previously cancelled signups are cleaned up before re-enrollment to avoid duplicate constraint violations
+- Shift create from scheduling page now converts local times to UTC using org timezone before sending to API
+- Template-generated shifts inherit timezone-correct start/end times
+
+### Elections Module — Hardening, Audit Logging & Email Improvements (2026-03-19)
+
+- **Comprehensive audit logging**: All election state changes (create, open, close, certify, cancel, extend, rollback) now generate audit log entries with actor, action, and metadata
+- **Response model standardization**: All election response schemas now use `UTCResponseBase` for consistent datetime serialization with UTC timezone markers
+- **Quorum fields**: Election responses now include `quorum_required` and `quorum_met` fields
+- **Race condition fixes**: Proxy authorization and vote casting now use database-level locking to prevent concurrent modification. Cross-tenant data access blocked with organization_id filtering
+- **JSON column mutation fixes**: Fixed `rollback_history` and `attendee check-in` not persisting due to in-place JSON mutation without `flag_modified()`. Uses `copy.deepcopy()` pattern
+- **Ballot sending reliability**: Fixed ballot emails silently returning 0 recipients — root cause was `User.is_active` property not being queryable in SQLAlchemy filters; converted to `hybrid_property`. Added exception handling per-recipient in send loop to prevent partial delivery failures. Added diagnostic logging for skipped voters
+- **Eligibility summary email**: After dispatching ballots, the secretary receives a summary email listing all skipped voters with reasons (no email, ineligible, already voted)
+- **Secretary-facing error messages**: Election error messages now include actionable details (e.g., "Election has no candidates" instead of generic "cannot open election")
+- **Election report email**: Officers can email election results as a formatted report
+- **Upcoming business meetings section**: Election detail page shows upcoming business meetings for linking elections to meeting records
+- **Linked meetings filter**: Elections linked to meetings now correctly show only upcoming meetings (not past ones)
+- **Extend modal date display fix**: Fixed incorrect date formatting in the election extension modal
+- **Safe error handling**: All elections endpoints wrapped with `safe_error_detail()` for consistent, sanitized error responses
+- **Empty string form value fix**: Optional election form fields use `||` instead of `??` to coerce empty strings
+
+**Edge Cases:**
+
+- Ballot email send loop catches per-recipient exceptions so one failed email doesn't block remaining recipients
+- Proxy authorization checks organization_id to prevent cross-tenant abuse
+- Rollback history uses `copy.deepcopy()` before appending to prevent SQLAlchemy silent no-op
+- Elections with only ballot items (no candidates) can be opened — `open_election` no longer requires candidates
+- Eligibility summary email is sent only to the user who triggered the ballot dispatch
+- If no voters are found after filtering, the API returns a descriptive error instead of a false success with 0 recipients
+
+### Dark Mode & High-Contrast Hardening (2026-03-18)
+
+- **Opaque backgrounds for all floating UI**: Overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode instead of transparent/semi-transparent backgrounds that caused content bleed-through
+- **Dark mode variants across 25+ files**: Added missing `dark:` Tailwind variants for icon badges, stat cards, settings UI, form inputs, and table rows
+- **High-contrast mode support**: Additional high-contrast variants for accessibility compliance
+
+### Event Notifications — In-App Delivery (2026-03-17)
+
+- **In-app notification delivery**: Event notifications (announcement, reminder, follow-up, missed_event, check_in_confirmation) now deliver via in-app notifications in addition to email. Notifications appear in the member's notification bell
+
+### Time Picker Standardization (2026-03-17)
+
+- **15-minute increment enforcement**: All time pickers across the application (event forms, shift forms, scheduling) now restrict to quarter-hour increments (`:00`, `:15`, `:30`, `:45`), consistent with the `DateTimeQuarterHour` component
+
+### Check-In Timing Fix (2026-03-17)
+
+- **QR display and self-check-in timing mismatch**: Fixed a bug where the QR code display page and the self-check-in page used different datetime sources for the check-in window, causing valid check-ins to be rejected as outside the window
+
+### UTC Timezone Marker — API Response Schemas (2026-03-16)
+
+- **Naive datetime UTC stamping in API responses**: All API response schemas now inherit from `UTCResponseBase` which automatically stamps naive `datetime` fields with UTC timezone info (`+00:00` suffix). This ensures JavaScript's `new Date()` correctly interprets times as UTC rather than local time, fixing the root cause of timezone display bugs across the frontend
+- **Scheduling-specific fix**: Scheduling response schemas were the first to receive the fix, then extended to all modules via the shared base class
+- **SQLAlchemy `load` event listener**: The existing ORM-level fix (stamping naive datetimes on load) is complemented by the schema-level fix for comprehensive coverage
+
+**Edge Cases:**
+
+- Response schemas with `Optional[datetime]` fields skip stamping when the value is `None`
+- The `UTCResponseBase` validator runs as a `model_validator(mode="before")` so it processes raw dict data before Pydantic validation
+- Existing frontend code using `formatDate()`/`formatDateTime()` utilities works correctly with both `Z` and `+00:00` suffixed timestamps
+
+### Training Module — Recurring Sessions & Quarter-Hour Time Picker (2026-03-15)
+
+- **Recurring training sessions**: Training sessions can now recur using the same recurrence infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom patterns). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting an existing course auto-populates training type, credit hours, instructor, expiration months, and max participants with a preview card
+- **Quarter-hour time picker (`DateTimeQuarterHour`)**: Replaces browser `datetime-local` inputs (which ignore `step="900"`) with a custom component splitting date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`. New reusable UX component in `components/ux/DateTimeQuarterHour.tsx`
+- **Quick duration buttons**: 1-hour, 2-hour, 4-hour, and 8-hour buttons after the date/time fields, matching the pattern in `EventForm` and `ElectionsPage`. Buttons appear once a start date is set and auto-populate end date/time
+- **Course auto-populate**: Selecting an existing course in the session form auto-fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
+- **Location selector stale closure fix**: `updateField()` was using `{ ...formData }` which captured a stale closure reference. Switched to functional `setState: prev => ({ ...prev })` to prevent second call from overwriting first
+- **Training pipeline save fix**: Added missing `program_requirements` relationship to `TrainingProgram` model and `program` back_populates to `ProgramRequirement`. Moved `/requirements/registries` and `/requirements/import/{registry_name}` routes before `/requirements/{requirement_id}` to fix route ordering (FastAPI was matching "registries" as a UUID)
+- **UUID comparison fix**: Fixed 12 instances where UUID objects from Pydantic schemas were compared directly against `String(36)` database columns without `str()` conversion in `training_program_service.py`. With aiomysql, UUID objects aren't auto-coerced, causing queries to silently return no results
+
+**Edge Cases:**
+
+- Recurring training sessions create one event per occurrence with a linked training session record — deleting the parent event does not cascade-delete the training session
+- Quarter-hour picker enforces `:00`/`:15`/`:30`/`:45` only; arbitrary minute values from imported data are rounded to the nearest quarter
+- Course auto-populate fills all fields but does not lock them — users can override any auto-filled value
+- Quick duration buttons are disabled until a start date is selected
+- The stale closure bug only manifested when two `updateField()` calls fired in the same render cycle (e.g., setting `location_id` then clearing `location`)
+
+### Scheduling Module — Template Positions & Timezone Fixes (2026-03-15)
+
+- **Template positions carry to crew roster**: Shift templates with defined `positions` and `min_staffing` now persist these values to created shifts. Both direct creation and pattern-based generation pass template staffing requirements through. The ShiftDetailPanel falls back to shift-level positions when apparatus has none defined
+- **Shift timezone display fix**: `ShiftReportsTab` was using UTC (`toISOString()`) instead of local timezone; now uses `getTodayLocalDate(tz)`. `ShiftDetailPanel` edit form was extracting time from the UTC ISO string instead of converting to local timezone via `Intl.DateTimeFormat`
+- **`toTimeValue` local timezone fix**: The `toTimeValue` function was extracting `HH:MM` by string-splitting the ISO datetime on `'T'`, returning the UTC time portion. For a shift starting at 2:30 PM Eastern (18:30 UTC), the edit form would show 18:30 instead of 14:30. Now uses `Intl.DateTimeFormat` with the user's timezone for local `HH:MM`, and `localToUTC()` when saving edits
+- **Alembic migration**: New migration adds `positions` (JSON) and `min_staffing` (Integer) columns to the `shifts` table
+
+**Data Model Changes:**
+
+| Table    | New Columns                        | Description                                    |
+| -------- | ---------------------------------- | ---------------------------------------------- |
+| `shifts` | `positions` (JSON, nullable)       | Position definitions inherited from template   |
+| `shifts` | `min_staffing` (Integer, nullable) | Minimum staffing level inherited from template |
+
+**Edge Cases:**
+
+- Shifts created before this migration have `NULL` for both columns — the UI falls back to apparatus-level positions
+- `toTimeValue` with a missing or invalid datetime returns an empty string instead of crashing
+- Template positions are copied at shift creation time; subsequent template edits do not retroactively update existing shifts
+
+### Inventory — Size/Style Auto-Generation on Item Creation (2026-03-14)
+
+- **Auto-generate size/style variants**: When creating a new uniform or PPE item, users can toggle "Generate Sizes & Styles" to select multiple standard sizes and garment styles. The backend creates one pool item per `size × color × style` combination, sets the `standard_size` and `style` enum fields on each generated item, and automatically groups them under a new `ItemVariantGroup`
+- **Frontend chip-based multi-select**: New UI with chip-based multi-select for sizes (`STANDARD_SIZES`) and styles (`GARMENT_STYLES`), comma-separated colors input, live preview of item count, and automatic call to `createSizeVariants` endpoint
+- **Backend schema extension**: `SizeVariantCreate` schema now includes `styles` list and `create_variant_group` flag. `SizeVariantCreateResponse` includes `variant_group_id`
+
+**Edge Cases:**
+
+- Empty styles list defaults to `['regular']` to always generate at least one variant per size/color
+- Empty colors list defaults to `['default']` to always generate at least one variant per size/style
+- Duplicate variant groups are prevented by checking for existing groups with the same base item name
+- The live preview count updates immediately as sizes, styles, and colors change: `count = sizes.length × colors.length × styles.length`
+
+### UTC Datetime Display — Root Cause Fix (2026-03-14)
+
+- **Root cause fix for UTC datetime display bug**: MySQL `DATETIME` columns don't store timezone info, so aiomysql returns naive Python datetime objects. Pydantic serialized them without a `'Z'` or `'+00:00'` suffix. JavaScript's `new Date()` treats strings without timezone indicators as local time, making the frontend's UTC-to-local conversion a no-op — times appeared shifted by the user's UTC offset
+- **SQLAlchemy `load` event listener**: Added a listener on `Base` that stamps all naive `DateTime(timezone=True)` columns with UTC tzinfo immediately after ORM hydration. Uses `set_committed_value()` instead of `object.__setattr__()` to properly integrate with SQLAlchemy's attribute tracking without marking the object dirty
+- **ESLint timezone enforcement**: New custom ESLint rules ban `.toLocaleString()`, `.toLocaleDateString()`, `.toLocaleTimeString()`, `import { ... } from 'date-fns'`, and `new Date().toISOString().slice(0,10)`. Enforces use of `dateFormatting.ts` utilities with explicit timezone parameter
+- **34 files updated**: All remaining `toLocaleString`/`toLocaleDateString`/`toLocaleTimeString` calls replaced with `formatDate()`/`formatDateTime()`/`formatTime()`/`formatNumber()`/`formatCurrency()` utilities across admin hours, grants-fundraising, inventory, facilities, scheduling, compliance, reports, and platform analytics
+
+**Edge Cases:**
+
+- The `load` event listener only stamps columns declared with `DateTime(timezone=True)` — plain `DateTime` columns are left unchanged
+- `set_committed_value()` does not trigger a flush or mark the instance as dirty, preventing unnecessary database writes
+- `formatNumber()` replaces numeric `.toLocaleString()` calls (used for formatting quantities and currency) — this is a different use case from date formatting
+
+### Prospective Members Pipeline — Pipeline Reports, Email UX & Days-in-Stage (2026-03-14)
+
+- **Pipeline overview report with configurable stage grouping**: New report renderer (`PipelineOverviewRenderer`) shows prospect counts per pipeline stage. Configurable stage groups (via `ReportStageGroupsEditor`) allow combining multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview). New `report_stage_groups` column on pipeline steps with migration
+- **Drag-and-drop section reordering for pipeline emails**: Email section order in pipeline email configuration can now be rearranged via drag-and-drop. Reordering updates `section_order` array. O(1) lookup optimization for section rendering with narrower `React.memo` dependencies
+- **Email preview panel**: Preview rendered email content before sending. Shows subject, sections, and styling as they will appear to the recipient
+- **Days-in-stage server-side calculation**: Days-in-stage for prospects was previously hardcoded to 0. Now computed server-side by calculating the difference between the current time and the prospect's `updated_at` timestamp
+- **Pipeline step hover state fix**: Inactive step buttons had identical base and hover colors (`text-theme-text-muted` for both), providing no visual feedback. Fixed to show a visible hover state
+- **Auto-advance for all applicable stage types**: Auto-advance option (`auto_advance` boolean) extended to all applicable pipeline stage types, not just form submission and document upload
+- **Automated email trigger reliability**: Fixed 4 separate issues preventing automated emails from sending when prospects advance to email stages: step_type mapping mismatch, auto-advance not triggering email, email config not loading, and missing email content validation
+
+**Edge Cases:**
+
+- Stage groups with zero prospects are still displayed in the report (with count 0) for completeness
+- Drag-and-drop reordering preserves section content — only the display order changes
+- Days-in-stage calculation uses `updated_at` (not `created_at`) so that moving a prospect to a new stage resets the counter
+- Auto-advance to an email stage both advances the prospect AND sends the configured email in a single operation
+- If automated email sending fails, the prospect is still advanced — email failure does not block stage progression
+
+### Events Module — Series End Reminders & Check-In Fix (2026-03-14)
+
+- **Series end email reminders**: When a recurring event series is nearing its end date, organizers receive an email reminder to extend or close the series
+- **Recurring event creation crash fix**: Fixed crash when creating recurring events with certain recurrence patterns that generated dates beyond the series end date
+- **Check-in modal fix**: Added missing `GET /api/v1/events/{id}/eligible-members` endpoint that the check-in modal was calling. Fixed modal overlay z-index so the check-in modal is always above the backdrop
+- **EventForm timezone bug fix**: Fixed date arithmetic and conflict detection in `EventForm` to use timezone-aware calculations instead of raw UTC comparisons
+
+**Edge Cases:**
+
+- Series end reminders are sent 7 days before the last occurrence — if the series has already ended, no reminder is sent
+- The eligible-members endpoint returns only members who haven't already checked in to the event
+- Conflict detection now correctly identifies overlaps when events span midnight in the organization's timezone
+
+### Non-Dismissable Modal Overlay Fix (2026-03-14)
+
+- **Fix non-dismissable modal overlays across the app**: All modals with backdrop-click and relative z-index issues fixed. Affected modals: EventDetailPage (7 modals — RSVP, Cancel Event, Cancel Series, Record Times, Override Attendance, Delete Confirm, Save Template), and modals in inventory, scheduling, and prospective members modules. Added `onClick` handler on backdrop and `relative z-10` on content panel
+
+**Edge Cases:**
+
+- Nested modals (e.g., confirmation dialog inside a form modal) maintain correct stacking order via incremental `z-index`
+- Clicking the backdrop of a form modal with unsaved changes triggers the standard discard confirmation before closing
+
+### Code Quality & Deduplication (2026-03-14)
+
+- **Backend error handling utilities**: New `ensure_found()` and `handle_service_errors()` helpers in `core/utils.py` replacing repetitive try/except/raise patterns across endpoint files. IP security endpoints fully refactored to use new utilities
+- **Shared `PaginationParams`**: Extracted common pagination query parameters into a reusable dependency
+- **Shared schema configs**: Extracted repeated Pydantic `model_config` patterns into shared `CAMEL_CASE_CONFIG`
+- **`formatCurrency` consolidation**: Unified currency formatting across frontend modules into `utils/currencyFormatting.ts`
+- **Frontend deduplication**: `LogoutConfirmModal` extracted into shared component; redundant utility functions consolidated
+- **Ballot email diagnostics**: Admin election page now shows reasons why present members didn't receive a ballot email (e.g., no email address, ineligible, already voted)
+- **Naive/aware datetime fix**: Fixed `can't subtract offset-naive and offset-aware datetimes` crash in prospective members list by adding `_ensure_utc()` helper to normalize naive timestamps before arithmetic
+
+### Prospective Members Pipeline — Auto-Advance & Stage Regression (2026-03-14)
+
+- **Auto-advance for form submission and document upload stages**: Pipeline stages of type `form_submission` or `document_upload` can now be configured to auto-advance the prospect when the form is submitted or documents are uploaded. New `auto_advance` boolean field in `FormStageConfig` and `DocumentStageConfig` interfaces, toggled via checkbox in StageConfigModal
+- **Move prospects back to a previous stage**: Coordinators can now regress a prospect to the previous pipeline stage from the Applicant Detail Drawer. New `POST /api/v1/membership-pipeline/prospects/{id}/regress` endpoint. Activity logged as `prospect_regressed` with source and target stage details
+- **Automated email trigger on stage advance**: When a prospect is advanced to an `automated_email` stage, the system now automatically sends the configured email. Email content is built from stage config: subject, welcome message, FAQ link, next meeting details, custom sections, and status tracker. All user inputs are HTML-escaped for security
+- **Email pipeline reliability improvements**: 9 fixes across the email pipeline — SMTP credential decryption, async SMTP processing, org context injection, SSL/TLS support for Gmail/Office365/self-hosted, welcome email templates, onboarding email config persistence to org settings, route ordering for `/scheduled` endpoint, Redis claim cleanup on shutdown, and polling interval reduced from 5 minutes to 60 seconds
+
+**Edge Cases:**
+
+- Auto-advance only triggers when the stage condition is fulfilled; the `auto_advance` config flag must be explicitly set to `true` (defaults to `false`)
+- Regression is blocked if the prospect is already at the first pipeline stage — the prospect is returned unchanged
+- Regression resets the previous step's progress to `IN_PROGRESS`
+- Email sending failures are logged and the email is marked `FAILED` with an error message; it does not block stage advancement
+- Redis lock (TTL 120s) prevents duplicate emails from concurrent workers
+- Stale Redis claims from crashed workers are automatically recovered instead of permanently blocking the email loop
+
+### Prospective Members Pipeline — Activity Log Fix (2026-03-13)
+
+- **Fix IntegrityError on prospect activity log**: Automated pipeline actions (e.g., stage advancement by the system) were setting `performed_by` to the string `'system'`, which violated the foreign key constraint to the `users` table. Fixed to use `None` instead, which the `nullable=True` column supports
+
+### Events Module — Comprehensive Enhancements (2026-03-13)
+
+- **Quick-create events**: Streamlined event creation flow with minimal required fields (title, date, time) and sensible defaults for all other fields
+- **Rich text descriptions**: Event descriptions now support rich text formatting via a WYSIWYG editor
+- **Split EventDetailPage**: Event detail page refactored into focused sub-components: `EventAttachmentsList`, `EventNotificationPanel`, `EventRSVPSection`, `EventRecurrenceInfo`
+- **Calendar view**: New `CalendarView` component showing a monthly calendar grid with event dots, day highlighting, collapsible daily event lists, timezone support, and navigation between months
+- **Event templates management page**: Dedicated `EventTemplatesPage` for creating, editing, toggling, and deleting event templates with list view, form modal, and delete confirmation
+- **Event analytics dashboard**: New `EventAnalyticsPage` with summary cards (total events, RSVPs, check-ins, attendance rate, avg check-in time), event type distribution bar chart, monthly trends line chart, and top events by attendance table with date range filtering
+- **RSVP history tracking**: Collapsible RSVP activity history feed on the event detail page showing all RSVP changes with timestamps
+- **Dietary/accessibility RSVP fields**: RSVP form now collects dietary restrictions and accessibility requirements from attendees
+- **Series overview & navigation**: Recurring event detail pages show series badge, "View All in Series" link, and series management actions
+- **Directions link**: Event detail page includes a map/directions link for events with a location
+- **Dashboard widget**: Events widget on the main dashboard showing upcoming events
+- **Recurrence editing**: Edit recurrence pattern on existing events; "Edit All Future" updates only future occurrences
+- **Recurrence exceptions**: Individual occurrences can be excluded from a recurring series without affecting other occurrences
+- **Duplicate/bulk actions**: Duplicate an event with one click; bulk actions for managing multiple events
+- **Draft/publish workflow**: Events can be saved as drafts and published when ready
+- **Save as template**: Save any event configuration as a reusable template
+- **Enhanced search**: Full-text search across event titles, descriptions, and locations
+- **My Events filter**: Filter events to show only those the current user has RSVP'd to
+- **Sort options**: Sort events by date, title, attendance, or creation date
+- **Conflict detection**: Warning when creating events that overlap with existing events at the same location
+- **Timezone labels**: All event times display with timezone abbreviation labels
+- **Waitlist system**: Events at capacity automatically waitlist new RSVPs; waitlisted attendees are promoted when spots open
+- **RSVP countdown**: Shows time remaining until RSVP deadline
+- **CSV export**: Export event attendee list as CSV
+- **Print roster**: Print-formatted attendee roster for on-site use
+- **Series RSVP**: RSVP to all events in a recurring series at once
+- **Inline RSVP**: RSVP directly from the events list without opening the detail page
+- **Attendance display**: Visual attendance count and capacity bar on event cards
+- **Template picker**: Quick-select from existing templates when creating a new event
+- **Attachments display**: Dedicated attachments panel on event detail page
+- **Capacity bar**: Visual progress bar showing RSVP count vs. capacity
+- **Calendar export**: Export events to iCal/Google Calendar format
+- **Non-respondent reminders**: Send targeted reminder notifications to members who haven't RSVP'd
+- **CSV import**: Import events from CSV files for bulk event creation
+- **Saved filter presets**: Save and recall frequently used event filter combinations
+- **File upload UI**: Upload attachments (flyers, agendas, maps) directly to events
+- **Event notification panel**: Send targeted notifications (announcements, reminders, follow-ups, missed-event alerts) to specific audiences (all, going, not responded, checked in, not checked in)
+
+**Edge Cases:**
+
+- Waitlisted attendees are promoted in RSVP order when spots open
+- Draft events are not visible to non-admin users
+- Conflict detection only warns — it does not block event creation (departments may intentionally schedule concurrent events)
+- Recurrence exceptions are tracked per-occurrence; deleting the exception restores the occurrence
+- CSV import validates required fields (title, date) and skips invalid rows with error reporting
+- Calendar export respects the user's timezone setting
+- Non-respondent reminders exclude members who have already responded (going, not going, or maybe)
+- Template picker shows only active templates; deactivated templates are hidden but not deleted
+
+### Medical Screening Module (2026-03-13)
+
+- **New medical screening module**: Full-stack module for tracking medical screenings, physicals, drug tests, fitness assessments, and psychological evaluations for members and prospects
+- **Screening types**: `PHYSICAL_EXAM`, `MEDICAL_CLEARANCE`, `DRUG_SCREENING`, `VISION_HEARING`, `FITNESS_ASSESSMENT`, `PSYCHOLOGICAL`
+- **Screening statuses**: `SCHEDULED`, `COMPLETED`, `PASSED`, `FAILED`, `PENDING_REVIEW`, `WAIVED`, `EXPIRED`
+- **Screening requirements**: Organization-level requirements with configurable frequency (months), role applicability (JSON), grace period, and active/inactive toggle
+- **Screening records**: Individual records linked to either a user or prospect (not both), with scheduled/completed dates, expiration tracking, provider info, result data (JSON), and reviewer chain
+- **Compliance tracking**: Per-user and per-prospect compliance summary endpoints showing which screenings are current, expiring, or overdue
+- **Expiring screenings alert**: Query screenings expiring within a configurable window (1-365 days)
+- **Frontend**: `MedicalScreeningPage` with compliance dashboard, screening record form, and requirement configuration form
+- **Permissions**: `medical_screening.view`, `medical_screening.manage`
+- **Feature flag**: `MODULE_MEDICAL_SCREENING_ENABLED`
+
+**API Endpoints:**
+
+| Method   | Path                                                          | Permission | Description                                               |
+| -------- | ------------------------------------------------------------- | ---------- | --------------------------------------------------------- |
+| `GET`    | `/api/v1/medical-screening/requirements`                      | `view`     | List requirements (filter: is_active, screening_type)     |
+| `GET`    | `/api/v1/medical-screening/requirements/{id}`                 | `view`     | Get requirement                                           |
+| `POST`   | `/api/v1/medical-screening/requirements`                      | `manage`   | Create requirement                                        |
+| `PUT`    | `/api/v1/medical-screening/requirements/{id}`                 | `manage`   | Update requirement                                        |
+| `DELETE` | `/api/v1/medical-screening/requirements/{id}`                 | `manage`   | Delete requirement                                        |
+| `GET`    | `/api/v1/medical-screening/records`                           | `view`     | List records (filter: user_id, prospect_id, type, status) |
+| `GET`    | `/api/v1/medical-screening/records/{id}`                      | `view`     | Get record                                                |
+| `POST`   | `/api/v1/medical-screening/records`                           | `manage`   | Create record                                             |
+| `PUT`    | `/api/v1/medical-screening/records/{id}`                      | `manage`   | Update record                                             |
+| `DELETE` | `/api/v1/medical-screening/records/{id}`                      | `manage`   | Delete record                                             |
+| `GET`    | `/api/v1/medical-screening/compliance/{user_id}`              | `view`     | User compliance summary                                   |
+| `GET`    | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `view`     | Prospect compliance summary                               |
+| `GET`    | `/api/v1/medical-screening/expiring`                          | `view`     | Expiring screenings (query: days=30)                      |
+
+**Data Models:**
+
+| Table                    | Key Columns                                                                                                                                                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `screening_requirements` | id, organization_id, name, screening_type, frequency_months, applies_to_roles (JSON), grace_period_days, is_active                                                                                                                           |
+| `screening_records`      | id, organization_id, requirement_id, user_id (nullable), prospect_id (nullable), screening_type, status, scheduled_date, completed_date, expiration_date, provider_name, result_summary, result_data (JSON), reviewed_by, reviewed_at, notes |
+
+**Edge Cases:**
+
+- A screening record must link to either `user_id` or `prospect_id`, never both — the service validates this constraint
+- `frequency_months = NULL` indicates a one-time screening that does not recur
+- Grace period (default 30 days) is applied to expiration calculations before marking non-compliant
+- Expiring endpoint accepts `days` query parameter clamped between 1 and 365
+- Screenings for prospects are preserved when the prospect is converted to a member (records are re-linked to the new user_id)
+
+### Compliance Requirements Configuration (2026-03-13)
+
+- **Compliance configuration page**: New `ComplianceRequirementsConfigPage` for configuring organization-wide compliance thresholds, profiles, and automated reporting
+- **Threshold types**: `PERCENTAGE` (compliance based on % of requirements met) or `ALL_REQUIRED` (every requirement must be met)
+- **Compliance profiles**: Named profiles targeting specific membership types and roles, with optional threshold overrides, required/optional requirement lists, priority ordering, and active/inactive toggle
+- **Automated reporting**: Schedule compliance reports monthly, quarterly, or yearly with configurable email recipients and day-of-month
+- **Report generation**: On-demand or scheduled report generation with status tracking (`PENDING` → `GENERATING` → `COMPLETED`/`FAILED`), email delivery, and stored report data (JSON)
+- **Dashboard nav link**: Compliance configuration is now linked from the compliance officer dashboard
+
+**API Endpoints:**
+
+| Method   | Path                                      | Permission        | Description                     |
+| -------- | ----------------------------------------- | ----------------- | ------------------------------- |
+| `GET`    | `/api/v1/compliance/config`               | `training.manage` | Get org compliance config       |
+| `PUT`    | `/api/v1/compliance/config`               | `settings.manage` | Create/update compliance config |
+| `POST`   | `/api/v1/compliance/config/initialize`    | `settings.manage` | First-time setup                |
+| `GET`    | `/api/v1/compliance/config/requirements`  | `training.manage` | Available training requirements |
+| `POST`   | `/api/v1/compliance/config/profiles`      | `settings.manage` | Create compliance profile       |
+| `PUT`    | `/api/v1/compliance/config/profiles/{id}` | `settings.manage` | Update compliance profile       |
+| `DELETE` | `/api/v1/compliance/config/profiles/{id}` | `settings.manage` | Delete compliance profile       |
+| `POST`   | `/api/v1/compliance/reports/generate`     | `training.manage` | Generate report                 |
+| `GET`    | `/api/v1/compliance/reports`              | `training.manage` | List stored reports             |
+
+**Data Models:**
+
+| Table                 | Key Columns                                                                                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compliance_configs`  | id, organization_id (unique), threshold_type, compliant_threshold (100.0), at_risk_threshold (75.0), grace_period_days (0), auto_report_frequency, report_email_recipients (JSON), notify_non_compliant_members, notify_days_before_deadline (JSON) |
+| `compliance_profiles` | id, config_id, name, membership_types (JSON), role_ids (JSON), threshold overrides, required/optional requirement_ids (JSON), priority, is_active                                                                                                   |
+| `compliance_reports`  | id, organization_id, report_type, period_label/year/month, status, report_data (JSON), summary (JSON), emailed_to (JSON), generated_by, generation_duration_ms                                                                                      |
+
+**Edge Cases:**
+
+- First-time initialization via `/config/initialize` raises an error if config already exists — use `PUT /config` for updates
+- Profiles with overlapping membership types or roles are resolved by priority ordering
+- Profile threshold overrides (null = use org default) allow different compliance standards per role
+- Report generation failures set status to `FAILED` with error_message; failed reports can be regenerated
+- Grace period is applied to deadline calculations before marking members non-compliant
+- `notify_days_before_deadline` is a JSON array allowing multiple notification lead times (e.g., [30, 14, 7])
+
+### Pipeline Email Configuration Improvements (2026-03-13)
+
+- **Custom section add/edit reliability**: Fixed custom section creation and editing in pipeline email stage configuration — sections now persist correctly when adding new ones or editing existing ones
+- **Email config persistence from onboarding**: SMTP settings configured during onboarding are now persisted to the organization's settings, ensuring email functionality works after initial setup without reconfiguration
+
+### Scheduled Email System Hardening (2026-03-13–14)
+
+- **SMTP provider compatibility**: Fixed SMTP sending for Gmail (STARTTLS on port 587), Office 365 (STARTTLS on port 587), and self-hosted servers (SSL on port 465 or plain on port 25). New `EMAIL_USE_SSL` env var for explicit SSL mode selection
+- **SMTP credential decryption**: Email service now correctly decrypts stored SMTP credentials before attempting connection; previously was sending encrypted strings as passwords
+- **Missing org context**: Email processing now loads full organization context (name, settings, logo) before sending, preventing template rendering errors
+- **Route ordering fix**: `GET /api/v1/email-templates/scheduled` moved before `GET /api/v1/email-templates/{template_id}` to prevent FastAPI from matching "scheduled" as a template ID
+- **Scheduled email date handling**: Removed server-side UTC-based future checks that incorrectly rejected emails scheduled in the user's local timezone. Date picker now uses local date for min constraint instead of UTC
+- **Scheduled email time display**: Scheduled emails now display times in the user's local timezone instead of raw UTC
+- **Redis claim recovery**: Scheduled email background loop no longer gives up permanently when encountering a stale Redis claim from a crashed worker — it reclaims after TTL expiry
+- **Redis key cleanup on shutdown**: Application shutdown now explicitly deletes the scheduled email Redis claim key
+- **Message history cleanup**: Added message history cleanup, date filtering, and email validation to the scheduled email pipeline
+
+**Edge Cases:**
+
+- Gmail requires STARTTLS (not SSL) on port 587 with an app password — `EMAIL_USE_SSL=false` is the correct setting
+- Office 365 uses the same STARTTLS pattern as Gmail on port 587
+- Self-hosted SMTP servers may use SSL on port 465 (`EMAIL_USE_SSL=true`) or plain SMTP on port 25
+- If a Redis claim from a crashed worker is found, the scheduler waits for TTL expiry then reclaims rather than exiting
+- Organizations without configured SMTP settings skip email sending with a warning log instead of crashing
+
+### Pipeline Stage Types — New Stage Types (2026-03-13)
+
+- **`form_dropdown` stage type**: Links an existing form from the Forms module for applicant data collection. Stage config includes form selection via dropdown. Icon: ListChecks
+- **`meeting` stage type**: Schedule an interview or orientation meeting with the applicant. Auto-links upcoming events matching the stage configuration. Includes "President Interview" quick preset. Icon: Calendar
+
+### Code Quality & Build Fixes (2026-03-13)
+
+- **Medical-screening module build fixes**: Resolved frontend build errors in the new medical-screening module
+- **EventDetailPage test update**: Fixed test for updated capacity display format
+- **Slug collision deduplication**: Server-side slug generation now appends numeric suffix for collisions
+- **Accurate modal warning text**: Stage config modal shows correct warning when pipeline has active prospects
+- **Reject extra fields**: Backend rejects unrecognized fields in pipeline stage config requests
+- **Server-side validation for inline stage UIs**: Added backend validation for new stage type configurations
+- **Compliance config wired into calculation**: Compliance calculation engine now reads from the configurable compliance config instead of hardcoded thresholds
+
+### Finance Module — Budgets, Purchase Requests, Expenses & Approval Chains (2026-03-12)
+
+- **New finance module**: Full-stack finance module (`/finance`) for internal operational finance workflows — budgets, purchase requests, expense reports, check requests, and dues management. Standalone from the grants-fundraising module
+- **Configurable approval chains**: Multi-step approval workflows with chain resolution by entity type, amount range, and budget category. Step types include APPROVAL (requires human action) and NOTIFICATION (auto-advances with email). Supports POSITION, PERMISSION, SPECIFIC_USER, and EMAIL approver types — EMAIL enables external approvers via secure token links
+- **Fiscal year management**: Create, activate, and lock fiscal years with constraint enforcement (one active per org). Budget tracking with amount_budgeted, amount_spent, and amount_encumbered
+- **Budget categories**: Hierarchical category system with 13 default categories (APPARATUS, TRAINING, FACILITIES, etc.) and optional QuickBooks account mapping
+- **Purchase request workflow**: Full lifecycle (DRAFT → SUBMITTED → PENDING_APPROVAL → APPROVED → ORDERED → RECEIVED → PAID) with auto-numbering (PR-YYYY-0001), budget encumbrance on approval, and encumbrance-to-spent conversion on payment
+- **Expense reports**: Multi-line-item expense reports with per-item budget linking, receipt URLs, and merchant tracking. Auto-numbered (ER-YYYY-0001)
+- **Check requests**: Request workflow for check issuance with payee management and check number tracking (CK-YYYY-0001)
+- **Dues management**: Dues schedule creation with frequency options (annual, semi-annual, quarterly, monthly), bulk member dues generation, late fee calculation, and waiver support
+- **Finance dashboard**: Budget health gauges, pending approval queue widget, dues collection rates, and recent transaction feed
+- **Permissions**: `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
+- **Feature flag**: `MODULE_FINANCE_ENABLED` in backend config
+- **Frontend**: 12 pages including dashboard, budgets, purchase requests, expense reports, check requests, dues management, approval chain settings, and fiscal year settings
+- **Backend tests**: Comprehensive test suite covering CRUD, approval state machine transitions, and budget calculations
+
+### Recurring Events — Monthly-by-Weekday & Annual Patterns (2026-03-12)
+
+- **Monthly-by-weekday recurrence**: Events can recur on patterns like "2nd Tuesday of every month" or "last Friday of every month". New `recurrence_week` and `recurrence_day_of_week` database columns store the pattern
+- **Annual recurrence**: Events can recur yearly on a specific date. Combined with monthly-by-weekday, this supports patterns like "first Monday in October every year"
+- **Recurring event UI**: New recurrence pattern selector in EventForm with radio buttons for daily/weekly/monthly/monthly-by-weekday/annual patterns. Weekday picker auto-populates from the event date
+- **Series management UX**: Event detail page shows recurring event badges, "View All in Series" link, and series management actions (edit all future, delete series). Events list shows recurrence indicator badges
+- **Duplicate event prevention**: Creating recurring events now checks for existing events at the same time/location to prevent accidental duplicates
+- **RecurringEventCreate type**: Fixed to support `exactOptionalPropertyTypes` with proper `undefined` union types on optional fields
+
+**Edge Cases:**
+
+- Monthly-by-weekday with "5th week" falls back to "last occurrence" when the month has fewer than 5 weeks
+- Annual events on Feb 29 shift to Feb 28 in non-leap years
+- Deleting a single occurrence from a series does not affect other occurrences
+- Series with past occurrences: "edit all future" only modifies events after the current date
+
+### Prospective Members Pipeline — Event Linking (2026-03-12)
+
+- **Link events to applicants**: Coordinators can link upcoming events (interviews, orientations, meetings) to individual applicants in the pipeline. New `prospect_event_links` table with full CRUD API
+- **Auto-link events to meeting stages**: When a pipeline stage of type `meeting` is activated for an applicant, the system automatically links the next upcoming event matching the stage configuration
+- **Applicant detail drawer**: Shows linked events with date, time, type, and status. Coordinators can manually add/remove event links
+- **President Interview preset**: New quick-setup preset in StageConfigModal for configuring a "President Interview" meeting stage with one click
+
+**Edge Cases:**
+
+- If no upcoming events match when a meeting stage activates, no link is created and the coordinator is prompted to schedule manually
+- Linking an event that is subsequently cancelled shows a "Cancelled" badge on the applicant's event list
+- Multiple applicants can be linked to the same event (e.g., group orientation)
+
+### Minutes Module — Refactoring & Module Conventions (2026-03-12)
+
+- **Module extraction**: Minutes pages (`MinutesPage`, `MinutesDetailPage`) moved from top-level `pages/` to `modules/minutes/` following module conventions. Original files now re-export from the module for backward compatibility
+- **Dedicated module structure**: New `modules/minutes/` with `index.ts`, `routes.tsx`, `services/api.ts`, `store/minutesStore.ts`, and `types/minutes.ts`
+- **Table name migration**: Alembic migration renames `meeting_action_items` table to match the expected model table name, fixing startup errors on fresh installs
+- **Zustand store**: New `minutesStore` with loading/error states for minutes CRUD operations
+- **Backend test suite**: Comprehensive `test_minute_service.py` covering CRUD, search, section operations, template management, and publish workflow
+
+**Edge Cases:**
+
+- Existing deployments with the old table name need to run the migration (`alembic upgrade head`) — the migration handles both rename and index recreation
+- Deep links to `/minutes/:id` continue to work via the re-exported route definitions
+
+### QR Check-In Timezone Fixes (2026-03-12)
+
+- **Organization timezone in QR data**: QR check-in response now includes `organizationTimezone` (IANA timezone string) so the check-in window displays times in the organization's local timezone instead of UTC
+- **ISO datetime string fix**: Check-in window was showing "N/A" because the backend was returning bare date/time strings instead of ISO 8601 format. Fixed to construct proper ISO datetime strings by combining event date with start/end times
+
+**Edge Cases:**
+
+- Organizations without a configured timezone default to UTC display
+- Events spanning midnight (e.g., overnight training) show the correct check-in window across the date boundary
+- Self check-in page gracefully handles missing timezone data by falling back to the browser's local timezone
+
+### Timezone Standardization Across Frontend (2026-03-12)
+
+- **34 files updated**: Standardized timezone-aware date/time formatting across all frontend pages using `dateFormatting.ts` utilities with optional `timezone` parameter
+- **Affected modules**: Admin hours, grants-fundraising, inventory, onboarding, scheduling, compliance, events, member profile, platform analytics, skills testing, and elections
+- **Pattern**: All `new Date().toLocaleString()` / `toLocaleDateString()` calls replaced with `formatDate()` / `formatDateTime()` / `formatTime()` utilities that accept an IANA timezone
+
+**Edge Cases:**
+
+- Pages that previously showed UTC times now show organization-local times — users may notice time "shifts" after the update
+- `AutoSaveIndicator` and `AutoSaveNotification` components now show save timestamps in local time
+
+### Ballot Email Notifications & Org Logo in Emails (2026-03-12)
+
+- **Ballot email notifications**: Election creators can send ballot notification emails to eligible voters from the election detail page. Emails include election title, voting period, and a direct link to the ballot
+- **Organization logo in all emails**: All email notifications (event requests, skills testing, member archive, scheduled tasks, cert alerts, election ballots, inventory, property returns) now include the organization's logo in the email header
+- **DRY email utility**: Extracted shared `build_logo_html()` and `get_org_logo_url()` helper functions into `email_service.py` to eliminate duplicated logo-building code across 7 service files
+
+**Edge Cases:**
+
+- Organizations without an uploaded logo get a text-only header (no broken image)
+- Logo URLs respect the `ALLOWED_ORIGINS` setting for correct absolute URL generation
+- Email clients that block images still show the organization name as alt text
+
+### Auth Cookie & Deployment Fixes (2026-03-12)
+
+- **Secure cookie auto-detection**: Auth cookies now auto-detect the `Secure` flag from the `ALLOWED_ORIGINS` scheme — HTTPS origins set `Secure=True`, HTTP origins (LAN deployments) set `Secure=False`. Removes the need for manual `COOKIE_SECURE` configuration
+- **LAN HTTP cookie fix**: Auth cookies were being dropped on LAN HTTP deployments because `Secure=True` was hardcoded. Now correctly serves cookies over plain HTTP when `ALLOWED_ORIGINS` uses `http://`
+- **Nginx worker count**: Added `NGINX_WORKER_PROCESSES` env var (default: `auto`) to prevent Nginx from spawning excessive workers (36+) on high-core-count servers
+
+**Edge Cases:**
+
+- Mixed-scheme `ALLOWED_ORIGINS` (both HTTP and HTTPS) defaults to `Secure=False` for compatibility — log a warning
+- Cookie `path` includes trailing slash (`/api/v1/auth/`) to ensure refresh endpoint receives the cookie on all browsers
+- Deployments behind a TLS-terminating reverse proxy should set `ALLOWED_ORIGINS` to the HTTPS URL even though backend-to-proxy traffic is HTTP
+
+### Events Settings Refactor & Form Redirect (2026-03-12)
+
+- **Settings page refactored**: `EventsSettingsTab` extracted into 6 focused section components (`CategoriesSection`, `EmailSection`, `FormSection`, `OutreachSection`, `PipelineSection`, `VisibilitySection`) with shared types and deduplicated save logic
+- **Form generation redirect**: After generating an event request form from Events Settings, the user is now redirected to the Forms page with the new form pre-selected, instead of staying on the settings page
+- **Custom categories schema fix**: `custom_event_categories` field in the Pydantic schema now accepts objects (with `id`, `label`, `color` fields) instead of plain strings, matching what the frontend actually sends
+
+**Edge Cases:**
+
+- Existing custom categories stored as plain strings are automatically migrated to object format on next save
+- The refactored settings page preserves unsaved changes when navigating between sections via the sidebar
+
+### Settings Persistence — SQLAlchemy JSON Mutation Fix (2026-03-12)
+
+- **Deep copy for JSON columns**: Organization settings updates now use `copy.deepcopy()` instead of `dict()` shallow copy when modifying nested JSON values, preventing silent write failures where SQLAlchemy didn't detect changes
+- **Orphan cleanup**: Settings save endpoint now cleans up orphaned event types and categories that were removed from the settings but left in the database
+- **Backend test suite**: New `test_event_settings.py` with 6 tests covering deep copy consistency, orphan cleanup, and concurrent save scenarios
+
+**Edge Cases:**
+
+- Shallow copy (`dict()`) of JSON columns shares nested dict references with SQLAlchemy's committed state — mutations appear to work in-memory but are never written to the database
+- `flag_modified()` is an alternative to `deepcopy()` but requires remembering to call it after every mutation
+- The `MutableDict.as_mutable(JSON)` type decorator auto-detects top-level key changes but still misses nested mutations
+
+### Slugs Made Internal (2026-03-12)
+
+- **Slugs removed from user-facing UIs**: Role slugs are now auto-generated server-side and hidden from role management, onboarding, and user profile pages. Previously, users could edit slugs directly, causing lookup failures when slugs were changed
+- **Backend auto-generation**: `RoleService` generates slugs from role names on create/update using `slugify()`. Duplicate slugs get a numeric suffix
+
+**Edge Cases:**
+
+- Existing roles retain their current slugs — no migration needed
+- API consumers that relied on user-provided slugs should use role IDs instead
+- The `slug` field remains in the database and API responses for internal lookups but is not editable via the UI
+
+### Code Quality & Build Fixes (2026-03-12)
+
+- **94 TypeScript errors resolved**: Fixed wrong import paths, duplicate properties, unused variables, missing type annotations, and `noUncheckedIndexedAccess` violations across 18 source and test files
+- **ESLint zero errors**: Resolved all ESLint errors and warnings across 59 files — 0 errors, 0 warnings
+- **Form value `??` to `||` migration**: Replaced `??` (nullish coalescing) with `||` (logical OR) for form value coercion across 14+ files to prevent empty strings from being sent to the backend. Affected modules: events, scheduling, inventory, onboarding, prospective members, training, member profile
+- **Python lint fixes**: Resolved flake8 violations (F401 unused imports, trailing whitespace, blank line formatting) in `elections.py`, `onboarding.py`, `organization_service.py`, `ip_security.py`, `sms_service.py`, `scheduled_tasks.py`
+- **Import path fixes**: Corrected wrong import paths in admin-hours module components (`ActiveSessionsTab`, `AllEntriesTab`, `PendingReviewTab`)
+- **`tsbuildinfo` gitignored**: Added TypeScript build info file to `.gitignore`
+- **Events module fixes**: Fixed `custom_category` field handling, attachment mutation in event update, and test file alignment with schema changes
+
+### CLAUDE.md Updates (2026-03-12)
+
+- **Package version accuracy**: Updated Vite, Zod, Tailwind, Vitest, and other package versions to match actual `package.json` values
+- **JSON column deep copy pitfall**: Added Pitfall #12 documenting the `dict()` shallow copy issue with SQLAlchemy JSON columns, with correct patterns using `copy.deepcopy()` and `flag_modified()`
+
+### Comprehensive Security Audit & Remediation (2026-03-07)
+
+- **25-issue security audit completed**: Full audit report (`SECURITY_AUDIT.md`) covering backend, frontend, infrastructure, and deployment. Issues prioritized across critical, high, medium, and low severity tiers
+- **Critical #1 — Database SSL enforcement**: `get_db_connect_args()` now creates SSL context when `DB_SSL=True`; verified usage in `database.py`. Rate limiter was constructing its own Redis URL bypassing `REDIS_SSL` — now uses `settings.REDIS_URL` to respect TLS config
+- **Critical #2 — Redis TLS enforcement**: `REDIS_URL` uses `rediss://` scheme when `REDIS_SSL=True`; all Redis consumers (cache, rate limiter, Celery broker) now route through the shared URL
+- **Critical #3 — Insecure defaults blocked in production/staging**: Production and staging environments now always raise `RuntimeError` on startup if default secrets are detected. `SECURITY_BLOCK_INSECURE_DEFAULTS` (default `False`) can block development environments too when explicitly enabled
+- **7 high-priority issues fixed**: (4) JWT algorithm allowlist restricted to HS256 only — reject `none`/RS256 tokens; (5) session invalidation on password change; (6) file upload path traversal blocked with `secure_filename()` + UUID prefix; (7) Jinja2 auto-escaping enforced globally with `SandboxedEnvironment`; (8) CORS origin validation uses exact match — no subdomain wildcards; (9) parameterized LIKE queries via `escape_like()` utility; (10) rate limiter thread-safety with `asyncio.Lock`
+- **Medium issues fixed**: (11) HTTPS enforcement upgraded from WARNING to CRITICAL in production; (15) scheduling module migrated from manual axios setup to shared `createApiClient()` factory for consistent CSRF/auth; (16) onboarding CSRF token moved from localStorage to SameSite=Strict cookie (double-submit pattern); (17) auto-clear deprecated sensitive sessionStorage keys on module load; (18) strict regex validation for table names in startup `DROP TABLE` loop + parameterized `INFORMATION_SCHEMA` query; (19) `/health` endpoint minimized — returns only `status` + `ready` (no environment/version info)
+- **Low issues fixed**: (20) removed `DEBUG=True` exposure in health endpoint; (21) added `Referrer-Policy: strict-origin-when-cross-origin` header; (22) added `X-Permitted-Cross-Domain-Policies: none` header
+- **Magic byte validation for file uploads**: All file upload endpoints now validate file content against magic bytes (JPEG, PNG, GIF, WebP, PDF, CSV, DOCX, XLSX) to prevent disguised malicious files
+
+### Inventory Module — Variant Groups, Equipment Kits & Size Preferences (2026-03-07)
+
+- **Variant groups**: Items can be grouped as variants of a base product (e.g., "Turnout Coat" in sizes S/M/L/XL). Each variant tracks its own stock, serial numbers, and assignments while sharing a common description and category
+- **Equipment kits**: Define named kits (e.g., "New Recruit PPE Kit") that bundle multiple inventory items. Issuing a kit assigns all component items in a single operation with individual tracking per component
+- **Member size preferences**: Members can record their preferred sizes for garment categories (coat, pants, gloves, boots, helmet). Size preferences are surfaced during kit issuance and equipment ordering to streamline fulfillment
+- **New data models**: `VariantGroup`, `EquipmentKit`, `EquipmentKitItem`, `MemberSizePreference` tables with full CRUD API endpoints
+- **New enums**: `StandardSize` (XS through 5XL), `GarmentStyle` (regular, long, short, tall)
+
+### Inventory Module — Reorder Points, Reorder Requests & SMS Alerts (2026-03-07)
+
+- **Item-level reorder points**: Each pool item can define a `reorder_point` threshold. When available stock drops to or below this value, the item appears in the low-stock dashboard and triggers alerts
+- **Reorder request workflow**: Full lifecycle — `pending` → `approved` → `ordered` → `received` — with audit logging at each transition. Admins can approve/deny requests, record order details (vendor, PO number, expected delivery), and mark items as received with quantity reconciliation
+- **Low stock SMS alerts via Twilio**: When `TWILIO_ENABLED=True`, low-stock alerts are sent via SMS to configured recipients alongside existing email notifications. SMS includes item name, current stock, and reorder point
+- **Inventory-by-location dashboard**: New location filter on the inventory dashboard showing item counts and stock levels grouped by storage location. Cascading Facility → Room → Storage Area selection
+- **New API endpoints**: `POST/GET /api/v1/inventory/reorder-requests`, `PATCH /api/v1/inventory/reorder-requests/{id}`, `GET /api/v1/inventory/reorder-requests/{id}/history`
+
+### Inventory Module Rewrite (2026-03-06)
+
+- **Focused pages replace monolithic admin hub**: Individual pages for items, pool items, categories, maintenance, members, charges, return requests, equipment requests, write-offs, and reorder requests — each with dedicated URL and navigation
+- **Type-specific views**: Pool items page with quantity tracking, variant group display, and bulk issuance. Individual items page with serial/barcode search and assignment history
+- **ItemDetailPage**: Two-column layout with sidebar (barcode, quick info, assignment/issuance history) and main content (overview, history, maintenance, NFPA compliance). Accessible at `/inventory/items/:id`
+- **Admin hub dashboard**: Summary statistics cards (total items, low stock, overdue checkouts, pending requests) with quick-link navigation to each admin sub-page
+- **Storage areas room filter**: Storage areas page filters by `facility_room_id` to prevent rooms from leaking into station location pickers
+- **Inventory test suite**: 25+ frontend tests covering page rendering, search, filters, and modal interactions
+- **Modal overlay stacking fix**: Modal backdrop z-index corrected so content is always above the overlay
+- **PDF label barcode rendering**: SVG barcodes now use `requestAnimationFrame` to ensure full rendering before `window.print()`. Added error handling and missing-item logging to barcode label generation
+
+### Test Suite Improvements (2026-03-07)
+
+- **vitest-axe for accessibility testing**: Automated WCAG compliance checks using axe-core. Example `Modal.a11y.test.tsx` demonstrates the pattern for component-level accessibility testing
+- **hypothesis for property-based testing**: 14 property-based tests for Pydantic schema validation (`test_schema_property.py`) — generates random valid/invalid inputs to find edge cases
+- **schemathesis for API contract testing**: Skeleton `test_api_contract.py` for automatic OpenAPI spec fuzzing. Validates that all documented endpoints handle edge-case inputs correctly
+- **pytest-timeout**: 30-second default timeout on all backend tests to catch hanging async tests. Configurable per-test with `@pytest.mark.timeout(60)`
+- **Coverage ratcheting**: Coverage thresholds enforce 80% lines/functions/statements and 75% branches. Ratchet script prevents coverage from decreasing between PRs
+- **Code quality ESLint plugins**: `eslint-plugin-testing-library`, `eslint-plugin-jest-dom`, `eslint-plugin-vitest` added. Fixed remaining weak assertions (e.g., `toBeTruthy()` → `toBeInTheDocument()`)
+- **Test infrastructure fixes**: Added pytest markers (`integration`, `unit`, `slow`, `docker`) to `pytest.ini`. Fixed 9 backend test failures across 5 files and 1 migration
+
+### Visual Design Improvements (2026-03-07)
+
+- **50 CSS and component enhancements**: Comprehensive visual polish across the entire application including consistent spacing, border-radius, shadow depth, and color usage
+- **Theme-aware gradients**: All hardcoded gradient colors replaced with CSS variable-based theme classes
+- **Card component standardization**: Unified card padding, border, and shadow styles across dashboard, inventory, facilities, and training pages
+- **Mobile responsive improvements**: Touch targets enlarged to 44px minimum, improved spacing on mobile breakpoints
+- **Typography refinement**: Consistent heading sizes, line heights, and font weights across all modules
+
+### PDF Generation & Print Fixes (2026-03-07)
+
+- **Barcode readiness race condition**: Print pages now wait for SVG barcode rendering via `requestAnimationFrame` before triggering `window.print()`, preventing blank barcodes on thermal labels
+- **SVG barcodes fully rendered before print/export**: Added explicit render-complete callbacks for JsBarcode SVG output
+- **Error handling for barcode label generation**: Missing items are logged with warnings instead of crashing the batch. Partial label sheets are generated for items that have valid barcodes
+- **XSS fix in print export**: User-supplied item names and descriptions are HTML-escaped before insertion into print templates
+- **Training report PDF export**: Fixed `format=pdf` parameter handling — training reports now correctly generate PDF output when requested instead of returning CSV
+
+### Auth & Session Fixes (2026-03-07)
+
+- **Concurrent token refresh replay detection**: When multiple API calls simultaneously receive 401 responses, they all shared a single refresh promise. However, the refresh endpoint's replay detection was flagging the second refresh attempt (using the same token) as a replay attack. Fixed by ensuring only one refresh request is made per token rotation cycle
+- **useIdleTimer polling storm**: The idle timer was firing `checkActivity()` every 100ms instead of the configured interval, causing thousands of unnecessary API calls. Fixed interval calculation and added debouncing
+- **WebSocket 403 rejections**: Module-specific WebSocket connections were missing auth credentials. Added `withCredentials: true` to WebSocket upgrade requests
+
+### Facilities Module Rewrite (2026-03-06)
+
+- **FacilitiesDashboard**: New landing page with summary statistics (total facilities, pending maintenance, upcoming inspections), recent activity feed, and facility card grid with search and type filtering
+- **FacilityDetailPage**: Full-page layout with sidebar navigation to sections (overview, rooms, systems, maintenance, inspections, utilities, contacts, compliance). Replaces the previous tab-based single-page layout
+- **Zustand store**: `useFacilitiesStore` manages facility CRUD, rooms, systems, maintenance, inspections, and dashboard data with proper loading/error states
+- **CRUD components**: Dedicated form components for rooms, building systems, emergency contacts, and compliance checklists with proper TypeScript interfaces (no more `Record<string, unknown>`)
+- **FacilityRoomPicker**: Reusable cascading picker (facility dropdown → room dropdown with info card) for cross-module room selection
+- **Route restructuring**: `/facilities` (dashboard), `/facilities/:id` (detail), `/facilities/maintenance` (cross-facility), `/facilities/inspections` (cross-facility). Static routes ordered before parameterized routes to prevent conflicts
+
+### Apparatus Module Fixes (2026-03-06)
+
+- **Missing `min_staffing` field**: The apparatus model had `min_staffing` but the list endpoint was not returning full Apparatus records — only partial data. Fixed serialization to include `min_staffing`, breaking staffing calculations for shift scheduling
+- **Broken setup checklist**: When the apparatus module was enabled, the setup checklist showed 0 apparatus even with vehicles configured. The checklist count query was not counting the correct table
+- **geoip2 dependency**: Added `geoip2` package to fix missing-package warning at startup
+
+### TypeScript Code Quality (2026-03-06)
+
+- **Enum constants replace string literals across 17+ files**: Replaced hardcoded string comparisons with constants from `constants/enums.ts` (e.g., `status === 'active'` → `status === MemberStatus.ACTIVE`). Covers event types, member statuses, approval statuses, training types, scheduling statuses, and inventory conditions
+- **Deduplicated enum type definitions**: Module-local enum types now re-export from `constants/enums.ts` instead of defining duplicates
+- **`getErrorMessage()` utility replaces `instanceof Error`**: All `catch (err: unknown)` blocks now use `getErrorMessage(err, 'fallback')` instead of manual `instanceof Error` checks. Consistent error handling across 40+ files
+- **Specific enum types replace generic `status: string`**: Component props and function signatures now use `MemberStatus`, `EventType`, `ApprovalStatus`, etc. instead of bare `string`
+
+### Migration & Startup Fixes (2026-03-06)
+
+- **Broken Alembic revision chain**: Multiple migration heads detected on startup due to broken `down_revision` references. Fixed revision chain to ensure linear history from initial migration to HEAD
+- **Misleading migration logs**: Startup logged "Running migrations..." even when the database was already at HEAD, causing false alarm in multi-worker deployments. Now only logs when actual migrations are applied
+- **Reduced startup noise**: Worker processes skip migration checks (only the first worker runs migrations). Suppressed redundant Redis connection and WebSocket manager log lines
+
+### Security Middleware Fix (2026-03-06)
+
+- **`UnboundLocalError` for `actual_receive` in SecurityMonitoringMiddleware**: The `actual_receive` variable was referenced before assignment when the middleware's body-inspection path was not taken. Moved variable initialization before the conditional block
+
+### Lint & Code Quality (2026-03-06)
+
+- **All outstanding lint errors resolved**: Fixed flake8 violations (F401, F811, E303, W291) across all modified Python files. Fixed ESLint violations across frontend. Zero lint errors in both backend and frontend
+
+### Prospective Members — Desired Membership Type (2026-03-06)
+
+- **Desired membership type selection**: Prospective member pipeline now includes a `desired_membership_type` field (regular or administrative). Displayed on the interest form, editable inline at any pipeline stage, and pre-filled during conversion to full member
+- **Membership Interest Form template**: The form template includes the membership type dropdown so applicants can indicate their preference at initial interest submission
+
+### Inventory — Cost Data & Item History (2026-03-06)
+
+- **Cost data added to inventory views**: Item list and detail views now display purchase cost, replacement cost, and total cost recovery. Cost summary cards on the admin dashboard show total inventory value and cost recovery percentage
+- **Item history `AttributeError` fix**: Fixed crash when loading item assignment/issuance history caused by accessing a relationship attribute on a detached SQLAlchemy instance
+
+### Login Auth Flow & Cookie Delivery Fixes (2026-03-06)
+
+- **Login auto-refresh loop caused by conflicting Set-Cookie headers**: The login endpoint called `_clear_auth_cookies()` before `_set_auth_cookies()`, adding delete headers (`Max-Age=0`, `SameSite=lax`) followed by set headers (`SameSite=strict`, `HttpOnly`) for the same cookie names. Browsers inconsistently processed the conflicting attributes, resulting in the `access_token` never being stored and a refresh loop that kicked users back to login
+- **Post-login 401 cascade from cookie timing race**: After login, the browser may not have processed Set-Cookie headers before the dashboard fires ~15 parallel API calls, causing spurious 401s. Added cookie settle polling (`waitForLoginCookies`) and a post-login grace period with exponential backoff in the 401 interceptor
+- **Temporary Bearer token bridge for post-login requests**: httpOnly auth cookies set by the login response may not be immediately available due to nginx proxy buffering or middleware response wrapping. Now temporarily uses the `access_token` from the login response body as an `Authorization: Bearer` header (the backend already supports this as a fallback), with automatic cleanup after 30 minutes
+- **Bearer token bridge extended to module-specific axios instances**: The scheduling module and `createApiClient` factory each create their own axios instances with independent interceptors. These now also include the Bearer token bridge to prevent 401s on module-specific endpoints (`scheduling/*`, `admin-hours/*`) after login
+- **Refresh token stored in memory alongside access token**: Cookies are never stored by the browser in some deployment configurations. The refresh token is now stored in memory with the access token, and all 401 interceptors send the refresh token in the request body (backend accepts it from body or cookie)
+- **CSRF header missing on standalone refresh request**: The refresh request uses a standalone axios instance to avoid recursive 401 interception, but this bypassed the CSRF header. Now manually reads the `csrf_token` cookie and attaches `X-CSRF-Token` on refresh requests
+- **Auth refresh 422 from empty body and cookie path mismatch**: `apiClient` was sending `{}` body on refresh, which Pydantic parsed against `TokenRefresh` (requires `refresh_token: str`) and rejected with 422. Also fixed cookie path from `/api/v1/auth` to `/api/v1/auth/` for correct sub-path matching. Made `TokenRefresh.refresh_token` optional as defense-in-depth
+- **Login response now includes user data**: Eliminated the separate `GET /auth/me` call after login, preventing the race condition where the access token cookie isn't processed by the browser before the `/auth/me` request fires
+- **Stale refresh token cookie cleanup on login**: Stale `refresh_token` cookies from previous sessions (different `SECRET_KEY`) persisted because the cookie path changed. Login now clears cookies for both path variants
+
+### Security Middleware Fixes (2026-03-06)
+
+- **SecurityHeaders and IPLogging middleware converted to pure ASGI**: Starlette's `BaseHTTPMiddleware` wraps responses through `call_next()`, which can strip Set-Cookie headers when multiple `BaseHTTPMiddleware` layers are stacked. This was the root cause of httpOnly auth cookies set by the login endpoint being lost before reaching the browser. Converted both middleware classes to pure ASGI to leave original response headers untouched
+- **SecurityMonitoringMiddleware receive lambda TypeError**: The `receive` lambda used to re-wrap the request body was synchronous, causing `TypeError` when downstream handlers called `await request.body()`. Changed to an async callable as required by ASGI
+- **Unbounded in-memory growth in SecurityMonitoringService**: Added periodic eviction of stale tracking keys (`_api_calls`, `_login_attempts`, `_session_ips`, `_data_transfers`) and trimming of the in-memory alerts list to prevent memory exhaustion under sustained traffic
+- **Unbounded in-memory growth in public portal security caches**: Added automatic `cleanup_rate_limit_cache()` calls when `rate_limit_cache` or `ip_rate_limit_cache` exceed their key limits
+
+### Elections Module Improvements (2026-03-06)
+
+- **Candidates not showing in ballot preview and voting page**: Ballot items created from templates were missing the `position` field, causing candidate-to-ballot-item matching to fail. Fixed template-created ballot items, preview matching, and voting page matching to all use position-based or title-based fallback
+- **Position field added to ballot item creation**: BallotBuilder now includes a position dropdown (from `election.positions`) when `vote_type` is `candidate_selection`. Templates also set the position field automatically
+- **Ballot preview enhanced with prospective members and election context**: Ballot preview now shows meeting date, prospective member/candidate info cards on approval-type items, write-in input placeholders, security notice footer, and election configuration summary
+- **BallotBuilder redesigned with modern card-based UI and drag-and-drop**: Replaced flat numbered list with interactive cards using `@dnd-kit` for drag-and-drop reordering with keyboard accessibility, expandable inline editing, color-coded type badges, two-step delete confirmation, and template popover
+- **Limit one ballot item per position**: Track which positions already have ballot items, filter dropdowns to show only unused positions, and show validation error toast on duplicate attempts
+- **Write-in candidate auto-fill**: When "Write-in candidate" is checked, auto-fills name with "Write-in Candidate" if empty and clears any linked member
+- **Election position input converted to dropdown with rank suggestions**: Position field now loads the organization's operational ranks (Chief, Captain, etc.) as dropdown suggestions with type-ahead filtering
+- **Position dropdown added to candidate edit form**: The edit form previously only showed name and statement fields, preventing users from moving a candidate to a different position
+- **Template popover repositioned above button**: Changed from downward to upward opening to prevent clipping inside the card content area
+- **Proxy voting toggle added to Election Settings**: Enable/disable proxy voting org-wide with max proxies per person. Fixed GET/PATCH `/elections/settings` endpoints to return flat field names matching frontend expectations
+- **Election integrity chain and security hardening**: Added ballot hash chaining, server-side voter eligibility enforcement, and election settings page
+
+### Events Module Improvements (2026-03-06)
+
+- **Attendance duration calculation for auto-checkout**: Added `finalize_event_attendance()` that calculates duration for all checked-in members who didn't check out (the default when `require_checkout` is false). Auto-finalizes when a secretary records actual end time. Updates linked training records with calculated hours
+- **Duplicate RSVP bug in form-event integration**: `_process_event_registration` now checks for existing RSVPs before creating new ones, updating to GOING status if one exists
+- **Events page UX improvements**: Added search bar filtering by title/location, Upcoming/Past toggle for all users, pagination, user RSVP status badge on event cards, and fixed cancelled event badge colors for light mode
+- **Event detail action button reorganization**: Organized 9+ manager action buttons into primary actions (RSVP, QR Code, Edit, Check In) plus a "More" dropdown for secondary actions (Duplicate, Record Times, Finalize Attendance, Monitoring, Create Meeting, Cancel, Delete)
+- **ESLint warning reduction**: Wrapped `fetchEvents` in `useCallback`, replaced eslint-disable with proper `useCallback` on ElectionsSettingsPage, added void prefix to async onClick handlers
+
+### Facilities Module Improvements (2026-03-06)
+
+- **NFPA compliance fields added**: 8 fire-critical system types (exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power), certification/testing fields on FacilitySystem, inspector fields on FacilityInspection, NFPA 1500/1585 zone classification (hot/transition/cold) on FacilityRoom, and 16 NFPA-aligned maintenance types seeded
+- **Facility type auto-matched to organization type**: "EMS Station" selected for EMS-only orgs instead of always defaulting to "Fire Station"
+- **Auto-assign "Operational" status on facility creation**: No longer requires explicit status selection
+- **Add Facility modal enhanced**: Now includes status dropdown, phone, and email fields
+- **Facility onboarding data flow fixed**: Location record now linked to auto-created facility during onboarding so headquarters appears in Events location picker and QR check-in. County and founded year fields added to onboarding form
+- **Container startup crash from facilities module**: Multiple cascading issues fixed: (1) FK reference from `roles` to `positions` table, (2) SET NULL FK columns missing `nullable=True` across ~50 columns in 8 model files, (3) fundraising migration in `MIGRATION_ONLY_FILES` causing "Table already exists", (4) lookup tables with NOT NULL `organization_id` preventing system seed data, (5) missing seed data causing "No facility types available" on create, (6) full migration chain fix with nullable `org_id` from creation and backfill seed migration
+- **Facility type/status auto-assignment fallback and validation**: Falls back to any active type/status for the org if "Fire Station"/"Operational" not found. Raises clear `ValueError` (400) instead of DB crash (500) if none exist
+- **Route ordering bug**: `GET /{facility_id}` was defined before static routes like `/maintenance`, causing FastAPI to match "maintenance" as a facility_id. Moved parameterized routes to end of router
+- **Auto-seed missing system defaults**: Safety net in `_ensure_system_defaults()` creates system types/statuses if missing (handles stamped migrations without data insertion)
+- **Null address data in facilities onboarding**: Falls back to mailing address when `physical_address_same=False` but physical address fields are `None`
+- **Room → Location integration**: Rooms now auto-sync a linked Location record, making them available to Events, Storage, and other modules via the location picker. Each room gets a display code for QR check-in support
+- **FacilityListItem schema expanded**: Added county, fax, and `address_line2` fields. FacilityDetailPanel updated to display county and fax in view mode
+- **Type safety improvements**: Replaced all `Record<string, unknown>` types with proper TypeScript interfaces matching backend schemas. Removed all `as unknown as` type casts. Created reusable `FacilityRoomPicker` component for cross-module room selection
+- **FacilityDetailPanel enhanced with tabbed sub-sections**: Rooms, Building Systems, and Emergency Contacts (previously only rooms were accessible). Zone classification badges and condition color coding added
+
+### Backend Startup & Onboarding Fixes (2026-03-06)
+
+- **Onboarding organization 422 from empty strings**: Form fields initialize as empty strings. `??` (nullish coalescing) passes `""` through to the backend where Pydantic validators reject it. Changed to `|| undefined` so empty strings become `undefined` and are omitted from JSON. ZIP code validation also strengthened to match backend regex
+- **Onboarding error messages showing empty or garbled content**: FastAPI returns 422 validation errors as arrays of `{loc, msg}` objects. `toAppError()` assumed `detail` was always a string, producing `[object Object]`. Now detects array detail and formats as "field: reason". Empty/whitespace error messages render `null` instead of an empty red alert box
+- **Global error handler for Pydantic 422 validation arrays**: `toAppError()` in `errorHandling.ts` now properly formats FastAPI's array-style validation errors
+
+### Integration Services (2026-03-06)
+
+- **Integration services secured, expanded, and implemented**: Hardened integration service layer with proper auth, expanded configuration options, and implemented core integration functionality
+
+### ESLint & Code Quality (2026-03-06)
+
+- **Pre-existing ESLint warnings resolved across pages**: Reduced warning count from 22 to 18 with proper `useCallback` wrapping and void-prefixed async handlers
+
+### Unraid Duplicate Cleanup (2026-03-05)
+
+- **Consolidated unraid/ directory from 16 to 11 files**: Removed 5 duplicate/superseded files — deleted `QUICK-START.md` (superseded by `QUICK-START-UPDATED.md`, which was renamed to `QUICK-START.md`), deleted `DOCKER-COMPOSE-SETUP.md` (content covered by other guides), deleted `ICON-REQUIREMENTS.txt` (already in `COMMUNITY-APP-SUBMISSION.md`), merged `check-frontend-config.sh` and `rebuild-frontend.sh` into `validate-deployment.sh` as `--diagnose-frontend` and `--rebuild-frontend` flags. Reduces ~1,100 lines of duplication. Updated all cross-references in `README.md`, `docs/deployment/unraid.md`, `unraid/README.md`, and `unraid/UNRAID-INSTALLATION.md`
+
+### Onboarding & Auth State Fixes (2026-03-05)
+
+- **Onboarding reset not clearing auth state after step 7**: When the system owner is created at step 7, auth cookies are now set. Previously, if a user navigated away and returned, the stale auth state from the cookie conflicted with the onboarding flow. The reset now properly clears `has_session` and auth cookies before restarting
+- **Hardcoded condition options in inventory**: The item condition dropdown was using a hardcoded list instead of the enum values from the backend. Fixed to use the `ItemCondition` enum consistently
+- **getUserPermissions test failure**: Fixed test that was failing due to a mock not matching the updated permission response schema
+
+### Inventory Improvements (2026-03-05)
+
+- **Charges UI, return requests, alerts, quarantine**: Added charges/fees tracking for damaged or lost items, member return request workflow, configurable stock alerts with email notifications, and quarantine status for items pending inspection
+- **Pool item enhancements — cost recovery, size variants, bulk issuance, allowances**: Pool items now support cost recovery tracking (replacement cost per unit), size variant management (S/M/L/XL with per-size stock), bulk issuance to multiple members at once, and per-member issuance allowances with override capability
+- **Mobile-friendly card views and FAB**: Inventory browse and admin pages now use responsive card layouts on mobile with a floating action button (FAB) for quick actions (add item, scan barcode, import CSV)
+- **Client-side barcode label printing for thermal printers**: Added Dymo (2.25×1.25″) and Rollo (4×6″) thermal printer support with Code128 barcode generation. Labels include item name, barcode, serial number, and organization logo. Print preview with per-label and batch modes
+- **Empty string clearing bug (`??` vs `||`)**: Fixed `??` (nullish coalescing) being used where `||` (logical OR) was needed across inventory pages. `??` only catches `null`/`undefined`, not empty strings `""`, causing form fields that were cleared to retain empty string values instead of falling back to defaults
+- **Fix inventory page 422 errors and WebSocket 403 rejections**: Inventory admin page was sending malformed payloads due to optional fields being sent as empty strings. WebSocket connection was rejected with 403 due to missing auth token in the upgrade request
+
+### Training Enhancements (2026-03-05)
+
+- **Recertification tracking, competency matrix, instructor management, effectiveness scoring, multi-agency training, xAPI integration**: Major training module expansion adding automated recertification reminders with configurable lead times, department-wide competency heat-map, instructor qualification and availability tracking, training effectiveness scoring (Kirkpatrick model), multi-agency joint training coordination, and xAPI (Tin Can) learning record integration
+
+### Compliance Officer Dashboard (2026-03-05)
+
+- **ISO readiness, attestations, and NFPA 1401 record quality**: New compliance officer dashboard with ISO 9001/14001/45001 readiness scoring, configurable attestation workflows (annual compliance sign-offs), and NFPA 1401 record quality analysis for training documentation
+- **Expanded compliance officer tests from 20 to 95**: Test coverage across 12 test classes for the new compliance dashboard features
+
+### Facilities Module Bug Fixes (2026-03-05)
+
+- **6 critical bugs fixed**: (1) Acronym display showing `undefined` for facilities without acronyms, (2) name validation rejecting valid facility names with special characters, (3) maintenance create/update `MissingGreenlet` error from synchronous relationship access in async context, (4) facility list not loading due to missing `address_line1`/`zip_code` in list response schema, (5) inspection form crash on facilities with no inspection history, (6) utility cost chart rendering error when no data exists
+
+### Grants & Fundraising Module (2026-03-05)
+
+- **Full-stack Grants & Fundraising module**: Complete implementation including grant application management (AFG, SAFER, FP&S, USDA), fundraising campaign engine with goal tracking, donor management mini-CRM, grant note system, pipeline stages, and financial reporting
+- **Fix GrantNote model crash**: Renamed reserved `metadata` attribute that conflicted with SQLAlchemy's internal `metadata` property on `Base`, causing `AttributeError` at import time
+- **Fix camelCase serialization, relationship loading, schema mismatches**: Backend schemas were missing `alias_generator=to_camel` on several response models, causing the frontend to receive snake_case keys. Fixed eager loading on grant-donor relationships to prevent N+1 queries
+- **Stage history typed status enum, progress bar UX, test coverage**: Replaced raw string stage statuses with a typed `StageStatus` enum, improved the pipeline progress bar with color-coded segments and hover tooltips, added comprehensive test coverage
+
+### Reports Module (2026-03-05)
+
+- **Reports showing raw rank_code instead of display name**: The reports rank column was displaying the internal `rank_code` (e.g., `FF1`, `LT`) instead of the human-readable `rank_name` (e.g., `Firefighter I`, `Lieutenant`). Fixed by joining the ranks table in the report query
+
+### Prospective Members (2026-03-05)
+
+- **Interview view for prospective members**: New interview detail view showing applicant information, interview questions, scheduled date/time, interviewer assignments, and notes — accessible from the prospect detail drawer
+- **Stage history showing all pipeline stages for new prospects**: New prospects were incorrectly showing history entries for all pipeline stages instead of just their current stage. Fixed to only create a history entry for the initial stage on prospect creation
+
+### TypeScript & Build Fixes (2026-03-05)
+
+- **Remove unused imports in TrainingEnhancementsTab**: Fixed TypeScript build errors caused by unused imports after the training enhancements were refactored
+- **Fix exactOptionalPropertyTypes and unused imports in grants-fundraising**: Multiple TypeScript errors from `exactOptionalPropertyTypes` strict check — `|| undefined` patterns fail because `undefined` is not assignable to optional properties. Replaced with conditional spreads and proper type narrowing
+- **Replace all `|| undefined` patterns with safe alternatives across 69 files**: Systematic fix for `|| undefined` anti-pattern that violates `exactOptionalPropertyTypes`. Replaced with conditional object spreads (`...(val ? { key: val } : {})`), ternaries with `null`, or proper type narrowing
+- **Fix pre-existing TypeScript errors in grants-fundraising module**: Resolved type errors in campaign, donor, and grant page components that predated the grants module merge
+
+### Production Code Quality (2026-03-05)
+
+- **Comprehensive code review fixes**: Input validation schema for event settings, store summary error handling, import cleanup across multiple files
+- **12 data point mismatches fixed**: Cross-layer audit fixing mismatches between models, schemas, services, and TypeScript types across inventory, training, facilities, and grants modules
+
+### Error Handling & Clipboard (2026-03-05)
+
+- **"Copy error details to clipboard" not working**: The error boundary's copy button was using `navigator.clipboard.writeText()` without the required `clipboard-write` permission and without fallback. Added `document.execCommand('copy')` fallback for contexts where the Clipboard API is unavailable (e.g., non-HTTPS, iframes)
+
+### Unraid App Removal (2026-03-05)
+
+- **App removal on Unraid requiring full restart**: Removing The Logbook from Unraid Community Applications left orphaned Docker volumes and network configurations that required a full Unraid restart to clean up. Added proper cleanup hooks to the Unraid template XML
+
+### Onboarding Auth Cookie Fix (2026-03-04)
+
+- **httpOnly auth cookies on system owner creation**: The onboarding system owner creation endpoint (Step 7) now sets httpOnly auth cookies via `_set_auth_cookies()`, matching the login endpoint pattern. Previously, tokens were returned in the response body but cookies were never set, causing `loadUser()` → 401 → cleared `has_session` → auth state lost for remaining onboarding steps (8–10) and the final redirect to `/dashboard` failed via `ProtectedRoute → /login`
+
+### Organization Profile — Physical Address (2026-03-04)
+
+- **Physical address in organization profile API and settings UI**: The organization model already had physical address columns (populated during onboarding), but they were never exposed in the profile API or displayed in Organization Settings. Added `PhysicalAddressUpdate` schema, physical address fields to `OrganizationProfileUpdate`, and a new Physical Address section in the Settings General tab with a "Same as mailing address" toggle
+
+### Custom Event Categories (2026-03-04)
+
+- **Custom event categories — full-stack integration**: Organizations can now define custom event categories with name and color badge. Backend: new `custom_category` column on events table with index + migration, visibility settings via `visible_custom_categories`, and category filtering in `list_events`. Frontend: category dropdown in EventForm, category filter tabs on EventsPage, and toggle controls in Events Settings visibility section
+- **Event Administration settings redesign**: Replaced collapsible sections with sidebar + content panel layout to match Organization Settings page. Desktop sidebar navigation with section descriptions; mobile horizontal scrollable tabs. Each section rendered in themed card panel with consistent header styling
+- **Outreach types auto-ID**: Outreach Event Types form now auto-generates the ID from the label, removing the separate ID input field. Email Notifications and Email Templates consolidated into a single Email Configuration section
+
+### Admin Hours camelCase Fix (2026-03-04)
+
+- **AdminHoursSummary.byCategory snake_case → camelCase**: The backend schema uses `alias_generator=to_camel`, so the API returns camelCase. Updated the `AdminHoursSummary` type definition and all 3 consuming components (`SummaryTab`, `AdminHoursPage`, `MemberProfilePage`) to use camelCase property names (`categoryId`, `categoryName`, `totalHours`, etc.)
+
+### Facility Address Display Fix (2026-03-04)
+
+- **Facility address fields not displaying**: Frontend `Facility` interface and all component code used snake_case (`address_line1`, `zip_code`, `facility_number`), but the backend Pydantic schema's `alias_generator=to_camel` returns camelCase. All multi-word fields resolved to `undefined` at runtime. Updated all frontend facility types to camelCase and added missing `address_line1`/`zip_code` to `FacilityListItem` backend schema
+
+### Theme & Styling Fixes (2026-03-04)
+
+- **EventRequestStatusPage theme compliance**: Replaced all hardcoded gray/color classes with manual `dark:` prefixes to theme-aware CSS variable classes (`bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`), so the page respects light, dark, and high-contrast modes
+- **Apparatus list page gradient fix**: Replaced hardcoded `via-red-900` with theme-aware `via-theme-bg-via` CSS variable class. The hardcoded dark red gradient was always rendering `#7f1d1d` regardless of theme, making the apparatus page look different in light mode
+
+### TypeScript Build Fix (2026-03-04)
+
+- **TS2345 category color state**: `useState` for `newCategoryColor` was initialized with `DEFAULT_CATEGORY_COLOR`, which had a narrow literal type of only the first color option. Added `CategoryColor` union type and annotated the constant to widen the inferred state type
+
+### WebSocket CSRF Fix (2026-03-04)
+
+- **WebSocket CSRF dependency error on `/api/v1/inventory/ws`**: The `verify_csrf_token` dependency was applied globally to the API router but failed on WebSocket connections because it expected a `Request` object. Changed parameter type to `HTTPConnection` (base class of both `Request` and `WebSocket`) and added early return for WebSocket scope, since CSRF protection is HTTP-specific and the WebSocket endpoint already uses JWT authentication
+
+### ResponseValidationError Fix (2026-03-04)
+
+- **ProspectResponse metadata field returning SQLAlchemy MetaData object**: The schema used `alias="metadata"` which caused Pydantic's `from_attributes` to read `obj.metadata` (SQLAlchemy's MetaData object) instead of `obj.metadata_` (the actual JSON column). Switched to `serialization_alias` so Pydantic reads the correct attribute but still outputs `"metadata"` in JSON
+
+### Docker Build Fixes (2026-03-04)
+
+- **Frontend Docker build failure**: Fixed `vite-plugin-pwa` peer dependency conflict with Vite 7. Root cause: no `package-lock.json` existed in the frontend Docker context, causing npm to resolve dependencies from scratch each build
+- **Resilient Dockerfile**: Frontend Dockerfile now uses `npm install --legacy-peer-deps` to handle both version mismatches and peer dependency conflicts. Lock file made optional via glob pattern
+- **Backend `.dockerignore`**: Added `backend/.dockerignore` to reduce Docker build context from 343MB
+
+### Alembic Migration Fixes (2026-03-04)
+
+- **Duplicate revision ID causing graph walk failure**: Fixed Alembic migration graph walk failure caused by duplicate revision IDs. Added `.stale` file recovery to migration cleanup and fixed regex deprecation warnings
+- **Type-annotated migration format support**: 11 migration files used Alembic's newer `revision: str = "..."` format which the regex patterns didn't match, making those files invisible and causing 4 apparent broken chain references
+- **SQLAlchemy relationship overlap warnings**: Fixed `back_populates` on `Event.recurrence_children`/`recurrence_parent` and `StorageArea.parent`/`children` self-referential relationships that caused `SAWarning` at startup
+
+### Form-to-Pipeline Integration Hardening (2026-03-04)
+
+- **13 form-to-pipeline improvements**: Complete form-to-pipeline integration hardening including server-side validation, label-based fallback for all integration types, O(N) cleanup query fix, form validation before save, step update lifecycle fix, and field compatibility checks
+- **Form data not flowing to prospective member pipeline**: Fixed multiple issues where form submissions were not appearing in the prospective members pipeline — including field mapping failures on reprocessed submissions
+- **Duplicate prospect detection**: Added duplicate prospect detection with email notification when a prospect with the same email already exists
+- **Pipeline form validation**: Added field compatibility checks before save — warns when form fields don't match expected pipeline field mappings
+- **Form deletion protection**: Forms linked to active pipelines are now protected from deletion with clear error messaging
+- **form.integration_type**: Added direct label-mapping path for pipeline integrations, simplifying form-to-pipeline configuration
+
+### Reports Module Expansion (2026-03-04)
+
+- **12 report types in dedicated feature module**: Expanded the Reports module from inline views into a dedicated feature module with 12 report types covering training, attendance, membership, apparatus, inventory, compliance, and more
+
+### Email Template Enhancements (2026-03-04)
+
+- **Configurable default CC/BCC per email template**: Each email template now supports default CC and BCC addresses. BCC support added for scheduled emails
+- **Email template enum sync test**: Added sync test to prevent drift between code-defined and DB-defined email template type enums. Fixed missing `duplicate_application` enum value in the database
+- **Email template 500 error fix**: Fixed 500 error on email templates endpoint caused by missing `duplicate_application` value in DB enum
+
+### Modal Click-Through Fix (2026-03-04)
+
+- **Modal backdrop intercepting clicks on dialog buttons**: Fixed the `Modal` component backdrop intercepting click events that should reach dialog buttons, causing delete confirmations and other actions to be unresponsive
+
+### Major Toolchain Upgrades (2026-03-03)
+
+- **React 18 → 19**: Upgraded React and react-dom to version 19; updated refs to use callback-based patterns where needed; fixed test utilities for React 19 compatibility
+- **Vitest 3 → 4**: Upgraded Vitest to version 4 and Zod to version 4; updated test patterns for new Vitest APIs
+- **ESLint v8 → v9 with flat config**: Migrated from `.eslintrc.json` to `eslint.config.js` (flat config format); updated all `@typescript-eslint` packages for ESLint 9 compatibility
+- **Tailwind CSS v3.4 → v4.2**: Migrated from Tailwind v3 to v4 with CSS-first configuration; removed `tailwind.config.js`; updated 200+ component files with v3→v4 class name changes; rebuilt `index.css` with `@theme` directives
+- **Safe patch dependency updates**: Updated 20+ frontend dependencies to latest safe patch versions
+
+### Forms Module Enhancements (2026-03-02)
+
+- **Integration health dashboard**: New dashboard showing integration processing status, result display per submission, and ability to reprocess failed integrations
+- **Form dropdown selector and field mapping UI**: Redesigned integration configuration with dropdown-based form selection and visual field mapping interface
+- **Survey results panel**: New `FormResultsPanel` component with per-field aggregation for survey-style forms (charts, counts, response summaries)
+- **Form builder UX improvements**: Highlight incomplete fields with visual indicators; improved novice user experience with guided tooltips and simplified interface
+- **Industry-standard form builder**: Upgraded FormBuilder and FormRenderer with drag-and-drop reordering (@dnd-kit), field duplication, conditional visibility, calculated fields, and hidden fields
+- **Public form fixes**: Fixed doubled `/v1` in public form API URL causing 404 errors; removed forced name/email section from public forms (now optional per form configuration)
+- **Forms permission fix**: Fixed Forms page visibility — now uses `forms.view` permission instead of `settings.manage`, making forms accessible to non-admin users with proper permissions
+- **Theme compatibility**: Fixed form editor background and tab text colors for light/dark theme compatibility
+
+### Prospective Members Pipeline Improvements (2026-03-02)
+
+- **Comprehensive pipeline management**: Added bulk stage operations, stage duplication, inline stage editing, pipeline export/import, and analytics dashboard to PipelineSettingsPage
+- **Event linking to pipeline stages**: Stages can now link to specific events; applicant detail drawer shows linked event information
+- **Automated email stage type**: New `automated_email` stage type sends configurable email templates to applicants when they reach a stage; includes email template selection, variable interpolation, and send delay configuration
+- **Form dropdown stage type**: New `form_dropdown` stage type links a form from the Forms module to a pipeline stage for applicant data collection
+- **Meeting stage type**: New `meeting` stage type for scheduling interviews or orientation meetings with applicants
+- **Status page toggle**: Pipeline stages can now optionally appear on the public application status page
+- **Stage reorder fix**: Fixed intermittent 500 error on pipeline stage reorder endpoint caused by race condition in sort order calculation; also fixed 422 error on step reorder
+
+### Inventory CSV Import (2026-03-02)
+
+- **CSV import with template**: New ImportInventory page for bulk importing inventory items via CSV upload; includes downloadable sample CSV template with all supported fields
+- **Backend validation**: Import endpoint validates CSV headers, data types, category references, and duplicate serial numbers before processing
+- **Frontend tests**: Added comprehensive test coverage for the import flow
+
+### Email Template Redesign (2026-03-02)
+
+- **2-column tabbed layout**: Redesigned email template page from 3-column layout to 2-column tabbed layout for improved usability on smaller screens
+
+### Events Module Fix (2026-03-02)
+
+- **Events settings page fix**: Fixed events settings page not loading due to 422 validation errors in the API endpoint; refactored endpoint request/response handling
+
+### Bug Fixes (2026-03-02)
+
+- **Circular chunk dependency**: Fixed Vite manual chunk configuration that caused circular dependency between vendor chunks, resulting in `useLayoutEffect` runtime error
+- **Stale lockfile**: Fixed stale frontend `package-lock.json` missing `@dnd-kit` dependencies after form builder upgrade
+
+### Testing Checklist (2026-03-02)
+
+- **Comprehensive testing coverage audit**: Updated TESTING_CHECKLIST.md with detailed coverage for all modules including forms, pipeline, inventory, scheduling, and elections
+- **35 recommendation audit**: Reviewed and documented implementation status of all 35 testing recommendations with specific file references and action items
+
+### Mobile Member ID Scanner (2026-03-02)
+
+- **Camera-based member ID scanning**: New `MemberIdScannerModal` component lets admins scan a member's QR/barcode ID card to instantly look up and select them during inventory checkout, replacing manual name search
+- **Mobile toolbar layout fix**: Fixed mobile toolbar layout so the "Scan Member ID" button is accessible alongside search and filter controls
+
+### ARIA Accessibility & 610 New Tests (2026-03-02)
+
+- **ARIA accessibility improvements**: Added `aria-label`, `aria-labelledby`, `aria-describedby`, `role` attributes across modals, forms, buttons, badges, and interactive elements (ElectionBallot, ElectionResults, CandidateManagement, ProxyVoting, FieldRenderer, FormBuilder, SubmissionViewer, ConfirmDialog, ReturnItemsModal, VoterOverride, AllEntriesTab, PageTransition, SuccessAnimation, EventTypeBadge, RSVPStatusBadge, PrivacyNotice)
+- **610 new frontend tests**: Added comprehensive test suites for services (`authService`, `communicationsServices`, `documentsService`, `electionService`, `eventServices`, `formsServices`, `userServices`, `errorTracking`), stores (`adminHoursStore`, `apparatusStore`, `membershipStore`), and utilities (`apiCache`, `dateFormatting`, `eventHelpers`, `lazyWithRetry`, `passwordValidation`, `storeHelpers`)
+- **Security dependency updates**: Updated backend `requirements.txt` with 10 security-related package updates
+
+### Frontend Architecture Overhaul (2026-03-02)
+
+- **exactOptionalPropertyTypes enabled**: Enabled `exactOptionalPropertyTypes` across entire frontend (57 files updated), preventing accidental `undefined` assignment to optional properties
+- **API service split**: Split monolithic `services/api.ts` (5,330 lines) into 13 domain-specific service files (`adminServices`, `apiClient`, `authService`, `communicationsServices`, `documentsService`, `electionService`, `eventServices`, `facilitiesServices`, `formsServices`, `inventoryService`, `meetingsServices`, `trainingServices`, `userServices`)
+- **Route module extraction**: Extracted all inline route definitions from `App.tsx` into dedicated module `routes.tsx` files (action-items, admin, documents, events, facilities, forms, integrations, inventory, minutes, notifications, settings, training, elections, membership, apparatus, admin-hours, communications); `App.tsx` reduced from ~500 lines to a thin orchestrator
+- **Additional strict TypeScript flags**: Enabled `noImplicitReturns`, `noImplicitOverride`, `allowUnreachableCode: false`, `allowUnusedLabels: false`
+- **Module component decomposition**: Decomposed large page components into focused sub-components:
+  - `AdminHoursManagePage` → `ActiveSessionsTab`, `AllEntriesTab`, `CategoriesTab`, `PendingReviewTab`, `SummaryTab`
+  - `ApparatusDetailPage` → `ApparatusDetailHeader`, `ApparatusOverviewTab`, `DocumentsTab`, `EquipmentTab`, `FuelLogsTab`, `MaintenanceTab`, `OperatorsTab`
+  - `ShiftSettingsPanel` → `ApparatusTypeDefaultsCard`, `DepartmentDefaultsCard`, `PositionNamesCard`, `ResourceTypeDefaultsCard`, `TemplatesOverviewCard`, `PositionListEditor`
+- **Lazy loading standardization**: All module route files use `lazyWithRetry()` for consistent chunk-loading resilience
+- **Module registry expansion**: Updated `types/modules.ts` with missing modules and metadata for all 20+ feature modules
+
+### Backend Modernization (2026-03-02)
+
+- **Python typing modernization**: Applied `pyupgrade --py313-plus` across 56 backend files — replaced `Optional[X]` with `X | None`, `List[X]` with `list[X]`, `Dict[K,V]` with `dict[K,V]`, `Tuple` with `tuple`, and legacy `Union` types
+- **IP spoofing vulnerability fix**: Hardened `X-Forwarded-For` header parsing in security middleware to prevent IP spoofing; only trusts the rightmost untrusted IP
+- **Deprecated API cleanup**: Removed deprecated `on_event` startup/shutdown handlers in favor of lifespan context manager; fixed deprecated `datetime.utcnow()` calls in core modules
+
+### Module Architecture Improvements (2026-03-02)
+
+- **Type safety for module APIs**: Added full TypeScript typing to `prospective-members/services/api.ts` and `scheduling/services/api.ts` with proper request/response types
+- **Public-portal and scheduling module structures**: Completed module directory structures with barrel exports, route files, and type definitions
+- **Error handling unification**: Unified error handling patterns across all module Zustand stores with consistent `toAppError()` / `getErrorMessage()` usage
+
+### MissingGreenlet Fixes (2026-03-02)
+
+- **Remaining services fixed**: Added `selectinload()` eager loading across all remaining backend services that accessed lazy-loaded SQLAlchemy relationships in async contexts
+- **Email template endpoints**: Fixed MissingGreenlet on email template create/update/list operations
+- **Template timestamp refresh**: Added explicit timestamp refresh on `create_template` to prevent MissingGreenlet when serializing response
+
+### Email Template Enhancements (2026-03-02)
+
+- **Default templates added**: Added missing default email templates for ballot notifications, event reminders, and training due alerts
+- **Organization logo in all templates**: All email templates now include the organization's logo in the header
+- **Email scheduling**: Added ability to schedule email sends for a future date/time
+- **Election ballot variables**: Template preview includes election-specific variables (ballot title, candidates, voting deadline)
+- **Live org data in preview**: Template preview now loads real organization data instead of placeholder values
+- **Member dropdown for test emails**: Preview panel includes a member selector to send test emails to specific members
+- **Template variable fixes**: Fixed variable interpolation in template preview rendering
+
+### Mobile & PWA Improvements (2026-03-02)
+
+- **PWA shortcuts**: Added shortcut links to the PWA manifest for quick access to Dashboard, Events, and Scheduling
+- **Push notification claims corrected**: Removed misleading push notification feature claims from mobile module; clarified that notifications are email + in-app only
+- **Mobile module repair**: Fixed broken `usePullToRefresh` hook, wired pull-to-refresh into Dashboard, corrected feature capability claims
+
+### Email Notification Templates & Management (2026-03-01)
+
+- **Email Templates Management Page**: Full admin page for creating, editing, previewing, and deleting email notification templates with per-type sample context data for realistic previews
+- **10 new email template types**: Added `event_reminder`, `shift_reminder`, `training_due`, `certification_expiring`, `election_opened`, `admin_hours_approved`, `admin_hours_rejected`, `maintenance_due`, `membership_renewal`, and `welcome_new_member` template types from application audit
+- **MySQL ENUM migration**: New Alembic migration syncs the `email_template_type` database ENUM with the Python model to prevent insertion errors when using newly added template types
+
+### Admin Hours Enhancements (2026-03-01)
+
+- **Edit pending entries**: Members can now edit their pending admin hours entries before approval (update duration, category, notes)
+- **Active sessions management**: New UI for viewing and managing active clock-in sessions; fixed stale sessions response bug where sessions from other users could appear
+- **Naive vs aware datetime fix**: Fixed crash when comparing timezone-naive and timezone-aware datetime objects in active sessions display
+- **MissingGreenlet fix**: Added `selectinload()` eager loading for relationships in admin hours service to prevent async lazy-load errors
+
+### Shift & Scheduling Improvements (2026-03-01)
+
+- **Expanded shift editing**: Officers can now edit shift times, apparatus assignment, color, notes, and custom creation times directly from the shift detail panel
+- **Inline position change**: New inline UI for changing member position assignments on shift cards without opening a modal
+
+### Training Registry & Imports (2026-03-01)
+
+- **Standalone registry generator tool**: New CLI tool (`scripts/generate_registry.py`) for generating training requirement registries from NFPA, NREMT, and Pro Board standards with `--list` flag to show existing registries
+- **Source field on imports**: Training requirement imports now include a `source` field in the API schema with source filter support
+- **Source URL citations**: Registry imports display `source_url` citation links for traceability
+- **Last-updated dates**: Registry imports show `last_updated` timestamps and source info in the UI
+
+### Member ID Card Improvements (2026-03-01)
+
+- **Rank display name**: ID card now shows the rank display name (e.g., "Lieutenant") instead of the slug (e.g., "lieutenant")
+- **Preserved rank casing**: Rank labels maintain proper casing from the database rather than being transformed
+- **Generated date footer**: ID card footer now includes the date the card was generated for verification
+
+### CSS & Design System Overhaul (2026-03-01)
+
+- **873 inline styles migrated**: Hard-coded inline styles across the frontend migrated to shared CSS component classes for maintainability and theme consistency
+- **Focus ring standardization**: Hard-coded focus ring colors migrated to a CSS theme variable (`--focus-ring`) across 39 frontend files
+- **Semantic color restoration**: Fixed semantic color damage from PR #491's blanket color replacement (restored status colors, severity indicators, and contextual badges)
+
+### Bug Fixes (2026-03-01)
+
+- **Session idle timeout blocking logins**: Fixed MySQL timezone mismatch causing idle timeout checks to evaluate all sessions as expired, blocking all logins
+- **Login 500 on transient DB failures**: Login endpoint now handles transient database connection failures gracefully instead of returning HTTP 500
+- **PlatformAnalyticsPage crash**: Fixed crash when `module.recordCount` is undefined by adding defensive null checks
+- **Missing modules**: Standard modules (Dashboard, Membership, Scheduling, etc.) now default to enabled; Settings UI redesigned with module cards
+- **OrganizationSettings.redacted() AttributeError**: Fixed crash in settings redaction method; also closed auth secret leak that could expose sensitive configuration
+- **Elections module**: Fixed type errors, missing required fields, CSS visual issues, and code quality problems across election pages
+
+### Database & Infrastructure (2026-03-01)
+
+- **MySQL outage resilience**: Improved connection pool resilience to transient MySQL outages with automatic reconnection and health check queries
+- **Deprecated auth plugin removed**: Removed `mysql_native_password` auth plugin flag from Docker Compose, using MySQL 8's default `caching_sha2_password` instead
+- **Backend formatting**: Applied Black formatting to 9 additional backend files with pre-existing violations
+
+### Scheduling Module Refactor (2026-02-28)
+
+#### Architecture Overhaul
+
+The scheduling module has been refactored from a monolithic 1,200-line page component into a proper modular architecture:
+
+- **Dedicated module directory**: `frontend/src/modules/scheduling/` with services, store, components, and barrel export
+- **Scheduling Zustand store** (`schedulingStore.ts`): Centralized state management for shifts, templates, patterns, members, and apparatus with async actions
+- **Dedicated API service** (`modules/scheduling/services/api.ts`): All scheduling API calls moved out of the global `services/api.ts` into a module-scoped axios client using the shared `createApiClient` factory
+- **ShiftSettingsPanel component**: New scheduling configuration panel for notification preferences, shift rules, and coverage settings
+- **SchedulingNotificationsPanel component**: Notification management for shift reminders and scheduling alerts
+- **InlineConfirmAction UX component**: New reusable component for inline confirmation actions (e.g., "Are you sure?" before destructive operations), with comprehensive tests
+- **Scheduling store tests**: Unit tests for store state management and async actions
+- **SchedulingPage slimmed**: Main page reduced from ~1,200 lines to a thin orchestrator that delegates to the store and sub-components
+
+### Code Quality & Review Improvements (2026-02-28)
+
+#### Shared API Client Factory
+
+- **`createApiClient()` utility** (`utils/createApiClient.ts`): New factory function that creates pre-configured axios instances with interceptors (auth refresh, CSRF, caching). Eliminates ~300 lines of duplicated axios setup across module services (admin-hours, apparatus, prospective-members, public-portal)
+- All module API services now use `createApiClient()` instead of manually configuring interceptors
+
+#### 20+ Review Fixes Across Security, A11y, and Code Quality
+
+- **Facilities & admin hours endpoints**: Added `require_permission` guards on unprotected admin endpoints
+- **Organization settings**: Restricted PATCH endpoints to org-scoped fields, preventing unintended updates to billing/internal fields
+- **Training endpoints**: Added input validation for pagination parameters and sanitized error details
+- **HIPAA cache exclusions**: Expanded `UNCACHEABLE_PREFIXES` in `apiCache.ts` with `/admin-hours/`, `/facilities/`, `/organizations/` endpoints
+- **Date formatting**: Enhanced `dateFormatting.ts` utilities with improved timezone handling, graceful fallbacks for invalid dates, and expanded test coverage
+- **Error handling**: Improved `toAppError()` type narrowing for non-Error thrown values
+- **Idle timer**: Fixed potential memory leak in cleanup path
+- **Analytics & error tracking**: Defensive null checks for edge cases
+- **Modal accessibility**: Added `aria-labelledby` and `aria-describedby` attributes
+- **AppLayout accessibility**: Skip-to-content and skip-to-navigation links for keyboard users
+- **LoadingSpinner**: Added `role="status"` and `aria-label` for screen readers
+- **Login page**: Added `aria-live="polite"` region for error messages
+- **ProtectedRoute**: Improved loading/error state accessibility
+- **Prettier config**: Added `.prettierrc.json` for consistent formatting across the frontend
+
+### Mobile Responsiveness Improvements (2026-02-28)
+
+- **Pagination**: Responsive layout collapses page numbers to prev/next on small screens
+- **Settings page**: Responsive grid for settings sections, collapsible on mobile
+- **User settings**: Mobile-friendly form layout
+- **Dashboard**: Improved card grid for small viewports
+- **Apparatus list**: Responsive card/table layout toggle
+- **Member profile**: Mobile-friendly profile sections
+- **Inventory pages**: Responsive table with horizontal scroll on mobile
+- **Scheduling reports**: Mobile-friendly report cards
+- **Prospective pipeline**: Kanban and table views adapt to screen width
+- **Ballot builder**: Improved touch targets for election ballot items
+- **Field editor**: Mobile-friendly form field editor
+- **Admin hours manage**: Responsive management dashboard
+- **Global CSS**: Added `scrollbar-gutter: stable` and improved responsive utility classes
+
+### Frontend Deployment Cache Refresh (2026-02-28)
+
+#### Proactive Version Detection
+
+- **`useAppUpdate` hook**: Monitors app version via a build timestamp injected into `index.html` as a `<meta>` tag. Periodically checks the deployed `index.html` for a newer version. Includes tests
+- **`UpdateNotification` component**: When a new version is detected, displays a non-intrusive notification bar prompting the user to refresh. Includes tests
+- **Nginx `X-App-Version` header**: Frontend nginx config now sends a version header for cache-busting verification
+- **Vite build plugin**: Injects `BUILD_TIMESTAMP` into the HTML at build time via a custom Vite plugin
+
+### Security Hardening — Continued (2026-02-28)
+
+#### Brute-Force Protection (Backend & Frontend)
+
+- **Progressive rate limiting**: Login endpoint now applies increasing delays after repeated failures (exponential backoff)
+- **IP-based lockout**: Configurable lockout after N failed attempts from the same IP
+- **Per-user lockout**: Separate tracking for per-username failed attempts
+- **Frontend rate limiting**: Login and forgot-password pages now enforce client-side submission rate limiting with countdown timers, preventing rapid-fire login attempts
+- **Auth store rate limiting**: `authStore` tracks last attempt timestamp and enforces minimum intervals between login attempts
+
+#### IDOR & Open Redirect Fixes
+
+- **Documents endpoint**: Added organization-scoped validation to prevent cross-org document access
+- **Training endpoints**: Added authorization checks ensuring users can only access training data within their organization
+- **API redirect validation**: Response interceptor now validates redirect URLs against allowed origins, preventing open redirect attacks
+- **API cache security**: Added `/documents/` and `/training/` to `UNCACHEABLE_PREFIXES`
+
+#### Security Alert Persistence & Audit
+
+- **Security alerts persisted to database**: New `SecurityAlert` model and migration (`20260228_0100_add_security_alerts_table.py`) stores alerts with severity, type, description, source IP, and resolution status
+- **`rehash_chain` endpoint**: Exposed API endpoint to rebuild the audit log hash chain for integrity verification after archival
+- **Audit archival**: Scheduled task that archives audit logs older than a configurable threshold while maintaining hash chain integrity
+- **Audit log export**: New endpoint for exporting audit logs with date range filters and format options
+- **Audit deletion logging**: All audit log deletion operations are themselves logged for accountability
+- **Hardened file logs**: File-based log rotation with secure permissions and restricted access paths
+
+### Navigation Fixes (2026-02-28)
+
+- **Module enablement**: SideNavigation and TopNavigation now dynamically show/hide menu items based on module enablement settings from organization configuration
+- **Navigation sync**: TopNavigation items synced with SideNavigation to ensure consistent page access from both navigation modes
+- **Logo navigation**: Fixed logo click behavior to navigate to the dashboard instead of an incorrect route
+- **Emergency contacts**: Added emergency contacts section to the account/profile page
+
+### Member ID Card Improvements (2026-02-28)
+
+- **Rank and member since year**: ID card details section now shows the member's rank and the year they joined
+- **Barcode in membership number box**: Barcode display combined into the membership number section for a cleaner layout
+- **Org logo fix**: Organization logo now correctly displays on the ID card using the proper image URL resolution
+
+### Design & Accessibility Audit (2026-02-28)
+
+- **Light/dark theme audit**: Comprehensive review and fix of color contrast across all pages in both light and dark modes
+- **High-contrast mode**: Verified compatibility with the high-contrast theme
+- **Mobile audit**: Verified responsive behavior across breakpoints for all pages
+- **`useMediaQuery` hook**: New hook for responsive behavior in components (replaces inline `window.matchMedia` calls)
+- **Form field renderer**: Improved contrast and focus states for form inputs across themes
+- **QR code pages**: Fixed contrast issues on event QR code and self-check-in pages
+- **Onboarding pages**: Fixed theme variable usage for consistent appearance
+- **Error boundary**: Improved dark mode styling
+
+### Test Stability (2026-02-28)
+
+- **132 pre-existing test failures → 0**: Fixed all test failures across 14 test files including EventForm, ActiveSkillTestPage, EventCreatePage, EventDetailPage, EventEditPage, EventQRCodePage, EventSelfCheckInPage, EventsPage, SchedulingPage, SkillsTestingPage, and authStore tests
+- **Mock data alignment**: Test mock data updated to match current API response shapes and enum values
+- **Vitest config**: E2E tests excluded from the Vitest runner (they run separately via Playwright)
+
+### Data Integrity Fixes (2026-02-28)
+
+- **Enum synchronization**: Frontend `enums.ts` constants synchronized with backend enum values for event types, membership types, and scheduling statuses
+- **Election schemas**: Added missing ballot-related Pydantic schemas for proper API validation
+- **Scheduling schemas**: Added missing fields to scheduling response schemas
+- **Training models**: Added missing relationship columns for skills testing integration
+- **Members page**: Fixed type-safe access to membership statistics
+- **Minutes page**: Fixed optional property access patterns
+
+### Backend Formatting & Cleanup (2026-02-28)
+
+- **Black formatting**: Applied consistent Black formatting across 35 backend files
+- **Missing imports**: Fixed missing `Depends` import in multiple endpoint files
+- **Code organization**: Improved service method signatures and error handling patterns across scheduling, training, inventory, and organization services
+
+### Digital Member ID Card (2026-02-28)
+
+#### New Feature: Member Identification Cards with QR Code and Barcode
+
+A new page at `/member-id` that displays a digital member ID card for each member, suitable for on-screen display, printing, and scanning.
+
+- **QR code**: Encodes the member's unique ID for quick lookup via phone camera or QR scanner
+- **Barcode**: Code128 barcode for compatibility with handheld barcode scanners
+- **Barcode scanner support**: Built-in scanner page that reads barcodes and navigates to the member's profile
+- **Print-optimized styles**: Dedicated `@media print` stylesheet produces a wallet-sized card with department logo, member photo, name, rank, badge number, and membership type
+- **Keyboard shortcuts**: `Ctrl+P` to print, `Esc` to close the scanner
+- **Responsive layout**: Card renders at ID card proportions on mobile and desktop
+
+### Skills Testing Enhancements (2026-02-28)
+
+#### Statement Criteria Type
+
+- **New criterion type: `statement`** — Allows open-ended text-box responses on skill sheets (e.g., "Describe the patient's chief complaint"). Evaluators can require or optionally score statement responses
+- **Global time limit units changed from seconds to minutes** for more intuitive configuration
+
+#### Test Visibility Controls
+
+- **Admin-controlled visibility**: Training officers can toggle which completed tests are visible to the candidate member vs. visible only to officers
+- **Visibility column** on the tests list with toggle switch for officers
+
+#### Practice Mode
+
+- **Non-graded practice tests**: Members can take tests in practice mode without affecting their official records
+- **Practice test UX flow**: Reordered start page, email results option, discard results, and retake flow
+- **Practice badge**: Clear visual indicator distinguishing practice tests from official evaluations
+
+#### Point-Based Scoring
+
+- **Weighted scoring**: Criteria can now carry variable point values (not just binary pass/fail), enabling more nuanced skill evaluation
+- **Section point subtotals**: Each section displays points earned vs. points possible
+- **Overall percentage**: Calculated from total points rather than simple criterion count
+
+#### Post-Completion Review & Detail View
+
+- **Post-completion review screen**: After completing a test, examiners see a full review with section-by-section notes before finalizing
+- **Full detail view for completed tests**: Replaces the previous summary-only view with expandable section details, individual criterion scores, and examiner notes
+- **Auto-stop clock**: Timer automatically stops when the test is completed, preventing inflated elapsed times
+- **UTC timezone fix**: Completed test times now display in the user's local timezone instead of raw UTC
+
+#### Test Management
+
+- **Delete test records**: Training officers can now permanently delete test records (with confirmation dialog)
+- **Non-critical criteria display fix**: Criteria not marked as critical no longer show "FAIL" status when unchecked — they display as "Not Completed" to avoid confusion
+
+#### Skills Testing Navigation
+
+- Admin sidebar now includes direct links to Skills Testing sub-pages
+- Regular users see a "My Skills Tests" link under Training
+
+### Dashboard Improvements (2026-02-28)
+
+- **Split shift display**: Dashboard now shows two separate sections — "My Upcoming Shifts" (assigned to you) and "Open Shifts" (available for signup), replacing the previous single list
+- **Shift signup error extraction**: Error messages from failed shift signups now correctly extract and display the server-provided detail instead of showing generic errors
+- **Vehicle linking on templates**: Shift templates can now be linked to actual department vehicles (from the Apparatus module), replacing the previous free-text vehicle field
+
+### Fire Department Shift Pattern Presets (2026-02-28)
+
+#### New Feature: Built-In Shift Rotation Patterns
+
+Pre-configured shift patterns commonly used by fire departments, selectable via a presets dropdown in the pattern creation form:
+
+| Preset                   | Pattern                                          | Description                             |
+| ------------------------ | ------------------------------------------------ | --------------------------------------- |
+| **24/48**                | 1 on / 2 off                                     | Most common US fire department rotation |
+| **48/96**                | 2 on / 4 off                                     | Common in Western US departments        |
+| **Kelly Schedule**       | 24 on / 24 off / 24 on / 24 off / 24 on / 96 off | 9-day cycle, three platoons             |
+| **California 3-Platoon** | 24 on / 24 off / 24 on / 48 off                  | Modified Kelly for 3 platoons           |
+| **ABCAB**                | 3 days with varying on/off                       | 5-day rotation used by some departments |
+
+- **Custom pattern builder**: For departments with non-standard rotations, a custom builder allows defining arbitrary on/off day sequences with visual preview
+- **Pattern preview calendar**: Shows a 30-day preview of the generated schedule before committing
+
+### Admin Hours Improvements (2026-02-28)
+
+- **Prominent clock-out card**: Active session banner replaced with a full-width card showing elapsed time, category, and a prominent "Clock Out" button — harder to miss than the previous slim banner
+- **Pagination**: Entries list supports pagination for departments with high volume
+- **Filters**: Filter entries by status (pending/approved/rejected), category, member, and date range
+- **Bulk approve**: Select multiple pending entries and approve them in one action
+- **CSV export**: Export filtered admin hours data to CSV for external reporting
+- **Validation improvements**: Better error messages for overlapping sessions and invalid date ranges
+- **Dashboard integration**: Admin hours summary widget on the main Dashboard page
+- **Reports integration**: Admin hours data included in the Reports page
+- **Member Profile integration**: Individual member's admin hours visible on their profile page
+- **Department Overview integration**: Aggregate admin hours statistics in the Department Overview
+
+### Security Hardening (2026-02-28)
+
+#### Encryption at Rest
+
+- **AES-256 encryption** for sensitive database fields using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables
+- Encrypted fields include emergency contacts, medical information, and other PII
+
+#### Docker Hardening
+
+- **Read-only root filesystems** on application containers with explicit tmpfs mounts for writable paths
+- **`no-new-privileges`** security option on all containers
+- **Dropped capabilities** — containers run with minimal Linux capabilities
+
+#### Network & Infrastructure
+
+- **Content Security Policy tightening**: Removed overly permissive directives, added strict `script-src` and `style-src` policies
+- **Redis ACL restrictions**: Redis now uses ACL-based authentication instead of simple password, limiting command access
+- **Redis bind to container network**: No longer listens on all interfaces
+- **Removed `upgrade-insecure-requests`** CSP directive from frontend nginx config (caused issues in mixed HTTP/HTTPS environments)
+
+#### Vulnerability Fixes
+
+- **XSS fix in email sending**: User-supplied values in email templates are now HTML-escaped before rendering
+- **Critical vulnerability patches**: Security audit across frontend, backend, and infrastructure addressing injection vectors, missing input validation, and unsafe deserialization
+
+### HIPAA Language Corrections (2026-02-28)
+
+- Replaced self-declared "HIPAA compliant" claims with accurate language: "features aligned to HIPAA requirements" and "HIPAA compliance requires external review and cannot be self-declared"
+- Updated across codebase: README, wiki, security documentation, frontend UI text, and marketing copy
+
+### Dynamic Import Fix — lazyWithRetry (2026-02-28)
+
+- **New utility: `lazyWithRetry()`** (`utils/lazyWithRetry.ts`) wraps `React.lazy()` with retry logic for chunk load failures after deployments
+- When a deployment changes asset hashes, users with cached `index.html` get 404 errors on JS chunks. `lazyWithRetry` catches these failures and retries the import up to 3 times with cache-busting query parameters
+- All lazy-loaded route-level pages now use `lazyWithRetry()` instead of bare `React.lazy()`
+
+### Platform Analytics Fix (2026-02-28)
+
+- **camelCase serialization**: Platform analytics response schemas now use `alias_generator=to_camel` and `populate_by_name=True`, matching the frontend's expected field names
+- Fixes the Platform Analytics dashboard for IT admins showing empty/error state
+
+### Bug Fixes (2026-02-28)
+
+- **Auto-default shift officer**: When creating a shift, if a member is assigned the "Officer" position, they are automatically set as the shift officer
+- **Scheduling module hardening**: Added type safety, error message sanitization via `safe_error_detail()`, input validation, and shift conflict detection
+- **Runtime error fixes**: Null-safe analytics access, eager-load timestamps on models, safe stats object access — prevents crashes on pages with missing data
+- **AdminSummary type fix**: Fixed type mismatch between backend response and frontend interface that caused build failure
+- **ResponseValidationError fix**: Added `db.refresh()` after `db.flush()` to ensure SQLAlchemy populates computed columns before Pydantic serialization
+- **Fix Invalid Date display**: `formatTime()` and `formatDate()` now handle bare time strings (e.g., "08:00:00") and null values without producing "Invalid Date"
+- **Docker Compose env fix**: Optional service environment variables (MinIO, Elasticsearch, Mailhog) now use `:-` default syntax instead of `:?` required syntax, preventing startup failures when optional profiles are inactive
+
+### Admin Hours Logging Module (2026-02-27)
+
+#### New Feature: Administrative Hours Tracking with QR Code Clock-In/Clock-Out
+
+A standalone module for tracking administrative work hours (committee meetings, building maintenance, fundraising, etc.) via QR code scanning or manual entry, with configurable approval workflows.
+
+##### Backend
+
+- **AdminHoursCategory** and **AdminHoursEntry** models with Alembic migration
+- **AdminHoursService** with clock-in/out, manual entry, and approval workflow
+- REST API endpoints under `/api/v1/admin-hours`
+- Permissions: `admin_hours.view`, `admin_hours.log`, `admin_hours.manage`
+- Configurable approval thresholds and auto-approve settings per category
+
+##### Frontend
+
+- Full `admin-hours` module (types, API service, Zustand store, routes)
+- **AdminHoursManagePage**: category CRUD, pending review queue, all entries, summary dashboard
+- **AdminHoursPage**: personal hours log, active session indicator, manual entry form
+- **AdminHoursQRCodePage**: printable QR code per category for posting at work locations
+- **AdminHoursClockInPage**: QR scan landing page with clock-in/clock-out flow
+- Sidebar navigation entries for both members and admins
+
+##### API Endpoints (under `/api/v1/admin-hours/`)
+
+- `GET    /categories` — List categories
+- `POST   /categories` — Create category
+- `PATCH  /categories/{id}` — Update category
+- `DELETE /categories/{id}` — Delete category
+- `POST   /clock-in` — Clock in to a category
+- `POST   /clock-out` — Clock out of active session
+- `POST   /manual-entry` — Submit manual hours entry
+- `GET    /entries` — List entries (with filters)
+- `GET    /my-entries` — List personal entries
+- `PATCH  /entries/{id}/approve` — Approve entry
+- `PATCH  /entries/{id}/reject` — Reject entry
+- `GET    /summary` — Hours summary dashboard
+
+##### Database Models
+
+- **AdminHoursCategory**: name, description, auto-approve settings, approval threshold minutes
+- **AdminHoursEntry**: user, category, clock_in/clock_out timestamps, duration, status (pending/approved/rejected), notes, approver
+
+### Member Categories for Training Requirements (2026-02-27)
+
+#### Enhancement: Targeted Training Requirements by Membership Type
+
+- Add `required_membership_types` JSON column to `training_requirements` table so requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary)
+- Add member category checkboxes in the Edit Requirement modal, shown when "Applies to all members" is unchecked
+- Display selected member categories in requirement cards and expanded details
+- Update backend filtering in `training_service` and `training_module_config` to respect `required_membership_types` when evaluating which requirements apply
+
+#### Enhancement: Permanent Delete for Training Requirements
+
+- Change `DELETE /training/requirements/{id}` from soft-delete (`active=False`) to permanent delete (`db.delete`) with updated confirmation messaging
+- Alembic migration for the new column
+
+### QR Code & Analytics Improvements (2026-02-27)
+
+- **Relabel "Analytics" to "QR Code Analytics"**: Navigation items in side nav, top nav, and Events Admin Hub tab now accurately reflect that the analytics page shows QR code check-in metrics only
+- **Fix QR code display on Locations & Rooms page**: Rooms now show a toggleable QR code for their kiosk display URL (uses `qrcode.react` QRCodeSVG)
+- **Fix clipboard copy fallback**: Added `document.execCommand('copy')` fallback when `navigator.clipboard` is unavailable (e.g., non-HTTPS contexts)
+- **Fix stale closure in EventQRCodePage**: Refresh interval no longer captures outdated `fetchQRData` callback
+
+### Centralized Backend Logging (2026-02-27)
+
+- **New `app/core/logging.py`**: Centralized logging configuration with text/JSON output, file rotation, stdlib interception (routes uvicorn/sqlalchemy/alembic through Loguru), Sentry SDK initialization, and request-scoped correlation IDs via ContextVar
+- **Request correlation**: UUID4 request IDs attached to every log entry for tracing requests across services
+- **Request duration tracking**: INFO-level completion logs with method, path, status code, and duration in milliseconds
+- **Updated `main.py`**: Uses `setup_logging()`/`setup_sentry()` instead of inline configuration
+
+### Shift Pattern & Scheduling Fixes (2026-02-27)
+
+- **Weekday convention mismatch fix**: Frontend sends JS weekday numbers (0=Sun) but backend used Python's `date.weekday()` (0=Mon). Weekly patterns now generate shifts on the correct days
+- **Template error clarity**: Distinguishes between "no template linked to pattern" and "linked template was deleted"
+- **Duplicate guard relaxed**: Shift overlap check now compares date + start_time, allowing multiple shift types per day (e.g., day shift and night shift)
+- **Shift conflict detection**: Backend prevents duplicate assignment of a member to the same shift and detects overlapping time conflicts
+- **Shift officer assignment**: Officer dropdown added to Create Shift modal and ShiftDetailPanel edit form
+- **Understaffing badges**: Calendar shift cards show amber warning triangle when `attendee_count < min_staffing`
+- **Template colors on calendar**: Shifts carry `color` from their template; calendar cards use inline styling with fallback to hour-based classes
+- **UniqueConstraint on ShiftAssignment**: `(shift_id, user_id)` constraint with IntegrityError catch for concurrent requests
+- **Overlap query hardening**: Scoped to ±1 day of `shift_date` to prevent false positives
+- **Pattern generation enrichment**: Generated shifts now include apparatus details, min_staffing, and color
+- **Dashboard shift fix**: Changed from `getMyShifts()` (user-only) to `getShifts()` to show all org shifts
+- **`formatTime()` fix**: Bare time strings like "08:00:00" no longer produce Invalid Date
+- **Vehicle type on Standard templates**: Vehicle type dropdown now shown for Standard category (was Specialty only)
+- **EMS renamed to EMT**: Position label updated across all files
+- **Route ordering fix**: `/shifts/open` moved before `/shifts/{shift_id}` to prevent route shadowing
+- **Data enrichment**: All shift responses now populate `shift_officer_name`, `attendee_count`, `user_name` on assignments/swaps/time-off, and embedded shift data on my-assignments
+- **`exclude_unset` on PATCH**: Clients can now explicitly clear optional fields (notes, apparatus_id)
+
+### Elections Module Fixes & Enhancements (2026-02-27)
+
+- **Fix election detail page not loading**: Route param mismatch (`/:id` vs `useParams<{ electionId }>`) caused `fetchElection()` to never fire — page hung on loading
+- **Fix election stalling for ballot-item elections**: `open_election` now allows elections with only ballot items (approval votes, resolutions) to proceed without requiring candidates
+- **Fix close_election error messages**: Returns descriptive error instead of misleading "Election not found" for wrong-status elections
+- **Meeting link**: Elections can be linked to formal meeting records via `meeting_id` FK with Alembic migration; meeting selector dropdown in creation form
+- **Voter overrides**: `VoterOverrideManagement` component for secretary to grant voting eligibility overrides
+- **Proxy voting**: `ProxyVotingManagement` component for proxy voting authorization management
+- **API response fix**: `getVoterOverrides` now correctly handles `{ overrides: [...] }` response shape
+
+### Organization Settings Enhancement (2026-02-27)
+
+- **Email settings**: Platform selector (Gmail, Outlook, Custom SMTP), OAuth credentials, SMTP encryption fields, exposed as `PATCH /settings/email`
+- **File storage settings**: Provider selector (Google Drive, OneDrive, S3, Local) with provider-specific configuration, exposed as `PATCH /settings/file-storage`
+- **Authentication settings**: Provider-specific config fields (LDAP, SAML, OAuth), exposed as `PATCH /settings/auth`
+- These settings were originally only configurable during onboarding; now accessible in Organization Settings for post-setup changes
+- Secret fields use password inputs with show/hide toggle
+- Info banners note settings were initially set during onboarding
+
+### Code Quality & Security (2026-02-27)
+
+#### ESLint & TypeScript Cleanup
+
+- Fix 565 floating/misused promise ESLint warnings across 99 files (added `void` operator, wrapped async handlers)
+- Add generic type parameters to 94 axios calls to eliminate `no-unsafe-return` warnings
+- Replace non-null assertions with safe alternatives (nullish coalescing, optional chaining, guards)
+- Replace `any` types with `unknown` or proper types across services, tests, and utilities
+- Fix `react-refresh/only-export-components` warnings
+- Result: **0 ESLint errors, 0 warnings**
+
+#### Security & Routing Fixes
+
+- Add CSRF double-submit token to module API clients (apparatus, prospective-members, public-portal)
+- Fix `FieldEditor` number min/max inputs bound to wrong state
+- Move `/application-status/:token` route outside `ProtectedRoute` for unauthenticated access
+- Add permission gates to apparatus create/edit (`apparatus.manage`) and forms/integrations routes (`settings.manage`)
+- Fix token refresh race condition in apparatus API client
+- Fix `usePWAInstall` memory leak (event listener never removed)
+- Complete incomplete enums: `on_leave` in UserStatus, all values in StageType and ApplicantStatus
+
+### Public Outreach Event Request Pipeline (2026-02-26)
+
+#### New Feature: Community Event Request System
+
+A complete pipeline for community members to request public outreach events (fire safety demos, station tours, CPR classes, career talks). Requests flow through a flexible, department-configurable workflow before becoming scheduled calendar events.
+
+##### Event Request Pipeline Core
+
+- **Public Request Form**: Generated via the Forms module with EVENT_REQUEST integration; includes contact info, event type, description, audience details, venue preference, and flexible date preferences
+- **Flexible Date Selection**: Requesters express preferences ("a Saturday morning in March") rather than committing to exact dates; three modes — specific dates, general timeframe, or fully flexible
+- **Configurable Outreach Types**: Departments define their own outreach event types (e.g., Fire Safety Demo, Station Tour, CPR/First Aid Class) via Settings — not hardcoded
+- **Simplified Status Flow**: `submitted → in_progress → scheduled → completed` with `postponed`, `declined`, and `cancelled` branches
+- **Configurable Pipeline Tasks**: Department-defined checklist items (review request, assign coordinator, confirm date, plan content, arrange volunteers, prepare equipment) that can be completed in any order
+- **Task Reorder**: Up/down arrows in Settings to control default task display order; departments can add custom steps like Chief approval or volunteer signup emails
+- **Auto-Transition**: Completing the first pipeline task automatically moves the request from `submitted` to `in_progress`
+
+##### Coordinator Assignment & Workflow
+
+- **Default Coordinator**: Departments configure a default assignee (e.g., Public Outreach Officer) who auto-receives all new requests with email notification
+- **Reassignment**: Coordinators can reassign requests to other org members from the request detail view
+- **Comment Thread**: Replaces single-note field with a threaded comment system; multiple team members leave notes over time, displayed alongside status changes in a unified activity feed
+
+##### Scheduling with Room Booking
+
+- **Schedule Dialog**: Coordinators set a confirmed date/time and optionally select a room/location when transitioning to "Scheduled"
+- **Calendar Event Creation**: Scheduling automatically creates an Event record linked to the request, appearing on the department calendar
+- **Double-Booking Prevention**: Room selection validates against `LocationService.check_overlapping_events()` — prevents scheduling conflicts
+- **Confirmed Date Display**: Requesters see the confirmed date on the public status page once scheduled
+
+##### Postpone & Cancel
+
+- **Postpone Status**: New `POSTPONED` status with optional rescheduled date or open-ended TBD
+- **Department Cancel**: Coordinators can cancel requests at any active stage
+- **Requester Self-Cancel**: Community members cancel their own request from the public status page via their status token
+- **Resume Work**: Postponed requests can be moved back to `in_progress` to resume planning
+
+##### Email Notifications & Templates
+
+- **Configurable Email Triggers**: Per-status-change toggles (on_submitted, on_scheduled, on_postponed, on_completed, on_declined, on_cancelled, days_before_event)
+- **Auto-Notify**: Assignee notified on new request; requester notified on status changes (when enabled)
+- **Email Template CRUD**: Departments create reusable email messages (e.g., "How to Find Our Building", "Volunteer Signup Instructions") with template variables (`{{contact_name}}`, `{{outreach_type}}`, `{{event_date}}`)
+- **Manual Send**: Coordinators send any template to the requester from the request detail view
+- **Auto-Trigger Support**: Templates can be linked to pipeline triggers (e.g., auto-send directions 7 days before event)
+
+##### Public Status Page
+
+- **Token-Based Access**: Each request gets a unique status URL for the requester — no login required
+- **Progress Stepper**: Visual 4-step stepper (Submitted → In Progress → Scheduled → Completed)
+- **Postponed Display**: Shows postponed state with tentative reschedule date or "TBD" messaging
+- **Optional Pipeline Progress**: Department-configurable toggle to show/hide pipeline task progress on public page (progress bar + task checklist)
+- **Self-Service Cancel**: Requester can cancel with an optional reason from the status page
+
+##### Admin Settings (Events Settings Tab)
+
+- **Event Type Visibility**: Toggle which event types show as primary filter tabs vs. grouped under "Other"
+- **Outreach Types Configuration**: Add/remove custom outreach event types
+- **Default Coordinator Picker**: Dropdown of all org members for auto-assignment
+- **Public Progress Visibility Toggle**: Show/hide planning progress on public status page
+- **Minimum Lead Time**: Configurable days-in-advance requirement (default 21 days / 3 weeks)
+- **Pipeline Task Management**: Add, remove, and reorder checklist tasks
+- **Email Trigger Toggles**: Enable/disable notifications per status change
+- **Email Template Management**: Create, edit, delete reusable email templates
+- **Form Generation**: One-click public form creation in the Forms module
+
+##### Admin Request Queue (Event Requests Tab)
+
+- **Status Filter Chips**: Filter by status with count badges
+- **Request List**: Summary rows with contact, type, date preference, audience size, assignee, and task progress
+- **Expandable Detail**: Full request info with contact, event details, date preferences, description, special requests
+- **Task Checklist**: Interactive pipeline task toggles in the detail view
+- **Assignment UI**: Assign/reassign coordinator dropdown
+- **Schedule Dialog**: Date/time picker + room selector with double-booking check
+- **Postpone Dialog**: Reason field + optional tentative date
+- **Comment Thread**: Inline comment input with enter-to-submit
+- **Copy Status Link**: One-click clipboard copy of the requester's status URL
+- **Send Email**: Template picker with send button from the request detail
+- **Activity Log**: Unified timeline of status changes, task completions, assignments, comments, and emails sent
+
+##### API Endpoints (14 endpoints under `/api/v1/event-requests/`)
+
+- `POST   /public` — Submit public request (no auth)
+- `GET    /status/{token}` — Check status by token (no auth)
+- `POST   /status/{token}/cancel` — Requester self-cancel (no auth)
+- `GET    /` — List requests (auth, `events.manage`)
+- `GET    /{id}` — Get request detail (auth)
+- `PATCH  /{id}/status` — Update status (auth)
+- `PATCH  /{id}/assign` — Assign coordinator (auth)
+- `POST   /{id}/comments` — Add comment (auth)
+- `PATCH  /{id}/schedule` — Schedule with date + room (auth)
+- `PATCH  /{id}/postpone` — Postpone request (auth)
+- `PATCH  /{id}/tasks` — Toggle pipeline task (auth)
+- `POST   /{id}/send-email` — Send template email (auth)
+- `GET    /email-templates` — List templates (auth)
+- `POST   /email-templates` — Create template (auth)
+- `PATCH  /email-templates/{id}` — Update template (auth)
+- `DELETE /email-templates/{id}` — Delete template (auth)
+- `GET    /types/labels` — Get outreach type labels (no auth)
+- `POST   /generate-form` — Generate public form (auth)
+
+##### Database Models
+
+- **EventRequest**: Core request model with flexible date fields (`date_flexibility`, `preferred_timeframe`, `preferred_time_of_day`), `task_completions` JSON, confirmed event fields (`event_date`, `event_end_date`, `event_location_id`), composite indexes on `(organization_id, status)` and `(organization_id, outreach_type)`
+- **EventRequestActivity**: Audit trail for all actions — status changes, task completions, comments, assignments, email sends
+- **EventRequestEmailTemplate**: Per-org reusable email templates with trigger configuration and days-before scheduling
+
+##### Frontend Components
+
+- **EventsSettingsTab** (`frontend/src/pages/EventsSettingsTab.tsx`) — Full settings interface with outreach types, pipeline tasks, default assignee, email triggers, templates, form generation
+- **EventRequestsTab** (`frontend/src/pages/EventRequestsTab.tsx`) — Admin queue with expandable detail, task checklist, assignment, comments, scheduling, postpone, email send
+- **EventRequestStatusPage** (`frontend/src/pages/EventRequestStatusPage.tsx`) — Public token-based status page with stepper, progress bar, cancel
+
+##### Documentation
+
+- **Changelog**: This entry
+- **Troubleshooting**: Added Public Outreach Request Pipeline section to `docs/TROUBLESHOOTING.md` with common issues and sample public education materials
+- **Wiki**: Updated `wiki/Module-Events.md` with outreach request pipeline reference; added `wiki/Public-Programs.md` how-to guide with sample programs
+- **Training Guide**: Updated `docs/training/04-events-meetings.md` with public outreach section
+- **Wiki Sidebar**: Added Public Programs link to sidebar navigation
+- **Docs Index**: Updated `docs/README.md` with new documentation entries
+
+### Skills Testing Module (2026-02-25)
+
+#### New Feature: Digital Psychomotor Skills Evaluations
+
+- **Skill Sheet Templates**: Reusable evaluation templates with sections, criteria, scoring configuration (passing percentage, critical criteria enforcement, time limits), versioning (draft → published → archived), and duplication
+- **Skills Test Sessions**: Full test administration workflow — create test, select template + candidate, score criteria in real time, complete with automatic pass/fail calculation
+- **Critical Criteria (Auto-Fail)**: Required criteria that trigger automatic failure regardless of score, mirroring NREMT psychomotor evaluation rules
+- **Scoring Engine**: Automatic calculation of section scores, overall percentage, critical criteria compliance, elapsed time, and pass/fail determination
+- **Template Versioning**: Auto-incrementing version numbers on structural changes; historical tests reference the version they were administered under
+- **Summary Dashboard**: Department-wide statistics — total templates, published count, total tests, tests this month, pass rate, and average score
+- **12 API Endpoints** under `/api/v1/training/skills-testing/`:
+  - Templates: list, create, get, update, delete (archive), publish, duplicate
+  - Tests: list, create, get, update (save progress), complete
+  - Summary: department-wide statistics
+- **Database Models**: `SkillTemplate` and `SkillTest` with composite indexes on `(organization_id, status)` and `(organization_id, category)` / `(template_id, candidate_id)`
+- **Pydantic Schemas**: Full CRUD schemas with nested section/criteria structures, denormalized response fields (template name, candidate/examiner names), and computed counts
+- **Audit Logging**: All template and test operations logged via `log_audit_event`
+- **Organization Scoping**: All queries scoped to current user's organization
+- **Permissions**: Template management requires `training.manage`; test creation open to all authenticated users
+
+#### Frontend (Skills Testing UI)
+
+- **Skills Testing Page**: Tabbed interface (Templates / Tests / Summary) with responsive layout
+- **Template Management**: Full CRUD with section/criteria builder, inline editing, drag-and-drop ordering
+- **Test Administration**: Real-time scoring interface with section-by-section criteria checkboxes, running score display, timer, and critical criteria tracking
+- **Results View**: Score breakdown by section, missed steps highlighted, pass/fail determination with critical criteria details
+- **Summary Dashboard**: Six stat cards showing department-wide testing metrics
+- **TypeScript Types**: Complete type definitions for all skills testing entities
+- **API Integration**: Axios service layer with all 12 endpoints
+- **Zustand Store**: State management for templates, tests, filters, and UI state
+- **Routing**: Three routes under `/training/skills-testing` (templates, tests, summary)
+
+#### Documentation
+
+- **Feature Specification**: `docs/SKILLS_TESTING_FEATURE.md` — Full requirements document with data models, UI/UX screens, API endpoints, and implementation phases
+- **Training Guide**: `docs/training/09-skills-testing.md` — End-user training document with realistic NREMT Trauma Assessment walkthrough example
+- **Troubleshooting**: Added Skills Testing section to `docs/TROUBLESHOOTING.md`
+- **Changelog**: This entry
+- **Wiki**: Updated Module-Training wiki page with skills testing section and API endpoints
+- **Documentation Index**: Updated `docs/README.md` and `docs/training/README.md`
+
+### Dependency Updates, Security Hardening & UX Improvements (2026-02-24)
+
+#### Backend Dependency Updates (Python 3.13 Compatibility)
+
+- **cryptography** 43.0.3 → 44.0.0 (Python 3.13 support)
+- **greenlet** 3.3.1 → 3.3.2
+- **hiredis** 3.0.0 → 3.1.0
+- **python-ldap** 3.4.4 → 3.4.5
+- **psutil** 6.1.1 → 7.0.0
+- **Pillow** 11.1.0 → 11.3.0 (image processing)
+- **argon2-cffi** 23.1.0 → 25.1.0 (password hashing)
+- **reportlab** 4.2.5 → 4.3.0 (PDF/label generation)
+- **pysaml2** 7.5.0 → 7.5.4 (SAML authentication)
+- **pytest-asyncio** 0.24.0 → 0.25.0
+- **black** 24.10.0 → 25.1.0 (code formatter)
+- **flake8** 7.1.1 → 7.2.0 (linter)
+
+#### Frontend Dependency Updates
+
+- **@typescript-eslint/eslint-plugin** and **@typescript-eslint/parser** 8.21.0 → 8.56.1 (fixes TypeScript 5.9 compatibility; old versions required `<5.8.0`)
+- **@vitest/coverage-v8** and **@vitest/ui** 3.0.0 → 3.2.4 (aligned with vitest 3.2.4; fixes `npm install` ERESOLVE failure)
+- **esbuild** override 0.25.0 → 0.27.0 (match Vite 7.3.1 peer dependency)
+- **postcss** 8.5.0 → 8.5.6 (match Vite 7.3.1 peer dependency, eliminate dual instances)
+- **react-hook-form** 7.54.2 → 7.71.1 (deduplicate with @hookform/resolvers)
+- **jsdom** (root) ^24.1.3 → ^26.0.0 (align with frontend)
+- **@types/dompurify** moved from `dependencies` to `devDependencies`
+- Removed redundant `vite` override from `frontend/package.json` (root handles it)
+
+#### Security Fixes (Insider Threat Analysis — 19 Findings)
+
+- **Token storage**: Removed localStorage JWT storage; authentication now uses httpOnly cookies exclusively
+- **WebSocket security**: WebSocket endpoint now validates user is active (not just JWT signature)
+- **Permission enforcement**: Added `require_permission` to user list, role query, and profile endpoints that were previously open to any authenticated user
+- **Error log injection**: Replace raw dict with Pydantic schema + 4KB context size limit on error log endpoint
+- **Cross-org auth prevention**: Scoped authentication query to organization to prevent cross-org authentication
+- **CSRF protection**: Wired up `verify_csrf_token` as global dependency on `api_router`
+- **Onboarding lockdown**: Block onboarding session creation if organization already exists
+- **Docker security**: Removed insecure default values from `docker-compose.yml`; credentials now require `.env` configuration
+- **Voting token**: Moved voting token from URL query param to request body (prevents token leakage in server logs)
+- **File upload safety**: File extension now derived from detected MIME type, not user-supplied filename
+- **Error tracking**: Strip query params from URLs in error tracking to prevent token leaks
+- **SQL injection prevention**: Escape backticks in DDL table/column names; drop tables individually
+- **Mass assignment prevention**: Added explicit field allowlists to `setattr` update loops in elections, events, external training, and inventory endpoints
+
+#### Docker & Infrastructure
+
+- **MinIO env vars**: Changed MinIO service environment variables from `:?` (required) to `:-` (default) syntax. Docker Compose validates `:?` variables even for inactive profiles (`with-s3`), causing startup failures for users who don't need S3 storage. MinIO credentials are now optional with sensible defaults.
+- **Memory resource limits**: Added `deploy.resources.limits` and `reservations` to all docker-compose services
+
+#### Bug Fixes
+
+- **Training compliance mismatch**: Dashboard "Training Compliance" showed 0% while Training Admin showed 100% due to different data sources. Extracted shared `compute_org_compliance_pct()` used by both endpoints.
+- **Waiver off-by-one**: Fixed rolling period waiver adjustment calculation (12-month rolling period spanning 13 calendar months now correctly adjusts denominator)
+- **Facilities 500 error**: Fixed `ResponseValidationError` on `GET /api/v1/facilities` where the service returned `(items, total)` tuple but the endpoint returned it directly without unpacking
+- **Auto-create facility**: Onboarding now auto-creates a "Station 1" facility from the organization's physical address
+- **Circular chunk dependency**: Fixed Vite manual chunk splitting that caused `React.memo` to be undefined at runtime due to circular dependency between vendor chunks
+- **Stale asset 404s**: Added `Cache-Control: no-cache` headers to `index.html` so browsers always fetch fresh asset references after deployments
+- **Runtime null safety**: Comprehensive audit and fix of patterns that could cause runtime crashes from undefined data (API response arrays, optional chaining, fallback defaults across 10+ components)
+- **TypeScript strict null checks**: Resolved all `tsc` build errors caused by strict null/undefined checks across 56 frontend source files
+- **Migration startup crashes (Unraid)**: Multiple fixes for Alembic migration failures on Unraid's union filesystem (shfs): retry with backoff, stale `__pycache__` cleanup, SQL-based stamp fallback, diagnostic logging
+- **Public portal timestamp overflow**: `datetime.isoformat()` produced 32-char strings exceeding `String(26)` columns; replaced with `strftime` helper
+- **Inventory barcode**: Fixed barcode not showing in edit form after label generation; fixed Total Value not reflecting purchase price
+- **Audit logging**: Fixed `log_audit_event()` call in `update_organization_profile` using wrong parameter names
+- **Login page dark mode**: Fixed white text on white background in dark mode by using theme-aware gradient background
+- **Migration collision**: Resolved revision ID collision between storage_areas and write-offs migrations
+
+#### Training & Waiver Enhancements
+
+- **New Member waiver type**: Added `NEW_MEMBER` to waiver type enums for long-service members exempt from requirements
+- **Permanent waivers**: End date is now optional; permanent waivers show purple "Permanent" badge; calculation layer maps null end_date to far-future sentinel
+- **Waiver multi-select**: "Applies To" field converted from single-select to checkboxes (Training, Meetings, Shifts can be combined)
+- **Auto-set Training Type**: Selecting a Requirement Type now auto-populates Training Type and Due Date Type (e.g., certification → cert_period)
+- **Smart field visibility**: Year and Frequency fields are hidden when not relevant to the selected due date type
+
+#### Accessibility & UX
+
+- **Alt text**: Added meaningful alt text to all avatar/logo images
+- **Skip-to-content**: Fixed skip-to-content link targeting empty element outside React root
+- **Focus-visible**: Added `focus-visible` styles to suppress focus rings on mouse clicks
+- **High-contrast theme**: New accessibility theme with pure black/white, yellow focus rings, and stronger borders
+- **ARIA form validation**: Added `aria-describedby` linking validation errors to inputs, with `aria-invalid` and `role="alert"`
+- **Print CSS**: Added `@media print` hiding navigation, resetting backgrounds, showing link URLs, preventing page breaks
+- **Bulk selection & export**: Added checkboxes and CSV export for member list and events list
+- **PWA install prompt**: Added install prompt on Dashboard with `beforeinstallprompt` handler
+- **Recent Activity feed**: New Dashboard section showing latest notification entries in timeline layout
+- **Command Palette**: Ctrl+K shortcut for search, navigation, and admin actions
+- **26 new UX components**: Skeleton loading, Breadcrumbs, Pagination, EmptyState, ConfirmDialog, Tooltip, ProgressSteps, TopProgressBar, SuccessAnimation, DateRangePicker, FileDropzone, InlineEdit, AutoSaveIndicator, WhatsNew modal, SortableHeader, Collapsible, PageTransition, and 6 new hooks (keyboard shortcuts, relative time, unsaved changes, pull-to-refresh, optimistic updates, form auto-focus)
+
+#### Inventory Module
+
+- **My Equipment cards**: Cards now show item name, quantity, category badge, and assignment date
+- **Dashboard fixes**: Active Checkouts, Maintenance Due, and Low Stock alerts now use accurate queries
+- **Maintenance tracking tab**: New tab with overdue/due-soon/in-maintenance sections and Log Maintenance modal
+- **Storage Areas**: New feature with hierarchical model (rack/closet → shelf → box), full CRUD, tree view, and integration with Add/Edit Item modals
+- **Detail chips**: Inventory list items now show size, color, and asset tag as compact colored chips
+- **Broader search**: Backend search now matches barcode, manufacturer, model, size, and color
+
+#### Code Quality & Performance
+
+- **useAutoSave hook**: Fixed interval reset on every keystroke and broken JSON.stringify comparison
+- **Vite chunk splitting**: Manual chunk splitting for vendor-react, vendor-router, vendor-ui, vendor-charts, vendor-date, vendor-state bundles
+- **Lazy-load DOMPurify**: Dynamic import on form submit instead of bundle-time import
+- **ESLint no-console**: Added warn rule on `console.log` (allow warn/error)
+- **Strict index access**: Enabled `noUncheckedIndexedAccess` in tsconfig for stricter null safety
+- **Centralized constants**: Extracted hardcoded values to `constants/config.ts` (API_TIMEOUT_MS, DEFAULT_PAGE_SIZE, etc.)
+- **Pre-commit hooks**: Added Python linting (black, flake8, isort) to pre-commit hooks for backend files
+
+#### Testing
+
+- **Frontend unit tests**: ErrorBoundary, Modal component tests; authStore (12 cases), errorHandling (9 cases)
+- **E2E tests**: Playwright tests for navigation, dashboard, and auth flows
+- **Backend tests**: Auth/security, inventory service (30 tests), security middleware (CSRF, rate limiter, input sanitization)
+- **Alembic migration tracking**: New `docs/ALEMBIC_MIGRATIONS.md` documenting complete chain of 114 migrations
+
+#### Documentation
+
+- **Insider threat analysis report**: Comprehensive report identifying 19 security findings with recommended fixes and prioritization
+
+### Training Compliance & Waiver Management (2026-02-23)
+
+#### Training Module Enhancements
+
+- **LOA–Training Waiver auto-linking**: Creating a Leave of Absence now automatically creates a linked training waiver with matching dates. Changes to the leave's dates sync to the waiver. Deactivating the leave also deactivates the linked waiver. Opt out per-leave with the `exempt_from_training_waiver` flag.
+- **Rank & station snapshot on training records**: `rank_at_completion` and `station_at_completion` are now captured automatically when a training record is created or a submission is approved.
+- **Bulk training record creation**: New `POST /training/records/bulk` endpoint accepts up to 500 records per request with per-record error reporting and duplicate detection.
+- **Duplicate detection**: Single and bulk record creation now warns when a record with the same member + course name (case-insensitive) + completion date (±1 day) already exists.
+- **Compliance summary card**: Member profile page now shows a compliance indicator (green/yellow/red) with requirements met/total, hours this year, active certs, and expiring certs.
+- **Certification expiration alerts**: Tiered in-app and email notifications at 90, 60, 30, and 7 days before expiration with escalation to officers. Expired certs trigger escalation to training, compliance, and chief officers.
+- **Program enrollment notifications**: Members now receive in-app notifications when enrolled in a training program and when they complete a program.
+- **Compliance calculations document**: New `docs/training-compliance-calculations.md` documents every formula, edge case, and integration point for training compliance.
+
+#### Waiver Management
+
+- **Waiver Management Page** (`/members/admin/waivers`): New unified page for managing all waivers (training, meetings, shifts). Three tabs: Active Waivers, Create Waiver, and All Waivers (history). Create form supports "Applies To" selector for choosing All (LOA + auto training waiver), Training Only, or Meetings & Shifts Only.
+- **Training Waivers officer tab**: New tab in the Training Admin Dashboard showing all training waivers with summary cards (Active/Future/Expired/Total), status badges, filterable by status and member search, and source tracking (Auto LOA vs Manual).
+- **Navigation**: Waivers link added under Members in the sidebar.
+
+#### Membership Module Enhancements
+
+- **Member Admin Edit page** (`/members/admin/edit/:userId`): Full admin member editing with all fields, rank/station dropdowns, status management, and role assignment.
+- **Member self-edit**: Members can now edit their own limited profile fields (phone, email, address, emergency contacts) from their profile page.
+- **Photo upload**: Profile photo upload with image preview and crop.
+- **Delete member modal**: Confirmation dialog for member deletion with clear warnings about irreversible data loss.
+- **Audit history page** (`/members/admin/history/:userId`): View complete change history for a member with timestamped entries showing who made each change.
+- **Data consistency fixes**: Added missing `list_ids`, `committee_ids`, `group_ids` fields; removed unused `photo_url` column; wired up delete modal across admin views.
+
+#### Rank Validation
+
+- **Rank validation endpoint**: New `GET /users/rank-validation` surfaces active members whose rank does not match any of the organization's configured operational ranks.
+- **Admin visibility**: Rank mismatches are surfaced in the Members Admin Hub for training officers and administrators to review and correct.
+
+#### UI & UX
+
+- **15-minute time increments**: All date/time pickers in the application now enforce 15-minute step increments (`step="900"`), including the check-in/check-out override pickers which previously allowed 1-minute granularity.
+
+#### Database Migration
+
+- **`20260223_0100`**: Adds `rank_at_completion` and `station_at_completion` to `training_records`; adds `exempt_from_training_waiver` and `linked_training_waiver_id` to `member_leaves_of_absence`.
+
+### Inventory Module Hardening & Comprehensive Overhaul (2026-02-22)
+
+#### Inventory Module Overhaul
+
+- **Pool / quantity-tracked items**: New `tracking_type` field (`individual` | `pool`) on `InventoryItem`. Pool items support `issue_from_pool` and `return_to_pool` workflows with quantity tracking.
+- **Item issuances**: New `item_issuances` table and full CRUD lifecycle for tracking pool item issue/return with user, quantity, reason, and condition-on-return.
+- **Batch operations**: `batch_checkout` and `batch_return` endpoints support multiple items in a single request with per-item error reporting. Silent condition fallback removed — invalid conditions are now rejected.
+- **Category management**: New `PATCH /inventory/categories/{id}` endpoint for updating category name/description.
+- **Departure clearance**: Full lifecycle (`initiate_clearance` → `resolve_line_item` → `complete_clearance`) for tracking property return when members depart.
+- **Notification netting**: Offsetting actions (assign then unassign, checkout then return) automatically cancel pending notifications instead of creating duplicates.
+- **Label generation**: `POST /inventory/labels/generate` now accepts a typed `LabelGenerateRequest` body with item IDs, label size, and label type.
+- **Thermal printer labels**: Added support for Dymo (2.25×1.25″) and Rollo (4×6″) label sizes using Code128 barcodes via ReportLab.
+- **AssignmentType validation**: `POST /inventory/items/{id}/assign` now validates `assignment_type` against the enum and returns 400 on invalid values.
+- **Lookup by code**: Returns a list of matching items instead of a single result, handling duplicate barcodes/serial numbers gracefully.
+
+#### Inventory Security & Data Integrity Hardening
+
+- **Row-level locking**: Added `_get_item_locked()` helper using `SELECT FOR UPDATE`. Applied to `update_item`, `unassign_item`, `return_to_pool`, and `checkin_item` to prevent concurrent-modification races.
+- **Expected-user guard**: `unassign_item` accepts optional `expected_user_id` parameter; batch operations pass this to prevent stale-read races where a concurrent assign could cause unassignment of the wrong user.
+- **Read-only overdue query**: `get_overdue_checkouts` no longer performs a bulk `UPDATE` on every call. Overdue status is computed at read time. New `mark_overdue_checkouts` method added for scheduled tasks.
+- **Clearance IDOR fix**: `resolve_line_item` now requires and validates `clearance_id`, preventing resolution of line items from a different clearance via URL manipulation.
+- **Org-scoped unique constraints**: Removed global `unique=True` from `barcode` and `asset_tag` columns. Added composite `UniqueConstraint("organization_id", "barcode")` and `UniqueConstraint("organization_id", "asset_tag")` for proper multi-tenant isolation.
+- **Alembic migration** (`20260222_0200`): Drops old global unique indexes, creates org-scoped unique constraints, and re-creates non-unique single-column indexes for bare-column lookups.
+- **LIKE injection prevention**: Member search in `get_members_inventory_summary` now escapes `%`, `_`, and `\` in user-supplied search strings.
+- **Kwargs injection prevention**: `create_maintenance_record` now uses a whitelist (`_MAINTENANCE_ALLOWED_FIELDS`) to filter incoming kwargs, preventing overwrite of `id`, `organization_id`, or other protected fields.
+
+#### Inventory Performance
+
+- **Lookup optimization**: `lookup_by_code` combined from 3 serial queries (barcode → serial → asset_tag) into 1 query with `OR`, reducing round-trips by 2/3.
+- **Removed unnecessary eager loads**: `return_to_pool` and `checkin_item` no longer use `selectinload` for the item relationship — the item is fetched separately with a row lock.
+
+#### Inventory Test Coverage
+
+- **40 new tests** in `test_inventory_extended.py` covering: departure clearance lifecycle, notification netting, batch operations, label generation, category updates, pool item validation, and edge cases.
+- All `resolve_line_item` test calls updated for new `clearance_id` parameter.
+
+#### Frontend — Inventory & Scan Fixes
+
+- **Scan modal error handling**: Differentiated 404 (item not found) from network errors with distinct user messages.
+- **Camera scan memory leak**: Fixed stale closure in `useCallback` + `setInterval` by using a ref pattern (`handleCodeScannedRef`).
+- **Member detail race condition**: `handleScanComplete` now awaits `loadMembers()` before fetching member detail, preventing stale data display.
+
+### Event System Enhancements (2026-02-22)
+
+#### Event Reminders
+
+- **End-to-end reminder system**: Events support configurable `reminder_schedule` (array of minutes-before values). Reminders are sent via the notification system at the scheduled times.
+- **Multiple reminder times**: Events can have multiple reminders (e.g., 24 hours before, 1 hour before).
+
+#### Event Notifications
+
+- **Post-event validation**: Event organizers receive a notification after an event ends, prompting them to review and finalize attendance.
+- **Post-shift validation**: Shift officers receive a notification after their shift ends to validate attendance records.
+
+#### Event UI Improvements
+
+- **Past events tab**: The `/events` page now hides past events by default. Managers see a **Past Events** tab to browse historical events.
+- **Attendee management**: Event detail page now supports adding/removing attendees directly.
+- **Removed `eligible_roles`**: Simplified event model by removing the unused `eligible_roles` field.
+
+### Notification System Enhancements (2026-02-22)
+
+- **Time-of-day preferences**: Users can configure preferred notification delivery windows.
+- **Notification expiry**: Notifications now support `expires_at` field; expired notifications are automatically hidden.
+- **User notification inbox**: New in-app notification center for viewing and managing notifications.
+- **Database migration** (`20260221_0800`): Added `action_url` column to `notification_logs`.
+- **Database migration** (`20260221_0700`): Added `category` and `expires_at` columns to `notification_logs`.
+
+### UI & Dark Mode Fixes (2026-02-22)
+
+- **Dark mode modal backgrounds**: Fixed `bg-theme-surface` → `bg-theme-surface-modal` across 9 modal/dialog files for proper dark mode contrast.
+- **Record Official Event Times modal**: Fixed dark mode styling.
+- **Members Admin modals**: Refactored to use shared `Modal` component; added rank and station dropdowns replacing free-text inputs.
+- **Training Admin**: Reorganized into 3 sub-pages with inner tabs for better navigation.
+
+### Backend Quality & Security Fixes (2026-02-22)
+
+#### Security Fixes
+
+- Fixed security vulnerabilities, dead code, and silent error handling identified in comprehensive audit.
+- Fixed quality issues across frontend and backend from audit.
+
+#### DateTime Consistency
+
+- Replaced all `datetime.utcnow()` calls with `datetime.now(timezone.utc)` across the entire backend (deprecated in Python 3.12+).
+- Fixed offset-naive vs offset-aware datetime comparison bugs across event, training, and scheduling services.
+
+#### Facilities Module
+
+- Fixed facilities module bugs and added missing CRUD operations for locations and equipment.
+
+#### Module Settings
+
+- Fixed module selections not persisting from onboarding wizard to organization settings page.
+
+### Badge Number Consolidation & Field Restrictions (2026-02-21)
+
+#### Consolidate `badge_number` into `membership_number`
+
+- **Database migration** (`20260221_0200`): Copies existing `badge_number` values into `membership_number` where NULL, then drops the `badge_number` column and its unique index.
+- **Backend**: Removed `badge_number` from the User model, all Pydantic schemas (`UserBase`, `AdminUserCreate`, `UserUpdate`, `UserListResponse`, `UserResponse`), and all service/endpoint logic across auth, onboarding, training, inventory, forms, reports, and member status modules.
+- **Frontend**: Renamed all `badge_number` / `departmentId` references to `membership_number` across types, services, pages, and components. UI labels updated from "Badge #" / "Department ID" to "Member #" / "Membership Number".
+- **CSV imports**: `badge_number` is still accepted as a column alias for backward compatibility in training record imports.
+- **Property return reports**: Dict key `member_badge_number` renamed to `member_number`; HTML template updated from "Badge #" to "Member #".
+
+#### Restrict rank, station, and membership number edits
+
+- **Backend**: Users without `members.manage` permission now receive a 403 error when attempting to update `rank`, `station`, or `membership_number` via the profile update endpoint. Previously rank was silently dropped and station had no restriction.
+- **Frontend**: The rank, station, and membership number fields on the User Settings page are now disabled (grayed out) for users without `members.manage` permission.
+
+#### Documentation & test fixes
+
+- Updated all onboarding documentation (ONBOARDING.md, ONBOARDING_FLOW.md, wiki/Onboarding.md) to use `membership_number` instead of `badge_number`, correct endpoint `/system-owner` instead of `/admin-user`, correct route `/positions` instead of `/roles`, and correct `total_steps: 10`.
+- Updated training documentation (01-membership.md) to remove badge_number as a separate field.
+- Updated troubleshooting docs to reference "Duplicate Membership Number Error" instead of badge number.
+- Fixed `test_onboarding_e2e.sh` to use the correct API endpoint and field names.
+- Fixed stale placeholder text in 3 frontend search inputs and 4 backend docstrings/descriptions.
+
+### Training Waiver Consistency & Meeting Attendance Fixes (2026-02-21)
+
+#### Shared Training Waiver Service
+
+- **New `training_waiver_service.py`**: Created a centralized service for all training waiver/leave-of-absence calculations. Merges data from both `training_waivers` (training-specific, supports per-requirement targeting) and `member_leaves_of_absence` (department-wide leaves from Member Lifecycle UI) into a uniform `WaiverPeriod` representation.
+- **Consistent waiver adjustments across all compliance views**: Previously, training requirement adjustments for leaves of absence were only applied in the member's My Training self-view (`GET /my-training`). Now the same proportional adjustment formula (`adjusted = base × active_months / total_months`) is applied consistently in:
+  - Compliance Matrix (`GET /training/compliance-matrix`)
+  - Competency Matrix / Heat Map (`GET /training/competency-matrix`)
+  - Individual Training Reports (`GET /training/reports/user/{id}`)
+  - Per-Requirement Progress (`GET /training/requirements/progress/{id}`)
+  - Program Enrollment Progress recalculation
+- **Batch-fetch pattern**: Org-wide views (compliance matrix, competency matrix) use `fetch_org_waivers()` to load all waivers in a single query, avoiding N+1 database calls.
+- **Requirement types adjusted**: Hours, Shifts, and Calls requirements are reduced proportionally. Courses and Certifications are not adjusted (they are binary completions).
+
+#### Meeting Attendance — Leave of Absence Exclusion
+
+- **Attendance Dashboard**: Meetings that fall within a member's active Leave of Absence are now automatically excluded from the attendance denominator. Officers no longer need to manually grant per-meeting waivers for members on formal leave. New `meetings_on_leave` field added to the dashboard response.
+- **Voting Eligibility**: `MembershipTierService.get_meeting_attendance_pct()` now accounts for Leave of Absence periods when calculating attendance percentage for voting eligibility checks.
+
+#### Documentation
+
+- **New `TRAINING_WAIVERS.md`**: Comprehensive how-to guide covering: step-by-step UI workflow for creating leaves of absence, waiver calculation details (15-day threshold, overlapping deduplication, requirement types affected), all compliance views where adjustments are applied, API reference for both Member Leaves and Training Waivers endpoints, meeting attendance impact, example scenario, and FAQ.
+
+#### Database Column Type Consistency
+
+- **DateTime timezone awareness**: Added `timezone=True` to all DateTime columns across `election.py`, `event.py`, `minute.py`, and `training.py` models to ensure consistent UTC storage.
+- **Enum migration**: Created migration `20260221_0100_fix_column_type_consistency.py` to convert `waiver_type` and `leave_type` columns from plain String to proper database ENUM types, matching the SQLAlchemy model definitions.
+
+#### CI Pipeline
+
+- **New `.github/workflows/ci.yml`**: Added GitHub Actions CI pipeline with backend linting (flake8), frontend build validation (TypeScript + Vite), and Python syntax checking.
+
+### Dependency Updates & Hardcoded Value Elimination (2026-02-20)
+
+#### Dependency Version Bumps (minor/patch only)
+
+Safe, non-breaking upgrades to current stable versions.
+
+**Backend (requirements.txt):**
+
+- fastapi 0.115.6 → 0.129.0
+- uvicorn 0.34.0 → 0.41.0
+- pydantic 2.10.5 → 2.12.5
+- pydantic-settings 2.7.1 → 2.13.1
+- sqlalchemy 2.0.36 → 2.0.46
+- alembic 1.14.0 → 1.18.4
+- greenlet 3.1.1 → 3.3.1
+- PyJWT 2.10.1 → 2.11.0
+- jinja2 3.1.5 → 3.1.6
+- sentry-sdk 2.20.0 → 2.53.0
+- celery 5.4.0 → 5.6.2
+- mypy 1.14.0 → 1.19.1
+
+**Frontend (package.json):**
+
+- lucide-react ^0.469.0 → ^0.575.0
+- @vitejs/plugin-react ^4.3.4 → ^5.1.4 (Vite 7 alignment)
+- typescript ^5.7.3 → ^5.9.3
+
+**Intentionally skipped** (need dedicated migration effort):
+React 19, React Router 7, ESLint 10, Tailwind 4, Zod 4, redis 7, bcrypt 5,
+cryptography 46, Pillow 12, pytest 9, pytest-asyncio 1.3, black 26.
+
+#### Centralized Constants — Eliminate Hardcoded Strings
+
+Created single-source-of-truth constant files to replace ~110 hardcoded string
+literals scattered across 43 files.
+
+**New files:**
+
+- `backend/app/core/constants.py` — centralized role group slugs, folder slugs,
+  analytics event types, audit event types
+- `frontend/src/constants/enums.ts` — 15 TypeScript const objects mirroring all
+  backend Python enums (UserStatus, ElectionStatus, RSVPStatus, EventType,
+  FormStatus, FieldType, TrainingStatus, VoteType, ConnectionStatus,
+  FeatureStatus, HealthStatus, MembershipType, StageType, ApplicantStatus,
+  CheckInWindowType)
+
+**Backend changes (20 files):**
+
+- Replaced scattered `["admin", "quartermaster", "chief"]` arrays (appeared in
+  4 files) with `ADMIN_NOTIFY_ROLE_SLUGS` constant
+- Replaced `["chief", "president", "vice_president", "secretary"]` (2 files)
+  with `LEADERSHIP_ROLE_SLUGS`
+- Replaced operational/administrative role arrays with `OPERATIONAL_ROLE_SLUGS`
+  and `ADMINISTRATIVE_ROLE_SLUGS`
+- Replaced ~50 string literal comparisons with Python enum members
+  (e.g. `"completed"` → `TrainingStatus.COMPLETED.value`,
+  `"going"` → `RSVPStatus.GOING`, `"section_header"` → `FieldType.SECTION_HEADER.value`)
+- Replaced hardcoded folder slugs (`"facilities"`, `"events"`) with
+  `FOLDER_FACILITIES`, `FOLDER_EVENTS`
+- Replaced hardcoded analytics/audit event types with named constants
+
+**Frontend changes (17 files):**
+
+- Replaced ~60 string literal comparisons with constant references
+  (e.g. `'active'` → `UserStatus.ACTIVE`, `'closed'` → `ElectionStatus.CLOSED`,
+  `'approval'` → `VoteType.APPROVAL`, `'section_header'` → `FieldType.SECTION_HEADER`)
+
+#### CSS Variable Cleanup — Eliminate Hardcoded Colors
+
+**New CSS variables** (light + dark mode):
+
+- `--toast-success`, `--toast-error`, `--toast-icon-secondary`
+- `--toast-warning-bg`, `--toast-warning-text`
+- `--status-passed`, `--status-failed`, `--status-pending`
+
+**Components updated:**
+
+- `App.tsx` — toast icon colors now use CSS variables
+- `useIdleTimer.ts` — idle warning toast now uses CSS variables
+- `tailwind.config.js` — new variables registered as theme colors
+
+### Security & Stability Audit (2026-02-20)
+
+Full codebase audit of all changes from 2026-02-19/20 identified and fixed 63 issues
+across security, data integrity, accessibility, and reliability.
+
+#### Critical Fixes — Security
+
+- **Training records authorization**: `POST /records` and `PATCH /records/{id}` now require `training.manage` permission. Previously any authenticated user could fabricate training records for any member.
+- **IDOR in scheduling requests**: Cancel button on swap/time-off requests now checks `req.user_id === currentUser.id`. Previously any member could cancel any other member's pending requests.
+- **Permission enumeration**: `GET /permissions` and `GET /permissions/by-category` now require authentication. Previously exposed all permission names to anonymous users.
+- **Mass-assignment prevention**: `PATCH /users/{id}/profile` now uses an explicit allowlist of safe fields instead of blind `setattr()` loop. Prevents potential overwrite of `password_hash`, `organization_id`, or `deleted_at`.
+
+#### Critical Fixes — Data Integrity
+
+- **Dashboard admin summary auth bypass**: Replaced raw `axios.get()` with authenticated `api` instance. Admin summary was always failing silently because the auth token was never sent.
+- **Multi-tenant data leak in dashboard**: Minutes action items queries now filter by `organization_id` via `MeetingMinutes` join. Previously counted action items across all organizations.
+- **Onboarding reset wrong table**: Changed `DELETE FROM user_roles` to `DELETE FROM user_positions` (the actual physical table name). Reset was silently failing, leaving stale junction rows.
+- **str vs UUID comparison always False**: `remove_role_from_user` now uses `str(role.id) == str(role_id)`. Previously the endpoint always returned 404.
+- **str vs UUID comparison always True**: `update_contact_info` self-check now uses `str(current_user.id) == str(user_id)`. Previously regular users could never update their own contact info.
+
+#### Critical Fixes — MissingGreenlet / Async ORM
+
+- **Training dashboard officer detection**: Replaced `current_user.roles` lazy access with eagerly-loaded `selectinload(User.roles)` query. Officers were silently treated as regular members; role-scoped requirements were never matched.
+- **Welcome emails**: Captured `new_user.email`, `first_name`, `last_name`, `username` into local variables before commit. Background task was accessing expired ORM attributes.
+- **Event cancellation notifications**: Captured `event.rsvps` into local list before `db.commit()`. Attendees were never notified of cancellations.
+- **Training session finalization**: Captured `event.title`, `event.start_datetime`, `training_session.course_name` before commit and updated `_notify_training_officers` to accept scalar values instead of ORM objects.
+- **Audit logging after commits**: Captured `role.name`, `user.username`, `user.full_name`, `member.full_name`, `program.name` before `db.commit()` across `add_role_to_user`, `delete_user`, and `enroll_member` endpoints.
+- **Rank permission check**: Replaced lazy `current_user.roles` access with eagerly-loaded query in `update_user_profile`.
+
+#### High — Reliability Fixes
+
+- **Historical import savepoints**: Wrapped individual row `db.add()` in `async with db.begin_nested()` (savepoint). Previously one failed row poisoned the entire session.
+- **hours_completed sum None guard**: Added `or 0` to all `sum(r.hours_completed ...)` generators in `training_service.py`. Previously crashed with `TypeError` when any record had `NULL` hours.
+- **Biannual cert matching**: Added fallback `course_name.ilike()` filter when `training_type` is None. Previously any unrelated cert could falsely satisfy a requirement.
+- **SubmitTrainingPage error state**: Added `loadError` state so the page shows a "Try Again" button instead of an eternal loading spinner when config API fails.
+- **MemberProfilePage null guards**: Added `?.` and `?? []` guards on `response.enabled_modules` and `response.permanent_assignments` to prevent crashes when API returns unexpected shape.
+
+#### Infrastructure
+
+- **Nginx CSP header**: Added `Content-Security-Policy` header with restrictive defaults (`default-src 'self'`, `frame-ancestors 'none'`).
+- **Nginx header inheritance**: Re-added security headers in `/api` and `/docs` location blocks (nginx doesn't inherit `add_header` from parent).
+- **Migration MySQL compatibility**: Wrapped `DROP TYPE IF EXISTS` statements in try/except for MySQL compatibility in departure clearance and inventory notification migrations.
+
+#### Accessibility (WCAG 2.1)
+
+- **ShiftDetailPanel**: Added Escape key listener to close the panel.
+- **MyTrainingPage**: Added `aria-expanded` to section toggle buttons.
+- **ModuleSelection**: Added `role="button"`, `tabIndex={0}`, and keyboard handlers to module cards.
+- **OrganizationSetup**: Added `aria-expanded` to SectionHeader buttons.
+
+#### Theme / Dark Mode
+
+- **MemberProfilePage**: Replaced light-mode-only badge colors (`bg-green-100 text-green-800`, `bg-red-50 text-red-700`) with dark-compatible variants (`bg-green-500/10 text-green-400`, `bg-red-500/10 text-red-400`).
+- **MembersAdminPage**: Fixed role badges and error banners using light-mode-only colors.
+
+### UI Improvements (2026-02-20)
+
+#### Login Page
+
+- **Larger logo**: Increased logo container from 96px to 144px tall (50% larger) for better visibility on the login page. Fallback icon scaled proportionally.
+
+#### Member Deletion
+
+- **New `DELETE /users/{user_id}` endpoint**: Soft-deletes a member by setting `deleted_at` timestamp. Requires `members.manage` permission. Prevents self-deletion. Audit-logged.
+- **Delete button on Members page**: The existing trash can icon buttons (mobile and desktop) are now wired to the new delete endpoint with a confirmation prompt. Hidden for the current user's own row.
+- **Delete button on Members Admin page**: Text "Delete" action button added alongside "Edit Info" and "Manage Roles".
+- **Frontend service method**: Added `userService.deleteUser()` for the new endpoint.
+
+### Fixed - Runtime Error Guards (2026-02-20)
+
+#### Comprehensive Frontend Audit
+
+Full audit of all frontend pages, components, hooks, stores, and services identified and fixed potential JavaScript runtime crashes from unguarded property access on API response data.
+
+#### Pages Fixed
+
+- **ImportMembers.tsx**: `rows[0].map()` now guards against empty CSV file uploads — previously crashed with "Cannot read property 'map' of undefined"
+- **SchedulingPage.tsx**: `template.start_time_of_day` now checks template exists before access — previously crashed when no shift templates were configured
+- **TrainingApprovalPage.tsx**: `data.attendees.map()` now falls back to empty array — previously crashed if API returned missing attendees
+- **AnalyticsDashboardPage.tsx**: `metrics.deviceBreakdown`, `.hourlyActivity`, and `.checkInTrends` now use `|| {}` / `|| []` fallbacks — previously crashed if API returned partial metrics data
+- **ElectionDetailPage.tsx**: `forensicsReport.anomaly_detection`, `.voting_timeline`, and `.audit_log` nested access now guarded with null checks — previously crashed if forensics report had missing sections
+- **DocumentsPage.tsx**: `d.name.toLowerCase()` now checks `d.name` exists — previously crashed on documents with null name field
+
+#### Components Fixed
+
+- **ElectionResults.tsx**: `positionResult.candidates.map()` now uses `|| []` fallback — previously crashed if candidates array was missing from API response
+
+#### Stores Fixed
+
+- **prospectiveMembersStore.ts**: `pipeline.stages.find()` now uses `|| []` fallback — previously crashed if pipeline had no stages array
+
+#### Member Profile Crash Fix
+
+- **MemberProfilePage.tsx**: Fixed crash caused by `user.first_name[0]` when `first_name` was null/empty — added optional chaining and fallback to username initial
+- **Nginx proxy buffer warning**: Increased `proxy_buffer_size` to 8k for `/api/v1/branding` to eliminate upstream response header warnings
+
+### Fixed - Data Integrity & Backend Errors (2026-02-20)
+
+#### Unique Badge Number Enforcement
+
+- **Database constraint**: Added unique badge number per organization (`idx_user_org_badge_number`). Previously duplicate badge numbers could be silently created.
+- **API validation**: Member creation endpoint now returns 409 Conflict for duplicate badge numbers with a clear error message.
+
+#### Training Session Creation
+
+- **Fixed broken training session creation**: The `POST /api/v1/training/sessions` endpoint was failing due to missing foreign key cascade on `training_attendees.session_id`
+- **Removed dead nav link**: The "Certifications" link in navigation pointed to a non-existent route
+- **Fixed TypeScript errors**: Resolved build errors in `CreateTrainingSessionPage.tsx`
+
+#### Role/Position Endpoint Crash
+
+- **Fixed `GET /api/v1/roles` crash**: `AttributeError: role_id` caused by incorrect column reference in the roles query
+
+#### Data Connection Fixes
+
+- **Locations**: Location dropdown in member creation now properly loads and saves location assignments
+- **Roles**: Role assignment during member creation now correctly maps role IDs
+- **Member creation**: Fixed field mapping mismatches between frontend form and backend API
+
+#### Dashboard Zero-Member Fix
+
+- **Fixed dashboard showing 0 members**: Admin summary queries were joining across organizations, causing count mismatches. Isolated queries to current organization.
+
+#### Login & Authentication Fixes
+
+- **Fixed login 500 error**: Added `User.roles` as synonym for `positions` relationship after taxonomy refactor, preventing `AttributeError` on login
+- **Fixed 401 on organization save**: Stale session after database reset caused authentication failures
+
+### Fixed - Scheduling Module (2026-02-20)
+
+#### Shift Template Improvements
+
+- **Auto-generated shift labels**: Shift names are now auto-generated from apparatus + shift type (e.g., "Engine 1 — Day Shift") instead of requiring manual entry
+- **Day/Night/24hr defaults**: Default shift templates updated to Day Shift (07:00–19:00), Night Shift (19:00–07:00), and 24-Hour Shift (07:00–07:00)
+- **Auto-computed end dates**: End date automatically calculates based on shift times (next day for overnight shifts)
+- **Removed rank-based positions**: Captain/Lieutenant removed from shift position options since they are ranks, not staffing seats
+
+#### Member Form & Location Fixes
+
+- **Fixed member form dropdowns**: Status, rank, and membership type dropdowns now populate correctly
+- **Fixed location wizard auto-fill**: Address fields in the location creation wizard now auto-populate when editing
+
+### Added - Expanded Scheduling & Events (2026-02-20)
+
+#### Event System Enhancement
+
+- **Resource types**: Events can now specify required resources (apparatus, equipment, facilities)
+- **Pre-built templates**: Added event templates for common event types (training, meetings, drills, community events)
+
+#### Shift Templates & Positions
+
+- **Configurable shift templates**: New settings tab for managing shift templates with custom positions per template
+- **Vehicle-type staffing defaults**: Templates auto-populate position requirements based on apparatus type (engine, ladder, ambulance, etc.)
+- **Template categories**: Shift templates organized by category for easier management
+
+### Improved - Mobile & Accessibility (2026-02-20)
+
+#### Mobile Optimization
+
+- **Responsive table views**: Major pages optimized for mobile and tablet with card-based layouts on small screens
+- **Scheduling module UX**: Calendar views, shift forms, and assignment panels redesigned for touch-friendly mobile use
+- **Rendering performance**: Reduced unnecessary re-renders in scheduling components
+
+#### Onboarding Accessibility
+
+- **Section 508 compliance**: Improved across all onboarding pages (ARIA labels, keyboard navigation, focus management, screen reader support)
+- **Dark mode toggle**: Enabled on all onboarding pages
+- **Progress indicator width**: Fixed inconsistent width across onboarding steps
+- **Color contrast fixes**: Amber/yellow info boxes and labels updated for light background readability
+- **Alert colors**: Refactored to use CSS theme system instead of hardcoded Tailwind classes
+
+### Added - Taxonomy Refactor (2026-02-20)
+
+#### Role → Position Rename
+
+- **Renamed `roles` to `positions`** throughout the system with backward-compatible `roles` synonym on the User model
+- **Operational ranks**: Added Fire Chief, Assistant Chief, Deputy Chief, Battalion Chief, Captain, Lieutenant, Engineer/Driver, Firefighter
+- **Membership types**: Added member, associate, honorary, life, probationary, retired, social, volunteer, prospect
+- **Prospect model**: New model for prospective member tracking
+- **Position templates**: Added Administrative Member, Regular Member, and expanded onboarding position list
+
+### Infrastructure & DevOps (2026-02-20)
+
+#### Database Reliability
+
+- **MySQL advisory lock**: Serializes Alembic migrations across multiple workers to prevent race conditions
+- **Race condition fix**: Fast-path DB init no longer fails when multiple workers start simultaneously
+- **Migration chain fixes**: Corrected broken Alembic `down_revision` references that caused "multiple heads" errors
+
+#### Docker & Deployment
+
+- **Unraid compose fixes**: Removed hardcoded subnet to avoid network conflicts; fixed build context paths to match installation docs
+- **MinIO env vars**: Fixed MinIO environment variables breaking `docker compose` for users with simple `.env` files
+- **`.env.example` documentation**: Documented differences between `.env.example` (minimal) and `.env.example.full` (all options)
+
+#### Build Fixes
+
+- **LocationsPage**: Fixed stray closing `</div>` tag that broke the production build
+- **Login page inputs**: Fixed white-on-white text in input fields
+- **Select dropdowns**: Fixed unreadable white-on-white text in native `<select>` elements
+
+### Added - Pool Item Issuance for Inventory (2026-02-19)
+
+#### Two Tracking Modes
+
+- **New `tracking_type` field on inventory items**: Items can now be `"individual"` (serial-numbered, assigned 1:1 to a member — existing behavior) or `"pool"` (quantity-tracked, units issued/returned from a shared pool)
+- **New `quantity_issued` field**: Tracks how many units from a pool item are currently issued to members, separate from the on-hand `quantity`
+
+#### Pool Issuance Model & Endpoints
+
+- **New `item_issuances` table**: Tracks who received units from a pool item, when, how many, and whether they've been returned — parallel to `item_assignments` for individual items
+- **`POST /api/v1/inventory/items/{item_id}/issue`**: Issue units from a pool item to a member; decrements on-hand quantity, creates an issuance record
+- **`POST /api/v1/inventory/issuances/{issuance_id}/return`**: Return issued units; increments on-hand quantity, supports partial returns
+- **`GET /api/v1/inventory/items/{item_id}/issuances`**: List who currently has units from a pool item (or full history with `?active_only=false`)
+- **`GET /api/v1/inventory/users/{user_id}/issuances`**: List all pool items issued to a specific member
+
+#### User Dashboard Integration
+
+- The user inventory endpoint (`GET /api/v1/inventory/users/{user_id}/inventory`) now includes an `issued_items` array alongside existing `permanent_assignments` and `active_checkouts`
+
+#### Frontend API Support
+
+- Added `inventoryService.issueFromPool()`, `.returnToPool()`, `.getItemIssuances()`, `.getUserIssuances()` methods
+- Added `ItemIssuance`, `UserIssuedItem` TypeScript interfaces
+- Updated `InventoryItem` and `InventoryItemCreate` interfaces with `tracking_type` and `quantity_issued` fields
+
+### Security Hardening (2026-02-18)
+
+#### Path Traversal Fix in Event Attachments (Critical)
+
+- **Fixed path traversal vulnerability** in `GET /api/v1/events/{id}/attachments/{id}/download`: file paths from the database are now resolved with `os.path.realpath()` and validated against the expected `ATTACHMENT_UPLOAD_DIR` before serving via `FileResponse` — prevents arbitrary file access if database data is ever compromised
+
+#### External Training Provider Credential Encryption (High)
+
+- **API keys and secrets now encrypted at rest** using AES-256 (Fernet) for external training providers (Vector Solutions, Target Solutions, Lexipol, etc.)
+- Credentials are encrypted on create (`POST /api/v1/external-training/providers`) and update (`PATCH /api/v1/external-training/providers/{id}`) before storage
+- Credentials are decrypted transparently when building API request headers in `ExternalTrainingSyncService`
+- Backward-compatible: if decryption fails (pre-existing plaintext values), the service falls back to using the raw value
+
+#### Document Upload MIME Validation (High)
+
+- **Added magic-byte MIME type validation** for document uploads (`POST /api/v1/documents/upload`) using `python-magic` to detect the true file type from content bytes, rather than trusting the HTTP `Content-Type` header
+- Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images (JPEG/PNG/GIF/WebP), and ZIP archives
+- The stored `file_type` in the database now reflects the detected MIME type instead of the client-supplied header
+
+#### MinIO Default Credentials Removed (Medium)
+
+- **Removed insecure default credentials** for MinIO in `docker-compose.yml` — `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` now require explicit configuration via `.env` (will error on startup if not set)
+
+### Added - Location Kiosk Display for Tablets (2026-02-18)
+
+#### Public Kiosk Display System
+
+- **New page: Location Kiosk Display (`/display/:code`)**: Public, unauthenticated page designed for tablets left in rooms. Automatically shows the current event's QR code for member check-in and cycles to the next event when it starts.
+- **Display codes**: Each location gets a unique, non-guessable 8-character display code (alphanumeric, ambiguous chars removed). Codes are auto-generated on location creation and backfilled for existing locations.
+- **Auto-refresh**: Kiosk page polls the backend every 30 seconds for event updates. Shows connection status indicator and live clock.
+- **Multi-event support**: When multiple events overlap in the same room, the display auto-rotates between them every 10 seconds with dot indicators.
+- **Idle state**: When no events are active, shows a clean "No Active Events" screen with messaging that QR codes will appear automatically.
+- **New public API endpoint**: `GET /api/public/v1/display/{code}` — returns location name and current events with QR check-in data. No authentication required. Only exposes non-sensitive data (event name, type, time — no descriptions or member data).
+- **Kiosk URL on Locations page**: Each room card now shows its kiosk display URL (`/display/{code}`) with one-click copy to clipboard.
+
+#### Security Model
+
+- The display page is intentionally public — it shows the same information you'd see on a printed flyer taped to a door (event name, room, time, QR code).
+- Authentication happens on the **scanning member's device** when they check in via `POST /events/{id}/self-check-in`.
+- Display codes use `secrets.choice()` for cryptographic randomness. The 8-character code space (32^8 = ~1.1 trillion combinations) makes brute-force enumeration impractical.
+
+### Added - Unified Location Architecture (2026-02-18)
+
+#### Location ↔ Facility Bridge
+
+- **`facility_id` FK on Location model**: When the Facilities module is enabled, each Location record can optionally reference a Facility for deep building management data (maintenance, inspections, utilities, etc.). The `locations` table becomes the universal "place picker" for all modules regardless of which module is active.
+- **Locations as single source of truth**: Events, Training, and Meetings all reference `locations.id` — turning Facilities on or off doesn't break any location references.
+
+#### Training Location Integration
+
+- **`location_id` FK on TrainingRecord model**: Training records can now reference wizard-created locations instead of relying on free-text strings. The existing `location` text field is preserved as a fallback for "Other Location" entries.
+- **Location dropdown on Create Training Session page**: Replaces the free-text location input with a proper dropdown that loads from `locationsService.getLocations()`, matching the pattern used by EventForm. Includes "Other (off-site / enter manually)" option for non-standard venues.
+- **Selected location details**: When a location is selected, shows address, building, floor, and capacity information below the dropdown.
+- **Review step updated**: The training session review step now shows the selected location name from the dropdown instead of raw text.
+
+#### Location Setup Wizard Enhancement
+
+- **Address fields in list endpoint**: The `GET /locations` API now returns `address`, `city`, `state`, `zip`, and `facility_id` in the list response, enabling richer display in dropdowns and cards.
+
+### Fixed - Training Admin Dashboard Disconnect (2026-02-18)
+
+#### Compliance Matrix Rewrite
+
+- **Root cause**: The compliance matrix endpoint used broken matching logic — it tried to match training records to requirements by `course_id` (which doesn't exist on requirements) or exact `course_name == requirement.name` (which never matches for hours-based requirements like "Annual Training Requirement")
+- **Requirement-type-aware matching**: The compliance matrix now evaluates each member × requirement using the correct strategy per requirement type:
+  - **HOURS**: Sums completed training hours matching `training_type` within the frequency date window, compares to `required_hours`
+  - **COURSES**: Checks if all required `course_id`s have completed records
+  - **CERTIFICATION**: Matches by `training_type`, name substring, or certification number
+  - **SHIFTS/CALLS**: Counts matching records within the date window
+  - **Others**: Falls back to `training_type` or name-based matching
+- **Frequency-aware date windows**: All compliance evaluations now use proper date windows (annual, biannual, quarterly, monthly, one-time) instead of ignoring the requirement's frequency
+- **Active-only filtering**: The compliance matrix now only shows active requirements (previously showed all, including inactive ones)
+
+#### Competency Matrix (Heat Map) Fix
+
+- **Same fixes applied**: The competency matrix service (`CompetencyMatrixService`) now uses the same frequency-aware, type-aware evaluation logic
+- **Hours requirements properly evaluated**: Previously just checked for any matching record; now sums hours and compares to `required_hours`
+
+#### Training Service Consistency
+
+- **`check_requirement_progress()` fixed**: Now uses proper frequency-aware date windows for biannual, quarterly, monthly, and one-time requirements (previously fell back to `start_date`/`due_date` which may not be set)
+
+#### Officer Dashboard Compliance
+
+- **Improved compliance calculation**: The Training Officer Dashboard now calculates member compliance based on actual requirement completion (hours against requirements) rather than only checking for expired certifications
+
+### Fixed - My Training Page & Build Errors (2026-02-18)
+
+#### My Training Page Cleanup
+
+- **Removed "Average Rating" stat card**: The Avg Rating box on the My Training overview was not useful for members and has been removed
+- **Removed "Shifts" stat card**: The Shifts count (shift completion reports) was not relevant to the My Training overview and has been removed
+- **Renamed "Annual Requirements" to "Requirements"**: Label is now generic since the system supports all requirement frequencies
+
+#### Requirements Compliance Fix
+
+- **Fixed requirements showing N/A**: The My Training requirements compliance calculation was filtering to annual-frequency requirements only. Biannual, quarterly, monthly, and one-time requirements were excluded, causing the stat to show "N/A" when only non-annual requirements existed
+- **All frequencies now included**: The backend requirements query now includes all active requirements with frequency-appropriate evaluation windows (annual=calendar year, biannual=2-year window, quarterly=current quarter, monthly=current month, one-time=all-time)
+
+#### Rank Permission Restriction
+
+- **Rank changes restricted**: Member rank can now only be changed by users with `members.manage` permission (Chief, membership coordinator) or admin wildcard. Regular members can no longer change their own rank through profile editing
+- **Added `rank` field to User type**: The frontend `User` interface was missing the `rank` field, causing TypeScript build errors in `CreateTrainingSessionPage.tsx`
+
+#### Additional Build Fixes
+
+- **Missing `BookOpen` import**: Added missing `BookOpen` lucide-react icon import in `MinutesPage.tsx` that caused TypeScript build failure
+
+### Fixed - TypeScript Build Errors (2026-02-18)
+
+#### API Service Layer Completeness
+
+- **Missing scheduling methods**: Added 30+ methods to `schedulingService` including shift calls (CRUD), shift assignments (CRUD + confirm), swap requests (CRUD + review), time-off requests (CRUD + review), shift attendance (get/update/delete), templates (CRUD), patterns (CRUD + generate), and reports (member hours, coverage, call volume, availability)
+- **Missing event settings methods**: Added `getModuleSettings()` and `updateModuleSettings()` to `eventService` for the Events Settings page
+- **Missing OAuth methods**: Added `getGoogleOAuthUrl()` and `getMicrosoftOAuthUrl()` to `authService` for SSO login flows
+- **Missing organization method**: Added `previewNextMembershipId()` to `organizationService` for membership ID preview during member creation
+- **Missing role method**: Added `getUserPermissions()` to `roleService` for the User Permissions page
+- **Missing training approval methods**: Added `getApprovalData()` and `submitApproval()` to `trainingSessionService`
+- **Missing member creation field**: Added `membership_id` to `createMember` type parameter
+- **New service exports**: Added `memberStatusService` (archived members, property returns, tier management), `prospectiveMemberService` (pipelines, prospects, election packages), and `scheduledTasksService` (list/run background tasks) with `ScheduledTask` type
+
+#### Type Definitions
+
+- **Missing user types**: Added `ArchivedMember`, `OverdueMember`, `MembershipTier`, `MembershipTierBenefits`, `MembershipTierConfig`, `PropertyReturnReport` to `types/user.ts`
+- **Missing user field**: Added `membership_number` to `User` interface for member list display
+
+### Fixed - CSS Accessibility & Theme Consistency (2026-02-17)
+
+#### Onboarding Module Theme Migration
+
+- **23 onboarding files refactored**: Converted all hardcoded Tailwind color classes to CSS theme variables across the entire onboarding module
+- **Converted patterns**: `bg-slate-900` → `bg-theme-bg-from`, `text-white` → `text-theme-text-primary`, `bg-white/10` → `bg-theme-surface`, `border-white/20` → `border-theme-surface-border`, `text-slate-300` → `text-theme-text-secondary`, `text-slate-400` → `text-theme-text-muted`, `bg-slate-800/50` → `bg-theme-surface-secondary`, input styling standardized to `bg-theme-input-bg border-theme-input-border`
+- **Preserved semantic colors**: All accent/status colors (red, green, blue, purple, amber, etc.) for buttons, badges, alerts, and interactive states left intentionally unchanged
+
+### Added - New Application Pages (2026-02-17)
+
+#### Scheduling Module
+
+- **ShiftCallsPanel**: Component for managing calls attached to shifts with create/update/delete
+- **ShiftAssignmentsPage**: Full shift assignment management with swap requests and time-off handling
+- **ShiftAttendancePage**: Shift attendance tracking with bulk update support
+- **ShiftTemplatesPage**: Shift template and pattern management with auto-generation from patterns
+- **SchedulingReportsPage**: Scheduling reports including member hours, coverage, call volume, and availability
+
+#### Member & Admin Pages
+
+- **MemberLifecyclePage**: Archived member management, overdue property returns, membership tier configuration, and property return report previews
+- **EventsSettingsPage**: Event module configuration (event types, defaults, QR codes, cancellation policies)
+- **UserPermissionsPage**: Individual user permission and role assignment viewer
+- **TrainingApprovalPage**: Token-based training session approval workflow
+- **ScheduledTasksPage**: View and manually trigger scheduled background tasks
+- **ProspectiveMembersPage** (standalone): Pipeline management, prospect creation, election packages
+
+### Changed - Navigation & Structure (2026-02-17)
+
+- **Module restructuring**: Admin hubs with clean member/admin navigation separation
+- **User profile editing**: Self-service and admin profile editing capabilities
+- **Training navigation**: Training sub-items added to sidebar and top navigation; `/training` routes to `MyTrainingPage`
+- **Pipeline settings nav**: Added Pipeline Settings entry for prospective members
+- **Full nav coverage**: All missing pages added to navigation menus
+- **Membership ID settings**: Added Membership ID Number settings to Organization Settings
+- **Department timezone**: All date/time displays now use department's local timezone instead of UTC
+- **Dashboard training hours**: Fixed Dashboard showing 0 training hours despite completed courses
+- **Role assignment fix**: Fixed role assignment permissions for Officers and Vice President roles
+- **Training pipeline fix**: Fixed save error, added knowledge tests and milestone reorder
+
+### Added - System-Wide Theme Support (2026-02-15)
+
+#### Theme System
+
+- **ThemeProvider context**: New `ThemeContext` with support for light, dark, and system (auto-detect) themes
+- **CSS custom properties**: Theme colors defined as CSS variables in `:root` (light) and `.dark` (dark), enabling centralized theme management instead of per-component hardcoding
+- **Tailwind dark mode**: Configured `darkMode: 'class'` with custom `theme-*` color utilities that reference CSS variables
+- **Theme toggle**: Added theme cycle button (Dark → Light → System) to both TopNavigation and SideNavigation
+- **Theme persistence**: Saves preference to `localStorage`, defaults to dark mode, respects `prefers-color-scheme` in system mode
+- **AppLayout**: Background gradient now uses CSS variables, automatically adapting to the selected theme
+
+#### Dashboard Redesign
+
+- **Member-focused dashboard**: Replaced admin-oriented dashboard (setup status, getting started guide) with member-focused content
+- **Hours tracking cards**: Shows total, training, standby, and administrative hours for the current month
+- **Notifications widget**: Displays recent notifications with unread indicators and mark-as-read functionality
+- **Upcoming shifts widget**: Shows the member's upcoming shifts for the next 30 days with date, time, and officer info
+- **Training progress**: Retained training enrollment progress with deadlines and next steps
+- **Added API methods**: `schedulingService.getMyShifts()` and `schedulingService.getMyAssignments()` for member-specific shift data
+
+### Fixed - UI Issues (2026-02-15)
+
+#### Footer & Layout
+
+- **Dashboard footer**: Fixed footer floating mid-page by using flexbox sticky footer pattern (`flex-col` + `flex-1` + `mt-auto`)
+
+#### Election Module Dark Theme
+
+- **CandidateManagement**: Converted from invisible light theme to dark theme with proper contrast
+- **BallotBuilder**: Converted secretary ballot creation interface to dark theme
+- **ElectionBallot**: Converted voter-facing ballot interface to dark theme
+- **ElectionResults**: Converted results display to dark theme
+- **MeetingAttendance**: Converted attendance tracker to dark theme
+
+#### Election Timezone Handling
+
+- **Frontend**: Replaced `.toISOString().slice(0,16)` with local datetime formatting helper to prevent UTC conversion of `datetime-local` input values
+- **Backend**: Changed `datetime.utcnow()` to `datetime.now()` in election service comparisons to match user-entered naive datetimes
+
+### Fixed - Duplicate Index Definitions Crashing Startup (2026-02-15)
+
+#### Database Model Fixes
+
+- **Location model crash fix**: Removed duplicate `ix_locations_organization_id` index that crashed `Base.metadata.create_all()` on MySQL — the `organization_id` column had both `index=True` (auto-generating the index) and an explicit `Index("ix_locations_organization_id", ...)` in `__table_args__` with the same name, causing a `Duplicate key name` error on every fresh database initialization
+- **VotingToken model crash fix**: Same issue — `token` column had `index=True` plus an explicit `Index("ix_voting_tokens_token", ...)` in `__table_args__`, causing startup failure after locations table was fixed
+- **Redundant index cleanup**: Removed `index=True` from 5 additional columns across `apparatus.py`, `facilities.py`, `inventory.py`, `ip_security.py`, and `public_portal.py` that had redundant (but differently-named) explicit indexes in `__table_args__`, preventing double-indexing
+- **Fast-path init log accuracy**: Fixed dropped table count in `_fast_path_init()` to exclude the skipped `alembic_version` table
+
+### Fixed - Docker & Deployment (2026-02-15)
+
+#### Database Consistency
+
+- **Unified database engine**: All standard deployments (main, Unraid, build-from-source) now use MySQL 8.0. MariaDB is reserved exclusively for ARM/Raspberry Pi via the `docker-compose.arm.yml` override
+- **Unraid compose files**: Changed `unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml` from `mariadb:10.11` to `mysql:8.0` with proper MySQL 8.0 healthchecks and command flags
+- **Minimal profile**: Removed MariaDB image override from `docker-compose.minimal.yml` — now uses the base MySQL image with resource-constrained settings
+- **Healthcheck improvements**: Unraid compose files now use robust two-step healthcheck (ping + SELECT 1) with `start_period: 60s` matching the main compose pattern
+
+#### Unraid Deployment
+
+- **Updated all Unraid documentation** (UNRAID-INSTALLATION.md, README.md, QUICK-START-UPDATED.md, DOCKER-COMPOSE-SETUP.md, BUILD-FROM-SOURCE-ON-UNRAID.md): Replaced MariaDB references with MySQL, corrected container names to `logbook-db`
+- **XML template**: Updated `the-logbook.xml` to reference MySQL, removed hardcoded 192.168.1.10 IP addresses from DB_HOST and REDIS_HOST defaults
+- **Build-from-source**: Fixed frontend `VITE_API_URL` from absolute URL to `/api/v1` for proper nginx proxying
+
+#### Wiki Documentation
+
+- **Updated 8 wiki files**: Replaced MariaDB references with MySQL 8.0 across Deployment-Guide, Deployment-Unraid, Development-Backend, Home, Installation, Quick-Reference, Troubleshooting, and Unraid-Quick-Start wiki pages
+
+#### New Features
+
+- **AWS deployment guide** (`docs/deployment/aws.md`): Comprehensive guide covering EC2 simple deployment, EC2 + RDS + ElastiCache production setup, security groups, VPC networking, S3 backups, CloudWatch monitoring, cost estimation, and troubleshooting
+- **Docker build verification script** (`scripts/verify-docker-build.sh`): 40-check validation covering Docker Compose config, Dockerfile validation, TypeScript compilation, Python syntax, database consistency, environment config, and service naming
+- **Proxmox deployment guide** (`docs/deployment/proxmox.md`): Complete guide for LXC and VM deployment on Proxmox VE with Docker, including networking, backups, reverse proxy, and migration from Unraid
+- **Synology NAS deployment guide** (`docs/deployment/synology.md`): Complete guide for deploying on Synology NAS via Docker Compose SSH or Container Manager UI, including DSM reverse proxy with SSL, Hyper Backup integration, port conflict resolution, and resource management
+- **Fixed dangling references**: Removed references to non-existent `deploy/aws/` CloudFormation templates and `infrastructure/terraform/providers/aws/` directory, replaced with links to the new AWS deployment guide
+
+### Fixed - TypeScript Build Errors (2026-02-15)
+
+- **useTraining.ts**: Fixed `getStatistics` and `getProgress` method names to match actual `trainingService` API (`getUserStats`, `getRequirementProgress`)
+- **PipelineDetailPage.tsx**: Extended `ProgramDetails` interface to accept `ProgramWithDetails` fields
+- **ReportsPage.tsx**: Fixed `unknown` not assignable to `ReactNode` by using `!!` boolean coercion
+- **ShiftReportPage.tsx**: Fixed `program_name` property access to `program?.name`
+- **DocumentsPage.tsx**: Added missing `Upload` import from lucide-react
+- **membership/types/index.ts**: Removed duplicate `User` import
+- **election.ts**: Removed duplicate `ballot_items` property from `ElectionUpdate` interface
+- Full `tsc --noEmit` now passes clean with zero errors
+
+### Fixed - Codebase Quality & Error Handling (2026-02-15)
+
+#### Error Handling Improvements
+
+- **Type-safe error handling**: Replaced all `catch (err: any)` with `catch (err: unknown)` across 40+ frontend files, using `getErrorMessage()` and `toAppError()` utilities from `utils/errorHandling.ts`
+- **`toAppError()` check ordering**: Fixed check order to evaluate Axios/HTTP errors (with `.response`) before `Error` instances and plain `AppError` objects, ensuring HTTP status codes and API detail messages are correctly extracted
+- **Silent exception handlers**: Added proper logging to previously empty `catch` blocks in `backend/app/utils/cache.py` and `backend/app/api/v1/endpoints/events.py`
+- **`createMockApiError()` test utility**: Fixed to return error object directly instead of a Promise, so `mockRejectedValue()` works correctly in tests
+
+#### Unused Code & Import Cleanup
+
+- **Removed unused imports/variables** in `ImportMembers.tsx` (`_XCircle`, `_AlertTriangle`, `_X`), `CreateTrainingSessionPage.tsx` (unused setter), `EventSelfCheckInPage.tsx` (`_alreadyCheckedIn`), `EventDetailPage.tsx` (`user: _user`), `TrainingOfficerDashboard.tsx` (duplicate `FileTextIcon`)
+- **Removed `console.log`/`console.error` statements** across 40+ frontend files for production readiness
+
+#### Backend Fixes
+
+- **Makefile**: Fixed all backend targets to use `pip`/`pytest`/`alembic` instead of incorrect `npm` commands
+- **Documents service**: Consolidated duplicate service pattern — all methods now return objects directly or raise `HTTPException`, eliminating inconsistent `(result, error)` tuple returns
+- **Documents endpoint**: Updated to match new service API (no more tuple unpacking)
+- **Public portal endpoints**: Implemented real database queries for `/api/public/v1/organization/stats` (active member count, apparatus count) and `/api/public/v1/events/public` (future public education events)
+- **Duplicate dependency**: Removed duplicate `redis==5.2.1` entry from `requirements.txt`
+- **Dockerfile healthcheck**: Fixed to validate HTTP response status
+
+#### Frontend Fixes
+
+- **ExternalTrainingPage**: Implemented `EditProviderModal` with full form fields (name, API URL, API key, description, sync settings)
+- **ErrorBoundary**: Integrated with `errorTracker` service for error reporting
+- **LoginPage**: Replaced OAuth TODO placeholder with actual API call to `/api/v1/auth/oauth-config`
+- **EventSelfCheckInPage**: Simplified check-in flow to always treat successful `selfCheckIn` response as success; fixed "Check-In" → "Check-in" case mismatch
+
+#### Configuration & Tooling
+
+- **Backend linting**: Added `.flake8` (max-line-length=120, excludes alembic) and `mypy.ini` (python 3.11, ignore missing imports)
+- **ESLint**: Changed 5 `no-unsafe-*` rules from `"off"` to `"warn"` in `.eslintrc.json`
+- **`package.json`**: Removed non-existent `"mobile"` workspace
+
+### Fixed - Members Page & Dark Theme Unification (2026-02-15)
+
+#### Members Page
+
+- **Zero-count bug**: Fixed `/api/v1/users` endpoint to handle missing organization settings gracefully; dashboard stats fallback changed from hardcoded 1 to 0
+
+#### Dark Theme Unification
+
+- **Centralized dark gradient**: Moved background gradient from per-page declarations to `AppLayout`, eliminating duplicate gradient CSS across 23 pages
+- **17 light-themed pages converted**: Converted all remaining light-themed authenticated pages to consistent dark theme (white text, translucent cards, dark form inputs)
+- **48 pages updated**: Unified dark theme across all authenticated pages for consistent visual experience
+
+### Fixed - Role Sync & Onboarding Bugs (2026-02-15)
+
+#### Role System
+
+- **Frontend-backend role sync**: Added Administrator, Treasurer, Safety Officer to backend `DEFAULT_ROLES`; added Assistant Secretary, Meeting Hall Coordinator, Facilities Manager to frontend `RoleSetup.tsx`
+- **Removed membership-tier entries from onboarding**: Tier roles (probationary, active, senior, life) removed from onboarding role selection as they are membership stages, not assignable roles
+
+#### Onboarding Fixes
+
+- **Prospective members module**: Added `prospective_members` to available modules list in onboarding
+- **SQLAlchemy JSON mutation detection**: Fixed `_mark_step_completed()` dict mutation being silently lost by SQLAlchemy (in-place dict modification not tracked); now creates new dict to trigger change detection
+- **Prospective members route prefix**: Fixed API route prefix mismatch preventing module endpoints from loading
+
+### Improved - Database Startup Reliability (2026-02-15)
+
+#### Fast-Path Initialization Hardening
+
+- **Self-healing database startup**: Added three recovery mechanisms — fast-path retry after 2s on failure, schema repair via `create_all(checkfirst=True)` if validation finds missing tables, and `FK_CHECKS` re-enabled in `finally` block to prevent stuck states
+- **Resource-constrained environment optimizations**: Single connection for all DDL, batched `DROP TABLE`, `checkfirst=False` on `create_all()`, `NullPool` for migration engine, and MySQL DDL flags (`innodb_autoinc_lock_mode=2`, `innodb_file_per_table=1`)
+- **Slimmed init SQL**: Reduced `001_initial_schema.sql` to only create `alembic_version` table (removed 7 redundant tables that are now created by `create_all()`)
+- **Dynamic schema validation**: `validate_schema()` now dynamically checks all 127+ expected tables from SQLAlchemy metadata instead of hardcoding 5 table names
+- **Progress logging**: Logs progress every 25 tables during `create_all()` for visibility on slow environments
+- **Init timeout increased**: Raised `create_all()` timeout from 600s to 1200s with `checkfirst=False` and `SET FOREIGN_KEY_CHECKS=0` for slow environments
+- **Leftover table cleanup**: `_fast_path_init()` now dynamically discovers and drops ALL tables (except `alembic_version`) before `create_all()`, preventing "Duplicate key name" errors from partial previous boots
+
+#### Docker & Health Check Fixes
+
+- **MySQL health check false-positive fix**: Changed healthcheck from `-h localhost` (Unix socket, which connects to temporary init server on port 0) to `-h 127.0.0.1 --port=3306` (TCP), preventing premature "healthy" status during MySQL initialization
+- **Backend start_period**: Increased to 600s with 10 retries to accommodate slow first-boot scenarios
+- **Connection retries**: Increased from 20 (~4 min) to 40 (~10 min) to exceed MySQL first-time init duration (~6 min)
+- **Startup reliability**: Six fixes — health check `start_period` 5s→300s, Docker dependency changed to `service_healthy`, schema validation raises `RuntimeError` instead of silently continuing, onboarding endpoints handle missing tables gracefully, nginx proxy timeouts added, `50x.html` auto-retry error page added
+
+#### Backend Startup Fixes
+
+- **Silent migration failure**: Moved `_fast_path_init()` outside forgiving try/except that swallowed all exceptions, added schema validation after fast-path, made validation failures crash the app
+- **Fast-path timeout**: Added 10-minute timeout to `_fast_path_init()` to prevent hung `create_all()` from freezing the backend forever
+- **Axios client timeout**: Added 30-second timeout to frontend Axios API client
+- **Duplicate Alembic revision IDs**: Fixed two pairs of migrations sharing the same revision IDs (20260212_0300 and 20260212_0400), causing Alembic to crash with "overlaps with other requested revisions"
+- **Backend crash on cold MySQL init**: Increased connection retries to cover MySQL's ~6 min first-time initialization
+- **NameError fix**: Moved `get_current_user` above `PermissionChecker` classes in `dependencies.py` — function was defined after classes that reference it in `Depends()` default arguments
+
+### Added - Hierarchical Document Folder System (2026-02-15)
+
+#### Per-Member Document Folders
+
+- **Folder access control**: Added `FolderVisibility` enum (organization/leadership/owner) and access control columns (`visibility`, `owner_user_id`, `allowed_roles`) to `DocumentFolder`
+- **Member Files system folder**: Auto-creates per-member subfolders on first access; members can only see their own folder
+- **My folder endpoint**: `GET /documents/my-folder` returns the current user's personal folder
+- **Access enforcement**: Folder visibility checks enforced on list, view, upload, and download endpoints
+
+#### Per-Apparatus Document Folders
+
+- **Apparatus file organization**: "Apparatus Files" system folder with per-vehicle subfolders named by unit number
+- **Categorized sub-folders**: Photos, Registration & Insurance, Maintenance Records, Inspection & Compliance, Manuals & References
+- **Lazy creation**: Folder hierarchy created on first access via `GET /apparatus/{id}/folders`
+
+#### Per-Facility & Per-Event Document Folders
+
+- **Facility folders**: Per-facility folders with Photos, Blueprints & Permits, Maintenance Records, Inspection Reports, Insurance & Leases, Capital Projects sub-folders
+- **Event folders**: Per-event folders created automatically for file attachments
+- **New endpoints**: `GET /facilities/{id}/folders` and `GET /events/{id}/folder`
+- **Migration**: Seeds all three new system folders for existing organizations
+
+### Added - Form & Security Enhancements (2026-02-15)
+
+#### Forms Module
+
+- **File upload field**: Drag-and-drop file upload support in `FieldRenderer` for form fields of type `file`
+- **Signature capture pad**: Canvas-based signature input with mouse and touch support for form fields of type `signature`
+
+#### Security Improvements
+
+- **Password rehashing on login**: Automatically rehashes password when argon2 parameters change, keeping passwords up to date with latest security settings
+- **Async database audit logging**: Blocked IP security events now logged asynchronously to the database instead of only to file logs
+- **Training enrollment permission check**: Added `training.view_all` permission check to enrollment endpoint
+- **TypeScript type safety**: Fixed `any` types in `AccessLogsTab` and `APIKeysTab` with proper TypeScript interfaces
+
+### Added - Testing & Quality (2026-02-15)
+
+#### New Test Suites
+
+- **Alembic migration chain tests**: 9 tests validating no duplicate revision IDs, no forked chains, single base/head, no orphan migrations, and valid `down_revision` references (`test_alembic_migrations.py`)
+- **Changelog regression tests**: 29-test suite (`test_changelog_fixes.py`) covering duplicate index detection, dependency ordering, documents service API, public portal queries, fast-path init logic, frontend error handling, Makefile correctness, migration chain integrity, and model import completeness
+
+#### Bug Fixes Found During Testing
+
+- **Missing facilities model import**: Fixed `models/__init__.py` to include facilities models — without this fix, `create_all()` would silently skip 20 facility tables
+- **pytest-asyncio scope mismatch**: Fixed `asyncio_default_fixture_loop_scope` from "function" to "session" in `pytest.ini` to match session-scoped async fixtures
+- **Standalone enum verification function**: Added `verify_enum_consistency()` to `test_enum_consistency.py` for CI/pre-commit integration
+
+### Added - Shift Module Enhancement: Full Scheduling System (2026-02-14)
+
+#### Shift Templates & Recurring Patterns
+
+- **Shift templates**: `POST /api/v1/scheduling/templates` — define reusable shift definitions (Day Shift, Night Shift, Weekend Duty) with start/end times, duration, positions, min staffing, and calendar color
+- **Shift patterns**: `POST /api/v1/scheduling/patterns` — create recurring schedules with support for four pattern types: `daily`, `weekly`, `platoon` (A/B/C rotation), and `custom`
+- **Auto-generation**: `POST /api/v1/scheduling/patterns/{id}/generate` — generates shifts for a date range from a pattern template, with automatic assignment creation for pre-assigned members
+- **Template CRUD**: Full create/read/update/delete for shift templates with active/inactive toggle
+
+#### Duty Roster & Shift Assignments
+
+- **Assign members**: `POST /api/v1/scheduling/shifts/{id}/assignments` — assign members to shifts with position designation (officer, driver, firefighter, EMS, captain, lieutenant, probationary, volunteer)
+- **Confirm/decline**: `POST /api/v1/scheduling/assignments/{id}/confirm` — members confirm their own shift assignments
+- **Assignment statuses**: `assigned`, `confirmed`, `declined`, `no_show`
+- **My assignments**: `GET /api/v1/scheduling/my-assignments` — personal view of upcoming shift assignments
+
+#### Shift Swap Requests
+
+- **Request swap**: `POST /api/v1/scheduling/swap-requests` — members request to swap shifts, optionally targeting a specific shift or member
+- **Officer review**: `POST /api/v1/scheduling/swap-requests/{id}/review` — approve or deny swap requests with notes
+- **Cancel request**: `POST /api/v1/scheduling/swap-requests/{id}/cancel` — requestor can cancel pending requests
+- **Status tracking**: `pending`, `approved`, `denied`, `cancelled` with full audit trail
+
+#### Time-Off / Unavailability
+
+- **Request time off**: `POST /api/v1/scheduling/time-off` — members submit time-off requests with date range and reason
+- **Officer review**: `POST /api/v1/scheduling/time-off/{id}/review` — approve or deny with notes
+- **Availability check**: `GET /api/v1/scheduling/availability` — view which members have approved time off in a date range, for scheduling decisions
+- **Cancel request**: `POST /api/v1/scheduling/time-off/{id}/cancel` — cancel pending requests
+
+#### Shift Call Recording
+
+- **Record calls**: `POST /api/v1/scheduling/shifts/{id}/calls` — log incidents/calls during shifts with incident number, type, dispatch/on-scene/cleared times, responding members
+- **Call details**: Track `cancelled_en_route`, `medical_refusal`, and per-call responding member list
+- **Call CRUD**: Full create/read/update/delete for shift call records
+
+#### Shift Reporting & Analytics
+
+- **Member hours report**: `GET /api/v1/scheduling/reports/member-hours` — per-member shift count and total hours for a date range
+- **Coverage report**: `GET /api/v1/scheduling/reports/coverage` — daily staffing levels showing assigned vs. confirmed vs. minimum required
+- **Call volume report**: `GET /api/v1/scheduling/reports/call-volume` — call counts by type with average response times, groupable by day/week/month
+- **My shifts**: `GET /api/v1/scheduling/my-shifts` — personal shift history and upcoming assignments
+
+#### New Permissions & Roles
+
+- **`scheduling.assign`**: Assign members to shifts (officers and above)
+- **`scheduling.swap`**: Request and manage shift swaps (all members)
+- **`scheduling.report`**: View shift reports and analytics (officers and above)
+- **Scheduling Officer role**: New system role with full scheduling permissions for dedicated scheduling coordinators
+
+#### New Models
+
+- `ShiftTemplate` — reusable shift definitions with positions and min staffing
+- `ShiftPattern` — recurring schedule definitions with platoon rotation support
+- `ShiftAssignment` — duty roster assignments with position and confirmation status
+- `ShiftSwapRequest` — swap request workflow with officer review
+- `ShiftTimeOff` — time-off request workflow with approval
+- **Migration**: `20260214_2200` creates 5 new tables with indexes
+
+### Added - Facilities Module: Building & Property Management (2026-02-14)
+
+#### Core Facilities Management
+
+- **Facility CRUD**: Create, edit, archive facilities with types, statuses, addresses, GPS coordinates, year built, square footage
+- **Facility types**: 10 default types (Fire Station, EMS Station, Training Center, Administrative Office, Meeting Hall, Storage Building, Maintenance Shop, Communications Center, Community Center, Other)
+- **Facility statuses**: 6 default statuses with color coding (Operational, Under Renovation, Under Construction, Temporarily Closed, Decommissioned, Other)
+- **Photos & documents**: Attach photos and documents to facilities with metadata
+- **Systems tracking**: Track building systems (HVAC, electrical, plumbing, etc.) with install dates and warranty info
+
+#### Facility Maintenance
+
+- **Maintenance scheduling**: `POST /api/v1/facilities/{id}/maintenance` — log maintenance records with type, priority, scheduling, and cost tracking
+- **20 default maintenance types**: HVAC, Generator, Fire Alarm, Sprinkler, Roof, Elevator, Bay Door, Pest Control, and more with recommended frequencies
+- **Inspections**: Track facility inspections with pass/fail, findings, and follow-up
+
+#### Extended Facilities Features
+
+- **Utility tracking**: Track utility accounts (electric, gas, water, sewer, internet, phone, trash) with billing cycles and meter readings
+- **Key & access management**: Track physical keys, key fobs, access cards, codes, and gate remotes with assignment to members
+- **Room/space inventory**: Catalog rooms with type, capacity, equipment, and availability
+- **Emergency contacts & shutoffs**: Record emergency contacts by type (fire, police, utility, building) and shutoff locations (water, gas, electric, HVAC, sprinkler)
+- **Capital improvement projects**: Track renovation/construction/equipment projects with budget, timeline, and contractor info
+- **Insurance policies**: Manage building, liability, flood, earthquake, and equipment policies with coverage amounts and renewal dates
+- **Occupant/unit assignments**: Track tenant/unit assignments for multi-use facilities
+- **ADA/compliance checklists**: Create compliance checklists (ADA, fire code, building code, OSHA, environmental) with individual checklist items and due dates
+
+#### Permissions & Roles
+
+- **6 permissions**: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance`, `facilities.manage`
+- **Facilities Manager role**: System role with VIEW, CREATE, EDIT, MAINTENANCE permissions for day-to-day building management
+- **Onboarding integration**: Facilities module added to onboarding available modules list
+
+#### Seed Data & Migration
+
+- **Migration**: `20260214_1900` creates 9 core facility tables; `20260214_2100` creates 11 extended feature tables
+- **Seed migration**: `20260214_2000` seeds default facility types, statuses, and maintenance types
+
+### Added - Apparatus Module Hardening (2026-02-14)
+
+#### Security & Quality Improvements
+
+- **Tenant isolation**: All queries filter by `organization_id` — no cross-organization data leakage
+- **Pagination**: All list endpoints support `skip`/`limit` with total count
+- **Error handling**: Consistent error responses with proper HTTP status codes
+- **Soft-delete**: `is_archived`/`archived_at`/`archived_by` pattern for apparatus records
+- **Historic repair entries**: Maintenance records support attachments and repair history
+
+### Added - Secretary Attendance Dashboard & Meeting Waivers (2026-02-14)
+
+#### Secretary Attendance Dashboard
+
+- **Attendance dashboard**: `GET /api/v1/meetings/attendance/dashboard` — secretary/leadership view showing every active member's meeting attendance %, meetings attended, waived, absent, membership tier, and voting eligibility
+- **Period filtering**: `period_months` parameter for configurable look-back window (default 12 months)
+- **Meeting type filter**: Optionally filter by meeting type (e.g. `business` only)
+- **Voting eligibility**: Shows whether each member is eligible to vote and the reason if blocked (tier restrictions or attendance below minimum)
+
+#### Meeting Attendance Waivers
+
+- **Grant waiver**: `POST /api/v1/meetings/{meeting_id}/attendance-waiver` — secretary, president, or chief excuses a member from a meeting
+- **Waiver effect**: The member cannot vote in this meeting, but their attendance percentage is not penalized
+- **Attendance calculation updated**: Waived meetings are excluded from both numerator and denominator of the attendance percentage
+- **List waivers**: `GET /api/v1/meetings/{meeting_id}/attendance-waivers` — view all waivers for a meeting
+- **Audit trail**: Every waiver is logged as `meeting_attendance_waiver_granted` with `warning` severity
+- **Migration**: `20260214_1300` adds `waiver_reason`, `waiver_granted_by`, `waiver_granted_at` to meeting_attendees
+
+### Added - Auto-Enrollment on Prospective Member Conversion (2026-02-14)
+
+#### Probationary Training Pipeline Auto-Enrollment
+
+- **Auto-enroll on transfer**: When a prospective member is converted to a full member, they are automatically enrolled in the organization's default probationary training program
+- **Program detection**: Looks for `settings.training.auto_enroll_program_id` first, then falls back to any active program with "probationary" in the name
+- **Manual enrollment**: `POST /api/v1/training/enrollments` — training officer can enroll any member into any training pipeline (probationary, driver training, AIC, etc.)
+- **Administrative conversion**: Works for both prospective→operational and administrative→operational conversions
+- **Transfer response**: Includes `auto_enrollment` field showing the program enrolled into
+
+### Added - Incident-Based Training Progress Tracking (2026-02-14)
+
+#### Call Type Tracking in Shift Completion Reports
+
+- **Call type matching**: When a requirement specifies `required_call_types` (e.g. `["transport", "cardiac"]`), shift completion reports now count only calls matching those types
+- **Call type running totals**: `progress_notes.call_type_totals` tracks per-type counts (e.g. `{"transport": 8, "cardiac": 3}`)
+- **Call type history**: `progress_notes.call_type_history` records each shift report's matching types and counts
+- **Customizable by training officer**: Requirements can specify minimum calls by type (e.g. 15 total calls, 10 transports, 5 shifts) via `required_calls`, `required_call_types`, `required_shifts`, `required_hours` on `TrainingRequirement`
+
+### Added - Scheduled Tasks / Cron Configuration (2026-02-14)
+
+#### Cron Task Runner
+
+- **List tasks**: `GET /api/v1/scheduled/tasks` — lists all available scheduled tasks with recommended cron schedules
+- **Run task**: `POST /api/v1/scheduled/run-task?task={task_id}` — manually trigger any scheduled task
+- **Recommended schedule**:
+  - **Daily 6:00 AM**: `cert_expiration_alerts` — tiered certification expiration reminders
+  - **Weekly Monday 7:00 AM**: `struggling_member_check` — detect members falling behind
+  - **Weekly Monday 7:30 AM**: `enrollment_deadline_warnings` — warn approaching deadlines
+  - **Monthly 1st 8:00 AM**: `membership_tier_advance` — auto-advance membership tiers
+
+### Added - Struggling Member Detection & Notifications (2026-02-14)
+
+#### Pipeline Progress Monitoring
+
+- **Behind-pace detection**: Flags members who have used >50% of their enrollment time but completed <25% of requirements
+- **Deadline approaching**: Flags members within 30 days of deadline at <75% completion (critical if within 7 days)
+- **Stalled requirements**: Detects requirements with no progress updates in 30+ days
+- **Auto-notification**: Training officers receive in-app alerts about struggling members (critical/warning severity)
+- **Deadline warnings**: Automatic warnings at 30, 14, and 7 days before enrollment deadline
+- **Large department support**: Proactively surfaces struggling members who might otherwise go unnoticed
+
+### Added - Membership Stage Requirements Editor (2026-02-14)
+
+#### Tier Configuration Management
+
+- **Get config**: `GET /api/v1/users/membership-tiers/config` — view current tier configuration
+- **Update config**: `PUT /api/v1/users/membership-tiers/config` — training/compliance/secretary can edit membership requirements for each stage
+- **Configurable per-tier settings**: voting eligibility, meeting attendance % required for voting, training exemptions, office-holding eligibility, years-of-service for auto-advancement
+- **Validation**: Ensures all tiers have `id` and `name`, attendance percentages are 0-100
+- **Audit trail**: Config changes logged as `membership_tier_config_updated` with `warning` severity
+
+### Added - Training Calendar Integration & Double-Booking Prevention (2026-02-14)
+
+#### Training Session Calendar View
+
+- **Calendar endpoint**: `GET /api/v1/training-sessions/calendar` — returns training sessions with linked Event data (dates, times, locations, training metadata) for calendar display
+- **Date range filtering**: `start_after` / `start_before` query parameters for fetching sessions in a date window
+- **Training type filter**: Filter calendar by `training_type` (certification, continuing_education, etc.)
+- **Double-booking prevention**: Training sessions with a `location_id` are checked against the organization's event calendar — prevents scheduling a training session at a location already booked by another event
+- **Shared calendar**: Training events appear on the organization-wide event calendar alongside all other events
+- **Hall coordinator filtering**: `GET /api/v1/events?exclude_event_types=training` — hall coordinators can hide training events from their view while double-booking prevention still applies across all event types
+- **`location_id` field**: Added to `TrainingSessionCreate` schema for location-aware training sessions
+- **Event relationship**: Explicit `event` and `course` relationships added to `TrainingSession` model for eager loading
+
+### Added - Competency Matrix / Heat Map Dashboard (2026-02-14)
+
+#### Department Readiness Dashboard
+
+- **Competency matrix**: `GET /api/v1/training/competency-matrix` — generates a member vs. requirement matrix showing certification/training status for every member
+- **Color-coded statuses**: `current` (green), `expiring_soon` (yellow, within 90 days), `expired` (red), `not_started` (gray)
+- **Readiness percentage**: Summary block with total members, requirements, and overall department readiness score
+- **Filterable**: Optional `requirement_ids` and `user_ids` query parameters to focus on specific requirements or members
+- **Gap identification**: Helps training officers identify where gaps exist and create targeted training plans
+
+### Added - Certification Expiration Alert Pipeline (2026-02-14)
+
+#### Tiered Expiration Reminders
+
+- **Process alerts**: `POST /api/v1/training/certifications/process-alerts` — scans all certification records and sends tiered reminders
+- **Four tiers**: 90-day, 60-day, 30-day, and 7-day warnings before expiration
+- **Escalation**: Expired certifications trigger an escalation email CC'd to training officer, compliance officer, and chief
+- **CC on escalation**: 30-day → training officers CC'd; 7-day → training + compliance officers; expired → + chief officer
+- **Idempotent**: Each tier is tracked per-record (`alert_90_sent_at`, `alert_60_sent_at`, etc.) — will not re-send
+- **Alert tracking columns**: `alert_90_sent_at`, `alert_60_sent_at`, `alert_30_sent_at`, `alert_7_sent_at`, `escalation_sent_at` on training_records
+
+### Added - Peer Skill Evaluation Sign-Offs (2026-02-14)
+
+#### Configurable Evaluator Permissions
+
+- **Check evaluator**: `POST /api/v1/training/skill-evaluations/{skill_id}/check-evaluator` — verifies whether the current user is authorized to sign off on a skill
+- **Role-based**: `allowed_evaluators.type = "roles"` — e.g. only `shift_leader` can sign off on AIC skills, `driver_trainer` for driver trainees
+- **User-specific**: `allowed_evaluators.type = "specific_users"` — explicitly named users who may evaluate
+- **Default fallback**: `null` → any user with `training.manage` permission can sign off
+- **Training officer configurable**: Training officer or chief sets the `allowed_evaluators` JSON on each `SkillEvaluation` record
+- **`allowed_evaluators` column**: New JSON column on skill_evaluations table
+
+### Added - Meeting Quorum Enforcement (2026-02-14)
+
+#### Organization-Configurable Quorum
+
+- **Get quorum status**: `GET /api/v1/minutes/{minutes_id}/quorum` — calculates and returns current quorum status for a meeting
+- **Configure quorum**: `PATCH /api/v1/minutes/{minutes_id}/quorum-config` — set per-meeting quorum type and threshold
+- **Organization defaults**: `organization.settings.quorum_config` — default quorum rules applied to all meetings (type: "count" or "percentage", threshold value)
+- **Check-in driven**: Quorum is calculated from attendees marked `present: true` in the meeting's attendee list
+- **Per-meeting override**: Individual meetings can override the org default with `quorum_type` and `quorum_threshold` columns
+- **Auto-update**: `update_quorum_on_checkin()` recalculates quorum each time an attendee checks in or is removed
+- **`quorum_threshold`/`quorum_type` columns**: New columns on meeting_minutes table
+
+### Added - Bulk Voter Override for Elections (2026-02-14)
+
+#### Secretary Bulk Override
+
+- **Bulk override**: `POST /api/v1/elections/{election_id}/voter-overrides/bulk` — secretary can grant voting overrides to multiple members in a single request
+- **Reason required**: A reason (10–500 characters) is required for every bulk override
+- **Enhanced audit logging**: Each override is individually logged with `warning` severity, and a summary audit event captures the full batch with all user IDs
+- **Existing override protection**: Members who already have an override are skipped (not duplicated)
+
+### Added - Migration 20260214_1200 (2026-02-14)
+
+#### Schema Changes
+
+- `meeting_minutes.quorum_threshold` (Float, nullable) — configurable quorum threshold per meeting
+- `meeting_minutes.quorum_type` (String(20), nullable) — "count" or "percentage"
+- `skill_evaluations.allowed_evaluators` (JSON, nullable) — configurable evaluator permissions
+- `training_records.alert_90_sent_at` through `alert_7_sent_at` (DateTime, nullable) — certification alert tracking
+- `training_records.escalation_sent_at` (DateTime, nullable) — escalation alert tracking
+
+### Added - Proxy Voting for Elections (2026-02-14)
+
+#### Proxy Voting System
+
+- **Organization opt-in**: Proxy voting is a department choice — enabled via `organization.settings.proxy_voting.enabled`; disabled by default
+- **Authorize a proxy**: `POST /api/v1/elections/{election_id}/proxy-authorizations` — secretary designates one member to vote on behalf of another, with a reason
+- **Proxy types**: `single_election` (one-time for this election) or `regular` (standing proxy, noted for reference)
+- **Cast proxy vote**: `POST /api/v1/elections/{election_id}/proxy-vote` — the designated proxy casts a vote; eligibility and double-vote prevention apply to the _delegating_ (absent) member
+- **Hash trail**: Each proxy vote records `is_proxy_vote=true`, `proxy_voter_id` (who physically voted), `proxy_delegating_user_id` (on whose behalf), and `proxy_authorization_id`; the `voter_hash` identifies the delegating member so the audit trail shows who voted on whose behalf
+- **Ballot email CC**: When ballot emails are sent, the proxy holder is automatically CC'd on the delegating member's ballot notification
+- **List authorizations**: `GET /api/v1/elections/{election_id}/proxy-authorizations` — view all active and revoked authorizations
+- **Revoke authorization**: `DELETE /api/v1/elections/{election_id}/proxy-authorizations/{id}` — revoke before the proxy votes; cannot revoke after the vote is cast
+- **Forensics integration**: The election forensics report includes a `proxy_voting` section with all authorizations and proxy votes cast
+- **Full audit trail**: `proxy_authorization_granted`, `proxy_authorization_revoked`, `proxy_vote_cast`, and `proxy_vote_double_attempt` audit events
+- **`proxy_authorizations` column**: New JSON column on the elections table
+- **Vote columns**: `is_proxy_vote`, `proxy_voter_id`, `proxy_authorization_id`, `proxy_delegating_user_id` added to votes table
+- **Migration**: `20260214_1100` adds proxy voting columns
+
+### Added - Secretary Voter Override for Elections (2026-02-14)
+
+#### Voter Eligibility Overrides
+
+- **Secretary override**: `POST /api/v1/elections/{election_id}/voter-overrides` — grants a member voting rights for a specific election, bypassing tier-based and meeting attendance restrictions
+- **Reason required**: Every override must include a reason (e.g. "Excused absence approved by board vote")
+- **Full audit trail**: Each override records the member, reason, granting officer name, and timestamp; logged as a `voter_override_granted` audit event with `warning` severity
+- **List overrides**: `GET /api/v1/elections/{election_id}/voter-overrides` — view all overrides for an election
+- **Remove override**: `DELETE /api/v1/elections/{election_id}/voter-overrides/{user_id}` — revoke an override before the member votes
+- **Scope**: Overrides skip tier voting eligibility and attendance percentage checks only; they do NOT bypass election-level eligible_voters lists, position-specific role requirements, or double-vote prevention
+- **`voter_overrides` column**: New JSON column on the elections table
+- **Migration**: `20260214_1000` adds `voter_overrides` column to elections table
+
+### Added - Membership Tiers, Voting Attendance Rules & Training Exemptions (2026-02-14)
+
+#### Membership Tier System
+
+- **Configurable membership tiers**: Organization settings > `membership_tiers` defines an ordered list of tiers (default: Probationary, Active, Senior, Life) with years-of-service thresholds
+- **Tier benefits per level**: Each tier can grant `training_exempt`, selective `training_exempt_types`, `voting_eligible`, `voting_requires_meeting_attendance` with configurable `voting_min_attendance_pct` and look-back `voting_attendance_period_months`, `can_hold_office`, and extensible `custom_benefits`
+- **`membership_type` field on User**: Stores the member's current tier (e.g. `"probationary"`, `"life"`); defaults to `"active"`
+- **Manual tier change**: `PATCH /api/v1/users/{user_id}/membership-type` — leadership can promote/adjust a member's tier with a reason
+- **Auto-advancement**: `POST /api/v1/users/advance-membership-tiers` — batch-advance all eligible members based on years of service from `hire_date`; idempotent, designed for periodic triggering
+
+#### Voting Eligibility — Meeting Attendance
+
+- **Tier-based voting rules**: The election system now checks the member's tier benefits before allowing votes; probationary members (default config) cannot vote
+- **Attendance-gated voting**: If a tier has `voting_requires_meeting_attendance: true`, the system calculates the member's meeting attendance percentage over the configured look-back period and rejects the vote if below the minimum (e.g. 50% over 12 months)
+- **Attendance calculation**: Uses the `MeetingAttendee` model — counts meetings marked present vs. total meetings in the organization during the period
+
+#### Training Exemptions
+
+- **Tier-based exemptions**: Members at a tier with `training_exempt: true` (e.g. Life Members) have all requirements treated as met in compliance checks
+- **Selective exemptions**: `training_exempt_types` allows exempting only specific requirement types (e.g. `["continuing_education"]`) while keeping others enforced
+
+#### Migration
+
+- `20260214_0900` adds `membership_type` (VARCHAR 50, default "active") and `membership_type_changed_at` columns to users table
+
+### Added - Configurable Drop Notification Messages (2026-02-14)
+
+#### Email Template & Recipient Configuration
+
+- **Default MEMBER_DROPPED email template**: Auto-created for each organization with template variables (`{{member_name}}`, `{{reason}}`, `{{item_count}}`, etc.) — fully editable via the Email Templates settings page
+- **CC/BCC support**: `EmailService.send_email()` now supports `cc_emails` and `bcc_emails` parameters
+- **Configurable CC recipients**: Organization settings > `member_drop_notifications.cc_roles` controls which roles are CC'd (default: admin, quartermaster, chief)
+- **Static CC emails**: `member_drop_notifications.cc_emails` allows adding extra email addresses always CC'd on drop notifications
+- **Personal email support**: New `personal_email` field on user profiles for post-separation contact; `member_drop_notifications.include_personal_email` controls whether it receives the drop notification (default: true)
+- **Template variable reference**: 10 available variables for the member_dropped template type, documented in the template editor
+- **Migration**: `20260214_0800` adds `personal_email` column to users table
+
+### Added - Member Archive & Reactivation (2026-02-14)
+
+#### Member Archiving Lifecycle
+
+- **New `archived` status**: Added to UserStatus enum — represents a dropped member who has returned all property
+- **Auto-archive on last item return**: When a dropped member returns their last assigned/checked-out item, they are automatically transitioned to `archived` status
+- **Manual archive endpoint**: `POST /api/v1/users/{user_id}/archive` — allows leadership to archive a dropped member manually (e.g. items written off)
+- **Reactivation endpoint**: `POST /api/v1/users/{user_id}/reactivate` — restores an archived member to `active` status when they rejoin the department
+- **Archived members list**: `GET /api/v1/users/archived` — lists all archived members for legal requests or reactivation lookup
+- **Audit trail**: All archive/reactivation events logged with full event data
+- **Admin notification**: Admins, quartermasters, and chiefs notified by email when auto-archive occurs
+- **`archived_at` column**: Tracks the exact timestamp of archiving on the user record
+- **Profile preservation**: Archived members' full profile, training history, and inventory records remain accessible
+- **Migration**: `20260214_0700` adds `archived` enum value and `archived_at` column
+
+#### Duplicate Member Prevention
+
+- **Prospect creation check**: Creating a prospect with an email matching an archived member returns 409 with reactivation guidance
+- **Prospect transfer check**: Transferring a prospect to membership is blocked if email matches any existing user (archived or active), with clear messaging about reactivation
+- **Admin user creation check**: Creating a member via admin endpoint returns 409 with match details and reactivation URL if email matches an archived member
+- **Pre-submission lookup**: `POST /api/v1/membership-pipeline/prospects/check-existing` — checks email and name against all existing members before prospect entry
+- **Match types**: Cross-references by email (exact) and by first+last name (case-insensitive)
+
+### Added - Property Return Report & Member Drop Statuses (2026-02-14)
+
+#### Member Drop Statuses
+
+- **New UserStatus values**: `dropped_voluntary` and `dropped_involuntary` added to the UserStatus enum
+- **Status change endpoint**: `PATCH /api/v1/users/{user_id}/status` with `members.manage` permission
+- **Drop reason in notification**: The `reason` field provided by leadership is now included in the property return letter sent to the dropped member (both HTML and plain text versions)
+- **Audit logging**: All status changes logged with severity `warning` for drops
+- **Migration**: `20260214_0500` adds new enum values to users, email_templates, and notification_rules tables
+
+#### Property Return Report (Auto-Generated)
+
+- **Automatic trigger**: When a member status changes to dropped, a formal property-return letter is generated
+- **Printable HTML letter**: Professional letterhead format with department name, member address block (window-envelope compatible), and formal language
+- **Item inventory table**: Lists every assigned and checked-out item with serial number, asset tag, condition, type (assigned/checked out), and dollar value
+- **Total assessed value**: Summed from `current_value` or `purchase_price` of all items
+- **Return instructions**: Three methods documented (in person, by appointment, by mail/courier) with tracking advice
+- **Involuntary notice**: Additional legal-recovery paragraph automatically included for involuntary drops
+- **Configurable deadline**: Return deadline in days (1-90, default 14) set per status change
+- **Custom instructions**: Optional extra paragraph for department-specific notes
+- **Document storage**: Report automatically saved to the Documents module (Reports folder) as a generated document
+- **Email delivery**: Report emailed to the member's address on file (toggleable via `send_property_return_email`)
+- **Plain text fallback**: Text version included for email clients that don't render HTML
+- **Preview endpoint**: `GET /api/v1/users/{user_id}/property-return-report` to preview before dropping a member
+
+#### Property Return Reminders (30-Day / 90-Day)
+
+- **Automatic reminders**: 30-day and 90-day reminders sent to dropped members who still have outstanding items
+- **Dual notification**: Reminder emailed to the member AND a summary sent to admin/quartermaster/chief users
+- **Duplicate prevention**: Each reminder type (30-day, 90-day) sent only once per member via `property_return_reminders` tracking table
+- **Escalation language**: 90-day reminder includes a "FINAL NOTICE" with recovery action warning
+- **Process endpoint**: `POST /api/v1/users/property-return-reminders/process` — designed for daily cron/scheduler or manual trigger
+- **Overdue dashboard**: `GET /api/v1/users/property-return-reminders/overdue` — lists all dropped members with outstanding items, days since drop, item details, and which reminders have been sent
+- **Status tracking**: `status_changed_at` and `status_change_reason` columns added to users table for accurate drop-date tracking
+- **Migration**: `20260214_0600` adds user columns and `property_return_reminders` table
+
+#### Notification & Email Template Support
+
+- **MEMBER_DROPPED trigger**: Added to NotificationTrigger enum for notification rules
+- **MEMBER_DROPPED template type**: Added to EmailTemplateType for admin-customizable templates
+
+### Added - Training Module Expansion (2026-02-14)
+
+#### Self-Reported Training
+
+- **Member Submission Page**: Members can submit external training for officer review at `/training/submit`
+- **Officer Review Page**: Training officers review, approve, reject, or request revisions at `/training/submissions`
+- **Configurable Approval Workflow**: Auto-approve under X hours, require manual approval, set review deadlines
+- **Customizable Form Fields**: Per-field visibility, required flags, and custom labels (14 configurable fields)
+- **Notification Settings**: Configurable notifications for submission and decision events
+- **TrainingRecord Auto-Creation**: Approved submissions automatically create official training records
+- **Database**: `self_report_configs` and `training_submissions` tables with migration `20260214_0200`
+
+#### Shift Completion Reports
+
+- **Shift Report Form**: Officers file detailed reports on trainee shift experiences at `/training/shift-reports`
+- **Performance Tracking**: 1-5 star rating, areas of strength, areas for improvement, officer narrative
+- **Skills Observed**: Track specific skills with demonstrated/not-demonstrated status
+- **Auto-Pipeline Progress**: Reports linked to enrollments automatically update requirement progress for SHIFTS, CALLS, and HOURS requirement types
+- **Trainee Acknowledgment**: Trainees can review and acknowledge reports with comments
+- **Three-Tab Interface**: New Report, Filed Reports (by officer), My Reports (received as trainee)
+- **Database**: `shift_completion_reports` table with migration `20260214_0300`
+- **API**: 9 endpoints under `/api/v1/training/shift-reports/`
+
+#### Training Reports
+
+- **Training Progress Report**: Pipeline enrollment progress, requirement completion rates, member advancement status
+- **Annual Training Report**: Comprehensive annual breakdown of training hours, shift hours, courses, calls, performance ratings, training by type
+- **Date Range Picker**: Customizable reporting periods with preset buttons (This Year, Last Year, Last 90 Days, Custom) and date inputs
+- **Report Period Display**: Selected period shown in report results modal header
+
+#### Member Training Page ("My Training")
+
+- **Personal Training Page** at `/training/my-training`: Aggregated view of all training data for each member
+- **Collapsible Sections**: Training hours summary, certifications, pipeline progress, shift reports, training history, submissions
+- **Stat Cards**: Total hours, records, shifts, average rating at a glance
+- **Certification Alerts**: Expired and expiring-soon badges with days-until-expiry
+- **Navigation**: Quick action links from Training Dashboard and member profile
+
+#### Member Visibility Configuration
+
+- **TrainingModuleConfig Model**: 14 boolean visibility toggles per organization controlling what members see
+- **Officer Settings Tab**: Officers can toggle each data category on/off from the My Training page
+- **Granular Control**: Independently control training history, hours, certifications, pipeline progress, requirement details, shift reports, shift stats, performance ratings, strengths, improvement areas, skills observed, officer narrative, submission history, and report export
+- **Default-Off Fields**: Officer narrative and report export are hidden from members by default
+- **Officer Override**: Officers and administrators always see the full dataset regardless of settings
+- **Database**: `training_module_configs` table with migration `20260214_0400`
+- **API**: 4 endpoints under `/api/v1/training/module-config/`
+
+#### Documentation Updates
+
+- **TRAINING_PROGRAMS.md**: Added sections for self-reported training, shift completion reports, member training page, member visibility configuration, training reports, and new database schemas
+- **TROUBLESHOOTING.md**: Added Training Module section with 7 troubleshooting scenarios covering self-reported training, shift reports, my training page, visibility settings, and training reports
+- **CHANGELOG.md**: Comprehensive changelog entry for all training module features
+
+### Added - Events Module Enhancements (2026-02-14)
+
+#### Recurring Events & Templates
+
+- **Recurrence Patterns**: Support for daily, weekly, monthly, and yearly recurrence with configurable intervals, end dates, and occurrence limits
+- **Event Templates**: Create and apply reusable event templates for common event configurations
+- **Recurrence Pattern Models**: `EventRecurrence` and `EventTemplate` database models with full schema support
+- **Frontend Types**: Complete TypeScript types for recurrence patterns, templates, and event duplication
+
+#### Event Creation & Editing
+
+- **Dedicated EventCreatePage**: Full-featured event creation page with `EventForm` component (extracted from EventsPage for better code organization)
+- **Event Edit/Delete UI**: `EventEditPage` with pre-populated form, delete confirmation, and cancel notifications
+- **Event Duplication**: Duplicate existing events from the detail page with all settings carried over
+- **EventForm Component**: Reusable form component with all event fields, validation, and type safety
+
+#### Event Attachments
+
+- **Upload Endpoint**: `POST /events/{id}/attachments` for file uploads with metadata
+- **Download Endpoint**: `GET /events/{id}/attachments/{attachment_id}` for file retrieval
+- **Delete Endpoint**: `DELETE /events/{id}/attachments/{attachment_id}` for file removal
+
+#### Event Operations
+
+- **Booking Prevention**: Prevent double-booking of locations for overlapping event times
+- **RSVP Overrides**: Admin override for RSVP limits and deadline enforcement
+- **Event Notifications**: Cancel notifications sent when events are deleted
+- **Organization Timezone**: Timezone support added to auth flow and date formatting utilities
+
+#### Test Coverage
+
+- **5 Test Files**: Comprehensive test coverage for `EventForm`, `EventCreatePage`, `EventDetailPage`, `EventEditPage`, and `EventsPage`
+- **1,865+ Test Lines**: Full component testing with mock API responses, form interactions, and edge cases
+
+### Fixed - TypeScript & Backend Quality (2026-02-14)
+
+#### TypeScript Build Fixes
+
+- **All Build Errors Resolved**: Fixed all TypeScript compilation errors across the entire frontend codebase
+- **17 'as any' Assertions Removed**: Replaced all unsafe `as any` type assertions with proper typing across 7 files (apparatus API, AddMember, EventDetailPage, EventQRCodePage tests, MinutesDetailPage, test setup, errorHandling utility)
+- **Broken JSX Fixed**: Repaired broken JSX in `DocumentsPage` and `MinutesPage` caused by merged duplicate code blocks
+- **Duplicate Type Identifier Fixed**: Resolved duplicate `User` type export in membership types
+
+#### Backend Quality Fixes
+
+- **Python Backend Incongruities**: Fixed broken dependency injection, duplicate models, and missing permissions across 29 files
+  - Fixed `models/__init__.py` with unified model registry
+  - Added `core/permissions.py` with comprehensive permission definitions
+  - Fixed meetings and minutes endpoints with correct DI patterns
+  - Fixed document service and schemas
+- **Mutable Default Arguments**: Fixed mutable default values (`[]`, `{}`) across all backend models (analytics, apparatus, email_template, error_log, integration, membership_pipeline, user) using `default_factory`
+- **Documents Schema**: Made `file_name` optional and added missing folder fields in document schemas
+
+#### Startup & Runtime Fixes
+
+- **Polling Loop Fix**: Fixed infinite polling loop in onboarding check page
+- **Type Safety**: Fixed type safety issues in onboarding hooks (`useApiRequest`) and `OnboardingCheck` page
+- **API Client**: Fixed onboarding API client service method signatures
+
+#### Events Module Bug Fixes
+
+- **Runtime Crashes**: Fixed critical events module bugs causing runtime crashes and missing data
+- **Event Endpoints**: Simplified and fixed event API endpoints (reduced broken logic)
+- **Location Model**: Fixed location model relationship definitions
+- **Event Service**: Fixed event service with proper error handling and data loading
+
+#### Code Cleanup
+
+- **Events Module Deduplication**: Removed duplicate code in `EventCheckInMonitoringPage` and `EventsPage`, extracted shared types to `event.ts`
+- **Minute Model**: Added missing relationship for event linking
+
+### Added - Meeting Minutes & Documents Module (2026-02-13)
+
+#### Meeting Minutes Backend
+
+- **Database Models**: `MeetingMinutes`, `MinutesTemplate`, `MinutesSection` with UUID primary keys, organization scoping, and foreign keys to events
+- **8 Meeting Types**: `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other` — each with tailored default section templates
+- **Dynamic Sections System**: Minutes use a flexible JSON sections array (`order`, `key`, `title`, `content`) replacing hardcoded content fields — sections can be added, removed, and reordered
+- **Template System**: `MinutesTemplate` model with configurable sections, header/footer configs, meeting type defaults, and `is_default` flag per type
+- **Default Section Presets**:
+  - Business (9 sections): call to order, roll call, approval of previous, treasurer report, old/new business, etc.
+  - Trustee (11 sections): adds financial review, trust fund report, audit report, legal matters
+  - Executive (11 sections): adds officers' reports, strategic planning, personnel matters, executive session
+  - Annual (12 sections): adds annual report, election results, awards & recognition
+- **Minutes Lifecycle**: `draft` → `review` → `approved` status progression with edit protection for approved minutes
+- **Publish Workflow**: Approved minutes can be published to the Documents module as styled HTML with organization branding
+- **Event Linking**: Minutes can be linked to events via `event_id` foreign key
+- **Search**: Full-text search across title and section content with SQL LIKE injection protection
+
+#### Documents Backend
+
+- **Document Management**: `Document` and `DocumentFolder` models with folder hierarchy, tagging, and file metadata
+- **7 System Folders**: SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents — auto-created on first access, non-deletable
+- **Custom Folders**: Users can create, update, and delete custom folders alongside system folders
+- **Document Types**: `policy`, `procedure`, `form`, `report`, `minutes`, `training`, `certificate`, `general`
+- **Source Tracking**: Documents track their origin (`upload`, `generated`, `linked`) and source reference ID
+
+#### API Endpoints
+
+- **Minutes**: 10 endpoints — CRUD, list, search, templates CRUD, publish
+- **Documents**: 5 endpoints — folders CRUD, document list/get/delete
+- **Permissions**: `meetings.view` for read access, `meetings.manage` for write operations
+
+#### Frontend Pages
+
+- **MinutesPage.tsx**: Meeting type filtering with color-coded badges, template selector in create modal (auto-selects default template per meeting type), search, quick stats dashboard
+- **MinutesDetailPage.tsx**: Dynamic section editor with rich text, section reordering (up/down), add/delete sections, publish button for approved minutes, "View in Documents" link for published minutes
+- **DocumentsPage.tsx**: Folder-based browsing, document viewer modal with server-rendered HTML, grid/list view toggle, custom folder management, document count badges
+
+#### Database Migrations
+
+- Migration `add_meeting_minutes`: Creates `meeting_minutes` table with all fields and indexes
+- Migration `20260213_0800`: Adds `minutes_templates`, `document_folders`, `documents` tables with dynamic sections support
+- Migration `a7f3e2d91b04`: Extends MeetingType ENUM with `trustee`, `executive`, `annual` on both tables
+
+### Security - Meeting Minutes Module Review (2026-02-13)
+
+#### Fixes Applied
+
+- **HIGH: Audit log parameter mismatch** — 6 audit log calls in minutes and documents endpoints used wrong parameter names (`action=`, `details=` instead of `event_type=`, `event_data=`), causing silent `TypeError` at runtime. Fixed all calls to use correct `log_audit_event()` signature
+- **MEDIUM: SQL LIKE pattern injection** — Search inputs in `minute_service.py` (2 methods) and `document_service.py` (1 method) passed directly into `%{search}%` without escaping `%` and `_` wildcards. Fixed by escaping all three special characters before interpolation
+- **LOW: Unbounded query limits** — List and search endpoints accepted arbitrary `limit` values. Added `min(limit, 100)` for list endpoints and `min(limit, 50)` for search
+
+#### Verified Secure
+
+- Multi-tenancy via `organization_id` scoping on all queries
+- Permission checks (`meetings.view`/`meetings.manage`) on all endpoints
+- Status-based edit protection (approved minutes cannot be modified)
+- HTML generation uses `html.escape()` for all user content
+- System folder protection (cannot delete system folders)
+- Pydantic validation on all request schemas
+
+### Fixed - Migration Chain Integrity (2026-02-13)
+
+- **Broken Alembic migration chain**: Three minutes/documents migrations had incorrect `down_revision` values creating orphaned migration heads
+  - `add_meeting_minutes`: Fixed `down_revision` from `None` to `'20260212_0400'`
+  - `20260213_0800`: Fixed `down_revision` from `'20260212_1200'` (wrong revision ID) to `'add_meeting_minutes'`
+  - `a7f3e2d91b04`: Fixed `down_revision` from `None` to `'20260213_0800'`
+
+### Enhanced - Email Ballot Voting Page (2026-02-12)
+
+#### Token-Based Ballot Page (`BallotVotingPage.tsx`)
+
+- **Public ballot page** at `/ballot?token=xxx` — no authentication required, accessed via "Vote Now" link in email
+- **Full ballot display**: Shows all ballot items with item numbers, titles, descriptions
+- **Voting options per item**: Approve/Deny for approval items, candidate selection for elections, write-in for custom entries, or abstain
+- **Submit Ballot button** at bottom of page with review prompt
+- **Confirmation modal**: Shows summary of all choices (item title + selected option) before final submission
+- **"Change Ballot" / "Cast Ballot"** options in confirmation — member can go back and modify or confirm
+- **Success confirmation**: Green checkmark with submission summary (votes cast, abstentions)
+- **Error handling**: Clear messages for expired tokens, already-submitted ballots, invalid links
+
+#### Backend: Bulk Ballot Submission
+
+- **`POST /ballot/vote/bulk?token=xxx`** endpoint: Submits all ballot item votes atomically in one transaction
+- **Write-in support**: Creates write-in candidates on the fly when member enters a custom name
+- **Approve/Deny candidates**: Auto-created for approval-type ballot items
+- **Abstain handling**: Items marked as abstain are skipped (no vote recorded)
+- **Token lifecycle**: Token marked as used after full ballot submission, preventing reuse
+- **HMAC-SHA256 signatures** on every vote for tamper detection
+- **Audit logging**: Full ballot submission logged with vote count and abstention count
+
+#### Email Template Updates
+
+- **"Vote Now" button** (was "Cast Your Vote") — centered, prominent blue button
+- **Ballot URL** now points to frontend `/ballot` page instead of API endpoint
+
+### Enhanced - Ballot Builder, Meeting Attendance & Member Class Eligibility (2026-02-12)
+
+#### Meeting Attendance Tracking
+
+- **Attendance management endpoints**: `POST /elections/{id}/attendees` (check in), `DELETE /elections/{id}/attendees/{user_id}` (remove), `GET /elections/{id}/attendees` (list)
+- **`attendees` JSON column** on Election model to track who is present at meetings
+- **Audit logging**: All attendance check-ins and removals are logged to the tamper-proof audit trail
+
+#### Member Class Eligibility System
+
+- **Extended `_user_has_role_type()`** with member class categories: `regular` (active non-probationary), `life` (life_member role), `probationary` (probationary status)
+- **Per-ballot-item eligibility**: Each ballot item can specify which member classes may vote (e.g., only regular + life members for membership approvals)
+- **Attendance requirement**: Ballot items can require meeting attendance (`require_attendance` flag) — voters must be checked in to participate
+- **Combined checks**: Voting eligibility now evaluates both member class AND attendance for each ballot item
+
+#### Ballot Templates API
+
+- **7 pre-configured templates**: Probationary to Regular, Admin Member Acceptance, Officer Election, Board Election, General Resolution, Bylaw Amendment, Budget Approval
+- **`GET /elections/templates/ballot-items`** endpoint returns templates with title/description placeholders
+- **One-click creation**: Secretary selects a template, fills in the name/topic, and the ballot item is created with correct eligibility rules
+
+#### Ballot Builder UI (`BallotBuilder.tsx`)
+
+- **Template picker**: Visual grid of available templates with eligibility badges
+- **Custom item form**: Create custom ballot items with configurable type, vote type, voter eligibility, and attendance requirements
+- **Reorder and remove**: Drag items up/down, remove unwanted items
+- **Live preview**: Shows title preview as secretary types the name/topic
+
+#### Meeting Attendance UI (`MeetingAttendance.tsx`)
+
+- **Check-in interface**: Search members by name or badge number, one-click check-in
+- **Attendance display**: Green pills showing checked-in members with timestamps
+- **Attendance percentage**: Shows percentage of organization members present
+- **Remove capability**: Remove accidentally checked-in members
+
+#### Database Migration
+
+- Migration `20260212_0400`: Adds `attendees` JSON column to elections table
+
+### Enhanced - Elections Audit Logging & Ballot Forensics (2026-02-12)
+
+#### Tamper-Proof Audit Logging
+
+- **Full audit trail integration**: All election operations now log to the tamper-proof `audit_logs` table with blockchain-style hash chains
+- **14 event types**: `election_created`, `election_opened`, `election_closed`, `election_deleted`, `election_rollback`, `vote_cast`, `vote_cast_token`, `vote_double_attempt`, `vote_double_attempt_token`, `vote_soft_deleted`, `vote_integrity_check`, `ballot_emails_sent`, `runoff_election_created`, `forensics_report_generated`
+- **Loguru structured logging**: All election operations emit structured log messages with election IDs, positions, and outcomes for operational monitoring
+
+#### Ballot Forensics
+
+- **Forensics aggregation endpoint** (`GET /elections/{id}/forensics`): Single API call returning vote integrity, deleted votes, rollback history, token access logs, audit trail, anomaly detection (suspicious IPs), and voting timeline
+- **Anomaly detection**: Flags IP addresses with suspiciously high vote counts; provides per-hour voting timeline for detecting ballot stuffing patterns
+- **BALLOT_FORENSICS_GUIDE.md**: Step-by-step playbook for investigating disputed elections with 5 scenario walkthroughs, complete API reference, and audit event reference table
+
+### Enhanced - Elections Module Low-Priority Improvements (2026-02-12)
+
+#### Vote Integrity & Audit Trail
+
+- **Vote Signatures**: HMAC-SHA256 cryptographic signatures on every vote for tampering detection. New `verify_vote_integrity()` endpoint validates all signatures and reports any anomalies
+- **Soft-Delete for Votes**: Votes are never hard-deleted — `deleted_at`, `deleted_by`, and `deletion_reason` columns maintain full audit trail. All queries filter out soft-deleted votes
+- **Vote Integrity Verification Endpoint**: `GET /elections/{id}/integrity` returns signature validation results (PASS/FAIL, tampered vote IDs)
+- **Soft-Delete Vote Endpoint**: `DELETE /elections/{id}/votes/{vote_id}` marks votes as deleted with reason, preserving audit trail
+
+#### Voting Methods
+
+- **Ranked-Choice (Instant-Runoff) Voting**: Full IRV implementation with iterative elimination rounds. Voters rank candidates; lowest-ranked candidate eliminated each round until majority winner found
+- **Approval Voting**: Voters can approve multiple candidates; percentages calculated based on unique voters rather than total ballot count
+- **Vote Rank Support**: `vote_rank` field on votes (schema, model, migration) for ranked-choice ballots
+
+#### Bulk & Multi-Position Improvements
+
+- **Atomic Bulk Voting**: `POST /elections/{id}/vote/bulk` now uses database savepoints — either all votes succeed or none are committed
+- **Multi-Position Token Tracking**: Token-based voting tracks `positions_voted` per token; tokens are only marked as "used" when all positions are voted on
+
+#### Frontend Components
+
+- **Voter-Facing Ballot UI** (`ElectionBallot.tsx`): Full voting interface supporting simple, ranked-choice, and approval voting methods. Shows eligibility status, per-position voting, and confirmation
+- **Candidate Management UI** (`CandidateManagement.tsx`): Admin interface for adding, editing, accepting/declining, and removing candidates with position grouping and write-in support
+- **ElectionDetailPage Integration**: Ballot and candidate management sections embedded in the election detail page
+
+#### Database Migration
+
+- Migration `20260212_0300`: Adds `vote_signature`, `deleted_at`, `deleted_by`, `deletion_reason`, `vote_rank` to votes table; `positions_voted` to voting_tokens table; `ix_votes_deleted_at` index
+
+### Security - Elections Module Deep Review (2026-02-12)
+
+#### Critical Fixes (4)
+
+- **SEC-C1: Remove status from ElectionUpdate** — Prevents bypassing `/open`, `/close`, `/rollback` validation logic by directly PATCHing the status field on DRAFT elections
+- **SEC-C2: Add IntegrityError handling to `cast_vote_with_token()`** — Token-based anonymous voting now catches database constraint violations instead of returning 500 errors
+- **SEC-C3: Fix anonymous vote eligibility check** — `check_voter_eligibility()`, `_get_user_votes()`, and `has_user_voted()` now query by `voter_hash` for anonymous elections instead of `voter_id` (which is NULL)
+- **SEC-C4: Fix `datetime.now()` to `datetime.utcnow()`** — Results visibility check now uses consistent UTC time, preventing timezone-dependent early/late result disclosure
+
+#### Medium Fixes (6)
+
+- **SEC-M3: Add enum validation** — `voting_method`, `victory_condition`, and `runoff_type` are now validated against allowed values via Pydantic field validators
+- **SEC-M4: Validate candidate positions** — Candidate creation now rejects positions not defined in the election's positions list
+- **SEC-M5: HTML-escape rollback email content** — Election titles, performer names, reasons, and user names are HTML-escaped in rollback notification emails
+- **SEC-M6: Block results visibility toggle for OPEN elections** — `results_visible_immediately` can no longer be toggled while voting is active, preventing strategic voting via live result disclosure
+- **Guard `close_election()` to require OPEN status** — Prevents closing DRAFT or CANCELLED elections that were never opened
+- **Frontend: Hide results visibility toggle for open elections** — Matches backend restriction
+
+#### Updated
+
+- **ELECTION_SECURITY_AUDIT.md** — Updated scores (7.1/10 → 9.0/10), marked all critical/high items as fixed, added new test recommendations, added audit history
+
+### Added - Prospective Members: Withdraw & Election Package Integration (2026-02-12)
+
+#### Withdraw / Archive Feature
+
+- **Withdraw Action**: Active or on-hold applicants can be voluntarily withdrawn from the pipeline with an optional reason
+- **Withdrawn Tab**: New tab on the main page showing all withdrawn applications with date, reason, and reactivate option
+- **Withdrawn Stats Card**: Stats bar shows withdrawn count when greater than zero
+- **Reactivation from Withdrawn**: Coordinators can reactivate withdrawn applications back to their previous pipeline stage
+- **Confirmation Dialogs**: Withdraw action requires confirmation in both the detail drawer and table action menu
+
+#### Election Package Integration
+
+- **Auto-Created Packages**: When an applicant advances to an `election_vote` stage, the system automatically creates an election package bundling their data
+- **Configurable Package Fields**: Stage config lets coordinators choose what applicant data to include (email, phone, address, DOB, documents, stage history)
+- **Package Review UI**: Election package section in the applicant detail drawer with status badge, applicant snapshot, and editable fields
+- **Coordinator Notes**: Draft packages can be edited with coordinator notes and a supporting statement for voters
+- **Submit for Ballot**: "Mark Ready for Ballot" button transitions package from draft to ready for the secretary
+- **Cross-Module Query**: `electionPackageService` provides endpoints for the Elections module to discover ready packages
+- **Recommended Ballot Item**: Each package includes pre-configured ballot item settings from the stage's election config (voting method, victory condition, anonymous voting)
+- **Package Status Tracking**: Five statuses (draft, ready, added_to_ballot, elected, not_elected) with appropriate UI for each
+
+### Added - Prospective Members Module (2026-02-12)
+
+#### Pipeline Management
+
+- **Configurable Pipeline Builder**: Drag-and-drop stage builder with four stage types (form submission, document upload, election/vote, manual approval)
+- **Pipeline Stages**: Each stage has a name, description, type, and optional per-stage inactivity timeout override
+- **Dual View Modes**: Toggle between kanban board (drag-and-drop columns) and table view (sortable, paginated) for managing applicants
+- **Server-Side Pagination**: Efficient pagination for large applicant lists with configurable page sizes
+- **Bulk Actions**: Select multiple applicants to advance, hold, or reject in batch
+
+#### Applicant Lifecycle
+
+- **Status Tracking**: Six applicant statuses — active, on_hold, withdrawn, converted, rejected, inactive
+- **Stage Progression**: Advance applicants through pipeline stages with action menu or drag-and-drop
+- **Detail Drawer**: Slide-out panel showing full applicant details, notes, stage history, and activity timestamps
+- **Conversion Flow**: Convert successful applicants to administrative member or probationary member via conversion modal
+
+#### Inactivity Timeout System
+
+- **Configurable Timeouts**: Pipeline-level default timeout with presets (3 months, 6 months, 1 year, never) or custom days
+- **Per-Stage Overrides**: Individual stages can override the pipeline default for stages that naturally take longer (e.g., background checks)
+- **Two-Phase Warnings**: Visual indicators at configurable warning threshold (amber at warning %, red at critical/approaching timeout)
+- **Automatic Deactivation**: Applications automatically marked inactive when no action occurs within the timeout period
+- **Notification Controls**: Toggle notifications for coordinators and/or applicants when approaching timeout
+- **Active/Inactive Tabs**: Main page splits into Active and Inactive tabs with badge counts
+- **Reactivation**: Coordinators can reactivate inactive applications; applicants can self-reactivate by resubmitting interest form
+- **Auto-Purge**: Optional automatic purging of inactive applications after configurable period (default 365 days) to reduce stored private data
+- **Manual Purge**: Bulk purge with confirmation modal and security messaging about permanent data deletion
+- **Stats Annotations**: Statistics explicitly note what is included/excluded (active applicants only; inactive, rejected, withdrawn excluded from conversion rates)
+
+#### Cross-Module Integration
+
+- **Forms Integration**: Pipeline stages of type `form_submission` link to the Forms module for structured data collection
+- **Elections Integration**: Pipeline stages of type `election_vote` link to the Elections module for membership votes
+- **Notifications Integration**: Configurable alerts for stage changes, inactivity warnings, and timeout events
+
+#### Onboarding & Permissions
+
+- **Optional Module**: Added to onboarding module registry as optional, Core category module
+- **Role Permissions**: Secretary and Membership Coordinator roles granted manage permissions by default
+- **RBAC Integration**: `prospective_members.view` and `prospective_members.manage` permissions
+
+#### Frontend Architecture
+
+- **Module Structure**: Full standalone module at `frontend/src/modules/prospective-members/` with types, services, store, components, and pages
+- **Zustand Store**: Comprehensive state management with server-side pagination, active/inactive tabs, loading states, and all CRUD operations
+- **Route Encapsulation**: `getProspectiveMembersRoutes()` registered in App.tsx with lazy-loaded pages
+- **7 Components**: PipelineBuilder, PipelineKanban, PipelineTable, ApplicantCard, ApplicantDetailDrawer, ConversionModal, StageConfigModal
+
+### Added - Forms Module (2026-02-12)
+
+#### Custom Forms Engine
+
+- **Form Builder**: Full form management with 15+ field types (text, textarea, email, phone, number, date, time, datetime, select, multiselect, checkbox, radio, file, signature, section_header, member_lookup)
+- **Form Lifecycle**: Draft, Published, and Archived states with publish/archive workflows
+- **Starter Templates**: Pre-built templates for Membership Interest Form and Equipment Assignment Form
+- **Field Configuration**: Labels, placeholders, help text, validation patterns, min/max constraints, required flags, field width (full/half/third)
+- **Field Reordering**: Drag-and-drop field ordering via reorder endpoint
+- **Submission Management**: View, filter, and delete submissions with pagination
+
+#### Public-Facing Forms
+
+- **Public Form URLs**: Each form gets a unique 12-character hex slug for public access (`/f/:slug`)
+- **No-Auth Submission**: Public forms accept submissions without authentication
+- **Public Form Page**: Clean, light-themed form page for external visitors with all field types rendered
+- **QR Code Generation**: Downloadable QR codes (PNG/SVG) in the sharing modal for printing and placing in physical locations
+- **Organization Branding**: Public forms display the organization name and form description
+
+#### Cross-Module Integrations
+
+- **Membership Integration**: Public form submissions can feed into the membership module for admin review
+- **Inventory Integration**: Internal forms with member lookup can assign equipment via the inventory module
+- **Field Mappings**: Configurable JSON field mappings between form fields and target module fields
+- **Integration Management UI**: Add, view, and delete integrations per form in the admin interface
+
+#### Form Security
+
+- **Input Sanitization**: All form submission data is HTML-escaped, null-byte stripped, and length-limited before storage
+- **Type Validation**: Email format + header injection check, phone character validation, number range validation
+- **Option Validation**: Select/radio/checkbox values validated against allowed options (prevents arbitrary value injection)
+- **Rate Limiting**: Public form views (60/min/IP) and submissions (10/min/IP) with lockout periods
+- **Honeypot Bot Detection**: Hidden field in public forms silently rejects bot submissions with fake success response
+- **Slug Validation**: Form slugs validated against strict hex pattern to prevent path traversal
+- **DOMPurify**: Frontend sanitization of all server-provided text content for defense-in-depth XSS protection
+
+#### Backend Architecture
+
+- **Database Models**: Form, FormField, FormSubmission, FormIntegration with UUID primary keys
+- **Alembic Migrations**: Two migrations for forms tables and public form extensions
+- **FormsService**: Comprehensive service layer with sanitization, validation, integration processing
+- **API Endpoints**: 16+ REST endpoints for form CRUD, field management, submissions, integrations, member lookup
+- **Public API**: Separate `/api/public/v1/forms/` router with no authentication
+- **Permissions**: `forms.view` and `forms.manage` integrated with RBAC system
+
+### Added - Module UIs (2026-02-11)
+
+#### Fully-Built Module Pages
+
+- **Events Page**: Full event management with create/edit modals, event type filtering (business meeting, public education, training, social, fundraiser, ceremony), RSVP settings, reminders, QR code check-in links
+- **Inventory Page**: Tabbed items/categories management with CRUD modals, item types (uniform, PPE, tool, equipment, vehicle, electronics, consumable), status tracking (available, assigned, checked out, in maintenance, lost, retired), condition tracking, search and filtering
+- **Training Dashboard**: Three-tab layout (courses, requirements, certifications), expiring certification alerts (90-day window), links to officer dashboard, requirements management, programs, and session creation
+- **Documents Page**: Folder-based document management with 6 default categories (SOPs, Policies, Forms & Templates, Reports, Training Materials, General Documents), grid/list view toggle, upload and folder creation modals
+- **Scheduling Page**: Week/month calendar views, shift templates (day, night, morning), calendar navigation, shift creation with date ranges and staffing requirements
+- **Reports Page**: Reports catalog with categories (member, training, event, compliance), report cards with descriptions and availability status
+- **Minutes Page**: Meeting minutes management with type filtering (business, special, committee, board), quick stats dashboard, create modal, search and filter
+- **Elections Page**: Election management with detail view sub-page
+
+#### Navigation System
+
+- **Persistent Side Navigation**: Fixed 256px sidebar (collapsible to 64px) with submenu support for Operations, Governance, Communication, and Settings sections
+- **Top Navigation**: Horizontal header bar alternative with responsive mobile hamburger menu
+- **Configurable Layout**: Users choose between top or left sidebar navigation during onboarding; preference stored in sessionStorage
+- **Accessibility**: ARIA labels, focus traps for mobile menu, "Skip to main content" link, keyboard navigation
+
+#### Dashboard
+
+- **Stats Dashboard**: Displays total members, active members, documents count, setup percentage, recent events, and pending tasks
+- **Dashboard Stats API**: `GET /api/v1/dashboard/stats` endpoint returns organization statistics
+- **Training Widget**: Shows top 3 active training enrollments with progress
+
+### Added - Roles & Permissions (2026-02-10)
+
+#### New System Roles (8 additional roles)
+
+- **Officers** (Priority 70): General officer role with broad operational access — scheduling, inventory, events, forms management
+- **Quartermaster** (Priority 85): Department inventory, equipment, and gear assignment management
+- **Training Officer** (Priority 65): Training programs, sessions, certifications, and related event management
+- **Public Outreach Coordinator** (Priority 65): Public education and outreach event management
+- **Meeting Hall Coordinator** (Priority 60): Meeting hall and location booking management
+- **Membership Coordinator** (Priority 55): Member records, applications, onboarding/offboarding, role assignment
+- **Communications Officer** (Priority 55): Website, social media, newsletters, and notification management
+- **Apparatus Manager** (Priority 50): Fleet tracking, maintenance logging, and equipment checks
+
+#### Role System Improvements
+
+- **Unified Role Initialization**: `DEFAULT_ROLES` in `permissions.py` is now the single source of truth for all role definitions, replacing scattered role creation logic
+- **Wildcard Permission Fix**: Permission check now correctly handles wildcard (`*`) permissions for IT Administrator role
+
+### Fixed - Onboarding (2026-02-09)
+
+#### State Persistence
+
+- **Role Permissions Persistence**: Role permission customizations now persist across page navigation via Zustand store with localStorage; previously, navigating away from the Role Setup page reset all permissions to defaults
+- **Module Configuration Persistence**: Module permission configs (`modulePermissionConfigs`) now save to the Zustand store instead of using a fake setTimeout; available roles are dynamically read from `rolesConfig` instead of being hardcoded
+- **Orphaned Role ID Filtering**: When restoring module permission configs, role IDs are now validated against available roles — prevents "undefined" display when a previously-configured role is removed in the Role Setup step
+- **Icon Serialization**: Role icons are serialized to string names for localStorage storage and deserialized back to React components on restore via `ICON_MAP`
+
+#### Authentication & Navigation
+
+- **Auth Token Key Fix**: Fixed critical redirect loop caused by AppLayout checking `localStorage.getItem('auth_token')` instead of the correct `'access_token'` key — this caused hundreds of API requests per second as the app bounced between login and dashboard
+- **Branding Persistence**: Organization name and logo now transfer correctly from onboarding to the main application layout via sessionStorage
+
+### Fixed - Infrastructure (2026-02-09)
+
+#### Docker Graceful Shutdown
+
+- **Exec Form CMD**: Backend Dockerfile and all Docker Compose files now use exec form (`["uvicorn", ...]`) instead of shell form, ensuring uvicorn receives SIGTERM signals directly
+- **Stop Grace Period**: Added `stop_grace_period: 15s` to all Docker Compose configurations (main, minimal, Unraid) to allow in-flight requests to complete
+- **Init Process**: Added `init: true` to backend services as a signal-forwarding safety net
+- **Unraid Compose Files**: Updated both `docker-compose-unraid.yml` and `docker-compose-build-from-source.yml` with graceful shutdown settings
+
+#### Backend Fixes
+
+- **Apparatus Module Whitelist**: Fixed module slug mismatch for apparatus/public outreach in the module configuration whitelist
+
+### Fixed - Authentication & Login (2026-02-11)
+
+#### Login Flow
+
+- **Login 401 Fix**: `get_user_from_token()` compared a UUID object against a `String(36)` database column causing type mismatch in aiomysql — fixed to query by token string only
+- **Account Lockout Persistence**: Failed login counter was flushed but rolled back when HTTPException was raised — changed to explicit `commit()` so lockout increments persist
+- **Token Refresh Type Mismatch**: `UUID(payload["sub"])` didn't match `String(36)` column — kept as string for correct comparison
+- **Session Revocation Fix**: Same UUID-vs-String mismatch in session revocation resolved
+- **Session Creation**: Onboarding endpoint created bare JWT with no UserSession row — now uses `create_user_tokens()` which creates the session record
+- **Login Redirect**: Login page now redirects to `/dashboard` instead of `/` for authenticated users
+- **ProtectedRoute Race Condition**: Route component now checks localStorage first and shows spinner while validating token, preventing flash of login page
+
+#### Auth UX
+
+- **Concurrent Token Refresh**: Multiple simultaneous 401 responses now share a single refresh promise instead of each triggering independent refresh calls — prevents replay detection from logging users out
+- **Welcome Page Detection**: Welcome page now detects when onboarding is already completed and redirects appropriately
+- **Logout Confirmation Modal**: New modal with ARIA attributes, Escape key support, and background scroll lock warns about unsaved changes before logging out
+
+### Added - Login Page (2026-02-11)
+
+- **Organization Branding**: Unauthenticated `GET /auth/branding` endpoint returns org name and logo; login page displays logo with "Sign in to [Org Name]" heading
+- **Footer**: Copyright footer with org name and "Powered by The Logbook" text matching onboarding style
+- **Logo Shape**: Updated logo container from circular to rounded square
+
+### Added - Startup Optimization (2026-02-11)
+
+- **Fast-Path Database Initialization**: Fresh databases now use `create_all()` instead of running 39+ Alembic migrations sequentially, reducing first-boot time from ~20 minutes to seconds
+- **Onboarding Completion Fix**: Added explicit `await db.commit()` in admin-user endpoint — previously relied on auto-commit but frontend immediately called `/complete`
+- **Audit Logger Savepoint**: Onboarding `/complete` endpoint was failing with 500 error due to audit logger commit conflicts — added savepoint isolation
+- **End-to-End Test Script**: Comprehensive bash script (`test_onboarding_e2e.sh`) validating complete onboarding flow: startup, session management, organization creation, admin user setup, login/auth, and database verification
+
+### Security - Election System (2026-02-10)
+
+- **Double-Voting Prevention**: Added 4 partial unique indexes on the votes table to prevent duplicate votes at the database level — guards against race conditions and direct DB manipulation
+- **Election Results Timing**: Results now require both `status=CLOSED` AND `end_date` to have passed before revealing vote counts — prevents premature result leaks during active elections
+- **Integrity Error Handling**: `cast_vote()` now catches `IntegrityError` with a user-friendly message instead of a 500 error
+- **Security Audit**: Comprehensive election security audit documented in `ELECTION_SECURITY_AUDIT.md` (rating: 7.1/10) — identified and resolved critical double-voting gap, catalogued anonymous voting strengths (HMAC-SHA256)
+
+### Added - UX Improvements (2026-02-10)
+
+#### Week 1: Core Usability
+
+- **Password Reset Flow**: New Forgot Password and Reset Password pages
+- **Live Dashboard Stats**: Replaced hardcoded dashboard values with live API data and skeleton loaders
+- **User Settings Page**: Full settings page with account, password, and notification tabs
+- **Dead Navigation Links Fixed**: Reports and Settings links now route correctly
+
+#### Week 2: Safety
+
+- **Logout Confirmation**: Modal warns about unsaved changes before logging out
+
+#### Week 3: Onboarding Polish
+
+- **Module Features Visible**: Module cards now display the first 3 features upfront with "+ X more" hint instead of hiding behind "More info" button
+- **Breadcrumb Progress Indicator**: Step names with green checkmarks replace the simple step counter
+- **Simplified Organization Setup**: Relaxed ZIP validation, form sections expanded by default
+- **Focus Trap Hook**: Reusable `useFocusTrap` hook for WCAG-compliant mobile menus
+
+#### Week 4: Contextual Help
+
+- **Help Link Component**: Reusable `HelpLink` with 3 variants (icon/button/inline), tooltip support, configurable positioning
+- **Integrated Help Tooltips**: Added to Dashboard, Organization Setup, and Reports pages
+
+#### Additional UX Fixes
+
+- **Membership Type Field**: Dropdown (prospective/probationary/regular/life/administrative) in admin user creation with prospective member warning banner
+- **Administrator Terminology**: Clarified distinction between IT Administrator (system admin) and Administrative Member (membership type)
+- **Validation Toast Fix**: `validateForm()` now returns errors directly instead of reading stale state, fixing "0 errors" toast message
+
+### Fixed - Backend (2026-02-10)
+
+#### SQLAlchemy Async Fixes
+
+- **Organization Creation Greenlet Error**: Added `await db.refresh(org)` after flush to prevent lazy-loading of `organization_type.value` in async context
+- **Admin User Creation Greenlet Error**: Eagerly loaded `roles` relationship before appending to avoid lazy loading in async context
+- **Migration Dependency Chain**: Fixed `down_revision` pointer in vote constraints migration from non-existent ID to correct parent
+- **Tax ID Field**: Added `tax_id` to onboarding Pydantic schema, service method, and API endpoint — frontend was sending it but backend rejected it with 422
+
+#### Test Infrastructure
+
+- **MySQL Test Database**: Tests now use actual MySQL database instead of SQLite for realistic testing
+- **Transaction Management**: Replaced `commit()` calls with `flush()` for test compatibility; fixed audit logger transaction management
+- **Comprehensive Onboarding Test Suite**: Full integration test coverage for onboarding flow
+- **Database Initialization Fixture**: Shared test fixture for consistent database state
+- **Async SQLAlchemy Review**: Full codebase audit of 32 `flush()` calls documented in `ASYNC_SQLALCHEMY_REVIEW.md` — 87.5% safe, 0 critical issues
+
+### Added - Frontend (2026-02-08)
+
+#### Onboarding UX Improvements
+
+- **Unsaved Changes Warning**: Added `useUnsavedChanges` and `useFormChanged` hooks to prevent accidental data loss during navigation
+  - Warns before browser refresh/close with unsaved changes
+  - Blocks in-app navigation with confirmation dialog
+  - Location: `frontend/src/modules/onboarding/hooks/useUnsavedChanges.ts`
+
+- **Password Requirements Always Visible**: Password requirements now display before user starts typing
+  - Shows all requirements (length, uppercase, lowercase, numbers, special characters)
+  - Initially displays with unchecked indicators
+  - Updates in real-time as user types
+  - Location: `frontend/src/modules/onboarding/pages/AdminUserCreation.tsx`
+
+- **Section Completion Checkmarks**: Organization setup form now shows visual completion status
+  - Green checkmarks appear when required fields are filled
+  - Red asterisks removed when section is complete
+  - Provides instant feedback on form progress
+  - Location: `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx`
+
+- **Sticky Continue Button (Mobile)**: Continue button stays visible at bottom on mobile devices
+  - Uses responsive Tailwind classes (`sticky bottom-0 md:relative`)
+  - Improves UX on long forms by keeping primary action visible
+  - Applied to NavigationChoice and OrganizationSetup pages
+
+#### Onboarding Validation Enhancements
+
+- **Inline Address Validation**: Error messages now appear directly under address form fields
+  - Previously only showed summary errors at bottom
+  - Improves user experience by showing exactly which field has an issue
+  - Location: `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx`
+
+- **URL Auto-HTTPS**: Website URLs automatically prepend `https://` if no protocol specified
+  - Triggers on blur event
+  - Prevents common user error of omitting protocol
+  - Location: `frontend/src/modules/onboarding/pages/OrganizationSetup.tsx`
+
+- **Improved ZIP Code Error Message**: Now shows expected format
+  - Old: "Invalid ZIP code"
+  - New: "Invalid ZIP code format. Expected: 12345 or 12345-6789"
+
+#### Onboarding Progress & Consistency
+
+- **Standardized Progress Indicators**: All onboarding pages now show consistent "Step X of 10"
+  - Updated DepartmentInfo, ModuleSelection, NavigationChoice pages
+  - Provides clear expectation of onboarding length
+
+- **Enhanced Database Initialization Messaging**: Onboarding check page now explains 1-3 minute startup delay
+  - Shows database connection retry attempts during MySQL initialization
+  - Displays migration count and progress
+  - Explains which tables are being created (users, training, events, elections, inventory, etc.)
+  - Provides context for first-time startup delays
+  - Location: `frontend/src/modules/onboarding/pages/OnboardingCheck.tsx`
+
+### Removed - Frontend (2026-02-08)
+
+- **Auto-save Notification**: Removed misleading auto-save indicators from OrganizationSetup page
+  - Zustand state changes are not true "auto-saves" to backend
+  - Prevents user confusion about when data is actually persisted
+
+- **Redundant Session Storage Calls**: Removed unnecessary `sessionStorage` writes in DepartmentInfo
+  - Data already persisted via Zustand store with localStorage
+  - Simplified state management approach
+
+### Fixed - Backend (2026-02-08)
+
+#### Configuration Errors
+
+- **Fixed Settings Configuration Reference** (`backend/app/utils/startup_validators.py`)
+  - Changed `settings.MYSQL_DATABASE` → `settings.DB_NAME` (lines 64, 199)
+  - Resolves error: `'Settings' object has no attribute 'MYSQL_DATABASE'`
+  - Enum validation now works correctly on startup
+
+#### Migration Errors
+
+- **Fixed Duplicate Migration** (`backend/alembic/versions/20260206_0301_add_missing_training_tables.py`)
+  - Migration was creating tables (`skill_evaluations`, `skill_checkoffs`, `shifts`, etc.) already created in migration `20260122_0015`
+  - Converted to conditional migration that checks if tables exist before creating
+  - Prevents error: `(1050, "Table 'skill_evaluations' already exists")`
+  - Maintains backwards compatibility with existing deployments
+
+#### API Errors
+
+- **Fixed Organization Creation Error** (`backend/app/api/v1/onboarding.py`)
+  - Endpoint was accessing `data.description` but `OrganizationSetupCreate` schema doesn't have that field
+  - Changed `description=data.description` → `description=None` (line 1322)
+  - Resolves error: `'OrganizationSetupCreate' object has no attribute 'description'`
+
+### Technical Improvements
+
+#### New Hooks & Utilities
+
+- `useUnsavedChanges(options)`: Warns before leaving page with unsaved changes
+- `useFormChanged(currentData, initialData)`: Detects if form data has changed from initial values
+
+#### Migration System
+
+- Improved migration error handling with conditional table creation
+- Better backwards compatibility for existing installations
+
+#### State Management
+
+- Cleaned up redundant storage operations
+- Improved consistency between Zustand store and backend persistence
 
 ## [1.0.0] - 2026-02-06
 

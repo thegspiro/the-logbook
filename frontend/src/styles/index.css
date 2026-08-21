@@ -350,6 +350,23 @@
   /* Compact on desktop, still thumb-sized on a phone — see form-input. */
   @media (max-width: 767px) {
     min-height: 44px;
+    /* iOS zooms the entire page when a focused field is below 16px. That is
+       especially disruptive in create/edit dialogs, where it can hide the
+       sticky actions and make the form appear horizontally clipped. */
+    font-size: 1rem;
+  }
+}
+
+/* Keep native and one-off form controls usable even when a feature has not yet
+   migrated to the form-input utility. min-width:0 also lets date/time inputs
+   shrink inside narrow grid columns instead of widening the whole page. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+    font-size: max(1rem, 16px);
   }
 }
 
@@ -737,6 +754,22 @@
   }
 }
 
+/* Comparison matrices intentionally scroll instead of reflowing. Keeping the
+ * region focusable gives keyboard users the same access as touch users. */
+.responsive-matrix {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 767px) {
+  .responsive-matrix {
+    border-right: 0.25rem solid var(--color-theme-primary);
+    box-shadow: inset -1rem 0 0.75rem -1rem color-mix(in srgb, var(--color-theme-text-primary) 35%, transparent);
+  }
+}
+
 @utility modal-body {
   /* Mobile-safe modal body — accounts for on-screen keyboard. Uses dvh so the
      cap tracks the visible viewport rather than the URL-bar-retracted height. */
@@ -751,9 +784,22 @@
   /* The scrim behind a dialog. This lived at the call site and had drifted into
      two different opacities for the same thing (bg-black/50 at 43 sites,
      bg-black/60 at 47); it settles here on the shared <Modal> component's /50.
-     Layout — flex centring, padding, a raised z-index for a dialog stacked over
-     another — stays at the call site. */
-  @apply fixed inset-0 z-50 bg-black/50;
+     Layout — flex centring, padding, z-index — stays at the call site.
+
+     The z-index in particular must NOT move in here. Two shapes use this class,
+     and they need opposite stacking:
+
+       a) the scrim IS the fixed container, with the panel as its child — it
+          needs a z-index to clear the page chrome, and the panel is a
+          descendant so it paints above the scrim whatever that z-index is;
+       b) the scrim is an empty sibling of the panel inside an already-raised
+          `fixed inset-0 z-50` wrapper — it needs NO z-index, because the panel
+          alongside it is only `relative z-10`.
+
+     Baking z-50 in here put the scrim on top of the panel in every (b) dialog:
+     the surface rendered dimmed under its own scrim, and every tap inside the
+     dialog hit the scrim's close handler instead of the control under it. */
+  @apply fixed inset-0 bg-black/50;
 }
 
 @utility modal-panel {
@@ -770,6 +816,34 @@
   @apply bg-theme-surface-modal px-4 pt-5 pb-4;
   @media (min-width: 640px) {
     padding: 1.5rem 1.5rem 1rem;
+  }
+}
+
+@utility modal-content {
+  /* The flexible, independently scrolling region in the shared Modal. min-h-0
+     is required for overflow to work inside a flex column on mobile Safari. */
+  @apply min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  @media (min-width: 640px) {
+    @apply px-6 pb-5;
+  }
+}
+
+@utility modal-footer {
+  /* Actions stay visible above the home indicator and become easy thumb-sized
+     full-width targets on phones. Desktop retains compact, inline actions. */
+  padding-top: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+  @media (max-width: 639px) {
+    & > button,
+    & > a {
+      width: 100%;
+      min-height: 44px;
+      margin-left: 0;
+      margin-right: 0;
+      justify-content: center;
+    }
   }
 }
 
@@ -950,6 +1024,22 @@
   .has-bottom-nav {
     --bottom-nav-height: 0px;
   }
+}
+
+/* Inside an overlay there is no bottom bar left to clear: AppLayout hides it
+ * for as long as any dialog, drawer or sheet is open (see useOverlaySurface).
+ * Without this reset `action-bar-safe` and `pb-safe` keep reserving the bar's
+ * height, and a sheet's buttons float above a band of dead space.
+ *
+ * Both selectors are needed, one per dialog shape. Where the scrim is the fixed
+ * container the panel is its descendant and inherits from `.modal-overlay`;
+ * where the scrim is an empty sibling of the panel it cannot reach it, so the
+ * panel classes carry it too. Page-level action bars sit outside both subtrees
+ * and keep the allowance — the bar is still there for them. */
+.modal-overlay,
+.modal-panel,
+.drawer-panel {
+  --bottom-nav-height: 0px;
 }
 
 @utility safe-top {
@@ -1672,5 +1762,427 @@ tbody tr:last-child {
   /* Suppress the link-URL-after-text rule inside the card */
   .id-card-printable a[href]:after {
     content: '' !important;
+  }
+}
+
+/* Printable member training record. */
+.member-training-print-shell {
+  max-width: 8.5in;
+  margin: 2rem auto;
+  background: #fff;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%);
+}
+.member-training-print {
+  padding: 2rem;
+  color: #111;
+  font:
+    10pt/1.5 Georgia,
+    'Times New Roman',
+    serif;
+}
+.member-training-print p,
+.member-training-print dd {
+  margin: 0;
+}
+.member-training-print__header {
+  margin-bottom: 14pt;
+  padding-bottom: 10pt;
+  border-bottom: 3px solid #111;
+}
+.member-training-print__header-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.member-training-print h1 {
+  margin: 0 0 2pt;
+  font-size: 18pt;
+  font-weight: 700;
+}
+.member-training-print__member {
+  font-size: 14pt;
+}
+.member-training-print__metadata {
+  color: #555;
+  font-size: 9pt;
+  text-align: right;
+}
+.member-training-print__compliance {
+  color: #92400e;
+  font-weight: 600;
+}
+.member-training-print__compliance--green {
+  color: #166534;
+}
+.member-training-print__compliance--red {
+  color: #991b1b;
+}
+.member-training-print__compliance--yellow {
+  color: #92400e;
+}
+.member-training-print__stats,
+.member-training-print__summary {
+  display: grid;
+  margin: 0 0 14pt;
+}
+.member-training-print__stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  text-align: center;
+}
+.member-training-print__summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.member-training-print__stats > div,
+.member-training-print__summary > div {
+  padding: 6pt 8pt;
+  border: 1px solid #aaa;
+}
+.member-training-print__stats > div {
+  display: flex;
+  flex-direction: column;
+}
+.member-training-print__stats dd {
+  order: -1;
+  font-size: 16pt;
+  font-weight: 700;
+}
+.member-training-print__stats dt,
+.member-training-print__summary dt {
+  color: #555;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.member-training-print__summary dd {
+  margin-top: 2pt;
+}
+.member-training-print__section h2 {
+  margin: 16pt 0 6pt;
+  padding-bottom: 3pt;
+  border-bottom: 1px solid #bbb;
+  font-size: 11pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.member-training-print__table-scroll {
+  overflow-x: auto;
+}
+.member-training-print table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.member-training-print th,
+.member-training-print td {
+  padding: 3pt 6pt;
+  border: 1px solid #aaa;
+  font-size: 9pt;
+  text-align: left;
+  vertical-align: top;
+}
+.member-training-print th {
+  background: #f5f5f5;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.member-training-print__hours {
+  text-align: center !important;
+}
+.member-training-print__expired {
+  color: #991b1b;
+  font-weight: 600;
+}
+.member-training-print__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 24pt;
+  padding-top: 6pt;
+  border-top: 1px solid #bbb;
+  color: #666;
+  font-size: 8pt;
+}
+@media (max-width: 40rem) {
+  .member-training-print__header-layout,
+  .member-training-print__footer {
+    flex-direction: column;
+  }
+  .member-training-print__metadata {
+    text-align: left;
+  }
+  .member-training-print__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .member-training-print__summary {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .member-training-print-shell {
+    margin: 0;
+    box-shadow: none;
+  }
+  .member-training-print {
+    padding: 0;
+  }
+  .member-training-print__table-scroll {
+    overflow: visible;
+  }
+}
+
+/* Shift completion report: keep the printable document's design out of JSX. */
+.shift-report-print-shell {
+  max-width: 8.5in;
+  margin: 2rem auto;
+  background: white;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%);
+}
+.shift-report-print {
+  padding: 2rem;
+  color: #111;
+  font:
+    11pt/1.6 Georgia,
+    'Times New Roman',
+    serif;
+}
+.shift-report-print p,
+.shift-report-print dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.shift-report-print__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16pt;
+  padding-bottom: 12pt;
+  border-bottom: 3px solid #111;
+}
+.shift-report-print__header h1 {
+  margin: 0 0 2pt;
+  font-size: 18pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.shift-report-print__subtitle {
+  color: #555;
+  font-size: 10pt;
+}
+.shift-report-print__metadata {
+  color: #555;
+  font-size: 9pt;
+  text-align: right;
+}
+.shift-report-print__status--approved,
+.shift-report-print__status--flagged {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.shift-report-print__status--approved {
+  color: #166534;
+}
+.shift-report-print__status--flagged {
+  color: #991b1b;
+}
+.shift-report-print__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 16pt;
+  font-size: 10pt;
+}
+.shift-report-print__facts > div {
+  padding: 6pt 8pt;
+  border: 1px solid #aaa;
+}
+.shift-report-print__fact-wide {
+  grid-column: 1 / -1;
+}
+.shift-report-print dt,
+.shift-report-print__signature h2 {
+  color: #555;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.shift-report-print dd {
+  margin: 0;
+}
+.shift-report-print__section {
+  margin-bottom: 14pt;
+}
+.shift-report-print__section h2 {
+  margin: 0 0 6pt;
+  padding-bottom: 3pt;
+  border-bottom: 1px solid #bbb;
+  font-size: 11pt;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.shift-report-print__rating {
+  font-size: 12pt;
+}
+.shift-report-print__table-scroll {
+  overflow-x: auto;
+}
+.shift-report-print table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+}
+.shift-report-print th,
+.shift-report-print td {
+  padding: 4pt 8pt;
+  border: 1px solid #aaa;
+  text-align: left;
+}
+.shift-report-print th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+.shift-report-print__score {
+  width: 80pt;
+  text-align: center !important;
+}
+.shift-report-print__muted {
+  color: #555;
+}
+.shift-report-print__signatures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40pt;
+  margin-top: 28pt;
+  padding-top: 12pt;
+  border-top: 2px solid #111;
+  break-inside: avoid;
+}
+.shift-report-print__signature h2 {
+  margin: 0 0 4pt;
+}
+.shift-report-print__signature p {
+  margin-bottom: 24pt;
+}
+.shift-report-print__signature span {
+  color: #666;
+  font-size: 8pt;
+}
+.shift-report-print__signature-line {
+  margin-bottom: 4pt;
+  border-bottom: 1px solid #777;
+}
+.shift-report-print__reviewer {
+  grid-column: 1 / -1;
+  color: #555;
+  font-size: 9pt;
+}
+.shift-report-print__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24pt;
+  padding-top: 6pt;
+  border-top: 1px solid #bbb;
+  color: #666;
+  font-size: 8pt;
+}
+@media (max-width: 40rem) {
+  .shift-report-print__header,
+  .shift-report-print__footer {
+    gap: 0.75rem;
+    flex-direction: column;
+  }
+  .shift-report-print__metadata {
+    text-align: left;
+  }
+  .shift-report-print__facts,
+  .shift-report-print__signatures {
+    grid-template-columns: 1fr;
+  }
+  .shift-report-print__fact-wide,
+  .shift-report-print__reviewer {
+    grid-column: auto;
+  }
+}
+@media print {
+  .shift-report-print-shell {
+    margin: 0;
+    box-shadow: none;
+  }
+  .shift-report-print {
+    padding: 0;
+  }
+  .shift-report-print__table-scroll {
+    overflow: visible;
+  }
+}
+/* Global async-route fallback and toast presentation. */
+.page-loading-fallback {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to));
+}
+.page-loading-fallback__spinner {
+  display: inline-block;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+  animation: page-loading-spin 1s linear infinite;
+  border-block: 4px solid var(--color-red-500, #ef4444);
+  border-radius: 9999px;
+}
+@keyframes page-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.page-loading-fallback__message {
+  color: var(--text-primary);
+  font-size: 1.125rem;
+}
+.app-toaster {
+  top: calc(0.5rem + env(safe-area-inset-top)) !important;
+  z-index: 110 !important;
+}
+.app-toast {
+  max-width: 100% !important;
+  overflow-wrap: anywhere;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--surface-border) !important;
+  background: var(--surface-modal) !important;
+  box-shadow: 0 10px 25px rgb(0 0 0 / 35%) !important;
+}
+
+/* react-hot-toast supplies different check and cross icons for these states;
+   retain explicit state hooks for custom icons and visual regression coverage. */
+.app-toast--success,
+.app-toast--error,
+.app-toast--warning {
+  border-inline-start-width: 0.25rem !important;
+}
+.app-toast--success {
+  border-inline-start-color: var(--toast-success) !important;
+}
+.app-toast--error {
+  border-inline-start-color: var(--toast-error) !important;
+}
+.app-toast--warning {
+  border-inline-start-color: var(--toast-warning-bg) !important;
+}
+
+@media (max-width: 767px) {
+  .app-toaster {
+    top: calc(4rem + env(safe-area-inset-top)) !important;
+    right: 1rem !important;
+    left: 1rem !important;
+  }
+
+  .app-toaster > div {
+    max-width: 100% !important;
   }
 }

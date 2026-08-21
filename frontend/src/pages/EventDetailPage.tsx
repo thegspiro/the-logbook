@@ -76,9 +76,28 @@ const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
   'series_end_reminder_sent',
 ]);
 
-/** True when the column holds anything the Event Details card would draw. */
-const hasVisibleCustomFields = (fields: Record<string, unknown>): boolean =>
-  Object.keys(fields).some((key) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key));
+const DISPLAYED_TRAINING_FIELD_KEYS = [
+  'course_name',
+  'course_code',
+  'credit_hours',
+  'training_type',
+  'instructor',
+  'issuing_agency',
+  'expiration_months',
+  'issues_certification',
+  'auto_create_records',
+] as const;
+
+/** True when the column holds anything the details card would draw. */
+const hasVisibleCustomFields = (event: Event): boolean => {
+  const fields = event.custom_fields;
+  if (!fields) return false;
+
+  return (
+    Object.keys(fields).some((key) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key)) ||
+    (event.event_type === EventTypeEnum.TRAINING && DISPLAYED_TRAINING_FIELD_KEYS.some((key) => Boolean(fields[key])))
+  );
+};
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -1077,7 +1096,7 @@ export const EventDetailPage: React.FC = () => {
                 the column being non-empty drew an empty purple card for any
                 event the scheduler had touched, since its bookkeeping keys
                 count towards the length but never render. */}
-            {event.custom_fields && hasVisibleCustomFields(event.custom_fields) && (
+            {event.custom_fields && hasVisibleCustomFields(event) && (
               <div className="bg-theme-surface rounded-lg border-l-4 border-purple-600 p-6 shadow-sm backdrop-blur-xs">
                 <div className="mb-4 flex items-center">
                   <svg
