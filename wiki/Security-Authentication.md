@@ -55,6 +55,66 @@ Username and password authentication with Argon2id password hashing.
 > being demanded. The exemption applies only while `must_change_password` is set;
 > once cleared, the minimum-age rule resumes for ordinary voluntary changes.
 
+### Breached-Password Rejection *(2026-08-17, opt-in)*
+
+Complexity rules say nothing about whether a password has already leaked.
+`Firetruck2024!` satisfies every rule above and appears in public breach
+corpora — which is exactly what credential stuffing tries first. The built-in
+common-password list covers a few dozen of the hundreds of millions that have
+leaked.
+
+When `BREACHED_PASSWORD_CHECK_ENABLED=true`, all five password-setting paths —
+registration, self-service change, reset-by-token, admin user creation and
+admin reset — additionally check the password against the Have I Been Pwned
+range API.
+
+**Privacy:** only the **first five hexadecimal characters** of the password's
+SHA-1 hash are transmitted. The provider returns every hash suffix sharing that
+prefix and the match is made in-process, so it never sees the password, its
+full hash, or which suffix was requested. No member identifier is sent. That
+SHA-1 is the corpus's lookup index, fixed by the provider's API — it is never
+stored and never compared against a stored credential; password storage remains
+bcrypt/Argon2.
+
+**Failure behaviour — fails open.** An unreachable or slow provider, an HTTP
+error, or an unparseable body all *accept* the password, and the degradation is
+logged. This check is supplementary; complexity rules, password history, MFA
+and lockout are unaffected by the outage, and a third-party failure must not
+stop a department setting passwords during an incident.
+
+**The rejection does not say how many times the password was seen.** A precise
+count is a free oracle over the breach corpus for anyone who can reach a
+password form, and it tells the member nothing actionable — they need a
+different password either way.
+
+See [Configuration → Security](Configuration-Security#breached-password-detection)
+for the settings.
+
+### Suspicious-IP Throttling *(2026-08-17, on by default)*
+
+The per-IP rate limit caps burst speed and the account lockout caps guesses
+against one user. Neither stops a **password spray**: one IP trying two
+passwords each against a thousand usernames stays under 5/minute and never
+reaches the 5-attempt lockout on any single account.
+
+Suspicious-IP throttling counts **failed** authentication attempts per IP
+across **all** accounts over a long window (default: 50 failures per hour) and
+blocks the IP for 15 minutes once the total crosses the threshold. It applies
+to `/auth/login`, `/auth/mfa/login`, and the pre-verification challenge
+rejections — those resolve no account, and would otherwise be the one unmetered
+door into the authentication surface.
+
+Two invariants that must survive any refactor:
+
+- A **fully** successful sign-in clears the IP's counter — never a correct
+  password alone. Otherwise an attacker holding one leaked password for an
+  MFA-protected account could zero the tally at will.
+- Clearing the counter **never lifts an active block**.
+
+The ledger is keyed on IP address only and holds no account or member data.
+Redis-backed and shared across workers, with a capped, evicted per-process
+fallback.
+
 ---
 
 ## OAuth

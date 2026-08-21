@@ -2,7 +2,7 @@
 
 **Script:** `backend/scripts/reencrypt_to_aesgcm.py`
 **Audience:** operator / DBA with shell access to the backend container
-**Estimated downtime:** none (the app reads both formats throughout)
+**Estimated downtime:** a write-maintenance window is required (reads may continue)
 **Reversible:** the data change is one-directional, but safe — see
 [Rollback & safety](#6-rollback--safety).
 
@@ -68,8 +68,9 @@ different effective key than what wrote the data will fail to decrypt it.
 - [ ] Confirm `ENCRYPTION_KEY` / `ENCRYPTION_SALT` in the target env match what
       encrypted the existing data (i.e., unchanged from before).
 - [ ] Take a **full database backup** and confirm it restores.
-- [ ] Pick a low-traffic window (not required for correctness, but keeps the
-      write volume predictable).
+- [ ] Stop application and worker writes to the covered fields for the entire
+      `--commit` run. This is required for correctness: the script updates from
+      values read earlier and could otherwise overwrite a concurrent change.
 - [ ] Run against **staging first**, verify, then production.
 
 ---
@@ -93,6 +94,9 @@ Run again with --commit to apply.
 If it reports `0`, everything is already AES-256-GCM — you're done.
 
 ### 4b. Apply
+
+Confirm that application and worker writes to every field in the
+[fields-covered table](#fields-covered) remain stopped, then run:
 
 ```bash
 docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py --commit

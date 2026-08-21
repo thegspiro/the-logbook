@@ -1264,14 +1264,29 @@ class Seeder:
         driver against.
         """
         levels = items(self.api.get("/apparatus/evoc-levels"), "levels")
+        # A new organization is seeded with four levels (EVOC1..EVOC4) by the
+        # product itself, so this step normally has nothing to do. Returning
+        # them is not merely an optimisation: the blueprint below would collide
+        # with what is already there, and `by_level` is keyed on level_number,
+        # so inventing a parallel set is wrong even where it succeeds.
+        if levels:
+            return levels
         codes = {level.get("code") for level in levels}
+        # The backend enforces uniqueness on level_number, not code, so guarding
+        # on code alone let a differently-coded level of the same number through
+        # to a 400 that failed the whole step -- which left `by_level` empty and
+        # no apparatus with a required EVOC level, so the driver-eligibility
+        # feature sat inert and 03-52 had nothing to photograph.
+        numbers = {
+            pick(level, "level_number", "levelNumber") for level in levels
+        }
         blueprint = [
             (1, "Basic", "EVOC-1", "Emergency vehicle operation, non-transport."),
             (2, "Intermediate", "EVOC-2", "Engine and rescue apparatus."),
             (3, "Advanced", "EVOC-3", "Aerial and tiller-equipped apparatus."),
         ]
         for number, name, code, description in blueprint:
-            if code in codes:
+            if code in codes or number in numbers:
                 continue
             levels.append(
                 self.api.post(
@@ -9036,9 +9051,24 @@ class Seeder:
         Submitted through the same public endpoint the request form uses; the
         admin tab otherwise renders "No event requests yet" under a caption
         describing a queue.
+
+        Public intake is opt-in as of 2026-08-17 (EV-5) and defaults to off, so
+        this turns it on first — exactly what an administrator does under
+        **Events -> Settings -> Request pipeline -> Accept Public Requests**.
+        Without it the post fails with a 404 that reads "Organization not
+        found", because a closed department is deliberately indistinguishable
+        from one that does not exist; that is correct behaviour and a very
+        confusing seeder failure, since the organization plainly does exist.
         """
         if items(self.api.get("/event-requests?limit=5"), "requests"):
             return
+        # Left on afterwards rather than restored: the demo department is
+        # meant to look like one that accepts outreach, and guide 04 pictures
+        # the setting itself.
+        self.api.patch(
+            "/events/settings",
+            {"request_pipeline": {"accept_public_requests": True}},
+        )
         org_id = pick(self.api.get("/auth/me"), "organization_id")
         self.api.post(
             f"/event-requests/public?organization_id={org_id}",

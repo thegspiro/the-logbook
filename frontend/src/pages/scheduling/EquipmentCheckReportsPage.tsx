@@ -71,13 +71,14 @@ const EquipmentCheckReportsPage: React.FC = () => {
         <SchedulingHeader backTo="/scheduling" description="Check reports · Review compliance and deficiencies" />
 
         {/* Tabs */}
-        <div className="card mb-5 flex gap-1 p-1">
+        <div className="segmented-group mb-5 flex gap-1">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'bg-violet-600 text-white'
@@ -85,7 +86,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
                 }`}
               >
                 <Icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sr-only sm:not-sr-only">{tab.label}</span>
               </button>
             );
           })}

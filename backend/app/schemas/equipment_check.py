@@ -6,7 +6,7 @@ and shift equipment check submissions.
 """
 
 from datetime import date, datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
@@ -37,6 +37,11 @@ CHECK_TYPES = frozenset(
         "header",
     }
 )
+
+# These are the only lifecycle phases understood by shift close-out and the
+# reminder jobs. Keeping request validation in step with those consumers also
+# prevents arbitrary strings from becoming permanently stored timing values.
+CheckTiming = Literal["start_of_shift", "end_of_shift"]
 
 
 def _validate_check_type(value: Optional[str]) -> Optional[str]:
@@ -231,7 +236,7 @@ class EquipmentCheckTemplateCreate(BaseModel):
     description: Optional[str] = None
     apparatus_id: Optional[str] = None
     apparatus_type: Optional[str] = Field(None, max_length=50)
-    check_timing: str = Field(..., max_length=30)
+    check_timing: CheckTiming
     template_type: str = Field(default="equipment", max_length=30)
     assigned_positions: Optional[List[str]] = None
     is_active: bool = True
@@ -246,7 +251,7 @@ class EquipmentCheckTemplateUpdate(BaseModel):
     description: Optional[str] = None
     apparatus_id: Optional[str] = None
     apparatus_type: Optional[str] = Field(None, max_length=50)
-    check_timing: Optional[str] = Field(None, max_length=30)
+    check_timing: Optional[CheckTiming] = None
     template_type: Optional[str] = Field(None, max_length=30)
     assigned_positions: Optional[List[str]] = None
     is_active: Optional[bool] = None
@@ -288,7 +293,9 @@ class CheckItemResultSubmit(BaseModel):
     """A single item result in a check submission."""
 
     template_item_id: str
-    compartment_name: str = Field(..., max_length=200)
+    # Nested containers are submitted as their full storage path. Each path
+    # segment may be 200 characters, so the combined snapshot is unbounded.
+    compartment_name: str
     item_name: str = Field(..., max_length=200)
     check_type: Optional[str] = Field(None, max_length=30)
     # "not_applicable" is a real answer, not a fault: a tool legitimately off
@@ -325,7 +332,6 @@ class ShiftEquipmentCheckCreate(BaseModel):
     """Schema for submitting an equipment check tied to a shift."""
 
     template_id: str
-    check_timing: str = Field(..., max_length=30)
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
@@ -336,7 +342,6 @@ class StandaloneEquipmentCheckCreate(BaseModel):
 
     template_id: str
     apparatus_id: Optional[str] = None
-    check_timing: str = Field(default="start_of_shift", max_length=30)
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None

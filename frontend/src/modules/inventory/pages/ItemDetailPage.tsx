@@ -35,6 +35,7 @@ import type {
   ItemHistoryEvent,
   MaintenanceRecord,
   NFPACompliance,
+  NFPACompliancePayload,
   NFPAExposureRecord,
   StorageAreaResponse,
   Location,
@@ -53,6 +54,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
+import { formCoercions } from '../../../utils/formValues';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -838,22 +840,28 @@ const NFPAComplianceModal: React.FC<NFPAComplianceModalProps> = ({ itemId, exist
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Coerce empty strings to undefined so optional fields are omitted (not
-      // sent as "" which the backend literal validators reject).
-      const payload: Partial<NFPACompliance> = {
-        manufacture_date: form.manufacture_date || undefined,
-        first_in_service_date: form.first_in_service_date || undefined,
-        expected_retirement_date: form.expected_retirement_date || undefined,
-        retirement_reason: form.retirement_reason.trim() || undefined,
-        ensemble_id: form.ensemble_id.trim() || undefined,
-        ensemble_role: form.ensemble_role || undefined,
-        cylinder_manufacture_date: form.cylinder_manufacture_date || undefined,
-        cylinder_expiration_date: form.cylinder_expiration_date || undefined,
-        hydrostatic_test_date: form.hydrostatic_test_date || undefined,
-        hydrostatic_test_due: form.hydrostatic_test_due || undefined,
-        flow_test_date: form.flow_test_date || undefined,
-        flow_test_due: form.flow_test_due || undefined,
-        contamination_level: form.contamination_level || undefined,
+      // On create a blank is omitted so `""` never reaches a Pydantic
+      // validator. On edit it goes as an explicit null: the PATCH dumps with
+      // `exclude_unset`, so an omitted key means "leave this alone", and a
+      // wrong hydrostatic test date or contamination level survived being
+      // cleared, behind a toast saying the record had been updated. These are
+      // the dates an SCBA cylinder is taken out of service on.
+      const { text, pick } = formCoercions(Boolean(existing));
+
+      const payload: NFPACompliancePayload = {
+        manufacture_date: pick(form.manufacture_date),
+        first_in_service_date: pick(form.first_in_service_date),
+        expected_retirement_date: pick(form.expected_retirement_date),
+        retirement_reason: text(form.retirement_reason),
+        ensemble_id: text(form.ensemble_id),
+        ensemble_role: pick(form.ensemble_role),
+        cylinder_manufacture_date: pick(form.cylinder_manufacture_date),
+        cylinder_expiration_date: pick(form.cylinder_expiration_date),
+        hydrostatic_test_date: pick(form.hydrostatic_test_date),
+        hydrostatic_test_due: pick(form.hydrostatic_test_due),
+        flow_test_date: pick(form.flow_test_date),
+        flow_test_due: pick(form.flow_test_due),
+        contamination_level: pick(form.contamination_level),
       };
       if (existing) {
         await inventoryService.updateNFPACompliance(itemId, { ...payload, is_retired_by_age: isRetiredByAge });
