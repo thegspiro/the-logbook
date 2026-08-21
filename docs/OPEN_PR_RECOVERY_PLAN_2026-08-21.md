@@ -143,6 +143,10 @@ the intentional rejection rollback; the tests now reload the persisted swap
 before asserting its unchanged state. Newly opened #1659 was also merged with
 the same `fe7cdf9c` base and pushed without conflicts.
 
+#1655's next full frontend run found three hand-built builder dialogs outside
+the mobile height contract. Each panel now uses `modal-panel-scroll`, and the
+source-wide dialog integrity test passes with no offenders.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
