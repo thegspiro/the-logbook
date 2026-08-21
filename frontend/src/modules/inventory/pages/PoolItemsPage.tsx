@@ -108,7 +108,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-theme-text-primary truncate font-semibold">{getDisplayName(item)}</h3>
+          <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{getDisplayName(item)}</h3>
           <p className="text-theme-text-muted text-xs">{categoryName}</p>
         </div>
         {onHand <= 0 && (

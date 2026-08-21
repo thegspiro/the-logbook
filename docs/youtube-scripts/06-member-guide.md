@@ -123,14 +123,14 @@ Administrative]**
 > about on your phone: it's your department ID with a scannable code, and it
 > works without signal once the app's installed."
 
-**[SCREEN: Scroll to My Training Progress, then My Equipment]**
+**[SCREEN: Scroll to My Training Progress, then My Issued Gear]**
 
 > "If you're enrolled in a training pipeline — a recruit school, an officer
 > track — **My Training Progress** shows where you are in it and what's next.
 > **This panel only appears if you're enrolled in something**, so don't worry if
 > you don't have it."
 
-> "And **My Equipment** is everything the department has issued you. We'll come
+> "And **My Issued Gear** is everything the department has issued you. We'll come
 > back to that one."
 
 **[CALLOUT: "Your dashboard = your personal fire department briefing"]**
@@ -410,9 +410,9 @@ Copy button, and Reset link]**
 
 ### MY EQUIPMENT (15:00 – 15:30)
 
-**[SCREEN: Navigate to My Equipment (MyEquipmentPage)]**
+**[SCREEN: Navigate to My Issued Gear (MyEquipmentPage)]**
 
-> "While we're talking about your assignments, the My Equipment page shows any
+> "While we're talking about your assignments, the My Issued Gear page shows any
 > gear assigned to you — radios, pagers, turnout gear, specialized equipment.
 > If your department tracks equipment assignments, you can see exactly what's
 > checked out to you."

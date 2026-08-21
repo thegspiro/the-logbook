@@ -395,7 +395,19 @@ class EmailService:
         # "{{organization_phone}} | {{organization_email}}" — and this path is
         # the *normal* one until somebody opens the Email Templates screen,
         # since that screen is what creates the rows.
-        context = EmailTemplateService.build_context(context, self.organization)
+        default_definition = next(
+            (
+                definition
+                for definition in EmailTemplateService._DEFAULT_TEMPLATE_DEFS
+                if definition["type"] == template_type
+            ),
+            {},
+        )
+        context = EmailTemplateService.build_context(
+            context,
+            self.organization,
+            footer_key=default_definition.get("footer"),
+        )
 
         def _replace(text: str, escape: bool = True) -> str:
             def replacer(match: re.Match) -> str:

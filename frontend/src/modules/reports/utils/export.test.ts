@@ -45,7 +45,9 @@ describe('generateCsv', () => {
   it('handles array values by joining with semicolons', () => {
     const rows = [{ roles: ['admin', 'member'] }];
     const csv = generateCsv(rows);
-    expect(csv).toContain('"admin; member"');
+    // Semicolon-joined, so there is nothing for quotes to disambiguate; cells
+    // are quoted only where RFC 4180 requires it.
+    expect(csv).toContain('admin; member');
   });
 });
 

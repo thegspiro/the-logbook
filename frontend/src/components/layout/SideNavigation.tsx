@@ -549,6 +549,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     }
   };
 
+  const activeDestination = navItems
+    .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
+    .filter((item) => isActive(item.path))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+
   return (
     <>
       {/* Mobile Header */}
@@ -659,6 +664,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             className="-webkit-overflow-scrolling-touch flex-1 space-y-1 overflow-y-auto overscroll-contain p-4"
             aria-label="Side navigation"
           >
+            {mobileMenuOpen && activeDestination && (
+              <div className="bg-theme-surface-hover text-theme-text-primary mb-3 rounded-lg px-4 py-3 md:hidden">
+                <span className="text-theme-text-muted block text-[10px] font-bold tracking-widest uppercase">
+                  Current
+                </span>
+                <span className="text-sm font-semibold">{activeDestination.label}</span>
+              </div>
+            )}
             <ul role="list" className="space-y-1">
               {navItems.map((item, idx) => {
                 // Render section label dividers

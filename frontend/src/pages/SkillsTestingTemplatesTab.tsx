@@ -316,6 +316,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           >
             <BookOpen className="h-4 w-4" />
             <span className="hidden sm:inline">Add from library</span>
+            <span className="sm:hidden">Library</span>
           </button>
           <button
             onClick={() => void navigate('/training/skills-testing/templates/new')}
@@ -323,6 +324,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Template</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
       </div>

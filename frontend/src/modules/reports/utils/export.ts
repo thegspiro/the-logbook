@@ -5,6 +5,7 @@
  */
 
 import { toLocalISODate, formatDate as fmtDate, formatTime as fmtTime } from '../../../utils/dateFormatting';
+import { escapeCsvCell } from '@/utils/csv';
 
 /** Escape HTML special characters to prevent XSS in generated HTML. */
 const escapeHtml = (s: string): string =>
@@ -22,20 +23,20 @@ export const toStr = (v: unknown, fallback = ''): string => {
   }
 };
 
-/** Safely convert any value to a string for CSV output. */
+/**
+ * Safely convert any value to a string for CSV output.
+ *
+ * Everything routes through `escapeCsvCell`, which also neutralizes the cell
+ * against spreadsheet formula execution — quoting alone does not, since the
+ * quotes are stripped on open and an `=`-leading cell still runs.
+ */
 const toCsvValue = (v: unknown): string => {
   if (v === null || v === undefined) return '';
-  if (typeof v === 'string') {
-    // Escape double-quotes and wrap in quotes if it contains commas, newlines, or quotes
-    if (v.includes(',') || v.includes('\n') || v.includes('"')) {
-      return `"${v.replace(/"/g, '""')}"`;
-    }
-    return v;
-  }
+  if (typeof v === 'string') return escapeCsvCell(v);
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  if (Array.isArray(v)) return `"${v.join('; ')}"`;
+  if (Array.isArray(v)) return escapeCsvCell(v.join('; '));
   try {
-    return `"${JSON.stringify(v).replace(/"/g, '""')}"`;
+    return escapeCsvCell(JSON.stringify(v));
   } catch {
     return '';
   }

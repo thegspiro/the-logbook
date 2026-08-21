@@ -76,7 +76,7 @@ Each module may have its own settings page accessible after enabling:
 | Training | Training Admin > Settings |
 | Scheduling | Scheduling > Settings tab |
 | Events | Events Admin > Settings |
-| Inventory | Inventory Admin > Settings |
+| Inventory | Gear Admin > Settings |
 | Facilities | Facilities > Settings |
 | Admin Hours | Admin Hours > Manage (categories, approval settings) |
 

@@ -877,13 +877,13 @@ export interface StorageAreaResponse {
 
 export interface StorageAreaCreate {
   name: string;
-  label?: string | undefined;
-  description?: string | undefined;
+  label?: string | null | undefined;
+  description?: string | null | undefined;
   storage_type: string;
-  parent_id?: string | undefined;
-  location_id?: string | undefined;
-  barcode?: string | undefined;
-  sort_order?: number | undefined;
+  parent_id?: string | null | undefined;
+  location_id?: string | null | undefined;
+  barcode?: string | null | undefined;
+  sort_order?: number | null | undefined;
 }
 
 export interface EquipmentRequestItem {
@@ -931,40 +931,40 @@ export interface WriteOffRequestItem {
 }
 
 export interface InventoryItemCreate {
-  category_id?: string | undefined;
+  category_id?: string | null | undefined;
   name: string;
-  description?: string | undefined;
-  manufacturer?: string | undefined;
-  model_number?: string | undefined;
-  serial_number?: string | undefined;
-  asset_tag?: string | undefined;
-  barcode?: string | undefined;
-  purchase_date?: string | undefined;
-  purchase_price?: number | undefined;
-  purchase_order?: string | undefined;
+  description?: string | null | undefined;
+  manufacturer?: string | null | undefined;
+  model_number?: string | null | undefined;
+  serial_number?: string | null | undefined;
+  asset_tag?: string | null | undefined;
+  barcode?: string | null | undefined;
+  purchase_date?: string | null | undefined;
+  purchase_price?: number | null | undefined;
+  purchase_order?: string | null | undefined;
   vendor?: string | null | undefined;
   vendor_id?: string | null | undefined;
-  warranty_expiration?: string | undefined;
-  expected_lifetime_years?: number | undefined;
-  current_value?: number | undefined;
-  replacement_cost?: number | undefined;
-  size?: string | undefined;
-  color?: string | undefined;
-  weight?: number | undefined;
-  location_id?: string | undefined;
-  storage_location?: string | undefined;
-  storage_area_id?: string | undefined;
-  station?: string | undefined;
+  warranty_expiration?: string | null | undefined;
+  expected_lifetime_years?: number | null | undefined;
+  current_value?: number | null | undefined;
+  replacement_cost?: number | null | undefined;
+  size?: string | null | undefined;
+  color?: string | null | undefined;
+  weight?: number | null | undefined;
+  location_id?: string | null | undefined;
+  storage_location?: string | null | undefined;
+  storage_area_id?: string | null | undefined;
+  station?: string | null | undefined;
   condition?: string | undefined;
   status?: string | undefined;
   tracking_type?: string | undefined;
   quantity?: number | undefined;
-  unit_of_measure?: string | undefined;
-  reorder_point?: number | undefined;
-  inspection_interval_days?: number | undefined;
+  unit_of_measure?: string | null | undefined;
+  reorder_point?: number | null | undefined;
+  inspection_interval_days?: number | null | undefined;
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;
-  notes?: string | undefined;
+  notes?: string | null | undefined;
   standard_size?: string | undefined;
   style?: string | undefined;
   variant_group_id?: string | undefined;
@@ -987,11 +987,11 @@ export interface ItemVariantGroup {
 
 export interface ItemVariantGroupCreate {
   name: string;
-  description?: string | undefined;
-  category_id?: string | undefined;
-  base_price?: number | undefined;
-  base_replacement_cost?: number | undefined;
-  unit_of_measure?: string | undefined;
+  description?: string | null | undefined;
+  category_id?: string | null | undefined;
+  base_price?: number | null | undefined;
+  base_replacement_cost?: number | null | undefined;
+  unit_of_measure?: string | null | undefined;
 }
 
 export interface EquipmentKit {
@@ -1024,7 +1024,7 @@ export interface EquipmentKitItem {
 
 export interface EquipmentKitCreate {
   name: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   restricted_to_roles?: string[] | undefined;
   min_rank_order?: number | undefined;
   line_items: Array<{
@@ -1214,12 +1214,12 @@ export interface LocationInventorySummary {
 
 export interface InventoryCategoryCreate {
   name: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   item_type: string;
   requires_assignment?: boolean | undefined;
   requires_serial_number?: boolean | undefined;
   requires_maintenance?: boolean | undefined;
-  low_stock_threshold?: number | undefined;
+  low_stock_threshold?: number | null | undefined;
   nfpa_tracking_enabled?: boolean | undefined;
 }
 
@@ -1434,13 +1434,13 @@ export interface ReorderRequestUpdate {
   vendor?: string | null | undefined;
   vendor_contact?: string | null | undefined;
   vendor_id?: string | null | undefined;
-  estimated_unit_cost?: number | undefined;
+  estimated_unit_cost?: number | null | undefined;
   actual_unit_cost?: number | undefined;
   purchase_order_number?: string | undefined;
-  expected_delivery_date?: string | undefined;
+  expected_delivery_date?: string | null | undefined;
   status?: string | undefined;
   urgency?: string | undefined;
-  notes?: string | undefined;
+  notes?: string | null | undefined;
 }
 
 // Scan / Quick-Action Types
@@ -1723,6 +1723,32 @@ export interface NFPACompliance {
   contamination_level?: string | undefined;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * The write side of an NFPA compliance record.
+ *
+ * Separate from `NFPACompliance` rather than `Partial<>` of it, because a
+ * request body and a response body want different things from a missing value:
+ * the PATCH dumps with `exclude_unset`, so an omitted key means "leave this
+ * alone" and an explicit `null` is the only way to clear a date. Reusing the
+ * response type made `null` untypeable and the clear silently lossy.
+ */
+export interface NFPACompliancePayload {
+  manufacture_date?: string | null | undefined;
+  first_in_service_date?: string | null | undefined;
+  expected_retirement_date?: string | null | undefined;
+  retirement_reason?: string | null | undefined;
+  is_retired_by_age?: boolean | undefined;
+  ensemble_id?: string | null | undefined;
+  ensemble_role?: string | null | undefined;
+  cylinder_manufacture_date?: string | null | undefined;
+  cylinder_expiration_date?: string | null | undefined;
+  hydrostatic_test_date?: string | null | undefined;
+  hydrostatic_test_due?: string | null | undefined;
+  flow_test_date?: string | null | undefined;
+  flow_test_due?: string | null | undefined;
+  contamination_level?: string | null | undefined;
 }
 
 export interface NFPAExposureRecord {

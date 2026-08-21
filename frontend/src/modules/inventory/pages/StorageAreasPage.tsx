@@ -28,6 +28,7 @@ import { STORAGE_TYPES, getStatusStyle, getStatusLabel, getConditionColor } from
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
+import { formCoercions } from '../../../utils/formValues';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -474,15 +475,21 @@ const StorageAreasPage: React.FC = () => {
     }
     setIsSaving(true);
     try {
+      // Create and edit want opposite things from a blank box. On create a blank
+      // is omitted so `""` never reaches a Pydantic validator; on edit it goes
+      // as an explicit null, because the backend dumps update payloads with
+      // `exclude_unset` and an omitted key means "leave this alone" — the clear
+      // was being lost behind a success toast (CLAUDE.md pitfall #1).
+      const { text, pick, num } = formCoercions(Boolean(editingArea));
       const sortNum = parseInt(formData.sort_order, 10);
       const payload: StorageAreaCreate = {
         name: formData.name.trim(),
-        label: formData.label.trim() || undefined,
-        description: formData.description.trim() || undefined,
+        label: text(formData.label),
+        description: text(formData.description),
         storage_type: formData.storage_type,
-        parent_id: formData.parent_id || undefined,
-        location_id: formData.location_id || undefined,
-        sort_order: isNaN(sortNum) ? undefined : sortNum,
+        parent_id: pick(formData.parent_id),
+        location_id: pick(formData.location_id),
+        sort_order: isNaN(sortNum) ? num('') : sortNum,
       };
       if (editingArea) {
         await inventoryService.updateStorageArea(editingArea.id, payload);

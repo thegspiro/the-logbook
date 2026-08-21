@@ -119,7 +119,9 @@ describe('ImportMembers', () => {
 
   it('includes every column the create-member API accepts', async () => {
     const template = await captureTemplate();
-    const headers = (template.split('\n')[0] ?? '').split(',');
+    // Split on either ending: the template is written with RFC 4180 CRLF, the
+    // same as the error report, and this assertion is about the columns.
+    const headers = (template.split(/\r?\n/)[0] ?? '').split(',');
 
     expect(headers).toEqual([
       'firstName',

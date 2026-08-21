@@ -62,6 +62,13 @@ describe('MyProgramProgressPage', () => {
           progress_percentage: 50,
           requirement: { id: 'req-2', name: 'Ladder Ops', requirement_type: 'hours', required_hours: 24 },
         },
+        {
+          id: 'rp-3',
+          requirement_id: 'req-3',
+          status: 'waived',
+          progress_percentage: 100,
+          requirement: { id: 'req-3', name: 'Online Coursework', requirement_type: 'courses' },
+        },
       ],
       completed_requirements: 1,
       total_requirements: 2,
@@ -134,13 +141,15 @@ describe('MyProgramProgressPage', () => {
     expect(await screen.findByText(/12 \/ 24 hrs/)).toBeInTheDocument();
   });
 
-  it('shows an action hint on an incomplete requirement but not a completed one', async () => {
+  it('shows an action hint only on requirements that are not satisfied', async () => {
     renderWithRouter(<MyProgramProgressPage />);
 
     // The in-progress hours requirement (Ladder Ops) tells the student what to do.
     expect(await screen.findByText(/Attend training sessions to log hours/)).toBeInTheDocument();
     // The completed requirement (Hose Ops) has no action hint.
     expect(screen.queryByText(/Get signed off/)).not.toBeInTheDocument();
+    // A waived requirement is also satisfied and must not tell the student to act.
+    expect(screen.queryByText(/Finish the assigned coursework/)).not.toBeInTheDocument();
   });
 
   it('lets a member leave the program after confirming', async () => {

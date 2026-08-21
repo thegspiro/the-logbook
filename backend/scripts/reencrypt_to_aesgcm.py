@@ -32,6 +32,9 @@ Safety
 ------
 - Idempotent: values already in `$gcm1$` form are skipped.
 - Dry-run by DEFAULT — pass --commit to persist.
+- The commit run requires application and worker writes to the covered fields
+  to be stopped. Updates are computed from previously read values, so concurrent
+  writes could otherwise be overwritten. Reads may continue.
 - **Untested against a live database in the authoring environment.** Take a DB
   backup and run against staging first, then production. Values are only ever
   rewritten to a form that `decrypt_data` can read, so a partial run is safe to
@@ -103,9 +106,7 @@ async def _migrate_plain(db, commit: bool) -> tuple[int, int]:
     scanned = migrated = 0
     for table, pk, columns in _PLAIN_COLUMNS:
         col_list = ", ".join(columns)
-        rows = (
-            await db.execute(text(f"SELECT {pk}, {col_list} FROM {table}"))
-        ).all()
+        rows = (await db.execute(text(f"SELECT {pk}, {col_list} FROM {table}"))).all()
         for row in rows:
             row_id = row[0]
             updates = {}
@@ -141,9 +142,7 @@ async def _migrate_mfa_backup_codes(db, commit: bool) -> tuple[int, int]:
         if not isinstance(codes, list):
             continue
         scanned += len(codes)
-        new_codes = [
-            _reencrypt(c) if _needs_migration(c) else c for c in codes
-        ]
+        new_codes = [_reencrypt(c) if _needs_migration(c) else c for c in codes]
         if new_codes != codes:
             changed = sum(1 for a, b in zip(codes, new_codes) if a != b)
             migrated += changed
@@ -167,9 +166,9 @@ def _reencrypt_enc_fields(node) -> int:
             if (
                 isinstance(val, str)
                 and val.startswith(_ENC_PREFIX)
-                and _needs_migration(val[len(_ENC_PREFIX):])
+                and _needs_migration(val[len(_ENC_PREFIX) :])
             ):
-                node[key] = _ENC_PREFIX + _reencrypt(val[len(_ENC_PREFIX):])
+                node[key] = _ENC_PREFIX + _reencrypt(val[len(_ENC_PREFIX) :])
                 count += 1
             else:
                 count += _reencrypt_enc_fields(val)
@@ -187,7 +186,9 @@ async def _migrate_org_settings(db, commit: bool) -> tuple[int, int]:
     ).all()
     migrated = 0
     for row_id, raw_json in rows:
-        settings = raw_json if isinstance(raw_json, dict) else json.loads(raw_json or "{}")
+        settings = (
+            raw_json if isinstance(raw_json, dict) else json.loads(raw_json or "{}")
+        )
         changed = _reencrypt_enc_fields(settings)
         if changed:
             migrated += changed
