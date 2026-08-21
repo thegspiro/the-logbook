@@ -55,7 +55,7 @@ def test_monthly_only_annotates():
     assert "filter" not in monthly_branch.split("elapsed_ms")[0].lower()
 
 
-def test_report_type_is_still_constrained_to_the_known_pair():
+def test_report_type_is_still_constrained_to_the_known_values():
     """The CS-9 guard stays: this is persisted and interpolated into email."""
     source = _source()
-    assert 'if report_type not in ("monthly", "annual"):' in source
+    assert 'if report_type not in ("monthly", "annual", "yearly"):' in source
