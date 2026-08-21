@@ -71,13 +71,16 @@ export const Modal: React.FC<ModalProps> = ({
           </button>
         )}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6" data-testid="modal-content">
+      <div
+        className="modal-content min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+        data-testid="modal-content"
+      >
         {children}
       </div>
       {footer && (
         <div
           data-testid="modal-footer"
-          className="modal-footer-sticky flex shrink-0 flex-col-reverse gap-2 px-4 sm:flex-row-reverse sm:gap-3 sm:px-6"
+          className="modal-footer modal-footer-sticky flex shrink-0 flex-col-reverse gap-2 px-4 sm:flex-row-reverse sm:gap-3 sm:px-6"
         >
           {footer}
         </div>
