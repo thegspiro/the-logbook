@@ -5,7 +5,7 @@
  * upcoming inspections), an action-items list, and a quick-access facility grid.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Building2,
@@ -32,6 +32,7 @@ import { facilitiesService } from '../../../services/api';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 
 const PREVIEW_ITEM_COUNT = 5;
+const FACILITIES_PAGE_SIZE = 24;
 
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
@@ -39,6 +40,7 @@ export default function FacilitiesDashboard() {
   const { canCreate } = useFacilitiesAccess();
   const {
     facilities,
+    facilitiesTotal,
     facilityTypes,
     facilityStatuses,
     dashboardStats,
@@ -50,10 +52,10 @@ export default function FacilitiesDashboard() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Facility[] | null>(null);
-
-  const facilityMap = useMemo(() => new Map(facilities.map((f) => [f.id, f.name])), [facilities]);
-  const getFacilityName = (id: string) => facilityMap.get(id) || 'Unknown';
+  const [gridPage, setGridPage] = useState(0);
+  const [gridResults, setGridResults] = useState<Facility[] | null>(null);
+  const [gridTotal, setGridTotal] = useState(0);
+  const [isGridLoading, setIsGridLoading] = useState(false);
 
   useEffect(() => {
     void loadDashboardStats();
@@ -66,20 +68,33 @@ export default function FacilitiesDashboard() {
 
   useEffect(() => {
     const query = searchQuery.trim();
-    if (!query) {
-      setSearchResults(null);
+    if (!query && gridPage === 0) {
+      setGridResults(null);
+      setGridTotal(0);
+      setIsGridLoading(false);
       return;
     }
     let active = true;
+    setIsGridLoading(true);
     const timeout = window.setTimeout(() => {
       void facilitiesService
-        .getFacilities({ is_archived: false, search: query, limit: 100 })
-        .then((results) => active && setSearchResults(results))
+        .getFacilitiesPage({
+          is_archived: false,
+          ...(query ? { search: query } : {}),
+          skip: gridPage * FACILITIES_PAGE_SIZE,
+          limit: FACILITIES_PAGE_SIZE,
+        })
+        .then((result) => {
+          if (!active) return;
+          setGridResults(result.items);
+          setGridTotal(result.total);
+          setIsGridLoading(false);
+        })
         .catch(() => {
           if (!active) return;
-          // Drop the previous query's results — leaving them rendered under
-          // the new query text presents stale matches as current ones.
-          setSearchResults(null);
+          setGridResults([]);
+          setGridTotal(0);
+          setIsGridLoading(false);
           toast.error('Failed to search facilities');
         });
     }, 250);
@@ -87,13 +102,16 @@ export default function FacilitiesDashboard() {
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [searchQuery]);
+  }, [gridPage, searchQuery]);
 
   const handleFacilityClick = (facility: Facility) => {
     void navigate(`/facilities/${facility.id}`);
   };
 
   const stats = dashboardStats;
+  const displayedFacilities = gridResults ?? facilities;
+  const displayedTotal = gridResults === null ? facilitiesTotal : gridTotal;
+  const totalPages = Math.max(1, Math.ceil(displayedTotal / FACILITIES_PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -106,13 +124,15 @@ export default function FacilitiesDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {facilities.length > 0 && (
+          {displayedFacilities.length > 0 && (
             <button
-              onClick={() => void navigate(`/facilities/print-labels?ids=${facilities.map((f) => f.id).join(',')}`)}
+              onClick={() =>
+                void navigate(`/facilities/print-labels?ids=${displayedFacilities.map((f) => f.id).join(',')}`)
+              }
               className="btn-secondary flex items-center gap-2 text-sm"
             >
               <Printer className="h-4 w-4" />
-              Print Labels
+              Print Page Labels
             </button>
           )}
           {canCreate && (
@@ -194,7 +214,7 @@ export default function FacilitiesDashboard() {
                 ) : (
                   <div className="space-y-2">
                     {stats.overdueMaintenanceRecords.slice(0, PREVIEW_ITEM_COUNT).map((record) => {
-                      const facilityName = getFacilityName(record.facilityId);
+                      const facilityName = record.facilityName;
                       return (
                         <div
                           key={record.id}
@@ -243,7 +263,7 @@ export default function FacilitiesDashboard() {
                 ) : (
                   <div className="space-y-2">
                     {stats.upcomingInspections.slice(0, PREVIEW_ITEM_COUNT).map((insp) => {
-                      const facilityName = getFacilityName(insp.facilityId);
+                      const facilityName = insp.facilityName;
                       return (
                         <div
                           key={insp.id}
@@ -268,16 +288,16 @@ export default function FacilitiesDashboard() {
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent maintenance completions */}
           {stats?.recentActivity && stats.recentActivity.length > 0 && (
             <div className="card">
               <div className="border-theme-surface-border flex items-center gap-2 border-b p-4">
                 <Activity className="text-theme-text-muted h-4 w-4" />
-                <h2 className="text-theme-text-primary text-sm font-semibold">Recent Activity</h2>
+                <h2 className="text-theme-text-primary text-sm font-semibold">Recent Maintenance Completions</h2>
               </div>
               <div className="divide-theme-surface-border divide-y">
                 {stats.recentActivity.map((record) => {
-                  const facilityName = getFacilityName(record.facilityId);
+                  const facilityName = record.facilityName;
                   return (
                     <div key={record.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
@@ -308,7 +328,10 @@ export default function FacilitiesDashboard() {
                 <input
                   type="search"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setGridPage(0);
+                  }}
                   placeholder="Search name, number, or city"
                   aria-label="Search facilities"
                   className="form-input pl-10"
@@ -316,7 +339,11 @@ export default function FacilitiesDashboard() {
               </div>
             </div>
 
-            {(searchResults ?? facilities).length === 0 ? (
+            {isGridLoading ? (
+              <div className="flex justify-center py-12" role="status" aria-label="Loading facilities">
+                <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+              </div>
+            ) : displayedFacilities.length === 0 ? (
               <div className="card px-4 py-12 text-center">
                 <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-muted mb-4">
@@ -327,10 +354,33 @@ export default function FacilitiesDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {(searchResults ?? facilities).map((facility) => (
+                {displayedFacilities.map((facility) => (
                   <FacilityCard key={facility.id} facility={facility} onClick={handleFacilityClick} />
                 ))}
               </div>
+            )}
+            {displayedTotal > FACILITIES_PAGE_SIZE && (
+              <nav className="mt-4 flex items-center justify-between" aria-label="Facilities pagination">
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  disabled={gridPage === 0 || isGridLoading}
+                  onClick={() => setGridPage((page) => Math.max(0, page - 1))}
+                >
+                  Previous
+                </button>
+                <span className="text-theme-text-muted text-sm">
+                  Page {gridPage + 1} of {totalPages} · {displayedTotal} facilities
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  disabled={gridPage + 1 >= totalPages || isGridLoading}
+                  onClick={() => setGridPage((page) => page + 1)}
+                >
+                  Next
+                </button>
+              </nav>
             )}
           </div>
         </>

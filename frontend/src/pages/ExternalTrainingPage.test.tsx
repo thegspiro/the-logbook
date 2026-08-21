@@ -104,9 +104,26 @@ describe('ExternalTrainingPage — category mappings', () => {
 
     await waitFor(() =>
       expect(mockUpdateCategoryMapping).toHaveBeenCalledWith('prov-1', 'map-1', {
-        internal_category_id: '',
+        internal_category_id: null,
         is_mapped: false,
       })
     );
+  });
+});
+
+describe('ExternalTrainingPage — modal behavior', () => {
+  it('only activates dialog behavior when a modal is open', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+
+    await screen.findByRole('button', { name: /^Mappings$/ });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    const addProvider = screen.getByRole('button', { name: /add provider/i });
+    await userEvent.click(addProvider);
+
+    expect(await screen.findByRole('dialog', { name: 'Select Provider Type' })).toBeInTheDocument();
+    await waitFor(() => expect(addProvider).not.toHaveFocus());
+    expect(document.body.style.overflow).toBe('hidden');
   });
 });

@@ -127,6 +127,18 @@ def upgrade() -> None:
             "documents", sa.Column("source_type", sa.String(50), nullable=True)
         )
         op.add_column("documents", sa.Column("source_id", sa.String(36), nullable=True))
+        op.alter_column(
+            "documents",
+            "file_name",
+            existing_type=sa.String(255),
+            nullable=True,
+        )
+        op.alter_column(
+            "documents",
+            "file_path",
+            existing_type=sa.String(500),
+            nullable=True,
+        )
         op.create_index(
             "ix_documents_source", "documents", ["source_type", "source_id"]
         )

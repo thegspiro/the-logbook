@@ -865,6 +865,15 @@ class ShiftSwapRequestResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class ShiftSwapRequestsPage(BaseModel):
+    """Paginated shift swap request response."""
+
+    items: List[ShiftSwapRequestResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 # ============================================
 # Shift Time Off Schemas
 # ============================================
@@ -909,6 +918,15 @@ class ShiftTimeOffResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+class ShiftTimeOffRequestsPage(BaseModel):
+    """Paginated time-off request response."""
+
+    items: List[ShiftTimeOffResponse]
+    total: int
+    skip: int
+    limit: int
 
 
 # ============================================

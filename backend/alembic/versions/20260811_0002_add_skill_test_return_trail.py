@@ -30,6 +30,24 @@ depends_on = None
 def upgrade() -> None:
     inspector = sa.inspect(op.get_bind())
 
+    # This revision used to share 20260811_0001 with the skill-test migration.
+    # A database that applied that old revision is considered past the new
+    # equipment-kit migration, even though it does not have this column. Repair
+    # that ambiguous upgrade path here, while remaining safe for databases that
+    # applied the current 20260811_0001 migration.
+    if inspector.has_table("equipment_kit_items"):
+        kit_columns = {c["name"] for c in inspector.get_columns("equipment_kit_items")}
+        if "optional" not in kit_columns:
+            op.add_column(
+                "equipment_kit_items",
+                sa.Column(
+                    "optional",
+                    sa.Boolean(),
+                    nullable=False,
+                    server_default=sa.text("0"),
+                ),
+            )
+
     # skill_tests is a model-only table — nothing in the migration chain creates
     # it, and create_all() materializes it with these columns already present.
     # On a fresh chain run (CI) there is nothing to alter. Same guard as

@@ -919,11 +919,6 @@ class Seeder:
                     "phone": f"(703) 555-{2000 + index:04d}",
                     "mobile": f"(703) 555-{3000 + index:04d}",
                     "rank": rank,
-                    "membership_type": (
-                        "administrative"
-                        if username in ADMINISTRATIVE_USERNAMES
-                        else "active"
-                    ),
                     "hire_date": str(TODAY - timedelta(days=365 * (2 + index % 12))),
                     "address_street": f"{100 + index * 7} Sycamore Lane",
                     "address_city": "Oakville",
@@ -944,6 +939,18 @@ class Seeder:
                     "password": DEMO_MEMBER_PASSWORD,
                 },
             )
+            if username in ADMINISTRATIVE_USERNAMES and pick(record, "id"):
+                try:
+                    self.api.patch(
+                        f"/users/{pick(record, 'id')}/membership-type",
+                        {
+                            "membership_type": "administrative",
+                            "reason": "Moved to non-operational support role.",
+                        },
+                    )
+                    record["membership_type"] = "administrative"
+                except ApiError as exc:
+                    self.blocked.append(f"membership type: {exc}")
             created.append(record)
         self._fill_in_the_administrator(created)
         self._enable_two_factor_for_one_member(created)
@@ -6547,7 +6554,7 @@ class Seeder:
                         # being asked of them, and "2 items" pictures the
                         # feature without demonstrating it.
                         requirement["checklist_items"] = CHECKLIST_ITEMS.get(
-                            name,
+                            req_name,
                             [
                                 "Reviewed with company officer",
                                 "Signed off in station logbook",
@@ -8496,7 +8503,10 @@ class Seeder:
         if not published or not candidate or not examiner:
             return None
 
-        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        existing = items(
+            self.api.get("/training/skills-testing/tests?include_practice=true"),
+            "tests",
+        )
         candidate_id = pick(candidate, "id")
         mine = [t for t in existing if pick(t, "candidate_id") == candidate_id]
         # Idempotent on the two states, not on a count: a re-run must not keep

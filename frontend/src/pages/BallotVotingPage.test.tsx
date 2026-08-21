@@ -97,6 +97,27 @@ describe('BallotVotingPage', () => {
   });
 
   describe('approval multi-select (R-D5)', () => {
+    it('keeps the confirmation open when Escape is pressed during submission', async () => {
+      setUrl('/ballot#token=tok');
+      mockLookupBallot.mockResolvedValueOnce({
+        election: baseElection({ voting_method: 'approval' }),
+        candidates: CANDIDATES,
+      });
+      mockSubmitBallot.mockReturnValueOnce(new Promise(() => undefined));
+
+      const user = userEvent.setup();
+      render(<BallotVotingPage />);
+
+      await user.click(await screen.findByRole('checkbox', { name: /Alice Anderson/ }));
+      await user.click(screen.getByRole('button', { name: 'Submit Ballot' }));
+      await user.click(screen.getByRole('button', { name: 'Cast Ballot' }));
+
+      expect(screen.getByRole('button', { name: 'Submitting...' })).toBeDisabled();
+      await user.keyboard('{Escape}');
+
+      expect(screen.getByRole('heading', { name: 'Confirm Your Ballot' })).toBeInTheDocument();
+    });
+
     it('renders checkboxes and submits candidate_ids', async () => {
       setUrl('/ballot#token=tok');
       mockLookupBallot.mockResolvedValueOnce({
