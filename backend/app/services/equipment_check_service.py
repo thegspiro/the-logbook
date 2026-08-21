@@ -1028,12 +1028,6 @@ class EquipmentCheckService:
             )
             if selected_template is None:
                 raise ValueError("Template is not applicable to this shift")
-            requested_timing = data.get("check_timing")
-            if (
-                requested_timing is not None
-                and requested_timing != selected_template.check_timing
-            ):
-                raise ValueError("check_timing does not match the selected template")
 
         # Prevent duplicate submission for same shift+template
         if template_id:
@@ -1206,10 +1200,6 @@ class EquipmentCheckService:
         # editing views, but must not create new operational check records.
         if not template or not template.is_active:
             raise ValueError("Template not found")
-
-        requested_timing = data.get("check_timing")
-        if requested_timing is not None and requested_timing != template.check_timing:
-            raise ValueError("check_timing does not match the selected template")
 
         apparatus_id = data.get("apparatus_id") or template.apparatus_id
         # A client-supplied apparatus_id must belong to the caller's org — the

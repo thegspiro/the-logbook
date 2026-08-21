@@ -186,7 +186,7 @@ class TestStandaloneTemplateVisibility:
 class TestAuthoritativeCheckTiming:
     """Stored timing comes from the selected template, never the request."""
 
-    async def test_shift_check_rejects_timing_that_differs_from_template(
+    async def test_shift_check_discards_timing_that_differs_from_template(
         self, service, mock_db
     ):
         shift_result = MagicMock()
@@ -196,23 +196,34 @@ class TestAuthoritativeCheckTiming:
         mock_db.execute.return_value = shift_result
         template = MagicMock(id="tmpl-1", check_timing="end_of_shift")
 
-        with patch.object(
-            service, "_resolve_templates", AsyncMock(return_value=[template])
+        # Stop after template selection: the request value must not be read or
+        # rejected, because the public request schema no longer exposes it.
+        with (
+            patch.object(
+                service, "_resolve_templates", AsyncMock(return_value=[template])
+            ),
+            patch.object(
+                service,
+                "complete_incomplete_check",
+                AsyncMock(return_value=MagicMock()),
+            ) as complete,
         ):
-            with pytest.raises(ValueError, match="does not match"):
-                await service.submit_check(
-                    "shift-1",
-                    "org-1",
-                    "manager-1",
-                    {
-                        "template_id": "tmpl-1",
-                        "check_timing": "start_of_shift",
-                        "items": [{"status": "pass"}],
-                    },
-                )
+            existing = MagicMock(id="check-1", overall_status="incomplete")
+            existing_result = MagicMock()
+            existing_result.scalars.return_value.first.return_value = existing
+            mock_db.execute.side_effect = [shift_result, existing_result]
+            await service.submit_check(
+                "shift-1",
+                "org-1",
+                "manager-1",
+                {
+                    "template_id": "tmpl-1",
+                    "check_timing": "start_of_shift",
+                    "items": [{"status": "pass"}],
+                },
+            )
 
-        mock_db.add.assert_not_called()
-        mock_db.commit.assert_not_awaited()
+        assert "check_timing" not in complete.await_args.kwargs["data"]
 
     async def test_standalone_check_stores_template_timing(self, service, mock_db):
         template = MagicMock(

@@ -330,9 +330,6 @@ class ShiftEquipmentCheckCreate(BaseModel):
     """Schema for submitting an equipment check tied to a shift."""
 
     template_id: str
-    # Retained for older clients, but the service verifies it against the
-    # selected template and always persists the template's value.
-    check_timing: Optional[CheckTiming] = None
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
@@ -343,8 +340,6 @@ class StandaloneEquipmentCheckCreate(BaseModel):
 
     template_id: str
     apparatus_id: Optional[str] = None
-    # Compatibility only; EquipmentCheckTemplate.check_timing is authoritative.
-    check_timing: Optional[CheckTiming] = None
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
