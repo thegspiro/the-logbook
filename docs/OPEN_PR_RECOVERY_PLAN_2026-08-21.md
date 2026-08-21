@@ -82,6 +82,42 @@ These merge commits move CI to the fixed dependency graph and remove every
 previously reported Git conflict. Any subsequent failure is therefore tied to
 the integrated feature head rather than the stale base diagnosed above.
 
+## Refresh after subsequent main changes
+
+The queue was refreshed again after `main` advanced to `36019a97`. At that
+point six feature PRs remained open, and all six heads were updated from the new
+base:
+
+- #1649 kept the current selection-mode bulk-action behavior and combined the
+  branch's scrollable signup panel with `main`'s centralized modal close path.
+- #1648 retained both the recruitment prospect card and `main`'s CSV utilities
+  in the event detail page.
+- #1629 adopted the current labelled, keyboard-focusable document-table scroll
+  region while retaining its responsive table rendering.
+- #1637, #1585, and #1577 merged the refreshed base without file conflicts so
+  their previously repaired tests, title management, and legal migration remain
+  on top of the current application behavior.
+
+The refreshed heads were pushed to their existing PR branches, removing every
+newly reported conflict and triggering CI on the integrated commits rather than
+their obsolete SHAs.
+
+The first refreshed CI run exposed four additional integration issues, which
+were corrected on the affected heads:
+
+- Generated schema documentation was refreshed after the compartment-name
+  column changed to `TEXT`, and that generated reference was applied to each
+  remaining feature branch.
+- #1649 now caps both hand-built event dialogs and teaches its integrity test to
+  recognize a decorated Modal scrim instead of misidentifying it as the panel.
+- #1585 removes obsolete PageTransition title cleanup now owned by
+  RouteTitleManager, eliminating the extra lint warning that exceeded CI's
+  warning budget.
+- #1577 rebases its legal-document revision on the new compartment-path
+  migration head, restoring a single Alembic head.
+- Stacked PR #1651 was updated from its refreshed #1648 base so it includes the
+  prospect-card render fix and regenerated schema reference.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:

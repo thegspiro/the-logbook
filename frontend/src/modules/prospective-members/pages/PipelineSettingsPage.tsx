@@ -990,7 +990,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCloneModal(false);
           }}
         >
-          <div ref={dialogRef1} className="modal-panel w-full max-w-md">
+          <div ref={dialogRef1} className="modal-panel modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="clone-pipeline-title"
@@ -1058,7 +1058,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowSaveTemplateModal(false);
           }}
         >
-          <div ref={dialogRef2} className="modal-panel w-full max-w-md">
+          <div ref={dialogRef2} className="modal-panel modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2
                 id="save-template-title"
@@ -1200,7 +1200,7 @@ export const PipelineSettingsPage: React.FC = () => {
             if (e.key === 'Escape') setShowCreateModal(false);
           }}
         >
-          <div ref={dialogRef4} className="modal-panel w-full max-w-md">
+          <div ref={dialogRef4} className="modal-panel modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
                 Create Pipeline
