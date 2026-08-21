@@ -98,6 +98,8 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Duplicate' })).toBeVisible();
     expect(within(menu).getByLabelText(/current destination Cab/i)).toHaveTextContent('Cab / Medical bag');
     expect(within(menu).getByRole('button', { name: 'Delete' })).toHaveClass('text-red-600');
+    await user.click(within(menu).getByRole('button', { name: 'Duplicate' }));
+    expect(menu).not.toHaveAttribute('open');
   });
 
   it('offers hierarchy-aware compartment movement and omits section headers', async () => {
@@ -111,6 +113,8 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     const destination = within(menu).getByLabelText(/current destination Cab/i);
     expect(destination).toHaveTextContent('Cab (current)');
     expect(destination).not.toHaveTextContent('Supplies');
+    expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
+    expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
   });
 });

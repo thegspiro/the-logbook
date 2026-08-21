@@ -114,7 +114,16 @@ const mobileDestructiveMenuItemClass = `${mobileMenuItemClass} text-red-600 dark
 /** Native details/summary preserves keyboard disclosure behavior without making
  * the compact row permanently carry every secondary action. */
 const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <details className="relative flex-shrink-0 sm:hidden" onClick={(event) => event.stopPropagation()}>
+  <details
+    className="relative flex-shrink-0 sm:hidden"
+    onClick={(event) => {
+      event.stopPropagation();
+      if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false;
+    }}
+    onChange={(event) => {
+      if ((event.target as HTMLElement).matches('select')) event.currentTarget.open = false;
+    }}
+  >
     <summary
       className="text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden"
       aria-label={label}
@@ -821,21 +830,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= compartments.length) return;
+    const source = compartments[idx];
+    if (!source) return;
+    // A nested container can only be reordered among siblings. Swapping raw
+    // neighbours can appear to do nothing because rendering is depth-first.
+    const siblingIndices = compartments
+      .map((candidate, candidateIdx) => ({ candidate, candidateIdx }))
+      .filter(({ candidate }) => candidate.parentCompartmentId === source.parentCompartmentId)
+      .map(({ candidateIdx }) => candidateIdx);
+    const siblingPosition = siblingIndices.indexOf(idx);
+    const destinationPosition = direction === 'up' ? siblingPosition - 1 : siblingPosition + 1;
+    const newIdx = siblingIndices[destinationPosition];
+    if (siblingPosition < 0 || newIdx === undefined) return;
 
     setCompartments((prev) => {
       const next = [...prev];
-      const [moved] = next.splice(idx, 1);
-      if (!moved) return prev;
-      next.splice(newIdx, 0, moved);
+      [next[idx], next[newIdx]] = [next[newIdx]!, next[idx]!];
       return next;
     });
 
     if (isEditing && templateId) {
       const ids = compartments.map((c, i) => c.id ?? `comp-${i}`);
-      const [movedId] = ids.splice(idx, 1);
-      if (movedId) ids.splice(newIdx, 0, movedId);
+      [ids[idx], ids[newIdx]] = [ids[newIdx]!, ids[idx]!];
       const savedIds = ids.filter((id) => !id.startsWith('comp-'));
       if (savedIds.length > 0) {
         void schedulingService
@@ -2154,7 +2170,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return (
       <div
         key={itemKey}
-        className={`overflow-hidden rounded-md border transition-colors ${
+        className={`rounded-md border transition-colors ${
           isSelected
             ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
             : isHeader
@@ -2290,7 +2306,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             >
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-            {compartments.length > 1 && (
+            {compartments.some(
+              (candidate, candidateIdx) =>
+                candidateIdx !== compIdx && !candidate.isHeader && (!isEditing || !item.id || Boolean(candidate.id))
+            ) && (
               <div className="text-theme-text-muted relative rounded p-1 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20">
                 <ArrowRightLeft className="pointer-events-none h-3.5 w-3.5" aria-hidden="true" />
                 <select
@@ -2310,9 +2329,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     Move to…
                   </option>
                   {compartments.map((c, ci) =>
-                    ci !== compIdx ? (
+                    ci !== compIdx && !c.isHeader && (!isEditing || !item.id || Boolean(c.id)) ? (
                       <option key={ci} value={ci}>
-                        {c.name || `Compartment ${ci + 1}`}
+                        {compartmentPath(ci)}
                       </option>
                     ) : null
                   )}
@@ -2356,8 +2375,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button type="button" className={mobileMenuItemClass} onClick={() => duplicateItem(compIdx, itemIdx)}>
               <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
             </button>
-            {compartments.filter((candidate, candidateIdx) => !candidate.isHeader && candidateIdx !== compIdx).length >
-              0 && (
+            {compartments.filter(
+              (candidate, candidateIdx) =>
+                !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id))
+            ).length > 0 && (
               <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
                 <span className="flex items-center gap-3">
                   <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
@@ -2372,7 +2393,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     Current: {compartmentPath(compIdx)}
                   </option>
                   {compartments.map((candidate, candidateIdx) =>
-                    !candidate.isHeader && candidateIdx !== compIdx ? (
+                    !candidate.isHeader &&
+                    candidateIdx !== compIdx &&
+                    (!isEditing || !item.id || Boolean(candidate.id)) ? (
                       <option key={candidate.id ?? candidateIdx} value={candidateIdx}>
                         {compartmentPath(candidateIdx)}
                       </option>
@@ -2709,17 +2732,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const parentName = comp.parentCompartmentId
       ? compartments.find((c) => c.id === comp.parentCompartmentId)?.name
       : undefined;
+    const siblingIndices = compartments
+      .map((candidate, candidateIdx) => ({ candidate, candidateIdx }))
+      .filter(({ candidate }) => candidate.parentCompartmentId === comp.parentCompartmentId)
+      .map(({ candidateIdx }) => candidateIdx);
+    const siblingPosition = siblingIndices.indexOf(idx);
+    const canMoveUp = siblingPosition > 0;
+    const canMoveDown = siblingPosition >= 0 && siblingPosition < siblingIndices.length - 1;
 
     // Section header compartment — simplified visual divider
     if (comp.isHeader) {
       return (
-        <div
-          key={key}
-          ref={sortableRef}
-          style={sortableStyle}
-          {...(sortableAttributes ?? {})}
-          className="card overflow-hidden"
-        >
+        <div key={key} ref={sortableRef} style={sortableStyle} {...(sortableAttributes ?? {})} className="card">
           <div className="flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
             <button
               type="button"
@@ -2748,7 +2772,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'up')}
-                disabled={idx === 0}
+                disabled={!canMoveUp}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section up"
               >
@@ -2757,7 +2781,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'down')}
-                disabled={idx === compartments.length - 1}
+                disabled={!canMoveDown}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section down"
               >
@@ -2776,7 +2800,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 className={mobileMenuItemClass}
-                disabled={idx === 0}
+                disabled={!canMoveUp}
                 onClick={() => moveCompartment(idx, 'up')}
               >
                 <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
@@ -2784,7 +2808,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 className={mobileMenuItemClass}
-                disabled={idx === compartments.length - 1}
+                disabled={!canMoveDown}
                 onClick={() => moveCompartment(idx, 'down')}
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
@@ -2890,7 +2914,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'up')}
-              disabled={idx === 0}
+              disabled={!canMoveUp}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} up`}
             >
@@ -2899,7 +2923,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'down')}
-              disabled={idx === compartments.length - 1}
+              disabled={!canMoveDown}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} down`}
             >
@@ -2937,7 +2961,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               className={mobileMenuItemClass}
-              disabled={idx === 0}
+              disabled={!canMoveUp}
               onClick={() => moveCompartment(idx, 'up')}
             >
               <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
@@ -2945,7 +2969,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               className={mobileMenuItemClass}
-              disabled={idx === compartments.length - 1}
+              disabled={!canMoveDown}
               onClick={() => moveCompartment(idx, 'down')}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
@@ -3826,7 +3850,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Change Log Modal (admin only) */}
       {showChangelog && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface modal-panel-scroll w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 Change History{' '}
@@ -3926,7 +3950,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* CSV Preview Confirmation Modal */}
       {csvPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface modal-panel-scroll w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 CSV Import Preview — {csvPreview.length} item(s)
@@ -3986,7 +4010,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Preview Modal — mobile device frame */}
       {showPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="modal-panel-scroll relative flex flex-col items-center gap-3">
+          <div className="relative flex flex-col items-center gap-3">
             {/* Close button outside the phone frame */}
             <button
               type="button"
