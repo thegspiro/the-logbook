@@ -323,6 +323,66 @@ class TestAuthoritativeCheckTiming:
         assert check.overall_status == "pass"
 
 
+class TestShiftCheckCompletionStatus:
+    """A row is complete only after it has left the draft state."""
+
+    @pytest.mark.parametrize(
+        ("overall_status", "expected_completed"),
+        [
+            pytest.param(None, False, id="missing"),
+            pytest.param("incomplete", False, id="incomplete"),
+            pytest.param("pass", True, id="passing"),
+            pytest.param("fail", True, id="failing"),
+        ],
+    )
+    async def test_get_shift_check_status_uses_canonical_completion_predicate(
+        self, service, mock_db, overall_status, expected_completed
+    ):
+        shift = SimpleNamespace(id="shift-1")
+        template = SimpleNamespace(
+            id="tmpl-1",
+            name="End check",
+            check_timing="end_of_shift",
+            assigned_positions=[],
+            compartments=[],
+        )
+        check = None
+        if overall_status is not None:
+            check = SimpleNamespace(
+                template_id="tmpl-1",
+                overall_status=overall_status,
+                checked_by=None,
+                checked_at=None,
+                total_items=2,
+                completed_items=1 if overall_status == "incomplete" else 2,
+                failed_items=1 if overall_status == "fail" else 0,
+            )
+
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        checks_result = MagicMock()
+        checks_result.scalars.return_value.all.return_value = [check] if check else []
+        mock_db.execute.side_effect = [shift_result, checks_result]
+
+        with (
+            patch.object(
+                service,
+                "_resolve_templates",
+                new_callable=AsyncMock,
+                return_value=[template],
+            ),
+            patch.object(
+                service, "_get_user_name_map", new_callable=AsyncMock, return_value={}
+            ),
+        ):
+            summaries = await service.get_shift_check_status("shift-1", "org-1")
+
+        assert summaries[0]["is_completed"] is expected_completed
+        assert summaries[0]["overall_status"] == overall_status
+
+
+
+
 class TestUpdateItemCompartmentValidation:
     """update_item must validate a reassigned compartment_id in-org — moving an
     item to a foreign compartment transfers it (with the caller's content) into

@@ -55,6 +55,16 @@ class EquipmentCheckService:
         self.db = db
 
     @staticmethod
+    def is_check_completed(check: Optional[ShiftEquipmentCheck]) -> bool:
+        """Return the canonical completion state for an equipment check.
+
+        A saved draft is still outstanding.  Keep this predicate in one place
+        so shift lists, shift detail, and close-out enforcement cannot disagree
+        merely because a ``ShiftEquipmentCheck`` row exists.
+        """
+        return check is not None and check.overall_status != "incomplete"
+
+    @staticmethod
     def _trend_bucket_for_status(status: str) -> Optional[str]:
         """Map every stored item outcome to its reporting bucket."""
         if status == "pass":
@@ -623,7 +633,7 @@ class EquipmentCheckService:
         checklists = []
         for tmpl in templates:
             check = existing_checks.get(tmpl.id)
-            is_completed = check is not None and check.overall_status != "incomplete"
+            is_completed = self.is_check_completed(check)
             checklists.append(
                 {
                     "template": tmpl,
@@ -687,7 +697,7 @@ class EquipmentCheckService:
                     "template_name": tmpl.name,
                     "check_timing": tmpl.check_timing,
                     "assigned_positions": tmpl.assigned_positions,
-                    "is_completed": check is not None,
+                    "is_completed": self.is_check_completed(check),
                     "overall_status": check.overall_status if check else None,
                     "checked_by_name": (
                         user_map.get(check.checked_by, "")
@@ -962,6 +972,82 @@ class EquipmentCheckService:
                 template_items_map[str(ti.id)] = ti
         return template_items_map
 
+    async def _load_checkable_template_items(
+        self, organization_id: str, template_id: str
+    ) -> Dict[str, CheckTemplateItem]:
+        """Load every question row belonging to a template, with its location.
+
+        Submission validation must be based on the template, rather than on the
+        ids the client happened to send.  ``header`` and ``text`` are display
+        rows and therefore deliberately never become check-result rows.
+        """
+        result = await self.db.execute(
+            select(CheckTemplateItem, CheckTemplateCompartment.name)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                CheckTemplateCompartment.template_id == EquipmentCheckTemplate.id,
+            )
+            .where(
+                EquipmentCheckTemplate.id == template_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+                CheckTemplateItem.check_type.notin_(("header", "text")),
+            )
+        )
+        items: Dict[str, CheckTemplateItem] = {}
+        for template_item, compartment_name in result.all():
+            # A response item snapshots the compartment label as it existed at
+            # check time.  Keep the joined label transiently alongside the ORM
+            # row so canonicalisation cannot accidentally use a client label.
+            template_item._check_compartment_name = compartment_name
+            items[str(template_item.id)] = template_item
+        return items
+
+    @staticmethod
+    def _validate_and_snapshot_submission(
+        items_data: List[Dict[str, Any]],
+        template_items_map: Dict[str, CheckTemplateItem],
+    ) -> None:
+        """Require exactly one answer for every authoritative question row."""
+        submitted_ids: List[str] = []
+        for item in items_data:
+            template_item_id = item.get("template_item_id")
+            if not template_item_id:
+                raise ValueError("template_item_id is required for every item")
+            submitted_ids.append(str(template_item_id))
+
+        if len(submitted_ids) != len(set(submitted_ids)):
+            raise ValueError("Duplicate template_item_id values are not allowed")
+
+        expected_ids = set(template_items_map)
+        supplied_ids = set(submitted_ids)
+        unknown = supplied_ids - expected_ids
+        if unknown:
+            raise ValueError(
+                f"Items do not belong to template: {', '.join(sorted(unknown))}"
+            )
+        omitted = expected_ids - supplied_ids
+        if omitted:
+            raise ValueError(
+                f"Submission is missing template items: {', '.join(sorted(omitted))}"
+            )
+
+        for item, template_item_id in zip(items_data, submitted_ids):
+            template_item = template_items_map[template_item_id]
+            item["template_item_id"] = template_item_id
+            item["item_name"] = template_item.name
+            item["compartment_name"] = template_item._check_compartment_name
+            item["check_type"] = template_item.check_type
+            item["required_quantity"] = template_item.required_quantity
+            item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
+            item["level_unit"] = template_item.level_unit
+            item["serial_number"] = template_item.serial_number
+            item["lot_number"] = template_item.lot_number
+            item["expiration_date"] = template_item.expiration_date
+
     # ------------------------------------------------------------------
     # Check Submission
     # ------------------------------------------------------------------
@@ -1029,6 +1115,14 @@ class EquipmentCheckService:
             if selected_template is None:
                 raise ValueError("Template is not applicable to this shift")
 
+            template_items_map = await self._load_checkable_template_items(
+                organization_id, str(template_id)
+            )
+            self._validate_and_snapshot_submission(items_data, template_items_map)
+        else:
+            # Shift checks without a template have no authoritative item set.
+            template_items_map = {}
+
         # Prevent duplicate submission for same shift+template
         if template_id:
             existing_result = await self.db.execute(
@@ -1064,9 +1158,6 @@ class EquipmentCheckService:
         # Loaded before the status computation, not after: expiry is decided
         # from the template item (see _compute_check_status), so the map has to
         # exist before any item can be force-failed.
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id, template_id
-        )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )
@@ -1105,23 +1196,6 @@ class EquipmentCheckService:
             signature_data=data.get("signature_data"),
         )
         self.db.add(check)
-
-        # Validate submitted items belong to the template
-        submitted_ids = {
-            i.get("template_item_id") for i in items_data if i.get("template_item_id")
-        }
-        if template_id and submitted_ids:
-            valid_result = await self.db.execute(
-                select(CheckTemplateItem.id)
-                .join(CheckTemplateCompartment)
-                .where(CheckTemplateCompartment.template_id == template_id)
-            )
-            valid_ids = {str(r) for r in valid_result.scalars().all()}
-            invalid = submitted_ids - valid_ids
-            if invalid:
-                raise ValueError(
-                    f"Items do not belong to template: " f"{', '.join(invalid)}"
-                )
 
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
@@ -1323,15 +1397,28 @@ class EquipmentCheckService:
         # A replacement logged while finishing an incomplete check has to reach
         # the template too — otherwise which write path the crew happened to
         # take decides whether the truck's record gets updated.
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id, check.template_id
+        template_items_map = await self._load_checkable_template_items(
+            organization_id, str(check.template_id)
         )
+        self._validate_and_snapshot_submission(items_data, template_items_map)
         today = date.today()
 
         for item_data in items_data:
             tmpl_id = item_data.get("template_item_id")
             existing = existing_map.get(tmpl_id) if tmpl_id else None
             if existing:
+                # Refresh snapshot metadata from the current authoritative row;
+                # none of these fields is an observation supplied by the crew.
+                existing.item_name = item_data["item_name"]
+                existing.compartment_name = item_data["compartment_name"]
+                existing.check_type = item_data["check_type"]
+                existing.required_quantity = item_data["required_quantity"]
+                existing.critical_minimum_quantity = item_data[
+                    "critical_minimum_quantity"
+                ]
+                existing.level_unit = item_data["level_unit"]
+                existing.serial_number = item_data["serial_number"]
+                existing.lot_number = item_data["lot_number"]
                 new_status = item_data.get("status", "not_checked")
                 if existing.status == "not_checked" or new_status != "not_checked":
                     existing.status = new_status
@@ -1369,7 +1456,22 @@ class EquipmentCheckService:
                 existing.expiration_date = expiration
                 existing.is_expired = bool(expiration and expiration < today)
 
-        all_items = check.items
+        missing_rows = [
+            item for item in items_data if item["template_item_id"] not in existing_map
+        ]
+        if missing_rows:
+            created = await self._create_check_items(
+                check.id, missing_rows, template_items_map, organization_id
+            )
+            check.items.extend(created)
+
+        # Ignore any historic/client-created rows that are not questions on the
+        # selected template.  They must not inflate totals or satisfy completion.
+        all_items = [
+            item
+            for item in check.items
+            if str(item.template_item_id or "") in template_items_map
+        ]
         # Re-apply the same auto-fail rule the initial submit uses
         # (_compute_check_status): an expired item, or one found below its
         # required quantity, is forced to "fail" so completing an incomplete
@@ -1401,6 +1503,7 @@ class EquipmentCheckService:
 
         check.completed_items = completed
         check.failed_items = failed
+        check.total_items = total
 
         if data.get("notes"):
             check.notes = data["notes"]
