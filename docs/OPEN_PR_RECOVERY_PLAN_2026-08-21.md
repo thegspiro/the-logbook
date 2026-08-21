@@ -102,6 +102,22 @@ The refreshed heads were pushed to their existing PR branches, removing every
 newly reported conflict and triggering CI on the integrated commits rather than
 their obsolete SHAs.
 
+The first refreshed CI run exposed four additional integration issues, which
+were corrected on the affected heads:
+
+- Generated schema documentation was refreshed after the compartment-name
+  column changed to `TEXT`, and that generated reference was applied to each
+  remaining feature branch.
+- #1649 now caps both hand-built event dialogs and teaches its integrity test to
+  recognize a decorated Modal scrim instead of misidentifying it as the panel.
+- #1585 removes obsolete PageTransition title cleanup now owned by
+  RouteTitleManager, eliminating the extra lint warning that exceeded CI's
+  warning budget.
+- #1577 rebases its legal-document revision on the new compartment-path
+  migration head, restoring a single Alembic head.
+- Stacked PR #1651 was updated from its refreshed #1648 base so it includes the
+  prospect-card render fix and regenerated schema reference.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
