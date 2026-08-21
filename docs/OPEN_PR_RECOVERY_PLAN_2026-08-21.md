@@ -69,6 +69,13 @@ The recovery was applied on 2026-08-21 rather than left as a proposal:
 - The older #1578, #1577, and #1575 heads use current `main` content for
   overlapping changelog, responsive-document, schema, release-status, and wiki
   documentation while retaining their non-overlapping feature changes.
+- Follow-up CI failures exposed by the integrations were repaired on their own
+  heads: #1637's source-inspection test now follows the shared assignment
+  validator; #1642's fixtures satisfy authoritative template-item validation;
+  #1639 preserves the shared Modal layout class hooks; #1624's regression test
+  recognizes `yearly`; #1616's migration has a generated revision ID and follows
+  the current single head; #1587 and #1585 use typed bound history wrappers; and
+  #1575's script tests satisfy the active pytest-style lint rules.
 
 These merge commits move CI to the fixed dependency graph and remove every
 previously reported Git conflict. Any subsequent failure is therefore tied to
