@@ -138,6 +138,11 @@ warning budget; #1648 rebased the recruitment event-type migration onto the
 current Alembic head; #1585 removed a superseded PageTransition title assertion;
 and #1577 regenerated the schema reference for its legal revision model.
 
+#1637's database failures were traced to tests reading ORM objects expired by
+the intentional rejection rollback; the tests now reload the persisted swap
+before asserting its unchanged state. Newly opened #1659 was also merged with
+the same `fe7cdf9c` base and pushed without conflicts.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
