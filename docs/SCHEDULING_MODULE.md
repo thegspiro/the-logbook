@@ -548,7 +548,7 @@ Lightweight apparatus management at `/apparatus-basic`:
 | ------------------- | ------------------------------------------------------------------------------------ |
 | `scheduling.manage` | Create/edit/delete shifts, templates, patterns. Approve/deny requests. View reports. |
 | `scheduling.assign` | Assign members to shifts (admin assignment, not self-signup).                        |
-| `scheduling.view`   | View scheduling data (implicit for all authenticated members).                       |
+| `scheduling.view`   | View scheduling data (implicit for all authenticated members). **Not a meaningful gate** — anything genuinely restricted needs `assign`/`manage` or the shift-officer check. |
 | `scheduling.swap`   | Request/manage shift swaps and time-off.                                             |
 | `scheduling.report` | View shift reports and analytics.                                                    |
 
@@ -712,6 +712,24 @@ so a supervisor can immediately fill an open slot. The platoon responsible for a
 generated shift is stored on the row (`Shift.platoon`, migration
 `20260618_0200`).
 
+> **Roster visibility is restricted _(2026-08-17)_.** The hold-over roster is
+> derived from **who is on approved leave**, so `GET /scheduling/shifts/{id}`
+> returns `platoon_roster` only to callers satisfying
+> `_can_view_platoon_roster(shift, user)`:
+>
+> ```
+> scheduling.assign  OR  scheduling.manage  OR  user.id == shift.shift_officer_id
+> ```
+>
+> Everyone else receives `platoon_roster: []` and the roster is **not fetched
+> at all** — the restriction is on the read, not on the serializer. Every other
+> field on the shift (time, apparatus, assignments, check-in state) is
+> unchanged for any member holding `scheduling.view`.
+>
+> This closes a gap that the endpoint's own permission could not: `scheduling.view`
+> is implicit for all authenticated members, so gating the endpoint on it never
+> gated the roster.
+
 ### Department Platoon Overview & Bulk Assignment
 
 A dedicated **Platoon Management** page (`/scheduling/platoons`,
@@ -720,9 +738,17 @@ platoon and the unassigned bucket with their active members at a glance, and
 lets a manager **bulk-assign** many members to a platoon (or clear it) in one
 operation:
 
-- `GET /scheduling/platoons/overview` (`scheduling.view`) → `{ platoons_enabled,
+- `GET /scheduling/platoons/overview` (**`scheduling.manage`** as of
+  2026-08-17; previously `scheduling.view`) → `{ platoons_enabled,
 groups: [{ platoon, member_count, members: [{ user_id, user_name, rank }] }] }`
   (named platoons sorted, then the `platoon: null` unassigned group).
+
+  > **Breaking for existing users.** `scheduling.view` is implicit for every
+  > authenticated member, so this endpoint published the entire department's
+  > platoon assignments to anyone signed in. Members who reached
+  > `/scheduling/platoons` before the change and do not hold
+  > `scheduling.manage` now get a permission error; grant `scheduling.manage`
+  > to the roles that legitimately need the department-wide roster.
 - `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`) → body
   `{ user_ids: [...], platoon: "A" | null }`; only members in the caller's org
   are updated (IDOR-safe), audit-logged `platoon_bulk_assigned`. Returns
@@ -1762,7 +1788,7 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 | `/scheduling/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which
-carries a count badge) and from the Inventory Admin Hub. The apparatus view is
+carries a count badge) and from the Gear Admin hub. The apparatus view is
 reached from **My Equipment Checklists → Apparatus Inventory**.
 
 ### Schema
