@@ -610,10 +610,16 @@ class EquipmentCheckService:
             )
             await self.db.flush()
 
+            # This must also be a locking/current read. Under MySQL REPEATABLE
+            # READ, a plain aggregate would keep the snapshot established before
+            # we waited for the compartment lock and could miss a batch that just
+            # committed while we were waiting.
             max_order = await self.db.scalar(
-                select(func.max(CheckTemplateItem.sort_order)).where(
-                    CheckTemplateItem.compartment_id == compartment_id
-                )
+                select(CheckTemplateItem.sort_order)
+                .where(CheckTemplateItem.compartment_id == compartment_id)
+                .order_by(CheckTemplateItem.sort_order.desc())
+                .limit(1)
+                .with_for_update()
             )
             first_order = (max_order if max_order is not None else -1) + 1
             created = []
