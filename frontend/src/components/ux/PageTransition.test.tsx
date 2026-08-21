@@ -54,9 +54,30 @@ describe('PageTransition accessibility', () => {
     );
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Members'));
+    expect(document.title).toBe('Members | The Logbook');
     expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(screen.getByRole('button')).not.toHaveAttribute('aria-live');
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('clears heading-derived titles when leaving the protected layout', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <PageTransition>
+          <h1>Private Member Name</h1>
+        </PageTransition>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(document.title).toBe('Private Member Name | The Logbook'));
+    unmount();
+
+    expect(document.title).toBe('The Logbook');
   });
 
   // The announcement used to be captured on the first frame and never looked
@@ -124,10 +145,12 @@ describe('PageTransition accessibility', () => {
     // about it — but the old page is no longer claimed either.
     expect(screen.getByRole('status')).toHaveTextContent('');
     expect(screen.getByRole('status')).not.toHaveTextContent('Roster');
+    expect(document.title).toBe('The Logbook');
 
     // …and the watch still settles on the heading when it lands: one
     // announcement per navigation, not permanent silence.
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Members'));
+    expect(document.title).toBe('Members | The Logbook');
   });
 
   it('falls back to a generic announcement when no heading ever arrives', async () => {
@@ -150,6 +173,7 @@ describe('PageTransition accessibility', () => {
         vi.advanceTimersByTime(6000);
       });
       expect(screen.getByRole('status')).toHaveTextContent('Page loaded');
+      expect(document.title).toBe('The Logbook');
     } finally {
       vi.useRealTimers();
     }

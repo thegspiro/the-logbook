@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Navigation: browser tabs now identify the current page (2026-08-20)
+
+**Fixed**
+
+- **Every page kept the app's generic startup title.** Router-wide page
+  navigation now derives the browser-tab and history title from the page's
+  visible `h1`, including headings that arrive after an asynchronous load.
+  During navigation the old page title is cleared immediately, so a slow or
+  heading-less destination never masquerades as the page the user just left.
+  The manager sits above lazy-route loading and covers authenticated, public,
+  onboarding, and sign-in pages. It does not depend on animation frames, and
+  keeps watching beyond the screen-reader announcement timeout. This makes
+  multiple Logbook tabs distinguishable and gives screen-reader users the same
+  page identity already exposed by the route announcement.
+
 ### Mobile: the bottom navigation no longer sits on top of open dialogs (2026-08-20)
 
 **Fixed**

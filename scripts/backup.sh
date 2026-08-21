@@ -402,6 +402,41 @@ list_backups() {
 # Main Function
 # ============================================
 
+run_backup() {
+    print_info "Starting backup process..."
+
+    create_backup_dir
+    backup_database
+    backup_uploads
+    backup_config
+    create_backup_metadata
+    compress_backup
+    cleanup_temp
+    cleanup_old_backups
+
+    # Upload to cloud if specified
+    case "${DESTINATION:-local}" in
+        s3)
+            upload_to_s3
+            ;;
+        azure)
+            upload_to_azure
+            ;;
+        gcs)
+            upload_to_gcs
+            ;;
+        local)
+            print_info "Backup stored locally"
+            ;;
+        *)
+            print_warning "Unknown destination: $DESTINATION, keeping backup local"
+            ;;
+    esac
+
+    print_success "Backup completed successfully!"
+    print_info "Backup location: $BACKUP_DIR/$BACKUP_NAME.tar.gz"
+}
+
 main() {
     case "${1:-}" in
         --restore)
@@ -417,6 +452,7 @@ main() {
             ;;
         --destination)
             DESTINATION="${2:-local}"
+            run_backup
             ;;
         --help|-h)
             cat <<EOF
@@ -446,39 +482,7 @@ EOF
             exit 0
             ;;
         *)
-            # Create backup
-            print_info "Starting backup process..."
-
-            create_backup_dir
-            backup_database
-            backup_uploads
-            backup_config
-            create_backup_metadata
-            compress_backup
-            cleanup_temp
-            cleanup_old_backups
-
-            # Upload to cloud if specified
-            case "${DESTINATION:-local}" in
-                s3)
-                    upload_to_s3
-                    ;;
-                azure)
-                    upload_to_azure
-                    ;;
-                gcs)
-                    upload_to_gcs
-                    ;;
-                local)
-                    print_info "Backup stored locally"
-                    ;;
-                *)
-                    print_warning "Unknown destination: $DESTINATION, keeping backup local"
-                    ;;
-            esac
-
-            print_success "Backup completed successfully!"
-            print_info "Backup location: $BACKUP_DIR/$BACKUP_NAME.tar.gz"
+            run_backup
             ;;
     esac
 }

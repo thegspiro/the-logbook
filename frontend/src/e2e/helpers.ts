@@ -26,7 +26,34 @@ export const TEST_USER = {
   first_name: 'Alex',
   last_name: 'Tester',
   is_active: true,
-  permissions: [],
+  // E2E represents an administrator so permission-gated pages exercise their
+  // substantive body rather than merely proving that AppLayout rendered.
+  permissions: [
+    'members.view',
+    'members.manage',
+    'users.view',
+    'scheduling.view',
+    'scheduling.manage',
+    'scheduling.reports',
+    'forms.view',
+    'forms.manage',
+    'prospective_members.view',
+    'prospective_members.manage',
+    'communications.view',
+    'communications.manage',
+    'settings.view',
+    'organization.manage',
+    'positions.manage_permissions',
+    'events.view',
+    'events.manage',
+    'training.view',
+    'training.manage',
+    'inventory.view',
+    'inventory.manage',
+    'documents.view',
+    'documents.manage',
+    'admin.access',
+  ],
   roles: [],
   positions: [],
 };
@@ -123,6 +150,8 @@ export interface MockOptions {
    * Serve empty collections everywhere so the dashboard's empty states render.
    */
   empty?: boolean;
+  /** Permissions granted to the signed-in fixture user. */
+  permissions?: string[];
 }
 
 /**
@@ -130,16 +159,17 @@ export interface MockOptions {
  * registers them in order and Playwright matches the last registration first,
  * so later entries win.
  */
-const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
+const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
   ['**/api/v1/**', () => ({})],
 
-  ['**/api/v1/auth/me', () => TEST_USER],
+  ['**/api/v1/auth/me', () => ({ ...TEST_USER, permissions })],
   ['**/api/v1/auth/branding', () => ({ name: TEST_DEPARTMENT, logo: null })],
   ['**/api/v1/auth/oauth-config', () => ({ googleEnabled: false, microsoftEnabled: false })],
   ['**/api/v1/auth/session-settings', () => ({ session_timeout_minutes: 60 })],
   ['**/api/v1/auth/logout', () => ({ message: 'Logged out' })],
+  ['**/api/v1/onboarding/status', () => ({ is_complete: true })],
 
   ['**/api/v1/organization/modules', () => ({})],
 
@@ -149,10 +179,17 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
 
   ['**/api/v1/messages/inbox**', () => []],
   ['**/api/v1/messages/inbox/unread-count', () => ({ unread_count: 0 })],
+  ['**/api/v1/messages/threads**', () => ({ threads: [], total: 0 })],
 
   ['**/api/v1/scheduling/my-shifts**', () => (empty ? { shifts: [], total: 0 } : myShifts())],
   ['**/api/v1/scheduling/shifts/open**', () => []],
   ['**/api/v1/scheduling/summary**', () => ({ hours_worked_this_month: 24 })],
+  ['**/api/v1/scheduling/reports**', () => ({ reports: [], total: 0 })],
+  [
+    '**/api/v1/scheduling/reports/member-hours**',
+    () => ({ members: [], period_start: '2026-08-01', period_end: '2026-08-20', total_members: 0 }),
+  ],
+  ['**/api/v1/ranks**', () => []],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 
@@ -175,7 +212,17 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
 
   ['**/api/v1/inventory/summary**', () => ({})],
   ['**/api/v1/inventory/low-stock**', () => []],
+  ['**/api/v1/inventory/items**', () => ({ items: [], total: 0 })],
+  ['**/api/v1/inventory/categories**', () => []],
+  ['**/api/v1/inventory/storage-areas**', () => []],
+  ['**/api/v1/inventory/vendors**', () => []],
+  ['**/api/v1/inventory/summary/by-location**', () => []],
+  ['**/api/v1/locations**', () => []],
 
+  ['**/api/v1/forms**', () => ({ forms: [], total: 0 })],
+  ['**/api/v1/prospective-members**', () => ({ applicants: [], total: 0 })],
+  ['**/api/v1/members**', () => ({ members: [], users: [], total: 0 })],
+  ['**/api/v1/settings**', () => ({})],
   ['**/api/v1/events**', () => []],
 ];
 
@@ -201,11 +248,14 @@ export async function mockApi(page: Page, options: MockOptions = {}): Promise<vo
  * calling `/auth/me` is worthwhile.
  */
 export async function signIn(page: Page, options: MockOptions = {}): Promise<void> {
+  // Install routes before the first document load. Login mounts branding and
+  // onboarding queries immediately; registering afterward leaked them to the
+  // dev-server proxy and made every workflow wait for failed network calls.
+  await mockApi(page, options);
   await page.goto('/login');
   await page.evaluate(() => {
     localStorage.setItem('has_session', '1');
   });
-  await mockApi(page, options);
 }
 
 /** Ensure no session flag is set, so ProtectedRoute redirects to /login. */

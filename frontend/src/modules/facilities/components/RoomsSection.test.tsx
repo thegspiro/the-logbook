@@ -39,8 +39,10 @@ const storage = {
   updatedAt: '2026-08-16T00:00:00Z',
 };
 
-function renderSection(canManage = true) {
-  return renderWithRouter(<RoomsSection facilityId="facility-1" canManage={canManage} />);
+function renderSection(canCreate = true, canEdit = true, canDelete = true) {
+  return renderWithRouter(
+    <RoomsSection facilityId="facility-1" canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} />
+  );
 }
 
 describe('RoomsSection nesting', () => {
@@ -63,6 +65,21 @@ describe('RoomsSection nesting', () => {
     renderSection();
 
     expect(await screen.findByText('1 sub-room')).toBeInTheDocument();
+  });
+
+  it('lets an editor change rooms without exposing manager-only deletion', async () => {
+    renderSection(true, true, false);
+
+    expect(await screen.findByRole('button', { name: 'Edit room Volunteer Office' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete room Volunteer Office' })).not.toBeInTheDocument();
+  });
+
+  it('lets a creator add rooms without exposing edit or delete controls', async () => {
+    renderSection(true, false, false);
+
+    expect(await screen.findByRole('button', { name: 'Add Room' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit room Volunteer Office' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete room Volunteer Office' })).not.toBeInTheDocument();
   });
 
   it('creates a sub-room with the containing room as parent', async () => {

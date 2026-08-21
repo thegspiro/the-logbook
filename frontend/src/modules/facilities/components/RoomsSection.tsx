@@ -26,7 +26,9 @@ import { formatNumber } from '../../../utils/dateFormatting';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
-  canManage: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 /**
@@ -79,7 +81,7 @@ const emptyForm = {
   parent_room_id: '',
 };
 
-export default function RoomsSection({ facilityId, canManage }: Props) {
+export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete }: Props) {
   const { confirm } = useConfirm();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -302,9 +304,9 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
                   <QrCode className="h-3.5 w-3.5" />
                 </button>
               )}
-              {canManage && (
+              {(canCreate || canEdit || canDelete) && (
                 <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  {canNestDeeper && (
+                  {canCreate && canNestDeeper && (
                     <button
                       onClick={() => openCreate(room.id)}
                       className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
@@ -314,22 +316,26 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  <button
-                    onClick={() => openEdit(room)}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                    aria-label={`Edit room ${room.name}`}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleDelete(node);
-                    }}
-                    className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    aria-label={`Delete room ${room.name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => openEdit(room)}
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                      aria-label={`Edit room ${room.name}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      onClick={() => {
+                        void handleDelete(node);
+                      }}
+                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      aria-label={`Delete room ${room.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -378,7 +384,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
         <div className="flex items-center gap-1">
           {/* Rooms sync to Locations with kiosk display codes — the QR
               directory is where those codes can be viewed and printed */}
-          {canManage && (
+          {canDelete && (
             <Link
               to="/locations/qr-codes"
               className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors max-md:min-h-11"
@@ -386,7 +392,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
               <QrCode className="h-3.5 w-3.5" aria-hidden="true" /> Check-In QR Codes
             </Link>
           )}
-          {canManage && (
+          {canCreate && (
             <button
               onClick={() => openCreate()}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -399,7 +405,7 @@ export default function RoomsSection({ facilityId, canManage }: Props) {
 
       <div className="p-4">
         {/* Add/Edit Form */}
-        {canManage && showForm && (
+        {showForm && (editingRoom ? canEdit : canCreate) && (
           <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
             <h3 className="text-theme-text-primary text-sm font-medium">{editingRoom ? 'Edit Room' : 'Add Room'}</h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

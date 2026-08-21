@@ -34,6 +34,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { blankToNull } from '../../../utils/formValues';
+import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { Modal } from '../../../components/Modal';
 import { formatVendorAddress, primaryContact } from '../utils/vendorHelpers';
 import { EmptyState } from '../../../components/ux';
@@ -1266,7 +1267,7 @@ export const VendorsPage: React.FC = () => {
                         </a>
                       </p>
                     )}
-                    {vendor.website && (
+                    {vendor.website && isSafeExternalUrl(vendor.website) && (
                       <p className="flex items-center gap-1.5">
                         <Globe className="h-3.5 w-3.5 shrink-0" />
                         <a

@@ -22,6 +22,7 @@ import { Modal } from '../../../components/Modal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
+import { formCoercions } from '../../../utils/formValues';
 
 interface GroupFormData {
   name: string;
@@ -272,15 +273,21 @@ const VariantGroupsPage: React.FC = () => {
     }
     setIsSaving(true);
     try {
+      // Create and edit want opposite things from a blank box. On create a blank
+      // is omitted so `""` never reaches a Pydantic validator; on edit it goes
+      // as an explicit null, because the backend dumps update payloads with
+      // `exclude_unset` and an omitted key means "leave this alone" — the clear
+      // was being lost behind a success toast (CLAUDE.md pitfall #1).
+      const { text, pick, num } = formCoercions(Boolean(editingGroup));
       const basePrice = parseFloat(formData.base_price);
       const replacementCost = parseFloat(formData.base_replacement_cost);
       const payload: ItemVariantGroupCreate = {
         name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        category_id: formData.category_id || undefined,
-        base_price: isNaN(basePrice) ? undefined : basePrice,
-        base_replacement_cost: isNaN(replacementCost) ? undefined : replacementCost,
-        unit_of_measure: formData.unit_of_measure.trim() || undefined,
+        description: text(formData.description),
+        category_id: pick(formData.category_id),
+        base_price: isNaN(basePrice) ? num('') : basePrice,
+        base_replacement_cost: isNaN(replacementCost) ? num('') : replacementCost,
+        unit_of_measure: text(formData.unit_of_measure),
       };
       if (editingGroup) {
         await inventoryService.updateVariantGroup(editingGroup.id, payload);
@@ -395,7 +402,7 @@ const VariantGroupsPage: React.FC = () => {
                     <Ruler className="h-4 w-4 text-teal-500" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-theme-text-primary truncate font-semibold">{group.name}</h3>
+                    <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{group.name}</h3>
                     {!group.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
                   </div>
                 </div>

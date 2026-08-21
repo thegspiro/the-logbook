@@ -467,7 +467,7 @@ export const MembersAdminPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setViewMode('by-member')}
-              className={`border px-4 py-2 text-sm font-medium ${
+              className={`min-h-11 border px-4 py-2 text-sm font-medium ${
                 viewMode === 'by-member'
                   ? 'z-10 border-blue-600 bg-blue-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
@@ -478,7 +478,7 @@ export const MembersAdminPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setViewMode('by-role')}
-              className={`border px-4 py-2 text-sm font-medium ${
+              className={`min-h-11 border px-4 py-2 text-sm font-medium ${
                 viewMode === 'by-role'
                   ? 'z-10 border-blue-600 bg-blue-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'

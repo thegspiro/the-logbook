@@ -77,11 +77,31 @@ class EmailTriggerConfig(BaseModel):
 
 
 class RequestPipelineUpdate(BaseModel):
-    """Settings for the event request pipeline."""
+    """Settings for the event request pipeline.
+
+    Every key in ``EVENT_SETTINGS_DEFAULTS["request_pipeline"]`` that an
+    administrator can change must be declared here. Pydantic drops undeclared
+    fields silently, and ``update_event_settings`` then deep-merges an empty
+    dict — so an omission is not a validation error the caller sees, it is a
+    ``200 OK`` over a write that never happened.
+
+    That is what happened to ``accept_public_requests`` and
+    ``public_daily_limit`` when EV-5 added them (2026-08-17): the defaults
+    carried them, the public intake endpoint gated on them, the settings screen
+    rendered a toggle for them — and the only path that could set them threw
+    them away. Public intake could not be turned on at all, and the toggle's
+    own success toast read the unchanged response back and announced that the
+    form was "now closed".
+    """
 
     min_lead_time_days: Optional[int] = Field(None, ge=0)
     default_assignee_id: Optional[str] = None
     public_progress_visible: Optional[bool] = None
+    accept_public_requests: Optional[bool] = None
+    # ge=1, not ge=0: a zero ceiling would accept nothing while the intake
+    # toggle still read as open, which is a confusing way to spell the thing
+    # `accept_public_requests: false` already says plainly.
+    public_daily_limit: Optional[int] = Field(None, ge=1)
     tasks: Optional[List[RequestPipelineTask]] = None
     email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
 

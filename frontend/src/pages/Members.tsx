@@ -28,6 +28,7 @@ import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
 import { UserStatus } from '../constants/enums';
+import { buildCsv, downloadCsv } from '../utils/csv';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -218,14 +219,7 @@ const Members: React.FC = () => {
       m.membership_number || '',
       m.hire_date ? formatDate(m.hire_date, tz) : '',
     ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `members-${getTodayLocalDate(tz)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(buildCsv([headers, ...rows]), `members-${getTodayLocalDate(tz)}.csv`);
   }, [filteredMembers, selectedIds, tz]);
 
   const getStatusColor = (status: string) => {
@@ -262,7 +256,7 @@ const Members: React.FC = () => {
           {filteredMembers.length > 0 && (
             <button
               onClick={handleExportCSV}
-              className="btn-secondary inline-flex items-center gap-2"
+              className="btn-secondary btn-auto inline-flex items-center gap-2"
               title="Export to CSV"
             >
               <Download className="h-4 w-4" aria-hidden="true" />

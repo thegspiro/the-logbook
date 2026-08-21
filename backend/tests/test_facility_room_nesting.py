@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.facilities import FacilityRoomCreate, FacilityRoomUpdate
 from app.services.facilities_service import MAX_ROOM_NESTING_DEPTH, FacilitiesService
@@ -56,6 +57,18 @@ def make_room(room_id, facility_id, parent_room_id=None, name="Room"):
     room.parent_room_id = parent_room_id
     room.name = name
     return room
+
+
+@pytest.mark.parametrize(
+    ("schema", "payload"),
+    [
+        (FacilityRoomCreate, {"facility_id": "facility", "name": "Room"}),
+        (FacilityRoomUpdate, {}),
+    ],
+)
+def test_empty_parent_room_id_is_rejected(schema, payload):
+    with pytest.raises(ValidationError):
+        schema(parent_room_id="", **payload)
 
 
 class TestAssertParentRoomValid:

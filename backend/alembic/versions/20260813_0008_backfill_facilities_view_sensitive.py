@@ -23,7 +23,7 @@ Positions whose grants already cover the permission ("*",
 is a documented no-op — see downgrade().
 
 Revision ID: 20260813_0008
-Revises: 20260813_0007
+Revises: 20260813_0007_merge
 Create Date: 2026-08-13 00:01:00.000000
 """
 
@@ -34,7 +34,7 @@ from alembic import op
 
 # revision identifiers
 revision = "20260813_0008"
-down_revision = "20260813_0007"
+down_revision = "20260813_0007_merge"
 branch_labels = None
 depends_on = None
 

@@ -600,7 +600,7 @@ const SchedulingPage: React.FC = () => {
             canManage && activeTab === 'schedule' ? (
               <button
                 onClick={() => setShowCreateShift(true)}
-                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
+                className="flex min-h-11 w-full items-center justify-center space-x-2 rounded-lg bg-violet-600 px-4 py-2 text-white transition-colors hover:bg-violet-700 sm:w-auto"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 <span>Create Shift</span>
@@ -616,8 +616,10 @@ const SchedulingPage: React.FC = () => {
         <div className="border-theme-surface-border relative -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
           <div
             className="flex scrollbar-thin space-x-1 overflow-x-auto scroll-smooth"
+            data-mobile-scroll-region
             role="tablist"
             aria-label="Scheduling views"
+            tabIndex={0}
           >
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
@@ -671,7 +673,7 @@ const SchedulingPage: React.FC = () => {
                     key={link.path}
                     to={link.path}
                     title={link.description}
-                    className="btn-secondary mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
+                    className="btn-secondary btn-auto mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
                   >
                     <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
                     {link.label}

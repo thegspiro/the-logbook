@@ -372,6 +372,41 @@ class TestTheCodeDefaultsFillInTheOrganization:
         assert "Falls Church Fire &amp; Rescue" in html
         assert "Falls Church Fire & Rescue" in text
 
+    @pytest.mark.parametrize(
+        ("template_type", "footer_text"),
+        [
+            (
+                EmailTemplateType.EVENT_REQUEST_STATUS,
+                "Replies to this message reach the department office.",
+            ),
+            (
+                EmailTemplateType.MEMBER_DROPPED,
+                "Please retain this notice for your records.",
+            ),
+        ],
+    )
+    async def test_code_default_uses_its_declared_footer(
+        self, template_type, footer_text
+    ):
+        """The no-row path must honor the footer selected by the catalogue."""
+        from app.services.email_service import EmailService
+
+        defn = next(d for d in _DEFS if d["type"] is template_type)
+        svc = EmailService(organization=self._org())
+
+        _, html, text = await svc._render_with_fallback(
+            template_type=template_type,
+            context=dict(SAMPLE_CONTEXT[template_type.value]),
+            default_subject=defn["subject"],
+            default_html=defn["html"],
+            default_text=defn["text"],
+        )
+
+        assert footer_text in html
+        assert footer_text in text
+        assert "Please do not reply to this email." not in html
+        assert "Please do not reply to this email." not in text
+
 
 class TestTheDocumentShell:
     def test_declares_its_encoding(self):

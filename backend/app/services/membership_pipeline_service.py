@@ -949,7 +949,9 @@ class MembershipPipelineService:
             # the unique index is the concurrency boundary. A simultaneous
             # public submission may win after our SELECT, in which case return
             # that durable application rather than surfacing a database 500.
-            existing = await self._find_active_prospect_by_email(organization_id, email)
+            existing = await self._find_active_prospect_by_email(
+                organization_id, email, current_read=True
+            )
             if existing:
                 await self._notify_duplicate_application(existing, organization_id)
                 return existing
@@ -3418,7 +3420,7 @@ class MembershipPipelineService:
         return await self._find_active_prospect_by_email(organization_id, email)
 
     async def _find_active_prospect_by_email(
-        self, organization_id: str, email: str
+        self, organization_id: str, email: str, *, current_read: bool = False
     ) -> Optional[ProspectiveMember]:
         """Return an existing active/pending prospect with the given email.
 
@@ -3430,7 +3432,7 @@ class MembershipPipelineService:
         without this the duplicate path answered **500** instead of returning
         the existing applicant, which is the whole point of detecting one.
         """
-        result = await self.db.execute(
+        query = (
             select(ProspectiveMember)
             .where(
                 and_(
@@ -3455,6 +3457,11 @@ class MembershipPipelineService:
             .order_by(ProspectiveMember.created_at)
             .limit(1)
         )
+        if current_read:
+            # MySQL locking reads use the latest committed state rather than
+            # the REPEATABLE READ snapshot established by the preflight query.
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalars().first()
 
     async def _notify_duplicate_application(

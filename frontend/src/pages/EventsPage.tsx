@@ -32,7 +32,7 @@ import {
   Trash2,
   AlertCircle,
   BarChart3,
-  Zap,
+  MoreHorizontal,
   Settings,
   Pencil,
 } from 'lucide-react';
@@ -50,6 +50,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
@@ -99,6 +100,11 @@ const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.OTHER,
 ];
 
+/* One row of the overflow menu. `max-md` grows it to the 44px touch minimum
+   without inflating the same menu on a desktop pointer. */
+const MENU_ITEM_CLASS =
+  'text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors max-md:min-h-[44px]';
+
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -115,15 +121,27 @@ export const EventsPage: React.FC = () => {
   const [rsvpLoading, setRsvpLoading] = useState<Record<string, boolean>>({});
   const [rsvpChanging, setRsvpChanging] = useState<Record<string, boolean>>({});
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+  /**
+   * Bulk selection is a mode, entered from the overflow menu, rather than a
+   * checkbox on every card. Bulk-cancelling is occasional; the checkbox was
+   * permanent, and the 40px of gutter it claimed came out of the title on the
+   * single-column phone layout.
+   */
+  const [selectionMode, setSelectionMode] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
-  // Quick-create from template state
+  // Templates offered inside the overflow menu (quick-create)
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
-  const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
-  const quickCreateRef = React.useRef<HTMLDivElement>(null);
+
+  // Header overflow menu, and the phone-only disclosure over the secondary
+  // filters. Both are open-by-intent: on a desktop pointer the filters are
+  // laid out inline and the disclosure button is not rendered at all.
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const moreMenuRef = React.useRef<HTMLDivElement>(null);
 
   // CSV Import state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -193,18 +211,25 @@ export const EventsPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [showPresetMenu]);
 
-  // Close quick-create dropdown on outside click
+  // Close the overflow menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (quickCreateRef.current && !quickCreateRef.current.contains(e.target as Node)) {
-        setShowQuickCreate(false);
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
       }
     };
-    if (showQuickCreate) {
+    if (showMoreMenu) {
       document.addEventListener('mousedown', handler);
     }
     return () => document.removeEventListener('mousedown', handler);
-  }, [showQuickCreate]);
+  }, [showMoreMenu]);
+
+  const closeMoreMenu = useCallback(() => setShowMoreMenu(false), []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedEvents(new Set());
+  }, []);
 
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
@@ -393,30 +418,43 @@ export const EventsPage: React.FC = () => {
   }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy]);
 
   // #48: CSV export for events
+  /** One builder for both export paths, so a fix to either cannot miss the other. */
+  const exportEventsToCsv = useCallback(
+    (events: EventListItem[], filename: string) => {
+      const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
+      const rows = events.map((e) => [
+        e.title,
+        getEventTypeLabel(e.event_type),
+        formatShortDateTime(e.start_datetime, tz),
+        e.location || '',
+        e.is_mandatory ? 'Yes' : 'No',
+        e.is_cancelled ? 'Yes' : 'No',
+      ]);
+      downloadCsv(buildCsv([headers, ...rows]), filename);
+    },
+    [tz]
+  );
+
   const handleExportCSV = useCallback(() => {
-    const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
-    const rows = sortedEvents.map((e) => [
-      e.title,
-      getEventTypeLabel(e.event_type),
-      formatShortDateTime(e.start_datetime, tz),
-      e.location || '',
-      e.is_mandatory ? 'Yes' : 'No',
-      e.is_cancelled ? 'Yes' : 'No',
-    ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `events-${getTodayLocalDate(tz)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [sortedEvents, tz]);
+    exportEventsToCsv(sortedEvents, `events-${getTodayLocalDate(tz)}.csv`);
+  }, [exportEventsToCsv, sortedEvents, tz]);
+
+  const handleExportFromMenu = useCallback(() => {
+    setShowMoreMenu(false);
+    handleExportCSV();
+  }, [handleExportCSV]);
+
+  // Drives the count on the phone-only filter button. Only the filters hidden
+  // behind the disclosure are counted — the ones still on screen (upcoming/past,
+  // list/calendar, search) say what they are without a badge.
+  const activeFilterCount = (showMyEventsOnly ? 1 : 0) + (sortBy !== 'date' ? 1 : 0);
+
+  // With no events to export and no management rights the menu has no rows, so
+  // the trigger would open an empty panel.
+  const hasMoreActions = canManage || sortedEvents.length > 0;
 
   const handleDuplicate = useCallback(
-    async (eventId: string, e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    async (eventId: string) => {
       try {
         const newEvent = await eventService.duplicateEvent(eventId);
         toast.success('Event duplicated successfully');
@@ -428,9 +466,7 @@ export const EventsPage: React.FC = () => {
     [navigate]
   );
 
-  const toggleEventSelection = useCallback((eventId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const toggleEventSelection = useCallback((eventId: string) => {
     setSelectedEvents((prev) => {
       const next = new Set(prev);
       if (next.has(eventId)) {
@@ -445,24 +481,8 @@ export const EventsPage: React.FC = () => {
   const handleExportSelectedCSV = useCallback(() => {
     const selected = sortedEvents.filter((e) => selectedEvents.has(e.id));
     if (selected.length === 0) return;
-    const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
-    const rows = selected.map((e) => [
-      e.title,
-      getEventTypeLabel(e.event_type),
-      formatShortDateTime(e.start_datetime, tz),
-      e.location || '',
-      e.is_mandatory ? 'Yes' : 'No',
-      e.is_cancelled ? 'Yes' : 'No',
-    ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `events-selected-${getTodayLocalDate(tz)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [sortedEvents, selectedEvents, tz]);
+    exportEventsToCsv(selected, `events-selected-${getTodayLocalDate(tz)}.csv`);
+  }, [exportEventsToCsv, sortedEvents, selectedEvents, tz]);
 
   const handleCancelSelected = useCallback(async () => {
     const selected = sortedEvents.filter((e) => selectedEvents.has(e.id) && !e.is_cancelled);
@@ -589,7 +609,7 @@ export const EventsPage: React.FC = () => {
         <Breadcrumbs />
 
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-red-600 p-2">
               <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
@@ -601,64 +621,39 @@ export const EventsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+
+          {/* One row at every width: the create action, with everything else
+              behind a single overflow menu. As eight sibling buttons these
+              wrapped to a column of full-width bars on a phone — and since
+              each hid its label below 640px, a column of unlabelled ones —
+              which pushed the first event most of a screen below the fold. */}
+          <div className="flex items-center gap-2">
             <NfcTapButton />
-            {sortedEvents.length > 0 && (
-              <button
-                onClick={handleExportCSV}
-                className="btn-secondary inline-flex items-center gap-2"
-                title="Export to CSV"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-            )}
             {canManage && (
-              <>
+              <Link
+                to="/events/admin?tab=create"
+                className="btn-primary btn-auto inline-flex flex-1 items-center justify-center gap-2 sm:flex-none"
+              >
+                <Plus className="h-5 w-5" aria-hidden="true" />
+                Create Event
+              </Link>
+            )}
+            {hasMoreActions && (
+              <div className="relative shrink-0" ref={moreMenuRef}>
                 <button
-                  onClick={() => setShowImportModal(true)}
-                  className="btn-secondary inline-flex items-center gap-2"
-                  title="Import from CSV"
+                  type="button"
+                  onClick={() => setShowMoreMenu((prev) => !prev)}
+                  className="btn-secondary btn-auto btn-icon"
+                  aria-label="More event actions"
+                  aria-haspopup="true"
+                  aria-expanded={showMoreMenu}
                 >
-                  <Upload className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Import</span>
+                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
                 </button>
-                <Link
-                  to="/events/templates"
-                  className="btn-secondary inline-flex items-center gap-2"
-                  title="Event Templates"
-                >
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Templates</span>
-                </Link>
-                <Link
-                  to="/events/analytics"
-                  className="btn-secondary inline-flex items-center gap-2"
-                  title="Attendance Trends"
-                >
-                  <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Analytics</span>
-                </Link>
-                <Link
-                  to="/events/admin?tab=settings"
-                  className="btn-secondary btn-icon"
-                  title="Module Settings"
-                  aria-label="Event module settings"
-                >
-                  <Settings className="h-5 w-5" aria-hidden="true" />
-                </Link>
-                <div className="relative" ref={quickCreateRef}>
-                  <button
-                    onClick={() => setShowQuickCreate((prev) => !prev)}
-                    className="btn-primary inline-flex items-center gap-2"
-                    title="Quick Create from Template"
-                  >
-                    <Zap className="h-5 w-5" aria-hidden="true" />
-                    <span className="hidden sm:inline">Quick Create</span>
-                  </button>
-                  {showQuickCreate && (
-                    <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
-                      <div className="p-2">
+                {showMoreMenu && (
+                  <div className="popover-panel absolute right-0 z-50 mt-2 w-64">
+                    {canManage && (
+                      <div className="border-theme-surface-border border-b p-2">
                         <p className="text-theme-text-secondary px-3 py-1.5 text-xs font-semibold tracking-wider uppercase">
                           Create from Template
                         </p>
@@ -667,219 +662,301 @@ export const EventsPage: React.FC = () => {
                         ) : templates.length === 0 ? (
                           <p className="text-theme-text-secondary px-3 py-2 text-sm">No templates available</p>
                         ) : (
-                          templates.map((template) => (
-                            <button
-                              key={template.id}
-                              onClick={() => {
-                                setShowQuickCreate(false);
-                                void navigate(`/events/admin?tab=create&template=${template.id}`);
-                              }}
-                              className="text-theme-text-primary hover:bg-theme-surface-hover w-full rounded-md px-3 py-2 text-left text-sm transition-colors"
-                            >
-                              <span className="font-medium">{template.name}</span>
-                              {template.description && (
-                                <span className="text-theme-text-secondary block truncate text-xs">
-                                  {template.description}
+                          <div className="max-h-48 overflow-y-auto">
+                            {templates.map((template) => (
+                              <button
+                                key={template.id}
+                                onClick={() => {
+                                  setShowMoreMenu(false);
+                                  void navigate(`/events/admin?tab=create&template=${template.id}`);
+                                }}
+                                className={MENU_ITEM_CLASS}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-medium">{template.name}</span>
+                                  {template.description && (
+                                    <span className="text-theme-text-secondary block truncate text-xs">
+                                      {template.description}
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                            </button>
-                          ))
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                </div>
-                <Link to="/events/admin?tab=create" className="btn-primary inline-flex items-center gap-2">
-                  <Plus className="h-5 w-5" aria-hidden="true" />
-                  Create Event
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Upcoming / Past Toggle + View Mode + Search + My Events + Sort */}
-        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="card inline-flex p-1">
-            <button
-              onClick={() => setShowPastEvents(false)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-                !showPastEvents
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              Upcoming
-            </button>
-            <button
-              onClick={() => setShowPastEvents(true)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-                showPastEvents
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-            >
-              Past
-            </button>
-          </div>
-          <div className="card inline-flex p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
-                viewMode === 'list'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-              aria-label="List view"
-              title="List view"
-            >
-              <List className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
-                viewMode === 'calendar'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
-              aria-label="Calendar view"
-              title="Calendar view"
-            >
-              <Calendar className="h-4 w-4" />
-            </button>
-          </div>
-          <button
-            onClick={() => setShowMyEventsOnly((prev) => !prev)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-              showMyEventsOnly
-                ? 'border-red-600 bg-red-600 text-white shadow-sm'
-                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
-            }`}
-          >
-            <User className="h-4 w-4" aria-hidden="true" />
-            My Events
-          </button>
-          <div className="relative max-w-sm flex-1">
-            <Search
-              className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
-            <input
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              type="text"
-              aria-label="Search events..."
-              placeholder="Search events..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="form-input pr-4 pl-10"
-            />
-          </div>
-          <div className="relative">
-            <SlidersHorizontal
-              className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
-              className="form-input appearance-none pr-8 pl-9"
-            >
-              <option value="date">Sort by Date</option>
-              <option value="title">Sort by Title</option>
-              <option value="rsvp_count">Sort by RSVP Count</option>
-            </select>
-          </div>
-
-          {/* Filter Presets */}
-          <div className="relative" ref={presetMenuRef}>
-            <button
-              onClick={() => {
-                setShowPresetMenu((prev) => !prev);
-                setShowSavePresetInput(false);
-                setPresetName('');
-              }}
-              className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px] max-md:min-w-[44px]"
-              title="Filter presets"
-            >
-              <Bookmark className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Presets</span>
-            </button>
-
-            {showPresetMenu && (
-              <div className="popover-panel absolute top-full right-0 z-40 mt-1 w-72">
-                <div className="border-theme-surface-border border-b p-2">
-                  {!showSavePresetInput ? (
-                    <button
-                      onClick={() => setShowSavePresetInput(true)}
-                      className="text-theme-text-primary hover:bg-theme-surface-hover inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                    >
-                      <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-                      Save Current Filters
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={presetName}
-                        onChange={(e) => setPresetName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSavePreset();
-                          if (e.key === 'Escape') {
-                            setShowSavePresetInput(false);
-                            setPresetName('');
-                          }
-                        }}
-                        placeholder="Preset name..."
-                        className="form-input-sm flex-1"
-                        autoFocus
-                      />
-                      <button
-                        onClick={handleSavePreset}
-                        disabled={!presetName.trim()}
-                        className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="max-h-60 overflow-y-auto">
-                  {presets.length === 0 ? (
-                    <p className="text-theme-text-muted px-3 py-4 text-center text-sm">No saved presets yet</p>
-                  ) : (
-                    <ul className="py-1">
-                      {presets.map((preset) => (
-                        <li key={preset.id} className="flex items-center gap-1 px-2">
+                    )}
+                    <div className="p-2">
+                      {canManage && sortedEvents.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMoreMenu(false);
+                            setSelectionMode(true);
+                          }}
+                          className={MENU_ITEM_CLASS}
+                        >
+                          <CheckSquare className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          Select Events
+                        </button>
+                      )}
+                      {sortedEvents.length > 0 && (
+                        <button type="button" onClick={handleExportFromMenu} className={MENU_ITEM_CLASS}>
+                          <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          Export to CSV
+                        </button>
+                      )}
+                      {canManage && (
+                        <>
                           <button
-                            onClick={() => handleLoadPreset(preset)}
-                            className="text-theme-text-primary hover:bg-theme-surface-hover flex-1 truncate rounded-md px-2 py-2 text-left text-sm transition-colors"
-                            title={`Load "${preset.name}"`}
+                            type="button"
+                            onClick={() => {
+                              setShowMoreMenu(false);
+                              setShowImportModal(true);
+                            }}
+                            className={MENU_ITEM_CLASS}
                           >
-                            {preset.name}
+                            <Upload className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Import from CSV
                           </button>
-                          <button
-                            onClick={() => handleDeletePreset(preset.id)}
-                            className="text-theme-text-muted hover:bg-theme-surface-hover shrink-0 rounded-md p-1.5 transition-colors hover:text-red-600 dark:hover:text-red-400"
-                            title={`Delete "${preset.name}"`}
-                            aria-label={`Delete preset ${preset.name}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                          <Link to="/events/templates" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                            <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Event Templates
+                          </Link>
+                          <Link to="/events/analytics" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                            <BarChart3 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Attendance Trends
+                          </Link>
+                          <Link to="/events/admin?tab=settings" onClick={closeMoreMenu} className={MENU_ITEM_CLASS}>
+                            <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Event Module Settings
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
+        {/* Mode + view + search stay on screen; the filters nobody changes on
+            every visit sit behind a disclosure on phones, where each one cost
+            a full-width row above the first event. */}
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <div className="flex items-center gap-2">
+            <div className="segmented-group inline-flex shrink-0 items-center">
+              <button
+                onClick={() => setShowPastEvents(false)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                  !showPastEvents
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                Upcoming
+              </button>
+              <button
+                onClick={() => setShowPastEvents(true)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                  showPastEvents
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >
+                Past
+              </button>
+            </div>
+            <div className="segmented-group inline-flex shrink-0 items-center">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
+                  viewMode === 'list'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+                aria-label="List view"
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
+                  viewMode === 'calendar'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+                aria-label="Calendar view"
+                title="Calendar view"
+              >
+                <Calendar className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 md:min-w-0 md:flex-1">
+            <div className="relative min-w-0 flex-1 md:max-w-sm">
+              <Search
+                className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                type="text"
+                aria-label="Search events..."
+                placeholder="Search events..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="form-input pr-4 pl-10"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className="btn-secondary btn-auto btn-icon relative shrink-0 md:hidden"
+              aria-controls="event-filter-options"
+              aria-expanded={showFilters}
+              aria-label={showFilters ? 'Hide filter options' : 'Show filter options'}
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div
+            id="event-filter-options"
+            data-testid="event-filter-options"
+            className={`${showFilters ? 'flex' : 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3`}
+          >
+            <button
+              onClick={() => setShowMyEventsOnly((prev) => !prev)}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
+                showMyEventsOnly
+                  ? 'border-red-600 bg-red-600 text-white shadow-sm'
+                  : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
+              }`}
+            >
+              <User className="h-4 w-4" aria-hidden="true" />
+              My Events
+            </button>
+            <div className="relative">
+              <SlidersHorizontal
+                className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
+                className="form-input appearance-none pr-8 pl-9"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="title">Sort by Title</option>
+                <option value="rsvp_count">Sort by RSVP Count</option>
+              </select>
+            </div>
+
+            {/* Filter Presets */}
+            <div className="relative" ref={presetMenuRef}>
+              <button
+                onClick={() => {
+                  setShowPresetMenu((prev) => !prev);
+                  setShowSavePresetInput(false);
+                  setPresetName('');
+                }}
+                className="btn-secondary text-theme-text-secondary hover:text-theme-text-primary inline-flex w-full items-center justify-center gap-1.5 px-3 text-sm font-medium max-md:min-h-[44px]"
+                title="Filter presets"
+              >
+                <Bookmark className="h-4 w-4" aria-hidden="true" />
+                Presets
+              </button>
+
+              {showPresetMenu && (
+                <div className="popover-panel absolute top-full right-0 z-40 mt-1 w-72">
+                  <div className="border-theme-surface-border border-b p-2">
+                    {!showSavePresetInput ? (
+                      <button
+                        onClick={() => setShowSavePresetInput(true)}
+                        className="text-theme-text-primary hover:bg-theme-surface-hover inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                      >
+                        <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+                        Save Current Filters
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={presetName}
+                          onChange={(e) => setPresetName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSavePreset();
+                            if (e.key === 'Escape') {
+                              setShowSavePresetInput(false);
+                              setPresetName('');
+                            }
+                          }}
+                          placeholder="Preset name..."
+                          className="form-input-sm flex-1"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleSavePreset}
+                          disabled={!presetName.trim()}
+                          className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {presets.length === 0 ? (
+                      <p className="text-theme-text-muted px-3 py-4 text-center text-sm">No saved presets yet</p>
+                    ) : (
+                      <ul className="py-1">
+                        {presets.map((preset) => (
+                          <li key={preset.id} className="flex items-center gap-1 px-2">
+                            <button
+                              onClick={() => handleLoadPreset(preset)}
+                              className="text-theme-text-primary hover:bg-theme-surface-hover flex-1 truncate rounded-md px-2 py-2 text-left text-sm transition-colors"
+                              title={`Load "${preset.name}"`}
+                            >
+                              {preset.name}
+                            </button>
+                            <button
+                              onClick={() => handleDeletePreset(preset.id)}
+                              className="text-theme-text-muted hover:bg-theme-surface-hover shrink-0 rounded-md p-1.5 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                              title={`Delete "${preset.name}"`}
+                              aria-label={`Delete preset ${preset.name}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Filter Tabs */}
         <div className="border-theme-surface-border -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
-          <nav className="-mb-px flex scrollbar-thin space-x-4 overflow-x-auto pb-px sm:space-x-8" aria-label="Tabs">
+          <nav
+            className="-mb-px flex scrollbar-thin space-x-4 overflow-x-auto pb-px sm:space-x-8"
+            data-mobile-scroll-region
+            aria-label="Event filters"
+            tabIndex={0}
+          >
             {filterTabs.map((filter) => (
               <button
                 key={filter}
@@ -935,10 +1012,15 @@ export const EventsPage: React.FC = () => {
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {paginatedEvents.map((event) => (
-                <div key={event.id} className="relative">
-                  {canManage && (
+                <div
+                  key={event.id}
+                  className={`card relative flex flex-col transition-all hover:border-red-300 hover:shadow-md ${
+                    selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''
+                  }`}
+                >
+                  {selectionMode && canManage && (
                     <button
-                      onClick={(e) => toggleEventSelection(event.id, e)}
+                      onClick={() => toggleEventSelection(event.id)}
                       className={`absolute top-3 left-3 z-10 rounded p-0.5 transition-colors ${
                         selectedEvents.has(event.id)
                           ? 'text-red-600 dark:text-red-400'
@@ -953,11 +1035,17 @@ export const EventsPage: React.FC = () => {
                       )}
                     </button>
                   )}
+                  {/* Manager actions: a footer strip on a phone, the card corner
+                      from md up. In the corner at every width they overlapped the
+                      title, and the 96px of clearance they needed cut most titles
+                      on a single-column phone layout to "Monthly Traini…".
+                      `order-last` puts the strip below the card body while
+                      keeping it out of the anchor below. */}
                   {canManage && (
-                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+                    <div className="border-theme-surface-border order-last flex items-center justify-end gap-1 border-t px-4 py-2 md:absolute md:top-3 md:right-3 md:z-10 md:order-none md:border-0 md:p-0">
                       <Link
                         to={`/events/${event.id}/edit`}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30"
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 max-md:min-h-[44px] max-md:px-4 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30"
                         aria-label={`Edit ${event.title}`}
                       >
                         <Pencil className="h-3 w-3" aria-hidden="true" />
@@ -965,10 +1053,10 @@ export const EventsPage: React.FC = () => {
                       </Link>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          void handleDuplicate(event.id, e);
+                        onClick={() => {
+                          void handleDuplicate(event.id);
                         }}
-                        className="bg-theme-surface-modal text-theme-text-muted hover:bg-theme-surface-hover rounded-full p-1.5 shadow-sm transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+                        className="bg-theme-surface-modal text-theme-text-muted hover:bg-theme-surface-hover rounded-full p-1.5 shadow-sm transition-colors hover:text-blue-600 max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center dark:hover:text-blue-400"
                         title="Duplicate event"
                         aria-label={`Duplicate ${event.title}`}
                       >
@@ -976,14 +1064,11 @@ export const EventsPage: React.FC = () => {
                       </button>
                     </div>
                   )}
-                  <Link
-                    to={`/events/${event.id}`}
-                    className={`card block transition-all hover:border-red-300 hover:shadow-md ${selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''}`}
-                  >
-                    <div className={`p-5 ${canManage ? 'pl-10' : ''}`}>
+                  <Link to={`/events/${event.id}`} className="block">
+                    <div className={`p-5 ${selectionMode && canManage ? 'pl-10' : ''} ${canManage ? 'md:pr-24' : ''}`}>
                       <div className="flex items-start justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className={`flex items-center gap-2 ${canManage ? 'pr-24' : ''}`}>
+                          <div className="flex items-center gap-2">
                             {event.event_type === EventTypeEnum.TRAINING && (
                               <svg
                                 className="h-5 w-5 shrink-0 text-purple-600"
@@ -1000,7 +1085,10 @@ export const EventsPage: React.FC = () => {
                                 />
                               </svg>
                             )}
-                            <h3 className="text-theme-text-primary truncate text-lg font-medium">{event.title}</h3>
+                            {/* Two lines rather than one truncated one: on a phone the card is a
+     single column and the manager chips claim the right quarter of it,
+     which cut most titles to "Monthly Traini…". */}
+                            <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{event.title}</h3>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-2">
                             <span
@@ -1104,70 +1192,57 @@ export const EventsPage: React.FC = () => {
                             )}
                           </div>
                         )}
-
-                        {/* Inline Quick RSVP */}
-                        {event.requires_rsvp && !event.is_cancelled && (
-                          <div
-                            className="flex items-center gap-2 pt-1"
-                            onClick={(e) => e.preventDefault()}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') e.preventDefault();
-                            }}
-                            role="group"
-                            aria-label="Quick RSVP"
-                          >
-                            {!event.user_rsvp_status || rsvpChanging[event.id] ? (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    void handleQuickRSVP(event.id, 'going');
-                                  }}
-                                  disabled={!!rsvpLoading[event.id]}
-                                  className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-200 disabled:opacity-50 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30"
-                                >
-                                  <Check className="h-3 w-3" aria-hidden="true" />
-                                  Going
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    void handleQuickRSVP(event.id, 'not_going');
-                                  }}
-                                  disabled={!!rsvpLoading[event.id]}
-                                  className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
-                                >
-                                  <X className="h-3 w-3" aria-hidden="true" />
-                                  Not Going
-                                </button>
-                                {event.user_rsvp_status && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      setRsvpChanging((prev) => ({ ...prev, [event.id]: false }));
-                                    }}
-                                    className="text-theme-text-muted hover:text-theme-text-primary text-xs"
-                                  >
-                                    Cancel
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  setRsvpChanging((prev) => ({ ...prev, [event.id]: true }));
-                                }}
-                                className="text-theme-text-muted hover:text-theme-text-primary text-xs underline"
-                              >
-                                Change RSVP
-                              </button>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </Link>
+                  {/* Inline Quick RSVP */}
+                  {event.requires_rsvp && !event.is_cancelled && (
+                    <div className="flex items-center gap-2 px-5 pb-4" role="group" aria-label="Quick RSVP">
+                      {!event.user_rsvp_status || rsvpChanging[event.id] ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              void handleQuickRSVP(event.id, 'going');
+                            }}
+                            disabled={!!rsvpLoading[event.id]}
+                            className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-200 disabled:opacity-50 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30"
+                          >
+                            <Check className="h-3 w-3" aria-hidden="true" />
+                            Going
+                          </button>
+                          <button
+                            onClick={() => {
+                              void handleQuickRSVP(event.id, 'not_going');
+                            }}
+                            disabled={!!rsvpLoading[event.id]}
+                            className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
+                          >
+                            <X className="h-3 w-3" aria-hidden="true" />
+                            Not Going
+                          </button>
+                          {event.user_rsvp_status && (
+                            <button
+                              onClick={() => {
+                                setRsvpChanging((prev) => ({ ...prev, [event.id]: false }));
+                              }}
+                              className="text-theme-text-muted hover:text-theme-text-primary text-xs"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setRsvpChanging((prev) => ({ ...prev, [event.id]: true }));
+                          }}
+                          className="text-theme-text-muted hover:text-theme-text-primary text-xs underline"
+                        >
+                          Change RSVP
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1186,14 +1261,25 @@ export const EventsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Bulk Action Bar */}
-      {selectedEvents.size > 0 && (
-        <div className="popover-panel fixed bottom-6 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-6 py-3">
+      {/* Floating Bulk Action Bar.
+          Shown for the whole of selection mode, not only once something is
+          selected: it carries the only way back out, so appearing at the first
+          tick and vanishing at the last would strand anyone who entered the mode
+          and changed their mind. Raised on phones to clear the bottom navigation,
+          which the previous `bottom-6` sat on top of — the nav is 56px tall plus
+          the home-indicator inset, and shares this z-index. */}
+      {selectionMode && (
+        <div
+          className="popover-panel fixed left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-6 py-3 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6"
+          role="region"
+          aria-label="Bulk event actions"
+        >
           <span className="text-theme-text-primary text-sm font-medium">{selectedEvents.size} selected</span>
           <div className="bg-theme-surface-border h-5 w-px" />
           <button
             onClick={handleExportSelectedCSV}
-            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px]"
+            disabled={selectedEvents.size === 0}
+            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 max-md:min-h-[44px]"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
             Export CSV
@@ -1201,7 +1287,7 @@ export const EventsPage: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setShowCancelConfirm(true)}
-              disabled={bulkActionLoading}
+              disabled={bulkActionLoading || selectedEvents.size === 0}
               className="inline-flex items-center gap-1.5 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 max-md:min-h-[44px] dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
             >
               <XCircle className="h-4 w-4" aria-hidden="true" />
@@ -1209,11 +1295,11 @@ export const EventsPage: React.FC = () => {
             </button>
           )}
           <button
-            onClick={() => setSelectedEvents(new Set())}
-            className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+            onClick={exitSelectionMode}
+            className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px]"
           >
             <X className="h-4 w-4" aria-hidden="true" />
-            Clear
+            Done
           </button>
         </div>
       )}

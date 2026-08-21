@@ -27,6 +27,7 @@ from app.schemas.scheduling import (
     ShiftFinalizeRequest,
 )
 from app.services.call_tracking_service import CallTrackingService
+from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
 
 
@@ -40,6 +41,35 @@ def _rows(items):
     r = MagicMock()
     r.all.return_value = items
     return r
+
+
+@pytest.mark.parametrize("mode", [CallTrackingMode.COUNT_ONLY, CallTrackingMode.OFF])
+@pytest.mark.asyncio
+async def test_detailed_shift_call_rejected_outside_detailed_mode(monkeypatch, mode):
+    """Count-only/off tenants must not be able to persist incident details."""
+    db = MagicMock()
+    db.rollback = AsyncMock()
+    service = SchedulingService(db)
+    service.get_shift_by_id = AsyncMock(return_value=SimpleNamespace(id="shift-1"))
+    monkeypatch.setattr(
+        CallTrackingService,
+        "get_settings",
+        AsyncMock(return_value={"mode": mode, "call_types": []}),
+    )
+
+    call, error = await service.create_shift_call(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {
+            "incident_type": "medical",
+            "incident_number": "CAD-12345",
+            "notes": "Patient details must not be stored",
+        },
+    )
+
+    assert call is None
+    assert error == "Detailed call records are disabled for this organization"
+    db.add.assert_not_called()
 
 
 # ======================================================================
