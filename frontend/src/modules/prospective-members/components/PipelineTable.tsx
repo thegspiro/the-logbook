@@ -362,12 +362,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   const statusColor = APPLICANT_STATUS_COLORS[applicant.status];
                   const statusLabel = APPLICANT_STATUS_LABELS[applicant.status];
                   const isSelected = selected.has(applicant.id);
-                  // The menu is absolutely positioned inside `overflow-x-auto`,
-                  // which forces overflow-y to `auto` and clips it, and inside
-                  // the card's `overflow-hidden`, which clips it with no scroll
-                  // at all. Opening upward on the last rows keeps it within the
-                  // table's own box, where neither ancestor can cut it off.
-                  const menuOpensUp = rowIndex >= sortedApplicants.length - 3 && sortedApplicants.length > 3;
+                  // Open upward only when at least five complete rows provide
+                  // enough room for the tallest action menu. Otherwise keep the
+                  // menu in the table's downward-scrollable overflow area.
+                  const rowsBelow = sortedApplicants.length - rowIndex - 1;
+                  const menuOpensUp = rowIndex >= 5 && rowsBelow < 5;
 
                   return (
                     <tr
