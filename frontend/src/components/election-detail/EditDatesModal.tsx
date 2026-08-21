@@ -75,7 +75,7 @@ const EditDatesModal: React.FC<EditDatesModalProps> = ({
       aria-labelledby="edit-dates-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div ref={dialogRef} className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="edit-dates-modal-title" className="text-theme-text-primary text-lg font-medium">
             Edit Voting Window

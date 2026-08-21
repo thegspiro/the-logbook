@@ -2286,7 +2286,7 @@ export const ShiftReportsTab: React.FC = () => {
           aria-modal="true"
           aria-label="Acknowledge Report"
         >
-          <div className="card w-full max-w-md space-y-4 p-5 sm:p-6">
+          <div className="card modal-panel-scroll w-full max-w-md space-y-4 p-5 sm:p-6">
             <h3 className="text-theme-text-primary text-lg font-semibold">Acknowledge Report</h3>
             <p className="text-theme-text-secondary text-sm">
               Acknowledging confirms you have reviewed this shift completion report.

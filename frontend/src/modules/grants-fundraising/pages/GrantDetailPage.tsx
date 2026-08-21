@@ -12,6 +12,7 @@ import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { DialogPanel } from '@/components/ux/DialogPanel';
 import {
   ArrowLeft,
   Edit,
@@ -136,9 +137,17 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} role="presentation" />
-      <div className="card relative z-10 mx-4 w-full max-w-lg p-6 shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="modal-overlay" onClick={onClose} role="presentation" />
+      {/* DialogPanel rather than a bare div: this shell predated the shared one
+          and so shipped without a focus trap, Escape handling, the body scroll
+          lock, or the registration that lifts the mobile bottom bar off it. */}
+      <DialogPanel onClose={onClose} className="modal-panel-scroll relative z-10 mx-4 w-full max-w-lg p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-theme-text-primary text-lg font-semibold">{title}</h3>
           <button
@@ -150,7 +159,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
           </button>
         </div>
         {children}
-      </div>
+      </DialogPanel>
     </div>
   );
 };
