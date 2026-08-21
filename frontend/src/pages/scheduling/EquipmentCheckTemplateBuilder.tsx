@@ -41,6 +41,7 @@ import {
   List,
   Package,
   Link2,
+  MoreHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
@@ -59,6 +60,13 @@ import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
+import {
+  canMoveCompartment,
+  moveCompartment as moveCompartmentInTree,
+  orderedCompartmentIds,
+  orderedCompartments as buildOrderedCompartments,
+  reorderCompartment,
+} from '@/modules/scheduling/utils/compartmentTree';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/scheduling/components/CatalogQuickAdd';
@@ -67,6 +75,7 @@ import type { CatalogAddPayload } from '@/modules/scheduling/components/CatalogQ
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
+import { storedInsideOptions } from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -105,6 +114,35 @@ const selectClass = 'form-input';
 const labelClass = 'form-label';
 
 const checkboxClass = 'form-checkbox';
+
+const mobileMenuItemClass =
+  'text-theme-text-primary hover:bg-theme-surface-secondary flex min-h-[44px] w-full items-center gap-3 px-3 py-2 text-left text-sm';
+const mobileDestructiveMenuItemClass = `${mobileMenuItemClass} text-red-600 dark:text-red-400`;
+
+/** Native details/summary preserves keyboard disclosure behavior without making
+ * the compact row permanently carry every secondary action. */
+const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <details
+    className="relative flex-shrink-0 sm:hidden"
+    onClick={(event) => {
+      event.stopPropagation();
+      if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false;
+    }}
+    onChange={(event) => {
+      if ((event.target as HTMLElement).matches('select')) event.currentTarget.open = false;
+    }}
+  >
+    <summary
+      className="text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden"
+      aria-label={label}
+    >
+      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+    </summary>
+    <div className="border-theme-surface-border bg-theme-surface absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden rounded-lg border py-1 shadow-lg">
+      {children}
+    </div>
+  </details>
+);
 
 // ============================================================================
 // Item Form State
@@ -275,6 +313,7 @@ const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({ id, children 
 
 interface SortableCompartmentWrapperProps {
   id: string;
+  disabled?: boolean;
   children: (opts: {
     listeners: Record<string, unknown> | undefined;
     setNodeRef: React.Ref<HTMLDivElement>;
@@ -283,8 +322,8 @@ interface SortableCompartmentWrapperProps {
   }) => React.ReactNode;
 }
 
-const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({ id, children }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({ id, disabled = false, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -799,31 +838,31 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Move compartment up/down
   // ---------------------------------------------------------------------------
 
+  const pendingCompartmentOrderRef = useRef(false);
+
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= compartments.length) return;
-
-    setCompartments((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(idx, 1);
-      if (!moved) return prev;
-      next.splice(newIdx, 0, moved);
-      return next;
-    });
-
-    if (isEditing && templateId) {
-      const ids = compartments.map((c, i) => c.id ?? `comp-${i}`);
-      const [movedId] = ids.splice(idx, 1);
-      if (movedId) ids.splice(newIdx, 0, movedId);
-      const savedIds = ids.filter((id) => !id.startsWith('comp-'));
-      if (savedIds.length > 0) {
-        void schedulingService
-          .reorderCompartments(templateId, savedIds)
-          .catch(() => toast.error('Failed to save compartment order'));
-      }
-    }
+    const id = compartments[idx]?.id;
+    // Unsaved records have no stable identity and therefore cannot be safely
+    // represented in the reorder API. Save the template before reordering.
+    if (!id) return;
+    setCompartments((prev) => moveCompartmentInTree(prev, id, direction));
+    pendingCompartmentOrderRef.current = true;
     markDirty();
   };
+
+  // Persistence deliberately follows the state update. This builds ordered_ids
+  // from the resulting canonical state, never from an event handler's stale
+  // `compartments` closure.
+  useEffect(() => {
+    if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
+    pendingCompartmentOrderRef.current = false;
+    const savedIds = orderedCompartmentIds(compartments);
+    if (savedIds.length > 0) {
+      void schedulingService
+        .reorderCompartments(templateId, savedIds)
+        .catch(() => toast.error('Failed to save compartment order'));
+    }
+  }, [compartments, isEditing, templateId]);
 
   // ---------------------------------------------------------------------------
   // Bulk selection helpers
@@ -1944,82 +1983,54 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const compartmentKey = useCallback((comp: CompartmentFormState, flatIdx: number) => comp.id ?? `comp-${flatIdx}`, []);
 
-  // Depth-first display order: each top-level compartment is followed by its
-  // nested containers (a "pack" inside a "bag" inside a "compartment"), so the
-  // list visually reflects the storage hierarchy. `idx` is the position in the
-  // flat `compartments` array (what every handler expects); `depth` drives the
-  // indentation. Nesting is keyed on a parent's saved id, so children of
-  // not-yet-saved parents simply render at the top level.
-  const orderedCompartments = useMemo(() => {
-    const result: { comp: CompartmentFormState; idx: number; depth: number }[] = [];
-    const childIdxByParent = new Map<string, number[]>();
-    const topLevel: number[] = [];
-    compartments.forEach((c, i) => {
-      const pid = c.parentCompartmentId;
-      if (pid) {
-        const arr = childIdxByParent.get(pid) ?? [];
-        arr.push(i);
-        childIdxByParent.set(pid, arr);
-      } else {
-        topLevel.push(i);
-      }
-    });
+  // Canonical depth-first display order is shared with reorder persistence.
+  const orderedCompartments = useMemo(
+    () =>
+      buildOrderedCompartments(compartments).map(({ node, depth }) => ({
+        comp: node,
+        idx: compartments.indexOf(node),
+        depth,
+      })),
+    [compartments]
+  );
 
-    const seen = new Set<number>();
-    const visit = (flatIdx: number, depth: number) => {
-      if (seen.has(flatIdx)) return; // guard against parent-cycle loops
-      const comp = compartments[flatIdx];
-      if (!comp) return;
-      seen.add(flatIdx);
-      result.push({ comp, idx: flatIdx, depth });
-      if (comp.id) {
-        for (const childIdx of childIdxByParent.get(comp.id) ?? []) {
-          visit(childIdx, depth + 1);
-        }
-      }
-    };
-    for (const i of topLevel) visit(i, 0);
-    // Append any orphans (parent id points at a missing/removed compartment).
-    compartments.forEach((_, i) => {
-      if (!seen.has(i)) visit(i, 0);
-    });
-    return result;
-  }, [compartments]);
-
+  // Only persisted records are draggable: backing-array positions are not
+  // identities, and cannot produce a safe ordered_ids API payload.
   const compartmentIds = useMemo(
-    () => orderedCompartments.map(({ comp, idx }) => compartmentKey(comp, idx)),
-    [orderedCompartments, compartmentKey]
+    () => orderedCompartments.flatMap(({ comp }) => (comp.id ? [comp.id] : [])),
+    [orderedCompartments]
+  );
+
+  const compartmentPath = useCallback(
+    (targetIdx: number) => {
+      const names: string[] = [];
+      const visited = new Set<number>();
+      let currentIdx: number | undefined = targetIdx;
+      while (currentIdx !== undefined && !visited.has(currentIdx)) {
+        visited.add(currentIdx);
+        const current: CompartmentFormState | undefined = compartments[currentIdx];
+        if (!current) break;
+        names.unshift(current.name.trim() || `Untitled ${containerTypeLabel(current.containerType)}`);
+        currentIdx = current.parentCompartmentId
+          ? compartments.findIndex((candidate) => candidate.id === current.parentCompartmentId)
+          : undefined;
+        if (currentIdx === -1) currentIdx = undefined;
+      }
+      return names.join(' / ');
+    },
+    [compartments]
   );
 
   const handleCompartmentDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    // Map the dragged/target ids back to their positions in the flat array.
-    const activeFlat = orderedCompartments.find((o) => compartmentKey(o.comp, o.idx) === String(active.id))?.idx;
-    const overFlat = orderedCompartments.find((o) => compartmentKey(o.comp, o.idx) === String(over.id))?.idx;
-    if (activeFlat == null || overFlat == null) return;
-
-    setCompartments((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(activeFlat, 1);
-      if (!moved) return prev;
-      next.splice(overFlat, 0, moved);
-      return next;
-    });
-
-    // Persist reorder if template is saved
-    if (isEditing && templateId) {
-      const flatIds = compartments.map((c, i) => compartmentKey(c, i));
-      const [movedId] = flatIds.splice(activeFlat, 1);
-      if (movedId) flatIds.splice(overFlat, 0, movedId);
-      const savedIds = flatIds.filter((id) => !id.startsWith('comp-'));
-      if (savedIds.length > 0) {
-        void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
-          toast.error('Failed to save compartment order');
-        });
-      }
-    }
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    // reorderCompartment rejects cross-parent drops. Dragging a parent moves
+    // its subtree because the returned array is canonical depth-first order.
+    setCompartments((prev) => reorderCompartment(prev, activeId, overId));
+    pendingCompartmentOrderRef.current = true;
+    markDirty();
   };
 
   const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
@@ -2094,7 +2105,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return (
       <div
         key={itemKey}
-        className={`overflow-hidden rounded-md border transition-colors ${
+        className={`rounded-md border transition-colors ${
           isSelected
             ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
             : isHeader
@@ -2110,7 +2121,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           {/* Bulk selection checkbox */}
           <button
             type="button"
-            className="flex-shrink-0 p-0.5"
+            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
             onClick={(e) => {
               e.stopPropagation();
               toggleItemSelection(compIdx, itemIdx);
@@ -2126,7 +2137,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
+            className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
             onClick={(e) => e.stopPropagation()}
             aria-label="Drag to reorder"
             {...(dragHandleProps ?? {})}
@@ -2136,7 +2147,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0 p-0.5"
+            className="text-theme-text-muted hover:text-theme-text-primary flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
             onClick={(e) => {
               e.stopPropagation();
               toggleItemExpanded(itemKey);
@@ -2178,7 +2189,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="text-theme-text-muted flex-shrink-0 p-0.5 transition-opacity hover:text-blue-600 sm:opacity-0 sm:group-hover/item:opacity-100"
+            className="text-theme-text-muted hidden flex-shrink-0 p-0.5 transition-opacity hover:text-blue-600 sm:block sm:opacity-0 sm:group-hover/item:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               startInlineEdit(itemKey, item.name, e);
@@ -2230,7 +2241,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             >
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-            {compartments.length > 1 && (
+            {compartments.some(
+              (candidate, candidateIdx) =>
+                candidateIdx !== compIdx && !candidate.isHeader && (!isEditing || !item.id || Boolean(candidate.id))
+            ) && (
               <div className="text-theme-text-muted relative rounded p-1 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20">
                 <ArrowRightLeft className="pointer-events-none h-3.5 w-3.5" aria-hidden="true" />
                 <select
@@ -2250,9 +2264,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     Move to…
                   </option>
                   {compartments.map((c, ci) =>
-                    ci !== compIdx ? (
+                    ci !== compIdx && !c.isHeader && (!isEditing || !item.id || Boolean(c.id)) ? (
                       <option key={ci} value={ci}>
-                        {c.name || `Compartment ${ci + 1}`}
+                        {compartmentPath(ci)}
                       </option>
                     ) : null
                   )}
@@ -2268,6 +2282,71 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
+
+          <MobileActionMenu label={`Actions for ${item.name.trim() || 'item'}`}>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              onClick={(e) => startInlineEdit(itemKey, item.name, e)}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={itemIdx === 0}
+              onClick={() => moveItem(compIdx, itemIdx, 'up')}
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={itemIdx === itemCount - 1}
+              onClick={() => moveItem(compIdx, itemIdx, 'down')}
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+            </button>
+            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateItem(compIdx, itemIdx)}>
+              <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+            </button>
+            {compartments.filter(
+              (candidate, candidateIdx) =>
+                !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id))
+            ).length > 0 && (
+              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                <span className="flex items-center gap-3">
+                  <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
+                </span>
+                <select
+                  className="form-input min-h-[44px] text-sm"
+                  value={compIdx}
+                  aria-label={`Move ${item.name || 'item'} to compartment; current destination ${compartmentPath(compIdx)}`}
+                  onChange={(e) => void moveItemToCompartment(compIdx, itemIdx, Number(e.target.value))}
+                >
+                  <option value={compIdx} disabled>
+                    Current: {compartmentPath(compIdx)}
+                  </option>
+                  {compartments.map((candidate, candidateIdx) =>
+                    !candidate.isHeader &&
+                    candidateIdx !== compIdx &&
+                    (!isEditing || !item.id || Boolean(candidate.id)) ? (
+                      <option key={candidate.id ?? candidateIdx} value={candidateIdx}>
+                        {compartmentPath(candidateIdx)}
+                      </option>
+                    ) : null
+                  )}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              className={mobileDestructiveMenuItemClass}
+              onClick={() => void deleteItem(compIdx, itemIdx)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+            </button>
+          </MobileActionMenu>
         </div>
 
         {/* Expanded form — visible on click */}
@@ -2588,22 +2667,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const parentName = comp.parentCompartmentId
       ? compartments.find((c) => c.id === comp.parentCompartmentId)?.name
       : undefined;
-
     // Section header compartment — simplified visual divider
     if (comp.isHeader) {
       return (
-        <div
-          key={key}
-          ref={sortableRef}
-          style={sortableStyle}
-          {...(sortableAttributes ?? {})}
-          className="card overflow-hidden"
-        >
+        <div key={key} ref={sortableRef} style={sortableStyle} {...(sortableAttributes ?? {})} className="card">
           <div className="flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
             <button
               type="button"
-              className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
-              aria-label="Drag to reorder section"
+              className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
+              aria-label={comp.id ? 'Drag to reorder section among siblings' : 'Save before dragging this section'}
+              disabled={!comp.id}
+              title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling sections'}
               {...(dragHandleProps ?? {})}
             >
               <GripVertical className="h-5 w-5" />
@@ -2627,7 +2701,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'up')}
-                disabled={idx === 0}
+                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section up"
               >
@@ -2636,7 +2710,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'down')}
-                disabled={idx === compartments.length - 1}
+                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section down"
               >
@@ -2651,6 +2725,31 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
+            <MobileActionMenu label={`Actions for ${comp.name || 'section'}`}>
+              <button
+                type="button"
+                className={mobileMenuItemClass}
+                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
+                onClick={() => moveCompartment(idx, 'up')}
+              >
+                <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+              </button>
+              <button
+                type="button"
+                className={mobileMenuItemClass}
+                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
+                onClick={() => moveCompartment(idx, 'down')}
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+              </button>
+              <button
+                type="button"
+                className={mobileDestructiveMenuItemClass}
+                onClick={() => void deleteCompartment(idx)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+              </button>
+            </MobileActionMenu>
           </div>
           {comp.description && (
             <div className="-mt-1 px-4 pb-2">
@@ -2679,8 +2778,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
           <button
             type="button"
-            className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
-            aria-label="Drag to reorder compartment"
+            className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
+            aria-label={
+              comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
+            }
+            disabled={!comp.id}
+            title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling compartments'}
             {...(dragHandleProps ?? {})}
           >
             <GripVertical className="h-5 w-5" />
@@ -2689,7 +2792,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => toggleCompartmentExpanded(key)}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 text-left sm:min-h-0"
             aria-expanded={isExpanded}
           >
             {isExpanded ? (
@@ -2744,7 +2847,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'up')}
-              disabled={idx === 0}
+              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} up`}
             >
@@ -2753,7 +2856,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'down')}
-              disabled={idx === compartments.length - 1}
+              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} down`}
             >
@@ -2776,6 +2879,64 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
+
+          <MobileActionMenu label={`Actions for ${comp.name || 'compartment'}`}>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              onClick={() => {
+                setExpandedCompartments((previous) => new Set(previous).add(key));
+                window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
+              }}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
+              onClick={() => moveCompartment(idx, 'up')}
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+            </button>
+            <button
+              type="button"
+              className={mobileMenuItemClass}
+              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
+              onClick={() => moveCompartment(idx, 'down')}
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+            </button>
+            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateCompartment(idx)}>
+              <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+            </button>
+            <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+              <span className="flex items-center gap-3">
+                <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
+              </span>
+              <select
+                className="form-input min-h-[44px] text-sm"
+                value={comp.parentCompartmentId}
+                aria-label={`Move ${comp.name || 'compartment'} to compartment; current destination ${comp.parentCompartmentId ? compartmentPath(compartments.findIndex((entry) => entry.id === comp.parentCompartmentId)) : 'Top level'}`}
+                onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
+              >
+                <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
+                {storedInsideOptions(compartments, comp).map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                    {comp.parentCompartmentId === option.id ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={mobileDestructiveMenuItemClass}
+              onClick={() => void deleteCompartment(idx)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+            </button>
+          </MobileActionMenu>
         </div>
 
         {/* Compartment body */}
@@ -2862,20 +3023,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 );
               })()}
               <div>
-                <label className={labelClass}>Stored Inside</label>
+                <label className={labelClass}>Reparent: stored inside</label>
                 <select
                   className={selectClass}
                   value={comp.parentCompartmentId}
                   onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
                 >
                   <option value="">Nothing (top-level)</option>
-                  {compartments
-                    .filter((other, cIdx) => cIdx !== idx && Boolean(other.id))
-                    .map((other) => (
-                      <option key={other.id} value={other.id ?? ''}>
-                        {containerTypeLabel(other.containerType)}: {other.name || 'Untitled'}
-                      </option>
-                    ))}
+                  {storedInsideOptions(compartments, comp).map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="sm:col-span-2">
@@ -3539,7 +3698,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     style={depth > 0 ? { marginLeft: depth * 20 } : undefined}
                     className={depth > 0 ? 'border-theme-surface-border/60 border-l-2 pl-2' : undefined}
                   >
-                    <SortableCompartmentWrapper id={id}>
+                    <SortableCompartmentWrapper id={id} disabled={!comp.id}>
                       {({ listeners: compListeners, setNodeRef, style, attributes }) =>
                         renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes, depth)
                       }
@@ -3624,7 +3783,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Change Log Modal (admin only) */}
       {showChangelog && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 Change History{' '}
@@ -3724,7 +3883,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* CSV Preview Confirmation Modal */}
       {csvPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 CSV Import Preview — {csvPreview.length} item(s)
@@ -3784,7 +3943,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Preview Modal — mobile device frame */}
       {showPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="relative flex flex-col items-center gap-3">
+          <div className="modal-panel-scroll relative flex flex-col items-center gap-3">
             {/* Close button outside the phone frame */}
             <button
               type="button"

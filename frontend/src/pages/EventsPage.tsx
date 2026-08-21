@@ -96,6 +96,7 @@ const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.SOCIAL,
   EventTypeEnum.FUNDRAISER,
   EventTypeEnum.CEREMONY,
+  EventTypeEnum.RECRUITMENT,
   EventTypeEnum.OTHER,
 ];
 
@@ -1312,7 +1313,7 @@ export const EventsPage: React.FC = () => {
           aria-label="Import Events from CSV"
         >
           <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
-          <DialogPanel onClose={handleCloseImportModal} className="relative mx-4 w-full max-w-lg p-6">
+          <DialogPanel onClose={handleCloseImportModal} className="modal-panel-scroll relative mx-4 w-full max-w-lg p-6">
             <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Import Events from CSV</h3>
 
             {!importResult ? (
@@ -1328,8 +1329,8 @@ export const EventsPage: React.FC = () => {
                   <code className="bg-theme-surface-hover rounded px-1 py-0.5 text-xs">is_mandatory</code>.
                 </p>
                 <p className="text-theme-text-muted mb-4 text-xs">
-                  Valid event types: business_meeting, public_education, training, social, fundraiser, ceremony, other.
-                  Dates can be in formats like{' '}
+                  Valid event types: business_meeting, public_education, training, social, fundraiser, ceremony,
+                  recruitment, other. Dates can be in formats like{' '}
                   <code className="bg-theme-surface-hover rounded px-1 py-0.5">YYYY-MM-DD HH:MM</code> or{' '}
                   <code className="bg-theme-surface-hover rounded px-1 py-0.5">MM/DD/YYYY HH:MM</code>.
                 </p>
@@ -1469,7 +1470,7 @@ export const EventsPage: React.FC = () => {
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
           <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
-          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="relative mx-4 w-full max-w-md p-6">
+          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="modal-panel-scroll relative mx-4 w-full max-w-md p-6">
             <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>

@@ -2467,7 +2467,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no |  | `other` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no |  | `other` |  |
 | `default_title` | VARCHAR(200) | yes |  |  |  |
 | `default_description` | TEXT | yes |  |  |  |
 | `default_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` |
@@ -2508,7 +2508,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no | IDX | `other` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no | IDX | `other` |  |
 | `custom_category` | VARCHAR(100) | yes | IDX |  |  |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` |
 | `location` | VARCHAR(300) | yes |  |  |  |
@@ -7634,7 +7634,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `check_id` | VARCHAR(36) | no | FK, IDX |  | → `shift_equipment_checks.id` ON DELETE CASCADE |
 | `template_item_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_items.id` ON DELETE SET NULL |
-| `compartment_name` | VARCHAR(200) | no |  |  |  |
+| `compartment_name` | TEXT | no |  |  |  |
 | `item_name` | VARCHAR(200) | no |  |  |  |
 | `check_type` | VARCHAR(30) | yes |  |  |  |
 | `status` | VARCHAR(30) | no |  |  |  |
