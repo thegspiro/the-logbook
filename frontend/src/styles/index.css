@@ -350,6 +350,23 @@
   /* Compact on desktop, still thumb-sized on a phone — see form-input. */
   @media (max-width: 767px) {
     min-height: 44px;
+    /* iOS zooms the entire page when a focused field is below 16px. That is
+       especially disruptive in create/edit dialogs, where it can hide the
+       sticky actions and make the form appear horizontally clipped. */
+    font-size: 1rem;
+  }
+}
+
+/* Keep native and one-off form controls usable even when a feature has not yet
+   migrated to the form-input utility. min-width:0 also lets date/time inputs
+   shrink inside narrow grid columns instead of widening the whole page. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+    font-size: max(1rem, 16px);
   }
 }
 
@@ -799,6 +816,34 @@
   @apply bg-theme-surface-modal px-4 pt-5 pb-4;
   @media (min-width: 640px) {
     padding: 1.5rem 1.5rem 1rem;
+  }
+}
+
+@utility modal-content {
+  /* The flexible, independently scrolling region in the shared Modal. min-h-0
+     is required for overflow to work inside a flex column on mobile Safari. */
+  @apply min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  @media (min-width: 640px) {
+    @apply px-6 pb-5;
+  }
+}
+
+@utility modal-footer {
+  /* Actions stay visible above the home indicator and become easy thumb-sized
+     full-width targets on phones. Desktop retains compact, inline actions. */
+  padding-top: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+  @media (max-width: 639px) {
+    & > button,
+    & > a {
+      width: 100%;
+      min-height: 44px;
+      margin-left: 0;
+      margin-right: 0;
+      justify-content: center;
+    }
   }
 }
 
@@ -2102,9 +2147,42 @@ tbody tr:last-child {
 }
 .app-toaster {
   top: calc(0.5rem + env(safe-area-inset-top)) !important;
+  z-index: 110 !important;
 }
 .app-toast {
+  max-width: 100% !important;
+  overflow-wrap: anywhere;
   color: var(--text-primary) !important;
   border: 1px solid var(--surface-border) !important;
-  background: var(--surface-bg) !important;
+  background: var(--surface-modal) !important;
+  box-shadow: 0 10px 25px rgb(0 0 0 / 35%) !important;
+}
+
+/* react-hot-toast supplies different check and cross icons for these states;
+   retain explicit state hooks for custom icons and visual regression coverage. */
+.app-toast--success,
+.app-toast--error,
+.app-toast--warning {
+  border-inline-start-width: 0.25rem !important;
+}
+.app-toast--success {
+  border-inline-start-color: var(--toast-success) !important;
+}
+.app-toast--error {
+  border-inline-start-color: var(--toast-error) !important;
+}
+.app-toast--warning {
+  border-inline-start-color: var(--toast-warning-bg) !important;
+}
+
+@media (max-width: 767px) {
+  .app-toaster {
+    top: calc(4rem + env(safe-area-inset-top)) !important;
+    right: 1rem !important;
+    left: 1rem !important;
+  }
+
+  .app-toaster > div {
+    max-width: 100% !important;
+  }
 }
