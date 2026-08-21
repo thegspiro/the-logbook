@@ -1,6 +1,6 @@
 """Allow full nested storage paths in equipment check item snapshots.
 
-Revision ID: 20260820_1300
+Revision ID: d6f4a13c9e20
 Revises: 7ed8593bc904
 Create Date: 2026-08-20
 """
@@ -8,7 +8,7 @@ Create Date: 2026-08-20
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260820_1300"
+revision = "d6f4a13c9e20"
 down_revision = "7ed8593bc904"
 branch_labels = None
 depends_on = None

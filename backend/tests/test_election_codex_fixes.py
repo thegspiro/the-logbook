@@ -391,6 +391,9 @@ class TestTokenVoteNullPositionDedup:
             position=None,
         )
         service.get_ballot_by_token = AsyncMock(return_value=(election, token, None))
+        service._lock_token_ballot_for_submission = AsyncMock(
+            return_value=(election, token, None)
+        )
         service.db.execute.side_effect = [
             _result_returning(scalar=candidate),
             _result_returning(scalars_all=[legacy_vote]),
@@ -419,6 +422,9 @@ class TestTokenVoteNullPositionDedup:
             id=str(uuid4()), accepted=True, is_write_in=False, position=None
         )
         service.get_ballot_by_token = AsyncMock(return_value=(election, token, None))
+        service._lock_token_ballot_for_submission = AsyncMock(
+            return_value=(election, token, None)
+        )
         service.db.execute.side_effect = [
             _result_returning(scalar=candidate),
             _result_returning(scalars_all=[]),
@@ -447,6 +453,9 @@ class TestTokenVoteNullPositionDedup:
             id=str(uuid4()), accepted=True, is_write_in=False, position="Chief"
         )
         service.get_ballot_by_token = AsyncMock(return_value=(election, token, None))
+        service._lock_token_ballot_for_submission = AsyncMock(
+            return_value=(election, token, None)
+        )
         service.db.execute.side_effect = [
             _result_returning(scalar=candidate),
             _result_returning(scalars_all=[]),
