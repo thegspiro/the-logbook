@@ -57,7 +57,7 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, mer
       aria-labelledby="merge-write-ins-title"
       onKeyDown={handleKeyDown}
     >
-      <div ref={dialogRef} className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="merge-write-ins-title" className="text-theme-text-primary text-lg font-medium">
             Merge Write-In Variants

@@ -1263,7 +1263,7 @@ export const MinutesDetailPage: React.FC = () => {
               if (e.key === 'Escape') setShowLinkEventModal(false);
             }}
           >
-            <DialogPanel onClose={() => setShowLinkEventModal(false)} className="w-full max-w-lg">
+            <DialogPanel onClose={() => setShowLinkEventModal(false)} className="modal-panel-scroll w-full max-w-lg">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
                 <h3 id="link-event-title" className="text-theme-text-primary text-lg font-medium">
                   Link to Meeting Event
@@ -1329,7 +1329,7 @@ export const MinutesDetailPage: React.FC = () => {
               }
             }}
           >
-            <DialogPanel onClose={() => setShowRejectModal(false)} className="w-full max-w-md">
+            <DialogPanel onClose={() => setShowRejectModal(false)} className="modal-panel-scroll w-full max-w-md">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="reject-title" className="text-theme-text-primary text-lg font-medium">
                   Reject Minutes

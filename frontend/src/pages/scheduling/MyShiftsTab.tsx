@@ -664,7 +664,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           aria-modal="true"
           aria-label="Request shift swap"
         >
-          <DialogPanel onClose={() => setShowSwapModal(false)} ref={swapModalRef} className="w-full max-w-md">
+          <DialogPanel
+            onClose={() => setShowSwapModal(false)}
+            ref={swapModalRef}
+            className="modal-panel-scroll w-full max-w-md"
+          >
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
@@ -778,7 +782,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           aria-modal="true"
           aria-label="Request time off"
         >
-          <DialogPanel onClose={() => setShowTimeOffModal(false)} ref={timeOffModalRef} className="w-full max-w-md">
+          <DialogPanel
+            onClose={() => setShowTimeOffModal(false)}
+            ref={timeOffModalRef}
+            className="modal-panel-scroll w-full max-w-md"
+          >
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Time Off</h2>
             </div>
