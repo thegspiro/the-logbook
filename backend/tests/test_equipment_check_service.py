@@ -21,6 +21,7 @@ from app.services.equipment_check_service import EquipmentCheckService
 @pytest.fixture
 def mock_db():
     db = AsyncMock()
+    db.add = MagicMock()
     db.commit = AsyncMock()
     db.execute = AsyncMock()
     return db
@@ -106,6 +107,108 @@ class TestUpdateTemplateApparatusValidation:
         ):
             result = await service.update_template("tmpl-x", "org-1", {"name": "X"})
         assert result is None
+
+
+class TestBulkItemCreation:
+    """The batch validates first, orders deterministically, and is retry-safe."""
+
+    @staticmethod
+    def empty_result():
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        return result
+
+    async def test_orders_after_existing_items_and_commits_once(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_result()
+        mock_db.scalar.return_value = 7
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+        ):
+            created, replayed = await service.add_items_bulk(
+                "comp-1", "org-1", [{"name": "A"}, {"name": "B"}], "request-123"
+            )
+        assert [item.name for item in created] == ["A", "B"]
+        assert [item.sort_order for item in created] == [8, 9]
+        assert replayed is False
+        mock_db.commit.assert_awaited_once()
+
+    async def test_invalid_foreign_key_writes_nothing(self, service, mock_db):
+        validator = AsyncMock(side_effect=[None, ValueError("Invalid equipment")])
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", validator),
+        ):
+            with pytest.raises(ValueError, match="Invalid equipment"):
+                await service.add_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    [{"name": "A"}, {"name": "B", "equipment_id": "bad"}],
+                    "request-123",
+                )
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
+        mock_db.rollback.assert_awaited_once()
+
+    async def test_flush_failure_rolls_back_complete_batch(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_result()
+        mock_db.scalar.return_value = None
+        mock_db.flush.side_effect = RuntimeError("database failure")
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+        ):
+            with pytest.raises(RuntimeError, match="database failure"):
+                await service.add_items_bulk(
+                    "comp-1", "org-1", [{"name": "A"}, {"name": "B"}], "request-123"
+                )
+        assert mock_db.add.call_count == 2
+        mock_db.commit.assert_not_awaited()
+        mock_db.rollback.assert_awaited_once()
+
+    async def test_retry_returns_original_rows_without_writing(self, service, mock_db):
+        original = [
+            SimpleNamespace(id="first", name="A"),
+            SimpleNamespace(id="second", name="B"),
+        ]
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = original
+        mock_db.execute.return_value = result
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch(
+                "app.services.equipment_check_service.uuid5",
+                side_effect=["first", "second"],
+            ),
+        ):
+            items, replayed = await service.add_items_bulk(
+                "comp-1", "org-1", [{"name": "A"}, {"name": "B"}], "request-123"
+            )
+        assert items == original
+        assert replayed is True
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
 
 
 class TestSubmitterTemplateVisibility:

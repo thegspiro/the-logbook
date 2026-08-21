@@ -7,6 +7,7 @@ check submissions, checklist resolution by position, and item history.
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -534,6 +535,83 @@ class EquipmentCheckService:
         await self.db.commit()
         await self.db.refresh(item)
         return item
+
+    async def add_items_bulk(
+        self,
+        compartment_id: str,
+        organization_id: str,
+        items_data: List[Dict[str, Any]],
+        idempotency_key: str,
+    ) -> Optional[tuple[List[CheckTemplateItem], bool]]:
+        """Validate and insert a batch atomically, returning it in input order.
+
+        Stable IDs derived from the org, compartment, key and input position form
+        the retry ledger without requiring a separate table. A repeated key must
+        describe the identical request; it then returns the original rows.
+        """
+        compartment = await self._get_compartment(compartment_id, organization_id)
+        if not compartment:
+            return None
+
+        try:
+            # Validate the complete batch before adding even one pending row.
+            for data in items_data:
+                if not str(data.get("name", "")).strip():
+                    raise ValueError("Item name cannot be blank")
+                await self._validate_item_fks(data, organization_id)
+
+            ids = [
+                str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        f"equipment-check:{organization_id}:{compartment_id}:{idempotency_key}:{i}",
+                    )
+                )
+                for i in range(len(items_data))
+            ]
+            existing_result = await self.db.execute(
+                select(CheckTemplateItem).where(CheckTemplateItem.id.in_(ids))
+            )
+            existing = {str(item.id): item for item in existing_result.scalars().all()}
+            if existing:
+                if len(existing) != len(ids):
+                    raise ValueError(
+                        "Idempotency key conflicts with an incomplete request"
+                    )
+                ordered = [existing[item_id] for item_id in ids]
+                for item, requested in zip(ordered, items_data):
+                    comparable = dict(requested)
+                    comparable.pop("sort_order", None)
+                    if any(
+                        getattr(item, key) != value for key, value in comparable.items()
+                    ):
+                        raise ValueError(
+                            "Idempotency key was already used with different items"
+                        )
+                return ordered, True
+
+            max_order = await self.db.scalar(
+                select(func.max(CheckTemplateItem.sort_order)).where(
+                    CheckTemplateItem.compartment_id == compartment_id
+                )
+            )
+            first_order = (max_order if max_order is not None else -1) + 1
+            created = []
+            for index, data in enumerate(items_data):
+                values = dict(data)
+                values["name"] = str(values["name"]).strip()
+                values["sort_order"] = first_order + index
+                item = CheckTemplateItem(
+                    id=ids[index], compartment_id=compartment_id, **values
+                )
+                self.db.add(item)
+                created.append(item)
+            await self.db.flush()
+            await self.db.commit()
+            return created, False
+        except Exception:
+            await self.db.rollback()
+            raise
 
     async def update_item(
         self,

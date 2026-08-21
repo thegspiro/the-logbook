@@ -908,6 +908,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkPasteMode, setBulkPasteMode] = useState<Record<string, boolean>>({});
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
+  const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
 
   const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
@@ -966,22 +967,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (names.length === 0) return;
 
     if (comp.id) {
+      setBulkItemPending((prev) => ({ ...prev, [key]: true }));
       try {
-        const newItems: ItemFormState[] = [];
-        for (let i = 0; i < names.length; i++) {
-          const itemName = names[i];
-          if (!itemName) continue;
-          const payload: CheckTemplateItemCreate = {
-            name: itemName,
-            sort_order: comp.items.length + i,
-          };
-          const created = await schedulingService.addCheckItem(comp.id, payload);
-          newItems.push(itemFormFromResponse(created));
-        }
+        const payload = names.map((name) => ({ name }));
+        const result = await schedulingService.addCheckItemsBulk(comp.id, payload, crypto.randomUUID());
+        const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+        toast.success(`Added ${result.createdCount} item${result.createdCount !== 1 ? 's' : ''}`);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add items'));
         return;
+      } finally {
+        setBulkItemPending((prev) => ({ ...prev, [key]: false }));
       }
     } else {
       const newItems = names.map((n) => ({ ...emptyItem(), name: n }));
@@ -990,7 +987,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setBulkPasteValues((prev) => ({ ...prev, [key]: '' }));
     setBulkPasteMode((prev) => ({ ...prev, [key]: false }));
-    toast.success(`Added ${names.length} item${names.length !== 1 ? 's' : ''}`);
+    if (!comp.id) toast.success(`Added ${names.length} item${names.length !== 1 ? 's' : ''}`);
   };
 
   const addEquipmentPreset = async (compartmentIdx: number, presetKey: string) => {
@@ -1002,33 +999,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const key = getCompKey(compartmentIdx);
 
     if (comp.id) {
+      setBulkItemPending((prev) => ({ ...prev, [key]: true }));
       try {
-        const newItems: ItemFormState[] = [];
-        // Add a header for the preset group
-        const headerPayload: CheckTemplateItemCreate = {
-          name: preset.label,
-          sort_order: comp.items.length,
-          check_type: 'header',
-          is_required: false,
-        };
-        const headerCreated = await schedulingService.addCheckItem(comp.id, headerPayload);
-        newItems.push(itemFormFromResponse(headerCreated));
-
-        for (let i = 0; i < preset.items.length; i++) {
-          const presetItem = preset.items[i];
-          if (!presetItem) continue;
-          const payload: CheckTemplateItemCreate = {
+        const items: CheckTemplateItemCreate[] = [
+          {
+            name: preset.label,
+            check_type: 'header',
+            is_required: false,
+          },
+          ...preset.items.map((presetItem) => ({
             name: presetItem.name,
-            sort_order: comp.items.length + 1 + i,
             check_type: presetItem.checkType,
-          };
-          const created = await schedulingService.addCheckItem(comp.id, payload);
-          newItems.push(itemFormFromResponse(created));
-        }
+          })),
+        ];
+        const result = await schedulingService.addCheckItemsBulk(comp.id, items, crypto.randomUUID());
+        const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+        toast.success(`Added ${preset.label} (${result.createdCount} items)`);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add preset items'));
         return;
+      } finally {
+        setBulkItemPending((prev) => ({ ...prev, [key]: false }));
       }
     } else {
       const headerItem: ItemFormState = {
@@ -1048,7 +1040,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
 
     setShowEquipmentPresets((prev) => ({ ...prev, [key]: false }));
-    toast.success(`Added ${preset.label} (${preset.items.length} items)`);
+    if (!comp.id) toast.success(`Added ${preset.label} (${preset.items.length + 1} items)`);
   };
 
   // ---------------------------------------------------------------------------
@@ -3016,6 +3008,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         key={presetKey}
                         type="button"
                         onClick={() => void addEquipmentPreset(idx, presetKey)}
+                        disabled={bulkItemPending[getCompKey(idx)] ?? false}
                         className="btn-secondary px-2 py-1.5 text-left text-xs hover:border-green-500/40 hover:bg-green-500/10"
                       >
                         <span className="font-medium">{preset.label}</span>
@@ -3098,11 +3091,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => void handleBulkPaste(idx)}
-                            disabled={(bulkPasteValues[compKey] ?? '').trim().length === 0}
+                            disabled={
+                              (bulkPasteValues[compKey] ?? '').trim().length === 0 ||
+                              (bulkItemPending[compKey] ?? false)
+                            }
                             className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
                           >
-                            <Plus className="h-3 w-3" />
-                            Add All
+                            {(bulkItemPending[compKey] ?? false) ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Plus className="h-3 w-3" />
+                            )}
+                            {(bulkItemPending[compKey] ?? false) ? 'Adding…' : 'Add All'}
                           </button>
                         </div>
                       </div>
