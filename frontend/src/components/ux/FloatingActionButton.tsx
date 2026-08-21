@@ -59,7 +59,11 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ acti
   return (
     <div
       ref={containerRef}
-      className="fixed right-[calc(1.5rem+env(safe-area-inset-right))] bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 md:hidden"
+      /* The bottom allowance must include --bottom-nav-height: the FAB is
+         h-14 (56px) and the mobile bottom bar is 56px tall at z-50, so a plain
+         1.5rem offset buried the FAB's lower 32px behind the bar — visible,
+         but the taps landed on the nav and navigated away. */
+      className="fixed right-[calc(1.5rem+env(safe-area-inset-right))] bottom-[calc(1.5rem+env(safe-area-inset-bottom)+var(--bottom-nav-height,0px))] z-40 md:hidden"
     >
       {/* Backdrop */}
       {open && (
