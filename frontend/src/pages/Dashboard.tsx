@@ -9,6 +9,7 @@ import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -27,7 +28,6 @@ import {
   Package,
   Pin,
   Plus,
-  Rocket,
   Share,
   Shield,
   Smartphone,
@@ -1635,44 +1635,12 @@ const Dashboard: React.FC = () => {
               )}
             </div>
 
-            {setupProgress && setupProgress.completed < setupProgress.total && (
-              <section className="card p-4 sm:p-5" aria-labelledby="organization-setup-heading">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <span className="bg-theme-accent-red-muted text-theme-accent-red flex h-11 w-11 shrink-0 items-center justify-center rounded-lg">
-                    <Rocket className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <h4 id="organization-setup-heading" className="text-theme-text-primary font-semibold">
-                        Organization setup
-                      </h4>
-                      <span className="text-theme-text-secondary text-sm font-semibold tabular-nums">
-                        {setupProgress.completed} of {setupProgress.total}
-                      </span>
-                    </div>
-                    <div
-                      className="bg-theme-surface-hover mt-2 h-2 overflow-hidden rounded-full"
-                      role="progressbar"
-                      aria-label="Organization setup progress"
-                      aria-valuemin={0}
-                      aria-valuemax={setupProgress.total}
-                      aria-valuenow={setupProgress.completed}
-                    >
-                      <div
-                        className="bg-theme-accent-red h-full rounded-full"
-                        style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void navigate('/setup')}
-                    className="btn-primary btn-auto min-h-[44px] shrink-0 px-4 text-sm font-semibold"
-                  >
-                    Continue setup
-                  </button>
-                </div>
-              </section>
+            {canViewOrganization && setupProgress && (
+              <OrganizationSetupWidget
+                completed={setupProgress.completed}
+                total={setupProgress.total}
+                onOpen={() => void navigate('/setup')}
+              />
             )}
 
             {!loadingInventory && inventorySummary && inventorySummary.total_items > 0 && (
