@@ -865,6 +865,15 @@ class ShiftSwapRequestResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class ShiftSwapRequestsPage(BaseModel):
+    """Paginated shift swap request response."""
+
+    items: List[ShiftSwapRequestResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 # ============================================
 # Shift Time Off Schemas
 # ============================================
@@ -909,6 +918,15 @@ class ShiftTimeOffResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+class ShiftTimeOffRequestsPage(BaseModel):
+    """Paginated time-off request response."""
+
+    items: List[ShiftTimeOffResponse]
+    total: int
+    skip: int
+    limit: int
 
 
 # ============================================
@@ -1037,7 +1055,11 @@ class ApparatusOption(BaseModel):
     unit_number: Optional[str] = None
     apparatus_type: str
     source: str  # "apparatus", "basic", or "default"
-    positions: Optional[List[str]] = None
+    # Seat lists are stored as {"position", "required"} slots (see
+    # app/utils/positions.py). Declared List[Any] like every other positions
+    # field in this module: a List[str] here rejected the canonical shape and
+    # 500'd the endpoint for any org whose apparatus had seats.
+    positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
 
 

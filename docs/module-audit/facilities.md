@@ -114,242 +114,230 @@ introspection + template contract) and the frontend section-contract test.
 
 # Product Delivery Review — Advertised vs. Delivered
 
-**Reviewed:** 2026-08-11
-**Advertised surface:** `README.md` (unified locations and facilities summary),
-`APPLICATION_PAGES.md` (dashboard, detail sections, permissions, and bridge
-behavior).
-**Delivered surface:** `backend/app/api/v1/endpoints/facilities.py`,
-`backend/app/services/facilities_service.py`, `backend/app/services/location_service.py`,
-`frontend/src/modules/facilities`, and `frontend/src/services/facilitiesServices.ts`.
+**Revalidated:** 2026-08-20 (current implementation, not the historical state of
+an earlier audit pass)
+
+**Advertised surface:** `README.md`, `docs/README.md`, `APPLICATION_PAGES.md`,
+and `docs/training/06-apparatus-facilities.md`.
+
+**Delivered surface:** Facilities endpoints, service and schemas; the Facilities
+routes, store, dashboard, detail sections and typed API client; and the shared
+Location bridge.
 
 ## Executive summary
 
-The module has a much broader backend than its UI suggests: the API and typed
-client implement the core facility record plus a broad set of related resource
-families.
-The currently reachable UI makes seven detail sections available and provides
-useful cross-facility maintenance and inspection workflows. The largest gap is
-therefore not missing persistence or API design, but an unfinished presentation
-layer: six sections promised in the page catalog have no detail-page UI even
-though most of their API clients already exist.
+Facilities delivers the advertised breadth better than the previous review
+recorded. All 13 documented detail sections are now registered, sensitive
+sections are separately read-gated, server-side search exists, dashboard card
+counts are unpaginated aggregates, room nesting is implemented, and facility
+rooms synchronize Location records. Cross-facility maintenance and inspection
+pages are also genuine working workflows.
 
-The other material mismatches are correctness and access-control UX. Dashboard
-"totals" are calculated from the first API page rather than true aggregates,
-the advertised searchable facility grid has no search control, and the route and
-mutation UI does not reflect the documented permissions. Finally, the location
-bridge is reliable in the Facility Room → Location direction, but the reverse
-path is opt-in, not validated against the caller's organization, and cannot be
-changed after creation.
+It should nevertheless not yet be described as a complete property-management
+experience. The dashboard and search still expose only the first 100 records,
+the UI hides legitimate edit and maintenance capabilities behind the broader
+`facilities.manage` grant in several core sections, and the module calls five
+completed maintenance records “Recent Activity.” Photos and documents have a
+complete API but no facility-detail workflow. The Location bridge is deliberately
+room-owned rather than bidirectional, which is a sound design but narrower than
+“locations created through either module are linked.”
 
-## Advertised vs. delivered
+## Current contract matrix
 
-| Advertised capability                                                                      | Delivered state                                                                                                                                                                                                              | Assessment                                          |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Dashboard summary statistics                                                               | Four cards plus overdue/upcoming previews are present, but all values are derived client-side from list responses capped at 100 rows.                                                                                        | **Partial; becomes incorrect at scale**             |
-| Recent activity feed                                                                       | Present, but defined narrowly as the last five _completed maintenance_ records. It does not include facility, room, system, inspection, or other activity.                                                                   | **Partial**                                         |
-| Searchable facility card grid                                                              | Facility cards are present; no search input, query state, or filtering exists on the dashboard.                                                                                                                              | **Not delivered**                                   |
-| Detail: overview, rooms, systems, maintenance, inspections, emergency contacts, compliance | All seven sections are reachable and have CRUD-oriented UI.                                                                                                                                                                  | **Delivered**                                       |
-| Detail: utilities, access keys, shutoff locations, capital projects, insurance, occupants  | Models, schemas, endpoints, service methods, TypeScript types, and API client methods exist, but none is registered in `FacilityDetailPage`'s section list.                                                                  | **Backend/client delivered; user workflow missing** |
-| Facilities includes utility management                                                     | Utility accounts/readings have backend and typed-client CRUD, but no page or section consumes those methods.                                                                                                                 | **Not delivered to users**                          |
-| Locations remain the shared event/training reference                                       | Facility rooms create/update a linked `Location`; event-facing consumers continue to use `locations`.                                                                                                                        | **Delivered in the facility-to-location direction** |
-| Locations created through either module are linked                                         | A generic location may accept an optional `facility_id` only at create time. The Locations UI does not establish that link automatically, `LocationUpdate` cannot change it, and no room is created from a generic location. | **Partial / wording overstates bidirectionality**   |
-| Routes require `facilities.view`                                                           | The print-label route has a `ProtectedRoute` permission guard. Dashboard, detail, maintenance, and inspection routes do not; their API reads still enforce permissions.                                                      | **Backend enforced; frontend contract missing**     |
+| Advertised capability                                | What is delivered now                                                                                                                                                                                                                                                | Assessment                                  |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Summary statistics                                   | Dedicated SQL counts provide correct totals for facilities, operational facilities, overdue maintenance, and inspections due in 30 days.                                                                                                                             | **Delivered**                               |
+| Overdue/upcoming dashboard previews                  | Preview rows are derived from default, 100-row list calls and filtered in the browser. Counts can therefore be non-zero while the corresponding preview is empty or incomplete.                                                                                      | **Partial**                                 |
+| Recent activity                                      | The widget contains only the five most recent completed maintenance records; it has no actor and excludes every other facility action.                                                                                                                               | **Over-advertised**                         |
+| Searchable facility card grid                        | Debounced server-side search covers name, facility number, and city, but returns at most 100 matches and has no pagination.                                                                                                                                          | **Partial at scale**                        |
+| All 13 documented detail sections                    | Overview, rooms, systems, maintenance, inspections, utilities, contacts, keys, shutoffs, projects, insurance, occupants, and compliance are reachable.                                                                                                               | **Delivered**                               |
+| Utility management                                   | Account CRUD, reading CRUD, costs, usage, billing dates, and notes are exposed in the detail UI.                                                                                                                                                                     | **Delivered at record-keeping level**       |
+| Room nesting and Location synchronization            | Same-facility parent selection, cycle/depth safeguards, tree rendering, re-parent-on-delete, and room-to-Location synchronization are implemented.                                                                                                                   | **Delivered**                               |
+| “Locations created through either module are linked” | Facility rooms create and own linked Locations. A standalone Location may point to a Facility, but does not create a room; the Locations UI is replaced when Facilities is enabled.                                                                                  | **Wording overstates the reverse workflow** |
+| Permission-specific mutation access                  | The backend distinguishes create, edit, maintenance, sensitive-read, and manage. Extended sections use edit/manage correctly, but rooms, systems, contacts, overview, compliance, and facility-detail maintenance still show mutation controls only to manage users. | **Inconsistent**                            |
+| Complete building/property management                | Core records are broad, but there are no detail sections for the already-supported photos/documents, no portfolio views for costs/expirations/projects, and no reminders or task ownership workflow in this module.                                                  | **Strong foundation, not complete**         |
 
 ## What is working well
 
-- **Tenant scoping is systematic in the Facilities service.** Primary and child
-  reads filter by `organization_id`, and mutations resolve their target through
-  those scoped getters. The previously identified facility-FK reassignment gaps
-  are now guarded by `_assert_facility_in_org` on the relevant paths.
-- **The room bridge preserves the canonical location reference.** Creating a
-  room creates/updates its linked `Location`, and deleting a room deletes only
-  the matching in-org location. The unique `facility_room_id` relationship makes
-  this a strong basis for the advertised unified picker.
-- **The API surface is unusually complete.** Utilities/readings, keys, shutoffs,
-  projects, insurance, occupants, photos, documents, and compliance all have
-  server-side CRUD. Most also already have typed frontend service methods, so
-  finishing the user experience does not require redesigning the module.
-- **Cross-facility maintenance and inspection pages are real workflows, not
-  placeholders.** Both support create/edit/delete, filters/search, facility
-  attribution, and useful status cues.
-- **Archive/restore is preferable to destructive facility deletion.** This
-  protects references while keeping inactive facilities out of normal lists.
+- **Security boundaries are strong.** Facilities routes are authenticated and
+  permission-gated, tenant scoping is systematic, and sensitive families are not
+  exposed to every holder of baseline `facilities.view`.
+- **The advertised detail navigation is now real.** The section registry provides
+  an executable contract, and tests verify both the complete list and sensitive
+  visibility behavior.
+- **The room model is richer than a flat directory.** Nested rooms, a maximum
+  depth, cycle rejection, containment paths, and safe re-parenting make the
+  room/Location integration operationally useful.
+- **Archive/restore protects references.** Facility lifecycle is non-destructive,
+  while normal lists can omit archived records.
+- **The API is ahead of the presentation layer.** This reduces the cost of future
+  iterations for reporting, photo/document workflows, utilities, policies, and
+  capital planning.
 
-## Findings and improvement opportunities
+## Active gaps and improvement opportunities
 
-### FAC-P1 — HIGH product gap — Six advertised detail sections were unreachable — ✅ FIXED
+### FAC-P2 — MEDIUM correctness/scale — Counts and dashboard rows have different scopes
 
-**✅ Fixed 2026-08-11:** the detail sidebar now exposes utilities, access keys,
-shutoff locations, capital projects, insurance, and occupants. Each section
-loads its facility-scoped records, provides a read-only state for viewers, and
-offers create/delete workflows to managers through the existing typed API
-client. A section-contract test locks the advertised navigation list in place.
+**✅ Fixed 2026-08-20:** `/facilities/dashboard` now returns organization-wide
+counts plus separately queried, globally ordered preview rows with facility
+names. The facility card grid and server-side search use `/facilities/page`,
+which returns total metadata and 24-record pages. Label printing is explicitly
+scoped to the visible page rather than silently presenting loaded IDs as every
+facility.
 
-Before the fix, the sidebar stopped at seven sections even though the models,
-endpoints, and typed client already supported all six extended resource groups.
-The absence was therefore a presentation-layer gap rather than missing backend
-infrastructure.
+Previously, `/dashboard-counts` counted the full organization while the store
+derived its rows from the first 100 ordinary list records. That could produce:
 
-**Follow-up:** add update workflows and richer domain behavior incrementally,
-starting with utility readings, expiry/budget alerts, access-key assignee
-pickers, and printable emergency shutoff information.
+- a correct non-zero card paired with an empty or incomplete preview;
+- “Unknown” facility names when a preview references a facility outside the
+  loaded facility page;
+- a facility grid and bulk-label action that silently omit later facilities;
+- recent completed maintenance selected from the first API page rather than the
+  globally most recent records.
 
-### FAC-P2 — MEDIUM correctness — Dashboard statistics silently cap at 100 rows
+**Follow-up:** preserve search, filters, and page state in URL parameters. If a
+true “print all matching” action is desired, implement a server-side selection
+contract rather than expanding an unbounded ID list in the browser.
 
-**⚠️ Partly fixed 2026-08-11:** a dedicated `/facilities/dashboard-counts`
-endpoint now computes all four summary-card values with unpaginated SQL counts,
-and the dashboard consumes those values. The card grid and bounded preview lists
-still need cursor pagination so records beyond the first API page remain
-navigable and attributable by facility name.
+### FAC-P6 — LOW/MEDIUM product language — The Location bridge is intentionally one-way
 
-Before the fix, `loadDashboardStats` derived every card from ordinary list
-responses capped at 100 rows. Counts are now authoritative, but the bounded
-records used for the overdue, upcoming, recent-activity, facility-name, and print
-label views can still omit rows outside their first page.
+**✅ Fixed 2026-08-20:** product and page-catalog language now describes the
+room-owned synchronization contract explicitly and distinguishes standalone
+Locations, which may reference a Facility but do not create or update rooms.
 
-**Recommended follow-up:** return bounded, correctly ordered preview rows from a
-server-side dashboard response and paginate or cursor-load the facility grid.
-Do not request the endpoint maximum of 500; that only moves the failure point and
-increases dashboard payload cost.
+The current ownership model is coherent: a `FacilityRoom` owns its room-shaped
+`Location`; standalone Locations can optionally reference a Facility but never
+materialize or update a room. That does not deliver a general “created through
+either module” bridge, especially because enabling Facilities replaces the
+standalone Locations page in normal navigation.
 
-### FAC-P3 — MEDIUM product gap — The advertised searchable grid was not searchable — ✅ FIXED
+**Recommended iteration:** keep the room-owned model and advertise it precisely.
+Document which fields are canonical and how conflicts are resolved. If a true
+reverse workflow is later required, design explicit conversion, conflict, audit,
+and unlink semantics instead of adding implicit two-way synchronization.
 
-**✅ Fixed 2026-08-11:** `GET /facilities` now exposes the service's escaped
-server-side search, the typed client forwards it, and the dashboard provides a
-debounced name/number/city search with a distinct empty state. Pagination of the
-base grid remains part of FAC-P2.
+### FAC-P7 — LOW semantics — “Recent Activity” is a maintenance-completion widget
 
-Before the fix, the dashboard rendered `facilities.map(...)` directly without
-search state, and the API did not expose the service's existing search argument.
+**✅ Fixed 2026-08-20:** the dashboard and training catalog now call this widget
+**Recent Maintenance Completions**, matching the records it actually renders.
 
-**Follow-up:** add type, status, and archived filters alongside pagination. Preserve them in URL query parameters so a view is
-shareable and back-navigation is stable. A client-only filter would still miss
-facilities beyond the first 100 and should be avoided.
+The dashboard endpoint selects the five most recent completed maintenance rows
+organization-wide. It excludes inspections, room/system changes, keys,
+compliance, archive/restore, and the actor who performed the action; the
+corrected label makes that narrower scope explicit.
 
-### FAC-P4 — HIGH security/integrity — Generic locations accepted an unscoped facility ID — ✅ FIXED
+**Future iteration:** a multi-entity feed should use audit events, include
+actor/action/entity, and support a facility filter; do not infer activity from
+mutable domain rows.
 
-**✅ Fixed 2026-08-11:** location create and update now validate a supplied
-facility through the shared `assert_in_org` helper. `LocationUpdate` supports
-safe reassignment and clearing, with regression tests for rejection-before-write,
-reassignment, and clearing.
+### FAC-P9 — HIGH authorization UX — Several core sections under-deliver delegated permissions
 
-`LocationCreate.facility_id` is caller-controlled. `LocationService.create_location`
-copies it directly into the new in-org location without checking that the
-facility exists in the same organization. This is the remaining location-side
-instance of the cross-cutting unvalidated-FK pattern (XC-1). Depending on foreign
-key existence it can either create a cross-org association or fail as a generic
-server error. `LocationUpdate` omits `facility_id`, so an incorrect association
-cannot be repaired through the API.
+**✅ Fixed 2026-08-20:** facility-detail sections now receive create, edit,
+maintenance, and manager-only delete capabilities separately. A create holder
+can add records without receiving edit/delete controls; editors can create and
+update; the maintenance grant can create/update/complete maintenance; deletes
+remain manager-only. Hook and component regression tests cover view, create,
+edit, maintenance, and manage behavior.
 
-**Recommended iteration:** validate `facility_id` with the shared `assert_in_org`
-helper on create and when adding it to `LocationUpdate`. If the intended bridge
-is facility-only, remove `facility_id` from the public location request instead.
-Add tests for foreign-org, missing, same-org, clear, and reassignment cases.
+The API permits room and system create/update with `facilities.edit` (and some
+creates with `facilities.create`), and maintenance create/update with
+`facilities.maintenance` or `facilities.edit`. The shared access hook and detail
+page now pass edit, maintenance, and manager-only delete capabilities separately.
+The Facilities permissions are additive action grants: normal UI entry and read
+endpoints still require `facilities.view` (or `facilities.manage`). Custom roles
+must pair create/edit/maintenance with view; a mutation-only role intentionally
+does not gain read access implicitly.
 
-### FAC-P5 — MEDIUM contract/UX — Permission behavior did not match the page catalog — ✅ FIXED
+**Follow-up:** expose the additive-view requirement in role-editor help text so
+custom-role authors cannot mistake an action grant for module visibility.
 
-**✅ Fixed 2026-08-11:** all five Facilities routes, including print labels,
-accept either `facilities.view` or `facilities.manage` through `ProtectedRoute`.
-A shared Facilities access hook now distinguishes create from manage access;
-the dashboard hides facility creation without `facilities.create`/`.manage`, and
-all detail and cross-facility mutation controls require `facilities.manage`.
-Backend permission checks remain authoritative.
+### FAC-P10 — MEDIUM completeness — Photos and documents are API-only
 
-Before the fix, only the print-label route had a permission-aware guard and
-mutation controls rendered regardless of the caller's grants. This created
-avoidable 403-driven workflows for view-only users.
+Facility photos and documents have list/create/update/delete endpoints and typed
+client methods, but neither appears in the advertised 13-section detail page.
+For a module described as complete building/property management, users cannot
+attach a site plan, inspection certificate, warranty, equipment-room photo, or
+policy file from the facility workflow.
 
-**Follow-up:** add route-level integration coverage for view-only, create-only,
-manage, and no-access roles as the Facilities route test harness expands.
+**Recommended iteration:** add a single **Files** section using the application’s
+shared document/storage patterns rather than parallel bespoke upload behavior.
+Define sensitivity, retention, download authorization, and folder ownership
+before exposing it. Link documents to the relevant maintenance, inspection,
+system, project, policy, or compliance record where useful.
 
-### FAC-P6 — MEDIUM integration gap — The location bridge is one-way in practice
+### FAC-P11 — MEDIUM product depth — Extended sections are ledgers, not management workflows
 
-The facility-room service does a useful room-to-location sync, including name,
-address, floor, room number, capacity, and `facility_id`. The reverse workflow
-does not match the claim that locations "created through either module are
-linked":
+The delivered sections are useful CRUD surfaces, but the product claims suggest
+more operational support than record storage alone:
 
-- The Locations UI is hidden when Facilities is enabled, so there is no normal
-  "either module" workflow at that point.
-- A generic location can link only to a facility, not a `facility_room_id`, and
-  it does not create or update a `FacilityRoom`.
-- Location edits cannot add, change, or clear `facility_id`.
-- Facility-level fields and linked location fields can drift because facility
-  updates do not synchronize standalone linked locations; only room writes run
-  `_sync_room_location`.
+- utilities have no portfolio trend, anomaly detection, budget comparison, or
+  cost-per-area view;
+- policies, keys, compliance items, inspections, and maintenance have no
+  configurable reminder/notification ownership surfaced here;
+- capital projects have no portfolio prioritization, milestones, commitments,
+  approvals, or variance dashboard;
+- emergency contacts and shutoffs lack a purpose-built, mobile/print emergency
+  summary.
 
-**Recommended iteration:** define and document one ownership model. The simplest
-is: `FacilityRoom` owns room-shaped locations; standalone locations may optionally
-point at a facility but never create rooms. Expose the distinction in UI labels,
-make reassignment safe and explicit, and replace "created through either module"
-with wording that describes actual ownership. If true bidirectional editing is
-desired, add conflict rules and audit events before exposing it.
+**Recommended iteration:** prioritize exception-driven views rather than adding
+more fields. Start with expiring/overdue/over-budget queues, named owners, and
+configurable reminders. Follow with utility trends and an access-controlled
+emergency summary.
 
-### FAC-P7 — LOW/MEDIUM semantics — "Recent activity" is only completed maintenance
+### FAC-P12 — LOW discovery/configuration — Lookup administration has no obvious module UI
 
-The dashboard feed is built from maintenance records where `isCompleted` is
-true. A newly added inspection, room, access key, facility edit, or archived
-facility never appears. This is a valid "recent maintenance completions" widget,
-but not a module activity feed as advertised.
+Facility types, statuses, and maintenance types have full management endpoints,
+but the ordinary dashboard/detail workflow loads them only as form options. A
+manager has no clearly advertised Facilities settings surface for tailoring the
+lookups that the backend calls customizable.
 
-**Recommended iteration:** either rename the widget now or back it with audit-log
-events across facility entity types. An audit-backed feed would also provide the
-actor and action, which the current maintenance-derived feed cannot show.
-
-### FAC-P8 — LOW maintainability — Delivered backend breadth is weakly covered at the UI boundary
-
-Existing frontend tests concentrate on dashboard rendering/store actions and a
-small inspection presentation case. There is no detail-page navigation test and
-no component test coverage for rooms, systems, maintenance, contacts, or
-compliance. The absence of six promised sidebar sections therefore has no
-executable specification that would fail.
-
-**Recommended iteration:** turn the advertised-vs-delivered table into a compact
-route/section contract test. Assert every advertised section is registered,
-permission-gated, and renders an accessible heading. Add API-client contract
-tests for snake_case request and camelCase response mapping where applicable.
+**Recommended iteration:** add a Facilities settings page with safe delete rules,
+usage counts, ordering, active/inactive state, and previews of which system
+values are inherited versus organization-owned.
 
 ## Suggested roadmap
 
-### Now — make claims and behavior trustworthy
+### Now — make the contract truthful
 
-1. Fix the unscoped `LocationCreate.facility_id` path and add tenant-isolation
-   regression tests (FAC-P4).
-2. Add permission-aware route and action gating (FAC-P5).
-3. Correct the documentation immediately for the six API-only sections and
-   one-way bridge, or mark them clearly as planned (FAC-P1/FAC-P6).
+1. ~~Rename Recent Activity or replace it with accurately scoped wording~~ —
+   completed (FAC-P7).
+2. ~~Align mutation affordances with the backend permission matrix~~ — completed
+   (FAC-P9).
+3. ~~Correct Location-bridge wording~~ — completed (FAC-P6).
 
-### Next — make the delivered core scale
+### Next — make the core reliable at organizational scale
 
-1. Add a server-side dashboard aggregate and paginated/searchable facility grid
-   (FAC-P2/FAC-P3).
-2. Rename recent activity or implement a true audit-backed feed (FAC-P7).
-3. Add the section/permission contract test before expanding the UI (FAC-P8).
+1. ~~Deliver server-side dashboard previews and paginate facility search/grid~~
+   — completed; URL-state filters remain a follow-up (FAC-P2).
+2. Add an integrated Files section with explicit authorization and retention
+   behavior (FAC-P10).
+3. Add Facilities lookup administration (FAC-P12).
 
-### Later — expose the backend investment
+### Later — turn records into operations
 
-1. Deliver the missing sections in the order proposed in FAC-P1.
-2. Add cross-facility views only where they answer an operational question
-   (utilities cost/usage, expiring insurance, projects over budget), rather than
-   duplicating every detail section as a global table.
-3. Add reminders/notifications for due maintenance, inspections, insurance, and
-   compliance, with configurable lead times and explicit ownership.
-4. Provide an emergency-mode, mobile-first summary containing contacts,
-   shutoffs, hazards, and critical documents, with carefully defined offline and
-   access-control behavior.
+1. Add owned exception queues and configurable reminders for maintenance,
+   inspections, policies, keys, and compliance.
+2. Add utility trend/cost analysis and capital-project portfolio/variance views.
+3. Provide an access-controlled, mobile-first emergency summary for contacts,
+   shutoffs, hazards, plans, and critical documents.
+4. Consider offline availability only after threat-modeling sensitive cached data
+   and revocation behavior.
 
 ## Acceptance criteria for calling the advertised module complete
 
-- Every section named in `APPLICATION_PAGES.md` is reachable or explicitly
-  labeled planned/API-only.
-- Dashboard counts remain correct above 100 facilities, maintenance records, and
-  inspections.
-- Facility search works across the full organization dataset, not only the
-  loaded page.
-- A user without `facilities.view` cannot enter facilities routes; a view-only
-  user sees no mutation affordances; create/manage roles see only allowed actions.
-- Location-to-facility links are tenant-validated, editable according to a
-  documented ownership model, and covered by cross-org tests.
-- "Recent activity" either contains multi-entity audit activity with actor/action
-  context or is accurately named "Recent maintenance completions."
-- The missing-section and permission states have executable frontend tests.
+- Grid, search, previews, current-page labels, and facility-name attribution
+  remain complete and correct beyond 100 records.
+- Dashboard preview ordering is performed by the server and agrees with the
+  aggregate cards.
+- Every permission advertised in the role editor unlocks exactly the matching UI
+  actions, and a role without read access has an explicitly defined outcome.
+- “Recent Activity” is either accurately named or includes audited, multi-entity
+  actor/action events.
+- Product wording describes room-owned Location synchronization rather than an
+  unspecified bidirectional bridge.
+- Facility files are attachable, viewable, and governed from the facility detail
+  workflow.
+- Due, expiring, and over-budget records have visible owners and configurable
+  escalation/reminder behavior.
+- The permission, section, pagination, and sensitive-data contracts have
+  executable frontend and backend tests.

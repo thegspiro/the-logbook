@@ -1,5 +1,180 @@
 # Script currency
 
+## Flagged by the 2026-08-17 → 08-19 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
+
+The window produced **one Wrong**, one **Dangerous-if-recorded** (a number a
+chief could put in a grant application), and a set of **additions** that are
+new material rather than corrections.
+
+### 04 — Fire Chief / Leadership · **WRONG — corrected in-script 2026-08-19**
+
+Two separate problems in the same script, and the second is the serious one.
+
+**1. The close-out chapter narrates a screen half the audience will not have.**
+`### SETTING SHIFT CLOSE-OUT RULES (19:45 – 20:15)` walks the close-out rules
+card and then describes what an officer sees at finalize. As of 2026-08-19 a
+department that has switched on **Record a call count at close-out** gets a
+**three-step wizard** instead of the single checklist — different screen,
+different flow, and the toggle that switches between them is _on the very card
+the presenter is standing on_ and is not mentioned.
+
+The card needs the new toggle named, and the officer-facing consequence stated:
+turning it on changes what your officers see at 0700 the same morning.
+
+**Both are now rewritten in `04-fire-chief-leadership-guide.md`** rather than
+left in this queue, per the standing rule that no behavioural content lives only
+in SCRIPT_CURRENCY.
+
+**2. The call-volume figure needs the caveat said out loud, on camera.**
+`### SCHEDULING REPORTS (21:30 – 22:15)` sends a chief to a report that, for a
+count-only department, is labelled **Unit Responses** and _is not a department
+call count_. Two units that closed out independently each reported their own
+call, so an MVA that an engine and a medic both ran appears twice.
+
+This script's audience is precisely the person who puts that number in a grant
+application or an ISO submission. **A narrator who says "here's your call
+volume" over that screen is teaching a reporting error with a funding
+consequence.** The caveat is one sentence and it must be in the take:
+
+> **Three additions to this beat _(2026-08-19, from the Codex review of
+> PR #1573)_.** They change what can safely be shown, not just what is said.
+> **(a)** Switching the demo department to per-incident mode does **not** make
+> "total calls" safe — that figure sums `calls_responded` across *per-trainee*
+> shift completion reports, so a shift with two enrolled trainees counts twice.
+> Neither mode yields a quotable incident count. **(b) Do not show a CSV
+> export in this chapter.** The export still labels the column "Total Calls" in
+> both modes, so it visibly contradicts the tile beside it on camera. **(c) Do
+> not promise a per-apparatus breakdown** — the API returns one, the screen does
+> not render it. Tracked as SCHED-13/15/16 in `docs/KNOWN_LIMITATIONS.md`.
+
+> "If your department records call counts at close-out, read the label — this
+> is _unit responses_, not incidents. An MVA two units ran shows up twice.
+> Reconcile mutual responses before this goes in a grant application."
+
+**B-roll check:** any planned shot of the finalize checklist must be captioned
+as the detailed-mode screen, or shot twice — once per mode.
+
+**EDITOR:** the close-out chapter grows by roughly **60–90 seconds** (the new
+toggle, the three wizard steps, and why they save as they go). Scheduling
+Reports grows by **~15 seconds** for the caveat. Both sit inside existing
+chapters, so **only the bands from 19:45 onward re-time**, not the whole script.
+Final timecodes are a recording-production task.
+
+### 08 — Quick Tips & Shorts · **written in-script 2026-08-19**
+
+- **Short 8J** (end-of-shift checks) still holds for detailed-mode
+  departments, but for a count-only department the override moved to the **last
+  step of the wizard** rather than the dialog it shows. A shooting note is now
+  in the short itself: film it on a detailed-mode department, which keeps the
+  take correct as filmed, and do not mix both screens into one 50-second clip —
+  a viewer has to recognise their own screen immediately or the format fails.
+- **New short 8AG, "Tap Instead of Scan"**, is written. Needs a **real Android
+  phone and a real tag**; it cannot be captured in the harness, and anyone who
+  has used NFC will spot a staged shot. Its production note also rules out
+  shooting it on a room kiosk card — those are deliberately not taggable, and
+  showing a viewer hunting for a button that is correctly absent teaches the
+  wrong thing.
+
+### 01 — Installing The Logbook · **written in-script 2026-08-19**
+
+A new chapter, **CHECK IT BEFORE YOU START IT (10:45 – 11:00)**, now sits ahead
+of START THE SERVICES in the script. It adds the preflight check before the
+first `docker compose up`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
+
+This is the single best 60 seconds available anywhere in the series. It converts
+"discover the configuration problem by losing the service" into a command run
+beforehand. Two details have to be in the narration or the advice is worse than
+useless:
+
+- **`--build`**, or the viewer checks the image they are replacing rather than
+  the one they are deploying.
+- **The same `-f` files the deployment uses**, or Compose evaluates only the
+  base development configuration and answers about a setup nobody runs.
+
+**EDITOR:** lands inside the existing pre-launch chapter. Budget **60–80
+seconds**; no chapter re-ordering.
+
+### 03 — IT Manager / System Admin · **written in-script 2026-08-19**
+
+Two sections added to the script body, both post-setup and both in scope:
+
+- **`python -m app.preflight --compose PATH`** — names the settings a compose
+  file _drops_, i.e. values sitting in `.env` that never reach the container.
+  Those used to become defaults silently, which is how a production stack ends
+  up running a development setting with nothing on screen to say so. This is an
+  IT manager's problem specifically, and belongs here rather than in 01.
+- **The sign-in hardening posture, and which way each control fails.** Worth
+  saying explicitly because the two directions are opposite and deliberate:
+  breached-password lookup **fails open** (it is supplementary — complexity,
+  history, MFA and lockout still apply, and an outage must not block a password
+  change), CAPTCHA **fails closed** (nothing sits behind it, so accepting
+  unverified traffic during an outage is the state an attacker wants). Also
+  worth one line: enabling CAPTCHA widens the CSP for the provider's widget
+  origins, and a misconfigured provider presents as _"the challenge never
+  appears"_ rather than as an error.
+
+Written as **Chapter 5 → "Brute-force protection, and which way each control
+fails"** and **Chapter 9 → "Ask before you restart"**.
+
+**Do not let a delivery pass compress the fail-open / fail-closed beat into
+"both are security checks."** That they fail in opposite directions is the
+entire content of the section — breached-password checking must not block a
+password change during an outage, and CAPTCHA must not admit unverified traffic
+during one. An editor smoothing those into one sentence removes the only thing
+a viewer needed to hear.
+
+**Demo environment:** the `--compose` beat needs a compose file that genuinely
+drops a setting present in `.env`. Without that fixture the command prints an
+empty list and the section has nothing behind it.
+
+**EDITOR:** ~2:30 total, both inside existing chapters. Chapter 5's addition
+re-times everything from 17:30 onward; Chapter 9's re-times only Chapter 9 and
+the last rows of the clip table.
+
+### 06 — Member Guide · **written in-script 2026-08-19**
+
+`### QR CODE CHECK-IN (6:30 – 7:30)` has gained the NFC alternative in-script.
+The added narration keeps it short, because for most members it is one extra
+option and one limitation:
+
+> "If your station has put up an NFC tag, you can just hold your phone against
+> it instead of scanning. If the app's already open on screen, use **Tap Tag**
+> on the Events page — Android won't hand the tag over while the app is in
+> front."
+
+**Say the limitation, do not bury it.** Chrome on Android, over HTTPS. iPhone
+cannot do this and neither can a desktop, and a member who tries it on an
+iPhone and fails will assume the app is broken rather than that their phone
+does not have the hardware API.
+
+**B-roll:** needs a real Android phone and a real tag. This cannot be captured
+in the screenshot harness, and a mocked-up shot will look wrong to anyone who
+has used one.
+
+**EDITOR:** ~25 seconds inside the existing chapter; the clip table entry at
+`| QR Code Check-In | 6:30–7:30 |` keeps its title or becomes "Checking In with
+a QR Code or a Tap".
+
+### 10 — Training Pipelines, Member · **verify only**
+
+Members whose training requirements count calls will see credit arrive from
+close-out rather than from per-incident logging if their department switched
+modes. Nothing in the script is wrong; check that no take says "each call your
+officer logs" in a way that implies the per-incident form.
+
+### Not affected
+
+**02, 05, 07, 09, 11, 12, 13, 14, 15, 16** — no behaviour in this window
+touches what they narrate.
+
 ## Flagged by the 2026-08-15 → 08-16 changes
 
 The window produced one **Wrong** (script 02's auto-save promise), several
@@ -95,23 +270,23 @@ Two items are already **written into the scripts** (same convention as the
 08-12 → 08-14 pass — each carries an inline **EDITOR** note at the insertion
 point):
 
-| Script | Applied update |
-|---|---|
+| Script | Applied update                                                                                                                                                                          |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **01** | Compose minimum raised to **v2.24.4+** in the prerequisites narration (production override now uses `volumes: !override`); on-screen `docker compose version` output must show ≥ 2.24.4 |
-| **12** | New ~15s beat in Chapter 5: pending nominations are member-visible only while the nomination window is open; managers always see the full list. Chapter 5 onward re-times by ~0:15 |
+| **12** | New ~15s beat in Chapter 5: pending nominations are member-visible only while the nomination window is open; managers always see the full list. Chapter 5 onward re-times by ~0:15      |
 
 The rest of the window's changes are **B-roll / verify** items — the words in
 the scripts remain true, but the screens behind them changed. Nothing is
 recorded yet, so these are capture-plan notes, not re-records:
 
-| Script | Kind | What changed on screen |
-|---|---|---|
-| **04** (Fire Chief) | B-roll only | The event-creation Location picker now indents sub-rooms under their container and shows a containment path for a selected nested room (facilities rooms can nest, 2026-08-16). If the demo department has nested rooms, the picker will not look like a flat list. Either seed flat-only demo rooms or let the tree show and don't remark on it. |
-| **06** (Member guide) | B-roll only + verify | Member Directory beat (18:00–18:30): a colleague's profile opened from the directory no longer shows MFA/verification/last-login/account timestamps or role permission lists to members — do not capture or gesture at an account-metadata block that is no longer there. The narration as written makes no such claim; keep it that way. |
-| **07** (Secretary) | B-roll only | Event form location field — same nested-room picker note as script 04. |
-| **08** (Short 8AF) | B-roll only | Room QR Codes directory: nested rooms display with their containment path, so "search for 'Training Room'" may surface "Training Room — Station 1"-style names. Still correct; choose demo data so the searched name is unambiguous. |
-| **03** (IT manager) | Verify before take | If the deployment chapter shows `docker compose` commands or version checks, apply the same v2.24.4+ floor as script 01. Also: `unraid/.env.example` now ships an HTTPS `ALLOWED_ORIGINS` example — any Unraid-flavored aside should not show the old `http://<LAN-IP>` form as the end state. |
-| **All** | B-roll only | Dark-mode captures of public pages (forms, ballots, status) render on the themed gradient now, not white — retake any dark-mode public-page B-roll captured before 2026-08-15. |
+| Script                | Kind                 | What changed on screen                                                                                                                                                                                                                                                                                                                            |
+| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **04** (Fire Chief)   | B-roll only          | The event-creation Location picker now indents sub-rooms under their container and shows a containment path for a selected nested room (facilities rooms can nest, 2026-08-16). If the demo department has nested rooms, the picker will not look like a flat list. Either seed flat-only demo rooms or let the tree show and don't remark on it. |
+| **06** (Member guide) | B-roll only + verify | Member Directory beat (18:00–18:30): a colleague's profile opened from the directory no longer shows MFA/verification/last-login/account timestamps or role permission lists to members — do not capture or gesture at an account-metadata block that is no longer there. The narration as written makes no such claim; keep it that way.         |
+| **07** (Secretary)    | B-roll only          | Event form location field — same nested-room picker note as script 04.                                                                                                                                                                                                                                                                            |
+| **08** (Short 8AF)    | B-roll only          | Room QR Codes directory: nested rooms display with their containment path, so "search for 'Training Room'" may surface "Training Room — Station 1"-style names. Still correct; choose demo data so the searched name is unambiguous.                                                                                                              |
+| **03** (IT manager)   | Verify before take   | If the deployment chapter shows `docker compose` commands or version checks, apply the same v2.24.4+ floor as script 01. Also: `unraid/.env.example` now ships an HTTPS `ALLOWED_ORIGINS` example — any Unraid-flavored aside should not show the old `http://<LAN-IP>` form as the end state.                                                    |
+| **All**               | B-roll only          | Dark-mode captures of public pages (forms, ballots, status) render on the themed gradient now, not white — retake any dark-mode public-page B-roll captured before 2026-08-15.                                                                                                                                                                    |
 
 No script narrates facility-room management in enough depth to need a nested
 rooms chapter today; if a Facilities deep-dive script is added later, the

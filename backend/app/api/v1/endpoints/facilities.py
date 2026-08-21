@@ -52,6 +52,7 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
     FacilityComplianceItemUpdate,
     FacilityCreate,
     FacilityDashboardCounts,
+    FacilityDashboardSummary,
     FacilityDocumentCreate,
     FacilityDocumentResponse,
     FacilityDocumentUpdate,
@@ -74,6 +75,7 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
     FacilityOccupantCreate,
     FacilityOccupantResponse,
     FacilityOccupantUpdate,
+    FacilityPageResponse,
     FacilityPhotoCreate,
     FacilityPhotoResponse,
     FacilityPhotoUpdate,
@@ -498,6 +500,58 @@ async def get_facility_dashboard_counts(
     return await FacilitiesService(db).get_dashboard_counts(
         current_user.organization_id
     )
+
+
+@router.get(
+    "/dashboard",
+    response_model=FacilityDashboardSummary,
+    tags=["Facilities"],
+)
+async def get_facility_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.view", "facilities.manage")
+    ),
+):
+    """Return organization-wide counts and correctly ordered preview rows."""
+    return await FacilitiesService(db).get_dashboard_summary(
+        current_user.organization_id
+    )
+
+
+@router.get(
+    "/page",
+    response_model=FacilityPageResponse,
+    tags=["Facilities"],
+)
+async def get_facilities_page(
+    facility_type_id: str | None = Query(None, description="Filter by facility type"),
+    status_id: str | None = Query(None, description="Filter by status"),
+    is_archived: bool | None = Query(False, description="Include archived facilities"),
+    search: str | None = Query(
+        None,
+        min_length=1,
+        max_length=200,
+        description="Search by name, number, or city",
+    ),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(24, ge=1, le=100, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.view", "facilities.manage")
+    ),
+):
+    """Return a facility page with the total number of matching records."""
+    items, total = await FacilitiesService(db).list_facilities(
+        organization_id=current_user.organization_id,
+        facility_type_id=facility_type_id,
+        status_id=status_id,
+        is_archived=is_archived,
+        search=search,
+        skip=skip,
+        limit=limit,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.post(

@@ -100,7 +100,7 @@ export default function ApparatusBasicPage() {
       setApparatusList(
         data.map((a) => ({
           ...a,
-          positions: a.positions?.map((p) => (typeof p === 'string' ? p : p.position)) ?? [],
+          positions: a.positions?.map((p) => p.position) ?? [],
         }))
       );
     } catch {
@@ -363,7 +363,7 @@ export default function ApparatusBasicPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {

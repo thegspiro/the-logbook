@@ -13,7 +13,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +60,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
+from app.utils.positions import normalize_stored_positions
 
 
 def _position_label(position) -> str:
@@ -320,6 +321,9 @@ class SchedulingService:
         - ``["officer", "emt"]`` → ``[{"position": "officer", "required": True}, ...]``
         - ``[{"position": "officer", "required": True}, ...]`` → pass-through
         - Event metadata dicts (flat_positions / resources) → expanded
+
+        Display only. Saving this output would flatten an event template's
+        metadata into seats — use ``app.utils.positions`` on a write path.
         """
         if not positions:
             return []
@@ -354,17 +358,6 @@ class SchedulingService:
                             result.append({"position": name, "required": True})
                 return result
         return []
-
-    @staticmethod
-    def _resolve_template_positions(positions: Any) -> Optional[List[str]]:
-        """Extract a flat list of position strings (legacy helper).
-
-        Delegates to ``normalize_positions`` and strips structure.
-        """
-        slots = SchedulingService.normalize_positions(positions)
-        if not slots:
-            return None
-        return [s["position"] for s in slots]
 
     # ============================================
     # Enrichment Helpers
@@ -704,6 +697,10 @@ class SchedulingService:
                         and apparatus_min_staffing is not None
                     ):
                         shift_data["min_staffing"] = apparatus_min_staffing
+            if "positions" in shift_data:
+                shift_data["positions"] = normalize_stored_positions(
+                    shift_data["positions"]
+                )
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -1369,6 +1366,11 @@ class SchedulingService:
             if requalify_error:
                 return None, requalify_error
 
+            if "positions" in update_data:
+                update_data["positions"] = normalize_stored_positions(
+                    update_data["positions"]
+                )
+
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
                     setattr(shift, key, value)
@@ -1906,6 +1908,12 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            tracking = await CallTrackingService(self.db).get_settings(
+                str(organization_id)
+            )
+            if tracking.get("mode") != CallTrackingMode.DETAILED:
+                return None, "Detailed call records are disabled for this organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
@@ -1998,6 +2006,10 @@ class SchedulingService:
             self.db, apparatus_id, organization_id
         ):
             return None, "Apparatus not found"
+        if "positions" in template_data:
+            template_data["positions"] = normalize_stored_positions(
+                template_data["positions"]
+            )
         return await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
@@ -2039,6 +2051,10 @@ class SchedulingService:
             self.db, apparatus_id, organization_id
         ):
             return None, "Apparatus not found"
+        if "positions" in update_data:
+            update_data["positions"] = normalize_stored_positions(
+                update_data["positions"]
+            )
         return await self._crud_update(template, update_data)
 
     async def delete_template(
@@ -2449,9 +2465,14 @@ class SchedulingService:
                     apparatus_id=getattr(template, "apparatus_id", None),
                     platoon=shift_platoon,
                     color=shift_color,
-                    positions=self._resolve_template_positions(
+                    # Structured slots, not bare strings: this writer is how
+                    # a recurring pattern fills the calendar, so stripping the
+                    # required flag here would re-seed the legacy shape after
+                    # the migration and quietly promote every optional seat.
+                    positions=self.normalize_positions(
                         getattr(template, "positions", None)
-                    ),
+                    )
+                    or None,
                     min_staffing=getattr(template, "min_staffing", None),
                     created_by=created_by,
                 )
@@ -3623,12 +3644,37 @@ class SchedulingService:
 
         # Paginated results
         query = (
-            query.order_by(ShiftSwapRequest.created_at.desc()).offset(skip).limit(limit)
+            query.order_by(
+                case(
+                    (ShiftSwapRequest.status == SwapRequestStatus.PENDING, 0), else_=1
+                ),
+                ShiftSwapRequest.created_at.desc(),
+                ShiftSwapRequest.id.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
         )
         result = await self.db.execute(query)
         swap_requests = result.scalars().all()
 
         return swap_requests, total
+
+    async def get_swap_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[SwapRequestStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftSwapRequest], int]:
+        """Get only swaps in which ``user_id`` is a participant.
+
+        Member-facing callers should use this method rather than accepting an
+        optional client filter on the organization-wide query.
+        """
+        return await self.get_swap_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
 
     async def get_swap_request_by_id(
         self, request_id: UUID, organization_id: UUID
@@ -3641,6 +3687,23 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def get_swap_request_for_user_by_id(
+        self, request_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftSwapRequest]:
+        """Get a swap only when ``user_id`` is its requester or target."""
+        result = await self.db.execute(
+            select(ShiftSwapRequest)
+            .where(ShiftSwapRequest.id == str(request_id))
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
+            .where(
+                or_(
+                    ShiftSwapRequest.requesting_user_id == str(user_id),
+                    ShiftSwapRequest.target_user_id == str(user_id),
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def review_swap_request(
         self,
         request_id: UUID,
@@ -3649,7 +3712,11 @@ class SchedulingService:
         status: SwapRequestStatus,
         reviewer_notes: Optional[str] = None,
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Review (approve/deny) a shift swap request"""
+        """Review (approve/deny) a shift swap request.
+
+        This is a manager-review workflow, not participant acceptance: neither
+        the requester nor a targeted participant may review the request.
+        """
         try:
             swap_request = await self.get_swap_request_by_id(
                 request_id, organization_id
@@ -3659,6 +3726,17 @@ class SchedulingService:
 
             if swap_request.status != SwapRequestStatus.PENDING:
                 return None, "Swap request is no longer pending"
+
+            # Enforce separation of duties before mutating either the request
+            # or its assignments. A target participant's agreement, if a
+            # dedicated acceptance workflow is added, must remain distinct
+            # from the manager approval performed by this endpoint.
+            if str(reviewer_id) == str(swap_request.requesting_user_id):
+                return None, "Requesters cannot review their own swap requests"
+            if swap_request.target_user_id and str(reviewer_id) == str(
+                swap_request.target_user_id
+            ):
+                return None, "Target participants cannot manager-review swap requests"
 
             swap_request.status = status
             swap_request.reviewed_by = reviewer_id
@@ -3806,11 +3884,32 @@ class SchedulingService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(ShiftTimeOff.start_date.asc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(
+                case((ShiftTimeOff.status == TimeOffStatus.PENDING, 0), else_=1),
+                ShiftTimeOff.created_at.desc(),
+                ShiftTimeOff.id.desc(),
+            )
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         time_off_requests = result.scalars().all()
 
         return time_off_requests, total
+
+    async def get_time_off_requests_for_user(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        status: Optional[TimeOffStatus] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Tuple[List[ShiftTimeOff], int]:
+        """Get only ``user_id``'s time-off requests for member-facing reads."""
+        return await self.get_time_off_requests(
+            organization_id, status=status, user_id=user_id, skip=skip, limit=limit
+        )
 
     async def get_time_off_by_id(
         self, time_off_id: UUID, organization_id: UUID
@@ -3820,6 +3919,18 @@ class SchedulingService:
             select(ShiftTimeOff)
             .where(ShiftTimeOff.id == str(time_off_id))
             .where(ShiftTimeOff.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_time_off_for_user_by_id(
+        self, time_off_id: UUID, organization_id: UUID, user_id: UUID
+    ) -> Optional[ShiftTimeOff]:
+        """Get a time-off request only when it belongs to ``user_id``."""
+        result = await self.db.execute(
+            select(ShiftTimeOff)
+            .where(ShiftTimeOff.id == str(time_off_id))
+            .where(ShiftTimeOff.organization_id == str(organization_id))
+            .where(ShiftTimeOff.user_id == str(user_id))
         )
         return result.scalar_one_or_none()
 
@@ -3843,6 +3954,11 @@ class SchedulingService:
 
             if time_off.status != TimeOffStatus.PENDING:
                 return None, "Time-off request is no longer pending"
+
+            # Check before changing fields or cancelling assignments so a
+            # rejected self-review leaves the request completely pending.
+            if str(reviewer_id) == str(time_off.user_id):
+                return None, "Requesters cannot review their own time-off requests"
 
             time_off.status = status
             time_off.approved_by = reviewer_id
@@ -5126,8 +5242,7 @@ class SchedulingService:
         return sum(
             1
             for s in summaries
-            if s.get("check_timing") == "end_of_shift"
-            and (not s.get("is_completed") or s.get("overall_status") == "incomplete")
+            if s.get("check_timing") == "end_of_shift" and not s.get("is_completed")
         )
 
     async def finalize_shift(

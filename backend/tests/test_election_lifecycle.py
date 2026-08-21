@@ -14,6 +14,8 @@ Covers:
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from email import policy
+from email.parser import Parser
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -376,14 +378,28 @@ class TestElectionLifecycleTask(TestLifecycleSetup):
         svc = ElectionService(db_session)
 
         send_batch = AsyncMock(side_effect=lambda batch: [True] * len(batch))
-        with patch(
-            "app.services.email_service.EmailService.send_batch", new=send_batch
+        with (
+            patch("app.services.email_service.EmailService.send_batch", new=send_batch),
+            patch(
+                "app.services.election_service.settings.FRONTEND_URL",
+                "https://fd.example/",
+            ),
         ):
             first = await svc.process_election_lifecycle(uuid.UUID(org_id))
             second = await svc.process_election_lifecycle(uuid.UUID(org_id))
 
         assert first >= 1
         assert send_batch.await_count == 1, "reminder must fire exactly once"
+        messages = send_batch.await_args.args[0]
+        assert messages
+        assert all(
+            any(
+                "https://fd.example/ballot#token=" in part.get_content()
+                for part in Parser(policy=policy.default).parsestr(message).walk()
+                if part.get_content_maintype() == "text"
+            )
+            for _recipients, message in messages
+        ), "automatic reminders must include a fresh ballot link"
         election = await self._get_election(db_session, election_id)
         assert election.reminder_sent_at is not None
         assert election.status == ElectionStatus.OPEN

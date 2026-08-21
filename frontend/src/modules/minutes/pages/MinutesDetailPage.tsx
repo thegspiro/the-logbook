@@ -1255,7 +1255,7 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Link Event Modal */}
         {showLinkEventModal && (
           <div
-            className="modal-overlay flex items-center justify-center p-4"
+            className="modal-overlay z-50 flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="link-event-title"
@@ -1318,7 +1318,7 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Reject Modal */}
         {showRejectModal && (
           <div
-            className="modal-overlay flex items-center justify-center p-4"
+            className="modal-overlay z-50 flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="reject-title"

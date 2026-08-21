@@ -144,7 +144,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       onKeyDown={(e) => {
@@ -731,7 +731,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
       {syllabusCourse && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label={`Classes for ${syllabusCourse.name}`}

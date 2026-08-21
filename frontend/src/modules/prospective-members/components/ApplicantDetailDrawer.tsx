@@ -36,6 +36,7 @@ import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { toDisplayString } from '../../../utils/displayValue';
 import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
@@ -101,6 +102,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   isLastStage,
   isFirstStage,
 }) => {
+  // Rendered by the parent whether open or not, so the flag is what counts.
+  // Takes the mobile bottom bar off the drawer while it is showing.
+  useOverlaySurface(isOpen);
+
   const tz = useTimezone();
 
   const { isLoadingApplicant } = useProspectiveMembersStore();

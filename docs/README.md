@@ -12,8 +12,21 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🔄 Recent-change handoff
 
+**[Three-day change and connection audit — 2026-08-17 through 2026-08-19](./CHANGE_AUDIT_2026-08-17_TO_19.md)**
+is the current release handoff. It covers PII-free call volume tracking and the
+resumable shift close-out wizard (two migrations, two new tables, one new
+column), the cross-module NFC tag surface, the configuration preflight tool, the
+rewritten privacy notice, the red-team security batch, and the CI fix for an
+`apt-get` stall that had been letting the backend suite report _skipped_ rather
+than failed. It carries the new data model, what the call tables deliberately do
+not hold, the end-to-end data paths, the edge cases, and the screenshot / YouTube
+disposition.
+
+**[August 15–16 audit](./CHANGE_AUDIT_2026-08-15_TO_16.md)** covers the window
+immediately before it.
+
 **[Six-day change and connection audit — 2026-08-10 through 2026-08-16](./CHANGE_AUDIT_2026-08-10_TO_16.md)**
-is the current release handoff. It carries what the three-day frame could not
+was the previous release handoff. It carries what the three-day frame could not
 show: every route added across the window with its real permission gate, the
 full 28-revision Alembic route from `20260809_0002` to the then-head
 `20260814_0004` with its

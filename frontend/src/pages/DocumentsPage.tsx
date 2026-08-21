@@ -268,14 +268,14 @@ const DocumentsPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
-                className="btn-secondary btn-auto inline-flex items-center space-x-2"
+                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
               >
                 <Folder className="h-4 w-4" aria-hidden="true" />
                 <span>New Folder</span>
               </button>
               <button
                 onClick={handleOpenUploadModal}
-                className="mobile-touch-target space-x-2 rounded-lg bg-amber-600 px-4 py-2 text-white transition-colors hover:bg-amber-700"
+                className="flex min-h-11 items-center space-x-2 rounded-lg bg-amber-600 px-4 py-2 text-white transition-colors hover:bg-amber-700"
               >
                 <Upload className="h-4 w-4" />
                 <span>Upload Document</span>
@@ -400,7 +400,7 @@ const DocumentsPage: React.FC = () => {
                         className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
                       />
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{folder.name}</h3>
+                        <h3 className="text-theme-text-primary truncate font-semibold">{folder.name}</h3>
                         <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
                         <p className="text-theme-text-muted mt-2 text-xs">
                           {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
@@ -435,7 +435,7 @@ const DocumentsPage: React.FC = () => {
                       <div className="flex items-start space-x-3">
                         <File className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-theme-text-primary line-clamp-2 font-semibold">{doc.name}</h3>
+                          <h3 className="text-theme-text-primary truncate font-semibold">{doc.name}</h3>
                           {doc.description && (
                             <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{doc.description}</p>
                           )}
@@ -467,8 +467,8 @@ const DocumentsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="card overflow-hidden overflow-x-auto">
-                  <table className="w-full">
+                <div className="card overflow-x-auto">
+                  <table className="rwd-table w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
@@ -511,7 +511,7 @@ const DocumentsPage: React.FC = () => {
                           key={doc.id}
                           className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
                         >
-                          <td className="px-4 py-3">
+                          <td data-label="Name" className="px-4 py-3">
                             <div className="flex items-center space-x-2">
                               <File className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                               <div>
@@ -524,18 +524,21 @@ const DocumentsPage: React.FC = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Size" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {formatFileSize(doc.file_size)}
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm uppercase">
+                          <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm uppercase">
                             {doc.file_type || '-'}
                           </td>
-                          <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
+                          <td data-label="Uploaded" className="text-theme-text-muted px-4 py-3 text-sm">
+                            {formatDate(doc.created_at, tz)}
+                          </td>
                           {canManage && (
-                            <td className="px-4 py-3 text-right">
+                            <td data-label="Actions" className="px-4 py-3 text-right">
                               <button
                                 onClick={() => setDeleteConfirm(doc.id)}
-                                className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"
+                                className="text-theme-text-muted inline-flex min-h-11 min-w-11 items-center justify-center transition-colors hover:text-red-800 dark:hover:text-red-400"
+                                aria-label={`Delete ${doc.name}`}
                                 title="Delete document"
                               >
                                 <Trash2 className="h-4 w-4" />

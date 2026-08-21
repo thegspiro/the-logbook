@@ -11,11 +11,12 @@ The Admin Hours module tracks administrative work hours for department members v
 - **Configurable Categories** — Define work categories (e.g., Committee Meeting, Building Maintenance, Fundraising, Training Prep)
 - **Auto-Approve Thresholds** — Entries below a configurable duration threshold are auto-approved; longer entries require review
 - **Approval Workflow** — Admins review, approve, or reject pending entries from the management dashboard
-- **Separation of Duties** *(2026-08-01)* — Nobody can approve their own hours entry, even holding the approval permission. Officers log time into the same pool they approve, so a second person has to sign it off. Rejecting your own entry is still allowed — withdrawing a claim is not a conflict.
+- **Separation of Duties** _(2026-08-01)_ — Nobody can approve their own hours entry, even holding the approval permission. Officers log time into the same pool they approve, so a second person has to sign it off. Rejecting your own entry is still allowed — withdrawing a claim is not a conflict.
 - **Personal Hours Log** — Members view their own hours, active sessions, and submission history
 - **Prominent Clock-Out Card** — Active sessions display a full-width card with elapsed time and prominent clock-out button (replaces the previous slim banner)
 - **Summary Dashboard** — Admin view of total hours, pending reviews, entries by category, and per-member breakdowns
 - **Printable QR Codes** — Generate and print QR codes per category for posting at work locations
+- **NFC Tags** — _(2026-08-18)_ Write a category's clock-in URL to a reusable tag from `/admin-hours/categories/:id/qr-code`, and read one with **Tap Tag** on My Admin Hours. See [NFC Tags](#nfc-tags-2026-08-18) below
 - **Pagination & Filters** — Filter entries by status, category, member, and date range with paginated results
 - **Bulk Approve** — Select multiple pending entries and approve them in one action (your own entries are refused, as above)
 - **CSV Export** — Export filtered admin hours data to CSV for external reporting
@@ -30,12 +31,12 @@ The Admin Hours module tracks administrative work hours for department members v
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/admin-hours` | My Admin Hours | Authenticated |
-| `/admin-hours/manage` | Admin Hours Management | `admin_hours.manage` |
-| `/admin-hours/qr-codes` | QR Code Generation | `admin_hours.manage` |
-| `/admin-hours/clock-in` | QR Clock-In Landing | Authenticated |
+| URL                     | Page                   | Permission           |
+| ----------------------- | ---------------------- | -------------------- |
+| `/admin-hours`          | My Admin Hours         | Authenticated        |
+| `/admin-hours/manage`   | Admin Hours Management | `admin_hours.manage` |
+| `/admin-hours/qr-codes` | QR Code Generation     | `admin_hours.manage` |
+| `/admin-hours/clock-in` | QR Clock-In Landing    | Authenticated        |
 
 ---
 
@@ -91,10 +92,10 @@ PATCH  /api/v1/admin-hours/entries/{id}       # Edit pending entry (before appro
 
 ## Permissions
 
-| Permission | Description |
-|------------|-------------|
-| `admin_hours.view` | View admin hours data (implicit for authenticated members viewing own hours) |
-| `admin_hours.log` | Submit clock-in/clock-out and manual entries |
+| Permission           | Description                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `admin_hours.view`   | View admin hours data (implicit for authenticated members viewing own hours)               |
+| `admin_hours.log`    | Submit clock-in/clock-out and manual entries                                               |
 | `admin_hours.manage` | Create/edit categories, approve/reject entries, view all members' hours, generate QR codes |
 
 ---
@@ -103,32 +104,32 @@ PATCH  /api/v1/admin-hours/entries/{id}       # Edit pending entry (before appro
 
 ### AdminHoursCategory
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | UUID | Primary key |
-| `organization_id` | UUID | FK to organizations |
-| `name` | String | Category name (e.g., "Building Maintenance") |
-| `description` | Text | Optional description |
-| `auto_approve` | Boolean | Whether entries below threshold are auto-approved |
-| `approval_threshold_minutes` | Integer | Duration threshold for auto-approval |
-| `is_active` | Boolean | Active/inactive status |
+| Field                        | Type    | Description                                       |
+| ---------------------------- | ------- | ------------------------------------------------- |
+| `id`                         | UUID    | Primary key                                       |
+| `organization_id`            | UUID    | FK to organizations                               |
+| `name`                       | String  | Category name (e.g., "Building Maintenance")      |
+| `description`                | Text    | Optional description                              |
+| `auto_approve`               | Boolean | Whether entries below threshold are auto-approved |
+| `approval_threshold_minutes` | Integer | Duration threshold for auto-approval              |
+| `is_active`                  | Boolean | Active/inactive status                            |
 
 ### AdminHoursEntry
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | UUID | Primary key |
-| `organization_id` | UUID | FK to organizations |
-| `user_id` | UUID | FK to users (member who worked) |
-| `category_id` | UUID | FK to admin_hours_categories |
-| `clock_in` | DateTime | Start time |
-| `clock_out` | DateTime | End time (nullable while active) |
-| `duration_minutes` | Integer | Computed duration |
-| `entry_type` | String | `clock_in` or `manual` |
-| `status` | String | `pending`, `approved`, `rejected` |
-| `notes` | Text | Optional notes from member |
-| `reviewer_id` | UUID | FK to users (who approved/rejected) |
-| `reviewer_notes` | Text | Optional notes from reviewer |
+| Field              | Type     | Description                         |
+| ------------------ | -------- | ----------------------------------- |
+| `id`               | UUID     | Primary key                         |
+| `organization_id`  | UUID     | FK to organizations                 |
+| `user_id`          | UUID     | FK to users (member who worked)     |
+| `category_id`      | UUID     | FK to admin_hours_categories        |
+| `clock_in`         | DateTime | Start time                          |
+| `clock_out`        | DateTime | End time (nullable while active)    |
+| `duration_minutes` | Integer  | Computed duration                   |
+| `entry_type`       | String   | `clock_in` or `manual`              |
+| `status`           | String   | `pending`, `approved`, `rejected`   |
+| `notes`            | Text     | Optional notes from member          |
+| `reviewer_id`      | UUID     | FK to users (who approved/rejected) |
+| `reviewer_notes`   | Text     | Optional notes from reviewer        |
 
 ---
 
@@ -162,3 +163,32 @@ The `AdminHoursManagePage` was decomposed from a 1,000+ line monolith into 5 foc
 ---
 
 **See also:** [Scheduling Module](Module-Scheduling) | [Training Module](Module-Training) | [Module Configuration](Configuration-Modules)
+
+---
+
+## NFC Tags _(2026-08-18)_
+
+An NFC tag is a **second way in to a clock-in that already has a QR code** —
+not a new flow. A station can mount one reusable sticker instead of reprinting
+a sheet, and a member taps it with their phone. No camera, which is the part
+that fails in a dark apparatus bay or with gloves on.
+
+**Writing a tag.** The tag writer sits on the same page as the QR code. Tap
+**Write to an NFC tag**, hold a blank tag to the phone, done.
+
+**Reading one.** Android hands a URL tag straight to the browser when the app
+is closed. When the app is already in the foreground the OS does not, so
+**Tap Tag** in the app reads it instead — it routes by what the tag says rather
+than by where the button lives.
+
+**A tag is untrusted input, and is treated as such.** Anyone with a phone can
+write one, so the payload is on par with a scanned QR code rather than with
+configuration. The parser resolves it against the app's own origin, rejects
+anything that lands anywhere else, accepts only known routes, and hands
+react-router a **rebuilt** path rather than the raw string. An unrecognized tag
+leaves the scan armed and says so rather than navigating somewhere unintended.
+
+**Requirements: Chrome on Android, over HTTPS.** Web NFC exists nowhere else,
+and browsers expose it only in a secure context — a LAN deployment on plain
+`http://` cannot use it. The writer panel says which of the two you are hitting
+rather than a bare "unavailable". QR remains the universal path.

@@ -74,11 +74,13 @@ from app.schemas.scheduling import (
     ShiftsListResponse,
     ShiftSwapRequestCreate,
     ShiftSwapRequestResponse,
+    ShiftSwapRequestsPage,
     ShiftSwapReview,
     ShiftTemplateCreate,
     ShiftTemplateResponse,
     ShiftTemplateUpdate,
     ShiftTimeOffCreate,
+    ShiftTimeOffRequestsPage,
     ShiftTimeOffResponse,
     ShiftTimeOffReview,
     ShiftUpdate,
@@ -91,6 +93,7 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.positions import normalize_stored_positions
 
 router = APIRouter()
 
@@ -1672,7 +1675,7 @@ async def confirm_assignment(
 # ============================================
 
 
-@router.get("/swap-requests", response_model=list[ShiftSwapRequestResponse])
+@router.get("/swap-requests", response_model=ShiftSwapRequestsPage)
 async def list_swap_requests(
     status_filter: str | None = Query(None, alias="status"),
     pagination: PaginationParams = Depends(),
@@ -1689,13 +1692,27 @@ async def list_swap_requests(
             raise HTTPException(
                 status_code=400, detail=f"Invalid status: {status_filter}"
             )
-    requests, total = await service.get_swap_requests(
-        current_user.organization_id,
-        status=swap_status,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
-    return await service.enrich_swap_requests(requests)
+    if user_has_permission(current_user, "scheduling.manage"):
+        requests, total = await service.get_swap_requests(
+            current_user.organization_id,
+            status=swap_status,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    else:
+        requests, total = await service.get_swap_requests_for_user(
+            current_user.organization_id,
+            current_user.id,
+            status=swap_status,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    return {
+        "items": await service.enrich_swap_requests(requests),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.post(
@@ -1731,10 +1748,15 @@ async def get_swap_request(
 ):
     """Get a specific swap request"""
     service = SchedulingService(db)
-    swap_request = ensure_found(
-        await service.get_swap_request_by_id(request_id, current_user.organization_id),
-        "Swap request",
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        result = await service.get_swap_request_by_id(
+            request_id, current_user.organization_id
+        )
+    else:
+        result = await service.get_swap_request_for_user_by_id(
+            request_id, current_user.organization_id, current_user.id
+        )
+    swap_request = ensure_found(result, "Swap request")
     enriched = await service.enrich_swap_requests([swap_request])
     return enriched[0]
 
@@ -1793,7 +1815,7 @@ async def cancel_swap_request(
 # ============================================
 
 
-@router.get("/time-off", response_model=list[ShiftTimeOffResponse])
+@router.get("/time-off", response_model=ShiftTimeOffRequestsPage)
 async def list_time_off_requests(
     status_filter: str | None = Query(None, alias="status"),
     user_id: UUID | None = None,
@@ -1811,14 +1833,30 @@ async def list_time_off_requests(
             raise HTTPException(
                 status_code=400, detail=f"Invalid status: {status_filter}"
             )
-    requests, total = await service.get_time_off_requests(
-        current_user.organization_id,
-        status=time_off_status,
-        user_id=user_id,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
-    return await service.enrich_time_off_requests(requests)
+    if user_has_permission(current_user, "scheduling.manage"):
+        requests, total = await service.get_time_off_requests(
+            current_user.organization_id,
+            status=time_off_status,
+            user_id=user_id,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    else:
+        # The authenticated identity, never a client-provided user_id, defines
+        # the member scope.
+        requests, total = await service.get_time_off_requests_for_user(
+            current_user.organization_id,
+            current_user.id,
+            status=time_off_status,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    return {
+        "items": await service.enrich_time_off_requests(requests),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.post(
@@ -1854,10 +1892,15 @@ async def get_time_off_request(
 ):
     """Get a specific time-off request"""
     service = SchedulingService(db)
-    time_off = ensure_found(
-        await service.get_time_off_by_id(time_off_id, current_user.organization_id),
-        "Time-off request",
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        result = await service.get_time_off_by_id(
+            time_off_id, current_user.organization_id
+        )
+    else:
+        result = await service.get_time_off_for_user_by_id(
+            time_off_id, current_user.organization_id, current_user.id
+        )
+    time_off = ensure_found(result, "Time-off request")
     enriched = await service.enrich_time_off_requests([time_off])
     return enriched[0]
 
@@ -2283,7 +2326,7 @@ async def list_apparatus_options(
                         unit_number=apparatus.unit_number,
                         apparatus_type=type_name.lower(),
                         source="apparatus",
-                        positions=apparatus.crew_positions,
+                        positions=normalize_stored_positions(apparatus.crew_positions),
                         min_staffing=apparatus.min_staffing,
                     )
                 )
@@ -2312,7 +2355,7 @@ async def list_apparatus_options(
                         unit_number=ba.unit_number,
                         apparatus_type=ba.apparatus_type or "other",
                         source="basic",
-                        positions=ba.positions,
+                        positions=normalize_stored_positions(ba.positions),
                         min_staffing=ba.min_staffing,
                     )
                 )
@@ -2372,7 +2415,7 @@ async def create_basic_apparatus(
         name=apparatus.name,
         apparatus_type=apparatus.apparatus_type,
         min_staffing=apparatus.min_staffing,
-        positions=apparatus.positions,
+        positions=normalize_stored_positions(apparatus.positions),
     )
     db.add(new_apparatus)
     await db.commit()
@@ -2396,6 +2439,8 @@ async def update_basic_apparatus(
     )
     existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
     update_data = apparatus.model_dump(exclude_unset=True)
+    if "positions" in update_data:
+        update_data["positions"] = normalize_stored_positions(update_data["positions"])
     for key, value in update_data.items():
         setattr(existing, key, value)
     await db.commit()
