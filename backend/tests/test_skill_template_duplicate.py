@@ -8,13 +8,15 @@ from app.api.v1.endpoints import skills_testing as endpoint
 from app.models.skills_testing import SkillTemplate
 
 
-async def test_duplicate_template_preserves_result_privacy_policy(monkeypatch):
+async def test_duplicate_template_preserves_configuration(monkeypatch):
+    requirement_id = str(uuid4())
     source = SkillTemplate(
         id=str(uuid4()),
         organization_id=str(uuid4()),
         created_by=str(uuid4()),
         name="Promotional evaluation",
         sections=[{"name": "Command", "criteria": []}],
+        requirement_id=requirement_id,
         result_disclosure="scores",
         result_release="on_release",
         result_viewer_positions=["training-chief"],
@@ -39,3 +41,4 @@ async def test_duplicate_template_preserves_result_privacy_policy(monkeypatch):
     assert duplicate.result_disclosure == "scores"
     assert duplicate.result_release == "on_release"
     assert duplicate.result_viewer_positions == ["training-chief"]
+    assert duplicate.requirement_id == requirement_id
