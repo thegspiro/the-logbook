@@ -82,6 +82,26 @@ These merge commits move CI to the fixed dependency graph and remove every
 previously reported Git conflict. Any subsequent failure is therefore tied to
 the integrated feature head rather than the stale base diagnosed above.
 
+## Refresh after subsequent main changes
+
+The queue was refreshed again after `main` advanced to `36019a97`. At that
+point six feature PRs remained open, and all six heads were updated from the new
+base:
+
+- #1649 kept the current selection-mode bulk-action behavior and combined the
+  branch's scrollable signup panel with `main`'s centralized modal close path.
+- #1648 retained both the recruitment prospect card and `main`'s CSV utilities
+  in the event detail page.
+- #1629 adopted the current labelled, keyboard-focusable document-table scroll
+  region while retaining its responsive table rendering.
+- #1637, #1585, and #1577 merged the refreshed base without file conflicts so
+  their previously repaired tests, title management, and legal migration remain
+  on top of the current application behavior.
+
+The refreshed heads were pushed to their existing PR branches, removing every
+newly reported conflict and triggering CI on the integrated commits rather than
+their obsolete SHAs.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
