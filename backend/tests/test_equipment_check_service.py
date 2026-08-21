@@ -514,7 +514,10 @@ class TestCompartmentParentValidation:
     async def test_rejects_self_parenting(self, service, mock_db):
         compartment = self.compartment("comp-1")
         with patch.object(
-            service, "_get_compartment", new_callable=AsyncMock, return_value=compartment
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=compartment,
         ):
             with pytest.raises(ValueError, match="cannot be stored inside itself"):
                 await service.update_compartment(
