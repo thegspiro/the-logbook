@@ -790,6 +790,16 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ---
 
+## Legal Documents (Governance)
+
+| URL                 | Page            | Permission                                            |
+| ------------------- | --------------- | ----------------------------------------------------- |
+| `/governance/legal` | Legal Documents | `legal.propose`, `legal.publish` or `settings.manage` |
+
+> Where the secretary and department leaders read the wording currently published on `/privacy` and `/terms` and propose alternatives that fit local bylaws, SOPs, and law. Proposing and publishing are separate grants: a proposal is a draft that changes nothing until somebody with `legal.publish` (Chief, President, IT Manager by default) publishes it. Publishing archives the previous version rather than deleting it, so the department can answer what a member was shown on a given date. Regular members hold neither grant and never see the screen. Not gated on a module flag — every deployment publishes the two public pages.
+
+---
+
 ## Forms
 
 | URL      | Page             | Permission     |
