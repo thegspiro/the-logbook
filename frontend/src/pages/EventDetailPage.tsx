@@ -1240,6 +1240,13 @@ export const EventDetailPage: React.FC = () => {
               <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} />
             )}
 
+            {/* Pipeline meeting stages can also link prospects to ordinary
+                business events, so this is intentionally not type-gated. */}
+            <EventProspectsCard
+              eventId={event.id}
+              createsProspects={event.guest_check_in_creates_prospect ?? false}
+            />
+
             {/* Attachments */}
             {event.attachments && event.attachments.length > 0 && (
               <EventAttachmentsList
