@@ -79,7 +79,7 @@ export const NfcTapButton: React.FC = () => {
       <button
         type="button"
         onClick={handleOpen}
-        className="btn-secondary inline-flex items-center gap-2"
+        className="btn-secondary btn-auto inline-flex items-center justify-center gap-2"
         title="Tap an NFC tag to check in"
       >
         <Nfc className="h-4 w-4" aria-hidden="true" />

@@ -91,6 +91,23 @@ def block_start(lines: list[str], start: int) -> int:
     return start
 
 
+def demote_trailing_separator(lines: list[str], end: int) -> None:
+    """Turn the bare ``>`` below a replaced marker into a blank line.
+
+    ``block_end`` deliberately leaves that separator alone: while both
+    neighbours are still requests it belongs to the gap between them, and
+    consuming it is how the first replacement used to swallow its siblings.
+
+    Once the request above has become an image, though, the separator is a
+    quoted empty line sitting directly under it — the following marker's
+    blockquote then opens with a blank first line. A real blank line is what
+    separates an image from a quote, so the separator is demoted rather than
+    deleted; the marker below keeps its own ``>`` and its own block.
+    """
+    if end < len(lines) and lines[end].strip() == ">":
+        lines[end] = ""
+
+
 def separated(lines: list[str], start: int, replacement: str) -> list[str]:
     """The replacement, preceded by a blank line if it would otherwise fuse.
 
@@ -206,7 +223,9 @@ def main() -> int:
                 continue
             replacement = f"![{shot['alt']}](./images/{shot['file']})"
             start = block_start(lines, index)
-            lines[start : block_end(lines, index)] = separated(lines, start, replacement)
+            end = block_end(lines, index)
+            demote_trailing_separator(lines, end)
+            lines[start:end] = separated(lines, start, replacement)
             applied += 1
         if not args.dry_run:
             path.write_text("\n".join(lines) + "\n")

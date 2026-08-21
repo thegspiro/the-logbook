@@ -3,8 +3,8 @@
  * catalog actually contains.
  */
 
-import { describe, it, expect } from 'vitest';
-import { parseCsv, parseCsvRecords, csvValue, escapeCsvCell, normalizeHeader } from './csv';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { parseCsv, parseCsvRecords, csvValue, escapeCsvCell, normalizeHeader, buildCsv, downloadCsv } from './csv';
 
 describe('parseCsv', () => {
   it('splits plain rows and columns', () => {
@@ -123,11 +123,71 @@ describe('escapeCsvCell', () => {
   it.each(['=1+1', '+cmd', '-2+3', '@SUM(A1:A2)', '  =1+1', '\t@SUM(A1:A2)'])(
     'neutralizes formula-like value %j',
     (value) => {
-      expect(escapeCsvCell(value)).toBe(`"'${value}"`);
+      expect(escapeCsvCell(value)).toBe(`'${value}`);
     }
   );
 
   it('does not alter ordinary text containing formula markers', () => {
-    expect(escapeCsvCell('Jane = Treasurer')).toBe('"Jane = Treasurer"');
+    expect(escapeCsvCell('Jane = Treasurer')).toBe('Jane = Treasurer');
+  });
+});
+
+describe('escapeCsvCell — leading control characters', () => {
+  // A tab or CR leads the trigger list because some importers strip it and act
+  // on what follows; skipping whitespace before testing would let these past.
+  it.each(['\tformula', '\rformula'])('should neutralize a leading control character: %j', (value) => {
+    expect(escapeCsvCell(value)).toBe(value.startsWith('\r') ? `"'${value}"` : `'${value}`);
+  });
+
+  it('should neutralize a formula hidden behind a leading space', () => {
+    expect(escapeCsvCell('  =cmd')).toBe("'  =cmd");
+  });
+});
+
+describe('escapeCsvCell — blank cells', () => {
+  it('should not prefix an apostrophe onto an empty or whitespace-only cell', () => {
+    expect(escapeCsvCell('')).toBe('');
+    expect(escapeCsvCell('   ')).toBe('   ');
+  });
+});
+
+describe('buildCsv', () => {
+  it('should join cells and rows with RFC 4180 CRLF endings', () => {
+    expect(
+      buildCsv([
+        ['Title', 'Going'],
+        ['CPR Training', 30],
+      ])
+    ).toBe('Title,Going\r\nCPR Training,30');
+  });
+
+  it('should neutralize every cell it writes, not only the first', () => {
+    expect(buildCsv([['ok', '=EVIL()']])).toBe("ok,'=EVIL()");
+  });
+
+  it('should render null and undefined as empty cells', () => {
+    expect(buildCsv([[null, undefined, false]])).toBe(',,false');
+  });
+});
+
+describe('downloadCsv', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('should hand the browser a named text/csv blob and clean up after itself', () => {
+    const createObjectURL = vi.fn().mockReturnValue('blob:fake');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    downloadCsv('a,b', 'events.csv');
+
+    expect(click).toHaveBeenCalled();
+    expect((createObjectURL.mock.calls[0]?.[0] as Blob).type).toBe('text/csv;charset=utf-8');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake');
+    // The anchor must not be left behind in the document.
+    expect(document.querySelector('a[download]')).toBeNull();
   });
 });

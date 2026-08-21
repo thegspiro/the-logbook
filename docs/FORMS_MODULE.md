@@ -338,6 +338,9 @@ Integration configuration includes a visual field mapping interface:
 
 ## Recent Changes (March 2026)
 
+### August 17, 2026
+- **Auto-advance is bound to the submitting prospect**: `_auto_advance_pipeline_step` previously found *every* `ACTIVE` prospect sitting on the matching stage and completed the step for all of them — so one applicant's submission advanced the whole cohort behind them. It now takes the `FormSubmission` as an argument and filters `ProspectiveMember.form_submission_id == submission.id`, and the audit `action_result` records `form_submission_id` alongside `form_id`. A form submission is not evidence that unrelated prospects on the same stage have completed the form
+
 ### March 14, 2026
 - **Auto-advance integration with pipeline stages**: When a `form_submission` pipeline stage has `auto_advance: true` in its configuration, submitting the linked form automatically advances the prospect to the next pipeline stage. The `forms_service.py` now checks for auto-advance configuration after processing a submission linked to a pipeline stage
 - **Auto-advance for document upload stages**: Similarly, `document_upload` pipeline stages with `auto_advance: true` auto-advance when all required documents are uploaded

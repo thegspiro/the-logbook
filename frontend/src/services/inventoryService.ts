@@ -33,6 +33,7 @@ import type {
   BatchReturnResponse,
   LabelFormat,
   NFPACompliance,
+  NFPACompliancePayload,
   NFPAExposureRecord,
   NFPASummary,
   NFPARetirementDueItem,
@@ -658,12 +659,12 @@ export const inventoryService = {
     return response.data;
   },
 
-  async createNFPACompliance(itemId: string, data: Partial<NFPACompliance>): Promise<NFPACompliance> {
+  async createNFPACompliance(itemId: string, data: NFPACompliancePayload): Promise<NFPACompliance> {
     const response = await api.post<NFPACompliance>(`/inventory/items/${itemId}/nfpa-compliance`, data);
     return response.data;
   },
 
-  async updateNFPACompliance(itemId: string, data: Partial<NFPACompliance>): Promise<NFPACompliance> {
+  async updateNFPACompliance(itemId: string, data: NFPACompliancePayload): Promise<NFPACompliance> {
     const response = await api.patch<NFPACompliance>(`/inventory/items/${itemId}/nfpa-compliance`, data);
     return response.data;
   },

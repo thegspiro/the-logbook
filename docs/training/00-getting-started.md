@@ -367,7 +367,7 @@ After completing setup, the dashboard loads with personalized widgets:
   underneath saying how many more there are in the next 30 days; **View
   Schedule** opens the lot
 - **Upcoming Events** — events in the next 30 days, each showing his RSVP
-- **Recent Activity**, **My ID Card** and **My Equipment** — his last few
+- **Recent Activity**, **My ID Card** and **My Issued Gear** — his last few
   actions, a shortcut to his barcode, and what he has been issued
 
 > **Edge case:** If Jake hasn't been assigned to a platoon yet, the "My Upcoming Shifts" widget shows "No upcoming shifts" and the "Open Shifts" widget may still display shifts he can volunteer for.
@@ -408,7 +408,7 @@ Back on his laptop, Jake takes his first actions in the system:
 
 1. **RSVPs to an upcoming training event** — navigates to Events, finds "Q3 Ladder Operations Drill," clicks RSVP, selects "Going," and sets dietary preference to "None" and accessibility needs to "None"
 2. **Checks training program progress** — navigates to Training and sees his Phase 1 requirements listed with completion status (all currently incomplete)
-3. **Views assigned gear** — navigates to My Equipment under Inventory and sees his PPE items (helmet, turnout coat, turnout pants, boots, gloves) each with an assigned barcode
+3. **Views assigned gear** — navigates to My Issued Gear under Inventory and sees his PPE items (helmet, turnout coat, turnout pants, boots, gloves) each with an assigned barcode
 4. **Manages notifications** — taps the bell icon in the header, reads a notification about an upcoming drill, and marks it as read by collapsing the card
 
 > **Edge case:** Jake navigates to **Training Admin** in the sidebar. The page loads with a "You don't have permission to view this page" message. Training Admin features are restricted to officers and administrators — regular members access their own training records through the member-facing Training section.

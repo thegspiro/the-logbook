@@ -1412,6 +1412,8 @@ async def accept_nomination(
     Accept your nomination — only the nominee can accept.
 
     **Authentication required**
+
+    **Permissions required:** elections.view
     """
     service = ElectionService(db)
     ok, error = await service.respond_to_nomination(
@@ -1446,6 +1448,8 @@ async def decline_nomination(
     entry is removed; the audit log retains the record.
 
     **Authentication required**
+
+    **Permissions required:** elections.view
     """
     service = ElectionService(db)
     ok, error = await service.respond_to_nomination(
