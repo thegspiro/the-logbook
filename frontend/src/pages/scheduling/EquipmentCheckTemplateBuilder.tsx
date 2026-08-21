@@ -3850,7 +3850,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Change Log Modal (admin only) */}
       {showChangelog && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 Change History{' '}
@@ -3950,7 +3950,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* CSV Preview Confirmation Modal */}
       {csvPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 CSV Import Preview — {csvPreview.length} item(s)
@@ -4010,7 +4010,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Preview Modal — mobile device frame */}
       {showPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="relative flex flex-col items-center gap-3">
+          <div className="modal-panel-scroll relative flex flex-col items-center gap-3">
             {/* Close button outside the phone frame */}
             <button
               type="button"
