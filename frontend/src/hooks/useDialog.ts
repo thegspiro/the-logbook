@@ -17,7 +17,31 @@ import { useOverlaySurface } from './useOverlaySurface';
  * dialog must not unlock body scroll when only it closes, and Escape must
  * dismiss the top dialog rather than every dialog at once.
  */
-const openDialogs: symbol[] = [];
+interface OpenDialog {
+  id: symbol;
+  lockScroll: boolean;
+}
+
+const openDialogs: OpenDialog[] = [];
+let overflowBeforeFirstLock: string | null = null;
+
+/**
+ * Derive the body lock from the complete dialog stack rather than whichever
+ * dialog happened to mount or unmount last. This matters when a non-locking
+ * popover/dialog overlaps a true modal: closing them in either order must not
+ * leave an invisible page-wide interaction barrier behind.
+ */
+const syncBodyScrollLock = () => {
+  const shouldLock = openDialogs.some((dialog) => dialog.lockScroll);
+
+  if (shouldLock && overflowBeforeFirstLock === null) {
+    overflowBeforeFirstLock = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  } else if (!shouldLock && overflowBeforeFirstLock !== null) {
+    document.body.style.overflow = overflowBeforeFirstLock;
+    overflowBeforeFirstLock = null;
+  }
+};
 
 export interface UseDialogOptions {
   /** Defaults to true, for dialogs the parent mounts only while open. */
@@ -50,12 +74,12 @@ export function useDialog<T extends HTMLElement>({
     if (!isOpen) return;
 
     const id = Symbol('dialog');
-    openDialogs.push(id);
-    if (lockScroll) document.body.style.overflow = 'hidden';
+    openDialogs.push({ id, lockScroll });
+    syncBodyScrollLock();
 
     const handleEscape = (event: KeyboardEvent) => {
       if (!closeOnEscape || event.key !== 'Escape') return;
-      if (openDialogs[openDialogs.length - 1] !== id) return;
+      if (openDialogs[openDialogs.length - 1]?.id !== id) return;
       onCloseRef.current();
     };
 
@@ -63,12 +87,9 @@ export function useDialog<T extends HTMLElement>({
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      const index = openDialogs.indexOf(id);
+      const index = openDialogs.findIndex((dialog) => dialog.id === id);
       if (index !== -1) openDialogs.splice(index, 1);
-      // Only the last dialog to close releases the lock.
-      if (lockScroll && openDialogs.length === 0) {
-        document.body.style.overflow = 'unset';
-      }
+      syncBodyScrollLock();
     };
   }, [isOpen, closeOnEscape, lockScroll]);
 

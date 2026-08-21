@@ -236,80 +236,122 @@ const AuditLogPage: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs font-medium uppercase">
-              <tr>
-                <th scope="col" className="px-4 py-3">
-                  When
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Severity
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Event
-                </th>
-                <th scope="col" className="hidden px-4 py-3 md:table-cell">
-                  Category
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  User
-                </th>
-                <th scope="col" className="hidden px-4 py-3 lg:table-cell">
-                  IP
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-theme-surface-border divide-y">
-              {entries.map((entry) => {
-                const sev = entry.severity;
-                const expanded = expandedId === entry.id;
-                return (
-                  <React.Fragment key={entry.id}>
-                    <tr
-                      className="hover:bg-theme-surface-hover cursor-pointer"
-                      onClick={() => setExpandedId(expanded ? null : entry.id)}
-                      aria-expanded={expanded}
-                    >
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                        {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {sev && (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
-                          >
-                            {SEVERITY_ICON[sev]}
-                            {sev}
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">{entry.event_type}</td>
-                      <td className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell">
-                        {entry.event_category}
-                      </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm">
-                        {entry.username || <span className="text-theme-text-muted italic">system</span>}
-                      </td>
-                      <td className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm lg:table-cell">
-                        {entry.ip_address || '—'}
-                      </td>
-                    </tr>
-                    {expanded && (
-                      <tr className="bg-theme-surface-secondary">
-                        <td colSpan={6} className="px-4 py-3">
-                          <pre className="text-theme-text-secondary font-mono text-xs whitespace-pre-wrap">
-                            {JSON.stringify(entry.event_data, null, 2)}
-                          </pre>
+        <>
+          <div className="space-y-3 md:hidden" aria-label="Audit events">
+            {entries.map((entry) => {
+              const sev = entry.severity;
+              const expanded = expandedId === entry.id;
+              return (
+                <article key={entry.id} className="card overflow-hidden">
+                  <button
+                    type="button"
+                    className="min-h-11 w-full p-4 text-left"
+                    onClick={() => setExpandedId(expanded ? null : entry.id)}
+                    aria-expanded={expanded}
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="text-theme-text-primary font-mono text-sm font-medium break-all">
+                        {entry.event_type}
+                      </span>
+                      {sev && (
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
+                        >
+                          {SEVERITY_ICON[sev]} {sev}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-theme-text-secondary mt-3 grid gap-1 text-sm">
+                      <span>{entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}</span>
+                      <span>
+                        {entry.username || 'system'} · {entry.event_category}
+                      </span>
+                    </span>
+                  </button>
+                  {expanded && (
+                    <pre className="bg-theme-surface-secondary text-theme-text-secondary overflow-x-auto border-t p-4 font-mono text-xs whitespace-pre-wrap">
+                      {JSON.stringify(entry.event_data, null, 2)}
+                    </pre>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <div className="card hidden overflow-x-auto md:block">
+            <table className="w-full">
+              <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs font-medium uppercase">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    When
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Severity
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Event
+                  </th>
+                  <th scope="col" className="hidden px-4 py-3 md:table-cell">
+                    Category
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    User
+                  </th>
+                  <th scope="col" className="hidden px-4 py-3 lg:table-cell">
+                    IP
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-theme-surface-border divide-y">
+                {entries.map((entry) => {
+                  const sev = entry.severity;
+                  const expanded = expandedId === entry.id;
+                  return (
+                    <React.Fragment key={entry.id}>
+                      <tr
+                        className="hover:bg-theme-surface-hover cursor-pointer"
+                        onClick={() => setExpandedId(expanded ? null : entry.id)}
+                        aria-expanded={expanded}
+                      >
+                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                          {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {sev && (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
+                            >
+                              {SEVERITY_ICON[sev]}
+                              {sev}
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">{entry.event_type}</td>
+                        <td className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell">
+                          {entry.event_category}
+                        </td>
+                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          {entry.username || <span className="text-theme-text-muted italic">system</span>}
+                        </td>
+                        <td className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm lg:table-cell">
+                          {entry.ip_address || '—'}
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {expanded && (
+                        <tr className="bg-theme-surface-secondary">
+                          <td colSpan={6} className="px-4 py-3">
+                            <pre className="text-theme-text-secondary font-mono text-xs whitespace-pre-wrap">
+                              {JSON.stringify(entry.event_data, null, 2)}
+                            </pre>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Pagination */}
