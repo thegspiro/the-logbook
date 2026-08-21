@@ -931,7 +931,7 @@ const Dashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => void handleExpandSignup(shift.id)}
-              className="btn-success inline-flex min-h-[44px] shrink-0 items-center gap-1.5 px-4 text-sm font-semibold"
+              className="btn-success btn-auto inline-flex min-h-[44px] shrink-0 items-center gap-1.5 px-4 text-sm font-semibold"
             >
               <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Sign Up</span>
@@ -950,7 +950,7 @@ const Dashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}
-                className="btn-secondary inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
+                className="btn-secondary btn-auto inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
               >
                 {evt.requires_rsvp ? 'RSVP' : 'Open'}
               </button>
@@ -1667,7 +1667,7 @@ const Dashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void navigate('/setup')}
-                    className="btn-primary min-h-[44px] shrink-0 px-4 text-sm font-semibold"
+                    className="btn-primary btn-auto min-h-[44px] shrink-0 px-4 text-sm font-semibold"
                   >
                     Continue setup
                   </button>

@@ -671,7 +671,7 @@ const SchedulingPage: React.FC = () => {
                     key={link.path}
                     to={link.path}
                     title={link.description}
-                    className="btn-secondary mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
+                    className="btn-secondary btn-auto mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
                   >
                     <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
                     {link.label}
