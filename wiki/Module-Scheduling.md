@@ -281,9 +281,34 @@ days, so the platoons tile to exactly one on-duty platoon per day:
   linked from Settings → Platoons) lists every platoon and the unassigned bucket
   with their active members, and lets a manager **bulk-assign** members to a
   platoon (or clear it) in one request.
-- `GET /scheduling/platoons/overview` (`scheduling.view`) and
-  `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`, org-scoped /
+- `GET /scheduling/platoons/overview` (**`scheduling.manage`** as of 2026-08-17)
+  and `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`, org-scoped /
   IDOR-safe, audit `platoon_bulk_assigned`).
+
+> ⚠️ **Permission change (2026-08-17).** The overview endpoint was gated on
+> `scheduling.view`, which is implicit for every authenticated member — so the
+> department-wide platoon roster was readable by anyone signed in. It now
+> requires `scheduling.manage`. **Anyone who used this page before and does not
+> hold `scheduling.manage` will now get a permission error.** Grant it to the
+> roles that need the roster.
+
+### Shift Roster Visibility *(2026-08-17)*
+
+The shift detail view's hold-over roster is derived from **who is on approved
+leave**. `GET /scheduling/shifts/{id}` now returns `platoon_roster` only to
+callers with `scheduling.assign`, `scheduling.manage`, or who are the shift's
+own **shift officer**. Everyone else receives an empty roster — it is not
+fetched at all — while every other detail on the shift (time, apparatus,
+assignments, check-in state) remains visible to any member.
+
+### Generation and Pattern Fixes *(2026-08-17)*
+
+- **Soft-deleted and anonymized members are no longer staffed onto generated
+  platoon shifts.** Generation filtered on the member's `status` column, which
+  a deleted member can still carry as `active`; it filters on `is_active` now.
+- **A malformed platoon list no longer crashes the Patterns tab.** A pattern's
+  stored schedule configuration is unvalidated JSON; a non-array (or an array
+  with non-string members) reached the renderer and took the whole tab down.
 
 ---
 

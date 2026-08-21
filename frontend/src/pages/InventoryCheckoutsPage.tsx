@@ -158,7 +158,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             className="btn-secondary flex shrink-0 items-center space-x-2 px-3 sm:px-4"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Refresh</span>
+            <span className="sr-only sm:not-sr-only">Refresh</span>
           </button>
         </div>
 

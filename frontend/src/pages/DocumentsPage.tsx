@@ -467,7 +467,12 @@ const DocumentsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="card overflow-hidden">
+                <div
+                  className="card overflow-hidden overflow-x-auto"
+                  data-mobile-scroll-region
+                  aria-label="Documents table"
+                  tabIndex={0}
+                >
                   <table className="rwd-table w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
@@ -511,7 +516,7 @@ const DocumentsPage: React.FC = () => {
                           key={doc.id}
                           className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
                         >
-                          <td data-label="Name" className="px-4 py-3">
+                          <td className="px-4 py-3">
                             <div className="flex items-center space-x-2">
                               <File className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                               <div>
@@ -524,21 +529,18 @@ const DocumentsPage: React.FC = () => {
                               </div>
                             </div>
                           </td>
-                          <td data-label="Size" className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
                             {formatFileSize(doc.file_size)}
                           </td>
-                          <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm uppercase">
+                          <td className="text-theme-text-secondary px-4 py-3 text-sm uppercase">
                             {doc.file_type || '-'}
                           </td>
-                          <td data-label="Uploaded" className="text-theme-text-muted px-4 py-3 text-sm">
-                            {formatDate(doc.created_at, tz)}
-                          </td>
+                          <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
                           {canManage && (
-                            <td data-label="Actions" className="px-4 py-3 text-right">
+                            <td className="px-4 py-3 text-right">
                               <button
                                 onClick={() => setDeleteConfirm(doc.id)}
-                                className="text-theme-text-muted inline-flex min-h-11 min-w-11 items-center justify-center transition-colors hover:text-red-800 dark:hover:text-red-400"
-                                aria-label={`Delete ${doc.name}`}
+                                className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"
                                 title="Delete document"
                               >
                                 <Trash2 className="h-4 w-4" />

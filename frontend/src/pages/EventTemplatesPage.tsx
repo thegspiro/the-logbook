@@ -202,7 +202,7 @@ export const EventTemplatesPage: React.FC = () => {
                   {/* Template Info */}
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center gap-2">
-                      <h3 className="text-theme-text-primary truncate text-lg font-medium">{template.name}</h3>
+                      <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{template.name}</h3>
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                           template.is_active

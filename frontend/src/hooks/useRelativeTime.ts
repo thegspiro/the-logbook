@@ -24,13 +24,19 @@ export function formatRelativeTime(dateStr: string | Date | null | undefined): s
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  if (seconds < 0) return 'just now';
-  if (seconds < 60) return 'just now';
+  // Future timestamps read forwards ("in 3 days"). Collapsing them to
+  // "just now" — as this did — labelled every upcoming event on the events
+  // list "just now", since an event list is by definition mostly ahead of us.
+  const future = seconds < 0;
+  const elapsed = Math.abs(seconds);
+
+  if (elapsed < 60) return 'just now';
 
   for (const interval of INTERVALS) {
-    const count = Math.floor(seconds / interval.seconds);
+    const count = Math.floor(elapsed / interval.seconds);
     if (count >= 1) {
-      return `${count} ${interval.label}${count !== 1 ? 's' : ''} ago`;
+      const span = `${count} ${interval.label}${count !== 1 ? 's' : ''}`;
+      return future ? `in ${span}` : `${span} ago`;
     }
   }
 

@@ -229,8 +229,8 @@ class ComplianceReportService:
         # Constrain report_type to the known set rather than accepting a
         # free-form string (it is persisted and interpolated into the report
         # email) (CS-9).
-        if report_type not in ("monthly", "annual"):
-            raise ValueError("report_type must be 'monthly' or 'annual'")
+        if report_type not in ("monthly", "annual", "yearly"):
+            raise ValueError("report_type must be 'monthly', 'annual', or 'yearly'")
 
         # Build period label
         if report_type == "monthly" and month:
