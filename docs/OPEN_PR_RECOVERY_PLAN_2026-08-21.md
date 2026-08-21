@@ -49,6 +49,31 @@ workarounds.
    before merging. Re-query the queue after every merge because the base and
    conflict set will have changed.
 
+## Implementation record
+
+The recovery was applied on 2026-08-21 rather than left as a proposal:
+
+- `origin/main` was merged and pushed to every open feature head from #1575
+  through #1642.
+- The authoritative-timing tests in #1642 retain the feature branch's timing
+  coverage and also include `main`'s shift-completion-status coverage.
+- #1639 keeps its form-capable shared Modal implementation, which already
+  incorporates the current mobile height, pinned-action, focus, and accessible
+  close behavior.
+- #1634 preserves an explicitly labelled, keyboard-focusable document-table
+  scroll region while adopting the current responsive-table class.
+- #1629 keeps its deliberate responsive-card rendering instead of reintroducing
+  horizontal scrolling on the three converted tables.
+- #1620 uses the complete current dependency list, including the contract-test
+  compatibility pin.
+- The older #1578, #1577, and #1575 heads use current `main` content for
+  overlapping changelog, responsive-document, schema, release-status, and wiki
+  documentation while retaining their non-overlapping feature changes.
+
+These merge commits move CI to the fixed dependency graph and remove every
+previously reported Git conflict. Any subsequent failure is therefore tied to
+the integrated feature head rather than the stale base diagnosed above.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
