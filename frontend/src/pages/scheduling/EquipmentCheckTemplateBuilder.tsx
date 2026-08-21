@@ -845,13 +845,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setCompartments((prev) => {
       const next = [...prev];
-      [next[idx], next[newIdx]] = [next[newIdx]!, next[idx]!];
+      const current = next[idx];
+      const destination = next[newIdx];
+      if (!current || !destination) return prev;
+      [next[idx], next[newIdx]] = [destination, current];
       return next;
     });
 
     if (isEditing && templateId) {
       const ids = compartments.map((c, i) => c.id ?? `comp-${i}`);
-      [ids[idx], ids[newIdx]] = [ids[newIdx]!, ids[idx]!];
+      const currentId = ids[idx];
+      const destinationId = ids[newIdx];
+      if (!currentId || !destinationId) return;
+      [ids[idx], ids[newIdx]] = [destinationId, currentId];
       const savedIds = ids.filter((id) => !id.startsWith('comp-'));
       if (savedIds.length > 0) {
         void schedulingService
