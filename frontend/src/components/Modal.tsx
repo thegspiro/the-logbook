@@ -77,13 +77,13 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} max-h-[calc(100dvh-2rem)] w-full overflow-y-auto sm:max-h-[calc(100dvh-4rem)]`}
+          className={`modal-panel relative z-10 inline-flex transform flex-col overflow-hidden text-left align-bottom transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} max-h-[calc(100dvh-2rem)] w-full sm:max-h-[calc(100dvh-4rem)]`}
           data-testid="modal-panel"
           tabIndex={-1}
         >
           {/* Header */}
           <div className="modal-header">
-            <div className="mb-4 flex items-start justify-between">
+            <div className="flex items-start justify-between gap-3">
               <h3 className="text-theme-text-primary text-lg font-medium" id="modal-title">
                 {title}
               </h3>
@@ -96,16 +96,19 @@ export const Modal: React.FC<ModalProps> = ({
                 <X className="h-6 w-6" aria-hidden="true" />
               </button>
             </div>
+          </div>
 
-            {/* Content */}
-            <div className="mt-2">{children}</div>
+          {/* Only the body scrolls, keeping the title, close control, and form
+              actions reachable when a phone keyboard reduces the viewport. */}
+          <div className="modal-content" data-testid="modal-content">
+            {children}
           </div>
 
           {/* Footer */}
           {footer && (
             <div
               data-testid="modal-footer"
-              className="bg-theme-surface-secondary flex flex-col-reverse gap-2 px-4 py-3 sm:flex-row-reverse sm:gap-0 sm:px-6"
+              className="modal-footer bg-theme-surface-secondary flex shrink-0 flex-col-reverse gap-2 px-4 sm:flex-row-reverse sm:gap-2 sm:px-6"
             >
               {footer}
             </div>
