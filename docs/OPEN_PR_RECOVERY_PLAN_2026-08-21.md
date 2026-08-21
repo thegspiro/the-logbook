@@ -118,6 +118,19 @@ were corrected on the affected heads:
 - Stacked PR #1651 was updated from its refreshed #1648 base so it includes the
   prospect-card render fix and regenerated schema reference.
 
+## Latest queue refresh
+
+After `main` advanced again to `fe7cdf9c`, the ten open PR heads (#1657, #1656,
+#1655, #1654, #1653, #1648, #1637, #1629, #1585, and #1577) were merged with
+that exact base and pushed. All ten integrations completed without file
+conflicts.
+
+This refresh is itself the shared fix for the stale failures visible before the
+update: it carries the current generated schema reference, modal scroll
+integrity fixes, warning-budget cleanup, migration chain, and test adjustments
+into every head before CI reruns. Branch-specific changes remain layered above
+`main`; no feature implementation was discarded to obtain a clean merge.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
