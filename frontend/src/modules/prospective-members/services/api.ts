@@ -27,6 +27,7 @@ import type {
   ApplicantUpdate,
   ApplicantListItem,
   ApplicantListFilters,
+  ProspectSourceEvent,
   ApplicantStatus,
   PaginatedApplicantList,
   AdvanceStageRequest,
@@ -660,6 +661,7 @@ export const applicantService = {
             ? (FRONTEND_STATUS_TO_BACKEND[params.filters.status] ?? params.filters.status)
             : params?.filters?.status,
           search: params?.filters?.search,
+          event_id: params?.filters?.event_id,
           limit: pageSize,
           offset,
         },
@@ -1138,6 +1140,16 @@ export const interviewService = {
 // =============================================================================
 
 export const eventLinkService = {
+  /**
+   * Events that applicants are linked to, newest first, with their counts.
+   * Only events something is actually linked to come back, so this is safe to
+   * render straight into a dropdown.
+   */
+  async getSourceEvents(): Promise<ProspectSourceEvent[]> {
+    const response = await api.get<ProspectSourceEvent[]>('/prospective-members/source-events');
+    return asArray(response.data);
+  },
+
   async getLinkedEvents(applicantId: string): Promise<ProspectEventLink[]> {
     const response = await api.get<ProspectEventLink[]>(`/prospective-members/prospects/${applicantId}/events`);
     return asArray(response.data);

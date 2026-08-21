@@ -60,6 +60,13 @@ import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
+import {
+  canMoveCompartment,
+  moveCompartment as moveCompartmentInTree,
+  orderedCompartmentIds,
+  orderedCompartments as buildOrderedCompartments,
+  reorderCompartment,
+} from '@/modules/scheduling/utils/compartmentTree';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/scheduling/components/CatalogQuickAdd';
@@ -68,6 +75,7 @@ import type { CatalogAddPayload } from '@/modules/scheduling/components/CatalogQ
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
+import { storedInsideOptions } from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -305,6 +313,7 @@ const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({ id, children 
 
 interface SortableCompartmentWrapperProps {
   id: string;
+  disabled?: boolean;
   children: (opts: {
     listeners: Record<string, unknown> | undefined;
     setNodeRef: React.Ref<HTMLDivElement>;
@@ -313,8 +322,8 @@ interface SortableCompartmentWrapperProps {
   }) => React.ReactNode;
 }
 
-const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({ id, children }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({ id, disabled = false, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -829,38 +838,31 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Move compartment up/down
   // ---------------------------------------------------------------------------
 
+  const pendingCompartmentOrderRef = useRef(false);
+
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
-    const source = compartments[idx];
-    if (!source) return;
-    // A nested container can only be reordered among siblings. Swapping raw
-    // neighbours can appear to do nothing because rendering is depth-first.
-    const siblingIndices = compartments
-      .map((candidate, candidateIdx) => ({ candidate, candidateIdx }))
-      .filter(({ candidate }) => candidate.parentCompartmentId === source.parentCompartmentId)
-      .map(({ candidateIdx }) => candidateIdx);
-    const siblingPosition = siblingIndices.indexOf(idx);
-    const destinationPosition = direction === 'up' ? siblingPosition - 1 : siblingPosition + 1;
-    const newIdx = siblingIndices[destinationPosition];
-    if (siblingPosition < 0 || newIdx === undefined) return;
-
-    setCompartments((prev) => {
-      const next = [...prev];
-      [next[idx], next[newIdx]] = [next[newIdx]!, next[idx]!];
-      return next;
-    });
-
-    if (isEditing && templateId) {
-      const ids = compartments.map((c, i) => c.id ?? `comp-${i}`);
-      [ids[idx], ids[newIdx]] = [ids[newIdx]!, ids[idx]!];
-      const savedIds = ids.filter((id) => !id.startsWith('comp-'));
-      if (savedIds.length > 0) {
-        void schedulingService
-          .reorderCompartments(templateId, savedIds)
-          .catch(() => toast.error('Failed to save compartment order'));
-      }
-    }
+    const id = compartments[idx]?.id;
+    // Unsaved records have no stable identity and therefore cannot be safely
+    // represented in the reorder API. Save the template before reordering.
+    if (!id) return;
+    setCompartments((prev) => moveCompartmentInTree(prev, id, direction));
+    pendingCompartmentOrderRef.current = true;
     markDirty();
   };
+
+  // Persistence deliberately follows the state update. This builds ordered_ids
+  // from the resulting canonical state, never from an event handler's stale
+  // `compartments` closure.
+  useEffect(() => {
+    if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
+    pendingCompartmentOrderRef.current = false;
+    const savedIds = orderedCompartmentIds(compartments);
+    if (savedIds.length > 0) {
+      void schedulingService
+        .reorderCompartments(templateId, savedIds)
+        .catch(() => toast.error('Failed to save compartment order'));
+    }
+  }, [compartments, isEditing, templateId]);
 
   // ---------------------------------------------------------------------------
   // Bulk selection helpers
@@ -1981,51 +1983,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const compartmentKey = useCallback((comp: CompartmentFormState, flatIdx: number) => comp.id ?? `comp-${flatIdx}`, []);
 
-  // Depth-first display order: each top-level compartment is followed by its
-  // nested containers (a "pack" inside a "bag" inside a "compartment"), so the
-  // list visually reflects the storage hierarchy. `idx` is the position in the
-  // flat `compartments` array (what every handler expects); `depth` drives the
-  // indentation. Nesting is keyed on a parent's saved id, so children of
-  // not-yet-saved parents simply render at the top level.
-  const orderedCompartments = useMemo(() => {
-    const result: { comp: CompartmentFormState; idx: number; depth: number }[] = [];
-    const childIdxByParent = new Map<string, number[]>();
-    const topLevel: number[] = [];
-    compartments.forEach((c, i) => {
-      const pid = c.parentCompartmentId;
-      if (pid) {
-        const arr = childIdxByParent.get(pid) ?? [];
-        arr.push(i);
-        childIdxByParent.set(pid, arr);
-      } else {
-        topLevel.push(i);
-      }
-    });
+  // Canonical depth-first display order is shared with reorder persistence.
+  const orderedCompartments = useMemo(
+    () =>
+      buildOrderedCompartments(compartments).map(({ node, depth }) => ({
+        comp: node,
+        idx: compartments.indexOf(node),
+        depth,
+      })),
+    [compartments]
+  );
 
-    const seen = new Set<number>();
-    const visit = (flatIdx: number, depth: number) => {
-      if (seen.has(flatIdx)) return; // guard against parent-cycle loops
-      const comp = compartments[flatIdx];
-      if (!comp) return;
-      seen.add(flatIdx);
-      result.push({ comp, idx: flatIdx, depth });
-      if (comp.id) {
-        for (const childIdx of childIdxByParent.get(comp.id) ?? []) {
-          visit(childIdx, depth + 1);
-        }
-      }
-    };
-    for (const i of topLevel) visit(i, 0);
-    // Append any orphans (parent id points at a missing/removed compartment).
-    compartments.forEach((_, i) => {
-      if (!seen.has(i)) visit(i, 0);
-    });
-    return result;
-  }, [compartments]);
-
+  // Only persisted records are draggable: backing-array positions are not
+  // identities, and cannot produce a safe ordered_ids API payload.
   const compartmentIds = useMemo(
-    () => orderedCompartments.map(({ comp, idx }) => compartmentKey(comp, idx)),
-    [orderedCompartments, compartmentKey]
+    () => orderedCompartments.flatMap(({ comp }) => (comp.id ? [comp.id] : [])),
+    [orderedCompartments]
   );
 
   const compartmentPath = useCallback(
@@ -2048,54 +2021,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     [compartments]
   );
 
-  const validParentDestinations = useCallback(
-    (sourceIdx: number) =>
-      compartments
-        .map((candidate, idx) => ({ candidate, idx }))
-        .filter(({ candidate, idx }) => {
-          if (idx === sourceIdx || candidate.isHeader || !candidate.id) return false;
-          const sourceId = compartments[sourceIdx]?.id;
-          let cursor: CompartmentFormState | undefined = candidate;
-          const seen = new Set<string>();
-          while (sourceId && cursor?.parentCompartmentId && !seen.has(cursor.parentCompartmentId)) {
-            if (cursor.parentCompartmentId === sourceId) return false;
-            seen.add(cursor.parentCompartmentId);
-            cursor = compartments.find((entry) => entry.id === cursor?.parentCompartmentId);
-          }
-          return true;
-        }),
-    [compartments]
-  );
-
   const handleCompartmentDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    // Map the dragged/target ids back to their positions in the flat array.
-    const activeFlat = orderedCompartments.find((o) => compartmentKey(o.comp, o.idx) === String(active.id))?.idx;
-    const overFlat = orderedCompartments.find((o) => compartmentKey(o.comp, o.idx) === String(over.id))?.idx;
-    if (activeFlat == null || overFlat == null) return;
-
-    setCompartments((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(activeFlat, 1);
-      if (!moved) return prev;
-      next.splice(overFlat, 0, moved);
-      return next;
-    });
-
-    // Persist reorder if template is saved
-    if (isEditing && templateId) {
-      const flatIds = compartments.map((c, i) => compartmentKey(c, i));
-      const [movedId] = flatIds.splice(activeFlat, 1);
-      if (movedId) flatIds.splice(overFlat, 0, movedId);
-      const savedIds = flatIds.filter((id) => !id.startsWith('comp-'));
-      if (savedIds.length > 0) {
-        void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
-          toast.error('Failed to save compartment order');
-        });
-      }
-    }
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    // reorderCompartment rejects cross-parent drops. Dragging a parent moves
+    // its subtree because the returned array is canonical depth-first order.
+    setCompartments((prev) => reorderCompartment(prev, activeId, overId));
+    pendingCompartmentOrderRef.current = true;
+    markDirty();
   };
 
   const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
@@ -2732,14 +2667,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const parentName = comp.parentCompartmentId
       ? compartments.find((c) => c.id === comp.parentCompartmentId)?.name
       : undefined;
-    const siblingIndices = compartments
-      .map((candidate, candidateIdx) => ({ candidate, candidateIdx }))
-      .filter(({ candidate }) => candidate.parentCompartmentId === comp.parentCompartmentId)
-      .map(({ candidateIdx }) => candidateIdx);
-    const siblingPosition = siblingIndices.indexOf(idx);
-    const canMoveUp = siblingPosition > 0;
-    const canMoveDown = siblingPosition >= 0 && siblingPosition < siblingIndices.length - 1;
-
     // Section header compartment — simplified visual divider
     if (comp.isHeader) {
       return (
@@ -2748,7 +2675,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
-              aria-label="Drag to reorder section"
+              aria-label={comp.id ? 'Drag to reorder section among siblings' : 'Save before dragging this section'}
+              disabled={!comp.id}
+              title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling sections'}
               {...(dragHandleProps ?? {})}
             >
               <GripVertical className="h-5 w-5" />
@@ -2772,7 +2701,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'up')}
-                disabled={!canMoveUp}
+                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section up"
               >
@@ -2781,7 +2710,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'down')}
-                disabled={!canMoveDown}
+                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section down"
               >
@@ -2800,7 +2729,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 className={mobileMenuItemClass}
-                disabled={!canMoveUp}
+                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
                 onClick={() => moveCompartment(idx, 'up')}
               >
                 <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
@@ -2808,7 +2737,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 className={mobileMenuItemClass}
-                disabled={!canMoveDown}
+                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
                 onClick={() => moveCompartment(idx, 'down')}
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
@@ -2850,7 +2779,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
-            aria-label="Drag to reorder compartment"
+            aria-label={
+              comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
+            }
+            disabled={!comp.id}
+            title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling compartments'}
             {...(dragHandleProps ?? {})}
           >
             <GripVertical className="h-5 w-5" />
@@ -2914,7 +2847,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'up')}
-              disabled={!canMoveUp}
+              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} up`}
             >
@@ -2923,7 +2856,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'down')}
-              disabled={!canMoveDown}
+              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} down`}
             >
@@ -2961,7 +2894,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               className={mobileMenuItemClass}
-              disabled={!canMoveUp}
+              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
               onClick={() => moveCompartment(idx, 'up')}
             >
               <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
@@ -2969,7 +2902,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               className={mobileMenuItemClass}
-              disabled={!canMoveDown}
+              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
               onClick={() => moveCompartment(idx, 'down')}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
@@ -2988,10 +2921,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
               >
                 <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
-                {validParentDestinations(idx).map(({ candidate, idx: destinationIdx }) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {compartmentPath(destinationIdx)}
-                    {comp.parentCompartmentId === candidate.id ? ' (current)' : ''}
+                {storedInsideOptions(compartments, comp).map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                    {comp.parentCompartmentId === option.id ? ' (current)' : ''}
                   </option>
                 ))}
               </select>
@@ -3090,16 +3023,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 );
               })()}
               <div>
-                <label className={labelClass}>Stored Inside</label>
+                <label className={labelClass}>Reparent: stored inside</label>
                 <select
                   className={selectClass}
                   value={comp.parentCompartmentId}
                   onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
                 >
                   <option value="">Nothing (top-level)</option>
-                  {validParentDestinations(idx).map(({ candidate: other, idx: destinationIdx }) => (
-                    <option key={other.id} value={other.id ?? ''}>
-                      {compartmentPath(destinationIdx)}
+                  {storedInsideOptions(compartments, comp).map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -3765,7 +3698,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     style={depth > 0 ? { marginLeft: depth * 20 } : undefined}
                     className={depth > 0 ? 'border-theme-surface-border/60 border-l-2 pl-2' : undefined}
                   >
-                    <SortableCompartmentWrapper id={id}>
+                    <SortableCompartmentWrapper id={id} disabled={!comp.id}>
                       {({ listeners: compListeners, setNodeRef, style, attributes }) =>
                         renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes, depth)
                       }
@@ -3850,7 +3783,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Change Log Modal (admin only) */}
       {showChangelog && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 Change History{' '}
@@ -3950,7 +3883,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* CSV Preview Confirmation Modal */}
       {csvPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+          <div className="modal-panel-scroll bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-theme-text-primary text-lg font-semibold">
                 CSV Import Preview — {csvPreview.length} item(s)
@@ -4010,7 +3943,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Preview Modal — mobile device frame */}
       {showPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div className="relative flex flex-col items-center gap-3">
+          <div className="modal-panel-scroll relative flex flex-col items-center gap-3">
             {/* Close button outside the phone frame */}
             <button
               type="button"

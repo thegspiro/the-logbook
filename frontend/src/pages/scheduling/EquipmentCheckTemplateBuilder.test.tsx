@@ -1,3 +1,4 @@
+/* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
