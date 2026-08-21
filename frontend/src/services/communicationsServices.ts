@@ -145,6 +145,22 @@ export interface AdminSummary {
   pending_admin_hours_approvals: number;
 }
 
+export interface OperationsItem {
+  key: string;
+  label: string;
+  severity: 'ok' | 'info' | 'warning' | 'critical';
+  count: number;
+  oldest_age_days?: number;
+  most_urgent?: string;
+  href: string;
+}
+
+export interface OperationsDashboard {
+  generated_at: string;
+  timezone: string;
+  sections: Array<{ key: string; title: string; items: OperationsItem[] }>;
+}
+
 export interface ActionItemSummary {
   id: string;
   source: string;
