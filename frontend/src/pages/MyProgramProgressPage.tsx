@@ -55,7 +55,7 @@ const RequirementRow: React.FC<{
   onClaim: (record: RequirementProgressRecord, itemId: string) => Promise<void>;
 }> = ({ record, lockedBy, saving, onClaim }) => {
   const meta = STATUS_META[record.status];
-  const done = record.status === 'completed' || record.status === 'verified';
+  const done = record.status === 'completed' || record.status === 'verified' || record.status === 'waived';
   const score = record.progress_notes?.latest_score;
   const target = requirementTarget(record);
   const action = requirementAction(record);
