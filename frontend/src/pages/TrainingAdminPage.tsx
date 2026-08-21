@@ -329,7 +329,7 @@ export const TrainingAdminPage: React.FC = () => {
                 onClick={() => handlePageChange(page.id)}
                 role="tab"
                 aria-selected={isActive}
-                className={`focus:ring-theme-focus-ring flex items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
+                className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
                   isActive
                     ? 'bg-red-600 text-white'
                     : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'

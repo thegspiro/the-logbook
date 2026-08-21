@@ -2478,6 +2478,7 @@ class TrainingProgramService:
         acting_user_id: Optional[UUID] = None,
         can_manage: bool = False,
         completion_credit_id: Optional[str] = None,
+        enforce_prerequisites: bool = True,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """
         Update progress on a specific requirement
@@ -2612,12 +2613,13 @@ class TrainingProgramService:
         # A requirement gated by an unfinished prerequisite can't be signed off
         # yet. Checked before anything is applied so a locked requirement is
         # rejected whole rather than half-updated.
-        locks = await self.prerequisite_locks(
-            progress.enrollment_id, progress.enrollment.program_id
-        )
-        blockers = locks.get(str(progress.requirement_id))
-        if blockers:
-            return None, self._locked_message(blockers)
+        if enforce_prerequisites:
+            locks = await self.prerequisite_locks(
+                progress.enrollment_id, progress.enrollment.program_id
+            )
+            blockers = locks.get(str(progress.requirement_id))
+            if blockers:
+                return None, self._locked_message(blockers)
 
         # Update status
         if updates.status:
@@ -3044,6 +3046,10 @@ class TrainingProgramService:
             completion_credit_id=str(ledger.id) if mark_completed else None,
             acting_user_id=acting_user_id,
             can_manage=can_manage,
+            # Logged numeric progress reflects work that already happened and
+            # must accrue even while the requirement is gated. Source-backed
+            # sign-offs remain subject to the same lock as manual sign-offs.
+            enforce_prerequisites=mark_completed,
         )
         if mark_completed:
             phase_after_result = await self.db.execute(
@@ -3127,6 +3133,10 @@ class TrainingProgramService:
             organization_id=organization_id,
             updates=RequirementProgressUpdate(**update_kwargs),
             verified_by=verified_by,
+            # Reversal is bookkeeping, not a new sign-off. Blocking it after
+            # deleting the ledger row would leave progress and its audit trail
+            # inconsistent.
+            enforce_prerequisites=False,
         )
         if units == 0 and phase_after_id:
             phase_result = await self.db.execute(
