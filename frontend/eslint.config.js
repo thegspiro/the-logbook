@@ -17,6 +17,12 @@ export default tseslint.config(
     ignores: [
       'dist/',
       'coverage/',
+      // Playwright writes a self-contained HTML application and trace assets.
+      // They are generated output, not project source; linting after an E2E run
+      // otherwise walks bundled JavaScript without our typed parser settings.
+      'playwright-report/',
+      'test-results/',
+      'blob-report/',
       'scripts/',
       'public/',
       // Stryker copies the whole project into a sandbox per run and leaves it
