@@ -142,6 +142,14 @@ describe('VendorsPage', () => {
     expect(screen.getByText('1 open reorder')).toBeInTheDocument();
   });
 
+  it('does not render an unsafe vendor website as a link', async () => {
+    mockGetVendors.mockResolvedValue([makeVendor({ website: 'javascript:alert(1)' })]);
+    renderWithRouter(<VendorsPage />);
+
+    expect(await screen.findByText('Galls')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).not.toBeInTheDocument();
+  });
+
   it('creates a vendor with its primary contact in one pass', async () => {
     const user = userEvent.setup();
     renderWithRouter(<VendorsPage />);

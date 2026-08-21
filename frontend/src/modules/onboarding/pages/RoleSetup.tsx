@@ -1044,7 +1044,7 @@ const PositionSetup: React.FC = () => {
       {/* Custom Position Modal */}
       {showCustomModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4 backdrop-blur-xs"
+          className="modal-overlay z-50 flex items-center justify-center p-4 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-position-modal-title"

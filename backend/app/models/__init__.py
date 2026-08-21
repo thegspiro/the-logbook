@@ -41,6 +41,7 @@ from app.models.apparatus import (
     MaintenanceIntervalUnit,
 )
 from app.models.audit import AuditLog, AuditLogCheckpoint, SeverityLevel
+from app.models.call_tracking import CallSource, OrgCall, OrgCallResponse
 from app.models.compliance_config import (
     ComplianceConfig,
     ComplianceProfile,
@@ -370,6 +371,10 @@ __all__ = [
     "AuditLog",
     "AuditLogCheckpoint",
     "SeverityLevel",
+    # Call tracking models
+    "CallSource",
+    "OrgCall",
+    "OrgCallResponse",
     # Onboarding models
     "OnboardingStatus",
     # Email template models

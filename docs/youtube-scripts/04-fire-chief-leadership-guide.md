@@ -494,6 +494,34 @@ who's swapping, which shifts, and the impact on coverage.]**
 
 **[CALLOUT: "Accountability without getting in the way of the run."]**
 
+**[SCREEN: Same card, scroll to "Record a call count at close-out". Toggle it
+on. — ADDED 2026-08-19]**
+
+> "There's a second setting on this card, and it matters most if your department
+> doesn't run incident-reporting software. Turn on **Record a call count at
+> close-out** and your officers stop logging calls one at a time. Instead, when
+> they close a shift out, they're asked one question: how many calls did this
+> apparatus run."
+
+**[SCREEN: The three-step close-out wizard, stepping through attendance, then
+the call-count rows, then the per-member confirmation.]**
+
+> "Close-out becomes three screens instead of one. Who was actually on, and
+> when. How many calls, by type. Then confirm what each member takes away — and
+> the important part for a chief is that **each screen saves as it advances**.
+> Your officer is doing this at seven in the morning after twenty-four hours
+> awake, on a phone, in an apparatus bay. If that phone locks, they come back to
+> the screen they left, not the beginning."
+
+**[CALLOUT: "This changes what your officers see at 0700 the same morning you
+turn it on. Tell them first."]**
+
+> "What it records is a date, a call type, and which units went — and
+> deliberately nothing else. No address, no patient details, no narrative, no
+> response times. Those are the fields that turn a call log into protected
+> health information, and if your department declined to keep that kind of
+> record, this doesn't quietly start keeping it for you."
+
 ### WHAT'S EXPIRING ON YOUR TRUCKS (20:15 – 21:30)
 
 **[SCREEN: Scheduling → Supply. The "Expiring on Apparatus" page loads.]**
@@ -558,6 +586,42 @@ behind it.]**
 > "This data feeds into shift planning. If you consistently have gaps on
 > Saturday mornings, you know to either recruit more weekend availability or
 > adjust the schedule."
+
+**[SCREEN: The Call Volume report for a count-only department. HOLD on the stat
+cards long enough that "Unit Responses" is readable. — ADDED 2026-08-19]**
+
+> "One caution on the call volume report, and this one is worth a funding
+> application. If your department records call counts at close-out, **read the
+> label on that number**. It says _unit responses_, not calls — and it means it.
+> When an engine and a medic both roll on the same MVA, and each crew closes out
+> their own shift, that one incident shows up twice."
+
+**[CALLOUT: "Unit responses ≠ incidents. Reconcile mutual responses before this
+goes in a grant application."]**
+
+**[PRODUCTION NOTE (2026-08-19, from the Codex review of PR #1573): three
+constraints on this beat. **(a)** Do **not** cut to a per-incident-mode report
+as the "correct" contrast — that figure sums per-trainee shift completion
+reports, so a shift with two enrolled trainees counts twice; neither mode yields
+a quotable incident count. **(b)** Do **not** show a CSV export here: it still
+labels the column "Total Calls" in both modes and would contradict the tile on
+screen. **(c)** Do **not** promise a per-apparatus breakdown — the API returns
+one, the screen does not render it. SCHED-13/15/16 in
+`docs/KNOWN_LIMITATIONS.md`.]**
+
+> "And one more thing before you quote any of this. If you export it to a
+> spreadsheet, the column still comes out headed 'total calls' — the export
+> hasn't caught up with the label on screen. Rename it before you send it
+> anywhere. Same goes if your department switched how it records calls part-way
+> through the year: this report only covers the way you record them **now**, so
+> run each period separately rather than trusting one date range across the
+> change."
+
+**[CALLOUT: "Exported column still says 'Total Calls' — rename it"]**
+
+> "So it's the right number for 'how hard did we work this truck.' It is not the
+> department's call count, and if you're filling in a grant application or an
+> ISO submission, reconcile your mutual responses first."
 
 **[TRANSITION: Reports section]**
 

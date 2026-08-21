@@ -11,7 +11,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { ClipboardCheck, Truck, Users } from 'lucide-react';
-import type { ShiftTemplateRecord, SchedulingFeatureSettings } from '../services/api';
+import type { ShiftTemplateRecord, SchedulingFeatureSettings, PositionSlot } from '../services/api';
 import { schedulingService } from '../services/api';
 import { useSchedulingStore } from '../store/schedulingStore';
 import type { ShiftSettings } from '../types/shiftSettings';
@@ -39,7 +39,7 @@ interface ShiftSettingsPanelProps {
     name: string;
     unit_number: string;
     apparatus_type: string;
-    positions?: Array<string | { position: string; required?: boolean }> | undefined;
+    positions?: PositionSlot[] | undefined;
   }>;
   onNavigateToTemplates: () => void;
   /** Section to render. Owned by the page so it can mirror it into the URL. */
@@ -100,6 +100,17 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     try {
       const updated = await schedulingService.updateFeatureSettings(patch);
       setFeature(updated);
+      // Mirror into the store the rest of the app reads. `loadSettings` is a
+      // once-per-session cache, so without this an admin who switched call
+      // tracking on kept seeing the old close-out — which never asks for a
+      // count — while the backend had already moved to count-only and would
+      // finalize the shift with none recorded.
+      useSchedulingStore.setState({
+        platoonsEnabled: updated.platoons_enabled,
+        requireEndOfShiftChecks: updated.require_end_of_shift_checks,
+        callTrackingMode: updated.call_tracking?.mode || 'detailed',
+        settingsLoaded: true,
+      });
       toast.success('Settings saved');
     } catch {
       toast.error('Failed to save settings');
@@ -133,7 +144,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     () =>
       apparatusList.map((a) => ({
         ...a,
-        positions: a.positions?.map((p) => (typeof p === 'string' ? p : p.position)),
+        positions: a.positions?.map((p) => p.position),
       })),
     [apparatusList]
   );
@@ -350,6 +361,41 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   <span
                     className={`toggle-knob-sm ${
                       feature.require_end_of_shift_checks ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Record a call count at close-out</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    For departments that don&apos;t log individual incidents. The officer is asked how many calls the
+                    apparatus ran when they close the shift out, and the crew&apos;s call credit comes from that number.
+                    Leave this off to keep logging calls one at a time.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Record a call count at close-out"
+                  aria-checked={feature.call_tracking?.mode === 'count_only'}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    const next = feature.call_tracking?.mode === 'count_only' ? 'detailed' : 'count_only';
+                    // Send the existing type list back untouched: the payload
+                    // replaces the whole call_tracking object, so omitting it
+                    // would wipe the department's own call types.
+                    void saveFeature({
+                      call_tracking: { mode: next, call_types: feature.call_tracking?.call_types ?? [] },
+                    });
+                  }}
+                  className={`toggle-track-sm ${
+                    feature.call_tracking?.mode === 'count_only' ? 'bg-violet-600' : 'bg-theme-surface-border'
+                  }`}
+                >
+                  <span
+                    className={`toggle-knob-sm ${
+                      feature.call_tracking?.mode === 'count_only' ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>

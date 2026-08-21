@@ -982,7 +982,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Clone Pipeline Modal */}
       {showCloneModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clone-pipeline-title"
@@ -1050,7 +1050,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Save as Template Modal */}
       {showSaveTemplateModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="save-template-title"
@@ -1118,7 +1118,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Template Gallery Modal */}
       {showTemplateGallery && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="template-gallery-title"
@@ -1192,7 +1192,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Create Pipeline Modal */}
       {showCreateModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="create-pipeline-title"

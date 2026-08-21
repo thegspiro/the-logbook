@@ -1,0 +1,88 @@
+# Screenshot audit baseline — images already known to be flagged.
+#
+# Generated 2026-08-16 from `audit_images.py --check edges`. Every entry here is
+# a capture that predates the 2026-08-15 move of the themed canvas from `body`
+# to `html`: the browser's stable scrollbar gutter went unpainted, leaving a
+# 15px white strip at the right edge wherever page content there was dark.
+#
+# Only `10-11-public-form-dark` is a dark-mode page, where the strip is plainly
+# visible and worth re-shooting on its own account. The rest are light-mode
+# captures of modal dialogs — the overlay darkens the viewport but sits inside
+# `body`, so the gutter stayed white behind it. On those the strip goes from
+# white to a *pale* gradient across 15px; fold them in whenever the shot is
+# re-taken for another reason.
+#
+# HOW TO USE THIS FILE
+#   - Re-capture an image, then DELETE its line here. CI fails on a stale entry,
+#     which is deliberate: it keeps this list shrinking instead of quietly
+#     suppressing future regressions on the same files.
+#   - Do not add a line to silence a new finding without saying why. A new
+#     finding means something changed that nobody looked at.
+#
+# See scripts/screenshots/README.md → "When something outside the guides
+# invalidates a shot", and docs/training/SCREENSHOT_CURRENCY.md.
+
+00-14-confirm-dialog.png
+00-18-rsvp-modal.png
+01-30-evoc-operator-modal.png
+02-79-training-attachments.png
+02-87-checklist-steps.png
+02-90-phase-prerequisites.png
+02-94-officer-progress-detail.png
+03-43-time-off-request-form.png
+03-96-lots-aboard-sheet.png
+04-09-rsvp-modal.png
+05-04-variant-group-form.png
+05-05-item-form-modal.png
+05-12-new-allowance-modal.png
+05-27-equipment-kit-modal.png
+05-46-size-preferences.png
+05-49-variant-stock-matrix.png
+05-50-equipment-kit-detail.png
+05-55-member-picker.png
+05-57-assign-scan-modal.png
+05-58-return-items-modal.png
+06-15-facility-maintenance-form.png
+06-23-add-operator-member-picker.png
+07-02-new-folder-dialog.png
+07-03-upload-documents.png
+07-05-form-sharing.png
+07-10-create-rule-modal.png
+08-22-screening-record-form.png
+08-57-template-reset-dialog.png
+10-11-public-form-dark.png
+10-14-scan-camera-denied.png
+10-15-mobile-menu-notifications.png
+11-03-budget-categories.png
+13-05-add-requirement.png
+14-02-create-election.png
+15-03-create-applicant.png
+15-09-convert-modal.png
+16-02-slack-connect.png
+16-04-documenso-connect.png
+16-06-paypal-connect.png
+
+# --- Post-move modal captures (added 2026-08-18) -----------------------------
+#
+# Both were captured AFTER the 2026-08-15 canvas move, so the explanation above
+# does not cover them: nothing about them is stale. Both were opened and read
+# before being listed here.
+#
+# The modal case is structural, not a capture defect. A dialog's scrim is
+# `position: fixed; inset: 0`, and a fixed box is laid out against the initial
+# containing block, which excludes the scrollbar gutter that
+# `scrollbar-gutter: stable` reserves on the root. The scrim therefore stops
+# 15px short of the window edge by definition, and the gutter keeps showing the
+# root gradient underneath. The canvas move fixed the original defect — that
+# strip is no longer the browser's default white — but on a light page under a
+# dark scrim a pale gradient against a dimmed page still trips the luma check.
+#
+# So, unlike every entry above, RE-CAPTURING THESE WILL NOT CLEAR THEM, and any
+# future modal screenshot on a light page will land here too. That makes this
+# section a growing list rather than a shrinking one, which is the opposite of
+# what this file is for; the durable fix is for `check_unpainted_gutter` to stop
+# reporting the subtle light-page-under-scrim tier, which would retire most of
+# the block above along with these two. Left as-is here because that is a change
+# to the check's contract, not a screenshot fix.
+05-75-setup-item-prefilled.png
+06-26-room-delete-subrooms.png

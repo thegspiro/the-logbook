@@ -45,6 +45,11 @@ describe('describeCameraError', () => {
     expect(message).not.toContain('Requested device not found');
   });
 
+  it('preserves the HTTPS guidance generated when camera APIs are unavailable', () => {
+    const reason = 'Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan.';
+    expect(describeCameraError(new Error(reason))).toBe(reason);
+  });
+
   it('sends a blocked permission to browser settings', () => {
     expect(describeCameraError(domException('NotAllowedError', 'Permission denied'))).toMatch(/browser settings/);
   });

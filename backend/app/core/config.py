@@ -428,16 +428,22 @@ class Settings(BaseSettings):
             if not self.REDIS_PASSWORD:
                 warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
 
-            # No TLS at all: CRITICAL (blocks boot) only when the deployment
-            # has opted in via SECURITY_REQUIRE_TLS, so upgrading this release
-            # cannot refuse to start an existing prod that terminates TLS
-            # elsewhere.
+            # No TLS at all: CRITICAL (blocks boot) unless the deployment has
+            # explicitly accepted the risk by setting SECURITY_REQUIRE_TLS
+            # False. The flag defaults True (fail closed), so an existing
+            # production install that terminates TLS elsewhere DOES stop
+            # booting on upgrade until it records that acceptance — the
+            # deliberate trade made when the default flipped, and the reason
+            # both messages below name the flag.
             tls_severity = "CRITICAL" if self.SECURITY_REQUIRE_TLS else "WARNING"
 
             if not self.DB_SSL:
                 warnings.append(
                     f"{tls_severity}: DB_SSL should be enabled in production to "
-                    "encrypt database traffic and prevent man-in-the-middle attacks"
+                    "encrypt database traffic and prevent man-in-the-middle "
+                    "attacks. Set DB_SSL=true (plus DB_SSL_CA), or set "
+                    "SECURITY_REQUIRE_TLS=false to accept the risk for a "
+                    "deployment whose network already protects this traffic."
                 )
             elif not self.DB_SSL_CA:
                 # CRITICAL, not WARNING: this configuration *looks* secure and
@@ -456,7 +462,10 @@ class Settings(BaseSettings):
             if not self.REDIS_SSL:
                 warnings.append(
                     f"{tls_severity}: REDIS_SSL should be enabled in production to "
-                    "encrypt Redis traffic and prevent man-in-the-middle attacks"
+                    "encrypt Redis traffic and prevent man-in-the-middle "
+                    "attacks. Set REDIS_SSL=true (plus REDIS_SSL_CA), or set "
+                    "SECURITY_REQUIRE_TLS=false to accept the risk for a "
+                    "deployment whose network already protects this traffic."
                 )
             elif not self.REDIS_SSL_CA:
                 severity = (
@@ -496,10 +505,24 @@ class Settings(BaseSettings):
                     "SECRET_KEY and will be invalidated if SECRET_KEY is rotated."
                 )
 
+            # NOTE: this flag has no reader anywhere in the backend — nothing
+            # sends HSTS, and no middleware redirects http:// to https://. The
+            # Secure attribute on auth cookies is decided independently by
+            # COOKIE_SECURE (see api/v1/endpoints/auth.py), which is why the
+            # old message here — "prevent cookies and credentials from being
+            # sent over HTTP" — described a control that does not exist and
+            # sent operators chasing the wrong setting. Until enforcement is
+            # actually implemented, the flag's only effect is this assertion
+            # that a human deployed behind TLS, so say exactly that rather
+            # than claim protection the code does not provide.
             if not self.SECURITY_ENFORCE_HTTPS:
                 warnings.append(
-                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production "
-                    "to prevent cookies and credentials from being sent over HTTP"
+                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production. "
+                    "It is an attestation that this deployment is served over "
+                    "TLS (typically terminated at a reverse proxy or CDN) — it "
+                    "does not itself redirect HTTP or emit HSTS. Set it True "
+                    "once TLS terminates in front of the app; to control the "
+                    "Secure flag on auth cookies, use COOKIE_SECURE."
                 )
 
         return warnings
@@ -594,6 +617,24 @@ class Settings(BaseSettings):
 
     # IP Logging
     IP_LOGGING_ENABLED: bool = True  # Log all request IPs with geo info
+
+    @field_validator("COOKIE_SECURE", mode="before")
+    @classmethod
+    def _empty_cookie_secure_means_auto(cls, v):
+        """Treat an empty COOKIE_SECURE as unset (auto-detect), not an error.
+
+        This field is the only tri-state in the settings — None means
+        auto-detect, and there is no env-var spelling for None. Docker Compose
+        cannot conditionally omit a variable from a mapping-form
+        `environment:` block, so passing it through at all injects "" whenever
+        the operator has not set it. Pydantic rejects "" for `bool | None`, so
+        without this the passthrough would abort startup for every deployment
+        that simply left the setting alone — the failure landing on everyone
+        who did nothing, which is the worst possible blast radius.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     @field_validator("BLOCKED_COUNTRIES", mode="before")
     @classmethod

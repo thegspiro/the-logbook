@@ -7,6 +7,7 @@ Request and response schemas for inventory-related endpoints.
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Annotated, Any, Dict, List, Literal, Optional
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
@@ -19,6 +20,17 @@ _response_config = ConfigDict(from_attributes=True)
 # reasons on request schemas to prevent oversized payloads (DB bloat / abuse).
 # Applied to request schemas only; response schemas mirror stored data unchanged.
 FreeText = Annotated[str, StringConstraints(max_length=2000)]
+
+
+def _validate_external_website(value: Optional[str]) -> Optional[str]:
+    """Allow only absolute HTTP(S) URLs in user-controlled link targets."""
+    if value is None:
+        return value
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("website must be an absolute HTTP or HTTPS URL")
+    return value
+
 
 # ============================================
 # Enum Literal Types
@@ -245,6 +257,8 @@ class InventoryVendorBase(BaseModel):
     notes: Optional[FreeText] = None
     is_preferred: bool = False
 
+    _website_must_be_http = field_validator("website")(_validate_external_website)
+
 
 class InventoryVendorCreate(InventoryVendorBase):
     """Schema for creating a vendor, optionally with its contacts in one pass"""
@@ -273,6 +287,8 @@ class InventoryVendorUpdate(BaseModel):
     notes: Optional[FreeText] = None
     is_preferred: Optional[bool] = None
     is_active: Optional[bool] = None
+
+    _website_must_be_http = field_validator("website")(_validate_external_website)
 
 
 class InventoryVendorResponse(UTCResponseBase):
