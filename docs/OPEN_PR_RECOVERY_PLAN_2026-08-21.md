@@ -131,6 +131,13 @@ integrity fixes, warning-budget cleanup, migration chain, and test adjustments
 into every head before CI reruns. Branch-specific changes remain layered above
 `main`; no feature implementation was discarded to obtain a clean merge.
 
+The refreshed CI runs then isolated five branch-local failures, all repaired on
+their respective heads: #1657's parent-validation test was Black-formatted;
+#1655 scoped its intentional test-only DOM access so it stays within the lint
+warning budget; #1648 rebased the recruitment event-type migration onto the
+current Alembic head; #1585 removed a superseded PageTransition title assertion;
+and #1577 regenerated the schema reference for its legal revision model.
+
 ## Verification
 
 Use these checks on the recovery commit before updating feature heads:
