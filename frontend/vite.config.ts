@@ -45,26 +45,14 @@ export default defineConfig({
         // The build id in the URL also invalidates push-worker imports that an
         // existing installation cached before no-store headers were deployed.
         importScripts: [`/push-sw.js?v=${BUILD_ID}`],
-        // Precache the app SHELL only, not all ~275 route chunks.
-        //
-        // Precaching everything made installing the PWA a ~6.1MB download, most
-        // of it admin surfaces (finance, grants, elections, onboarding) that a
-        // given member will never open — a slow first launch on the rural
-        // cellular connections this app is used from. The shell here is the
-        // entry chunk (which contains Login and Dashboard), the vendor chunks
-        // and the stylesheet: ~1.8MB. Every other route chunk is cached on
-        // first visit by the CacheFirst rule below, so a page works offline
-        // once it has been opened online.
-        //
-        // Trade-off worth knowing: a member who installs and immediately goes
-        // offline can no longer open a page they have never visited. Restore
-        // the old behavior by deleting globPatterns/globIgnores.
-        globPatterns: ['**/*.{css,html}', 'assets/index-*.js', 'assets/vendor-*.js'],
-        // Drag-and-drop is only reachable from kanban/builder screens, which are
-        // desk work — never needed offline in the field. vendor-scanner is
-        // deliberately NOT ignored: barcode scanning is an offline field
-        // activity, so it has to survive a cold, disconnected start.
-        globIgnores: ['**/vendor-dnd-*.js'],
+        // Precache every generated JavaScript chunk. The entry chunk has static
+        // imports outside the index/vendor naming convention (shared API,
+        // stores, dialogs, and route registries), so filtering by filename can
+        // cache index.html while still producing a blank offline launch when
+        // one of those transitive imports misses the network. Content-hashed
+        // chunks are safe to precache, and correctness on a cold offline start
+        // takes priority over reducing the installation download.
+        globPatterns: ['**/*.{css,html,js}'],
         // Prevent the service worker from caching API responses
         // containing sensitive/PII data (HIPAA §164.312).
         navigateFallbackDenylist: [/^\/api/],

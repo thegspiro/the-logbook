@@ -369,7 +369,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => void navigate('/prospective-members/settings')}
-            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
+            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
           >
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">Pipeline Settings</span>
@@ -464,7 +464,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       <div className="tab-scroll mb-4">
         <button
           onClick={() => setActiveTab('active')}
-          className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+          className={`min-h-11 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'active'
               ? 'text-theme-text-primary border-red-500'
               : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
@@ -474,7 +474,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('inactive')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'inactive'
               ? 'text-theme-text-primary border-red-500'
               : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
@@ -489,7 +489,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('withdrawn')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'withdrawn'
               ? 'text-theme-text-primary border-red-500'
               : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
@@ -542,7 +542,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+              className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                 statusFilter
                   ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
                   : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
@@ -601,7 +601,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               void fetchApplicants();
             }}
             disabled={isLoading}
-            className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors disabled:opacity-50"
+            className="text-theme-text-muted hover:text-theme-text-primary min-h-11 min-w-11 p-2 transition-colors disabled:opacity-50"
             title="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -611,7 +611,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           <div className="card flex items-center">
             <button
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
+              className={`flex min-h-11 items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
                 viewMode === 'kanban' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -620,7 +620,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors ${
+              className={`flex min-h-11 items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors ${
                 viewMode === 'table' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >

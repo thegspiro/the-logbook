@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { OpenShiftsTab } from './OpenShiftsTab';
 
@@ -7,6 +8,7 @@ import { OpenShiftsTab } from './OpenShiftsTab';
 const mockGetOpenShifts = vi.fn();
 const mockGetShifts = vi.fn();
 const mockSignupForShift = vi.fn();
+const mockGetEligiblePositions = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -14,7 +16,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
     signupForShift: (...args: unknown[]) => mockSignupForShift(...args) as unknown,
     withdrawSignup: vi.fn().mockResolvedValue(undefined),
-    getEligiblePositions: vi.fn().mockResolvedValue({ positions: [] }),
+    getEligiblePositions: (...args: unknown[]) => mockGetEligiblePositions(...args) as unknown,
   },
 }));
 
@@ -66,6 +68,8 @@ describe('OpenShiftsTab', () => {
     vi.clearAllMocks();
     mockGetOpenShifts.mockResolvedValue(mockShifts);
     mockGetShifts.mockResolvedValue({ shifts: mockShifts, total: 2 });
+    mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: false });
+    mockSignupForShift.mockResolvedValue({});
   });
 
   it('should render the filter bar and info section', () => {
@@ -111,5 +115,49 @@ describe('OpenShiftsTab', () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
     const input = screen.getByLabelText('Filter open shifts from date');
     expect(input.className).toMatch(/sm:w-\S+/);
+  });
+
+  it('submits the only non-firefighter position a member is eligible for', async () => {
+    const user = userEvent.setup();
+    mockGetEligiblePositions.mockImplementation((shiftId?: string) =>
+      Promise.resolve({ positions: shiftId === 'shift-1' ? ['driver'] : [], is_excluded: false })
+    );
+    renderWithRouter(<OpenShiftsTab />);
+
+    const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+    await user.click(signupButtons[0]);
+
+    const position = await screen.findByLabelText('Position');
+    expect(position).toHaveValue('driver');
+    expect(screen.getByRole('option', { name: 'Driver/Operator' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Confirm Sign Up' }));
+
+    await waitFor(() => {
+      expect(mockSignupForShift).toHaveBeenCalledWith('shift-1', { position: 'driver' });
+    });
+  });
+
+  it('resets the selected position when opening shifts with disjoint eligible positions', async () => {
+    const user = userEvent.setup();
+    mockGetEligiblePositions.mockImplementation((shiftId?: string) => {
+      const positions = shiftId === 'shift-1' ? ['driver'] : shiftId === 'shift-2' ? ['officer'] : [];
+      return Promise.resolve({ positions, is_excluded: false });
+    });
+    renderWithRouter(<OpenShiftsTab />);
+
+    const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+    await user.click(signupButtons[0]);
+    expect(await screen.findByRole('option', { name: 'Driver/Operator' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await user.click(signupButtons[1]);
+    const visibleOption = await screen.findByRole('option', { name: 'Officer' });
+    expect(visibleOption).toBeVisible();
+    expect(screen.getByLabelText('Position')).toHaveValue('officer');
+    await user.click(screen.getByRole('button', { name: 'Confirm Sign Up' }));
+
+    await waitFor(() => {
+      expect(mockSignupForShift).toHaveBeenCalledWith('shift-2', { position: 'officer' });
+    });
   });
 });
