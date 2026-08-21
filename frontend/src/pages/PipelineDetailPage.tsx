@@ -1703,7 +1703,7 @@ const PipelineDetailPage: React.FC = () => {
                             {phase.phase_number}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-theme-text-primary truncate font-medium">{phase.name}</h3>
+                            <h3 className="text-theme-text-primary line-clamp-2 font-medium">{phase.name}</h3>
                             <div className="text-theme-text-muted flex items-center space-x-3 text-xs">
                               <span>
                                 {phaseReqs.length} requirement{phaseReqs.length !== 1 ? 's' : ''}

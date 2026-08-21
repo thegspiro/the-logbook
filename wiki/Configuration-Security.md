@@ -161,6 +161,143 @@ The Logbook supports multiple authentication methods:
 
 ---
 
+## Brute-Force Controls *(2026-08-17)*
+
+Five controls layer on top of each other. They are not interchangeable — each
+covers a gap the others leave open, so collapsing two of them into one
+reopens whatever sat between them.
+
+| Control | Counts | Keyed on | Default | On provider/Redis failure |
+|---------|--------|----------|---------|---------------------------|
+| Rate limit | All attempts, short window | IP + scope | On | Falls back to in-memory limiter |
+| Account lockout | Consecutive failures | User | On (5 attempts / 30 min) | n/a — database-backed |
+| Suspicious-IP throttle | **Failed** attempts, long window | IP, across **all** accounts | **On** | Falls back to in-memory counter |
+| Breached-password check | Appearances in breach corpora | Password hash prefix | Off | **Fails open** — password accepted |
+| Challenge-response (CAPTCHA) | Human challenge | Request | Off | **Fails closed** — submission refused |
+
+**The two failure directions are opposite on purpose.** Breached-password
+detection is supplementary — complexity rules, password history, MFA and
+lockout still guard the account if the lookup is skipped — so an outage must
+not block a department from setting passwords during an incident. CAPTCHA has
+no fallback control behind it, so accepting unverified traffic during an
+outage is exactly the state an attacker wants, and one they can bring about by
+attacking the provider. It rejects instead. Preserve both directions if you
+touch either.
+
+### Suspicious-IP throttling
+
+The per-IP rate limit caps burst speed and the per-account lockout caps
+guesses against one user — but a **password spray** slips between them. One IP
+trying two passwords each against a thousand usernames never exceeds 5/minute
+and never reaches the lockout threshold on any single account, because no
+account is tried more than twice.
+
+```bash
+SUSPICIOUS_IP_THROTTLE_ENABLED=true   # the only new control that is ON by default
+SUSPICIOUS_IP_MAX_FAILURES=50         # failed attempts per IP per window
+SUSPICIOUS_IP_WINDOW_SECONDS=3600
+SUSPICIOUS_IP_BLOCK_SECONDS=900       # 15-minute block once the threshold is crossed
+```
+
+Two behaviours are load-bearing and should not be "simplified":
+
+- **A fully successful sign-in clears the IP's counter**, so a station's
+  shared NAT egress does not drift into a block on ordinary typos. The clear
+  happens only after **full** authentication — never on a correct password
+  alone — or an attacker holding one leaked password for an MFA-protected
+  account could zero the tally at will.
+- **Clearing never lifts an already-active block**, for the same reason.
+
+It is Redis-backed and shared across workers; if Redis is unavailable it
+degrades to a per-process counter that is size-capped and evicted.
+
+Applies to `/auth/login`, `/auth/mfa/login`, **and the pre-verification
+challenge rejections** — those resolve no account, so without them they would
+be the one unmetered door into the authentication surface.
+
+> **Sizing note.** 50 failures per hour is generous. A large department behind
+> a single public IP should confirm the threshold suits its roster before
+> assuming it will never fire.
+
+### Breached-password detection
+
+Complexity rules say nothing about whether a password has already leaked.
+`Firetruck2024!` clears every rule the platform enforces and sits in public
+breach corpora, which is exactly what credential stuffing tries first.
+
+```bash
+BREACHED_PASSWORD_CHECK_ENABLED=false                       # off by default
+BREACHED_PASSWORD_MIN_COUNT=1                               # 1 rejects anything ever seen
+BREACHED_PASSWORD_API_URL=https://api.pwnedpasswords.com/range
+BREACHED_PASSWORD_TIMEOUT_SECONDS=3.0
+```
+
+**What leaves your deployment:** the first **five hexadecimal characters** of
+the password's SHA-1 hash, and nothing else. The provider returns every hash
+suffix sharing that prefix and the comparison happens in-process, so it never
+learns the password, its full hash, or which suffix was being asked about
+(k-anonymity). No member identifier is sent.
+
+Off by default because it makes an outbound request during a password set —
+some deployments cannot permit that. If yours cannot, leaving it off is the
+right answer; enabling it in a network that blocks the request simply accepts
+every password (and logs the degradation).
+
+Applies to all five paths that set a password: registration, self-service
+change, reset-by-token, admin user creation, and admin reset.
+
+The rejection message deliberately **omits the breach count**. A precise count
+is a free oracle over the corpus for anyone who can reach a password form, and
+it tells the member nothing they can act on.
+
+### Challenge-response (CAPTCHA)
+
+Covers the two forms anyone on the internet can reach — **public form
+submission** and **forgot password**. Both were defended only by rate
+limiting, a honeypot and a daily cap: controls that raise the cost of
+automation without ever requiring a human, so a bot pacing itself under the
+limit still got through.
+
+```bash
+CAPTCHA_ENABLED=false
+CAPTCHA_PROVIDER=turnstile   # turnstile | hcaptcha | recaptcha
+CAPTCHA_SECRET_KEY=
+CAPTCHA_SITE_KEY=            # public — served to the browser
+CAPTCHA_TIMEOUT_SECONDS=5.0
+CAPTCHA_MIN_SCORE=0.5        # reCAPTCHA v3 only; ignored by Turnstile and hCaptcha
+```
+
+Three providers are supported because operators do not share constraints, and
+Turnstile and hCaptcha offer accessible challenges without a Google
+dependency. reCAPTCHA v3 returns a 0.0–1.0 score rather than a pass/fail and
+is compared against `CAPTCHA_MIN_SCORE` — read as a boolean alone it would
+accept every bot it had already detected.
+
+**Things that will bite you:**
+
+- **Enabling it without `CAPTCHA_SECRET_KEY` enforces nothing** and logs an
+  error. That is deliberate — a half-finished setup should not present as an
+  outage — but it means "I turned it on" is not the same as "it is running".
+  `GET /api/v1/auth/captcha-config` reports `enabled: false` in that state,
+  matching what the server actually does.
+- **Enabling it widens the Content-Security-Policy** to the configured
+  provider's widget origins. Without that the browser blocks the script and
+  the iframe, and the symptom is *"the challenge never appears"* — nothing in
+  it names the CSP. With CAPTCHA off the policy is byte-for-byte unchanged,
+  `frame-src` included. Adding a new provider needs an entry in **both** the
+  verification-URL map and the widget-origin map in `app/core/captcha.py`.
+- **The token travels in an `X-Captcha-Token` header.** It is in the
+  application's CORS allowlist. If you front the app with a reverse proxy that
+  maintains its own header allowlist, add it there too, or every challenged
+  submission fails verification.
+- **Tokens are single-use.** A rejected submission resets the widget rather
+  than replaying a token the provider has already burned.
+- **Guest check-in is deliberately excluded.** It is reached by scanning a QR
+  code on a station display, where a challenge is hostile to somebody standing
+  in a firehouse.
+
+---
+
 ## CORS Configuration
 
 Set `ALLOWED_ORIGINS` in your `.env` file as a JSON array:

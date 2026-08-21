@@ -13,6 +13,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Update notification — detects new deployments while the user is active
 import { UpdateNotification } from './components/UpdateNotification';
+import { RouteTitleManager } from './components/RouteTitleManager';
 
 // Theme
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -101,6 +102,7 @@ function App() {
             outside AppLayout so public pages (login, onboarding) get one too. */}
         <ConfirmProvider>
           <BrowserRouter>
+            <RouteTitleManager />
             <div className="App">
               <UpdateNotification />
               <Suspense fallback={<PageLoadingFallback />}>

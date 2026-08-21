@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDialog } from '../../hooks/useDialog';
+import { Modal } from '../Modal';
 
 interface EventSaveTemplateModalProps {
   templateName: string;
@@ -20,81 +20,58 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
   onSubmit,
   onClose,
 }) => {
-  const dialogRef = useDialog<HTMLDivElement>({ onClose });
-
   return (
-    <div
-      className="fixed inset-0 z-50 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="save-template-modal-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Save as Template"
+      titleId="save-template-modal-title"
+      onSubmit={onSubmit}
+      footer={
+        <>
+          <button
+            type="submit"
+            disabled={submitting || !templateName.trim()}
+            className="btn-primary inline-flex w-full justify-center rounded-md text-base font-medium disabled:opacity-50 sm:ml-3 sm:w-auto sm:text-sm"
+          >
+            {submitting ? 'Saving...' : 'Save Template'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+          >
+            Cancel
+          </button>
+        </>
+      }
     >
-      <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={onClose}>
-          <div className="absolute inset-0 bg-black/75"></div>
+      <div className="space-y-4">
+        <div>
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            Template Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={templateName}
+            onChange={(e) => onTemplateNameChange(e.target.value)}
+            className="form-input"
+            placeholder="e.g., Weekly Business Meeting"
+          />
         </div>
-
-        <div
-          ref={dialogRef}
-          className="modal-panel relative z-10 inline-block transform overflow-hidden text-left align-bottom transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
-        >
-          <form onSubmit={onSubmit}>
-            <div className="modal-header">
-              <h3 id="save-template-modal-title" className="text-theme-text-primary mb-4 text-lg leading-6 font-medium">
-                Save as Template
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                    Template Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={templateName}
-                    onChange={(e) => onTemplateNameChange(e.target.value)}
-                    className="form-input"
-                    placeholder="e.g., Weekly Business Meeting"
-                  />
-                </div>
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                    Description (optional)
-                  </label>
-                  <textarea
-                    value={templateDescription}
-                    onChange={(e) => onTemplateDescriptionChange(e.target.value)}
-                    rows={3}
-                    className="form-input"
-                    placeholder="Brief description of this template..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-theme-surface-secondary px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-              <button
-                type="submit"
-                disabled={submitting || !templateName.trim()}
-                className="btn-primary inline-flex w-full justify-center rounded-md text-base font-medium disabled:opacity-50 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                {submitting ? 'Saving...' : 'Save Template'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary text-theme-text-secondary mt-3 inline-flex w-full justify-center text-base font-medium shadow-xs focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+        <div>
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Description (optional)</label>
+          <textarea
+            value={templateDescription}
+            onChange={(e) => onTemplateDescriptionChange(e.target.value)}
+            rows={3}
+            className="form-input"
+            placeholder="Brief description of this template..."
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

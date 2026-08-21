@@ -1,15 +1,11 @@
 /**
- * Accessible Modal Component
+ * Accessible, mobile-safe dialog shell.
  *
- * Features:
- * - Focus trapping (keeps focus within modal)
- * - Escape key to close
- * - Click outside to close
- * - Proper ARIA attributes
- * - Returns focus to trigger element on close
+ * The header and optional action bar remain pinned while `.modal-body` scrolls.
+ * `onSubmit` makes the panel a form so controls in the body and actions in the
+ * footer retain native form validation without introducing a second scroller.
  */
-
-import React, { ReactNode } from 'react';
+import React, { FormEventHandler, ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useDialog } from '../hooks/useDialog';
 
@@ -22,7 +18,12 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   closeOnClickOutside?: boolean;
   closeOnEscape?: boolean;
+  /** Stable IDs are supported for dialogs whose accessible relationships are tested or externally referenced. */
+  titleId?: string;
   'aria-describedby'?: string;
+  /** When supplied, the modal panel is rendered as the form element. */
+  onSubmit?: FormEventHandler<HTMLFormElement>;
+  showCloseButton?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -34,87 +35,91 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'md',
   closeOnClickOutside = true,
   closeOnEscape = true,
+  titleId = 'modal-title',
   'aria-describedby': ariaDescribedBy,
+  onSubmit,
+  showCloseButton = true,
 }) => {
-  const modalRef = useDialog<HTMLDivElement>({ isOpen, onClose, closeOnEscape });
-
+  const modalRef = useDialog<HTMLElement>({ isOpen, onClose, closeOnEscape });
   const sizeClasses = {
-    sm: 'max-w-[calc(100vw-2rem)] sm:max-w-md',
-    md: 'max-w-[calc(100vw-2rem)] sm:max-w-lg',
-    lg: 'max-w-[calc(100vw-2rem)] sm:max-w-2xl',
-    xl: 'max-w-[calc(100vw-2rem)] sm:max-w-4xl',
+    sm: 'sm:max-w-md',
+    md: 'sm:max-w-lg',
+    lg: 'sm:max-w-2xl',
+    xl: 'sm:max-w-4xl',
   };
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (closeOnClickOutside && e.target === e.currentTarget) {
-      onClose();
-    }
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (closeOnClickOutside && event.target === event.currentTarget) onClose();
   };
+
+  const content = (
+    <>
+      <header className="modal-header-sticky flex items-start justify-between gap-4 px-4 py-4 sm:px-6">
+        <h3 className="text-theme-text-primary min-w-0 text-lg font-medium" id={titleId}>
+          {title}
+        </h3>
+        {showCloseButton && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md focus:ring-2 focus:outline-hidden"
+            aria-label="Close modal"
+          >
+            <X className="h-6 w-6" aria-hidden="true" />
+          </button>
+        )}
+      </header>
+      <div
+        className="modal-content min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+        data-testid="modal-content"
+      >
+        {children}
+      </div>
+      {footer && (
+        <div
+          data-testid="modal-footer"
+          className="modal-footer modal-footer-sticky flex shrink-0 flex-col-reverse gap-2 px-4 sm:flex-row-reverse sm:gap-3 sm:px-6"
+        >
+          {footer}
+        </div>
+      )}
+    </>
+  );
+
+  const panelClasses = `modal-panel modal-body relative z-10 flex w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden text-left ${sizeClasses[size]}`;
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto"
-      aria-labelledby="modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      aria-labelledby={titleId}
       role="dialog"
       aria-modal="true"
       aria-describedby={ariaDescribedBy}
+      data-testid="modal-backdrop"
+      onClick={handleBackdropClick}
     >
-      <div
-        className="flex min-h-screen items-center justify-center px-4 py-4 text-center sm:block sm:p-0"
-        data-testid="modal-backdrop"
-        onClick={handleBackdropClick}
-      >
-        {/* Background overlay */}
-        <div className="modal-overlay pointer-events-none transition-opacity" aria-hidden="true" />
-
-        {/* Center modal vertically */}
-        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">
-          &#8203;
-        </span>
-
-        {/* Modal panel */}
-        <div
-          ref={modalRef}
-          className={`modal-panel relative z-10 inline-flex transform flex-col overflow-hidden text-left align-bottom transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} max-h-[calc(100dvh-2rem)] w-full sm:max-h-[calc(100dvh-4rem)]`}
+      <div className="modal-overlay pointer-events-none" aria-hidden="true" />
+      {onSubmit ? (
+        <form
+          ref={modalRef as React.Ref<HTMLFormElement>}
+          className={panelClasses}
+          onSubmit={onSubmit}
           data-testid="modal-panel"
-          tabIndex={-1}
         >
-          {/* Header */}
-          <div className="modal-header">
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="text-theme-text-primary text-lg font-medium" id="modal-title">
-                {title}
-              </h3>
-              <button
-                type="button"
-                onClick={onClose}
-                className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
-                aria-label="Close modal"
-              >
-                <X className="h-6 w-6" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-
-          {/* Only the body scrolls, keeping the title, close control, and form
-              actions reachable when a phone keyboard reduces the viewport. */}
-          <div className="modal-content" data-testid="modal-content">
-            {children}
-          </div>
-
-          {/* Footer */}
-          {footer && (
-            <div
-              data-testid="modal-footer"
-              className="modal-footer bg-theme-surface-secondary flex shrink-0 flex-col-reverse gap-2 px-4 sm:flex-row-reverse sm:gap-2 sm:px-6"
-            >
-              {footer}
-            </div>
-          )}
+          {content}
+        </form>
+      ) : (
+        <div
+          ref={modalRef as React.Ref<HTMLDivElement>}
+          className={panelClasses}
+          tabIndex={-1}
+          data-testid="modal-panel"
+        >
+          {content}
         </div>
-      </div>
+      )}
     </div>
   );
 };

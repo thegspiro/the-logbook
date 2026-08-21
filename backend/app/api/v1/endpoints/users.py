@@ -107,6 +107,8 @@ async def list_users(
     for commercial purposes.
 
     **Authentication required**
+
+    **Permissions required:** members.manage, members.view, or users.view
     """
     user_service = UserService(db)
     org_service = OrganizationService(db)
@@ -158,9 +160,9 @@ async def create_member(
     Allows secretaries and admins to create new member accounts with initial roles.
     A temporary password will be generated and sent via email if send_welcome_email is True.
 
-    Requires `users.create` permission.
-
     **Authentication required**
+
+    **Permissions required:** users.create
     """
     from uuid import uuid4
 
@@ -605,12 +607,13 @@ async def list_users_with_roles(
     List all users with their assigned roles
 
     This endpoint is for the Members admin page.
-    Requires `users.view` or `members.manage` permission.
 
     Contact information is redacted the same way `GET /users` redacts it —
     see the note in the implementation.
 
     **Authentication required**
+
+    **Permissions required:** members.manage or users.view
     """
     is_admin = _has_permission(
         "members.manage", _collect_user_permissions(current_user)
@@ -646,6 +649,8 @@ async def get_user_roles(
     Get roles assigned to a specific user
 
     **Authentication required**
+
+    **Permissions required:** members.manage or users.view
     """
     result = await db.execute(
         select(User)
@@ -781,9 +786,10 @@ async def assign_user_roles(
     """
     Assign roles to a user (replaces all existing roles)
 
-    Requires `users.update_roles` or `members.assign_roles` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.assign_positions, members.assign_roles,
+    users.update_positions, or users.update_roles
     """
     # Get user
     result = await db.execute(
@@ -904,9 +910,10 @@ async def add_role_to_user(
     """
     Add a single role to a user (keeps existing roles)
 
-    Requires `users.update_roles` or `members.assign_roles` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.assign_positions, members.assign_roles,
+    users.update_positions, or users.update_roles
     """
     # Get user
     result = await db.execute(
@@ -1006,9 +1013,10 @@ async def remove_role_from_user(
     """
     Remove a role from a user
 
-    Requires `users.update_roles` or `members.assign_roles` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.assign_positions, members.assign_roles,
+    users.update_positions, or users.update_roles
     """
     # Get user
     result = await db.execute(
@@ -1505,9 +1513,9 @@ async def delete_user(
     Delete a member. By default this is a soft-delete (sets deleted_at).
     Pass `hard=true` to permanently delete the member and all associated records.
 
-    Requires `members.manage` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.manage
     """
     if str(user_id) == str(current_user.id):
         raise HTTPException(
@@ -1646,9 +1654,9 @@ async def admin_reset_password(
     Allows administrators to set a new password for any member.
     By default the user is required to change the password on next login.
 
-    Requires `users.create` or `members.manage` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.manage or users.create
     """
     from app.core.breached_password import check_password_not_breached
     from app.core.security import hash_password, validate_password_strength
@@ -1758,9 +1766,9 @@ async def admin_reset_mfa(
     Admins cannot reset their own MFA here (they retain their recovery codes or
     can disable it from their own Security settings).
 
-    Requires `users.create` or `members.manage` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.manage or users.create
     """
     from app.models.user import Session as UserSession
 
@@ -1846,9 +1854,9 @@ async def get_deletion_impact(
     """
     Get the impact of deleting a member (how many records would be affected).
 
-    Requires `members.manage` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.manage
     """
     result = await db.execute(
         select(User)
@@ -2168,9 +2176,9 @@ async def get_member_audit_history(
     Returns a chronological log of changes to the member's record including
     who made each change, what was changed, and when.
 
-    Requires `members.manage` permission.
-
     **Authentication required**
+
+    **Permissions required:** members.manage
     """
     # Verify the target user exists in the same org
     result = await db.execute(

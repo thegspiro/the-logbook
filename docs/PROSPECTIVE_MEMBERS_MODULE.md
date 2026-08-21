@@ -777,9 +777,27 @@ The setting is stored as `auto_advance: boolean` in the stage's `FormStageConfig
 | Scenario                                | Behavior                                                                     |
 | --------------------------------------- | ---------------------------------------------------------------------------- |
 | Auto-advance disabled (default)         | Coordinator must manually advance the prospect                               |
-| Auto-advance enabled, form submitted    | Prospect automatically moves to next stage                                   |
+| Auto-advance enabled, form submitted    | **Only the prospect bound to that submission** moves to the next stage       |
 | Auto-advance enabled, last stage        | Auto-advance does not trigger conversion — coordinator must manually convert |
 | Stage config missing auto_advance field | Treated as `false` (defaults to off)                                         |
+| Several prospects parked on the same auto-advancing stage | Unaffected by another prospect's submission — see below |
+
+> **Fixed 2026-08-17: one submission advanced everybody on the stage.**
+> `FormsService._auto_advance_pipeline_step` selected *every* `ACTIVE` prospect
+> whose `current_step_id` matched the stage and completed the step for all of
+> them. A single applicant returning a form pushed the whole cohort behind them
+> forward, with a history entry on each that named only the form. A submission
+> is evidence about its own submitter and nobody else.
+>
+> The selection now also filters
+> `ProspectiveMember.form_submission_id == submission.id`, and the audit
+> `action_result` carries `form_submission_id` alongside `form_id` so the cause
+> of an advance is legible after the fact.
+>
+> **If you have prospects who were advanced in error before this date**, the
+> tell is a stage-completion history entry reading "Auto-advanced on form
+> submission" against a prospect with no matching submission of their own. Use
+> [stage regression](#stage-regression-2026-03-14) to move them back.
 
 ---
 

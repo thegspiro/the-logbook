@@ -1193,7 +1193,7 @@ counts produced: the package status, beside the applicant it belongs to.
    that line notifies **all of them at once**, not one member at a time. There
    is no per-member request: the planner works on the whole analysis, and the
    button reports back how many were notified.
-8. Alex logs in for the first time, changes their password, and navigates to **My Equipment > Size Preferences**. Alex enters:
+8. Alex logs in for the first time, changes their password, and navigates to **My Issued Gear > Size Preferences**. Alex enters:
    - Coat: L Regular
    - Pants: 34x32
    - Helmet: 7 1/4

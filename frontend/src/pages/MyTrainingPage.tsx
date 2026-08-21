@@ -672,7 +672,7 @@ const MyTrainingPage: React.FC = () => {
                   <button
                     onClick={() => void handleExport('csv')}
                     disabled={exporting}
-                    className="btn-secondary text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
+                    className="btn-secondary btn-auto text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
                   >
                     <Download className="h-4 w-4" />
                     <span>Export CSV</span>
@@ -680,7 +680,7 @@ const MyTrainingPage: React.FC = () => {
                   <button
                     onClick={() => void handleExport('pdf')}
                     disabled={exporting}
-                    className="btn-secondary text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
+                    className="btn-secondary btn-auto text-theme-text-secondary flex items-center space-x-2 text-sm font-medium"
                   >
                     <Download className="h-4 w-4" />
                     <span>Export PDF</span>

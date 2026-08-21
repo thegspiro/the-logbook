@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { BottomNavigation, OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { BottomNavigation, BOTTOM_NAV_STORAGE_KEY, OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -19,6 +19,11 @@ vi.mock('../../hooks/useEnabledModules', () => ({
 }));
 
 vi.mock('../../utils/routePrefetch', () => ({ prefetchRoute: vi.fn() }));
+let mockPermissions = new Set<string>();
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: { checkPermission: (permission: string) => boolean }) => unknown) =>
+    selector({ checkPermission: (permission) => mockPermissions.has(permission) }),
+}));
 
 function renderBar(props: { hidden?: boolean } = {}, initialPath = '/dashboard') {
   return render(
@@ -31,10 +36,12 @@ function renderBar(props: { hidden?: boolean } = {}, initialPath = '/dashboard')
 describe('BottomNavigation', () => {
   beforeEach(() => {
     mockEnabled = null;
+    mockPermissions = new Set();
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
-  it('shows four destinations plus More when all modules are on', () => {
+  it('keeps Home and the three stable member slots when all modules are on', () => {
     renderBar();
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Events')).toBeInTheDocument();
@@ -43,13 +50,43 @@ describe('BottomNavigation', () => {
     expect(screen.getByText('More')).toBeInTheDocument();
   });
 
-  it('promotes the next candidate when a module is disabled', () => {
-    // Scheduling off — Members should move up into the freed slot rather than
-    // leaving a gap or shrinking the bar.
+  it('uses the same-slot fallback without reordering unrelated destinations', () => {
     mockEnabled = new Set(['training', 'members', 'events']);
     renderBar();
+    const labels = screen.getAllByRole('button').map((button) => button.textContent);
     expect(screen.queryByText('Schedule')).not.toBeInTheDocument();
-    expect(screen.getByText('Members')).toBeInTheDocument();
+    expect(labels).toEqual(['Home', 'Events', 'Training', 'Documents', 'More']);
+  });
+
+  it('persists customization and safely falls back when its module is disabled', () => {
+    localStorage.setItem(BOTTOM_NAV_STORAGE_KEY, JSON.stringify(['/members', '/training/my-training', '/store']));
+    mockEnabled = new Set(['training']);
+    const { unmount } = renderBar();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Home',
+      'Members',
+      'Training',
+      'Documents',
+      'More',
+    ]);
+    unmount();
+    expect(JSON.parse(localStorage.getItem(BOTTOM_NAV_STORAGE_KEY) ?? '[]')).toEqual([
+      '/members',
+      '/training/my-training',
+      '/store',
+    ]);
+  });
+
+  it('uses an administrator priority only while its permission is present', () => {
+    mockPermissions.add('settings.manage');
+    const { unmount } = renderBar();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    unmount();
+
+    mockPermissions.clear();
+    renderBar();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
   });
 
   it('never renders more than five slots', () => {
@@ -79,6 +116,19 @@ describe('BottomNavigation', () => {
   it('marks More active when the current route is not a visible tab', () => {
     renderBar({}, '/inventory');
     expect(screen.getByRole('button', { name: 'Open full navigation menu' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps every enabled destination reachable through a tab or More', async () => {
+    const user = userEvent.setup();
+    const listener = vi.fn();
+    window.addEventListener(OPEN_MOBILE_NAV_EVENT, listener);
+    mockEnabled = new Set(['storefront', 'training', 'scheduling']);
+    renderBar({}, '/training/courses');
+
+    expect(screen.getByRole('button', { name: 'Open full navigation menu' })).toHaveAttribute('aria-current', 'page');
+    await user.click(screen.getByText('More'));
+    expect(listener).toHaveBeenCalledOnce();
+    window.removeEventListener(OPEN_MOBILE_NAV_EVENT, listener);
   });
 
   it('asks the drawer to open instead of navigating when More is tapped', async () => {

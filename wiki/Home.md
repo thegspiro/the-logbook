@@ -76,7 +76,8 @@ docker compose up -d
 - **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
 - **[Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)** - Digital member identification with QR code, barcode, and print support
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
-- **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
+- **[Inventory (Gear & Uniforms)](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
+- **[Medical Supplies](Module-Medical-Supplies)** - EMS consumables as dated lots, domain-scoped permissions, EMS Supply Officer role
 - **[Compliance](Module-Compliance)** - Compliance tracking
 - **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_
 

@@ -174,6 +174,64 @@ describe('ItemFormModal', () => {
     expect(screen.queryByLabelText('Vendor name (not on file)')).not.toBeInTheDocument();
   });
 
+  // The vendor fields were the only two carrying this fix; everything else in
+  // the same payload still omitted a cleared box, so the old value survived.
+  it('sends an explicit null for every field an edit clears', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([]);
+    render(
+      <ItemFormModal
+        {...baseProps}
+        isOpen
+        editItem={makeItem({ serial_number: 'SN-1', description: 'old text', notes: 'old notes' })}
+      />
+    );
+
+    // Fields in this modal have no associated label, so they are found by the
+    // value the edit seeded them with.
+    await user.clear(screen.getByDisplayValue('SN-1'));
+    await user.clear(screen.getByDisplayValue('old text'));
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({
+      serial_number: null,
+      description: null,
+    });
+  });
+
+  // `|| undefined` stays correct on create — a blank must be omitted so `""`
+  // never reaches a Pydantic validator.
+  it('omits a blank field on create rather than sending null', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([]);
+    render(<ItemFormModal {...baseProps} isOpen />);
+
+    await user.type(nameInput(), 'Helmet');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+    const payload = mockCreateItem.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.serial_number).toBeUndefined();
+    expect(payload.description).toBeUndefined();
+  });
+
+  // Three fields are deliberately left out of the null treatment because the
+  // backend raises on them, not because the column rejects a null.
+  it('leaves condition, quantity and tracking type omitted on an edit', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([]);
+    render(<ItemFormModal {...baseProps} isOpen editItem={makeItem()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateItem.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.condition).not.toBeNull();
+    expect(payload.quantity).not.toBeNull();
+    expect(payload.tracking_type).not.toBeNull();
+  });
+
   it('sends an explicit null when an edit unlinks the vendor', async () => {
     const user = userEvent.setup();
     mockGetVendors.mockResolvedValue([makeVendor()]);

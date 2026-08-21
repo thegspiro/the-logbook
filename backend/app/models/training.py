@@ -4395,7 +4395,8 @@ class ShiftEquipmentCheckItem(Base):
         ForeignKey("check_template_items.id", ondelete="SET NULL"),
         nullable=True,
     )
-    compartment_name = Column(String(200), nullable=False)
+    # Full nested storage paths may exceed the per-compartment name limit.
+    compartment_name = Column(Text, nullable=False)
     item_name = Column(String(200), nullable=False)
     check_type = Column(String(30), nullable=True)
     status = Column(String(30), nullable=False)  # pass, fail, not_checked

@@ -283,9 +283,10 @@ const StorefrontPage: React.FC = () => {
               {storefront.tagline && <p className="text-theme-text-muted text-sm">{storefront.tagline}</p>}
             </div>
           </div>
-          <Link to="/store/orders" className="btn-secondary btn-md shrink-0">
+          <Link to="/store/orders" className="btn-secondary btn-md btn-auto shrink-0">
             <ShoppingBag className="h-4 w-4" />
             <span className="hidden sm:inline">My orders</span>
+            <span className="sm:hidden">Orders</span>
           </Link>
         </div>
 
