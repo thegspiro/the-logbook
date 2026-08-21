@@ -771,18 +771,22 @@ async def list_prospect_source_events(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
-    List the events that applicants are linked to, newest first, with counts.
+    List the events recorded as applicant sources, newest first, with counts.
 
     Backs the "came from" filter on the pipeline board. Only events with at
-    least one linked applicant appear — offering the whole calendar would bury
+    least one sourced applicant appear — offering the whole calendar would bury
     the two open houses that matter under a year of business meetings.
 
     **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    rows = await service.list_source_events(current_user.organization_id)
+    rows = await service.list_source_events(
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
+    )
     return [ProspectSourceEventResponse(**row) for row in rows]
 
 

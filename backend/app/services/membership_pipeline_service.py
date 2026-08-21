@@ -640,8 +640,8 @@ class MembershipPipelineService:
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters.
 
-        ``event_id`` narrows to prospects linked to that event — the applicants
-        an open house actually produced. Callers must have already confirmed
+        ``event_id`` narrows to prospects whose creation metadata names that
+        event as their source. Callers must have already confirmed
         the event belongs to *organization_id*; the prospect scope below stops
         a foreign id leaking rows, but it would read as "no applicants" rather
         than as the wrong-org id it is.
@@ -662,11 +662,8 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.status == status)
         if event_id:
             query = query.where(
-                ProspectiveMember.id.in_(
-                    select(ProspectEventLink.prospect_id).where(
-                        ProspectEventLink.event_id == event_id
-                    )
-                )
+                ProspectiveMember.metadata_["source_event_id"].as_string()
+                == str(event_id)
             )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:
@@ -5027,18 +5024,19 @@ class MembershipPipelineService:
         self,
         organization_id: str,
         limit: int = MAX_SOURCE_EVENTS,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Events that produced applicants, newest first, with their counts.
 
-        This backs the "came from" filter, so it lists only events something
-        is actually linked to. Offering every event on the calendar would bury
+        This backs the "came from" filter, so it lists only events explicitly
+        recorded in prospect creation metadata. General event links represent
+        invitations or future meetings, not provenance. Offering every event
+        on the calendar would bury
         the two open houses that matter among a year of business meetings, and
         most of the choices would return nothing.
 
-        The join is org-scoped through :class:`Event`; ``prospect_event_links``
-        carries no ``organization_id`` of its own, so filtering on the link
-        table alone would count another department's links against this
-        department's events.
+        Both sides of the join are organization-scoped. Prospect exclusions
+        suppress confidential records from both counts and returned events.
         """
         query = (
             select(
@@ -5046,14 +5044,11 @@ class MembershipPipelineService:
                 Event.title,
                 Event.event_type,
                 Event.start_datetime,
-                func.count(func.distinct(ProspectEventLink.prospect_id)).label(
-                    "prospect_count"
-                ),
+                func.count(func.distinct(ProspectiveMember.id)).label("prospect_count"),
             )
-            .join(ProspectEventLink, ProspectEventLink.event_id == Event.id)
             .join(
                 ProspectiveMember,
-                ProspectiveMember.id == ProspectEventLink.prospect_id,
+                ProspectiveMember.metadata_["source_event_id"].as_string() == Event.id,
             )
             .where(
                 Event.organization_id == organization_id,
@@ -5063,6 +5058,7 @@ class MembershipPipelineService:
             .order_by(Event.start_datetime.desc())
             .limit(limit)
         )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         rows = (await self.db.execute(query)).all()
         return [
             {
