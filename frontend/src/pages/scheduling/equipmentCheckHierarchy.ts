@@ -5,6 +5,7 @@ export interface HierarchyCompartment {
   name: string;
   containerType: string;
   parentCompartmentId: string;
+  isHeader?: boolean;
 }
 
 export function descendantCompartmentIds(
@@ -49,7 +50,7 @@ export function storedInsideOptions(
   return compartments
     .filter(
       (candidate): candidate is HierarchyCompartment & { id: string } =>
-        Boolean(candidate.id) && !unavailable.has(candidate.id as string)
+        Boolean(candidate.id) && !candidate.isHeader && !unavailable.has(candidate.id as string)
     )
     .map((candidate) => ({
       id: candidate.id,
