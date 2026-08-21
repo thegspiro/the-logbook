@@ -175,6 +175,25 @@ SETTINGS_MANAGE_CONTACT_VISIBILITY = Permission(
     PermissionCategory.SETTINGS,
 )
 
+# Governance -> Legal Documents. The public /privacy and /terms pages are the
+# department's own publication, so drafting is deliberately separated from
+# publishing: legal.propose lets the secretary and department leaders read the
+# live wording and write alternatives that fit local rules, while legal.publish
+# is what actually changes what the public sees. Backfilled onto existing
+# positions from settings.view / settings.manage respectively (migration
+# 06adc68a8b84), which is the split that already distinguishes leadership from
+# the general membership.
+LEGAL_PROPOSE = Permission(
+    "legal.propose",
+    "View legal documents and propose revisions",
+    PermissionCategory.SETTINGS,
+)
+LEGAL_PUBLISH = Permission(
+    "legal.publish",
+    "Publish legal document revisions to the public pages",
+    PermissionCategory.SETTINGS,
+)
+
 # ============================================
 # Module-Specific Permissions
 # ============================================
@@ -570,6 +589,9 @@ ALL_PERMISSIONS: list[Permission] = [
     SETTINGS_MANAGE,
     SECURITY_MANAGE,
     SETTINGS_MANAGE_CONTACT_VISIBILITY,
+    # Legal documents (governance)
+    LEGAL_PROPOSE,
+    LEGAL_PUBLISH,
     # Modules
     TRAINING_VIEW,
     TRAINING_MANAGE,
@@ -791,6 +813,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     POSITIONS_VIEW.name,
     ORGANIZATION_VIEW.name,
     SETTINGS_VIEW.name,
+    LEGAL_PROPOSE.name,
     TRAINING_VIEW.name,
     TRAINING_VIEW_ALL.name,
     COMPLIANCE_VIEW.name,
@@ -840,6 +863,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             ORGANIZATION_UPDATE_SETTINGS.name,
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE.name,
+            LEGAL_PUBLISH.name,
             SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_MANAGE.name,
@@ -1210,8 +1234,10 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             ORGANIZATION_EDIT.name,
             ORGANIZATION_UPDATE_SETTINGS.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE.name,
+            LEGAL_PUBLISH.name,
             SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_VIEW.name,
@@ -1294,6 +1320,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             TRAINING_VIEW.name,
             COMPLIANCE_VIEW.name,
             # Elected officers set the department's member requirements
@@ -1339,6 +1366,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
             FINANCE_VIEW.name,
@@ -1375,6 +1403,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
@@ -1415,6 +1444,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             MEETINGS_VIEW.name,
             ELECTIONS_VIEW.name,
             FUNDRAISING_VIEW.name,
@@ -1440,6 +1470,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             INVENTORY_VIEW.name,
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
@@ -1603,6 +1634,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             COMPLIANCE_VIEW.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
@@ -1715,6 +1747,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
+            LEGAL_PROPOSE.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
             EVENTS_VIEW.name,

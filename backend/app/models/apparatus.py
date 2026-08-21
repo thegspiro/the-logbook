@@ -2347,6 +2347,36 @@ class CheckTemplateItem(Base):
     )
 
 
+class EquipmentCheckBulkRequest(Base):
+    """Durable idempotency ledger for atomic template-item batches."""
+
+    __tablename__ = "equipment_check_bulk_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    idempotency_key = Column(String(200), nullable=False)
+    payload_hash = Column(String(64), nullable=False)
+    item_ids = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            "uq_equipment_check_bulk_request",
+            "organization_id",
+            "compartment_id",
+            "idempotency_key",
+            unique=True,
+        ),
+    )
+
+
 class TemplateChangeLog(Base):
     """
     Granular audit trail for equipment check template edits.
