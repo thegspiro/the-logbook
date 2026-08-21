@@ -694,7 +694,12 @@ class FacilitiesService:
                 FacilityMaintenance.is_completed.is_(False),
             )
             .order_by(
-                FacilityMaintenance.due_date.asc().nullslast(),
+                # MySQL/MariaDB do not support the SQL ``NULLS LAST``
+                # modifier emitted by SQLAlchemy's ``nullslast()``.  Sort on
+                # the null predicate first instead, which preserves the
+                # intended ordering across all supported database engines.
+                FacilityMaintenance.due_date.is_(None),
+                FacilityMaintenance.due_date.asc(),
                 FacilityMaintenance.updated_at.desc(),
             )
             .limit(preview_limit)
@@ -723,7 +728,8 @@ class FacilitiesService:
                 FacilityMaintenance.is_completed.is_(True),
             )
             .order_by(
-                FacilityMaintenance.completed_date.desc().nullslast(),
+                FacilityMaintenance.completed_date.is_(None),
+                FacilityMaintenance.completed_date.desc(),
                 FacilityMaintenance.updated_at.desc(),
             )
             .limit(preview_limit)

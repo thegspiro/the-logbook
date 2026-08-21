@@ -11,7 +11,7 @@ import { gotoDashboard, signIn } from './helpers';
  *
  * This is a capture utility, not a test: it asserts nothing and is excluded
  * from the normal E2E run by the `@screenshots` tag. Regenerate with
- *   npx playwright test --grep @screenshots
+ *   npm run generate:screenshots
  * and commit the resulting PNGs. It drives the real UI against the same mocked
  * API the E2E suite uses, so the images show the actual application rendering
  * the project's existing demo fixtures rather than a mockup.
