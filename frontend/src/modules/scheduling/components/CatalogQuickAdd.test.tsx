@@ -81,6 +81,7 @@ describe('CatalogQuickAdd', () => {
 
   it('adds what was typed when the crew presses Enter', async () => {
     const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
     renderWith();
 
     await typeName(user, 'Check tire pressure');

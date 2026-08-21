@@ -27,9 +27,10 @@ export const UpdateNotification: React.FC = () => {
 
          It stacks ABOVE the bottom navigation rather than at bottom-0, which
          put it under the bar: both are z-50 and the bar renders later, so the
-         bar won and swallowed "Reload now". Include the safe-area inset as well
-         because the navigation extends into it on notched devices. */
-      className="relative z-50 flex items-center justify-center gap-3 bg-blue-600 px-4 py-2 text-sm text-white max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--bottom-nav-height,0px)+env(safe-area-inset-bottom))]"
+         bar won and swallowed "Reload now". The safe-area inset then belongs to
+         the bar underneath, not to the banner — the banner only carries it on
+         the public pages where no bar is mounted and the offset resolves to 0. */
+      className="relative z-50 flex items-center justify-center gap-3 bg-blue-600 px-4 py-2 text-sm text-white max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--bottom-nav-height,0px)] max-md:pb-[calc(0.5rem+max(0px,env(safe-area-inset-bottom)-var(--bottom-nav-height,0px)))]"
     >
       <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span>A new version of The Logbook is available.</span>
