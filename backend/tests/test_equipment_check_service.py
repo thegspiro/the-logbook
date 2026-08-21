@@ -501,22 +501,100 @@ class TestItemFkValidation:
 
 
 class TestCompartmentParentValidation:
-    """EC2-3: a reassigned parent_compartment_id must be in-org."""
+    """A compartment hierarchy stays within its template and remains acyclic."""
 
-    async def test_update_compartment_rejects_foreign_parent(self, service, mock_db):
-        # 1st _get_compartment: the compartment itself (in-org). 2nd: the foreign
-        # parent (None) -> rejected.
+    @staticmethod
+    def compartment(compartment_id, parent_id=None, template_id="tmpl-1"):
+        return SimpleNamespace(
+            id=compartment_id,
+            parent_compartment_id=parent_id,
+            template_id=template_id,
+        )
+
+    async def test_rejects_self_parenting(self, service, mock_db):
+        compartment = self.compartment("comp-1")
+        with patch.object(
+            service, "_get_compartment", new_callable=AsyncMock, return_value=compartment
+        ):
+            with pytest.raises(ValueError, match="cannot be stored inside itself"):
+                await service.update_compartment(
+                    "comp-1", "org-1", {"parent_compartment_id": "comp-1"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_rejects_two_node_cycle(self, service, mock_db):
+        compartment = self.compartment("a")
+        child = self.compartment("b", "a")
         with patch.object(
             service,
             "_get_compartment",
             new_callable=AsyncMock,
-            side_effect=[MagicMock(), None],
+            side_effect=[compartment, child],
         ):
-            with pytest.raises(ValueError, match="Invalid parent compartment"):
+            with pytest.raises(ValueError, match="cannot be stored inside itself"):
                 await service.update_compartment(
-                    "comp-1", "org-1", {"parent_compartment_id": "foreign-comp"}
+                    "a", "org-1", {"parent_compartment_id": "b"}
                 )
         mock_db.commit.assert_not_awaited()
+
+    async def test_rejects_three_node_cycle(self, service, mock_db):
+        compartment = self.compartment("a")
+        grandchild = self.compartment("c", "b")
+        child = self.compartment("b", "a")
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            side_effect=[compartment, grandchild, child],
+        ):
+            with pytest.raises(ValueError, match="cannot be stored inside itself"):
+                await service.update_compartment(
+                    "a", "org-1", {"parent_compartment_id": "c"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_rejects_parent_from_another_template_in_same_org(
+        self, service, mock_db
+    ):
+        template = SimpleNamespace(id="tmpl-1")
+        foreign_parent = self.compartment("other-parent", template_id="tmpl-2")
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=foreign_parent,
+            ),
+        ):
+            with pytest.raises(ValueError, match="same template"):
+                await service.add_compartment(
+                    "tmpl-1",
+                    "org-1",
+                    {"name": "Child", "parent_compartment_id": "other-parent"},
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_accepts_valid_multi_level_hierarchy(self, service, mock_db):
+        compartment = self.compartment("leaf")
+        parent = self.compartment("middle", "root")
+        root = self.compartment("root")
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = compartment
+        mock_db.execute.return_value = result
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            side_effect=[compartment, parent, root],
+        ):
+            await service.update_compartment(
+                "leaf", "org-1", {"parent_compartment_id": "middle"}
+            )
+        assert compartment.parent_compartment_id == "middle"
+        mock_db.commit.assert_awaited_once()
 
 
 class TestSubmitCheckResumeOverride:

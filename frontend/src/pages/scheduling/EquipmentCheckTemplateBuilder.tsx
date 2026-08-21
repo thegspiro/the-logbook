@@ -67,6 +67,7 @@ import type { CatalogAddPayload } from '@/modules/scheduling/components/CatalogQ
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
+import { storedInsideOptions } from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -2869,13 +2870,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
                 >
                   <option value="">Nothing (top-level)</option>
-                  {compartments
-                    .filter((other, cIdx) => cIdx !== idx && Boolean(other.id))
-                    .map((other) => (
-                      <option key={other.id} value={other.id ?? ''}>
-                        {containerTypeLabel(other.containerType)}: {other.name || 'Untitled'}
-                      </option>
-                    ))}
+                  {storedInsideOptions(compartments, comp).map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="sm:col-span-2">
