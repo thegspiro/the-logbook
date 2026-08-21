@@ -62,13 +62,14 @@ describe('CatalogQuickAdd', () => {
   };
 
   const typeName = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
-    await user.type(screen.getByRole('textbox'), name);
+    await user.type(screen.getByRole('combobox'), name);
   };
 
   const renderWith = (canCreate = true) => render(<Harness canCreate={canCreate} />);
 
   it('adds what was typed when the crew presses Enter', async () => {
     const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
     renderWith();
 
     await typeName(user, 'Check tire pressure');
@@ -78,6 +79,19 @@ describe('CatalogQuickAdd', () => {
     // has to stay a first-class outcome.
     await waitFor(() => {
       expect(onAdd).toHaveBeenCalledWith({ name: 'Check tire pressure' });
+    });
+  });
+
+  it('uses Enter to select the highlighted inventory match', async () => {
+    const user = userEvent.setup();
+    renderWith();
+
+    await typeName(user, 'gauze');
+    await screen.findByText('Gauze Pads, 4x4 Sterile');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ inventoryItemId: 'inv-1' }));
     });
   });
 
