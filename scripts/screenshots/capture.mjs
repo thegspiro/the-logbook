@@ -96,6 +96,9 @@ const args = process.argv.slice(2);
 const onlyIndex = args.indexOf("--only");
 // Comma-separated prefixes, so a run can target exactly the shots that
 // failed ("--only 03-09,03-31,03-58") instead of a whole guide per invocation.
+if (onlyIndex >= 0 && !args[onlyIndex + 1]) {
+  throw new Error("--only requires at least one id prefix");
+}
 const only =
   onlyIndex >= 0 ? args[onlyIndex + 1].split(",").filter(Boolean) : null;
 const headed = args.includes("--headed");

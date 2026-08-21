@@ -59,6 +59,26 @@ describe('PageTransition accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  it('clears heading-derived titles when leaving the protected layout', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <PageTransition>
+          <h1>Private Member Name</h1>
+        </PageTransition>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(document.title).toBe('Private Member Name | The Logbook'));
+    unmount();
+
+    expect(document.title).toBe('The Logbook');
+  });
+
   // The announcement used to be captured on the first frame and never looked
   // again, so any page opening on a spinner or skeleton announced "Page
   // loaded" forever, whatever heading its data eventually brought.

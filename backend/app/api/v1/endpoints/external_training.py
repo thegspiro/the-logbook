@@ -744,7 +744,7 @@ async def update_category_mapping(
         )
 
     # Update fields
-    if mapping_update.internal_category_id is not None:
+    if "internal_category_id" in mapping_update.model_fields_set:
         internal_category_id = (
             str(mapping_update.internal_category_id)
             if mapping_update.internal_category_id
@@ -764,7 +764,7 @@ async def update_category_mapping(
                 detail="Internal category not found",
             )
         mapping.internal_category_id = internal_category_id
-        mapping.is_mapped = mapping_update.internal_category_id is not None
+        mapping.is_mapped = internal_category_id is not None
         mapping.auto_mapped = False
         mapping.mapped_by = current_user.id
 

@@ -429,6 +429,11 @@ export interface ShiftCheckSummary {
   failedItems: number;
 }
 
+/** Canonical client-side interpretation of the backend completion contract. */
+export function isShiftCheckCompleted(summary: ShiftCheckSummary): boolean {
+  return summary.isCompleted && summary.overallStatus !== 'incomplete';
+}
+
 export interface CheckItemHistory {
   checkId: string;
   shiftId: string;

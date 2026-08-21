@@ -36,6 +36,16 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
   // on children) is told apart from an actual navigation.
   const lastPath = useRef<string | null>(null);
 
+  // Public routes render outside this component. Clear any heading-derived
+  // title when the protected application layout unmounts so record details do
+  // not remain visible in the browser tab after logout or session expiry.
+  useEffect(
+    () => () => {
+      document.title = APPLICATION_NAME;
+    },
+    []
+  );
+
   useEffect(() => {
     setTransitioning(true);
     setDisplayedChildren(children);

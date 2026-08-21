@@ -64,6 +64,27 @@ describe('EventTemplateForm reminder audience', () => {
     );
   });
 
+  it('defaults mandatory templates after reminders are enabled first', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/template name/i), 'Mandatory meeting');
+    await user.click(screen.getByRole('button', { name: /reminders/i }));
+    await user.click(screen.getByLabelText(/send reminders/i));
+    await user.click(screen.getByRole('button', { name: /rsvp & attendance/i }));
+    await user.click(screen.getByLabelText(/mandatory attendance/i));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        is_mandatory: true,
+        send_reminders: true,
+        reminder_target: 'all',
+      })
+    );
+  });
+
   it('never submits the none audience when reminders are re-enabled on edit', async () => {
     // A template saved with reminders off persists reminder_target 'none'.
     // Re-checking "Send reminders" must submit a real audience, not 'none' —

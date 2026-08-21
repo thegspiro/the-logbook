@@ -1007,7 +1007,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const items: CheckItemResultSubmit[] = [];
       for (const compartment of compartments) {
         for (const rawItem of compartment.items) {
-          if (rawItem.checkType === 'header') continue;
+          if (rawItem.checkType === 'header' || rawItem.checkType === 'text') continue;
           // Reflect any in-check lot swap so the recorded snapshot carries the
           // fresh unit's lot/expiration rather than the pre-swap values.
           const item = applyOverride(rawItem);
