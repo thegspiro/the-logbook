@@ -622,6 +622,7 @@ export const BallotVotingPage: React.FC = () => {
         >
           <DialogPanel
             onClose={() => setShowConfirmation(false)}
+            closeOnEscape={!submitting}
             className="max-h-[90dvh] w-full max-w-lg overflow-y-auto"
           >
             <div className="border-theme-surface-border bg-theme-surface-secondary border-b px-6 py-4">

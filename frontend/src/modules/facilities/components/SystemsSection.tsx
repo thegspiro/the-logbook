@@ -16,10 +16,12 @@ import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
-  canManage: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
-export default function SystemsSection({ facilityId, canManage }: Props) {
+export default function SystemsSection({ facilityId, canCreate, canEdit, canDelete }: Props) {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [systems, setSystems] = useState<FacilitySystem[]>([]);
@@ -156,7 +158,7 @@ export default function SystemsSection({ facilityId, canManage }: Props) {
         <h2 className="text-theme-text-primary text-sm font-semibold">
           Building Systems {!isLoading && `(${systems.length})`}
         </h2>
-        {canManage && (
+        {canCreate && (
           <button
             onClick={() => {
               resetForm();
@@ -170,7 +172,7 @@ export default function SystemsSection({ facilityId, canManage }: Props) {
       </div>
 
       <div className="p-4">
-        {canManage && showForm && (
+        {showForm && (editingSystem ? canEdit : canCreate) && (
           <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
             <h3 className="text-theme-text-primary text-sm font-medium">
               {editingSystem ? 'Edit System' : 'Add System'}
@@ -337,24 +339,28 @@ export default function SystemsSection({ facilityId, canManage }: Props) {
                     </div>
                   </div>
                 </div>
-                {canManage && (
+                {(canEdit || canDelete) && (
                   <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    <button
-                      onClick={() => openEdit(sys)}
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                      aria-label={`Edit ${sys.name}`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleDelete(sys);
-                      }}
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                      aria-label={`Delete ${sys.name}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => openEdit(sys)}
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                        aria-label={`Edit ${sys.name}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          void handleDelete(sys);
+                        }}
+                        className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                        aria-label={`Delete ${sys.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

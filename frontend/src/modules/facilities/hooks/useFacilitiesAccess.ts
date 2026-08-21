@@ -5,10 +5,11 @@ export function useFacilitiesAccess() {
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canManage = checkPermission('facilities.manage');
   const canEdit = canManage || checkPermission('facilities.edit');
+  const canCreate = canEdit || checkPermission('facilities.create');
 
   return {
     canManage,
-    canCreate: canManage || checkPermission('facilities.create'),
+    canCreate,
     // Backend create/update gates on sub-resources (rooms, systems, utility
     // accounts/readings, access keys, shutoffs, capital projects, insurance,
     // occupants) accept facilities.edit alongside facilities.manage; deletes

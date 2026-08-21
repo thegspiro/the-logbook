@@ -52,7 +52,9 @@ describe('useOverlaySurface', () => {
     expect(observer.result.current).toBe(false);
     // useDialog owns the scroll lock; releasing it is that hook's contract and
     // must not have been disturbed by joining the overlay stack.
-    expect(document.body.style.overflow).toBe('unset');
+    // useDialog restores the exact inline value that existed before it opened,
+    // rather than replacing it with the semantically different `unset` token.
+    expect(document.body.style.overflow).toBe('');
   });
 
   it('does not strand useDialog’s scroll lock when a drawer is also open', () => {
@@ -65,7 +67,7 @@ describe('useOverlaySurface', () => {
     expect(document.body.style.overflow).toBe('hidden');
 
     dialog.unmount();
-    expect(document.body.style.overflow).toBe('unset');
+    expect(document.body.style.overflow).toBe('');
 
     drawer.unmount();
   });

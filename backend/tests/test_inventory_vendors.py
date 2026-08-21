@@ -18,6 +18,7 @@ import pytest
 
 from app.api.v1.endpoints.inventory import _vendor_response
 from app.models.inventory import InventoryVendor, InventoryVendorContact
+from app.schemas.inventory import InventoryVendorCreate, InventoryVendorUpdate
 from app.services.inventory_service import InventoryService
 
 
@@ -100,6 +101,28 @@ def _contact(vendor_id, org_id, **kwargs):
     }
     defaults.update(kwargs)
     return InventoryVendorContact(**defaults)
+
+
+class TestVendorWebsiteValidation:
+    @pytest.mark.parametrize("schema", [InventoryVendorCreate, InventoryVendorUpdate])
+    @pytest.mark.parametrize(
+        "website",
+        [
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "/relative",
+        ],
+    )
+    def test_rejects_non_http_website_links(self, schema, website):
+        with pytest.raises(ValueError, match="absolute HTTP or HTTPS URL"):
+            schema(name="Galls", website=website)
+
+    @pytest.mark.parametrize("schema", [InventoryVendorCreate, InventoryVendorUpdate])
+    @pytest.mark.parametrize(
+        "website", ["https://example.com/path", "http://localhost:8080"]
+    )
+    def test_accepts_absolute_http_website_links(self, schema, website):
+        assert schema(name="Galls", website=website).website == website
 
 
 class TestVendorNameUniqueness:

@@ -33,6 +33,10 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+vi.mock('../components/event-detail/TrainingSessionLinkageCard', () => ({
+  default: () => null,
+}));
+
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -866,6 +870,20 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByText('Dress Code')).toBeInTheDocument();
       expect(screen.getByText('Class B uniform')).toBeInTheDocument();
+    });
+
+    it('shows training details when only training fields are present', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...withCustomFields({ course_name: 'Fire Behavior', credit_hours: 4, instructor: 'Alex Rivera' }),
+        event_type: 'training',
+      } as unknown as Event);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Training Session Details')).toBeInTheDocument();
+      expect(screen.getByText('Fire Behavior')).toBeInTheDocument();
+      expect(screen.getByText('4 hours')).toBeInTheDocument();
+      expect(screen.getByText('Alex Rivera')).toBeInTheDocument();
     });
 
     it.each([

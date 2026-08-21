@@ -134,6 +134,40 @@ npm run build
 # Serve with any static file server or use nginx
 ```
 
+### Progressive Web App validation
+
+The production build generates the web app manifest and service worker. It
+precaches the application shell for offline launches, caches visited frontend
+chunks, and deliberately keeps authenticated API responses out of browser
+caches. Install icons, iOS launch images, screenshots, and an in-app install
+prompt are also included.
+
+Run the production PWA contract check after changing the manifest, service
+worker caching rules, or install assets:
+
+```bash
+npm run validate:pwa
+```
+
+The check builds the production app and fails when the manifest link, required
+install metadata and icons, offline navigation shell, push worker, or
+network-only rules are missing. Service workers require a secure context in
+deployment (HTTPS, with `localhost` permitted for local testing).
+
+For a browser-level check, `npm run test:pwa` builds and serves the production
+bundle, confirms that Chromium installs and controls the page with the generated
+service worker, activates an updated worker, verifies API requests are absent
+from Cache Storage, and opens the login shell after taking the browser fully
+offline. The ordinary Playwright suite cannot provide this coverage because it
+runs against Vite's development server, where service-worker registration is
+disabled.
+
+All generated frontend chunks are precached so a cold offline launch never
+fails on a transitive JavaScript import. Authenticated API responses are never
+cached, so screens that require server data still need connectivity. Features
+that queue offline mutations, such as supported field-report drafts, own their
+persistence and synchronization behavior separately from the service worker.
+
 ## Docker
 
 ```bash

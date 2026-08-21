@@ -257,11 +257,22 @@ export interface BasicApparatusUpdate {
 export interface SwapRequestFilters {
   status?: RequestStatus;
   user_id?: string;
+  skip?: number;
+  limit?: number;
 }
 
 export interface TimeOffFilters {
   status?: RequestStatus;
   user_id?: string;
+  skip?: number;
+  limit?: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  skip: number;
+  limit: number;
 }
 
 export interface ReportFilters {
