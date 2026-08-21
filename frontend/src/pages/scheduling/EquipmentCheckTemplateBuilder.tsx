@@ -60,6 +60,7 @@ import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
 import {
+  canMoveCompartment,
   moveCompartment as moveCompartmentInTree,
   orderedCompartmentIds,
   orderedCompartments as buildOrderedCompartments,
@@ -2588,15 +2589,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'up')}
-                disabled={
-                  !comp.id ||
-                  !compartments.some(
-                    (candidate) =>
-                      candidate.parentCompartmentId === comp.parentCompartmentId &&
-                      candidate.id &&
-                      compartments.indexOf(candidate) < idx
-                  )
-                }
+                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section up"
               >
@@ -2605,15 +2598,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'down')}
-                disabled={
-                  !comp.id ||
-                  !compartments.some(
-                    (candidate) =>
-                      candidate.parentCompartmentId === comp.parentCompartmentId &&
-                      candidate.id &&
-                      compartments.indexOf(candidate) > idx
-                  )
-                }
+                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section down"
               >
@@ -2725,15 +2710,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'up')}
-              disabled={
-                !comp.id ||
-                !compartments.some(
-                  (candidate) =>
-                    candidate.parentCompartmentId === comp.parentCompartmentId &&
-                    candidate.id &&
-                    compartments.indexOf(candidate) < idx
-                )
-              }
+              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} up`}
             >
@@ -2742,15 +2719,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'down')}
-              disabled={
-                !comp.id ||
-                !compartments.some(
-                  (candidate) =>
-                    candidate.parentCompartmentId === comp.parentCompartmentId &&
-                    candidate.id &&
-                    compartments.indexOf(candidate) > idx
-                )
-              }
+              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} down`}
             >

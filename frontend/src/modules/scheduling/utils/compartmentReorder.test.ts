@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalCompartmentOrder,
   moveCompartment,
+  canMoveCompartment,
   orderedCompartmentIds,
   orderedCompartments,
   reorderCompartment,
@@ -88,5 +89,34 @@ describe('compartment tree ordering', () => {
     expect(orderedCompartmentIds([...nodes, { parentCompartmentId: '' }])).toEqual(
       ids(canonicalCompartmentOrder(nodes))
     );
+  });
+
+  it('skips unsaved siblings when choosing keyboard movement targets', () => {
+    const withDraft = [{ id: 'root-a', parentCompartmentId: '' }, { parentCompartmentId: '' }, ...nodes.slice(1)];
+    expect(canMoveCompartment(withDraft, 'root-a', 'down')).toBe(true);
+    expect(
+      orderedCompartmentIds(moveCompartment(withDraft, 'root-a', 'down')).filter((id) =>
+        ['root-a', 'root-header', 'root-b'].includes(id)
+      )
+    ).toEqual(['root-header', 'root-a', 'root-b']);
+  });
+
+  it('treats orphaned records as members of the visible root sibling group', () => {
+    const orphaned = nodes.map((node) =>
+      node.id === 'child-a' ? { ...node, parentCompartmentId: 'deleted-parent' } : node
+    );
+    const reordered = reorderCompartment(orphaned, 'child-a', 'root-a');
+    const reorderedIds = orderedCompartmentIds(reordered);
+    expect(reorderedIds.indexOf('child-a')).toBeLessThan(reorderedIds.indexOf('root-a'));
+    expect(reordered.find((node) => node.id === 'child-a')?.parentCompartmentId).toBe('deleted-parent');
+  });
+
+  it('renders cyclic records as fallback roots and refuses recursive reparenting', () => {
+    const cyclic: Node[] = [
+      { id: 'a', parentCompartmentId: 'b' },
+      { id: 'b', parentCompartmentId: 'a' },
+    ];
+    expect(orderedCompartments(cyclic).map(({ depth }) => depth)).toEqual([0, 0]);
+    expect(reparentCompartment(cyclic, 'a', '')).toEqual(cyclic);
   });
 });

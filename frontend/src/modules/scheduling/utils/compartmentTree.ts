@@ -111,6 +111,12 @@ export interface OrderedCompartment<T> {
   depth: number;
 }
 
+/** The parent that determines the node's visible sibling group. */
+function visibleParentId(nodes: readonly CompartmentNode[], node: CompartmentNode): string {
+  if (!node.parentCompartmentId) return '';
+  return nodes.some((candidate) => candidate.id === node.parentCompartmentId) ? node.parentCompartmentId : '';
+}
+
 export function canonicalCompartmentOrder<T extends CompartmentNode>(nodes: readonly T[]): T[] {
   const byParent = new Map<string, T[]>();
   const ids = new Set(nodes.flatMap((node) => (node.id ? [node.id] : [])));
@@ -138,12 +144,15 @@ export function orderedCompartments<T extends CompartmentNode>(nodes: readonly T
   return canonicalCompartmentOrder(nodes).map((node) => {
     let depth = 0;
     let parent = byId.get(node.parentCompartmentId);
-    const seen = new Set<T>();
+    const seen = new Set<T>([node]);
     while (parent && !seen.has(parent)) {
       seen.add(parent);
       depth += 1;
       parent = byId.get(parent.parentCompartmentId);
     }
+    // Cyclic records are retained by canonicalCompartmentOrder as fallback
+    // roots. Render them as roots too rather than inventing a partial depth.
+    if (parent) depth = 0;
     return { node, depth };
   });
 }
@@ -156,15 +165,17 @@ export function reorderCompartment<T extends CompartmentNode>(
 ): T[] {
   const active = nodes.find((node) => node.id === activeId);
   const over = nodes.find((node) => node.id === overId);
-  if (!active || !over || active.parentCompartmentId !== over.parentCompartmentId) return [...nodes];
-  const siblings = nodes.filter((node) => node.parentCompartmentId === active.parentCompartmentId);
+  if (!active || !over) return [...nodes];
+  const parentId = visibleParentId(nodes, active);
+  if (parentId !== visibleParentId(nodes, over)) return [...nodes];
+  const siblings = nodes.filter((node) => visibleParentId(nodes, node) === parentId);
   const from = siblings.indexOf(active);
   const to = siblings.indexOf(over);
   siblings.splice(from, 1);
   siblings.splice(to, 0, active);
   let siblingIndex = 0;
   const arranged = nodes.map((node) =>
-    node.parentCompartmentId === active.parentCompartmentId ? (siblings[siblingIndex++] ?? node) : node
+    visibleParentId(nodes, node) === parentId ? (siblings[siblingIndex++] ?? node) : node
   );
   return canonicalCompartmentOrder(arranged);
 }
@@ -176,10 +187,27 @@ export function moveCompartment<T extends CompartmentNode>(
 ): T[] {
   const active = nodes.find((node) => node.id === id);
   if (!active) return [...nodes];
-  const siblings = nodes.filter((node) => node.parentCompartmentId === active.parentCompartmentId);
+  const parentId = visibleParentId(nodes, active);
+  // Unsaved records are visible but unsupported reorder targets. Select the
+  // adjacent persisted sibling so they cannot trap the arrow controls.
+  const siblings = nodes.filter((node) => visibleParentId(nodes, node) === parentId && node.id);
   const index = siblings.indexOf(active);
   const target = siblings[index + (direction === 'up' ? -1 : 1)];
   return target?.id ? reorderCompartment(nodes, id, target.id) : [...nodes];
+}
+
+export function canMoveCompartment(
+  nodes: readonly CompartmentNode[],
+  id: string | undefined,
+  direction: 'up' | 'down'
+): boolean {
+  if (!id) return false;
+  const node = nodes.find((candidate) => candidate.id === id);
+  if (!node) return false;
+  const parentId = visibleParentId(nodes, node);
+  const savedSiblings = nodes.filter((candidate) => visibleParentId(nodes, candidate) === parentId && candidate.id);
+  const index = savedSiblings.indexOf(node);
+  return direction === 'up' ? index > 0 : index >= 0 && index < savedSiblings.length - 1;
 }
 
 /** Explicitly reparent a saved node. This is not performed by ordinary reorder operations. */
@@ -187,16 +215,21 @@ export function reparentCompartment<T extends CompartmentNode>(nodes: readonly T
   const node = nodes.find((candidate) => candidate.id === id);
   if (!node || id === parentId) return [...nodes];
   const descendants = new Set<string>();
+  let hasCycle = false;
   const collect = (parent: string) => {
     for (const child of nodes.filter((candidate) => candidate.parentCompartmentId === parent)) {
       if (child.id) {
+        if (child.id === id || descendants.has(child.id)) {
+          hasCycle = true;
+          continue;
+        }
         descendants.add(child.id);
         collect(child.id);
       }
     }
   };
   collect(id);
-  if (parentId && (!nodes.some((candidate) => candidate.id === parentId) || descendants.has(parentId)))
+  if (hasCycle || (parentId && (!nodes.some((candidate) => candidate.id === parentId) || descendants.has(parentId))))
     return [...nodes];
   return canonicalCompartmentOrder(
     nodes.map((candidate) => (candidate === node ? { ...candidate, parentCompartmentId: parentId } : candidate))
