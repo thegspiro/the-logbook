@@ -47,7 +47,7 @@ import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
-import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
+import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
@@ -742,11 +742,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   }, [equipmentCheckSummaries]);
 
   const hasIncompleteEquipmentChecks = useMemo(() => {
-    return endOfShiftChecks.some((c) => !c.isCompleted);
+    return endOfShiftChecks.some((c) => !isShiftCheckCompleted(c));
   }, [endOfShiftChecks]);
 
   const completedEquipmentChecks = useMemo(() => {
-    return endOfShiftChecks.filter((c) => c.isCompleted);
+    return endOfShiftChecks.filter(isShiftCheckCompleted);
   }, [endOfShiftChecks]);
 
   /**
@@ -1115,7 +1115,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
               const understaffed = target > 0 && activeAssignments.length < target;
               const outstandingStartChecks = equipmentCheckSummaries.filter(
-                (c) => c.checkTiming === 'start_of_shift' && !c.isCompleted
+                (c) => c.checkTiming === 'start_of_shift' && !isShiftCheckCompleted(c)
               ).length;
               return (
                 <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
@@ -1240,7 +1240,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               shiftId={shift.id}
               unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
               tz={tz}
-              outstandingChecks={endOfShiftChecks.filter((c) => !c.isCompleted).length}
+              outstandingChecks={endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length}
               requireChecks={requireEndOfShiftChecks}
               onCancel={() => setShowFinalizeChecklist(false)}
               onFinalized={() => {
@@ -1277,9 +1277,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         Must fix before close-out: end-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. Complete
-                        them, or override below with a reason that goes on the record.
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
+                        pending. Complete them, or override below with a reason that goes on the record.
                       </p>
                     </div>
                   </div>
@@ -1298,9 +1298,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         End-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. The
-                        shift will close with them outstanding.
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
+                        pending. The shift will close with them outstanding.
                       </p>
                     </div>
                   </div>
@@ -2426,7 +2426,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
             const isOfficer = user?.id === shift.shift_officer_id;
             const showReportBtn = shiftEnded && (isOfficer || canManage);
-            const showChecklistLink = equipmentCheckSummaries.some((s) => !s.isCompleted);
+            const showChecklistLink = equipmentCheckSummaries.some((s) => !isShiftCheckCompleted(s));
 
             if (!showReportBtn && !showChecklistLink) return null;
 
@@ -2472,16 +2472,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   {/* Inline status summary — always visible */}
                   {(() => {
                     const passed = equipmentCheckSummaries.filter(
-                      (s) => s.isCompleted && s.overallStatus === 'pass'
+                      (s) => isShiftCheckCompleted(s) && s.overallStatus === 'pass'
                     ).length;
                     const failed = equipmentCheckSummaries.filter(
-                      (s) => s.isCompleted && s.overallStatus !== 'pass'
+                      (s) => isShiftCheckCompleted(s) && s.overallStatus !== 'pass'
                     ).length;
                     const inProgress = equipmentCheckSummaries.filter(
-                      (s) => !s.isCompleted && s.completedItems > 0
+                      (s) => !isShiftCheckCompleted(s) && s.completedItems > 0
                     ).length;
                     const notStarted = equipmentCheckSummaries.filter(
-                      (s) => !s.isCompleted && s.completedItems === 0
+                      (s) => !isShiftCheckCompleted(s) && s.completedItems === 0
                     ).length;
                     return (
                       <span className="ml-1 flex items-center gap-1.5">
@@ -2532,7 +2532,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           >
                             <div className="flex items-center justify-between">
                               <p className="text-theme-text-primary text-sm font-medium">{summary.templateName}</p>
-                              {summary.isCompleted ? (
+                              {isShiftCheckCompleted(summary) ? (
                                 summary.overallStatus === 'pass' ? (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
                                     <Check className="h-3 w-3" /> Pass
