@@ -16,7 +16,7 @@ Fresh installs built by ``create_all()`` already carry the full value set, so
 the MODIFYs below are a no-op there.
 
 Revision ID: 5223a69474b8
-Revises: 1eeb053d59b7
+Revises: 4c8d7e2a91b3
 Create Date: 2026-08-20 03:15:06.344545
 
 """
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5223a69474b8"
-down_revision: Union[str, None] = "1eeb053d59b7"
+down_revision: Union[str, None] = "4c8d7e2a91b3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
