@@ -3,6 +3,7 @@
  * count as having been checked.
  */
 
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -415,5 +416,56 @@ describe('EquipmentCheckForm quantity seeding', () => {
       });
     });
     expect(await screen.findByText('NEW-9')).toBeInTheDocument();
+  });
+
+  it('derives an expired unanswered item as failed everywhere, including submission', async () => {
+    const user = userEvent.setup();
+    render({ hasExpiration: true, expirationDate: '2020-01-01' });
+
+    expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Front Bumper, 1 of 1 checked, Has Failures/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Submit Report' }));
+    await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
+    expect(mockSubmitCheck.mock.calls[0][1].items[0]).toMatchObject({ status: 'fail', is_expired: true });
+  });
+
+  it('recomputes expiration after a lot correction without retaining a derived failure', async () => {
+    const user = userEvent.setup();
+    render({
+      hasExpiration: true,
+      lotsAboard: [{ id: 'dl-1', lotNumber: 'LOT-OLD', expirationDate: '2020-01-01', quantity: 2, isExpired: true }],
+    });
+    expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Correct/ }));
+    const dateField = screen.getByLabelText('Expiration');
+    await user.clear(dateField);
+    await user.type(dateField, '2028-01-31');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await screen.findByText('NEW-9');
+    expect(screen.queryByText('EXPIRED')).not.toBeInTheDocument();
+    expect(screen.getByText('0/1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Front Bumper, 0 of 1 checked, Not Started/ })).toBeInTheDocument();
+  });
+
+  it('renders an expired item safely under React Strict Mode', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderWithRouter(
+      <StrictMode>
+        <EquipmentCheckForm
+          shiftId="shift-1"
+          template={template({ hasExpiration: true, expirationDate: '2020-01-01' }) as never}
+        />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/update.*while rendering|cannot update/i);
+    consoleError.mockRestore();
   });
 });
