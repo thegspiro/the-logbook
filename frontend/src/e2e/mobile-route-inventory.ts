@@ -432,6 +432,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/governance/legal',
+    source: 'src/modules/governance/routes.tsx',
+    coverage: 'exempt',
+    detail: 'administrative legal-content editor; public legal pages provide representative mobile coverage',
+  },
+  {
     path: '/grants',
     source: 'src/modules/grants-fundraising/routes.tsx',
     coverage: 'exempt',

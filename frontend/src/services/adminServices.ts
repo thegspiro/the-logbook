@@ -5,7 +5,13 @@
 import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { SecurityStatus, SecurityAlert } from './facilitiesServices';
-import type { DashboardStats, AdminSummary, ActionItemSummary, CommunityEngagement } from './communicationsServices';
+import type {
+  DashboardStats,
+  AdminSummary,
+  OperationsDashboard,
+  ActionItemSummary,
+  CommunityEngagement,
+} from './communicationsServices';
 import type { IntegrationConfig } from './trainingServices';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitiesServices';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
@@ -346,6 +352,10 @@ export const dashboardService = {
   },
   async getAdminSummary(): Promise<AdminSummary> {
     const response = await api.get<AdminSummary>('/dashboard/admin-summary');
+    return response.data;
+  },
+  async getOperations(): Promise<OperationsDashboard> {
+    const response = await api.get<OperationsDashboard>('/dashboard/operations');
     return response.data;
   },
   async getActionItems(params?: {

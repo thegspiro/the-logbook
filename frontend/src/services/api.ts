@@ -150,6 +150,8 @@ export {
 export type {
   DashboardStats,
   AdminSummary,
+  OperationsDashboard,
+  OperationsItem,
   ActionItemSummary,
   CommunityEngagement,
   ComplianceMatrixMember,

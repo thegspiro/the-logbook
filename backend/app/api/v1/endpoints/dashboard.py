@@ -5,7 +5,8 @@ Provides aggregated statistics for the main dashboard,
 including an admin-level summary for Chiefs and department leaders.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends
 from loguru import logger
@@ -43,10 +44,17 @@ from app.models.minute import (
     MinutesMeetingType,
     MinutesStatus,
 )
-from app.models.training import TrainingRecord, TrainingStatus
-from app.models.user import User, UserStatus
+from app.models.notification import NotificationLog
+from app.models.training import (
+    Shift,
+    ShiftEquipmentCheck,
+    TrainingRecord,
+    TrainingStatus,
+)
+from app.models.user import Organization, User, UserStatus
 from app.services.apparatus_service import ApparatusService
 from app.services.inventory_service import InventoryService
+from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
 
 router = APIRouter()
@@ -77,54 +85,6 @@ def minutes_visibility_filter(current_user: User):
         ),
         ActionItem.assignee_id == current_user.id,
     )
-
-
-class DashboardStats(BaseModel):
-    total_members: int
-    active_members: int
-    total_documents: int
-    setup_percentage: int
-    recent_events_count: int
-    pending_tasks_count: int
-
-
-class AdminSummary(BaseModel):
-    """Department-wide summary for Chiefs and admins."""
-
-    active_members: int
-    inactive_members: int
-    total_members: int
-    training_completion_pct: float
-    upcoming_events_count: int
-    overdue_action_items: int
-    open_action_items: int
-    recent_training_hours: float
-    recent_admin_hours: float
-    pending_admin_hours_approvals: int
-
-
-class ActionItemSummary(BaseModel):
-    """Unified action item from either meetings or minutes."""
-
-    id: str
-    source: str  # "meeting" or "minutes"
-    source_id: str
-    description: str
-    assignee_id: str | None = None
-    assignee_name: str | None = None
-    due_date: str | None = None
-    status: str
-    priority: str | None = None
-    created_at: str
-
-
-class CommunityEngagement(BaseModel):
-    """Community engagement metrics for Public Outreach."""
-
-    total_public_events: int
-    total_member_attendees: int
-    total_external_attendees: int
-    upcoming_public_events: int
 
 
 class AssetWidget(BaseModel):
@@ -378,6 +338,429 @@ async def get_asset_widgets(
         )
 
     return AssetWidgetDashboard(widgets=widgets)
+
+
+class DashboardStats(BaseModel):
+    total_members: int
+    active_members: int
+    total_documents: int
+    setup_percentage: int
+    recent_events_count: int
+    pending_tasks_count: int
+
+
+class AdminSummary(BaseModel):
+    """Department-wide summary for Chiefs and admins."""
+
+    active_members: int
+    inactive_members: int
+    total_members: int
+    training_completion_pct: float
+    upcoming_events_count: int
+    overdue_action_items: int
+    open_action_items: int
+    recent_training_hours: float
+    recent_admin_hours: float
+    pending_admin_hours_approvals: int
+
+
+class ActionItemSummary(BaseModel):
+    """Unified action item from either meetings or minutes."""
+
+    id: str
+    source: str  # "meeting" or "minutes"
+    source_id: str
+    description: str
+    assignee_id: str | None = None
+    assignee_name: str | None = None
+    due_date: str | None = None
+    status: str
+    priority: str | None = None
+    created_at: str
+
+
+class CommunityEngagement(BaseModel):
+    """Community engagement metrics for Public Outreach."""
+
+    total_public_events: int
+    total_member_attendees: int
+    total_external_attendees: int
+    upcoming_public_events: int
+
+
+class OperationsItem(BaseModel):
+    """A compact, non-sensitive operational exception or approval summary."""
+
+    key: str
+    label: str
+    severity: str
+    count: int
+    oldest_age_days: int | None = None
+    most_urgent: str | None = None
+    href: str
+
+
+class OperationsSection(BaseModel):
+    key: str
+    title: str
+    items: list[OperationsItem]
+
+
+class OperationsDashboard(BaseModel):
+    generated_at: datetime
+    timezone: str
+    sections: list[OperationsSection]
+
+
+# This is deliberately a data-source permission map, not a chief-role or
+# settings.manage gate.  It is also mirrored by the frontend widget registry.
+OPERATIONS_SECTION_PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "operational_readiness": ("scheduling.manage",),
+    "critical_exceptions": (
+        "meetings.manage",
+        "minutes.manage",
+        "scheduling.manage",
+        "equipment_check.manage",
+        "notifications.manage",
+    ),
+    "membership_health": ("members.manage",),
+    "upcoming_command_dates": ("events.manage",),
+    "period_trends": ("training.manage",),
+    "pending_approvals": ("admin_hours.manage",),
+}
+
+
+def _has_any(current_user: User, permissions: tuple[str, ...]) -> bool:
+    return any(
+        user_has_permission(current_user, permission) for permission in permissions
+    )
+
+
+def _age_days(value: date | datetime | None, today: date) -> int | None:
+    if value is None:
+        return None
+    return max(
+        0, (today - (value.date() if isinstance(value, datetime) else value)).days
+    )
+
+
+async def _count_and_oldest(db: AsyncSession, model, *criteria, date_column):
+    result = await db.execute(
+        select(func.count(model.id), func.min(date_column)).where(*criteria)
+    )
+    row = result.one()
+    return int(row[0] or 0), row[1]
+
+
+@router.get("/operations", response_model=OperationsDashboard)
+async def get_operations_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> OperationsDashboard:
+    """Return only the operational sections the caller is allowed to know.
+
+    A missing section is intentional: callers cannot distinguish an empty data
+    source from one they cannot access. Every statement includes the tenant id.
+    """
+    org_id = current_user.organization_id
+    org = (
+        await db.execute(select(Organization).where(Organization.id == org_id))
+    ).scalar_one_or_none()
+    timezone_name = (org.timezone if org else None) or "UTC"
+    try:
+        org_tz = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        timezone_name, org_tz = "UTC", timezone.utc
+    now = datetime.now(timezone.utc)
+    local_today = now.astimezone(org_tz).date()
+    local_midnight = datetime.combine(local_today, time.min, org_tz).astimezone(
+        timezone.utc
+    )
+    enabled = set(
+        (await OrganizationService(db).get_enabled_modules(org_id)).enabled_modules
+    )
+    sections: list[OperationsSection] = []
+
+    if "scheduling" in enabled and _has_any(
+        current_user, OPERATIONS_SECTION_PERMISSIONS["operational_readiness"]
+    ):
+        count, oldest = await _count_and_oldest(
+            db,
+            Shift,
+            Shift.organization_id == org_id,
+            Shift.shift_date == local_today,
+            date_column=Shift.shift_date,
+        )
+        sections.append(
+            OperationsSection(
+                key="operational_readiness",
+                title="Operational readiness",
+                items=[
+                    OperationsItem(
+                        key="today_shifts",
+                        label="Today's shifts",
+                        severity="info",
+                        count=count,
+                        oldest_age_days=_age_days(oldest, local_today),
+                        href="/scheduling/manage",
+                    )
+                ],
+            )
+        )
+
+    exception_items: list[OperationsItem] = []
+    if "scheduling" in enabled and user_has_permission(
+        current_user, "scheduling.manage"
+    ):
+        count, oldest = await _count_and_oldest(
+            db,
+            Shift,
+            Shift.organization_id == org_id,
+            Shift.shift_date >= local_today,
+            Shift.shift_officer_id.is_(None),
+            date_column=Shift.shift_date,
+        )
+        exception_items.append(
+            OperationsItem(
+                key="unassigned_shift_officers",
+                label="Shifts without an officer",
+                severity="critical" if count else "ok",
+                count=count,
+                oldest_age_days=_age_days(oldest, local_today),
+                most_urgent="Next shift without an officer" if count else None,
+                href="/scheduling/manage?filter=missing-officer",
+            )
+        )
+    if "minutes" in enabled and user_has_permission(current_user, "meetings.manage"):
+        count, oldest = await _count_and_oldest(
+            db,
+            MeetingActionItem,
+            MeetingActionItem.organization_id == org_id,
+            MeetingActionItem.status.in_(
+                [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+            ),
+            MeetingActionItem.due_date < local_today,
+            date_column=MeetingActionItem.due_date,
+        )
+        exception_items.append(
+            OperationsItem(
+                key="overdue_action_items",
+                label="Overdue action items",
+                severity="critical" if count else "ok",
+                count=count,
+                oldest_age_days=_age_days(oldest, local_today),
+                most_urgent="Oldest overdue action item" if count else None,
+                href="/action-items?status=overdue",
+            )
+        )
+    # Minutes descriptions are never queried here. A minutes count is disclosed
+    # only to minutes.manage holders, preserving executive/draft confidentiality.
+    if "minutes" in enabled and user_has_permission(current_user, "minutes.manage"):
+        # Explicit join is required because ActionItem has no organization_id.
+        result = await db.execute(
+            select(func.count(ActionItem.id), func.min(ActionItem.due_date))
+            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+            .where(
+                MeetingMinutes.organization_id == org_id,
+                ActionItem.status.in_(
+                    [
+                        MinutesActionItemStatus.PENDING.value,
+                        MinutesActionItemStatus.IN_PROGRESS.value,
+                    ]
+                ),
+                ActionItem.due_date < now,
+            )
+        )
+        count, oldest = result.one()
+        exception_items.append(
+            OperationsItem(
+                key="minutes_action_items",
+                label="Minutes action items",
+                severity="critical" if count else "ok",
+                count=count or 0,
+                oldest_age_days=_age_days(oldest, local_today),
+                most_urgent="Oldest overdue minutes action item" if count else None,
+                href="/action-items?source=minutes&status=overdue",
+            )
+        )
+    if "scheduling" in enabled and user_has_permission(
+        current_user, "equipment_check.manage"
+    ):
+        count, oldest = await _count_and_oldest(
+            db,
+            ShiftEquipmentCheck,
+            ShiftEquipmentCheck.organization_id == org_id,
+            ShiftEquipmentCheck.overall_status.in_(["fail", "incomplete"]),
+            date_column=ShiftEquipmentCheck.checked_at,
+        )
+        exception_items.append(
+            OperationsItem(
+                key="equipment_checks",
+                label="Failed equipment checks",
+                severity="critical" if count else "ok",
+                count=count,
+                oldest_age_days=_age_days(oldest, local_today),
+                most_urgent="Oldest unresolved equipment check" if count else None,
+                href="/equipment-checks?status=failed",
+            )
+        )
+    if "notifications" in enabled and user_has_permission(
+        current_user, "notifications.manage"
+    ):
+        count, oldest = await _count_and_oldest(
+            db,
+            NotificationLog,
+            NotificationLog.organization_id == org_id,
+            NotificationLog.error.is_not(None),
+            date_column=NotificationLog.created_at,
+        )
+        exception_items.append(
+            OperationsItem(
+                key="notification_failures",
+                label="Notification failures",
+                severity="critical" if count else "ok",
+                count=count,
+                oldest_age_days=_age_days(oldest, local_today),
+                most_urgent="Oldest delivery failure" if count else None,
+                href="/notifications/manage?status=failed",
+            )
+        )
+    if exception_items:
+        sections.append(
+            OperationsSection(
+                key="critical_exceptions",
+                title="Critical exceptions",
+                items=exception_items,
+            )
+        )
+
+    if "members" in enabled and _has_any(
+        current_user, OPERATIONS_SECTION_PERMISSIONS["membership_health"]
+    ):
+        result = await db.execute(
+            select(func.count(User.id)).where(
+                User.organization_id == org_id,
+                User.deleted_at.is_(None),
+                User.status == UserStatus.ACTIVE,
+            )
+        )
+        sections.append(
+            OperationsSection(
+                key="membership_health",
+                title="Membership health",
+                items=[
+                    OperationsItem(
+                        key="active_members",
+                        label="Active members",
+                        severity="info",
+                        count=result.scalar() or 0,
+                        href="/members?status=active",
+                    )
+                ],
+            )
+        )
+
+    if "events" in enabled and _has_any(
+        current_user, OPERATIONS_SECTION_PERMISSIONS["upcoming_command_dates"]
+    ):
+        boundary = local_midnight + timedelta(days=30)
+        result = await db.execute(
+            select(func.count(Event.id), func.min(Event.start_datetime)).where(
+                Event.organization_id == org_id,
+                Event.start_datetime >= local_midnight,
+                Event.start_datetime < boundary,
+                Event.is_cancelled.is_(False),
+            )
+        )  # noqa: E712
+        count, first = result.one()
+        sections.append(
+            OperationsSection(
+                key="upcoming_command_dates",
+                title="Upcoming command dates",
+                items=[
+                    OperationsItem(
+                        key="command_dates",
+                        label="Next 30 days",
+                        severity="info",
+                        count=count or 0,
+                        most_urgent=(
+                            first.astimezone(org_tz).date().isoformat()
+                            if first
+                            else None
+                        ),
+                        href="/events?range=next-30-days",
+                    )
+                ],
+            )
+        )
+
+    if "training" in enabled and _has_any(
+        current_user, OPERATIONS_SECTION_PERMISSIONS["period_trends"]
+    ):
+        current_start, previous_start = (
+            now - timedelta(days=30),
+            now - timedelta(days=60),
+        )
+        result = await db.execute(
+            select(func.count(TrainingRecord.id)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.created_at >= current_start,
+            )
+        )
+        current_count = result.scalar() or 0
+        result = await db.execute(
+            select(func.count(TrainingRecord.id)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.created_at >= previous_start,
+                TrainingRecord.created_at < current_start,
+            )
+        )
+        previous_count = result.scalar() or 0
+        sections.append(
+            OperationsSection(
+                key="period_trends",
+                title="Period-over-period trends",
+                items=[
+                    OperationsItem(
+                        key="training_records",
+                        label=f"Training records ({current_count - previous_count:+d})",
+                        severity="info",
+                        count=current_count,
+                        href="/training/reports",
+                    )
+                ],
+            )
+        )
+
+    if _has_any(current_user, OPERATIONS_SECTION_PERMISSIONS["pending_approvals"]):
+        count, oldest = await _count_and_oldest(
+            db,
+            AdminHoursEntry,
+            AdminHoursEntry.organization_id == org_id,
+            AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
+            date_column=AdminHoursEntry.created_at,
+        )
+        sections.append(
+            OperationsSection(
+                key="pending_approvals",
+                title="Pending approvals",
+                items=[
+                    OperationsItem(
+                        key="admin_hours",
+                        label="Admin hours",
+                        severity="warning" if count else "ok",
+                        count=count,
+                        oldest_age_days=_age_days(oldest, local_today),
+                        most_urgent="Oldest pending submission" if count else None,
+                        href="/admin-hours/manage?status=pending",
+                    )
+                ],
+            )
+        )
+
+    return OperationsDashboard(
+        generated_at=now, timezone=timezone_name, sections=sections
+    )
 
 
 @router.get("/stats", response_model=DashboardStats)

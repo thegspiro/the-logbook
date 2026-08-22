@@ -10,6 +10,8 @@ import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
 import { AssetWidgetRegistry } from '../components/dashboard/AssetWidgetRegistry';
 import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistry';
+import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDashboard';
+import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -47,7 +49,7 @@ import {
   eventService,
   medicalScreeningService,
 } from '../services/api';
-import type { AdminSummary, InboxMessage, MyComplianceSummary } from '../services/api';
+import type { AdminSummary, OperationsDashboard, InboxMessage, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -156,17 +158,20 @@ const Dashboard: React.FC = () => {
     setDismissedInstall(true);
   };
 
-  // Organization reporting contains department-wide information, so only
-  // leaders explicitly entrusted with organization settings can reveal it.
+  // The legacy summary retains its settings gate, while chief operations is
+  // available through the data-source permissions declared in its registry.
   // Everyone — including those leaders — still lands on the personal view.
-  const canViewOrganization = checkPermission('settings.manage');
-  const canViewAssetWidgets = ['inventory.view', 'apparatus.view', 'facilities.view'].some(checkPermission);
-  const canOpenOrganization = canViewOrganization || canViewAssetWidgets;
+  const canViewLegacyAdmin = checkPermission('settings.manage');
+  const canViewAssets = ['inventory.view', 'apparatus.view', 'facilities.view'].some(checkPermission);
+  const canViewChiefOperations = canViewChiefDashboard(checkPermission);
+  const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
   const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
-  const [loadingAdmin, setLoadingAdmin] = useState(canViewOrganization);
+  const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
+  const [operations, setOperations] = useState<OperationsDashboard | null>(null);
+  const [assetWidgets, setAssetWidgets] = useState<AssetWidgetData[]>([]);
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
@@ -222,7 +227,6 @@ const Dashboard: React.FC = () => {
   const [loadingTraining, setLoadingTraining] = useState(true);
 
   // Inventory
-  const [assetWidgets, setAssetWidgets] = useState<AssetWidgetData[]>([]);
   const [myEquipment, setMyEquipment] = useState({ assigned: 0, checkedOut: 0, overdue: 0 });
   const [loadingMyEquipment, setLoadingMyEquipment] = useState(true);
 
@@ -251,7 +255,7 @@ const Dashboard: React.FC = () => {
   // Continue accepting the former `overview` URL so existing bookmarks land on
   // the renamed view, while all new navigation writes the clearer URL.
   const organizationTabRequested = ['organization', 'overview'].includes(searchParams.get('tab') ?? '');
-  const activeTab = canOpenOrganization && organizationTabRequested ? 'organization' : 'department';
+  const activeTab = canViewOrganization && organizationTabRequested ? 'organization' : 'department';
   const selectTab = (tab: 'department' | 'organization') => {
     const next = new URLSearchParams(searchParams);
     if (tab === 'organization') next.set('tab', 'organization');
@@ -308,13 +312,14 @@ const Dashboard: React.FC = () => {
   // only after that leader intentionally opens the Organization tab.
   useEffect(() => {
     if (activeTab === 'organization') {
-      if (canViewOrganization) {
+      if (canViewChiefOperations) void loadOperations();
+      if (canViewAssets) void loadAssetWidgets();
+      if (canViewLegacyAdmin) {
         void loadAdminSummary();
         void loadSetupProgress();
       }
-      if (canViewAssetWidgets) void loadAssetWidgets();
     }
-  }, [activeTab, canViewAssetWidgets, canViewOrganization]);
+  }, [activeTab, canViewAssets, canViewChiefOperations, canViewLegacyAdmin]);
 
   const loadAdminSummary = async () => {
     setLoadingAdmin(true);
@@ -327,6 +332,22 @@ const Dashboard: React.FC = () => {
       setAdminError(true);
     } finally {
       setLoadingAdmin(false);
+    }
+  };
+
+  const loadOperations = async () => {
+    try {
+      setOperations(await dashboardService.getOperations());
+    } catch {
+      setOperations(null);
+    }
+  };
+
+  const loadAssetWidgets = async () => {
+    try {
+      setAssetWidgets(await dashboardService.getAssetWidgets());
+    } catch {
+      setAssetWidgets([]);
     }
   };
 
@@ -363,14 +384,6 @@ const Dashboard: React.FC = () => {
       });
     } catch {
       // Non-critical
-    }
-  };
-
-  const loadAssetWidgets = async () => {
-    try {
-      setAssetWidgets(await dashboardService.getAssetWidgets());
-    } catch {
-      // Asset reporting is non-critical on dashboard.
     }
   };
 
@@ -866,11 +879,12 @@ const Dashboard: React.FC = () => {
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
-      ...(activeTab === 'organization' && canViewOrganization ? [loadAdminSummary(), loadSetupProgress()] : []),
-      ...(activeTab === 'organization' && canViewAssetWidgets ? [loadAssetWidgets()] : []),
+      ...(activeTab === 'organization' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
+      ...(activeTab === 'organization' && canViewChiefOperations ? [loadOperations()] : []),
+      ...(activeTab === 'organization' && canViewAssets ? [loadAssetWidgets()] : []),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, canViewAssets, canViewChiefOperations, canViewLegacyAdmin]);
 
   useRegisterPullToRefresh(refreshDashboard);
 
@@ -1030,7 +1044,7 @@ const Dashboard: React.FC = () => {
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>
               </p>
             </div>
-            {canOpenOrganization && (
+            {canViewOrganization && (
               <div
                 role="tablist"
                 aria-label="Dashboard view"
@@ -1074,8 +1088,8 @@ const Dashboard: React.FC = () => {
         {activeTab === 'department' ? (
           <div
             id="dashboard-panel-department"
-            role={canOpenOrganization ? 'tabpanel' : undefined}
-            aria-labelledby={canOpenOrganization ? 'dashboard-tab-department' : undefined}
+            role={canViewOrganization ? 'tabpanel' : undefined}
+            aria-labelledby={canViewOrganization ? 'dashboard-tab-department' : undefined}
             className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6"
           >
             {/* ── Main column ── */}
@@ -1544,92 +1558,94 @@ const Dashboard: React.FC = () => {
                   Department-wide staffing, compliance, events, action items, and operations.
                 </p>
               </div>
-              {adminError ? (
-                <div className="card border-red-500/30 p-5" role="alert">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-theme-text-primary font-semibold">Organization summary is unavailable</p>
-                      <p className="text-theme-text-muted mt-1 text-sm">
-                        We could not load the department-wide metrics. Your personal dashboard is unaffected.
-                      </p>
+              {operations && <ChiefOperationsDashboard data={operations} />}
+              {canViewLegacyAdmin &&
+                (adminError ? (
+                  <div className="card border-red-500/30 p-5" role="alert">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-theme-text-primary font-semibold">Organization summary is unavailable</p>
+                        <p className="text-theme-text-muted mt-1 text-sm">
+                          We could not load the department-wide metrics. Your personal dashboard is unaffected.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void loadAdminSummary()}
+                        className="btn-primary min-h-[44px] px-4"
+                      >
+                        Try again
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void loadAdminSummary()}
-                      className="btn-primary min-h-[44px] px-4"
-                    >
-                      Try again
-                    </button>
                   </div>
-                </div>
-              ) : (
-                <div
-                  className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5"
-                  role="region"
-                  aria-label="Department overview"
-                >
-                  <DashboardStatCard
-                    label="Active Members"
-                    value={adminSummary?.active_members ?? 0}
-                    icon={Users}
-                    iconColor="text-blue-700 dark:text-blue-400"
-                    description={`${adminSummary?.total_members ?? 0} total`}
-                    loading={loadingAdmin}
-                  />
+                ) : (
+                  <div
+                    className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5"
+                    role="region"
+                    aria-label="Department overview"
+                  >
+                    <DashboardStatCard
+                      label="Active Members"
+                      value={adminSummary?.active_members ?? 0}
+                      icon={Users}
+                      iconColor="text-blue-700 dark:text-blue-400"
+                      description={`${adminSummary?.total_members ?? 0} total`}
+                      loading={loadingAdmin}
+                    />
 
-                  <DashboardStatCard
-                    label="Training Compliance"
-                    value={`${adminSummary?.training_completion_pct ?? 0}%`}
-                    icon={GraduationCap}
-                    iconColor="text-green-700 dark:text-green-400"
-                    description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
-                    loading={loadingAdmin}
-                  />
+                    <DashboardStatCard
+                      label="Training Compliance"
+                      value={`${adminSummary?.training_completion_pct ?? 0}%`}
+                      icon={GraduationCap}
+                      iconColor="text-green-700 dark:text-green-400"
+                      description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
+                      loading={loadingAdmin}
+                    />
 
-                  <DashboardStatCard
-                    label="Upcoming Events"
-                    value={adminSummary?.upcoming_events_count ?? 0}
-                    icon={Calendar}
-                    iconColor="text-purple-700 dark:text-purple-400"
-                    description="Next 30 days"
-                    loading={loadingAdmin}
-                  />
+                    <DashboardStatCard
+                      label="Upcoming Events"
+                      value={adminSummary?.upcoming_events_count ?? 0}
+                      icon={Calendar}
+                      iconColor="text-purple-700 dark:text-purple-400"
+                      description="Next 30 days"
+                      loading={loadingAdmin}
+                    />
 
-                  <DashboardStatCard
-                    label="Action Items"
-                    value={adminSummary?.open_action_items ?? 0}
-                    icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
-                    iconColor={
-                      (adminSummary?.overdue_action_items ?? 0) > 0
-                        ? 'text-red-700 dark:text-red-400'
-                        : 'text-yellow-700 dark:text-yellow-400'
-                    }
-                    description={
-                      (adminSummary?.overdue_action_items ?? 0) > 0
-                        ? `${adminSummary?.overdue_action_items} overdue`
-                        : 'All on track'
-                    }
-                    loading={loadingAdmin}
-                    onClick={() => void navigate('/action-items')}
-                    ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
-                  />
+                    <DashboardStatCard
+                      label="Action Items"
+                      value={adminSummary?.open_action_items ?? 0}
+                      icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
+                      iconColor={
+                        (adminSummary?.overdue_action_items ?? 0) > 0
+                          ? 'text-red-700 dark:text-red-400'
+                          : 'text-yellow-700 dark:text-yellow-400'
+                      }
+                      description={
+                        (adminSummary?.overdue_action_items ?? 0) > 0
+                          ? `${adminSummary?.overdue_action_items} overdue`
+                          : 'All on track'
+                      }
+                      loading={loadingAdmin}
+                      onClick={() => void navigate('/action-items')}
+                      ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
+                    />
 
-                  <DashboardStatCard
-                    label="Admin Hours"
-                    value={adminSummary?.recent_admin_hours ?? 0}
-                    icon={ClipboardCheck}
-                    iconColor="text-indigo-700 dark:text-indigo-400"
-                    description={
-                      (adminSummary?.pending_admin_hours_approvals ?? 0) > 0
-                        ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
-                        : 'Last 30 days'
-                    }
-                    loading={loadingAdmin}
-                    {...(canManageAdminHours ? { onClick: () => void navigate('/admin-hours/manage') } : {})}
-                    ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
-                  />
-                </div>
-              )}
+                    <DashboardStatCard
+                      label="Admin Hours"
+                      value={adminSummary?.recent_admin_hours ?? 0}
+                      icon={ClipboardCheck}
+                      iconColor="text-indigo-700 dark:text-indigo-400"
+                      description={
+                        (adminSummary?.pending_admin_hours_approvals ?? 0) > 0
+                          ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
+                          : 'Last 30 days'
+                      }
+                      loading={loadingAdmin}
+                      {...(canManageAdminHours ? { onClick: () => void navigate('/admin-hours/manage') } : {})}
+                      ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
+                    />
+                  </div>
+                ))}
             </div>
 
             {setupProgress && setupProgress.completed < setupProgress.total && (

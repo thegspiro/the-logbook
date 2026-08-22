@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**246 tables · 4239 columns · 801 foreign keys**
+**248 tables · 4258 columns · 806 foreign keys**
 
 ---
 
@@ -90,6 +90,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 11 | A named section/area within a checklist template. |
 | [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 27 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
+| [`equipment_check_bulk_requests`](#equipment_check_bulk_requests) | `EquipmentCheckBulkRequest` | 7 | Durable idempotency ledger for atomic template-item batches. |
 | [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 14 | Master template for an equipment checklist. |
 | [`evoc_levels`](#evoc_levels) | `EvocLevel` | 13 | Organization-configurable EVOC (Emergency Vehicle Operator Course) levels. |
 | [`template_change_logs`](#template_change_logs) | `TemplateChangeLog` | 11 | Granular audit trail for equipment check template edits. |
@@ -325,6 +326,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 24 | Tracks reorder requests for inventory items that have dropped below |
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
+
+### Legal
+
+<sub>`app/models/legal.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`legal_document_revisions`](#legal_document_revisions) | `LegalDocumentRevision` | 12 | A proposed or published version of one public legal document. |
 
 ### Locations
 
@@ -1511,6 +1520,26 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - CHECK `ck_driver_exceptions_ck_driver_exception_date_order`: `valid_until >= valid_from`
+
+### `equipment_check_bulk_requests`
+
+**EquipmentCheckBulkRequest** · `app/models/apparatus.py`
+
+> Durable idempotency ledger for atomic template-item batches.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `compartment_id` | VARCHAR(36) | no | FK |  | → `check_template_compartments.id` ON DELETE CASCADE |
+| `idempotency_key` | VARCHAR(200) | no |  |  |  |
+| `payload_hash` | VARCHAR(64) | no |  |  |  |
+| `item_ids` | JSON | no |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `uq_equipment_check_bulk_request` (`organization_id`, `compartment_id`, `idempotency_key`)
 
 ### `equipment_check_templates`
 
@@ -5253,6 +5282,33 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Legal
+
+### `legal_document_revisions`
+
+**LegalDocumentRevision** · `app/models/legal.py`
+
+> A proposed or published version of one public legal document.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `document_type` | ENUM(`privacy_policy`, `terms_of_service`) | no |  |  |  |
+| `status` | ENUM(`draft`, `published`, `archived`) | no |  | `draft` |  |
+| `body` | TEXT | no |  |  |  |
+| `change_note` | TEXT | no |  |  |  |
+| `effective_date` | VARCHAR(64) | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `published_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_legal_revisions_org_type_status` (`organization_id`, `document_type`, `status`)
+
 ## Locations
 
 ### `locations`
@@ -8703,7 +8759,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (298 references)
+### → `users` (300 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8869,6 +8925,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | NO ACTION | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | NO ACTION | yes |
+| `legal_document_revisions` | `created_by` | SET NULL | yes |
+| `legal_document_revisions` | `published_by` | SET NULL | yes |
 | `locations` | `created_by` | NO ACTION | yes |
 | `maintenance_records` | `created_by` | NO ACTION | yes |
 | `maintenance_records` | `performed_by` | NO ACTION | yes |
@@ -9006,7 +9064,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (195 references)
+### → `organizations` (197 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9056,6 +9114,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `dues_schedules` | `organization_id` | CASCADE | no |
 | `elections` | `organization_id` | CASCADE | no |
 | `email_templates` | `organization_id` | CASCADE | no |
+| `equipment_check_bulk_requests` | `organization_id` | CASCADE | no |
 | `equipment_check_templates` | `organization_id` | CASCADE | no |
 | `equipment_kits` | `organization_id` | CASCADE | no |
 | `equipment_requests` | `organization_id` | CASCADE | no |
@@ -9117,6 +9176,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
 | `manual_ballot_attestations` | `organization_id` | CASCADE | no |
@@ -9546,6 +9606,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
+### → `check_template_compartments` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
+| `check_template_items` | `compartment_id` | CASCADE | no |
+| `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
+
 ### → `equipment_check_templates` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -9636,13 +9704,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `approval_chain_steps` | `chain_id` | CASCADE | no |
 | `approval_step_records` | `chain_id` | CASCADE | no |
-
-### → `check_template_compartments` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
-| `check_template_items` | `compartment_id` | CASCADE | no |
 
 ### → `check_template_items` (2 references)
 
