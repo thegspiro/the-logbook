@@ -19,11 +19,14 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [pytest.mark.integration]
 
+from app.api.v1.endpoints import scheduling as scheduling_endpoint
 from app.models.training import (
     AssignmentStatus,
     PatternType,
@@ -32,6 +35,8 @@ from app.models.training import (
     SwapRequestStatus,
     TimeOffStatus,
 )
+from app.models.user import User
+from app.schemas.scheduling import ShiftUpdate
 from app.services.scheduling_service import SchedulingService
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -197,6 +202,179 @@ class TestShiftCRUD:
         )
         assert err is None
         assert updated.notes == "Updated notes"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("existing_end_hour", "update_hours", "valid"),
+        [
+            (19, {"start_time": 8}, True),
+            (19, {"start_time": 19}, False),
+            (19, {"end_time": 20}, True),
+            (19, {"end_time": 7}, False),
+            (19, {"start_time": 8, "end_time": 20}, True),
+            (19, {"start_time": 20, "end_time": 8}, False),
+            (None, {"start_time": 20}, True),
+            (None, {"end_time": 8}, True),
+        ],
+        ids=[
+            "valid-start-only",
+            "invalid-start-only",
+            "valid-end-only",
+            "invalid-end-only",
+            "valid-two-field",
+            "invalid-two-field",
+            "no-end-start-only",
+            "no-end-add-valid-end",
+        ],
+    )
+    async def test_update_shift_validates_effective_time_range(
+        self,
+        db_session,
+        setup_org_and_users,
+        existing_end_hour,
+        update_hours,
+        valid,
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+        today = date.today()
+
+        def at_hour(hour):
+            return datetime(today.year, today.month, today.day, hour)
+
+        shift, create_error = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": at_hour(7),
+                "end_time": at_hour(existing_end_hour) if existing_end_hour else None,
+            },
+            uuid.UUID(user_id),
+        )
+        assert create_error is None
+        # API request datetimes carry UTC while MySQL's persisted DATETIME may
+        # be naive. Mixed awareness must not turn a valid partial update into
+        # a TypeError and generic 400 response.
+        update_data = {
+            key: at_hour(hour).replace(tzinfo=timezone.utc)
+            for key, hour in update_hours.items()
+        }
+
+        updated, error = await svc.update_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), update_data
+        )
+
+        if valid:
+            assert error is None
+            assert updated is not None
+            for key, value in update_data.items():
+                assert getattr(updated, key).replace(tzinfo=timezone.utc) == value
+        else:
+            assert updated is None
+            assert error == "end_time must be after start_time"
+            await db_session.refresh(shift)
+            assert shift.start_time == at_hour(7)
+            assert shift.end_time == at_hour(existing_end_hour)
+
+    @pytest.mark.asyncio
+    async def test_non_time_update_allows_legacy_invalid_interval(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        service = SchedulingService(db_session)
+        today = date.today()
+        shift, create_error = await service.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 19),
+                "end_time": datetime(today.year, today.month, today.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        assert create_error is None
+
+        updated, error = await service.update_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), {"notes": "Needs repair"}
+        )
+
+        assert error is None
+        assert updated.notes == "Needs repair"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("existing_end_hour", "payload_hours", "expected_status"),
+        [
+            (19, {"start_time": 8}, 200),
+            (19, {"start_time": 19}, 400),
+            (19, {"end_time": 20}, 200),
+            (19, {"end_time": 7}, 400),
+            (19, {"start_time": 8, "end_time": 20}, 200),
+            (19, {"start_time": 20, "end_time": 8}, 422),
+            (None, {"start_time": 20}, 200),
+            (None, {"end_time": 8}, 200),
+        ],
+        ids=[
+            "valid-start-only",
+            "invalid-start-only",
+            "valid-end-only",
+            "invalid-end-only",
+            "valid-two-field",
+            "invalid-two-field",
+            "no-end-start-only",
+            "no-end-add-valid-end",
+        ],
+    )
+    async def test_update_shift_endpoint_validates_effective_time_range(
+        self,
+        db_session,
+        setup_org_and_users,
+        existing_end_hour,
+        payload_hours,
+        expected_status,
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        today = date.today()
+
+        def at_hour(hour):
+            return datetime(today.year, today.month, today.day, hour)
+
+        service = SchedulingService(db_session)
+        shift, create_error = await service.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": at_hour(7),
+                "end_time": at_hour(existing_end_hour) if existing_end_hour else None,
+            },
+            uuid.UUID(user_id),
+        )
+        assert create_error is None
+        payload = {
+            key: at_hour(hour).replace(tzinfo=timezone.utc)
+            for key, hour in payload_hours.items()
+        }
+
+        if expected_status == 422:
+            with pytest.raises(ValidationError, match="end_time must be after"):
+                ShiftUpdate(**payload)
+            return
+
+        current_user = await db_session.get(User, user_id)
+        request = ShiftUpdate(**payload)
+        if expected_status == 400:
+            with pytest.raises(HTTPException) as exc_info:
+                await scheduling_endpoint.update_shift(
+                    uuid.UUID(shift.id), request, db_session, current_user
+                )
+            assert exc_info.value.status_code == 400
+            assert "end_time must be after start_time" in exc_info.value.detail
+        else:
+            response = await scheduling_endpoint.update_shift(
+                uuid.UUID(shift.id), request, db_session, current_user
+            )
+            for key, value in payload.items():
+                assert response[key].replace(tzinfo=timezone.utc) == value
 
     @pytest.mark.asyncio
     async def test_update_shift_not_found(self, db_session, setup_org_and_users):
