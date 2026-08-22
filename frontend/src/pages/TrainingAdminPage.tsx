@@ -14,7 +14,7 @@
  * Requires: training.manage permission
  */
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import { LayoutDashboard, ClipboardList, Settings, ClipboardCheck, TrendingUp, Shield } from 'lucide-react';
@@ -254,6 +254,8 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
 
 export const TrainingAdminPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const pageTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const innerTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Resolve initial state from URL params (supports both old and new format)
   const resolveInitial = (): { page: PageId; tab: string } => {
@@ -299,6 +301,30 @@ export const TrainingAdminPage: React.FC = () => {
     setSearchParams({ page: activePage, tab: tabId });
   };
 
+  const handleTabKeyDown = <T extends string>(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    ids: T[],
+    activeId: T,
+    activate: (id: T) => void,
+    refs: React.RefObject<Record<string, HTMLButtonElement | null>>
+  ) => {
+    let nextIndex: number | undefined;
+    const activeIndex = ids.indexOf(activeId);
+
+    if (event.key === 'ArrowRight') nextIndex = (activeIndex + 1) % ids.length;
+    if (event.key === 'ArrowLeft') nextIndex = (activeIndex - 1 + ids.length) % ids.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = ids.length - 1;
+
+    if (nextIndex === undefined) return;
+
+    event.preventDefault();
+    const nextId = ids[nextIndex];
+    if (nextId === undefined) return;
+    activate(nextId);
+    refs.current[nextId]?.focus();
+  };
+
   const currentPage = getPage(activePage);
 
   return (
@@ -326,9 +352,24 @@ export const TrainingAdminPage: React.FC = () => {
             return (
               <button
                 key={page.id}
+                id={`training-admin-section-tab-${page.id}`}
+                ref={(element) => {
+                  pageTabRefs.current[page.id] = element;
+                }}
                 onClick={() => handlePageChange(page.id)}
+                onKeyDown={(event) =>
+                  handleTabKeyDown(
+                    event,
+                    pages.map((item) => item.id),
+                    activePage,
+                    handlePageChange,
+                    pageTabRefs
+                  )
+                }
                 role="tab"
                 aria-selected={isActive}
+                aria-controls={`training-admin-section-panel-${page.id}`}
+                tabIndex={isActive ? 0 : -1}
                 className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
                   isActive
                     ? 'bg-red-600 text-white'
@@ -341,32 +382,62 @@ export const TrainingAdminPage: React.FC = () => {
             );
           })}
         </div>
-
-        {/* Inner tab bar */}
-        <div className="border-theme-surface-border border-b">
-          <nav className="hscroll flex space-x-1" aria-label={`${currentPage.label} tabs`}>
-            {currentPage.tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                  activeTab === tab.id
-                    ? 'text-theme-text-primary border-red-500'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                }`}
-                aria-current={activeTab === tab.id ? 'page' : undefined}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
       </div>
 
-      {/* Tab Content - each child handles its own layout */}
-      <Suspense fallback={<TabLoading />}>
-        <TabContent page={activePage} tab={activeTab} />
-      </Suspense>
+      <div
+        id={`training-admin-section-panel-${activePage}`}
+        role="tabpanel"
+        aria-labelledby={`training-admin-section-tab-${activePage}`}
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* Inner tab bar */}
+          <div className="border-theme-surface-border border-b">
+            <div className="hscroll flex space-x-1" role="tablist" aria-label={`${currentPage.label} tabs`}>
+              {currentPage.tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  id={`training-admin-tab-${activePage}-${tab.id}`}
+                  ref={(element) => {
+                    innerTabRefs.current[tab.id] = element;
+                  }}
+                  onClick={() => handleTabChange(tab.id)}
+                  onKeyDown={(event) =>
+                    handleTabKeyDown(
+                      event,
+                      currentPage.tabs.map((item) => item.id),
+                      activeTab,
+                      handleTabChange,
+                      innerTabRefs
+                    )
+                  }
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`training-admin-tabpanel-${activePage}-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+                    activeTab === tab.id
+                      ? 'text-theme-text-primary border-red-500'
+                      : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Content - each child handles its own layout */}
+        <div
+          id={`training-admin-tabpanel-${activePage}-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`training-admin-tab-${activePage}-${activeTab}`}
+        >
+          <Suspense fallback={<TabLoading />}>
+            <TabContent page={activePage} tab={activeTab} />
+          </Suspense>
+        </div>
+      </div>
     </div>
   );
 };

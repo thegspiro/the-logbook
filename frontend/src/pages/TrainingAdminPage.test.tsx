@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
 // Mock all lazy-loaded page imports before importing the component
@@ -45,25 +46,65 @@ import TrainingAdminPage from './TrainingAdminPage';
 describe('TrainingAdminPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/training/admin');
   });
 
-  it('renders the admin page with navigation tabs', async () => {
+  it('exposes both navigation levels as labelled tab interfaces', async () => {
     renderWithRouter(<TrainingAdminPage />);
-    await waitFor(() => {
-      // Should show main navigation sections
-      expect(screen.getAllByText(/dashboard|training/i).length).toBeGreaterThan(0);
-    });
+    const sectionTablist = screen.getByRole('tablist', { name: 'Training admin sections' });
+    const sectionTabs = within(sectionTablist).getAllByRole('tab');
+    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+
+    expect(sectionTablist).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
+    expect(sectionTabs).toHaveLength(6);
+    expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+    expect(dashboardTab).toHaveAttribute('tabindex', '0');
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).not.toHaveAttribute('aria-current');
+
+    const sectionPanel = screen.getByRole('tabpanel', { name: 'Dashboard' });
+    const contentPanel = screen.getByRole('tabpanel', { name: 'Overview' });
+    expect(dashboardTab).toHaveAttribute('aria-controls', sectionPanel.id);
+    expect(overviewTab).toHaveAttribute('aria-controls', contentPanel.id);
+    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Dashboard');
   });
 
-  it('renders without crashing', () => {
-    const { container } = renderWithRouter(<TrainingAdminPage />);
-    expect(container).toBeInTheDocument();
-  });
-
-  it('shows the default tab content', async () => {
+  it('uses roving focus and arrow, Home, and End keys for inner tabs', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
-    await waitFor(() => {
-      expect(screen.getAllByTestId('lazy-component').length).toBeGreaterThan(0);
-    });
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+
+    overviewTab.focus();
+    await user.keyboard('{ArrowRight}');
+    const complianceTab = screen.getByRole('tab', { name: 'Compliance Matrix' });
+    expect(complianceTab).toHaveFocus();
+    expect(complianceTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).toHaveAttribute('tabindex', '-1');
+    expect(window.location.search).toBe('?page=dashboard&tab=compliance');
+
+    await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'Training Waivers' })).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
+  });
+
+  it('activates top-level tabs from the keyboard and restores URL state on browser back', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
+
+    dashboardTab.focus();
+    await user.keyboard('{ArrowRight}');
+    const recordsTab = screen.getByRole('tab', { name: 'Records' });
+    expect(recordsTab).toHaveFocus();
+    expect(recordsTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tablist', { name: 'Records tabs' })).toBeInTheDocument();
+    expect(window.location.search).toBe('?page=records&tab=submissions');
+
+    window.history.back();
+    await waitFor(() => expect(dashboardTab).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
   });
 });
