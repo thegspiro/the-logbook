@@ -43,6 +43,10 @@ from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
 
 
+class EquipmentCheckConflictError(ValueError):
+    """A completed shift/template check already owns this submission slot."""
+
+
 class EquipmentCheckService:
     """Service for equipment check template and submission management."""
 
@@ -1143,7 +1147,13 @@ class EquipmentCheckService:
         data: Dict[str, Any],
         allow_manage: bool = False,
     ) -> ShiftEquipmentCheck:
-        """Submit an equipment check for a shift."""
+        """Submit an equipment check for a shift.
+
+        The database unique constraint is the concurrency authority.  The
+        early lookup provides a friendly fast path, while the flush below
+        claims the shift/template slot before item, inventory, deficiency, or
+        notification effects are produced.
+        """
         result = await self.db.execute(
             select(Shift).where(
                 Shift.id == shift_id,
@@ -1177,10 +1187,31 @@ class EquipmentCheckService:
 
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
+        client_submission_id = data.get("client_submission_id")
         selected_template = None
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
+
+        # Resolve an acknowledged retry before consulting mutable template
+        # state. The template may have been disabled, reassigned, deleted, or
+        # edited after this transaction committed but before its response was
+        # lost; none of those changes should turn a successful retry into 400.
+        if client_submission_id:
+            retry_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.organization_id == organization_id,
+                    ShiftEquipmentCheck.client_submission_id == client_submission_id,
+                )
+            )
+            retry = retry_result.scalars().first()
+            if retry is not None:
+                if retry.shift_id != shift_id or retry.template_id != template_id:
+                    raise EquipmentCheckConflictError(
+                        "This client submission ID was already used for another check"
+                    )
+                if retry.overall_status != "incomplete":
+                    return await self.get_check(retry.id, organization_id)
 
         if template_id:
             position = getattr(assignment, "position", None)
@@ -1230,10 +1261,16 @@ class EquipmentCheckService:
                             "items": items_data,
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
+                            "client_submission_id": client_submission_id,
                         },
                         allow_any=allow_manage,
                     )
-                raise ValueError(
+                if (
+                    client_submission_id
+                    and existing_check.client_submission_id == client_submission_id
+                ):
+                    return await self.get_check(existing_check.id, organization_id)
+                raise EquipmentCheckConflictError(
                     "A check for this template has already "
                     "been submitted for this shift"
                 )
@@ -1277,8 +1314,64 @@ class EquipmentCheckService:
             failed_items=failed,
             notes=data.get("notes"),
             signature_data=data.get("signature_data"),
+            client_submission_id=client_submission_id,
         )
         self.db.add(check)
+
+        # Claim the unique slot before any operational side effects. Concurrent
+        # transactions both can miss the advisory lookup above; precisely one
+        # flush succeeds and the loser deterministically resumes/returns the
+        # winner or receives a conflict.
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            await self.db.rollback()
+            ownership_predicates = [
+                and_(
+                    ShiftEquipmentCheck.shift_id == shift_id,
+                    ShiftEquipmentCheck.template_id == template_id,
+                )
+            ]
+            if client_submission_id:
+                ownership_predicates.append(
+                    and_(
+                        ShiftEquipmentCheck.organization_id == organization_id,
+                        ShiftEquipmentCheck.client_submission_id
+                        == client_submission_id,
+                    )
+                )
+            winner_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(or_(*ownership_predicates))
+            )
+            winner = winner_result.scalars().first()
+            if winner is None:
+                # The integrity failure was unrelated to idempotency.
+                raise
+            if winner.shift_id != shift_id or winner.template_id != template_id:
+                raise EquipmentCheckConflictError(
+                    "This client submission ID was already used for another check"
+                )
+            if winner.overall_status == "incomplete":
+                return await self.complete_incomplete_check(
+                    check_id=winner.id,
+                    organization_id=organization_id,
+                    checked_by=checked_by,
+                    data={
+                        "items": items_data,
+                        "notes": data.get("notes"),
+                        "signature_data": data.get("signature_data"),
+                        "client_submission_id": client_submission_id,
+                    },
+                    allow_any=allow_manage,
+                )
+            if (
+                client_submission_id
+                and winner.client_submission_id == client_submission_id
+            ):
+                return await self.get_check(winner.id, organization_id)
+            raise EquipmentCheckConflictError(
+                "A check for this template has already been submitted for this shift"
+            )
 
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
@@ -1576,6 +1669,11 @@ class EquipmentCheckService:
             check.notes = data["notes"]
         if data.get("signature_data"):
             check.signature_data = data["signature_data"]
+        if data.get("client_submission_id"):
+            # Completing a draft is a distinct client operation. Persist its
+            # key so a lost completion response can replay to this now-complete
+            # record instead of conflicting with the draft's original key.
+            check.client_submission_id = data["client_submission_id"]
 
         await self.db.commit()
         return await self.get_check(check.id, organization_id)

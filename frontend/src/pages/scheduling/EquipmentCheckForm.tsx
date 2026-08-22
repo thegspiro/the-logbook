@@ -962,6 +962,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (!confirmed) return;
     }
 
+    const clientSubmissionId = crypto.randomUUID();
     setSubmitting(true);
     try {
       // Collect items with photo files for post-submit upload
@@ -1006,6 +1007,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const basePayload = {
         template_id: template.id,
         check_timing: template.checkTiming,
+        client_submission_id: clientSubmissionId,
         items,
         notes: overallNotes || undefined,
       };
@@ -1108,6 +1110,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const fallbackPayload: ShiftEquipmentCheckCreate = {
           template_id: template.id,
           check_timing: template.checkTiming,
+          client_submission_id: clientSubmissionId,
           items: fallbackItems,
           notes: overallNotes || undefined,
         };

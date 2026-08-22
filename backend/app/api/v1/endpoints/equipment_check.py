@@ -64,7 +64,10 @@ from app.schemas.equipment_check import (
     SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    EquipmentCheckConflictError,
+    EquipmentCheckService,
+)
 from app.services.equipment_readiness_service import EquipmentReadinessService
 from app.utils.image_processing import optimize_image
 
@@ -747,6 +750,8 @@ async def submit_check(
         return check
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    except EquipmentCheckConflictError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
