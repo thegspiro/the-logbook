@@ -50,6 +50,7 @@ import {
   enqueueCheck,
   listPendingChecks,
   dequeueCheck,
+  markCheckSubmitted,
   markRetry,
   pendingCount as getPendingCount,
   CHECK_QUEUE_MAX_RETRIES,
@@ -72,6 +73,7 @@ import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useAuthStore } from '../../stores/authStore';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 // ============================================================================
 // Types
 // ============================================================================
@@ -205,9 +207,21 @@ function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'ex
   return 'ok';
 }
 
+/**
+ * The verdict used everywhere in the form. Expiration is a property of the
+ * item currently aboard, not an answer the user has to make, so an expired
+ * item is effectively failed even when its persisted answer is absent (or
+ * stale). Keeping that derivation out of state also lets a corrected lot make
+ * the original answer visible again immediately.
+ */
+function getEffectiveStatus(item: CheckTemplateItem, result: ItemResult | undefined, today: string): CheckItemStatus {
+  return getExpirationStatus(item, today) === 'expired' ? 'fail' : (result?.status ?? 'not_checked');
+}
+
 function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
-  results: Record<string, ItemResult>
+  results: Record<string, ItemResult>,
+  today: string
 ): 'complete' | 'has_failures' | 'has_out_of_service' | 'in_progress' | 'not_started' {
   const checkable = compartment.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
   if (checkable.length === 0) return 'complete';
@@ -216,15 +230,15 @@ function getCompartmentStatus(
   let failed = 0;
   let outOfService = 0;
   for (const item of checkable) {
-    const result = results[item.id];
-    if (result && result.status !== 'not_checked') {
+    const status = getEffectiveStatus(item, results[item.id], today);
+    if (status !== 'not_checked') {
       checked++;
-      if (result.status === 'fail') failed++;
+      if (status === 'fail') failed++;
       // Counted apart from failures: the server tallies it as a failed item
       // (the check as a whole fails), but the form paints out-of-service amber
       // rather than red, and a compartment that reported one must not read as
       // a green "Complete".
-      if (result.status === 'out_of_service') outOfService++;
+      if (status === 'out_of_service') outOfService++;
     }
   }
 
@@ -297,6 +311,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     {}
   );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(swapTarget));
+  // Lots corrected during this check, so the row reflects the box the crew is
+  // holding without waiting for a template re-fetch.
+  const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
+  const [lotBusyId, setLotBusyId] = useState<string | null>(null);
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
@@ -340,11 +361,24 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const pending = await listPendingChecks();
       let failed = 0;
       let discarded = 0;
-      let photosLost = 0;
 
       for (const entry of pending) {
         try {
-          const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+          let checkId = entry.submittedCheckId;
+          let submittedItemIds = entry.submittedItemIds;
+          if (!checkId) {
+            const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+            checkId = record.id;
+            submittedItemIds = Object.fromEntries(
+              (record.items ?? [])
+                .filter((item) => item.templateItemId)
+                .map((item) => [item.templateItemId as string, item.id])
+            );
+            // From this point onward this queue entry is a photo-upload retry,
+            // not a check-submission retry. Persist that distinction before an
+            // upload can fail so the accepted check is never created twice.
+            await markCheckSubmitted(entry.id, checkId, submittedItemIds);
+          }
 
           // Upload queued photos
           const photosByItem = new Map<string, Array<{ blob: Blob; fileName: string }>>();
@@ -353,18 +387,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             arr.push({ blob: photo.blob, fileName: photo.fileName });
             photosByItem.set(photo.itemId, arr);
           }
-          for (const [itemId, photos] of photosByItem) {
-            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
-            try {
-              await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
-            } catch {
-              // The check itself is recorded, so this is not fatal — but the
-              // entry (and with it the only copy of these blobs) is about to be
-              // dequeued. Count them so the loss is reported rather than
-              // discovered later by whoever went looking for the photo of the
-              // damaged item.
-              photosLost += files.length;
+          for (const [templateItemId, photos] of photosByItem) {
+            const checkItemId = submittedItemIds?.[templateItemId];
+            if (!checkItemId) {
+              throw new Error(`Submitted check item not found for template item ${templateItemId}`);
             }
+            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
+            await schedulingService.uploadCheckItemPhotos(checkId, checkItemId, files);
           }
 
           await dequeueCheck(entry.id);
@@ -395,9 +424,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
       if (discarded > 0) {
         toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
-      }
-      if (photosLost > 0) {
-        toast.error(`${photosLost} photo(s) could not be uploaded and were not saved`);
       }
     } catch {
       setSyncStatus('error');
@@ -433,11 +459,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   const totalItems = checkableItems.length;
-  const checkedItems = checkableItems.filter((item) => {
-    const result = results[item.id];
-    return result && result.status !== 'not_checked';
-  }).length;
-  const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
 
   /**
    * "Brush 5 · Sat, Aug 16" beside a timing badge — whichever of the three we
@@ -460,13 +481,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       : shiftContext?.checkTiming === 'end_of_shift'
         ? 'End of shift'
         : null;
-
-  const unansweredRequiredCount = checkableItems.filter((item) => {
-    if (!item.isRequired) return false;
-    const result = results[item.id];
-    return !result || result.status === 'not_checked';
-  }).length;
-  const allRequiredChecked = unansweredRequiredCount === 0;
 
   // --------------------------------------------------------------------------
   // Handlers
@@ -498,6 +512,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     },
     [swapOverrides]
   );
+
+  const effectiveCheckableItems = useMemo(() => checkableItems.map(applyOverride), [checkableItems, applyOverride]);
+  const checkedItems = effectiveCheckableItems.filter(
+    (item) => getEffectiveStatus(item, results[item.id], today) !== 'not_checked'
+  ).length;
+  const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+  const unansweredRequiredCount = effectiveCheckableItems.filter(
+    (item) => item.isRequired && getEffectiveStatus(item, results[item.id], today) === 'not_checked'
+  ).length;
+  const allRequiredChecked = unansweredRequiredCount === 0;
 
   const openSwap = useCallback(
     async (item: CheckTemplateItem) => {
@@ -968,7 +992,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
             item_name: item.name,
             check_type: item.checkType,
-            status: result?.status || 'not_checked',
+            status: getEffectiveStatus(item, result, today),
             quantity_found: result?.quantityFound,
             required_quantity: item.requiredQuantity ?? item.expectedQuantity,
             critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
@@ -1071,7 +1095,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
               item_name: item.name,
               check_type: item.checkType,
-              status: result?.status || 'not_checked',
+              status: getEffectiveStatus(item, result, today),
               quantity_found: result?.quantityFound,
               required_quantity: item.requiredQuantity ?? item.expectedQuantity,
               critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
@@ -1150,16 +1174,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const renderCheckInput = (item: CheckTemplateItem) => {
     const result = results[item.id];
-    const currentStatus = result?.status ?? 'not_checked';
     const expirationStatus = getExpirationStatus(item, today);
     const isExpired = expirationStatus === 'expired';
 
-    // Auto-fail expired items
-    if (isExpired && currentStatus !== 'fail') {
-      queueMicrotask(() => updateResult(item.id, { status: 'fail' }));
-    }
-
-    const effectiveStatus = isExpired ? 'fail' : currentStatus;
+    const effectiveStatus = getEffectiveStatus(item, result, today);
 
     /**
      * Pass or Fail with nothing between forced a crew to file a legitimately
@@ -1291,7 +1309,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const hasBeenSet = result?.quantityFound != null;
         // Seeded from the running count but not yet affirmed by this crew. The
         // number is shown so they only correct what changed; it is not a check.
-        const isCarriedOver = hasBeenSet && currentStatus === 'not_checked';
+        const isCarriedOver = hasBeenSet && (result?.status ?? 'not_checked') === 'not_checked';
         const unit = item.unitOfMeasure;
         const prevQty = lastCheckData?.[item.id]?.quantity_found;
 
@@ -1554,7 +1572,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     }
 
     const result = results[item.id];
-    const effectiveStatus = result?.status ?? 'not_checked';
+    const effectiveStatus = getEffectiveStatus(item, result, today);
     const showNotesField = expandedNotes.has(item.id);
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
     const isQuantity = item.checkType === 'quantity';
@@ -1793,12 +1811,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
             {section.comps.map(({ comp }) => {
               const isCollapsed = collapsedCompartments.has(comp.id);
-              const status = getCompartmentStatus(comp, results);
+              const effectiveComp = { ...comp, items: comp.items.map(applyOverride) };
+              const status = getCompartmentStatus(effectiveComp, results, today);
               const checkable = comp.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
-              const checked = checkable.filter((i) => {
-                const r = results[i.id];
-                return r && r.status !== 'not_checked';
-              }).length;
+              const checked = checkable.filter(
+                (item) => getEffectiveStatus(applyOverride(item), results[item.id], today) !== 'not_checked'
+              ).length;
 
               return (
                 <div key={comp.id}>
