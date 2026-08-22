@@ -396,7 +396,8 @@ export const EventForm: React.FC<EventFormProps> = ({
    */
   const handleEventTypeChange = (nextType: EventType) => {
     const changes: Partial<EventCreate> = { event_type: nextType };
-    const isCreating = !initialData;
+    // Templates prefill initialData too; only an event ID means edit mode.
+    const isCreating = !editingEventId;
 
     if (isCreating && !guestSwitchesTouched) {
       if (nextType === EventTypeEnum.RECRUITMENT) {
