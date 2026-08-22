@@ -641,7 +641,8 @@ class MembershipPipelineService:
         """List prospects with filters.
 
         ``event_id`` narrows to prospects whose creation metadata names that
-        event as their source. Callers must have already confirmed
+        event as their source or who have an explicit event link. Callers must
+        have already confirmed
         the event belongs to *organization_id*; the prospect scope below stops
         a foreign id leaking rows, but it would read as "no applicants" rather
         than as the wrong-org id it is.
@@ -662,8 +663,16 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.status == status)
         if event_id:
             query = query.where(
-                ProspectiveMember.metadata_["source_event_id"].as_string()
-                == str(event_id)
+                or_(
+                    ProspectiveMember.metadata_["source_event_id"].as_string()
+                    == str(event_id),
+                    select(ProspectEventLink.id)
+                    .where(
+                        ProspectEventLink.prospect_id == ProspectiveMember.id,
+                        ProspectEventLink.event_id == str(event_id),
+                    )
+                    .exists(),
+                )
             )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:

@@ -1908,13 +1908,16 @@ async def review_swap_request(
 ):
     """Review (approve/deny) a shift swap request"""
     service = SchedulingService(db)
-    result, error = await service.review_swap_request(
-        request_id,
-        current_user.organization_id,
-        current_user.id,
-        review.status,
-        review.reviewer_notes,
-    )
+    try:
+        result, error = await service.review_swap_request(
+            request_id,
+            current_user.organization_id,
+            current_user.id,
+            review.status,
+            review.reviewer_notes,
+        )
+    except CodedValueError as exc:
+        raise _driver_block(exc)
     if error:
         raise HTTPException(
             status_code=400,
