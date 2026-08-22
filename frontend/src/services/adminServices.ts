@@ -340,6 +340,12 @@ export const platformAnalyticsService = {
 };
 
 export const dashboardService = {
+  async getAssetWidgets(): Promise<import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[]> {
+    const response = await api.get<{
+      widgets: import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[];
+    }>('/dashboard/asset-widgets');
+    return response.data.widgets;
+  },
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
     return response.data;
