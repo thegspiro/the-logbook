@@ -1190,6 +1190,38 @@ class MembershipPipelineService:
                         f"reference(s); only {len(references)} received."
                     )
 
+        elif step_type == PipelineStepType.DOCUMENT_UPLOAD:
+            required_document_types = config.get("required_document_types", [])
+            if required_document_types:
+                # Document type labels are coordinator-defined free text. Grade
+                # both configured labels and uploaded values using the same
+                # Unicode/case/whitespace normalization, while retaining the
+                # configured spelling in the error shown to the coordinator.
+                def normalize_document_type(value: Any) -> str:
+                    return unicodedata.normalize("NFKC", str(value)).strip().casefold()
+
+                result = await self.db.execute(
+                    select(ProspectDocument).where(
+                        and_(
+                            ProspectDocument.prospect_id == prospect.id,
+                            ProspectDocument.step_id == step.id,
+                        )
+                    )
+                )
+                uploaded_types = {
+                    normalize_document_type(document.document_type)
+                    for document in result.scalars().all()
+                }
+                missing = [
+                    str(document_type)
+                    for document_type in required_document_types
+                    if normalize_document_type(document_type) not in uploaded_types
+                ]
+                if missing:
+                    raise ValueError(
+                        f"Missing required documents: {', '.join(missing)}."
+                    )
+
         elif step_type == PipelineStepType.MEDICAL_SCREENING:
             required_screenings = config.get("required_screenings", [])
             require_all_passed = config.get("require_all_passed", True)
@@ -4993,7 +5025,24 @@ class MembershipPipelineService:
             performed_by=interviewer_id,
         )
 
+        prospect_id = str(interview.prospect_id)
+        interview_step_id = str(interview.step_id) if interview.step_id else None
         await self.db.commit()
+
+        # An edit can turn an interview that was already counted for this
+        # stage into one that satisfies its recommendation gate.  Retry only
+        # after committing so complete_step grades the durable interview
+        # values (and retain its current-step and auto-advance protections).
+        if interview_step_id:
+            await self._try_auto_advance_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=interview_step_id,
+                completed_by=interviewer_id,
+                trigger="interview update",
+                action_result={"interview_id": interview_id},
+            )
+
         return await self.get_interview(interview_id, organization_id)
 
     async def delete_interview(

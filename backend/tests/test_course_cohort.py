@@ -284,6 +284,49 @@ def _patch_session_service(sessions=None, error=None):
     )
 
 
+class TestCohortClassOverride:
+    def test_start_only_is_valid(self):
+        start = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)
+
+        override = CohortClassOverride(course_class_id=uuid4(), scheduled_start=start)
+
+        assert override.scheduled_start == start
+        assert override.scheduled_end is None
+
+    def test_end_only_is_rejected_with_actionable_message(self):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "scheduled_end cannot be supplied without scheduled_start; "
+                "provide scheduled_start or omit scheduled_end"
+            ),
+        ):
+            CohortClassOverride(
+                course_class_id=uuid4(),
+                scheduled_end=datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc),
+            )
+
+    def test_valid_paired_override_is_accepted(self):
+        start = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)
+        end = start + timedelta(hours=2)
+
+        override = CohortClassOverride(
+            course_class_id=uuid4(), scheduled_start=start, scheduled_end=end
+        )
+
+        assert (override.scheduled_start, override.scheduled_end) == (start, end)
+
+    def test_invalid_paired_override_is_rejected(self):
+        start = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)
+
+        with pytest.raises(ValueError, match="must be after scheduled_start"):
+            CohortClassOverride(
+                course_class_id=uuid4(),
+                scheduled_start=start,
+                scheduled_end=start,
+            )
+
+
 class TestPreviewSchedule:
     async def test_resolves_every_offset_into_a_real_date(self):
         course = _course()
@@ -506,13 +549,19 @@ class TestCreateCohort:
         for call in session_service.create_training_session.await_args_list:
             assert call.kwargs["commit"] is False
 
-    async def test_per_class_date_override_wins(self):
+    @pytest.mark.parametrize(
+        "explicit_end", [False, True], ids=["start-only", "paired"]
+    )
+    async def test_per_class_date_override_sets_generated_session_times(
+        self, explicit_end
+    ):
         course = _course()
         klass = _klass(1, course.id, 0)
         db = self._db_for_generation(course, [(klass, _course("SCBA"))])
-        patcher, _ = _patch_session_service()
+        patcher, session_service = _patch_session_service()
         svc = CourseCohortService(db)
         moved = datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)
+        expected_end = moved + timedelta(hours=2 if explicit_end else 3)
 
         with patcher:
             await svc.create_cohort(
@@ -524,7 +573,7 @@ class TestCreateCohort:
                         CohortClassOverride(
                             course_class_id=klass.id,
                             scheduled_start=moved,
-                            scheduled_end=moved + timedelta(hours=2),
+                            scheduled_end=expected_end if explicit_end else None,
                         )
                     ],
                 ),
@@ -532,7 +581,14 @@ class TestCreateCohort:
                 ACTOR,
             )
 
-        assert db.added_of(CourseCohortClass)[0].scheduled_start == moved
+        generated_class = db.added_of(CourseCohortClass)[0]
+        assert generated_class.scheduled_start == moved
+        assert generated_class.scheduled_end == expected_end
+        payload = session_service.create_training_session.await_args.kwargs[
+            "session_data"
+        ]
+        assert payload.start_datetime == moved
+        assert payload.end_datetime == expected_end
 
     async def test_skipped_classes_are_not_generated(self):
         course = _course()
