@@ -69,6 +69,10 @@ interface PageDef {
   description: string;
   tabs: TabDef[];
   defaultTab: string;
+  actions?: Array<{
+    label: string;
+    tab: string;
+  }>;
 }
 
 // ── Page & tab structure ────────────────────────────────────────
@@ -100,6 +104,10 @@ const pages: PageDef[] = [
       { id: 'member-status', label: 'Monthly Status' },
     ],
     defaultTab: 'submissions',
+    actions: [
+      { label: 'Review submissions', tab: 'submissions' },
+      { label: 'Create session', tab: 'sessions' },
+    ],
   },
   {
     id: 'setup',
@@ -115,6 +123,7 @@ const pages: PageDef[] = [
       { id: 'import', label: 'Import History' },
     ],
     defaultTab: 'requirements',
+    actions: [{ label: 'Manage requirements', tab: 'requirements' }],
   },
   {
     id: 'skills-testing',
@@ -377,11 +386,7 @@ export const TrainingAdminPage: React.FC = () => {
         </div>
 
         {/* Desktop navigation keeps frequent workflows prominent and tucks the rest into More. */}
-        <div
-          className="mb-6 hidden items-center space-x-2 md:flex"
-          role="navigation"
-          aria-label="Training admin sections"
-        >
+        <div className="mb-6 hidden items-center space-x-2 md:flex" role="tablist" aria-label="Training admin sections">
           {primaryPages.map((page) => {
             const Icon = page.icon;
             const isActive = activePage === page.id;
@@ -389,6 +394,8 @@ export const TrainingAdminPage: React.FC = () => {
               <button
                 key={page.id}
                 onClick={() => handlePageChange(page.id)}
+                role="tab"
+                aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
                 className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
                   isActive
@@ -449,6 +456,32 @@ export const TrainingAdminPage: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* The live region gives section changes useful context without announcing tab content. */}
+        <div
+          className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p className="text-theme-text-muted text-sm">
+            <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
+            {currentPage.description}
+          </p>
+          {currentPage.actions && (
+            <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
+              {currentPage.actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => handleTabChange(action.tab)}
+                  className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Inner tab bar */}
