@@ -6,9 +6,10 @@ Screening module — health screening records. This guide explains what you can
 see and control about your own data, and what administrators configure on
 behalf of the department.
 
-Two audiences share this lesson. Sections 1–4 are for **every member**.
-Sections 5–8 are for **administrators** who configure retention, handle
-departures, and answer records requests.
+Two audiences share this lesson. Sections 1–4 are for **every member** (with
+one officer-only subsection at the end of section 4, on changing the published
+wording). Sections 5–8 are for **administrators** who configure retention,
+handle departures, and answer records requests.
 
 ---
 
@@ -208,10 +209,51 @@ your information is never sold and never used for advertising.
 > these pages and for the data itself. The Logbook is the software the
 > department runs.
 
-> **Admins:** if you replace the wording with your own, it replaces the
-> platform default **entirely** — the two are not merged. Carry the control and
-> access language above into your version, and set `legal.last_updated` so
-> readers see a revision date. Have counsel review anything you publish.
+### Changing the wording (Officers)
+
+> **Required Permission:** `legal.propose` to read and propose, `legal.publish`
+> to publish
+
+Go to **Governance → Legal Documents**. The screen shows, for each of the two
+documents, what members see right now, any proposals open against it, and the
+history of what it said before.
+
+**Proposing is not publishing.** Anyone who can reach the screen — by default
+the secretary, the chiefs, captains and lieutenants, the president, vice
+president, treasurer, board, quartermaster, membership coordinator, and
+assistant secretary — can write an alternative version. Nothing on the public
+page changes until someone with publishing rights (by default the Fire Chief,
+President, or IT Manager) publishes it. Regular members never see the screen.
+
+To propose a revision:
+
+1. Pick the document — **Privacy Policy** or **Terms of Service**.
+2. Click **Propose a revision**. The editor opens already filled in with the
+   text currently published, so you edit rather than retype. If your department
+   has not published its own version yet, it is filled in with the platform
+   default — the same words members are reading on the page today.
+3. Edit the text. It is plain text, exactly as the public page renders it:
+   leave a blank line between paragraphs, and do not use formatting marks —
+   they would be printed literally.
+4. Say **what this changes and why**, naming the bylaw, SOP, statute, or
+   counsel advice behind it. This is required. It is what a future officer
+   reads to understand the change, and what you will want in front of you if
+   the notice is ever questioned.
+5. Optionally set the effective date members see as "Last updated".
+6. **Save draft.** It is now visible to the other officers, and still not
+   public.
+
+An officer with publishing rights reviews the draft and clicks **Publish to
+members**, which replaces the live page immediately. The version that was live
+is archived, not deleted, so the department can always answer what a member was
+shown on a given date. **Revert to the built-in text** puts the platform
+default back.
+
+> **Admins:** your wording replaces the platform default **entirely** — the two
+> are not merged. Carry the department-control and status-based-access language
+> across into your version; it is the part a rewrite most often loses, and the
+> part that matters when a member disputes an access removal. Have counsel
+> review anything you publish.
 
 ---
 
