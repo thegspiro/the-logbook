@@ -50,6 +50,7 @@ import {
   enqueueCheck,
   listPendingChecks,
   dequeueCheck,
+  markCheckSubmitted,
   markRetry,
   pendingCount as getPendingCount,
   CHECK_QUEUE_MAX_RETRIES,
@@ -351,11 +352,24 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const pending = await listPendingChecks();
       let failed = 0;
       let discarded = 0;
-      let photosLost = 0;
 
       for (const entry of pending) {
         try {
-          const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+          let checkId = entry.submittedCheckId;
+          let submittedItemIds = entry.submittedItemIds;
+          if (!checkId) {
+            const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+            checkId = record.id;
+            submittedItemIds = Object.fromEntries(
+              (record.items ?? [])
+                .filter((item) => item.templateItemId)
+                .map((item) => [item.templateItemId as string, item.id])
+            );
+            // From this point onward this queue entry is a photo-upload retry,
+            // not a check-submission retry. Persist that distinction before an
+            // upload can fail so the accepted check is never created twice.
+            await markCheckSubmitted(entry.id, checkId, submittedItemIds);
+          }
 
           // Upload queued photos
           const photosByItem = new Map<string, Array<{ blob: Blob; fileName: string }>>();
@@ -364,18 +378,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             arr.push({ blob: photo.blob, fileName: photo.fileName });
             photosByItem.set(photo.itemId, arr);
           }
-          for (const [itemId, photos] of photosByItem) {
-            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
-            try {
-              await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
-            } catch {
-              // The check itself is recorded, so this is not fatal — but the
-              // entry (and with it the only copy of these blobs) is about to be
-              // dequeued. Count them so the loss is reported rather than
-              // discovered later by whoever went looking for the photo of the
-              // damaged item.
-              photosLost += files.length;
+          for (const [templateItemId, photos] of photosByItem) {
+            const checkItemId = submittedItemIds?.[templateItemId];
+            if (!checkItemId) {
+              throw new Error(`Submitted check item not found for template item ${templateItemId}`);
             }
+            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
+            await schedulingService.uploadCheckItemPhotos(checkId, checkItemId, files);
           }
 
           await dequeueCheck(entry.id);
@@ -406,9 +415,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
       if (discarded > 0) {
         toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
-      }
-      if (photosLost > 0) {
-        toast.error(`${photosLost} photo(s) could not be uploaded and were not saved`);
       }
     } catch {
       setSyncStatus('error');
