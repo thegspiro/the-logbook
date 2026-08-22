@@ -257,6 +257,11 @@ class CohortClassOverride(BaseModel):
 
     @model_validator(mode="after")
     def _check_range(self) -> "CohortClassOverride":
+        if self.scheduled_end is not None and self.scheduled_start is None:
+            raise ValueError(
+                "scheduled_end cannot be supplied without scheduled_start; "
+                "provide scheduled_start or omit scheduled_end"
+            )
         if (
             self.scheduled_start
             and self.scheduled_end
