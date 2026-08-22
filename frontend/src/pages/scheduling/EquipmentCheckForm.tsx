@@ -314,6 +314,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(Boolean(swapTarget));
+  // Lots corrected during this check, so the row reflects the box the crew is
+  // holding without waiting for a template re-fetch.
+  const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
+  const [lotBusyId, setLotBusyId] = useState<string | null>(null);
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
