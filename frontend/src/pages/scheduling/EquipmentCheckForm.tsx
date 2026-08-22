@@ -312,6 +312,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     {}
   );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+  // Lots corrected during this check, so the row reflects the box the crew is
+  // holding without waiting for a template re-fetch.
   const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
   const [lotBusyId, setLotBusyId] = useState<string | null>(null);
 
@@ -530,7 +532,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       setLotBusyId(null);
     }
   };
-
   const effectiveCheckableItems = useMemo(() => checkableItems.map(applyOverride), [checkableItems, applyOverride]);
   const checkedItems = effectiveCheckableItems.filter(
     (item) => getEffectiveStatus(item, results[item.id], today) !== 'not_checked'
