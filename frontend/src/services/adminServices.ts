@@ -11,6 +11,8 @@ import type {
   OperationsDashboard,
   ActionItemSummary,
   CommunityEngagement,
+  MainDashboardWidgets,
+  WidgetPeriod,
 } from './communicationsServices';
 import type { IntegrationConfig } from './trainingServices';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitiesServices';
@@ -340,6 +342,10 @@ export const platformAnalyticsService = {
 };
 
 export const dashboardService = {
+  async getWidgets(period: WidgetPeriod): Promise<MainDashboardWidgets> {
+    const response = await api.get<MainDashboardWidgets>('/dashboard/widgets', { params: { period } });
+    return response.data;
+  },
   async getAssetWidgets(): Promise<import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[]> {
     const response = await api.get<{
       widgets: import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[];
