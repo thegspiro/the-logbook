@@ -20,12 +20,19 @@ Covered here:
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import CheckInWindowType, Event, EventType
+from app.api.v1.endpoints.events import check_in_external_attendee
+from app.models.event import (
+    CheckInWindowType,
+    Event,
+    EventExternalAttendee,
+    EventType,
+)
 from app.models.medical_screening import (
     ScreeningRecord,
     ScreeningStatus,
@@ -455,5 +462,98 @@ class TestMeetingAutoAdvanceOnCheckIn:
 
         assert error is None
         assert attendee is not None
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestMeetingAutoAdvanceOnStaffCheckIn:
+    """Staff-entered external attendance uses the same pipeline hook."""
+
+    async def _staff_check_in(
+        self,
+        db_session: AsyncSession,
+        org_id: str,
+        event: Event,
+        prospect_id: str | None,
+    ) -> EventExternalAttendee:
+        attendee = EventExternalAttendee(
+            id=_uid(),
+            organization_id=org_id,
+            event_id=str(event.id),
+            name="Dana Reed",
+            email=f"staff-{_uid()[:8]}@example.com",
+            prospect_id=prospect_id,
+        )
+        db_session.add_all([event, attendee])
+        await db_session.commit()
+
+        await check_in_external_attendee(
+            event_id=uuid.UUID(str(event.id)),
+            attendee_id=uuid.UUID(str(attendee.id)),
+            db=db_session,
+            current_user=SimpleNamespace(organization_id=org_id),
+        )
+        await db_session.refresh(attendee)
+        return attendee
+
+    async def test_linked_prospect_advances(self, db_session: AsyncSession, org):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+
+        attendee = await self._staff_check_in(
+            db_session, org, _make_event(org), prospect.id
+        )
+
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_unrelated_event_only_records_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+        event = _make_event(org, event_type=EventType.TRAINING)
+
+        attendee = await self._staff_check_in(db_session, org, event, prospect.id)
+
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_attendee_without_prospect_link_only_records_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        attendee = await self._staff_check_in(db_session, org, _make_event(org), None)
+
+        assert attendee.checked_in is True
+        assert attendee.prospect_id is None
+
+    async def test_auto_advance_disabled_only_records_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"linked_event_type": "business_meeting", "auto_advance": False},
+        )
+
+        attendee = await self._staff_check_in(
+            db_session, org, _make_event(org), prospect.id
+        )
+
         assert attendee.checked_in is True
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
