@@ -11,6 +11,7 @@ import { renderWithRouter } from '../../test/utils';
 const mockGetLastCheckResults = vi.fn();
 const mockSubmitCheck = vi.fn();
 const mockUpdateDeployedLot = vi.fn();
+const mockEnqueueCheck = vi.fn();
 const mockUploadCheckItemPhotos = vi.fn();
 const mockListPendingChecks = vi.fn();
 const mockDequeueCheck = vi.fn();
@@ -35,6 +36,9 @@ vi.mock('../../services/inventoryService', () => ({
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
 vi.mock('../../utils/offlineQueue', () => ({
+  enqueueCheck: (...a: unknown[]) => mockEnqueueCheck(...a) as unknown,
+  listPendingChecks: vi.fn().mockResolvedValue([]),
+  dequeueCheck: vi.fn(),
   enqueueCheck: vi.fn(),
   listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
   dequeueCheck: (...a: unknown[]) => mockDequeueCheck(...a) as unknown,
@@ -117,6 +121,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     mockUploadCheckItemPhotos.mockResolvedValue({ photoUrls: [], count: 1 });
     mockMarkCheckSubmitted.mockResolvedValue({});
     mockSubmitCheck.mockResolvedValue({ id: 'check-1', items: [] });
+    mockEnqueueCheck.mockResolvedValue('queued-check-1');
     mockUpdateDeployedLot.mockResolvedValue({
       templateItemId: 'ti-1',
       itemName: '4x4 Gauze',
@@ -204,6 +209,30 @@ describe('EquipmentCheckForm quantity seeding', () => {
     const payload = mockSubmitCheck.mock.calls[0][1];
     expect(payload.items).toHaveLength(1);
     expect(payload.items[0].template_item_id).toBe('ti-1');
+  });
+
+  it('does not queue text instruction rows after a transport failure', async () => {
+    const user = userEvent.setup();
+    const templateWithInstruction = template({ quantityOnTruck: 4 });
+    templateWithInstruction.compartments[0].items.push({
+      ...templateWithInstruction.compartments[0].items[0],
+      id: 'ti-instruction',
+      name: 'Inspect the package seal before recording the count.',
+      sortOrder: 1,
+      checkType: 'text',
+    });
+    mockSubmitCheck.mockRejectedValueOnce({ message: 'Network Error' });
+    renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={templateWithInstruction as never} />);
+
+    await user.click(await screen.findByDisplayValue('4'));
+    await user.click(screen.getByRole('button', { name: 'Submit Report' }));
+
+    await waitFor(() => expect(mockEnqueueCheck).toHaveBeenCalledOnce());
+    const queuedPayload = mockEnqueueCheck.mock.calls[0][1] as {
+      items: Array<{ template_item_id: string }>;
+    };
+    expect(queuedPayload.items).toHaveLength(1);
+    expect(queuedPayload.items.map((item) => item.template_item_id)).toEqual(['ti-1']);
   });
 
   it('states the carry-over once rather than on every row', async () => {
