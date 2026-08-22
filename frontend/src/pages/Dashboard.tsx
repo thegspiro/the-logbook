@@ -3,12 +3,13 @@ import toast from 'react-hot-toast';
 import { formatRelativeTime } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
-import DashboardCardHeader from '../components/dashboard/DashboardCardHeader';
 import DashboardNeedsYou from '../components/dashboard/DashboardNeedsYou';
 import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import { AssetWidgetRegistry } from '../components/dashboard/AssetWidgetRegistry';
+import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistry';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -24,7 +25,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Megaphone,
-  Package,
   Pin,
   Plus,
   Rocket,
@@ -47,7 +47,7 @@ import {
   eventService,
   medicalScreeningService,
 } from '../services/api';
-import type { AdminSummary, InboxMessage, InventorySummary, LowStockAlert, MyComplianceSummary } from '../services/api';
+import type { AdminSummary, InboxMessage, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -59,7 +59,6 @@ import {
   formatCalendarDate,
   formatDate,
   formatDateCustom,
-  formatNumber,
   formatTime,
   formatTimeOfDay,
   getTodayLocalDate,
@@ -161,8 +160,9 @@ const Dashboard: React.FC = () => {
   // leaders explicitly entrusted with organization settings can reveal it.
   // Everyone — including those leaders — still lands on the personal view.
   const canViewOrganization = checkPermission('settings.manage');
+  const canViewAssetWidgets = ['inventory.view', 'apparatus.view', 'facilities.view'].some(checkPermission);
+  const canOpenOrganization = canViewOrganization || canViewAssetWidgets;
   const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
-  const isInventoryAdmin = canViewOrganization || checkPermission('inventory.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewOrganization);
@@ -222,9 +222,7 @@ const Dashboard: React.FC = () => {
   const [loadingTraining, setLoadingTraining] = useState(true);
 
   // Inventory
-  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
-  const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
-  const [loadingInventory, setLoadingInventory] = useState(true);
+  const [assetWidgets, setAssetWidgets] = useState<AssetWidgetData[]>([]);
   const [myEquipment, setMyEquipment] = useState({ assigned: 0, checkedOut: 0, overdue: 0 });
   const [loadingMyEquipment, setLoadingMyEquipment] = useState(true);
 
@@ -253,7 +251,7 @@ const Dashboard: React.FC = () => {
   // Continue accepting the former `overview` URL so existing bookmarks land on
   // the renamed view, while all new navigation writes the clearer URL.
   const organizationTabRequested = ['organization', 'overview'].includes(searchParams.get('tab') ?? '');
-  const activeTab = canViewOrganization && organizationTabRequested ? 'organization' : 'department';
+  const activeTab = canOpenOrganization && organizationTabRequested ? 'organization' : 'department';
   const selectTab = (tab: 'department' | 'organization') => {
     const next = new URLSearchParams(searchParams);
     if (tab === 'organization') next.set('tab', 'organization');
@@ -310,11 +308,13 @@ const Dashboard: React.FC = () => {
   // only after that leader intentionally opens the Organization tab.
   useEffect(() => {
     if (activeTab === 'organization') {
-      void loadAdminSummary();
-      void loadSetupProgress();
-      void loadInventorySummary();
+      if (canViewOrganization) {
+        void loadAdminSummary();
+        void loadSetupProgress();
+      }
+      if (canViewAssetWidgets) void loadAssetWidgets();
     }
-  }, [activeTab]);
+  }, [activeTab, canViewAssetWidgets, canViewOrganization]);
 
   const loadAdminSummary = async () => {
     setLoadingAdmin(true);
@@ -366,15 +366,11 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadInventorySummary = async () => {
+  const loadAssetWidgets = async () => {
     try {
-      const [summary, alerts] = await Promise.all([inventoryService.getSummary(), inventoryService.getLowStockItems()]);
-      setInventorySummary(summary);
-      setLowStockAlerts(alerts);
+      setAssetWidgets(await dashboardService.getAssetWidgets());
     } catch {
-      // Inventory is non-critical on dashboard
-    } finally {
-      setLoadingInventory(false);
+      // Asset reporting is non-critical on dashboard.
     }
   };
 
@@ -870,7 +866,8 @@ const Dashboard: React.FC = () => {
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
-      ...(activeTab === 'organization' ? [loadAdminSummary(), loadSetupProgress(), loadInventorySummary()] : []),
+      ...(activeTab === 'organization' && canViewOrganization ? [loadAdminSummary(), loadSetupProgress()] : []),
+      ...(activeTab === 'organization' && canViewAssetWidgets ? [loadAssetWidgets()] : []),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -1033,7 +1030,7 @@ const Dashboard: React.FC = () => {
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>
               </p>
             </div>
-            {canViewOrganization && (
+            {canOpenOrganization && (
               <div
                 role="tablist"
                 aria-label="Dashboard view"
@@ -1077,8 +1074,8 @@ const Dashboard: React.FC = () => {
         {activeTab === 'department' ? (
           <div
             id="dashboard-panel-department"
-            role={canViewOrganization ? 'tabpanel' : undefined}
-            aria-labelledby={canViewOrganization ? 'dashboard-tab-department' : undefined}
+            role={canOpenOrganization ? 'tabpanel' : undefined}
+            aria-labelledby={canOpenOrganization ? 'dashboard-tab-department' : undefined}
             className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6"
           >
             {/* ── Main column ── */}
@@ -1675,93 +1672,7 @@ const Dashboard: React.FC = () => {
               </section>
             )}
 
-            {!loadingInventory && inventorySummary && inventorySummary.total_items > 0 && (
-              <div className="card p-4 sm:p-6">
-                <DashboardCardHeader
-                  icon={Package}
-                  iconColor="text-emerald-500"
-                  title={isInventoryAdmin ? 'Gear & Uniforms' : 'My Issued Gear'}
-                  viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
-                  onViewAll={() => void navigate('/inventory')}
-                />
-
-                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">
-                      {isInventoryAdmin ? 'Total Items' : 'My Items'}
-                    </p>
-                    <p className="text-theme-text-primary mt-1 text-xl font-bold">{inventorySummary.total_items}</p>
-                  </div>
-                  <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">
-                      {isInventoryAdmin ? 'Total Value' : 'My Value'}
-                    </p>
-                    <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400">
-                      $
-                      {formatNumber(inventorySummary.total_value, {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
-                    </p>
-                  </div>
-                  <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">
-                      {isInventoryAdmin ? 'Checked Out' : 'My Checkouts'}
-                    </p>
-                    <p className="mt-1 text-xl font-bold text-yellow-700 dark:text-yellow-400">
-                      {inventorySummary.active_checkouts}
-                    </p>
-                    {inventorySummary.overdue_checkouts > 0 && (
-                      <p className="text-xs text-red-700 dark:text-red-400">
-                        {inventorySummary.overdue_checkouts} overdue
-                      </p>
-                    )}
-                  </div>
-                  <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
-                    <p className="mt-1 text-xl font-bold text-orange-700 dark:text-orange-400">
-                      {inventorySummary.maintenance_due_count}
-                    </p>
-                  </div>
-                </div>
-
-                {lowStockAlerts.length > 0 && (
-                  <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
-                    <div className="mb-1 flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                      <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Low Stock</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {lowStockAlerts.map((a) => (
-                        <span
-                          key={a.category_id}
-                          className="rounded-sm bg-yellow-500/10 px-2 py-1 text-xs text-yellow-600 dark:text-yellow-400"
-                        >
-                          {a.category_name}: {a.current_stock} left
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <button
-                    onClick={() => void navigate('/inventory/my-equipment')}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white transition-colors hover:bg-emerald-700"
-                  >
-                    My Issued Gear
-                  </button>
-                  {isInventoryAdmin && (
-                    <button
-                      onClick={() => void navigate('/inventory/checkouts')}
-                      className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg border px-4 py-2 text-center text-sm transition-colors"
-                    >
-                      View Checkouts
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+            <AssetWidgetRegistry widgets={assetWidgets} />
           </div>
         )}
       </main>

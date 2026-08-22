@@ -20,7 +20,21 @@ from app.api.dependencies import (
 )
 from app.core.database import get_db
 from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
+from app.models.apparatus import Apparatus
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
+from app.models.facilities import (
+    Facility,
+    FacilityComplianceChecklist,
+    FacilityInspection,
+    FacilityMaintenance,
+)
+from app.models.inventory import (
+    CheckOutRecord,
+    EquipmentRequest,
+    InventoryItem,
+    InventoryLot,
+    RequestStatus,
+)
 from app.models.meeting import ActionItemStatus, MeetingActionItem
 from app.models.minute import (
     ActionItem,
@@ -31,6 +45,8 @@ from app.models.minute import (
 )
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus
+from app.services.apparatus_service import ApparatusService
+from app.services.inventory_service import InventoryService
 from app.services.training_compliance import compute_org_compliance_pct
 
 router = APIRouter()
@@ -109,6 +125,259 @@ class CommunityEngagement(BaseModel):
     total_member_attendees: int
     total_external_attendees: int
     upcoming_public_events: int
+
+
+class AssetWidget(BaseModel):
+    """A deliberately small dashboard card; never a projection of asset rows."""
+
+    id: str
+    module: str
+    title: str
+    count: int
+    href: str
+    empty_state: str
+    severity: str = "neutral"
+
+
+class AssetWidgetDashboard(BaseModel):
+    """Permission-filtered registry of organization asset widgets."""
+
+    widgets: list[AssetWidget]
+
+
+@router.get("/asset-widgets", response_model=AssetWidgetDashboard)
+async def get_asset_widgets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> AssetWidgetDashboard:
+    """Return bounded asset-module counts for the Organization dashboard.
+
+    Modules are authorized independently.  In particular, managing inventory
+    does not reveal apparatus or facilities.  This response contains only
+    counts and fixed links/messages, so sensitive facility fields (codes,
+    accounts, budgets, leases, and similar protected data) cannot leak through
+    this general dashboard endpoint.
+    """
+    org_id = str(current_user.organization_id)
+    today = date.today()
+    widgets: list[AssetWidget] = []
+
+    if user_has_permission(current_user, "inventory.view"):
+        inventory = InventoryService(db)
+        summary = await inventory.get_inventory_summary(org_id)
+        low_stock = await inventory.get_low_stock_items(org_id)
+        expiring = await db.scalar(
+            select(func.count(InventoryLot.id))
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .where(
+                InventoryLot.organization_id == org_id,
+                InventoryItem.organization_id == org_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryLot.expiration_date >= today,
+                InventoryLot.expiration_date <= today + timedelta(days=30),
+            )
+        )
+        requests = await db.scalar(
+            select(func.count(EquipmentRequest.id)).where(
+                EquipmentRequest.organization_id == org_id,
+                EquipmentRequest.status == RequestStatus.PENDING,
+            )
+        )
+        overdue = await db.scalar(
+            select(func.count(CheckOutRecord.id)).where(
+                CheckOutRecord.organization_id == org_id,
+                CheckOutRecord.is_returned.is_(False),
+                or_(
+                    CheckOutRecord.is_overdue.is_(True),
+                    CheckOutRecord.expected_return_at < datetime.now(timezone.utc),
+                ),
+            )
+        )
+        widgets.extend(
+            [
+                AssetWidget(
+                    id="inventory-summary",
+                    module="inventory",
+                    title="Inventory",
+                    count=(
+                        summary.total_items
+                        if hasattr(summary, "total_items")
+                        else summary["total_items"]
+                    ),
+                    href="/inventory",
+                    empty_state="Add the first inventory item to begin tracking assets.",
+                ),
+                AssetWidget(
+                    id="inventory-low-stock",
+                    module="inventory",
+                    title="Low stock",
+                    count=len(low_stock),
+                    href="/inventory?stock=low",
+                    empty_state="All stocked categories are above their reorder thresholds.",
+                    severity="warning",
+                ),
+                AssetWidget(
+                    id="inventory-expiring-lots",
+                    module="inventory",
+                    title="Expiring lots",
+                    count=int(expiring or 0),
+                    href="/inventory/lots?expiresWithin=30",
+                    empty_state="No stocked lots expire in the next 30 days.",
+                    severity="warning",
+                ),
+                AssetWidget(
+                    id="inventory-equipment-requests",
+                    module="inventory",
+                    title="Equipment requests",
+                    count=int(requests or 0),
+                    href="/inventory/requests?status=pending",
+                    empty_state="No equipment requests are waiting for review.",
+                ),
+                AssetWidget(
+                    id="inventory-overdue-returns",
+                    module="inventory",
+                    title="Overdue returns",
+                    count=int(overdue or 0),
+                    href="/inventory/checkouts?status=overdue",
+                    empty_state="No checkouts or property returns are overdue.",
+                    severity="danger",
+                ),
+            ]
+        )
+
+    if user_has_permission(current_user, "apparatus.view"):
+        fleet = await ApparatusService(db).get_fleet_summary(org_id)
+        defects = await db.scalar(
+            select(func.count(Apparatus.id)).where(
+                Apparatus.organization_id == org_id,
+                Apparatus.is_archived.is_(False),
+                Apparatus.has_deficiency.is_(True),
+            )
+        )
+        overdue_checks = await db.scalar(
+            select(func.count(Apparatus.id)).where(
+                Apparatus.organization_id == org_id,
+                Apparatus.is_archived.is_(False),
+                Apparatus.inspection_expiration < today,
+            )
+        )
+        widgets.extend(
+            [
+                AssetWidget(
+                    id="apparatus-service-status",
+                    module="apparatus",
+                    title="Out of service",
+                    count=int(
+                        fleet["out_of_service_count"] + fleet["in_maintenance_count"]
+                    ),
+                    href="/apparatus?serviceStatus=unavailable",
+                    empty_state="Every active apparatus is available for service.",
+                ),
+                AssetWidget(
+                    id="apparatus-defects",
+                    module="apparatus",
+                    title="Unresolved defects",
+                    count=int(defects or 0),
+                    href="/apparatus?hasDeficiency=true",
+                    empty_state="No active apparatus has an unresolved defect.",
+                    severity="danger",
+                ),
+                AssetWidget(
+                    id="apparatus-overdue-checks",
+                    module="apparatus",
+                    title="Overdue checks",
+                    count=int(overdue_checks or 0),
+                    href="/apparatus?inspection=overdue",
+                    empty_state="No apparatus checks are overdue.",
+                ),
+                AssetWidget(
+                    id="apparatus-maintenance",
+                    module="apparatus",
+                    title="Maintenance due",
+                    count=int(fleet["maintenance_due_soon"]),
+                    href="/apparatus/maintenance?dueWithin=30",
+                    empty_state="No apparatus maintenance is due in the next 30 days.",
+                    severity="warning",
+                ),
+            ]
+        )
+
+    if user_has_permission(current_user, "facilities.view"):
+        maintenance = await db.scalar(
+            select(func.count(FacilityMaintenance.id))
+            .join(Facility, Facility.id == FacilityMaintenance.facility_id)
+            .where(
+                FacilityMaintenance.organization_id == org_id,
+                Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
+                FacilityMaintenance.is_completed.is_(False),
+                FacilityMaintenance.due_date <= today,
+            )
+        )
+        compliance = await db.scalar(
+            select(func.count(FacilityComplianceChecklist.id))
+            .join(Facility, Facility.id == FacilityComplianceChecklist.facility_id)
+            .where(
+                FacilityComplianceChecklist.organization_id == org_id,
+                Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
+                FacilityComplianceChecklist.is_completed.is_(False),
+                FacilityComplianceChecklist.due_date >= today,
+                FacilityComplianceChecklist.due_date <= today + timedelta(days=30),
+            )
+        )
+        inspections = await db.scalar(
+            select(func.count(FacilityInspection.id))
+            .join(Facility, Facility.id == FacilityInspection.facility_id)
+            .where(
+                FacilityInspection.organization_id == org_id,
+                Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
+                FacilityInspection.next_inspection_date <= today + timedelta(days=30),
+                FacilityInspection.next_inspection_date >= today,
+            )
+        )
+        widgets.extend(
+            [
+                AssetWidget(
+                    id="facilities-urgent-work-orders",
+                    module="facilities",
+                    title="Urgent work orders",
+                    count=int(maintenance or 0),
+                    href="/facilities/maintenance?status=overdue",
+                    empty_state="No urgent facility work orders need attention.",
+                    severity="danger",
+                ),
+                AssetWidget(
+                    id="facilities-inspections",
+                    module="facilities",
+                    title="Upcoming inspections",
+                    count=int(inspections or 0),
+                    href="/facilities/inspections?dueWithin=30",
+                    empty_state="No facility inspections are scheduled in the next 30 days.",
+                ),
+                AssetWidget(
+                    id="facilities-compliance",
+                    module="facilities",
+                    title="Compliance deadlines",
+                    count=int(compliance or 0),
+                    href="/facilities?compliance=due",
+                    empty_state="No facility compliance deadlines are due soon.",
+                    severity="warning",
+                ),
+                AssetWidget(
+                    id="facilities-maintenance",
+                    module="facilities",
+                    title="Maintenance due",
+                    count=int(maintenance or 0),
+                    href="/facilities/maintenance?status=due",
+                    empty_state="No facility maintenance is overdue.",
+                ),
+            ]
+        )
+
+    return AssetWidgetDashboard(widgets=widgets)
 
 
 @router.get("/stats", response_model=DashboardStats)
