@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.dialects import mysql
 
 from app.schemas.facilities import (
     FacilityAccessKeyUpdate,
@@ -134,6 +135,18 @@ class TestDashboardCounts:
             result["recent_maintenance_completions"][0]["facility_name"] == "Station 3"
         )
         assert mock_db.execute.await_count == 3
+
+        # The production database is MySQL/MariaDB, which rejects the
+        # PostgreSQL-style ``NULLS LAST`` modifier.  The preview queries must
+        # express null placement portably so opening the dashboard does not
+        # fail with LB-SYS-001.
+        statements = [call.args[0] for call in mock_db.execute.await_args_list]
+        compiled_sql = "\n".join(
+            str(statement.compile(dialect=mysql.dialect())) for statement in statements
+        )
+        assert "NULLS LAST" not in compiled_sql.upper()
+        assert "facility_maintenance.due_date IS NULL" in compiled_sql
+        assert "facility_maintenance.completed_date IS NULL" in compiled_sql
 
 
 class TestUpdateReparentingRejected:

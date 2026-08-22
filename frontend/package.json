@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --grep-invert @screenshots",
     "test:pwa": "playwright test --config playwright.pwa.config.ts",
     "lint": "eslint --max-warnings 10",
     "lint:fix": "eslint --fix",

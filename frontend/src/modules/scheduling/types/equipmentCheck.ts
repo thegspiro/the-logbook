@@ -189,6 +189,12 @@ export interface CheckTemplateItemCreate {
   expiration_warning_days?: number | undefined;
 }
 
+export interface CheckTemplateItemBulkResult {
+  items: CheckTemplateItem[];
+  createdCount: number;
+  replayed: boolean;
+}
+
 export interface CheckTemplateItemUpdate {
   name?: string | undefined;
   description?: string | undefined;

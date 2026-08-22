@@ -361,6 +361,39 @@ describe('EventDetailPage', () => {
       });
     });
 
+    it('defaults official event times to the scheduled times', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: /more/i }));
+      await user.click(screen.getByRole('button', { name: /record times/i }));
+
+      expect(screen.getByLabelText('Actual Start Time')).toHaveValue('2030-04-15');
+      expect(screen.getByLabelText('Actual End Time')).toHaveValue('2030-04-15');
+      expect(screen.getByText('120 minutes')).toBeInTheDocument();
+    });
+
+    it('preserves already-recorded official event times', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        actual_start_time: '2030-04-15T18:30:00Z',
+        actual_end_time: '2030-04-15T19:45:00Z',
+      });
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: /more/i }));
+      await user.click(screen.getByRole('button', { name: /record times/i }));
+
+      expect(screen.getByText('75 minutes')).toBeInTheDocument();
+      expect(screen.getAllByText(/Currently:/)).toHaveLength(2);
+    });
+
     it('should show Finalize Attendance as a primary action when the event is over', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...mockEvent,
