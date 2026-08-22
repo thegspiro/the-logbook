@@ -352,6 +352,7 @@ class ShiftEquipmentCheckCreate(BaseModel):
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
+    client_submission_id: Optional[str] = Field(None, min_length=1, max_length=100)
 
 
 class StandaloneEquipmentCheckCreate(BaseModel):
