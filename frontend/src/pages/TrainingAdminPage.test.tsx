@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -18,6 +18,9 @@ vi.mock('./HistoricalImportPage', () => ({ default: () => <div data-testid="lazy
 vi.mock('./SkillsTestingTemplatesTab', () => ({ default: () => <div data-testid="lazy-component">Templates</div> }));
 vi.mock('./SkillsTestingTestRecordsTab', () => ({ default: () => <div data-testid="lazy-component">Records</div> }));
 vi.mock('./TrainingEnhancementsTab', () => ({ default: () => <div data-testid="lazy-component">Enhancements</div> }));
+vi.mock('./ComplianceOfficerDashboard', () => ({
+  default: () => <div data-testid="lazy-component">Compliance Officer</div>,
+}));
 
 vi.mock('../components/HelpLink', () => ({
   HelpLink: () => null,
@@ -46,26 +49,67 @@ import TrainingAdminPage from './TrainingAdminPage';
 describe('TrainingAdminPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/training/admin');
   });
 
-  it('renders the admin page with navigation tabs', async () => {
+  it('keeps Dashboard, Records, and Setup in the primary navigation', async () => {
     renderWithRouter(<TrainingAdminPage />);
-    await waitFor(() => {
-      // Should show main navigation sections
-      expect(screen.getAllByText(/dashboard|training/i).length).toBeGreaterThan(0);
-    });
+    const navigation = screen.getByRole('tablist', { name: 'Training admin sections' });
+
+    expect(navigation).toHaveTextContent('Dashboard');
+    expect(navigation).toHaveTextContent('Records');
+    expect(navigation).toHaveTextContent('Setup');
+    expect(screen.getByRole('tab', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('renders without crashing', () => {
-    const { container } = renderWithRouter(<TrainingAdminPage />);
-    expect(container).toBeInTheDocument();
-  });
-
-  it('shows the default tab content', async () => {
+  it('exposes lower-frequency destinations in the More menu', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
-    await waitFor(() => {
-      expect(screen.getAllByTestId('lazy-component').length).toBeGreaterThan(0);
-    });
+
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    const menu = screen.getByRole('menu', { name: 'More training admin sections' });
+    expect(menu).toHaveTextContent('Skills Testing');
+    expect(menu).toHaveTextContent('Compliance');
+    expect(menu).toHaveTextContent('Program Management');
+    expect(menu).not.toHaveTextContent('Advanced');
+
+    await user.click(screen.getByRole('menuitem', { name: /Program Management/ }));
+    expect(screen.getByRole('button', { name: 'More' })).toHaveClass('bg-red-600');
+    expect(window.location.search).toBe('?page=enhancements&tab=recertification');
+  });
+
+  it('presents the active primary section and destination', async () => {
+    window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(screen.getByRole('tab', { name: 'Records' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByText('Session')).toBeInTheDocument();
+  });
+
+  it('provides labeled section and destination selects for narrow screens', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+
+    const sectionSelect = screen.getByRole('combobox', { name: 'Training admin section' });
+    expect(sectionSelect).toHaveClass('min-h-11');
+    expect(screen.getByRole('option', { name: 'Program Management' })).toBeInTheDocument();
+
+    await user.selectOptions(sectionSelect, 'skills-testing');
+    const destinationSelect = screen.getByRole('combobox', { name: 'Skills Testing destination' });
+    expect(destinationSelect).toHaveValue('templates');
+    expect(screen.getByRole('option', { name: 'Test Records' })).toBeInTheDocument();
+    expect(window.location.search).toBe('?page=skills-testing&tab=templates');
+  });
+
+  it('continues to resolve legacy flat tab parameters', async () => {
+    window.history.replaceState({}, '', '/training/admin?tab=tests');
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(screen.getByRole('combobox', { name: 'Training admin section' })).toHaveValue('skills-testing');
+    expect(screen.getByRole('combobox', { name: 'Skills Testing destination' })).toHaveValue('tests');
+    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Records');
   });
 
   it('updates the section description and actions after navigation', async () => {
