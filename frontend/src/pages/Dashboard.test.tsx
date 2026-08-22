@@ -41,6 +41,8 @@ const {
   mockGetInventorySummary,
   mockGetEligiblePositions,
   mockGetMyCompliance,
+  mockGetWidgetRegistry,
+  mockGetWidgetData,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -57,6 +59,8 @@ const {
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
   mockGetMyCompliance: vi.fn(),
+  mockGetWidgetRegistry: vi.fn(),
+  mockGetWidgetData: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -105,6 +109,9 @@ vi.mock('../services/api', () => ({
     getMyCompliance: mockGetMyCompliance,
   },
   dashboardService: {
+    getWidgetRegistry: mockGetWidgetRegistry,
+    getWidgetData: mockGetWidgetData,
+    updateWidgetPreferences: vi.fn(),
     getStats: vi.fn().mockResolvedValue({}),
     getAdminSummary: mockGetAdminSummary,
     getActionItems: vi.fn().mockResolvedValue([]),
@@ -194,6 +201,11 @@ describe('Dashboard', () => {
       overdue_checkouts: 0,
       maintenance_due_count: 0,
     });
+    mockGetWidgetRegistry.mockResolvedValue({
+      widgets: [{ id: 'active-members', title: 'Active Members', module: 'members', deep_link: '/members' }],
+      selected_widget_ids: ['active-members'],
+    });
+    mockGetWidgetData.mockResolvedValue({ value: 12, description: 'Active organization members' });
   });
 
   describe('Next 7 Days', () => {
@@ -877,7 +889,7 @@ describe('Dashboard', () => {
       const organizationTab = screen.getByRole('tab', { name: 'Organization' });
       expect(personalTab).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByText('Next 7 Days')).toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Organization widgets' })).not.toBeInTheDocument();
       expect(mockGetAdminSummary).not.toHaveBeenCalled();
       expect(mockGetSetupChecklist).not.toHaveBeenCalled();
       expect(mockGetInventorySummary).not.toHaveBeenCalled();
@@ -885,16 +897,25 @@ describe('Dashboard', () => {
       await user.click(organizationTab);
 
       expect(organizationTab).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Organization widgets' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^Admin Hours:/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
       expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
       expect(window.location.search).toBe('?tab=organization');
       await waitFor(() => {
-        expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
-        expect(mockGetSetupChecklist).toHaveBeenCalledTimes(1);
-        expect(mockGetInventorySummary).toHaveBeenCalledTimes(1);
+        expect(mockGetWidgetRegistry).toHaveBeenCalledTimes(1);
+        expect(mockGetWidgetData).toHaveBeenCalledWith('active-members');
       });
+      expect(mockGetAdminSummary).not.toHaveBeenCalled();
+      expect(mockGetSetupChecklist).not.toHaveBeenCalled();
+      expect(mockGetInventorySummary).not.toHaveBeenCalled();
+    });
+
+    it('allows a training manager to open their authorized organization widgets', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'training.manage');
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('tab', { name: 'Organization' })).toBeInTheDocument();
     });
 
     it('keeps legacy overview bookmarks working', async () => {
@@ -904,7 +925,7 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Organization widgets' })).toBeInTheDocument();
     });
 
     it('supports keyboard navigation between leadership views', async () => {
@@ -928,18 +949,19 @@ describe('Dashboard', () => {
 
     it('shows a retry state instead of false zero metrics when the organization summary fails', async () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
-      mockGetAdminSummary.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValueOnce({});
+      mockGetWidgetRegistry
+        .mockRejectedValueOnce(new Error('Unavailable'))
+        .mockResolvedValueOnce({ widgets: [], selected_widget_ids: [] });
       window.history.replaceState({}, '', '/dashboard?tab=organization');
       const user = userEvent.setup();
 
       renderWithRouter(<Dashboard />);
 
       const alert = await screen.findByRole('alert');
-      expect(within(alert).getByText('Organization summary is unavailable')).toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
+      expect(within(alert).getByText('Organization widgets are unavailable')).toBeInTheDocument();
 
       await user.click(within(alert).getByRole('button', { name: 'Try again' }));
-      await waitFor(() => expect(mockGetAdminSummary).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(mockGetWidgetRegistry).toHaveBeenCalledTimes(2));
     });
   });
 });

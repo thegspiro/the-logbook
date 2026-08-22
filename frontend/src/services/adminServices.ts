@@ -334,6 +334,20 @@ export const platformAnalyticsService = {
 };
 
 export const dashboardService = {
+  async getWidgetRegistry(): Promise<DashboardWidgetRegistry> {
+    const response = await api.get<DashboardWidgetRegistry>('/dashboard/widgets');
+    return response.data;
+  },
+  async updateWidgetPreferences(widgetIds: string[]): Promise<DashboardWidgetRegistry> {
+    const response = await api.put<DashboardWidgetRegistry>('/dashboard/widgets/preferences', {
+      widget_ids: widgetIds,
+    });
+    return response.data;
+  },
+  async getWidgetData(widgetId: string): Promise<DashboardWidgetData> {
+    const response = await api.get<DashboardWidgetData>(`/dashboard/widget-data/${widgetId}`);
+    return response.data;
+  },
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
     return response.data;
@@ -369,6 +383,23 @@ export const dashboardService = {
     });
   },
 };
+
+export interface DashboardWidgetDefinition {
+  id: string;
+  title: string;
+  module: string;
+  deep_link: string;
+}
+
+export interface DashboardWidgetRegistry {
+  widgets: DashboardWidgetDefinition[];
+  selected_widget_ids: string[];
+}
+
+export interface DashboardWidgetData {
+  value: number | string;
+  description: string;
+}
 
 // ============================================
 // Email Templates Service

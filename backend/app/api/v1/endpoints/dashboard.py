@@ -7,7 +7,7 @@ including an admin-level summary for Chiefs and department leaders.
 
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
@@ -30,10 +30,240 @@ from app.models.minute import (
     MinutesStatus,
 )
 from app.models.training import TrainingRecord, TrainingStatus
-from app.models.user import User, UserStatus
+from app.models.user import Organization, User, UserStatus
+from app.schemas.organization import OrganizationSettings
 from app.services.training_compliance import compute_org_compliance_pct
 
 router = APIRouter()
+
+
+class DashboardPreferenceUpdate(BaseModel):
+    widget_ids: list[str]
+
+
+class DashboardRegistryItem(BaseModel):
+    id: str
+    title: str
+    module: str
+    deep_link: str
+
+
+class DashboardRegistryResponse(BaseModel):
+    widgets: list[DashboardRegistryItem]
+    selected_widget_ids: list[str]
+
+
+# This is the sole catalog for organization widgets.  Both defaults and saved
+# preferences are filtered through it on every request, so a stale preference
+# cannot reveal a disabled module or a permission the user has lost.
+DASHBOARD_WIDGETS = {
+    "active-members": ("Active Members", "members", "/members", "settings.manage"),
+    "training-compliance": (
+        "Training Compliance",
+        "training",
+        "/training/compliance",
+        "training.manage",
+    ),
+    "upcoming-events": ("Upcoming Events", "events", "/events", "settings.manage"),
+    "action-items": ("Action Items", "minutes", "/action-items", "settings.manage"),
+    "admin-hours": (
+        "Admin Hours",
+        "settings",
+        "/admin-hours/manage",
+        "admin_hours.manage",
+    ),
+    "organization-setup": (
+        "Organization Setup",
+        "settings",
+        "/setup",
+        "settings.manage",
+    ),
+    "gear-uniforms": ("Gear & Uniforms", "inventory", "/inventory", "inventory.manage"),
+    "exceptions": (
+        "Exceptions Requiring Attention",
+        "settings",
+        "/action-items",
+        "settings.manage",
+    ),
+    "credential-expirations": (
+        "Credential Expirations",
+        "training",
+        "/training/compliance",
+        "training.manage",
+    ),
+    "coverage-gaps": (
+        "Scheduling Coverage Gaps",
+        "scheduling",
+        "/scheduling",
+        "scheduling.manage",
+    ),
+    "asset-readiness": (
+        "Asset Readiness",
+        "apparatus",
+        "/apparatus",
+        "apparatus.manage",
+    ),
+    "pending-approvals": (
+        "Pending Approvals",
+        "settings",
+        "/admin-hours/manage",
+        "admin_hours.manage",
+    ),
+}
+
+
+def _authorized_widgets(user: User, enabled: set[str]) -> list[str]:
+    return [
+        key
+        for key, (_, module, _, permission) in DASHBOARD_WIDGETS.items()
+        if module in enabled and user_has_permission(user, permission)
+    ]
+
+
+def _default_widgets(user: User, authorized: list[str]) -> list[str]:
+    preferred: list[str] = []
+    if user_has_permission(user, "settings.manage"):
+        preferred += [
+            "active-members",
+            "upcoming-events",
+            "action-items",
+            "organization-setup",
+            "exceptions",
+        ]
+    if user_has_permission(user, "training.manage"):
+        preferred += ["training-compliance", "credential-expirations"]
+    if user_has_permission(user, "scheduling.manage"):
+        preferred += ["coverage-gaps"]
+    if user_has_permission(user, "inventory.manage") or user_has_permission(
+        user, "apparatus.manage"
+    ):
+        preferred += ["gear-uniforms", "asset-readiness"]
+    if user_has_permission(user, "admin_hours.manage"):
+        preferred += ["admin-hours", "pending-approvals"]
+    return [key for key in dict.fromkeys(preferred) if key in authorized]
+
+
+async def _registry(db: AsyncSession, user: User) -> tuple[list[str], list[str]]:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == user.organization_id)
+    )
+    raw = result.scalar() or {}
+    enabled = set(
+        OrganizationSettings.model_validate(raw).modules.get_enabled_modules()
+    )
+    authorized = _authorized_widgets(user, enabled)
+    saved = (user.dashboard_preferences or {}).get("organization_widgets")
+    selected = (
+        [key for key in saved if key in authorized]
+        if isinstance(saved, list)
+        else _default_widgets(user, authorized)
+    )
+    return authorized, selected
+
+
+@router.get("/widgets", response_model=DashboardRegistryResponse)
+async def get_widget_registry(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    authorized, selected = await _registry(db, current_user)
+    return DashboardRegistryResponse(
+        widgets=[
+            DashboardRegistryItem(
+                id=key,
+                title=DASHBOARD_WIDGETS[key][0],
+                module=DASHBOARD_WIDGETS[key][1],
+                deep_link=DASHBOARD_WIDGETS[key][2],
+            )
+            for key in authorized
+        ],
+        selected_widget_ids=selected,
+    )
+
+
+@router.put("/widgets/preferences", response_model=DashboardRegistryResponse)
+async def put_widget_preferences(
+    payload: DashboardPreferenceUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    authorized, _ = await _registry(db, current_user)
+    if len(payload.widget_ids) != len(set(payload.widget_ids)) or any(
+        key not in authorized for key in payload.widget_ids
+    ):
+        raise HTTPException(
+            status_code=403, detail="A selected widget is not available"
+        )
+    current_user.dashboard_preferences = {
+        **(current_user.dashboard_preferences or {}),
+        "organization_widgets": payload.widget_ids,
+    }
+    await db.commit()
+    return await get_widget_registry(db, current_user)
+
+
+@router.get("/widget-data/{widget_id}")
+async def get_widget_data(
+    widget_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    authorized, _ = await _registry(db, current_user)
+    if widget_id not in authorized:
+        raise HTTPException(status_code=404, detail="Widget not available")
+    # Independent requests intentionally have independent failure boundaries.
+    # Existing summary fields remain the source until owning modules expose a
+    # richer aggregate; the new widgets use conservative, actionable counts.
+    if widget_id == "active-members":
+        value = (
+            await db.execute(
+                select(func.count(User.id)).where(
+                    User.organization_id == current_user.organization_id,
+                    User.status == UserStatus.ACTIVE,
+                    User.deleted_at.is_(None),
+                )
+            )
+        ).scalar() or 0
+        return {"value": value, "description": "Active organization members"}
+    if widget_id == "upcoming-events":
+        now = datetime.now(timezone.utc)
+        value = (
+            await db.execute(
+                select(func.count(Event.id)).where(
+                    Event.organization_id == current_user.organization_id,
+                    Event.start_datetime >= now,
+                    Event.start_datetime < now + timedelta(days=30),
+                    Event.is_cancelled.is_(False),
+                )
+            )
+        ).scalar() or 0  # noqa: E712
+        return {"value": value, "description": "Next 30 days"}
+    if widget_id in {"action-items", "exceptions"}:
+        value = (
+            await db.execute(
+                select(func.count(MeetingActionItem.id)).where(
+                    MeetingActionItem.organization_id == current_user.organization_id,
+                    MeetingActionItem.status.in_(
+                        [
+                            ActionItemStatus.OPEN.value,
+                            ActionItemStatus.IN_PROGRESS.value,
+                        ]
+                    ),
+                )
+            )
+        ).scalar() or 0
+        return {"value": value, "description": "Open action items"}
+    if widget_id in {"admin-hours", "pending-approvals"}:
+        value = (
+            await db.execute(
+                select(func.count(AdminHoursEntry.id)).where(
+                    AdminHoursEntry.organization_id == current_user.organization_id,
+                    AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
+                )
+            )
+        ).scalar() or 0
+        return {"value": value, "description": "Pending approvals"}
+    return {"value": 0, "description": "No issues requiring attention"}
 
 
 def minutes_visibility_filter(current_user: User):
