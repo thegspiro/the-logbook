@@ -16,6 +16,8 @@ Covered here:
 - Attendance at an unrelated event does not
 - Which event a meeting stage is waiting on (including recurring stages, whose
   pinned event id goes stale the moment that occurrence passes)
+- Required document uploads advance only after every configured type is attached
+  to the current stage
 """
 
 import uuid
@@ -109,6 +111,108 @@ async def _pipeline_parked_on(
 async def _current_step_id(svc, prospect_id, org_id) -> str:
     prospect = await svc.get_prospect(prospect_id, org_id)
     return str(prospect.current_step_id)
+
+
+async def _upload_document(
+    svc: MembershipPipelineService,
+    prospect,
+    org_id: str,
+    document_type: str,
+    step_id: str | None,
+):
+    token = _uid()[:8]
+    return await svc.add_prospect_document(
+        prospect_id=prospect.id,
+        organization_id=org_id,
+        document_type=document_type,
+        file_name=f"{token}.pdf",
+        file_path=f"/app/uploads/{token}.pdf",
+        step_id=step_id,
+    )
+
+
+# =========================================================================
+# Document upload stage
+# =========================================================================
+
+
+class TestDocumentUploadAutoAdvance:
+    async def test_partial_upload_defers_then_final_required_type_advances(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={
+                "required_document_types": ["Background Check", "Photo ID"],
+                "auto_advance": True,
+            },
+        )
+
+        await _upload_document(svc, prospect, org, " background check ", gate.id)
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+        # Matching is deliberately case-insensitive for these free-text labels.
+        await _upload_document(svc, prospect, org, "PHOTO ID", gate.id)
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_unrelated_type_does_not_satisfy_a_required_type(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={
+                "required_document_types": ["Photo ID"],
+                "auto_advance": True,
+            },
+        )
+
+        await _upload_document(svc, prospect, org, "Resume", gate.id)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_documents_on_another_stage_or_without_a_stage_do_not_count(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={
+                "required_document_types": ["Photo ID"],
+                "auto_advance": True,
+            },
+        )
+        pipeline = await svc.get_pipeline(prospect.pipeline_id, org)
+        other_step = next(
+            step for step in pipeline.steps if str(step.id) != str(gate.id)
+        )
+
+        await _upload_document(svc, prospect, org, "Photo ID", other_step.id)
+        await _upload_document(svc, prospect, org, "Photo ID", None)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+        await _upload_document(svc, prospect, org, "Photo ID", gate.id)
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_auto_advance_disabled_records_upload_without_moving(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={"required_document_types": ["Photo ID"], "auto_advance": False},
+        )
+
+        document = await _upload_document(svc, prospect, org, "Photo ID", gate.id)
+
+        assert document is not None
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
 
 
 # =========================================================================
