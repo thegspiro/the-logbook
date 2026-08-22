@@ -3992,6 +3992,9 @@ class SchedulingService:
             await self.db.commit()
 
             return swap_request, None
+        except CodedValueError:
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
