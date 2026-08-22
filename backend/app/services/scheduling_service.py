@@ -1324,13 +1324,28 @@ class SchedulingService:
 
             # ShiftUpdate can reject an inverted interval when both values are
             # present in the request, but a partial update must be compared
-            # with the other value already stored on the shift.  Keep this
-            # authoritative check here, before any requested changes are
-            # applied.
-            effective_start = update_data.get("start_time", shift.start_time)
-            effective_end = update_data.get("end_time", shift.end_time)
-            if effective_end is not None and effective_end <= effective_start:
-                return None, "end_time must be after start_time"
+            # with the other value already stored on the shift. Only validate
+            # when a time is changing so unrelated edits can still repair or
+            # annotate legacy shifts that already have an invalid interval.
+            if "start_time" in update_data or "end_time" in update_data:
+                effective_start = update_data.get("start_time", shift.start_time)
+                effective_end = update_data.get("end_time", shift.end_time)
+
+                # MySQL DATETIME values may be naive while ISO request values
+                # carry an offset. Stored naive values use the application's
+                # UTC convention; normalize both sides before comparison.
+                comparison_start = (
+                    effective_start
+                    if effective_start.tzinfo is not None
+                    else effective_start.replace(tzinfo=timezone.utc)
+                )
+                comparison_end = (
+                    effective_end
+                    if effective_end is None or effective_end.tzinfo is not None
+                    else effective_end.replace(tzinfo=timezone.utc)
+                )
+                if comparison_end is not None and comparison_end <= comparison_start:
+                    return None, "end_time must be after start_time"
 
             # A client-supplied shift_officer_id must belong to the caller's org
             # before it is persisted (and before _sync_officer_assignment mints
@@ -4002,6 +4017,9 @@ class SchedulingService:
             await self.db.commit()
 
             return swap_request, None
+        except CodedValueError:
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             return None, str(e)

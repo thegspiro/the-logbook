@@ -29,6 +29,12 @@ const PastEventsTab: React.FC = () => {
   useEffect(() => {
     if (typeFilter === 'all') {
       setFilteredEvents(events);
+    } else if (typeFilter === EventTypeEnum.OTHER) {
+      // Recruitment is hidden from the primary type bar by default and is
+      // grouped under Other there; keep the administrative past view aligned.
+      setFilteredEvents(
+        events.filter((e) => e.event_type === EventTypeEnum.OTHER || e.event_type === EventTypeEnum.RECRUITMENT)
+      );
     } else {
       setFilteredEvents(events.filter((e) => e.event_type === typeFilter));
     }

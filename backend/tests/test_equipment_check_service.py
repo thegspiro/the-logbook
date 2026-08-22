@@ -439,9 +439,6 @@ class TestAuthoritativeCheckTiming:
                 AsyncMock(return_value={"item-1": MagicMock()}),
             ),
             patch.object(service, "get_check", AsyncMock(return_value=check)),
-            patch.object(
-                service, "_apply_found_values_to_template", return_value=False
-            ),
             patch.object(service, "_resolve_expiration", return_value=None),
         ):
             await service.complete_incomplete_check(

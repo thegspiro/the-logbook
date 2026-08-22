@@ -4,7 +4,7 @@ Prospects-by-source-event tests.
 Covers the "which applicants did this event bring in" filter shared by the
 event detail card and the pipeline board's "came from" dropdown:
 
-- ``list_prospects(event_id=...)`` narrows through explicit source metadata
+- ``list_prospects(event_id=...)`` includes source metadata and explicit links
 - ``list_source_events`` counts distinct applicants and scopes to the org
 - the endpoint refuses an event id belonging to another organization
 
@@ -43,14 +43,15 @@ def _list_db():
 
 
 class TestListProspectsByEvent:
-    async def test_event_id_filters_through_source_metadata(self):
+    async def test_event_id_filters_through_source_metadata_or_explicit_link(self):
         db = _list_db()
         await MembershipPipelineService(db).list_prospects(
             organization_id="org-1", event_id="event-1"
         )
         sql = _compiled(db)
         assert "source_event_id" in _compiled_params(db).values()
-        assert "prospect_event_links" not in sql
+        assert "prospect_event_links" in sql
+        assert "prospect_event_links.prospect_id = prospective_members.id" in sql
         assert "prospective_members.organization_id" in sql
 
     async def test_without_event_id_no_link_join(self):

@@ -154,6 +154,8 @@ export type {
   OperationsItem,
   ActionItemSummary,
   CommunityEngagement,
+  MainDashboardWidgets,
+  WidgetPeriod,
   ComplianceMatrixMember,
   ComplianceMatrix,
   ExpiringCertification,

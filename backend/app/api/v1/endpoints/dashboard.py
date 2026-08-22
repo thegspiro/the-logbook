@@ -8,7 +8,7 @@ including an admin-level summary for Chiefs and department leaders.
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
@@ -53,6 +53,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.services.apparatus_service import ApparatusService
+from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
 from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
@@ -347,6 +348,14 @@ class DashboardStats(BaseModel):
     setup_percentage: int
     recent_events_count: int
     pending_tasks_count: int
+
+
+class MainDashboardWidgets(BaseModel):
+    period: str
+    period_label: str
+    finance: dict | None = None
+    fundraising: dict | None = None
+    community: dict | None = None
 
 
 class AdminSummary(BaseModel):
@@ -760,6 +769,51 @@ async def get_operations_dashboard(
 
     return OperationsDashboard(
         generated_at=now, timezone=timezone_name, sections=sections
+    )
+
+
+@router.get("/widgets", response_model=MainDashboardWidgets)
+async def get_main_dashboard_widgets(
+    period: str = Query("month", pattern="^(month|quarter|year|rolling_30)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> MainDashboardWidgets:
+    """Return privacy-preserving aggregates authorized per module.
+
+    ``settings.manage`` is intentionally not financial access. Organization
+    monetary totals require ``finance.manage``; fundraising totals require
+    ``fundraising.view``; outreach totals require ``events.manage``.
+    """
+    org_id = str(current_user.organization_id)
+    enabled = set(
+        (
+            await OrganizationService(db).get_enabled_modules(
+                current_user.organization_id
+            )
+        ).enabled_modules
+    )
+    service = DashboardWidgetService(db)
+    finance = (
+        await service.finance(org_id, period)
+        if user_has_permission(current_user, "finance.manage")
+        else None
+    )
+    fundraising = (
+        await service.fundraising(org_id, period)
+        if "grants" in enabled and user_has_permission(current_user, "fundraising.view")
+        else None
+    )
+    community = (
+        await service.community(org_id, period)
+        if user_has_permission(current_user, "events.manage")
+        else None
+    )
+    return MainDashboardWidgets(
+        period=period,
+        period_label=PERIOD_LABELS[period],
+        finance=finance,
+        fundraising=fundraising,
+        community=community,
     )
 
 

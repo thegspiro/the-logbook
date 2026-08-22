@@ -759,7 +759,9 @@ async def submit_check(
 async def submit_standalone_check(
     data: StandaloneEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit a standalone equipment check not tied to a shift."""
     service = EquipmentCheckService(db)
@@ -782,7 +784,9 @@ async def complete_incomplete_check(
     check_id: str,
     data: EquipmentCheckCompleteItems,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Complete remaining items on an incomplete check."""
     service = EquipmentCheckService(db)

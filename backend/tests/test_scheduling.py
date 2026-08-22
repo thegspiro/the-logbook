@@ -252,7 +252,13 @@ class TestShiftCRUD:
             uuid.UUID(user_id),
         )
         assert create_error is None
-        update_data = {key: at_hour(hour) for key, hour in update_hours.items()}
+        # API request datetimes carry UTC while MySQL's persisted DATETIME may
+        # be naive. Mixed awareness must not turn a valid partial update into
+        # a TypeError and generic 400 response.
+        update_data = {
+            key: at_hour(hour).replace(tzinfo=timezone.utc)
+            for key, hour in update_hours.items()
+        }
 
         updated, error = await svc.update_shift(
             uuid.UUID(shift.id), uuid.UUID(org_id), update_data
@@ -262,13 +268,38 @@ class TestShiftCRUD:
             assert error is None
             assert updated is not None
             for key, value in update_data.items():
-                assert getattr(updated, key) == value
+                assert getattr(updated, key).replace(tzinfo=timezone.utc) == value
         else:
             assert updated is None
             assert error == "end_time must be after start_time"
             await db_session.refresh(shift)
             assert shift.start_time == at_hour(7)
             assert shift.end_time == at_hour(existing_end_hour)
+
+    @pytest.mark.asyncio
+    async def test_non_time_update_allows_legacy_invalid_interval(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        service = SchedulingService(db_session)
+        today = date.today()
+        shift, create_error = await service.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 19),
+                "end_time": datetime(today.year, today.month, today.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        assert create_error is None
+
+        updated, error = await service.update_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), {"notes": "Needs repair"}
+        )
+
+        assert error is None
+        assert updated.notes == "Needs repair"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -319,7 +350,10 @@ class TestShiftCRUD:
             uuid.UUID(user_id),
         )
         assert create_error is None
-        payload = {key: at_hour(hour) for key, hour in payload_hours.items()}
+        payload = {
+            key: at_hour(hour).replace(tzinfo=timezone.utc)
+            for key, hour in payload_hours.items()
+        }
 
         if expected_status == 422:
             with pytest.raises(ValidationError, match="end_time must be after"):
@@ -340,7 +374,7 @@ class TestShiftCRUD:
                 uuid.UUID(shift.id), request, db_session, current_user
             )
             for key, value in payload.items():
-                assert response[key] == value
+                assert response[key].replace(tzinfo=timezone.utc) == value
 
     @pytest.mark.asyncio
     async def test_update_shift_not_found(self, db_session, setup_org_and_users):
