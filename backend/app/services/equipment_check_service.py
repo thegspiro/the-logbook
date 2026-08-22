@@ -865,32 +865,15 @@ class EquipmentCheckService:
     ) -> Optional[date]:
         """Resolve the authoritative expiration for this item result.
 
-        The template is authoritative because changes to its expiration must
-        go through the validated inventory-lot swap flow. ``expiration_found``
-        remains part of the check result as an observation, but a check
-        submitter cannot use it to clear an expired equipment record.
+        Inventory-backed template data is authoritative. Shift checks only
+        report those values; lot numbers and expiration dates are changed by
+        inventory receiving, correction, and swap workflows.
         """
         if tmpl_item is not None:
             resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
         else:
             resolved = item_data.get("expiration_date")
 
-        # Trust the observation only in the conservative direction: a crew
-        # reading an already-past date off the unit means the thing on the
-        # truck is expired regardless of what the record promises, so the check
-        # must fail exactly as if the record itself were expired. The record is
-        # NOT updated here — the observed date lives on the check result and
-        # the swap flow remains the only writer of the template's date. A
-        # *later* observed date still never clears the record's verdict, and an
-        # item the record does not track (no resolved date) stays untracked.
-        observed = item_data.get("expiration_found")
-        if (
-            observed
-            and resolved is not None
-            and observed < resolved
-            and observed < date.today()
-        ):
-            return observed
         return resolved
 
     @classmethod
@@ -945,37 +928,6 @@ class EquipmentCheckService:
 
         return total, completed, failed, overall_status
 
-    @staticmethod
-    def _apply_found_values_to_template(
-        tmpl_item: Optional[CheckTemplateItem],
-        *,
-        serial_found: Optional[str] = None,
-        lot_found: Optional[str] = None,
-        expiration_found: Optional[date] = None,
-    ) -> bool:
-        """Write a swapped-in unit's identifiers back onto the template item.
-
-        Serial and lot observations remain synchronized for existing behavior.
-        Expiration observations are deliberately not applied here: only the
-        validated inventory-lot swap flow may change the authoritative date.
-
-        Returns True when the template actually changed.
-        """
-        if tmpl_item is None:
-            return False
-        serial_changed = serial_found and serial_found != (
-            tmpl_item.serial_number or ""
-        )
-        lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
-        if not (serial_changed or lot_changed):
-            return False
-
-        if serial_found:
-            tmpl_item.serial_number = serial_found
-        if lot_found:
-            tmpl_item.lot_number = lot_found
-        return True
-
     async def _create_check_items(
         self,
         check_id: str,
@@ -983,21 +935,11 @@ class EquipmentCheckService:
         template_items_map: Dict[str, CheckTemplateItem],
         organization_id: str,
     ) -> List[ShiftEquipmentCheckItem]:
-        """Create ORM check item records, updating template serials as needed."""
+        """Create check item snapshots from authoritative inventory data."""
         created: List[ShiftEquipmentCheckItem] = []
         for item_data in items_data:
             tmpl_item_id = item_data.get("template_item_id")
-            serial_found = item_data.get("serial_found")
-            lot_found = item_data.get("lot_found")
-            expiration_found = item_data.get("expiration_found")
-
             tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
-            updated_serial = self._apply_found_values_to_template(
-                tmpl_item,
-                serial_found=serial_found,
-                lot_found=lot_found,
-                expiration_found=expiration_found,
-            )
             # A check is a recount. quantity_found is a crew standing at the
             # compartment counting, so it outranks whatever the running total
             # had drifted to, and it settles a shortfall report if the truck is
@@ -1034,10 +976,10 @@ class EquipmentCheckService:
                 level_unit=item_data.get("level_unit"),
                 serial_number=item_data.get("serial_number"),
                 lot_number=item_data.get("lot_number"),
-                serial_found=serial_found,
-                lot_found=lot_found,
-                expiration_found=expiration_found,
-                updated_serial=updated_serial,
+                serial_found=None,
+                lot_found=None,
+                expiration_found=None,
+                updated_serial=False,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
                 expiration_date=item_data.get("expiration_date"),
@@ -1570,30 +1512,14 @@ class EquipmentCheckService:
                     "level_reading", existing.level_reading
                 )
                 existing.notes = item_data.get("notes", existing.notes)
-                existing.serial_found = item_data.get(
-                    "serial_found", existing.serial_found
-                )
-                existing.lot_found = item_data.get("lot_found", existing.lot_found)
-                existing.expiration_found = (
-                    item_data.get("expiration_found") or existing.expiration_found
-                )
-
                 tmpl_item = template_items_map.get(tmpl_id or "")
-                if self._apply_found_values_to_template(
-                    tmpl_item,
-                    serial_found=existing.serial_found,
-                    lot_found=existing.lot_found,
-                    expiration_found=existing.expiration_found,
-                ):
-                    existing.updated_serial = True
-
-                expiration = self._resolve_expiration(
-                    {
-                        "expiration_found": existing.expiration_found,
-                        "expiration_date": existing.expiration_date,
-                    },
-                    tmpl_item,
-                )
+                # Lot metadata is inventory-owned. Ignore legacy/client
+                # observations when a saved incomplete check is resumed.
+                existing.serial_found = None
+                existing.lot_found = None
+                existing.expiration_found = None
+                existing.updated_serial = False
+                expiration = self._resolve_expiration({}, tmpl_item)
                 existing.expiration_date = expiration
                 existing.is_expired = bool(expiration and expiration < today)
 
