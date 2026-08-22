@@ -84,6 +84,23 @@ class CheckTemplateItemCreate(BaseModel):
         return _validate_check_type(value) or value
 
 
+class CheckTemplateItemBulkCreate(BaseModel):
+    """Create several items atomically, with retry protection."""
+
+    items: List[CheckTemplateItemCreate] = Field(..., min_length=1, max_length=250)
+    idempotency_key: str = Field(..., min_length=8, max_length=200)
+
+
+class CheckTemplateItemBulkResponse(BaseModel):
+    """Ordered result of a bulk item creation request."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    items: List["CheckTemplateItemResponse"]
+    created_count: int
+    replayed: bool = False
+
+
 class CheckTemplateItemUpdate(BaseModel):
     """Schema for updating a check template item."""
 

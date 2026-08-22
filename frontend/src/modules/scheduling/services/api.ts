@@ -215,6 +215,30 @@ export interface SchedulingSummary {
   hours_worked_this_month: number;
 }
 
+export interface SchedulingWidgetSummary {
+  timezone: string;
+  window_start: string;
+  window_end: string;
+  today_staffing: number;
+  future_coverage_gaps: number;
+  open_slots: number;
+  pending_staffing_changes: number;
+  incomplete_closeouts: number;
+  workload_imbalance: number;
+  special_operations: number;
+  scheduling_enabled: boolean;
+}
+
+export interface SchedulingWidgetFilters {
+  station_id?: string;
+  platoon?: string;
+  horizon_days: number;
+}
+
+export interface SchedulingWidgetPreferences {
+  widgets: Record<string, SchedulingWidgetFilters>;
+}
+
 /** Event template metadata stored in the positions field for event-category templates. */
 export interface EventTemplatePositions {
   event_type?: string;
@@ -514,6 +538,28 @@ export const schedulingService = {
 
   async getSummary(): Promise<SchedulingSummary> {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
+    return response.data;
+  },
+  async getWidgetSummary(params: {
+    start_date: string;
+    end_date: string;
+    station_id?: string;
+    platoon?: string;
+    shift_type?: string;
+    position?: string;
+  }): Promise<SchedulingWidgetSummary> {
+    const response = await api.get<SchedulingWidgetSummary>('/scheduling/dashboard/widgets', { params });
+    return response.data;
+  },
+  async getWidgetPreferences(): Promise<SchedulingWidgetPreferences> {
+    const response = await api.get<SchedulingWidgetPreferences>('/scheduling/dashboard/widget-preferences');
+    return response.data;
+  },
+  async saveWidgetPreferences(preferences: SchedulingWidgetPreferences): Promise<SchedulingWidgetPreferences> {
+    const response = await api.put<SchedulingWidgetPreferences>(
+      '/scheduling/dashboard/widget-preferences',
+      preferences
+    );
     return response.data;
   },
 
@@ -951,6 +997,13 @@ export const schedulingService = {
   // --- Item CRUD ---
   async addCheckItem(compartmentId: string, data: CheckTemplateItemCreate): Promise<CheckTemplateItem> {
     const response = await api.post<CheckTemplateItem>(`/equipment-checks/compartments/${compartmentId}/items`, data);
+    return response.data;
+  },
+  async addCheckItemsBulk(compartmentId: string, items: CheckTemplateItemCreate[], idempotencyKey: string) {
+    const response = await api.post<import('../types/equipmentCheck').CheckTemplateItemBulkResult>(
+      `/equipment-checks/compartments/${compartmentId}/items/bulk`,
+      { items, idempotency_key: idempotencyKey }
+    );
     return response.data;
   },
   async updateCheckItem(itemId: string, data: CheckTemplateItemUpdate): Promise<CheckTemplateItem> {

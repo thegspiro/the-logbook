@@ -14,10 +14,18 @@ import type { RSVP, RSVPOverride } from '../types/event';
 interface UseOverrideAttendanceOptions {
   eventId: string | undefined;
   timezone: string;
+  officialStartTime?: string | undefined;
+  officialEndTime?: string | undefined;
   onSuccess: () => Promise<void>;
 }
 
-export const useOverrideAttendance = ({ eventId, timezone, onSuccess }: UseOverrideAttendanceOptions) => {
+export const useOverrideAttendance = ({
+  eventId,
+  timezone,
+  officialStartTime,
+  officialEndTime,
+  onSuccess,
+}: UseOverrideAttendanceOptions) => {
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [editingRsvp, setEditingRsvp] = useState<RSVP | null>(null);
   const [overrideCheckIn, setOverrideCheckIn] = useState('');
@@ -33,19 +41,23 @@ export const useOverrideAttendance = ({ eventId, timezone, onSuccess }: UseOverr
           ? formatForDateTimeInput(rsvp.override_check_in_at, timezone)
           : rsvp.checked_in_at
             ? formatForDateTimeInput(rsvp.checked_in_at, timezone)
-            : ''
+            : officialStartTime
+              ? formatForDateTimeInput(officialStartTime, timezone)
+              : ''
       );
       setOverrideCheckOut(
         rsvp.override_check_out_at
           ? formatForDateTimeInput(rsvp.override_check_out_at, timezone)
           : rsvp.checked_out_at
             ? formatForDateTimeInput(rsvp.checked_out_at, timezone)
-            : ''
+            : officialEndTime
+              ? formatForDateTimeInput(officialEndTime, timezone)
+              : ''
       );
       setShowOverrideModal(true);
       setSubmitError(null);
     },
-    [timezone]
+    [timezone, officialStartTime, officialEndTime]
   );
 
   const closeModal = useCallback(() => {

@@ -489,6 +489,32 @@ class SchedulingSummary(BaseModel):
     hours_worked_this_month: float
 
 
+class SchedulingWidgetFilters(BaseModel):
+    """Saved defaults for the scheduling dashboard widgets."""
+
+    station_id: Optional[str] = Field(None, max_length=100)
+    platoon: Optional[str] = Field(None, max_length=20)
+    horizon_days: int = Field(14, ge=1, le=93)
+
+
+class SchedulingWidgetPreferences(BaseModel):
+    widgets: dict[str, SchedulingWidgetFilters] = Field(default_factory=dict)
+
+
+class SchedulingWidgetSummary(BaseModel):
+    timezone: str
+    window_start: datetime
+    window_end: datetime
+    today_staffing: int
+    future_coverage_gaps: int
+    open_slots: int
+    pending_staffing_changes: int
+    incomplete_closeouts: int
+    workload_imbalance: int
+    special_operations: int
+    scheduling_enabled: bool = True
+
+
 # ============================================
 # Shift Call Schemas
 # ============================================

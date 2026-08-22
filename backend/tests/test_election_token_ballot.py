@@ -315,6 +315,26 @@ class TestPerItemEligibility(TestTokenBallotSetup):
         assert err is None, f"Expected success, got: {err}"
         assert result["votes_cast"] == 2
 
+    async def test_write_in_rejected_when_election_disallows_it(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        data = setup_ballot_election
+        _, raw_token = await self._issue_token(db_session, data)
+
+        result, err = await ElectionService(db_session).submit_ballot_with_token(
+            token=raw_token,
+            votes=[
+                {
+                    "ballot_item_id": "item_a",
+                    "choice": "write_in",
+                    "write_in_name": "Injected Candidate",
+                }
+            ],
+        )
+
+        assert result is None
+        assert err == "Write-in votes are not allowed for: Budget Approval"
+
 
 # ── Test-ballot tokens (B1) ───────────────────────────────────────────
 
