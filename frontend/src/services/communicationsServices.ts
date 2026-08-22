@@ -181,6 +181,14 @@ export interface CommunityEngagement {
   upcoming_public_events: number;
 }
 
+export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';
+export interface MainDashboardWidgets {
+  period: WidgetPeriod; period_label: string;
+  finance: null | { dues_due: number; dues_paid: number; overdue_dues: number; cash_in: number; cash_out: number; net_cash_flow: number; budgeted: number; spent: number; encumbered: number };
+  fundraising: null | { grant_deadlines_30_days: number; application_stages: Record<string, number>; campaign_raised: number; campaign_goal: number };
+  community: null | { public_events: number; member_attendees: number; external_attendees: number; pending_public_requests: number };
+}
+
 export interface ComplianceMatrixMember {
   user_id: string;
   member_name: string;

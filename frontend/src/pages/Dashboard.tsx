@@ -8,6 +8,7 @@ import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import DashboardOrganizationWidgets from '../components/dashboard/DashboardOrganizationWidgets';
 import { AssetWidgetRegistry } from '../components/dashboard/AssetWidgetRegistry';
 import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistry';
 import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDashboard';
@@ -1094,6 +1095,7 @@ const Dashboard: React.FC = () => {
           >
             {/* ── Main column ── */}
             <div className="flex min-w-0 flex-col gap-5">
+              <DashboardOrganizationWidgets />
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where
                   the actions and timeline swap around them. */}
