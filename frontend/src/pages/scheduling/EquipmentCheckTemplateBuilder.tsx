@@ -106,6 +106,7 @@ import {
   VEHICLE_PRESETS,
   EQUIPMENT_PRESETS,
 } from './equipmentCheckPresets';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 const inputClass = 'form-input';
 
@@ -1507,6 +1508,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
   const [showChangelog, setShowChangelog] = useState(false);
   const [showInventoryMatch, setShowInventoryMatch] = useState(false);
   const [changelogEntries, setChangelogEntries] = useState<
@@ -1747,6 +1749,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }[]
     | null
   >(null);
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview);
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -23,6 +23,7 @@ import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod }
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -33,6 +34,9 @@ const RecordAttachmentsModal: React.FC<{
   courseName: string;
   onClose: () => void;
 }> = ({ recordId, courseName, onClose }) => {
+  // Mounted only while open.
+  useOverlaySurface();
+
   const [attachments, setAttachments] = useState<TrainingAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
