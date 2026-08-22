@@ -11,6 +11,10 @@ import { renderWithRouter } from '../../test/utils';
 const mockGetLastCheckResults = vi.fn();
 const mockSubmitCheck = vi.fn();
 const mockUpdateDeployedLot = vi.fn();
+const mockUploadCheckItemPhotos = vi.fn();
+const mockListPendingChecks = vi.fn();
+const mockDequeueCheck = vi.fn();
+const mockMarkCheckSubmitted = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -19,7 +23,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     submitStandaloneCheck: (...a: unknown[]) => mockSubmitCheck(...a) as unknown,
     getEquipmentCheck: vi.fn(),
     updateDeployedLot: (...a: unknown[]) => mockUpdateDeployedLot(...a) as unknown,
-    uploadCheckItemPhoto: vi.fn(),
+    uploadCheckItemPhotos: (...a: unknown[]) => mockUploadCheckItemPhotos(...a) as unknown,
     swapItemLot: vi.fn(),
   },
 }));
@@ -32,8 +36,9 @@ vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
 vi.mock('../../utils/offlineQueue', () => ({
   enqueueCheck: vi.fn(),
-  listPendingChecks: vi.fn().mockResolvedValue([]),
-  dequeueCheck: vi.fn(),
+  listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
+  dequeueCheck: (...a: unknown[]) => mockDequeueCheck(...a) as unknown,
+  markCheckSubmitted: (...a: unknown[]) => mockMarkCheckSubmitted(...a) as unknown,
   markRetry: vi.fn(),
   pendingCount: vi.fn().mockResolvedValue(0),
 }));
@@ -108,6 +113,9 @@ describe('EquipmentCheckForm quantity seeding', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mockGetLastCheckResults.mockResolvedValue({});
+    mockListPendingChecks.mockResolvedValue([]);
+    mockUploadCheckItemPhotos.mockResolvedValue({ photoUrls: [], count: 1 });
+    mockMarkCheckSubmitted.mockResolvedValue({});
     mockSubmitCheck.mockResolvedValue({ id: 'check-1', items: [] });
     mockUpdateDeployedLot.mockResolvedValue({
       templateItemId: 'ti-1',
@@ -119,6 +127,32 @@ describe('EquipmentCheckForm quantity seeding', () => {
 
   const render = (itemOverrides = {}) =>
     renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template(itemOverrides) as never} />);
+
+  it('uploads a queued photo against the returned check-item ID', async () => {
+    const photo = new File(['photo'], 'gauze.jpg', { type: 'image/jpeg' });
+    mockListPendingChecks.mockResolvedValue([
+      {
+        id: 'queue-1',
+        shiftId: 'shift-1',
+        payload: { template_id: 'tmpl-1', items: [] },
+        photos: [{ itemId: 'ti-1', blob: photo, fileName: photo.name }],
+        queuedAt: 1,
+        retries: 0,
+      },
+    ]);
+    mockSubmitCheck.mockResolvedValue({
+      id: 'check-1',
+      items: [{ id: 'check-item-77', templateItemId: 'ti-1' }],
+    });
+
+    render();
+
+    await waitFor(() => {
+      expect(mockUploadCheckItemPhotos).toHaveBeenCalledWith('check-1', 'check-item-77', [expect.any(File)]);
+    });
+    expect(mockMarkCheckSubmitted).toHaveBeenCalledWith('queue-1', 'check-1', { 'ti-1': 'check-item-77' });
+    expect(mockDequeueCheck).toHaveBeenCalledWith('queue-1');
+  });
 
   it('starts from the running on-truck count, not the last check', async () => {
     // The last check saw four; two were used mid-shift and recorded against
