@@ -5,7 +5,13 @@
 import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { SecurityStatus, SecurityAlert } from './facilitiesServices';
-import type { DashboardStats, AdminSummary, ActionItemSummary, CommunityEngagement } from './communicationsServices';
+import type {
+  DashboardStats,
+  AdminSummary,
+  OperationsDashboard,
+  ActionItemSummary,
+  CommunityEngagement,
+} from './communicationsServices';
 import type { IntegrationConfig } from './trainingServices';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitiesServices';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
@@ -334,26 +340,16 @@ export const platformAnalyticsService = {
 };
 
 export const dashboardService = {
-  async getWidgetRegistry(): Promise<DashboardWidgetRegistry> {
-    const response = await api.get<DashboardWidgetRegistry>('/dashboard/widgets');
-    return response.data;
-  },
-  async updateWidgetPreferences(widgetIds: string[]): Promise<DashboardWidgetRegistry> {
-    const response = await api.put<DashboardWidgetRegistry>('/dashboard/widgets/preferences', {
-      widget_ids: widgetIds,
-    });
-    return response.data;
-  },
-  async getWidgetData(widgetId: string): Promise<DashboardWidgetData> {
-    const response = await api.get<DashboardWidgetData>(`/dashboard/widget-data/${widgetId}`);
-    return response.data;
-  },
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
     return response.data;
   },
   async getAdminSummary(): Promise<AdminSummary> {
     const response = await api.get<AdminSummary>('/dashboard/admin-summary');
+    return response.data;
+  },
+  async getOperations(): Promise<OperationsDashboard> {
+    const response = await api.get<OperationsDashboard>('/dashboard/operations');
     return response.data;
   },
   async getActionItems(params?: {
@@ -383,23 +379,6 @@ export const dashboardService = {
     });
   },
 };
-
-export interface DashboardWidgetDefinition {
-  id: string;
-  title: string;
-  module: string;
-  deep_link: string;
-}
-
-export interface DashboardWidgetRegistry {
-  widgets: DashboardWidgetDefinition[];
-  selected_widget_ids: string[];
-}
-
-export interface DashboardWidgetData {
-  value: number | string;
-  description: string;
-}
 
 // ============================================
 // Email Templates Service

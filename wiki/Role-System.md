@@ -82,6 +82,7 @@ The following roles are automatically created for each organization:
 Permissions are organized into the following categories:
 
 ### Users & Members
+
 - `users.view` - View user list
 - `users.create` - Create new users
 - `users.edit` - Edit user information
@@ -92,6 +93,7 @@ Permissions are organized into the following categories:
 - `members.assign_roles` - Assign roles to members
 
 ### Roles
+
 - `roles.view` - View roles
 - `roles.create` - Create new roles
 - `roles.edit` - Edit roles
@@ -99,14 +101,19 @@ Permissions are organized into the following categories:
 - `roles.manage_permissions` - Manage role permissions
 
 ### Organization & Settings
+
 - `organization.view` - View organization info
 - `organization.edit` - Edit organization info
 - `settings.view` - View settings
 - `settings.edit` - Edit settings
 - `settings.manage_contact_visibility` - Control contact info display
+- `legal.propose` - View the public privacy notice / terms and propose revisions
+- `legal.publish` - Publish a legal-document revision to the public pages
 
 ### Modules
+
 Each module has view and manage permissions:
+
 - Training (`training.view`, `training.manage`)
 - Compliance (`compliance.view`, `compliance.manage`)
 - Scheduling (`scheduling.view`, `scheduling.manage`)
@@ -158,6 +165,7 @@ The following pages are automatically visible to users with admin roles:
 ### Editing System Roles
 
 System roles (indicated by a blue "System Role" badge) have restrictions:
+
 - **Name and priority cannot be changed**
 - **Permissions can be modified** to suit your organization
 - **Cannot be deleted**
@@ -169,6 +177,7 @@ This allows you to customize permissions while maintaining the core role structu
 ### Endpoints
 
 **Roles**:
+
 - `GET /api/v1/roles` - List all roles
 - `GET /api/v1/roles/{id}` - Get specific role
 - `POST /api/v1/roles` - Create custom role
@@ -178,6 +187,7 @@ This allows you to customize permissions while maintaining the core role structu
 - `GET /api/v1/roles/permissions/by-category` - Permissions grouped by category
 
 **User Roles**:
+
 - `GET /api/v1/users/with-roles` - List users with roles
 - `GET /api/v1/users/{id}/roles` - Get user's roles
 - `PUT /api/v1/users/{id}/roles` - Assign roles (replaces all)
@@ -194,6 +204,7 @@ python -m app.core.seed
 ```
 
 This will:
+
 1. Create a test organization (if it doesn't exist)
 2. Create all default system roles with proper permissions
 
@@ -226,13 +237,14 @@ async def admin_route(
    position's permission list are all guarded. Recovering from that state
    needs direct database access, because every restore path is itself behind
    that permission. Departments should keep at least two people holding it so
-   the guard never has to fire. *(2026-08-01)*
+   the guard never has to fire. _(2026-08-01)_
 
 ## Extending the System
 
 ### Adding New Permissions
 
 1. Add permission constant in `backend/app/core/permissions.py`:
+
 ```python
 MY_NEW_PERMISSION = Permission(
     "module.action",
@@ -248,6 +260,7 @@ MY_NEW_PERMISSION = Permission(
 ### Adding New Modules
 
 When adding new modules:
+
 1. Create view and manage permissions
 2. Add to permission categories
 3. Update default roles to include appropriate permissions

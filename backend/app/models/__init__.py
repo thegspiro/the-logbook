@@ -229,6 +229,11 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.legal import (
+    LegalDocumentRevision,
+    LegalDocumentType,
+    LegalRevisionStatus,
+)
 from app.models.location import Location
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -693,4 +698,8 @@ __all__ = [
     # Consent models
     "ConsentType",
     "UserConsent",
+    # Legal document models
+    "LegalDocumentRevision",
+    "LegalDocumentType",
+    "LegalRevisionStatus",
 ]

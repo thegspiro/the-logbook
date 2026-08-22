@@ -1116,6 +1116,67 @@ class TestBallotSubmissionResponseReceipts:
         assert resp.receipt_hashes == ["abc", "def"]
 
 
+class TestBallotSubmissionInputSecurity:
+    """Public ballot payloads are bounded and unambiguous."""
+
+    def test_duplicate_ballot_items_are_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotSubmission
+
+        with pytest.raises(pydantic.ValidationError, match="one vote entry"):
+            BallotSubmission(
+                votes=[
+                    {"ballot_item_id": "question_1", "choice": "approve"},
+                    {"ballot_item_id": "question_1", "choice": "deny"},
+                ]
+            )
+
+    def test_oversized_write_in_is_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotSubmission
+
+        with pytest.raises(pydantic.ValidationError):
+            BallotSubmission(
+                votes=[
+                    {
+                        "ballot_item_id": "question_1",
+                        "choice": "write_in",
+                        "write_in_name": "x" * 201,
+                    }
+                ]
+            )
+
+    def test_public_vote_rejects_ignored_election_id(self):
+        import pydantic
+
+        from app.api.v1.endpoints.elections import VoteWithToken
+
+        with pytest.raises(pydantic.ValidationError, match="Extra inputs"):
+            VoteWithToken(
+                token="opaque-token",
+                election_id=uuid4(),
+                candidate_id=uuid4(),
+            )
+
+    def test_ballot_item_rejects_unknown_fields(self):
+        import pydantic
+
+        from app.schemas.election import BallotSubmission
+
+        with pytest.raises(pydantic.ValidationError, match="Extra inputs"):
+            BallotSubmission(
+                votes=[
+                    {
+                        "ballot_item_id": "question_1",
+                        "choice": "approve",
+                        "admin_override": True,
+                    }
+                ]
+            )
+
+
 class TestBulkVoteCreateSchema:
     """Bulk payload must express ranks and multiple candidates per position
     (ELEC-3 / approval + ranked-choice support)."""

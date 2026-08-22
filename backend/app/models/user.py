@@ -284,10 +284,6 @@ class User(Base):
     # app/services/notification_channels.
     notification_preferences = Column(JSON, default=dict)
 
-    # User-owned dashboard layout.  Widget authorization is always recomputed
-    # server-side; this column stores presentation choices, never capabilities.
-    dashboard_preferences = Column(JSON, default=dict)
-
     # Department Membership (one per member, no permissions – purely classification)
     membership_type = Column(String(50), default="active")  # See MembershipType enum
     membership_type_changed_at = Column(

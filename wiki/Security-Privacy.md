@@ -158,6 +158,40 @@ default text changes; a department publishing its own wording supplies its own
 date via `legal.last_updated`, and no date is shown if it does not — the
 built-in date describes the built-in text and would misdate custom wording.
 
+### Editing the wording: Governance -> Legal Documents _(2026-08-18)_
+
+`/governance/legal` is where a department changes what those pages say, instead
+of hand-editing a JSON settings column. It shows the live text for each
+document, the open proposals, and the published history.
+
+**Proposing is separate from publishing, on purpose.** `legal.propose` reaches
+the screen and writes drafts; `legal.publish` is what changes the public page.
+The two are backfilled from `settings.view` and `settings.manage` respectively
+(migration `06adc68a8b84`), so by default the secretary, chiefs, captains,
+lieutenants, president, VP, treasurer, board, quartermaster, membership
+coordinator, and assistant secretary can propose, while the Fire Chief,
+President, and IT Manager can publish. Regular members and firefighters hold
+neither and never see the screen. Both are assignable like any other permission
+if a department wants a different split.
+
+A new proposal is seeded with the text currently published — or, when the
+platform default is live, with a plain-text rendering of that default from the
+same source `LegalPage` renders (`pages/legal/legalContent.ts`). That shared
+source is the point: a department adapting the notice starts from what members
+are actually reading, and cannot silently drop the department-control and
+status-based-access language by retyping around it.
+
+Every revision carries a **required** change note naming the bylaw, SOP,
+statute, or counsel advice behind it. Publishing archives the previous
+published revision rather than deleting it, and audits as
+`legal.document_published`; reverting to the built-in default archives the
+department's version and clears the settings key. The result is that the
+question a records request asks — what did this page say on that date, and who
+decided — has an answer.
+
+Only drafts are editable. A proposer may change their own draft; a publisher
+may change anyone's. Published and archived revisions are immutable.
+
 Departments replace the wording via organization settings
 (`legal.privacy_policy` / `legal.terms_of_service`), served by
 `GET /api/public/v1/legal`. Custom text renders as **plain paragraphs, never

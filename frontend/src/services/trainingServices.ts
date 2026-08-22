@@ -105,6 +105,58 @@ import type {
   UserTrainingStats,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
+
+export interface TrainingDashboardSummary {
+  widget_metadata: Record<string, { module: 'training'; permission: 'training.manage' }>;
+  stats: {
+    total_members: number;
+    tracked_members: number;
+    compliant_members: number;
+    compliance_percentage: number;
+    expiring_count: number;
+    completions_last_30_days: number;
+    total_hours_this_year: number;
+    average_hours_per_member: number;
+  };
+  expirations: Array<{
+    id: string;
+    member_id: string;
+    member_name: string;
+    course_name: string;
+    expiration_date: string;
+    days_left: number;
+  }>;
+  recent_completions: Array<{
+    id: string;
+    member_id: string;
+    member_name: string;
+    course_name: string;
+    completion_date: string;
+    hours_completed: number;
+  }>;
+  requirements: Array<{ id: string; name: string; due_date: string | null }>;
+  members_needing_intervention: Array<{
+    member_id: string;
+    member_name: string;
+    unmet_count: number;
+    requirement_id: string;
+  }>;
+  upcoming_session_capacity: Array<{
+    session_id: string;
+    title: string;
+    start_datetime: string;
+    capacity: number;
+    registered: number;
+    remaining: number;
+  }>;
+  pending_validation: { count: number };
+  requirements_at_risk: Array<{
+    requirement_id: string;
+    name: string;
+    members_at_risk: number;
+    applicable_members: number;
+  }>;
+}
 import type {
   TrainingSessionResponse,
   TrainingSessionCreate,
@@ -113,6 +165,12 @@ import type {
 } from './adminServices';
 
 export const trainingService = {
+  async getDashboardSummary(expirationDays = 90): Promise<TrainingDashboardSummary> {
+    const response = await api.get<TrainingDashboardSummary>('/training/dashboard-summary', {
+      params: { expiration_days: expirationDays },
+    });
+    return response.data;
+  },
   /**
    * Get all training courses
    */
