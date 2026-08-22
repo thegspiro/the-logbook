@@ -4993,7 +4993,24 @@ class MembershipPipelineService:
             performed_by=interviewer_id,
         )
 
+        prospect_id = str(interview.prospect_id)
+        interview_step_id = str(interview.step_id) if interview.step_id else None
         await self.db.commit()
+
+        # An edit can turn an interview that was already counted for this
+        # stage into one that satisfies its recommendation gate.  Retry only
+        # after committing so complete_step grades the durable interview
+        # values (and retain its current-step and auto-advance protections).
+        if interview_step_id:
+            await self._try_auto_advance_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=interview_step_id,
+                completed_by=interviewer_id,
+                trigger="interview update",
+                action_result={"interview_id": interview_id},
+            )
+
         return await self.get_interview(interview_id, organization_id)
 
     async def delete_interview(
