@@ -107,4 +107,34 @@ describe('TrainingAdminPage', () => {
     await waitFor(() => expect(dashboardTab).toHaveAttribute('aria-selected', 'true'));
     expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
   });
+
+  it('updates the section description and actions after navigation', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(screen.getByText('Training overview, compliance tracking, and certificate monitoring')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review submissions' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Records' }));
+
+    expect(screen.getByText('Review submissions, manage sessions, and generate shift reports')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review submissions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create session' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Setup' }));
+
+    expect(screen.getByText('Configure requirements, pipelines, integrations, and data imports')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage requirements' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create session' })).not.toBeInTheDocument();
+  });
+
+  it('routes contextual actions to their existing tab destinations', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+
+    await user.click(screen.getByRole('tab', { name: 'Records' }));
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
+  });
 });
