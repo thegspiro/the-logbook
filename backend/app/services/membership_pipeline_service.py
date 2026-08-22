@@ -641,7 +641,8 @@ class MembershipPipelineService:
         """List prospects with filters.
 
         ``event_id`` narrows to prospects whose creation metadata names that
-        event as their source. Callers must have already confirmed
+        event as their source or who have an explicit event link. Callers must
+        have already confirmed
         the event belongs to *organization_id*; the prospect scope below stops
         a foreign id leaking rows, but it would read as "no applicants" rather
         than as the wrong-org id it is.
