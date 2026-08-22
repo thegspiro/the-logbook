@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -174,5 +174,35 @@ describe('TrainingAdminPage', () => {
     await user.keyboard(' ');
     expectLocation('records', 'sessions');
     await expectSelection('Records', 'Sessions', 'records-sessions');
+  });
+
+  it('updates the section description and actions after navigation', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(screen.getByText('Training overview, compliance tracking, and certificate monitoring')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review submissions' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Records' }));
+
+    expect(screen.getByText('Review submissions, manage sessions, and generate shift reports')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review submissions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create session' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Setup' }));
+
+    expect(screen.getByText('Configure requirements, pipelines, integrations, and data imports')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage requirements' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create session' })).not.toBeInTheDocument();
+  });
+
+  it('routes contextual actions to their existing tab destinations', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+
+    await user.click(screen.getByRole('tab', { name: 'Records' }));
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    expect(screen.getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page');
   });
 });
