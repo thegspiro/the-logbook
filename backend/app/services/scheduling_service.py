@@ -1322,6 +1322,16 @@ class SchedulingService:
             if not shift:
                 return None, "Shift not found"
 
+            # ShiftUpdate can reject an inverted interval when both values are
+            # present in the request, but a partial update must be compared
+            # with the other value already stored on the shift.  Keep this
+            # authoritative check here, before any requested changes are
+            # applied.
+            effective_start = update_data.get("start_time", shift.start_time)
+            effective_end = update_data.get("end_time", shift.end_time)
+            if effective_end is not None and effective_end <= effective_start:
+                return None, "end_time must be after start_time"
+
             # A client-supplied shift_officer_id must belong to the caller's org
             # before it is persisted (and before _sync_officer_assignment mints
             # an apparatus assignment for it), or a foreign user id could be
