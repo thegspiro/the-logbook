@@ -26,25 +26,70 @@ vi.mock('../components/HelpLink', () => ({
   HelpLink: () => null,
 }));
 
-vi.mock('../stores/authStore', () => ({
-  useAuthStore: vi.fn((selector) => {
-    const state = {
-      user: {
-        id: 'user-1',
-        first_name: 'Admin',
-        last_name: 'User',
-        role: { slug: 'admin' },
-        permissions: ['training.manage'],
-      },
-    };
-    if (typeof selector === 'function') {
-      return (selector as (s: typeof state) => unknown)(state);
-    }
-    return state;
-  }),
+// Keep every import used by TabContent isolated: these tests exercise routing, not the child pages.
+vi.mock('./TrainingOfficerDashboard', () => ({ default: lazyPage('dashboard-overview') }));
+vi.mock('./ComplianceMatrixTab', () => ({ default: lazyPage('dashboard-compliance') }));
+vi.mock('./ExpiringCertsTab', () => ({ default: lazyPage('dashboard-expiring-certs') }));
+vi.mock('./TrainingWaiversTab', () => ({ default: lazyPage('dashboard-waivers') }));
+vi.mock('./ReviewSubmissionsPage', () => ({ default: lazyPage('records-submissions') }));
+vi.mock('./CreateTrainingSessionPage', () => ({ default: lazyPage('records-sessions') }));
+vi.mock('./training/CohortsPage', () => ({ default: lazyPage('records-cohorts') }));
+vi.mock('./ShiftReportPage', () => ({ default: lazyPage('records-shift-reports') }));
+vi.mock('./MemberTrainingStatusPage', () => ({ default: lazyPage('records-member-status') }));
+vi.mock('./TrainingRequirementsPage', () => ({ default: lazyPage('setup-requirements') }));
+vi.mock('./CourseLibraryPage', () => ({ default: lazyPage('setup-courses') }));
+vi.mock('./CreatePipelinePage', () => ({ default: lazyPage('setup-pipelines') }));
+vi.mock('./training/ManualEntrySettingsPanel', () => ({ default: lazyPage('setup-manual-entry') }));
+vi.mock('./ExternalTrainingPage', () => ({ default: lazyPage('setup-integrations') }));
+vi.mock('./HistoricalImportPage', () => ({ default: lazyPage('setup-import') }));
+vi.mock('./SkillsTestingTemplatesTab', () => ({ default: lazyPage('skills-testing-templates') }));
+vi.mock('./SkillsTestingTestRecordsTab', () => ({ default: lazyPage('skills-testing-tests') }));
+vi.mock('./TrainingEnhancementsTab', () => ({
+  default: ({ activeTab }: { activeTab: string }) => lazyPage(`enhancements-${activeTab}`)(),
+}));
+vi.mock('./ComplianceOfficerDashboard', () => ({
+  default: ({ activeTab }: { activeTab: string }) => lazyPage(`compliance-${activeTab}`)(),
 }));
 
+vi.mock('../components/HelpLink', () => ({ HelpLink: () => null }));
+
 import TrainingAdminPage from './TrainingAdminPage';
+
+const pageCases = [
+  ['Dashboard', 'dashboard', 'Overview', 'overview', 'dashboard-overview'],
+  ['Records', 'records', 'Submissions', 'submissions', 'records-submissions'],
+  ['Setup', 'setup', 'Requirements', 'requirements', 'setup-requirements'],
+  ['Skills Testing', 'skills-testing', 'Templates', 'templates', 'skills-testing-templates'],
+  ['Advanced', 'enhancements', 'Recertification', 'recertification', 'enhancements-recertification'],
+  ['Compliance', 'compliance', 'Annual Report', 'annual-report', 'compliance-annual-report'],
+] as const;
+
+const transitionCases = [
+  ['dashboard', 'Dashboard', 'Compliance Matrix', 'compliance', 'dashboard-compliance'],
+  ['records', 'Records', 'Sessions', 'sessions', 'records-sessions'],
+  ['setup', 'Setup', 'Course Library', 'courses', 'setup-courses'],
+  ['skills-testing', 'Skills Testing', 'Test Records', 'tests', 'skills-testing-tests'],
+  ['enhancements', 'Advanced', 'Effectiveness', 'effectiveness', 'enhancements-effectiveness'],
+  ['compliance', 'Compliance', 'ISO Readiness', 'iso-readiness', 'compliance-iso-readiness'],
+] as const;
+
+function startAt(search = '') {
+  window.history.replaceState({}, '', `/training/admin${search}`);
+  return renderWithRouter(<TrainingAdminPage />);
+}
+
+function expectLocation(page: string, tab: string) {
+  expect(window.location.pathname).toBe('/training/admin');
+  expect(window.location.search).toBe(`?page=${page}&tab=${tab}`);
+}
+
+async function expectSelection(pageLabel: string, tabLabel: string, content: string) {
+  const pageNav = screen.getByRole('tablist', { name: 'Training admin sections' });
+  expect(within(pageNav).getByRole('tab', { name: pageLabel, selected: true })).toBeVisible();
+  const tabNav = screen.getByRole('navigation', { name: `${pageLabel} tabs` });
+  expect(within(tabNav).getByRole('button', { name: tabLabel })).toHaveAttribute('aria-current', 'page');
+  expect(await screen.findByRole('heading', { name: content })).toBeVisible();
+}
 
 describe('TrainingAdminPage', () => {
   beforeEach(() => {

@@ -484,6 +484,32 @@ export const TrainingAdminPage: React.FC = () => {
           )}
         </div>
 
+        {/* The live region gives section changes useful context without announcing tab content. */}
+        <div
+          className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p className="text-theme-text-muted text-sm">
+            <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
+            {currentPage.description}
+          </p>
+          {currentPage.actions && (
+            <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
+              {currentPage.actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => handleTabChange(action.tab)}
+                  className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Inner tab bar */}
         <div className="border-theme-surface-border border-b">
           <nav className="hidden space-x-1 md:flex" aria-label={`${currentPage.label} tabs`}>
