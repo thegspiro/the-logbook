@@ -167,6 +167,7 @@ const Dashboard: React.FC = () => {
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
   const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
+  const canViewScheduling = checkPermission('scheduling.view');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -1647,6 +1648,8 @@ const Dashboard: React.FC = () => {
                   </div>
                 ))}
             </div>
+
+            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
 
             {setupProgress && setupProgress.completed < setupProgress.total && (
               <section className="card p-4 sm:p-5" aria-labelledby="organization-setup-heading">
