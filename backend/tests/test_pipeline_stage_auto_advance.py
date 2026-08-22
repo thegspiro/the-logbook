@@ -40,6 +40,7 @@ from app.models.medical_screening import (
     ScreeningStatus,
     ScreeningType,
 )
+from app.models.membership_pipeline import PipelineStepType
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.medical_screening_service import MedicalScreeningService
 from app.services.membership_pipeline_service import MembershipPipelineService
@@ -64,6 +65,27 @@ async def org(db_session: AsyncSession):
     )
     await db_session.flush()
     return org_id
+
+
+@pytest.fixture
+async def interviewer(db_session: AsyncSession, org):
+    user_id = _uid()
+    await db_session.execute(
+        text(
+            "INSERT INTO users "
+            "(id, organization_id, username, first_name, last_name, email, "
+            "password_hash, status) VALUES "
+            "(:id, :org, :username, 'Ira', 'Viewer', :email, 'hashed', 'active')"
+        ),
+        {
+            "id": user_id,
+            "org": org,
+            "username": f"interviewer-{user_id[:8]}",
+            "email": f"interviewer-{user_id[:8]}@example.com",
+        },
+    )
+    await db_session.flush()
+    return user_id
 
 
 async def _pipeline_parked_on(
@@ -216,12 +238,125 @@ class TestDocumentUploadAutoAdvance:
 
 
 # =========================================================================
+# Interview stage updates
+# =========================================================================
+
+
+class TestInterviewUpdateAutoAdvance:
+    async def _interview(
+        self,
+        db_session: AsyncSession,
+        org_id: str,
+        interviewer_id: str,
+        *,
+        auto_advance: bool = True,
+        step_id: str | None = None,
+    ):
+        config = {
+            "required_count": 1,
+            "required_recommendation": "recommend",
+        }
+        if auto_advance:
+            config["auto_advance"] = True
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org_id,
+            step_type="interview_requirement",
+            config=config,
+        )
+        interview = await svc.create_interview(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            interviewer_id=interviewer_id,
+            recommendation="undecided",
+            step_id=step_id or str(gate.id),
+        )
+        return svc, prospect, gate, interview
+
+    async def test_required_recommendation_update_advances(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate, interview = await self._interview(
+            db_session, org, interviewer
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="recommend"
+        )
+
+        updated = await svc.get_prospect(prospect.id, org)
+        assert str(updated.current_step_id) != str(gate.id)
+        progress = next(
+            p for p in updated.step_progress if str(p.step_id) == str(gate.id)
+        )
+        assert progress.action_result["interview_id"] == interview.id
+        assert progress.completed_by == interviewer
+
+    async def test_update_that_still_does_not_qualify_stays_put(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate, interview = await self._interview(
+            db_session, org, interviewer
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="do_not_recommend"
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_interview_for_non_current_stage_does_not_advance(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="checkbox",
+            config={},
+        )
+        pipeline = await svc.get_pipeline(prospect.pipeline_id, org)
+        later = next(step for step in pipeline.steps if str(step.id) != str(gate.id))
+        later.step_type = PipelineStepType.INTERVIEW_REQUIREMENT
+        later.config = {
+            "required_count": 1,
+            "required_recommendation": "recommend",
+            "auto_advance": True,
+        }
+        await db_session.commit()
+        interview = await svc.create_interview(
+            prospect.id,
+            org,
+            interviewer,
+            recommendation="undecided",
+            step_id=str(later.id),
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="recommend"
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_stage_without_auto_advance_stays_put(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate, interview = await self._interview(
+            db_session, org, interviewer, auto_advance=False
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="recommend"
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+# =========================================================================
 # Medical screening stage
 # =========================================================================
 
 
 class TestMedicalScreeningAutoAdvance:
-
     async def _record(
         self,
         db_session: AsyncSession,
@@ -487,7 +622,6 @@ class TestMeetingStageMatching:
 
 
 class TestMeetingAutoAdvanceOnCheckIn:
-
     async def _check_in(self, db_session, event, org_id, email):
         return await GuestCheckInService(db_session).check_in_guest(
             event=event,
