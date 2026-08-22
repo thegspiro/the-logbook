@@ -662,8 +662,16 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.status == status)
         if event_id:
             query = query.where(
-                ProspectiveMember.metadata_["source_event_id"].as_string()
-                == str(event_id)
+                or_(
+                    ProspectiveMember.metadata_["source_event_id"].as_string()
+                    == str(event_id),
+                    select(ProspectEventLink.id)
+                    .where(
+                        ProspectEventLink.prospect_id == ProspectiveMember.id,
+                        ProspectEventLink.event_id == str(event_id),
+                    )
+                    .exists(),
+                )
             )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:
