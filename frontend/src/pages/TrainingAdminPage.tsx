@@ -115,7 +115,7 @@ const pages: PageDef[] = [
       { id: 'import', label: 'Import History' },
     ],
     defaultTab: 'requirements',
-    actions: [{ label: 'Add requirement', tab: 'requirements' }],
+    actions: [{ label: 'Manage requirements', tab: 'requirements' }],
   },
   {
     id: 'skills-testing',

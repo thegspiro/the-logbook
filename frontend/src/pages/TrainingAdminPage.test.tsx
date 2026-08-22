@@ -84,7 +84,7 @@ describe('TrainingAdminPage', () => {
     await user.click(screen.getByRole('tab', { name: 'Setup' }));
 
     expect(screen.getByText('Configure requirements, pipelines, integrations, and data imports')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add requirement' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage requirements' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create session' })).not.toBeInTheDocument();
   });
 
