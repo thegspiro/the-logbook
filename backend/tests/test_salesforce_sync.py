@@ -20,6 +20,7 @@ from app.services.integration_services import salesforce_oauth_service as sfoaut
 from app.services.integration_services.salesforce_service import SalesforceService
 from app.services.integration_services.salesforce_sync_service import (
     SalesforceSyncService,
+    build_salesforce_credentials,
 )
 
 
@@ -652,6 +653,21 @@ def test_client_credentials_fall_back_to_deployment(monkeypatch):
     client_id, client_secret = sfoauth.get_client_credentials(integ)
     assert client_id == "deploy-id"
     assert client_secret == "deploy-secret"
+
+
+def test_sync_credentials_fall_back_to_deployment(monkeypatch):
+    monkeypatch.setattr(settings, "SALESFORCE_CLIENT_ID", "deploy-id")
+    monkeypatch.setattr(settings, "SALESFORCE_CLIENT_SECRET", "deploy-secret")
+    integ = make_integration(
+        config={"instance_url": "https://example.my.salesforce.com"},
+        secrets={"refresh_token": "refresh-token"},
+    )
+
+    credentials = build_salesforce_credentials(integ)
+
+    assert credentials["client_id"] == "deploy-id"
+    assert credentials["client_secret"] == "deploy-secret"
+    assert credentials["refresh_token"] == "refresh-token"
 
 
 def test_build_authorization_url_requires_client_id(monkeypatch):
