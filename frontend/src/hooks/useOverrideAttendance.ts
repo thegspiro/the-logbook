@@ -14,8 +14,8 @@ import type { RSVP, RSVPOverride } from '../types/event';
 interface UseOverrideAttendanceOptions {
   eventId: string | undefined;
   timezone: string;
-  officialStartTime?: string;
-  officialEndTime?: string;
+  officialStartTime?: string | undefined;
+  officialEndTime?: string | undefined;
   onSuccess: () => Promise<void>;
 }
 
