@@ -58,6 +58,9 @@ export default function DashboardOrganizationWidgets() {
   const campaignPct =
     g && Number(g.campaign_goal) > 0 ? Math.round((Number(g.campaign_raised) / Number(g.campaign_goal)) * 100) : 0;
   const activeApps = g ? Object.values(g.application_stages).reduce((sum, count) => sum + count, 0) : 0;
+  const budgeted = Number(f?.budgeted ?? 0);
+  const spent = Number(f?.spent ?? 0);
+  const encumbered = Number(f?.encumbered ?? 0);
   return (
     <section aria-labelledby="dashboard-widgets-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -90,21 +93,21 @@ export default function DashboardOrganizationWidgets() {
               title="Dues"
               value={formatCurrencyWhole(f.dues_paid)}
               detail={`${formatCurrencyWhole(f.dues_due)} due · ${f.overdue_dues} overdue`}
-              to={`/finance/dues?period=${period}`}
+              to={`/finance?period=${period}#dues`}
               period={data.period_label}
             />
             <Card
               title="Cash flow"
               value={formatCurrencyWhole(f.net_cash_flow)}
               detail={`${formatCurrencyWhole(f.cash_in)} in · ${formatCurrencyWhole(f.cash_out)} out`}
-              to={`/finance/reports?period=${period}`}
+              to={`/finance?period=${period}#cash-flow`}
               period={data.period_label}
             />
             <Card
               title="Budget threshold"
-              value={`${f.budgeted > 0 ? Math.round(((f.spent + f.encumbered) / f.budgeted) * 100) : 0}%`}
+              value={`${budgeted > 0 ? Math.round(((spent + encumbered) / budgeted) * 100) : 0}%`}
               detail={`${formatCurrencyWhole(f.spent)} spent · ${formatCurrencyWhole(f.encumbered)} committed`}
-              to={`/finance/budgets?period=${period}`}
+              to={`/finance?period=${period}#budget-health`}
               period={data.period_label}
             />
           </>
@@ -115,21 +118,21 @@ export default function DashboardOrganizationWidgets() {
               title="Grant deadlines"
               value={String(g.grant_deadlines_30_days)}
               detail="Due in the next 30 days"
-              to={`/grants/opportunities?period=${period}`}
+              to={`/grants?period=${period}#deadlines`}
               period={data.period_label}
             />
             <Card
               title="Application stages"
               value={String(activeApps)}
               detail="Applications across the pipeline"
-              to={`/grants/applications?period=${period}`}
+              to={`/grants?period=${period}#pipeline`}
               period={data.period_label}
             />
             <Card
               title="Campaign progress"
               value={`${campaignPct}%`}
               detail={`${formatCurrencyWhole(g.campaign_raised)} of ${formatCurrencyWhole(g.campaign_goal)}`}
-              to={`/grants/campaigns?period=${period}`}
+              to={`/grants?period=${period}#campaigns`}
               period={data.period_label}
             />
           </>

@@ -3,7 +3,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
@@ -14,13 +14,17 @@ from app.models.finance import (
     DuesStatus,
     ExpenseReport,
     ExpenseReportStatus,
+    FiscalYear,
+    FiscalYearStatus,
     MemberDues,
 )
 from app.models.grant import (
     CampaignStatus,
+    Donation,
     FundraisingCampaign,
     GrantApplication,
     GrantOpportunity,
+    PaymentStatus,
 )
 
 PERIOD_LABELS = {
@@ -70,11 +74,9 @@ class DashboardWidgetService:
         expenses = await self.db.scalar(
             select(func.coalesce(func.sum(ExpenseReport.total_amount), 0)).where(
                 ExpenseReport.organization_id == organization_id,
-                ExpenseReport.status.in_(
-                    [ExpenseReportStatus.APPROVED.value, ExpenseReportStatus.PAID.value]
-                ),
-                ExpenseReport.approved_at >= start,
-                ExpenseReport.approved_at < end,
+                ExpenseReport.status == ExpenseReportStatus.PAID.value,
+                ExpenseReport.paid_at >= start,
+                ExpenseReport.paid_at < end,
             )
         )
         dues = (
@@ -82,28 +84,57 @@ class DashboardWidgetService:
                 select(
                     func.coalesce(func.sum(MemberDues.amount_due), 0),
                     func.coalesce(func.sum(MemberDues.amount_paid), 0),
-                    func.count(MemberDues.id).filter(
-                        MemberDues.due_date < now,
-                        MemberDues.status.in_(
-                            [DuesStatus.PENDING.value, DuesStatus.PARTIAL.value]
-                        ),
-                    ),
-                ).where(MemberDues.organization_id == organization_id)
+                ).where(
+                    MemberDues.organization_id == organization_id,
+                    MemberDues.due_date >= start,
+                    MemberDues.due_date < end,
+                )
             )
         ).one()
+        overdue = await self.db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                MemberDues.status.in_(
+                                    [
+                                        DuesStatus.PENDING.value,
+                                        DuesStatus.PARTIAL.value,
+                                        DuesStatus.OVERDUE.value,
+                                    ]
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                )
+            ).where(
+                MemberDues.organization_id == organization_id,
+                MemberDues.due_date < min(now, end),
+            )
+        )
         budget = (
             await self.db.execute(
                 select(
                     func.coalesce(func.sum(Budget.amount_budgeted), 0),
                     func.coalesce(func.sum(Budget.amount_spent), 0),
                     func.coalesce(func.sum(Budget.amount_encumbered), 0),
-                ).where(Budget.organization_id == organization_id)
+                )
+                .join(FiscalYear, FiscalYear.id == Budget.fiscal_year_id)
+                .where(
+                    Budget.organization_id == organization_id,
+                    FiscalYear.organization_id == organization_id,
+                    FiscalYear.status == FiscalYearStatus.ACTIVE.value,
+                )
             )
         ).one()
         return {
             "dues_due": dues[0],
             "dues_paid": dues[1],
-            "overdue_dues": dues[2],
+            "overdue_dues": overdue or 0,
             "cash_in": paid,
             "cash_out": expenses,
             "net_cash_flow": Decimal(paid) - Decimal(expenses),
@@ -119,8 +150,8 @@ class DashboardWidgetService:
             select(func.count(GrantOpportunity.id)).where(
                 GrantOpportunity.organization_id == organization_id,
                 GrantOpportunity.is_active.is_(True),
-                GrantOpportunity.deadline_date >= today,
-                GrantOpportunity.deadline_date <= today + timedelta(days=30),
+                GrantOpportunity.deadline_date >= max(today, start.date()),
+                GrantOpportunity.deadline_date < end.date(),
             )
         )
         stages = dict(
@@ -130,35 +161,45 @@ class DashboardWidgetService:
                         GrantApplication.application_status,
                         func.count(GrantApplication.id),
                     )
-                    .where(GrantApplication.organization_id == organization_id)
+                    .where(
+                        GrantApplication.organization_id == organization_id,
+                        GrantApplication.created_at >= start,
+                        GrantApplication.created_at < end,
+                    )
                     .group_by(GrantApplication.application_status)
                 )
             ).all()
         )
-        campaigns = (
-            await self.db.execute(
-                select(
-                    func.coalesce(func.sum(FundraisingCampaign.current_amount), 0),
-                    func.coalesce(func.sum(FundraisingCampaign.goal_amount), 0),
-                ).where(
-                    FundraisingCampaign.organization_id == organization_id,
-                    FundraisingCampaign.status == CampaignStatus.ACTIVE.value,
-                    FundraisingCampaign.active.is_(True),
-                    FundraisingCampaign.start_date < end.date(),
-                    (
-                        FundraisingCampaign.end_date.is_(None)
-                        | (FundraisingCampaign.end_date >= start.date())
-                    ),
-                )
+        campaign_goal = await self.db.scalar(
+            select(func.coalesce(func.sum(FundraisingCampaign.goal_amount), 0)).where(
+                FundraisingCampaign.organization_id == organization_id,
+                FundraisingCampaign.status == CampaignStatus.ACTIVE.value,
+                FundraisingCampaign.active.is_(True),
+                FundraisingCampaign.start_date < end.date(),
+                (
+                    FundraisingCampaign.end_date.is_(None)
+                    | (FundraisingCampaign.end_date >= start.date())
+                ),
             )
-        ).one()
+        )
+        campaign_raised = await self.db.scalar(
+            select(func.coalesce(func.sum(Donation.amount), 0))
+            .join(FundraisingCampaign, FundraisingCampaign.id == Donation.campaign_id)
+            .where(
+                Donation.organization_id == organization_id,
+                FundraisingCampaign.organization_id == organization_id,
+                Donation.payment_status == PaymentStatus.COMPLETED.value,
+                Donation.donation_date >= start,
+                Donation.donation_date < end,
+            )
+        )
         return {
             "grant_deadlines_30_days": deadlines or 0,
             "application_stages": {
                 str(getattr(k, "value", k)): v for k, v in stages.items()
             },
-            "campaign_raised": campaigns[0],
-            "campaign_goal": campaigns[1],
+            "campaign_raised": campaign_raised or 0,
+            "campaign_goal": campaign_goal or 0,
         }
 
     async def community(self, organization_id: str, period: str) -> dict:
@@ -183,6 +224,7 @@ class DashboardWidgetService:
         external = await self.db.scalar(
             select(func.count(EventExternalAttendee.id)).where(
                 EventExternalAttendee.organization_id == organization_id,
+                EventExternalAttendee.checked_in.is_(True),
                 EventExternalAttendee.event_id.in_(public_ids),
             )
         )

@@ -8,7 +8,7 @@ including an admin-level summary for Chiefs and department leaders.
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
@@ -53,7 +53,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.services.apparatus_service import ApparatusService
-from app.services.dashboard_widget_service import DashboardWidgetService, PERIOD_LABELS
+from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
 from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
@@ -795,7 +795,7 @@ async def get_main_dashboard_widgets(
     service = DashboardWidgetService(db)
     finance = (
         await service.finance(org_id, period)
-        if "finance" in enabled and user_has_permission(current_user, "finance.manage")
+        if user_has_permission(current_user, "finance.manage")
         else None
     )
     fundraising = (
