@@ -14,7 +14,7 @@
  * Requires: training.manage permission
  */
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -321,6 +321,30 @@ export const TrainingAdminPage: React.FC = () => {
     setSearchParams({ page: activePage, tab: tabId });
   };
 
+  const handleTabKeyDown = <T extends string>(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    ids: T[],
+    activeId: T,
+    activate: (id: T) => void,
+    refs: React.RefObject<Record<string, HTMLButtonElement | null>>
+  ) => {
+    let nextIndex: number | undefined;
+    const activeIndex = ids.indexOf(activeId);
+
+    if (event.key === 'ArrowRight') nextIndex = (activeIndex + 1) % ids.length;
+    if (event.key === 'ArrowLeft') nextIndex = (activeIndex - 1 + ids.length) % ids.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = ids.length - 1;
+
+    if (nextIndex === undefined) return;
+
+    event.preventDefault();
+    const nextId = ids[nextIndex];
+    if (nextId === undefined) return;
+    activate(nextId);
+    refs.current[nextId]?.focus();
+  };
+
   const currentPage = getPage(activePage);
 
   return (
@@ -393,7 +417,20 @@ export const TrainingAdminPage: React.FC = () => {
             return (
               <button
                 key={page.id}
+                id={`training-admin-section-tab-${page.id}`}
+                ref={(element) => {
+                  pageTabRefs.current[page.id] = element;
+                }}
                 onClick={() => handlePageChange(page.id)}
+                onKeyDown={(event) =>
+                  handleTabKeyDown(
+                    event,
+                    pages.map((item) => item.id),
+                    activePage,
+                    handlePageChange,
+                    pageTabRefs
+                  )
+                }
                 role="tab"
                 aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
@@ -483,31 +520,75 @@ export const TrainingAdminPage: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
 
-        {/* The live region gives section changes useful context without announcing tab content. */}
-        <div
-          className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <p className="text-theme-text-muted text-sm">
-            <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
-            {currentPage.description}
-          </p>
-          {currentPage.actions && (
-            <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
-              {currentPage.actions.map((action) => (
+      <div
+        id={`training-admin-section-panel-${activePage}`}
+        role="tabpanel"
+        aria-labelledby={`training-admin-section-tab-${activePage}`}
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* The live region gives section changes useful context without announcing tab content. */}
+          <div
+            className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <p className="text-theme-text-muted text-sm">
+              <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
+              {currentPage.description}
+            </p>
+            {currentPage.actions && (
+              <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
+                {currentPage.actions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => handleTabChange(action.tab)}
+                    className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Inner tab bar */}
+          <div className="border-theme-surface-border border-b">
+            <div className="hscroll flex space-x-1" role="tablist" aria-label={`${currentPage.label} tabs`}>
+              {currentPage.tabs.map((tab) => (
                 <button
-                  key={action.label}
-                  type="button"
-                  onClick={() => handleTabChange(action.tab)}
-                  className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                  key={tab.id}
+                  id={`training-admin-tab-${activePage}-${tab.id}`}
+                  ref={(element) => {
+                    innerTabRefs.current[tab.id] = element;
+                  }}
+                  onClick={() => handleTabChange(tab.id)}
+                  onKeyDown={(event) =>
+                    handleTabKeyDown(
+                      event,
+                      currentPage.tabs.map((item) => item.id),
+                      activeTab,
+                      handleTabChange,
+                      innerTabRefs
+                    )
+                  }
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`training-admin-tabpanel-${activePage}-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+                    activeTab === tab.id
+                      ? 'text-theme-text-primary border-red-500'
+                      : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
+                  }`}
                 >
-                  {action.label}
+                  {tab.label}
                 </button>
               ))}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Inner tab bar */}
@@ -530,11 +611,6 @@ export const TrainingAdminPage: React.FC = () => {
           </nav>
         </div>
       </div>
-
-      {/* Tab Content - each child handles its own layout */}
-      <Suspense fallback={<TabLoading />}>
-        <TabContent page={activePage} tab={activeTab} />
-      </Suspense>
     </div>
   );
 };

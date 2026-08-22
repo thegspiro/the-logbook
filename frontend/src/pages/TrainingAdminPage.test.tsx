@@ -184,6 +184,6 @@ describe('TrainingAdminPage', () => {
     await user.click(screen.getByRole('tab', { name: 'Records' }));
     await user.click(screen.getByRole('button', { name: 'Create session' }));
 
-    expect(screen.getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
   });
 });
