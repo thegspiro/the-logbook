@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Submit External Training asked one question with three controls (2026-08-23)
+
+**Changed**
+
+- **The two datetime pickers are gone.** Length is now a date, a start time and
+  a 15-minute stepper with 1h/2h/4h/8h chips; the end time is derived and shown
+  as a live line ("Runs 9:00 AM to 1:00 PM"). Hours are still computed, never
+  typed. The stepper clamps at the department's `max_hours_per_submission`, so
+  the over-max error and the "end must be after start" error are both
+  unreachable by construction — the green/red hours callout that carried them
+  is removed.
+- **Training Type, "Suggested {Type}" and Course Name were three controls
+  asking one question.** The suggestion select is gone: department requirements
+  are now a `<datalist>` on the course-name field, unfiltered by training type,
+  deduped and sorted. Picking one is never required, and changing the training
+  type no longer clears what the member typed.
+- **The certification fields are driven by an always-visible checkbox** —
+  "This training earned a certification" — instead of appearing and vanishing
+  with the training type. The type still seeds the checkbox; once the member
+  touches it, it is theirs, and switching type neither hides the block nor
+  discards what they entered.
+- **A summary rail** tracks hours and a six-row checklist derived from the live
+  field values, and carries the submit, Save Draft and attachment controls. On
+  a phone it flows below the form and a fixed bar carries the hours, the count
+  of fields still missing, and Submit.
+- **The full "My Submissions" list is now three recent rows** plus a "View
+  all N" disclosure. Edit and delete stay available on every listed row.
+- **A successful submission shows a receipt** — course, type, when, hours,
+  instructor, what was attached — and what happens next, rather than only a
+  toast. A submission an officer sent back now opens the page with the
+  officer's note, Fix and Resubmit, and Withdraw.
+
+**Added**
+
+- **Certificate attachments on a submission.** `POST/GET/DELETE
+/training/submissions/{id}/attachments` and a download route, mirroring the
+  training-record attachment endpoints: submitter-only writes, PDF/JPG/PNG
+  verified from magic bytes (not the client's Content-Type), 10 MB cap,
+  server-generated filenames, and a stored path that never leaves the backend.
+  Officers see the attachment on the review queue, which is the point of
+  collecting it.
+- **Draft submissions.** `save_as_draft` on create parks a submission in the
+  member's own list; `POST /training/submissions/{id}/submit` hands it over,
+  and routing (review vs auto-approve) is decided at that moment against the
+  settings then in force. Drafts stay out of the officer queue. The `draft`
+  status existed on the model and in the edit/delete guards but had no way to
+  be reached.
+
 ### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
 
 **Fixed**
