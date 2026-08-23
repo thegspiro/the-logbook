@@ -29,7 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   there and the failure looked browser-specific rather than structural.
 - `/push-sw.js` is still deployed, and still served `no-store`: workers
   installed before this change keep importing it until their next successful
-  update, which the change itself makes possible.
+  update, which the change itself makes possible. It is **excluded from the new
+  worker's precache** (`globIgnores`), because workbox fetches every precache
+  entry during `install` and rejects the install if one fails — leaving it in
+  the manifest would have moved the single point of failure from `importScripts`
+  to the install event rather than removing it, over a file the new worker no
+  longer uses.
+- **User settings now follow `?tab=` on an in-place navigation, not only on
+  mount, and mirror the selected section back into the URL.** The banner above
+  links to `/account?tab=app` from anywhere in the app, including from that page
+  with another section already open; `activeTab` was seeded from the query
+  string once at `useState` time, so such a link changed the URL and nothing
+  else. A forced password change or MFA enrollment still wins over the
+  parameter.
 
 **Added**
 

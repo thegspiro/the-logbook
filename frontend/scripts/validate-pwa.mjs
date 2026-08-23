@@ -52,7 +52,18 @@ for (const screenshot of manifest.screenshots ?? []) {
   await assertDistAsset(screenshot.src, `screenshot ${screenshot.src}`);
 }
 
+// Still deployed: workers installed before the handlers were inlined keep
+// importing it until their next successful update.
 await assertDistAsset('push-sw.js', 'push service worker');
+// ...but never precached. Workbox fetches every precache entry during `install`
+// and rejects the install if one fails, so a precached push-sw.js would take
+// the whole worker down over a file the new worker does not even use — the
+// exact failure inlining exists to remove.
+assert.doesNotMatch(
+  serviceWorker,
+  /url:\s*["']push-sw\.js["']/,
+  'push-sw.js must be excluded from the precache manifest (workbox globIgnores)'
+);
 assert.match(serviceWorker, /NavigationRoute/, 'the service worker must provide an offline navigation fallback');
 assert.match(serviceWorker, /index\.html/, 'the application shell must be precached');
 assert.match(serviceWorker, /NetworkOnly/, 'sensitive API and version requests must remain network-only');

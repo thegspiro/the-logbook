@@ -103,6 +103,15 @@ export default defineConfig({
         // blocker or a bad cache entry on that one file leaves the new worker
         // unable to precache or claim the page — see inlinePushWorkerPlugin,
         // which concatenates the handlers into dist/sw.js instead.
+        // /push-sw.js is deployed for service workers installed before the
+        // handlers were inlined, which still importScripts it. It must NOT be
+        // precached: workbox fetches every precache entry during `install` and
+        // rejects the install if any one of them fails, so leaving this file in
+        // the manifest would reintroduce exactly the failure inlining removes —
+        // one blocked request for a file the new worker does not even use,
+        // taking the whole worker down with it. Nothing in the new worker
+        // references it, so there is nothing to lose by excluding it.
+        globIgnores: ['push-sw.js'],
         // Precache every generated JavaScript chunk. The entry chunk has static
         // imports outside the index/vendor naming convention (shared API,
         // stores, dialogs, and route registries), so filtering by filename can
