@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
     admin_hours,
+    admin_hub,
     analytics,
     apparatus,
     audit_logs,
@@ -97,6 +98,7 @@ api_router.include_router(
 )
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hub"])
 api_router.include_router(training.router, prefix="/training", tags=["training"])
 api_router.include_router(
     training_programs.router, prefix="/training/programs", tags=["training-programs"]

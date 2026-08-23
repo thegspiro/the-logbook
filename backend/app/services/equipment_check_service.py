@@ -8,7 +8,7 @@ check submissions, checklist resolution by position, and item history.
 import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select
@@ -34,6 +34,7 @@ from app.models.training import (
     ShiftAssignment,
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
+    ShiftEquipmentCheckSeal,
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
@@ -993,6 +994,80 @@ class EquipmentCheckService:
             created.append(check_item)
         return created
 
+    async def _create_check_seals(
+        self,
+        check_id: str,
+        seals_data: List[Dict[str, Any]],
+        sealed_compartment_ids: Set[str],
+    ) -> List[ShiftEquipmentCheckSeal]:
+        """Record the tamper seals a crew read during one check.
+
+        Only compartments the template actually marks as sealed are recorded.
+        A seal submitted for an ordinary compartment is a client that has
+        drifted from the template, and storing it would put a claim on the
+        record that nobody was ever asked to make.
+
+        Replacing rather than appending: completing an incomplete check
+        re-reads the same bags, and two rows for one compartment would leave
+        the record unable to say which seal the crew actually saw.
+        """
+        seen: Dict[str, ShiftEquipmentCheckSeal] = {}
+        for seal_data in seals_data:
+            compartment_id = str(seal_data.get("template_compartment_id") or "")
+            if compartment_id not in sealed_compartment_ids:
+                continue
+            seal = ShiftEquipmentCheckSeal(
+                id=generate_uuid(),
+                check_id=check_id,
+                template_compartment_id=compartment_id,
+                compartment_name=seal_data.get("compartment_name", ""),
+                seal_number=(seal_data.get("seal_number") or None),
+                intact=bool(seal_data.get("intact", True)),
+                cleared_item_count=int(seal_data.get("cleared_item_count") or 0),
+                notes=seal_data.get("notes") or None,
+            )
+            seen[compartment_id] = seal
+
+        if not seen:
+            return []
+
+        existing = (
+            (
+                await self.db.execute(
+                    select(ShiftEquipmentCheckSeal).where(
+                        ShiftEquipmentCheckSeal.check_id == check_id,
+                        ShiftEquipmentCheckSeal.template_compartment_id.in_(
+                            list(seen.keys())
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in existing:
+            await self.db.delete(row)
+
+        for seal in seen.values():
+            self.db.add(seal)
+        return list(seen.values())
+
+    async def _sealed_compartment_ids(self, template_id: str) -> Set[str]:
+        """Ids of the template's compartments that carry a tamper seal."""
+        rows = (
+            (
+                await self.db.execute(
+                    select(CheckTemplateCompartment.id).where(
+                        CheckTemplateCompartment.template_id == template_id,
+                        CheckTemplateCompartment.is_sealed.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {str(row) for row in rows}
+
     async def _update_apparatus_deficiency(
         self,
         apparatus_id: Optional[str],
@@ -1164,6 +1239,7 @@ class EquipmentCheckService:
                 raise PermissionError("Not authorized to submit a check for this shift")
 
         items_data = data.pop("items", [])
+        seals_data = data.pop("seals", []) or []
         template_id = data.get("template_id")
         client_submission_id = data.get("client_submission_id")
         selected_template = None
@@ -1243,6 +1319,12 @@ class EquipmentCheckService:
                         checked_by=checked_by,
                         data={
                             "items": items_data,
+                            # The form always resubmits through submit_check, so
+                            # resuming a saved check lands here rather than in
+                            # the post-flush branch below. Dropping the seals
+                            # would file the passes an intact seal cleared while
+                            # discarding the record that justified them.
+                            "seals": seals_data,
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
                             "client_submission_id": client_submission_id,
@@ -1342,6 +1424,7 @@ class EquipmentCheckService:
                     checked_by=checked_by,
                     data={
                         "items": items_data,
+                        "seals": seals_data,
                         "notes": data.get("notes"),
                         "signature_data": data.get("signature_data"),
                         "client_submission_id": client_submission_id,
@@ -1360,6 +1443,12 @@ class EquipmentCheckService:
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
         )
+        if seals_data and template_id:
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(template_id),
+            )
 
         await self._update_apparatus_deficiency(
             shift.apparatus_id, organization_id, overall_status
@@ -1449,6 +1538,7 @@ class EquipmentCheckService:
                 raise ValueError("Apparatus not found")
 
         items_data = data.pop("items", [])
+        seals_data = data.pop("seals", []) or []
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
@@ -1504,6 +1594,12 @@ class EquipmentCheckService:
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
         )
+        if seals_data:
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(template_id),
+            )
 
         await self._update_apparatus_deficiency(
             apparatus_id, organization_id, overall_status
@@ -1562,6 +1658,7 @@ class EquipmentCheckService:
                 check.check_timing = template.check_timing
 
         items_data = data.get("items", [])
+        seals_data = data.get("seals", []) or []
         if not items_data:
             raise ValueError("At least one item is required")
 
@@ -1623,6 +1720,16 @@ class EquipmentCheckService:
                 check.id, missing_rows, template_items_map, organization_id
             )
             check.items.extend(created)
+
+        if seals_data and check.template_id:
+            # Replaces rather than appends: finishing an incomplete check
+            # re-reads the same bags, and the record has to say which seal the
+            # crew actually saw.
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(str(check.template_id)),
+            )
 
         # Ignore any historic/client-created rows that are not questions on the
         # selected template.  They must not inflate totals or satisfy completion.
@@ -1882,6 +1989,62 @@ class EquipmentCheckService:
                 "notes": item.notes,
             }
 
+        return results
+
+    async def get_last_check_seals(
+        self,
+        template_id: str,
+        organization_id: str,
+        apparatus_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Return the seal each sealed container carried at the last count.
+
+        Keyed by ``template_compartment_id``, so the form can put the number
+        the previous crew read next to the one in front of this crew. Equal
+        numbers are the whole basis of the shortcut: the bag has not been
+        opened since it was counted.
+        """
+        filters = [
+            ShiftEquipmentCheck.template_id == template_id,
+            ShiftEquipmentCheck.organization_id == organization_id,
+            ShiftEquipmentCheck.overall_status.in_(["pass", "fail"]),
+        ]
+        if apparatus_id:
+            filters.append(ShiftEquipmentCheck.apparatus_id == apparatus_id)
+
+        latest_check = (
+            await self.db.execute(
+                select(ShiftEquipmentCheck)
+                .where(*filters)
+                .order_by(ShiftEquipmentCheck.checked_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if not latest_check:
+            return {}
+
+        rows = (
+            (
+                await self.db.execute(
+                    select(ShiftEquipmentCheckSeal).where(
+                        ShiftEquipmentCheckSeal.check_id == latest_check.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        results: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if not row.template_compartment_id:
+                continue
+            results[row.template_compartment_id] = {
+                "seal_number": row.seal_number,
+                "intact": bool(row.intact),
+                "checked_at": latest_check.checked_at,
+            }
         return results
 
     # ------------------------------------------------------------------
@@ -2492,6 +2655,31 @@ class EquipmentCheckService:
         await self.db.commit()
         return self._restock_state(item)
 
+    @staticmethod
+    def _retire_replaced_units(
+        item: CheckTemplateItem,
+        lots: List[CheckItemDeployedLot],
+        quantity: int,
+    ) -> None:
+        """Take ``quantity`` units off the truck, oldest row first.
+
+        Units, not rows. A bracket holding four boxes of one lot is one row
+        with a quantity of four, and a crew swapping a single box exchanges one
+        of them — dropping the row would delete the three still in the bag,
+        count them all as disposed of, and leave the position reading three
+        short of a par it actually meets. A row is removed only once it is
+        emptied, which is what the single-unit case does on its first pass.
+        """
+        remaining = quantity
+        for lot in lots:
+            if remaining < 1:
+                break
+            taken = min(lot.quantity, remaining)
+            lot.quantity -= taken
+            remaining -= taken
+            if lot.quantity < 1:
+                item.deployed_lots.remove(lot)
+
     def _deployed_lot_payload(self, item: CheckTemplateItem) -> List[Dict[str, Any]]:
         """Each lot aboard, in the order a crew should draw from it."""
         return [
@@ -2860,6 +3048,7 @@ class EquipmentCheckService:
         quantity: int = 1,
         replaced_deployed_lot_id: Optional[str] = None,
         disposition: Optional[str] = None,
+        allow_first_link: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Move units from a ready-stock lot onto the apparatus.
 
@@ -2883,6 +3072,13 @@ class EquipmentCheckService:
         departments differ — destroyed here, handed back to the pharmacy there,
         pulled for somebody to exchange later somewhere else — and only the
         crew at the truck knows which happened.
+
+        ``allow_first_link=False`` (a submit-only caller) refuses a position
+        that is not yet tied to the catalog. Binding one is the first swap's
+        side effect below, and it is permanent: left open it would let a
+        submitter attach any catalog item to any checklist row and draw its
+        stock, going around the manage-only inventory-link screen where that
+        decision is supposed to be reviewed.
         """
         if quantity < 1:
             raise ValueError("Restock quantity must be at least 1")
@@ -2941,6 +3137,11 @@ class EquipmentCheckService:
 
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
+            if not allow_first_link:
+                raise PermissionError(
+                    "This position is not linked to the supply catalog yet; "
+                    "an officer has to link it before stock can be swapped in"
+                )
             item.inventory_item_id = lot.inventory_item_id
         if lot.lot_number is not None:
             item.lot_number = lot.lot_number
@@ -2984,6 +3185,7 @@ class EquipmentCheckService:
         # above, so the incoming units cannot be expired today — but it is what
         # stops a lot being named as its own replacement.
         incoming = existing if existing is not None else item.deployed_lots[-1]
+        today = date.today()
         replaced_lot_number: Optional[str] = None
         if replaced_deployed_lot_id:
             replaced = next(
@@ -2998,15 +3200,21 @@ class EquipmentCheckService:
                 raise ValueError("The lot being replaced is not aboard this item")
             if str(replaced.id) == str(incoming.id):
                 raise ValueError("A lot cannot replace itself")
+            # Checked here rather than trusted from the caller. The form only
+            # offers a replacement on a position reading expired, but that is a
+            # property of the screen, not of the API — and the disposition this
+            # records is specifically an expired-stock one, so retiring an
+            # in-date box under it would file a false account of the unit.
+            if not (replaced.expiration_date and replaced.expiration_date < today):
+                raise ValueError("That lot has not expired, so it cannot be replaced")
             replaced_lot_number = replaced.lot_number
-            item.deployed_lots.remove(replaced)
+            self._retire_replaced_units(item, [replaced], quantity)
         elif disposition:
             # No id to name: the position's units were never lot-tracked, so
             # _materialize_untracked_units has just given the blob aboard one
             # row carrying the position's own date. Retiring what is expired is
             # the only reading available, and the crew asked for a replacement
             # by reporting a disposition at all.
-            today = date.today()
             expired = [
                 deployed
                 for deployed in list(item.deployed_lots or [])
@@ -3017,8 +3225,7 @@ class EquipmentCheckService:
             if not expired:
                 raise ValueError("This position carries no expired stock to replace")
             replaced_lot_number = expired[0].lot_number
-            for deployed in expired:
-                item.deployed_lots.remove(deployed)
+            self._retire_replaced_units(item, expired, quantity)
 
         if self._target_quantity(item) is not None:
             item.quantity_on_truck = self._on_truck(item)
@@ -3405,6 +3612,7 @@ class EquipmentCheckService:
             image_url=source.image_url,
             is_header=source.is_header,
             container_type=source.container_type,
+            is_sealed=source.is_sealed,
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)

@@ -1,7 +1,7 @@
 """Add nfc_tags: NFC ID card credentials bound to members.
 
 Revision ID: c3b71f0d5a92
-Revises: a17c4e9d2b61
+Revises: c3f81a4d5e72
 
 The credential is stored only as a peppered SHA-256 hash — a card serial (or a
 code written onto a blank tag) is the whole of the credential, so a plaintext
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "c3b71f0d5a92"
-down_revision = "a17c4e9d2b61"
+down_revision = "c3f81a4d5e72"
 branch_labels = None
 depends_on = None
 
