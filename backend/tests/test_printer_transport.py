@@ -11,6 +11,8 @@ No sockets are opened. The DNS resolver is stubbed so the address-class checks
 can be exercised against addresses this container does not have.
 """
 
+import asyncio
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -354,3 +356,59 @@ class TestRawExchange:
             ):
                 await send_to_printer("printer.local", 9100, "^XA^XZ")
         writer.write.assert_called_once_with(b"^XA^XZ")
+
+
+class TestReadDeadline:
+    """The read budget spans the whole exchange, not each chunk.
+
+    A per-read timeout lets a target that dribbles one byte just before every
+    expiry hold the request open for hours against an advertised three-second
+    budget — and status is queried after every print, so that would tie up
+    printing too.
+    """
+
+    async def test_a_trickling_target_cannot_outlast_the_budget(self):
+        writer = _writer()
+
+        # Answers one byte at a time and never terminates the reply.
+        async def trickle(*_):
+            await asyncio.sleep(0.02)
+            return b"x"
+
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=trickle)
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection", AsyncMock(return_value=(reader, writer))
+            ):
+                started = time.monotonic()
+                result = await query_printer("printer.local", 9100, timeout=0.15)
+        elapsed = time.monotonic() - started
+        # Without one deadline this runs until MAX_STATUS_BYTES bytes arrive.
+        assert elapsed < 1.0
+        assert len(result) < MAX_STATUS_BYTES
+
+    async def test_the_sequential_exchange_shares_one_budget(self):
+        writer = _writer()
+
+        async def never(*_):
+            await asyncio.sleep(5)
+            return b"\x12"
+
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=never)
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection", AsyncMock(return_value=(reader, writer))
+            ):
+                started = time.monotonic()
+                replies = await query_printer_raw(
+                    "printer.local",
+                    9100,
+                    [b"\x10\x04\x02", b"\x10\x04\x04"],
+                    timeout=0.15,
+                )
+        elapsed = time.monotonic() - started
+        # Two questions must not cost two full budgets.
+        assert elapsed < 1.0
+        assert replies == [b"", b""]

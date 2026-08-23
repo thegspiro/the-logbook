@@ -24,6 +24,7 @@ from app.utils.label_renderer import (
     SYMBOLOGY_QR,
     LabelSpec,
     code128_width_dots,
+    qr_modules_for,
     sanitize_barcode_value,
     validate_symbology,
 )
@@ -43,26 +44,6 @@ _MAX_MODULE_DOTS = 10
 # Font 0 is proportional; 0.55x the character height is the average advance and
 # is what the truncation estimate below is built on.
 _AVG_CHAR_WIDTH_RATIO = 0.55
-
-# QR symbol sizes: (module count per side, byte-mode capacity at error
-# correction M). Sized against byte mode rather than alphanumeric because a
-# barcode value may carry lowercase or punctuation, which alphanumeric mode
-# cannot hold — so this never under-estimates the symbol.
-_QR_VERSIONS = (
-    (21, 14),
-    (25, 26),
-    (29, 42),
-    (33, 62),
-    (37, 84),
-    (41, 106),
-    (45, 122),
-    (49, 152),
-    (53, 180),
-    (57, 213),
-)
-
-# The QR spec's quiet zone is 4 modules per side, narrower than Code 128's 10.
-_QR_QUIET_MODULES = 4
 
 # A phone camera needs a bigger module than a laser scanner does; 10 mil is the
 # practical floor for a QR read off equipment in poor light.
@@ -126,15 +107,6 @@ def _fit_module_width(value: str, available_dots: int, dpi: int) -> int:
         if code128_width_dots(value, module_dots) <= available_dots:
             return module_dots
     raise ValueError(f"Barcode value {value!r} is too long for the selected label size")
-
-
-def qr_modules_for(value: str) -> int:
-    """Module count per side for *value*, quiet zone included."""
-    length = len(value.encode("utf-8"))
-    for modules, capacity in _QR_VERSIONS:
-        if length <= capacity:
-            return modules + 2 * _QR_QUIET_MODULES
-    raise ValueError(f"Value {value!r} is too long to encode as a QR code on a label")
 
 
 def _fit_qr_magnification(value: str, available_dots: int, dpi: int) -> tuple:

@@ -36,6 +36,7 @@ The guards, and why each is drawn where it is:
 import asyncio
 import ipaddress
 import socket
+import time
 from typing import List, Sequence, Union
 
 from loguru import logger
@@ -223,12 +224,21 @@ async def query_printer(
         writer.write(HOST_QUERY.encode("ascii"))
         await asyncio.wait_for(writer.drain(), timeout=timeout)
 
-        # Read until both replies have terminated, the cap is hit, or the
-        # printer goes quiet. A quiet printer is not an error here: whatever
-        # arrived is what gets parsed.
+        # Read until both replies have terminated, the cap is hit, the printer
+        # goes quiet, or the overall deadline passes. A quiet printer is not an
+        # error here: whatever arrived is what gets parsed.
+        #
+        # The deadline spans the whole loop rather than each read. Per-read
+        # timeouts let a target that dribbles one byte just before each expiry
+        # hold the request open indefinitely — status is queried after every
+        # print, so that would tie up printing too.
+        deadline = time.monotonic() + timeout
         while len(buffer) < MAX_STATUS_BYTES:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
-                chunk = await asyncio.wait_for(reader.read(1024), timeout=timeout)
+                chunk = await asyncio.wait_for(reader.read(1024), timeout=remaining)
             except asyncio.TimeoutError:
                 break
             if not chunk:
@@ -285,12 +295,20 @@ async def query_printer_raw(
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(address, port), timeout=CONNECT_TIMEOUT_SECONDS
         )
+        # One deadline for the whole exchange, for the same reason as above: a
+        # per-read budget multiplies by the number of questions asked.
+        deadline = time.monotonic() + timeout
         for payload in exchanges:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                replies.append(b"")
+                continue
             writer.write(payload)
-            await asyncio.wait_for(writer.drain(), timeout=timeout)
+            await asyncio.wait_for(writer.drain(), timeout=remaining)
             try:
                 chunk = await asyncio.wait_for(
-                    reader.read(min(read_bytes, MAX_STATUS_BYTES)), timeout=timeout
+                    reader.read(min(read_bytes, MAX_STATUS_BYTES)),
+                    timeout=max(0.001, deadline - time.monotonic()),
                 )
             except asyncio.TimeoutError:
                 chunk = b""

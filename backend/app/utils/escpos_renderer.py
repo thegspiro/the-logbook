@@ -30,6 +30,7 @@ from app.utils.label_renderer import (
     SYMBOLOGY_QR,
     LabelSpec,
     code128_width_dots,
+    qr_modules_for,
     sanitize_barcode_value,
     validate_symbology,
 )
@@ -179,14 +180,17 @@ def _qr(value: str, available_dots: int) -> bytes:
     reads worse for it.
     """
     payload = value.encode("ascii", errors="ignore")
-    # A rough module count for a version that holds this much at correction M;
-    # 33 covers the identifiers this prints and keeps the symbol inside the
-    # paper. Overestimating only makes the symbol smaller, never too wide.
-    estimated_modules = 33 + 8
-    module_dots = max(
-        _MIN_QR_MODULE_DOTS,
-        min(_MAX_QR_MODULE_DOTS, available_dots // estimated_modules),
-    )
+    # Size from the version the payload actually needs. A fixed estimate was
+    # wrong for long values: a barcode field holds up to 255 characters, which
+    # needs a much larger symbol than a short asset id, and the printer would
+    # render it past the edge of the paper as an unreadable clipped code.
+    modules = qr_modules_for(value)
+    module_dots = min(_MAX_QR_MODULE_DOTS, available_dots // modules)
+    if module_dots < _MIN_QR_MODULE_DOTS:
+        raise ValueError(
+            f"Value {value!r} needs a QR code wider than {available_dots} dots "
+            "of paper. Use wider paper or a shorter value."
+        )
 
     store_length = len(payload) + 3
     if store_length > 0xFFFF:
@@ -305,20 +309,57 @@ def _pad_columns(left: str, right: str, width: int) -> str:
     return _truncate(left, room).ljust(room) + " " + right
 
 
+def _wrap(text: str, width: int) -> List[str]:
+    """Break *text* onto as many lines as it needs, on word boundaries."""
+    if width < 1:
+        return [text]
+    lines: List[str] = []
+    for paragraph in text.splitlines() or [""]:
+        current = ""
+        for word in paragraph.split():
+            candidate = f"{current} {word}".strip()
+            if len(candidate) <= width:
+                current = candidate
+                continue
+            if current:
+                lines.append(current)
+            # A single word longer than the paper gets hard-split; there is
+            # nowhere else for it to go.
+            while len(word) > width:
+                lines.append(word[:width])
+                word = word[width:]
+            current = word
+        lines.append(current)
+    return lines or [""]
+
+
 def _document_row(row, width: int) -> bytes:
     prefix = " " * (2 * max(0, row.indent))
     if row.checkbox:
         prefix += "[ ] "
+    inner = width - len(prefix)
 
-    body = _pad_columns(_clean(row.left), _clean(row.right or ""), width - len(prefix))
-    line = (prefix + body).rstrip()
-    if not line:
-        return b""
+    left = _clean(row.left)
+    right = _clean(row.right or "")
 
-    encoded = line.encode("ascii", errors="ignore") + _LF
-    if row.emphasis:
-        return _BOLD_ON + encoded + _BOLD_OFF
-    return encoded
+    if right:
+        # A two-column row is a name against a status or a count; it stays on
+        # one line and the left half gives way (see _pad_columns).
+        bodies = [_pad_columns(left, right, inner)]
+    else:
+        # A single-column row is free-form text — a shift note, a pass-down.
+        # Truncating it would silently drop the part somebody wrote down,
+        # which on a pass-down is the whole reason the sheet exists.
+        bodies = _wrap(left, inner)
+
+    out = bytearray()
+    for body in bodies:
+        line = (prefix + body).rstrip()
+        if not line:
+            continue
+        encoded = line.encode("ascii", errors="ignore") + _LF
+        out += _BOLD_ON + encoded + _BOLD_OFF if row.emphasis else encoded
+    return bytes(out)
 
 
 def render_escpos_document(

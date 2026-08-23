@@ -33,8 +33,11 @@ vi.mock('../../contexts/ConfirmContext', () => ({
   useConfirm: () => ({ confirm: (...a: unknown[]) => mockConfirm(...a) as unknown }),
 }));
 
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('react-hot-toast', () => ({
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+}));
 
+import toast from 'react-hot-toast';
 import LabelPrintersSection from './LabelPrintersSection';
 
 const zebra = {
@@ -242,6 +245,45 @@ describe('LabelPrintersSection', () => {
 
       await user.click(screen.getByRole('button', { name: /Check status/ }));
       expect(await screen.findByText(/Out of labels/)).toBeInTheDocument();
+    });
+
+    it('does not call an unrecognised device ready', async () => {
+      // Anything listening on the port answers something. Without an
+      // identification or a readable status it is not a printer of this
+      // language, and saving it would send command bytes to whatever it is.
+      mockList.mockResolvedValue([zebra]);
+      mockStatus.mockResolvedValue({
+        printer_id: 'p1',
+        printer_name: 'Quartermaster Zebra',
+        configured_dpi: 203,
+        language: 'zpl',
+        responded: true,
+        identified: false,
+        model: null,
+        firmware: null,
+        reported_dpi: null,
+        errors: [],
+        warnings: [],
+        status_available: false,
+      });
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText('Quartermaster Zebra');
+
+      await user.click(screen.getByRole('button', { name: /Check status/ }));
+
+      expect(await screen.findByText(/did not identify itself/i)).toBeInTheDocument();
+      expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+
+    it('still reports a properly identified printer as ready', async () => {
+      mockList.mockResolvedValue([zebra]);
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText('Quartermaster Zebra');
+
+      await user.click(screen.getByRole('button', { name: /Check status/ }));
+      await waitFor(() => expect(vi.mocked(toast.success)).toHaveBeenCalled());
     });
 
     it('calls out a device that connects but never answers', async () => {

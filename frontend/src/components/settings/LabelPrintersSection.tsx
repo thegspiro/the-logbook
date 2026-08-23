@@ -99,12 +99,25 @@ const languageLabel = (id: string) => (id === PrinterLanguage.ESCPOS ? 'ESC/POS'
  * happens to hold that address, so a device that answers nothing is called out
  * rather than shown as fine.
  */
+/**
+ * Whether a probe actually found a printer.
+ *
+ * Answering at all is not enough: anything listening on the port answers
+ * something. Without either an identification or a readable status, the reply
+ * came from a device that does not speak this printer language — saving it
+ * would send command bytes to whatever it really is.
+ */
+const isRecognisedPrinter = (status: PrinterStatus) =>
+  status.responded && (status.identified || status.status_available);
+
 const PrinterStatusLine: React.FC<{ status: PrinterStatus }> = ({ status }) => {
-  if (!status.responded) {
+  if (!isRecognisedPrinter(status)) {
     return (
       <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        Connected, but nothing answered — check that this address is the printer.
+        {status.responded
+          ? 'Something answered, but it did not identify itself as this kind of printer — check the address and the printer language.'
+          : 'Connected, but nothing answered — check that this address is the printer.'}
       </p>
     );
   }
@@ -308,8 +321,10 @@ const LabelPrintersSection: React.FC = () => {
     try {
       const status = await labelPrinterService.status(printer.id);
       setStatuses((prev) => ({ ...prev, [printer.id]: status }));
-      if (!status.responded) {
-        toast.error(`${printer.name} accepted the connection but did not answer — it may not be a ZPL printer`);
+      if (!isRecognisedPrinter(status)) {
+        toast.error(
+          `${printer.name} answered, but not as a ${languageLabel(printer.language)} printer — check the address and language`
+        );
       } else if (status.errors.length > 0) {
         toast.error(`${printer.name}: ${status.errors.join(', ')}`, { duration: 8000 });
       } else {
@@ -333,7 +348,9 @@ const LabelPrintersSection: React.FC = () => {
       // The printer knows its own resolution; taking its word for it removes
       // the field most likely to be set wrong, and wrong dpi silently prints
       // the label at the wrong physical size.
-      if (result.reported_dpi && String(result.reported_dpi) !== form.dpi) {
+      if (!isRecognisedPrinter(result)) {
+        toast.error('Something answered at that address, but not as a printer of this language.');
+      } else if (result.reported_dpi && String(result.reported_dpi) !== form.dpi) {
         setForm((prev) => ({ ...prev, dpi: String(result.reported_dpi) }));
         toast.success(`Found ${result.model ?? 'a printer'} — set resolution to ${result.reported_dpi} dpi`);
       } else if (result.identified) {

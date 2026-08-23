@@ -1039,14 +1039,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                     Delete
                   </button>
-                  {/* Only appears when a receipt printer is registered. */}
-                  <PrintDocumentButton
-                    document={StationDocument.SHIFT_ROSTER}
-                    recordId={shift.id}
-                    label="Print roster"
-                  />
                 </>
               )}
+              {/* Outside the manage block on purpose: the endpoint authorizes
+                  scheduling.view as well as scheduling.manage, so gating the
+                  control on manage would deny it to the crew the roster is
+                  for — including the shift officer without a department-wide
+                  grant. Not tied to the shift's lifecycle either: a finished
+                  shift's roster is still worth printing for the record. The
+                  button hides itself when no receipt printer is registered. */}
+              <PrintDocumentButton document={StationDocument.SHIFT_ROSTER} recordId={shift.id} label="Print roster" />
               {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
                 <button
                   onClick={() => setShowCancelConfirm(true)}

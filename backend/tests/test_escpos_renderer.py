@@ -139,6 +139,28 @@ class TestQr:
         out = render_escpos([_spec(barcode_value="INV-000123")], symbology=SYMBOLOGY_QR)
         assert b"INV-000123" in out.split(b"1P0")[-1]
 
+    def test_the_symbol_is_sized_from_the_actual_payload(self):
+        # A fixed module estimate under-counted longer values, so the printer
+        # rendered a symbol wider than the paper and clipped it into an
+        # unreadable code. Module size must fall as the version grows.
+        from app.utils.label_renderer import qr_modules_for
+
+        for length in (10, 60, 120, 200):
+            value = "Y" * length
+            out = render_escpos(
+                [_spec(barcode_value=value)], "escpos_58mm", symbology=SYMBOLOGY_QR
+            )
+            index = out.index(_GS + b"(k\x03\x001C")
+            # GS ( k pL pH cn fn is seven bytes; the module size is the eighth.
+            module_dots = out[index + 7]
+            assert qr_modules_for(value) * module_dots <= 384
+
+    def test_a_value_needing_a_symbol_wider_than_the_paper_is_refused(self):
+        with pytest.raises(ValueError, match="too long to encode|wider than"):
+            render_escpos(
+                [_spec(barcode_value="Y" * 250)], "escpos_58mm", symbology=SYMBOLOGY_QR
+            )
+
     def test_the_store_length_prefix_is_two_bytes(self):
         out = render_escpos([_spec(barcode_value="INV-1")], symbology=SYMBOLOGY_QR)
         index = out.index(b"1P0")
@@ -176,3 +198,65 @@ class TestValidation:
     def test_copies_out_of_range_is_rejected(self):
         with pytest.raises(ValueError, match="copies must be between"):
             render_escpos([_spec()], copies=0)
+
+
+class TestDocumentWrapping:
+    """Free-form rows wrap; two-column rows still give way on the left."""
+
+    def _doc(self, text):
+        from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
+
+        return PrintDocument(
+            title="R",
+            sections=[DocumentSection(heading="Notes", rows=[DocumentRow(left=text)])],
+        )
+
+    def test_a_long_note_keeps_every_word(self):
+        # Notes and pass-downs are free text. Truncating one silently drops
+        # what somebody wrote down, which on a pass-down is the whole point of
+        # printing the sheet.
+        from app.utils.escpos_renderer import render_escpos_document
+
+        note = (
+            "Ladder 2 out of service until Thursday pump test 0900 cones by bay three"
+        )
+        out = render_escpos_document(self._doc(note), "escpos_58mm").decode(
+            "ascii", "replace"
+        )
+        for word in note.split():
+            assert word in out
+
+    def test_no_printed_line_exceeds_the_paper(self):
+        from app.utils.escpos_renderer import render_escpos_document
+
+        note = "word " * 60
+        out = render_escpos_document(self._doc(note), "escpos_58mm").decode(
+            "ascii", "replace"
+        )
+        body = [
+            ln for ln in out.split("\n") if ln and "\x1b" not in ln and "\x1d" not in ln
+        ]
+        assert all(len(line) <= 32 for line in body)
+
+    def test_a_word_longer_than_the_paper_is_hard_split(self):
+        from app.utils.escpos_renderer import render_escpos_document
+
+        out = render_escpos_document(self._doc("Y" * 100), "escpos_58mm").decode(
+            "ascii", "replace"
+        )
+        assert out.count("Y") == 100
+
+    def test_a_two_column_row_still_fits_one_line(self):
+        # The right column carries a status or a count; it must not wrap away
+        # from the name it belongs to.
+        from app.utils.escpos_renderer import render_escpos_document
+        from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
+
+        doc = PrintDocument(
+            title="R",
+            sections=[
+                DocumentSection(rows=[DocumentRow(left="X" * 100, right="OFFICER")])
+            ],
+        )
+        out = render_escpos_document(doc, "escpos_58mm").decode("ascii", "replace")
+        assert out.count("OFFICER") == 1
