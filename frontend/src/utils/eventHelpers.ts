@@ -5,7 +5,9 @@
  * including type labels, status colors, and badge styling.
  */
 
-import type { RSVPStatus } from '../types/event';
+import type { EventListItem, RSVPStatus } from '../types/event';
+import { EVENT_RELATIVE_LABEL_WINDOW_MS, EVENT_RSVP_DEADLINE_SOON_MS } from '../constants/config';
+import { formatDateCustom, formatTime, toLocalDateString } from './dateFormatting';
 
 /**
  * Get human-readable label for event type
@@ -168,4 +170,163 @@ export function downloadICSFile(event: {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * How much an event is asking of the member right now.
+ *
+ * One derived value drives the card's left accent, its status strip, its
+ * footer actions and whether it appears in the "Needs You" band — so the band
+ * and the card it points at can never disagree about an event's state.
+ */
+export type EventUrgency =
+  | 'live' // check-in window is open now
+  | 'action' // needs an RSVP that has not been given
+  | 'confirmed' // going
+  | 'waitlisted'
+  | 'declined' // not going
+  | 'missed' // mandatory, over, and no attendance recorded
+  | 'routine';
+
+/** The three states the band surfaces; the rest resolve on the card alone. */
+export const URGENT_EVENT_STATES: readonly EventUrgency[] = ['live', 'action', 'missed'];
+
+export const isUrgentEventState = (urgency: EventUrgency): boolean => URGENT_EVENT_STATES.includes(urgency);
+
+/**
+ * Whether an unanswered RSVP is close enough to its deadline to be urgent.
+ *
+ * A deadline already past is not urgent — nothing the member does now clears
+ * it, and a row that cannot be cleared is exactly what the band promises not
+ * to show.
+ */
+const isRsvpDeadlineSoon = (event: EventListItem, nowMs: number): boolean => {
+  if (!event.rsvp_deadline) return false;
+  const deadline = Date.parse(event.rsvp_deadline);
+  if (Number.isNaN(deadline)) return false;
+  return deadline > nowMs && deadline - nowMs <= EVENT_RSVP_DEADLINE_SOON_MS;
+};
+
+/**
+ * Classify an event by what it needs from the current member.
+ *
+ * Precedence is fixed: live -> missed -> action -> waitlisted -> confirmed ->
+ * declined -> routine. Cancelled and draft events short-circuit to `routine`:
+ * a cancelled event has nothing to answer, and a draft is a manager's
+ * unpublished working copy that must never nag anyone.
+ */
+export function getEventUrgency(event: EventListItem, now: Date = new Date()): EventUrgency {
+  const nowMs = now.getTime();
+
+  if (event.is_cancelled || event.is_draft) return 'routine';
+
+  const opensAt = event.check_in_opens_at ? Date.parse(event.check_in_opens_at) : NaN;
+  const closesAt = event.check_in_closes_at ? Date.parse(event.check_in_closes_at) : NaN;
+  if (!Number.isNaN(opensAt) && !Number.isNaN(closesAt) && nowMs >= opensAt && nowMs <= closesAt) {
+    return 'live';
+  }
+
+  const endsAt = Date.parse(event.end_datetime);
+  const hasEnded = !Number.isNaN(endsAt) && endsAt < nowMs;
+
+  // `user_attended` is absent on responses from a backend that predates the
+  // projection. Treating that as "no attendance recorded" would accuse every
+  // member of missing every mandatory event, so an absent value means "not
+  // known" and produces no `missed`.
+  if (hasEnded && event.is_mandatory && event.user_attended === false) return 'missed';
+
+  if (!hasEnded && !event.user_rsvp_status) {
+    if (event.is_mandatory) return 'action';
+    if (event.requires_rsvp && isRsvpDeadlineSoon(event, nowMs)) return 'action';
+  }
+
+  switch (event.user_rsvp_status) {
+    case 'waitlisted':
+      return 'waitlisted';
+    case 'going':
+      return 'confirmed';
+    case 'not_going':
+      return 'declined';
+    default:
+      return 'routine';
+  }
+}
+
+/**
+ * Whether the roster is full, so a new RSVP would land on the waitlist.
+ *
+ * `going_count` counts confirmed attendance only, which is what
+ * `max_attendees` caps — a waitlisted or declined RSVP does not consume a slot.
+ */
+export function isRosterFull(event: EventListItem): boolean {
+  if (!event.max_attendees || event.max_attendees <= 0) return false;
+  return (event.going_count ?? 0) >= event.max_attendees;
+}
+
+/** Format a span as "2h", "1h 30m" or "45m". Returns '' for a bad span. */
+export function formatEventDuration(startIso: string, endIso: string): string {
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '';
+
+  const totalMinutes = Math.round((end - start) / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+/**
+ * "Tonight" / "Tomorrow" for an event inside the next 48 hours, else null.
+ *
+ * Compared by calendar day in the member's timezone rather than by elapsed
+ * hours: an event at 9am tomorrow is "Tomorrow" whether it is 20 hours away or
+ * 10, and "Tonight" must not attach to something 26 hours out that happens to
+ * fall in the same rolling day.
+ */
+export function getRelativeDayLabel(startIso: string, now: Date = new Date(), timezone?: string): string | null {
+  const start = Date.parse(startIso);
+  if (Number.isNaN(start)) return null;
+
+  const deltaMs = start - now.getTime();
+  if (deltaMs < 0 || deltaMs > EVENT_RELATIVE_LABEL_WINDOW_MS) return null;
+
+  const dayOf = (date: Date): string => toLocalDateString(date, timezone);
+  const startDay = dayOf(new Date(start));
+  const today = dayOf(now);
+
+  if (startDay === today) {
+    // Only the evening reads as "Tonight"; a 9am event today is just its time.
+    const hour = Number(formatDateCustom(new Date(start), { hour: 'numeric', hour12: false }, timezone));
+    return Number.isNaN(hour) || hour < 17 ? 'Today' : 'Tonight';
+  }
+
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  if (startDay === dayOf(tomorrow)) return 'Tomorrow';
+
+  return null;
+}
+
+/**
+ * The card's time row: "Tue, Sep 1 · 7:00 – 9:00 PM · 2h", with the date
+ * replaced by "Tonight" / "Tomorrow" when the event is imminent.
+ */
+export function formatEventTimeRange(
+  event: Pick<EventListItem, 'start_datetime' | 'end_datetime'>,
+  timezone?: string,
+  now: Date = new Date()
+): string {
+  const dayLabel =
+    getRelativeDayLabel(event.start_datetime, now, timezone) ??
+    formatDateCustom(event.start_datetime, { weekday: 'short', month: 'short', day: 'numeric' }, timezone);
+
+  const startTime = formatTime(event.start_datetime, timezone);
+  const endTime = formatTime(event.end_datetime, timezone);
+  const duration = formatEventDuration(event.start_datetime, event.end_datetime);
+
+  const parts = [dayLabel, endTime && endTime !== 'N/A' ? `${startTime} – ${endTime}` : startTime];
+  if (duration) parts.push(duration);
+  return parts.join(' · ');
 }

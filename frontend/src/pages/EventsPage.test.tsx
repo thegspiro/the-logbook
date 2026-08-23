@@ -129,10 +129,14 @@ describe('EventsPage', () => {
     });
 
     it('should retry loading when try again is clicked', async () => {
-      let callCount = 0;
-      vi.mocked(eventService.getEvents).mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) return Promise.reject(new Error('fail'));
+      // Keyed on the params, not on call order: the page also fires a
+      // mandatory-only fetch for the "Needs You" band, and a call counter
+      // would let that one absorb the rejection meant for the grid.
+      let gridCalls = 0;
+      vi.mocked(eventService.getEvents).mockImplementation((params?: { mandatory_only?: boolean }) => {
+        if (params?.mandatory_only) return Promise.resolve([]);
+        gridCalls++;
+        if (gridCalls === 1) return Promise.reject(new Error('fail'));
         return Promise.resolve(mockEvents);
       });
 
@@ -242,9 +246,11 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /all events/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /business meeting/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /training/i })).toBeInTheDocument();
+        // Anchored: an event card's "Add <title> to calendar" button also
+        // carries the type name, so a loose matcher now finds two elements.
+        expect(screen.getByRole('button', { name: /^all events$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^business meeting$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^training$/i })).toBeInTheDocument();
       });
     });
 

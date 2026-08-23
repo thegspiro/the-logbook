@@ -169,13 +169,15 @@ class EventService:
         end_before: Optional[datetime] = None,
         include_cancelled: bool = False,
         include_drafts: bool = False,
+        mandatory_only: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """List events with filtering.
 
         Returns dicts with event fields plus pre-computed rsvp_count,
-        going_count, and user_rsvp_status — avoiding N+1 queries.
+        going_count, user_rsvp_status and user_attended — avoiding N+1
+        queries.
         """
         # Aggregate RSVP counts as correlated subqueries
         rsvp_count_sq = (
@@ -196,7 +198,7 @@ class EventService:
 
         columns = [Event, rsvp_count_sq, going_count_sq]
 
-        # Optionally include current user's RSVP status
+        # Optionally include current user's RSVP status and attendance
         if user_id:
             user_rsvp_sq = (
                 select(EventRSVP.status)
@@ -207,6 +209,31 @@ class EventService:
                 .label("user_rsvp_status")
             )
             columns.append(user_rsvp_sq)
+
+            # An officer recording attendance after the fact writes
+            # override_check_in_at without ever setting `checked_in`, so a
+            # member who was present but never scanned would otherwise read
+            # back as a no-show on the list.
+            user_attended_sq = (
+                select(
+                    case(
+                        (
+                            or_(
+                                EventRSVP.checked_in.is_(True),
+                                EventRSVP.override_check_in_at.isnot(None),
+                            ),
+                            True,
+                        ),
+                        else_=False,
+                    )
+                )
+                .where(EventRSVP.event_id == Event.id)
+                .where(EventRSVP.user_id == str(user_id))
+                .correlate(Event)
+                .scalar_subquery()
+                .label("user_attended")
+            )
+            columns.append(user_attended_sq)
 
         query = (
             select(*columns)
@@ -230,6 +257,9 @@ class EventService:
 
         if not include_cancelled:
             query = query.where(Event.is_cancelled.is_(False))
+
+        if mandatory_only:
+            query = query.where(Event.is_mandatory.is_(True))
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)
@@ -256,6 +286,7 @@ class EventService:
                 "rsvp_count": row[1] or 0,
                 "going_count": row[2] or 0,
                 "user_rsvp_status": None,
+                "user_attended": False,
             }
             if user_id:
                 raw_status = row[3]
@@ -263,9 +294,87 @@ class EventService:
                     item["user_rsvp_status"] = (
                         raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
+                item["user_attended"] = bool(row[4])
             items.append(item)
 
+        await self._annotate_list_items(items, organization_id)
+
         return items
+
+    async def _annotate_list_items(
+        self, items: List[Dict[str, Any]], organization_id: UUID
+    ) -> None:
+        """Attach the derived fields the member-facing list renders.
+
+        The check-in window is computed, not stored, and the credited hours
+        come from the org's event-hour mappings — both would otherwise be a
+        query (or a duplicated rule) per card.
+        """
+        if not items:
+            return
+
+        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
+            str(organization_id)
+        )
+
+        for item in items:
+            event: Event = item["event"]
+            check_in_opens_at, check_in_closes_at = self._get_check_in_window(event)
+            item["check_in_opens_at"] = check_in_opens_at
+            item["check_in_closes_at"] = check_in_closes_at
+
+            credited_hours, hour_category_label = self._resolve_credited_hours(
+                event, mappings
+            )
+            item["credited_hours"] = credited_hours
+            item["hour_category_label"] = hour_category_label
+
+    @staticmethod
+    def _resolve_credited_hours(
+        event: Event,
+        mappings: Dict[Tuple[str, str], List[Tuple[int, str]]],
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """Hours this event's scheduled duration would credit, and to what.
+
+        Resolution order mirrors ``AdminHoursService.get_mappings_for_event``
+        exactly — event_type wins, custom_category applies only when the event
+        has no type — so the number on the card is the number
+        ``credit_event_attendance`` will award. It is an estimate in one
+        respect the card must not overstate: the real credit is the *attended*
+        duration settled at check-out, not the scheduled one.
+        """
+        event_type = (
+            event.event_type.value
+            if hasattr(event.event_type, "value")
+            else event.event_type
+        )
+        if event_type:
+            matched = mappings.get(("event_type", event_type))
+        elif event.custom_category:
+            matched = mappings.get(("custom_category", event.custom_category))
+        else:
+            matched = None
+
+        if not matched:
+            return None, None
+        if not event.start_datetime or not event.end_datetime:
+            return None, None
+
+        duration_hours = (
+            event.end_datetime - event.start_datetime
+        ).total_seconds() / 3600
+        if duration_hours <= 0:
+            return None, None
+
+        total_percentage = sum(percentage for percentage, _ in matched)
+        credited = round(duration_hours * total_percentage / 100, 1)
+        if credited <= 0:
+            return None, None
+
+        # A split (70% Training / 30% Professional Development) has no single
+        # honest label, so the card shows the total without naming a category.
+        label = matched[0][1] if len(matched) == 1 else None
+        return credited, label
 
     async def update_event(
         self,

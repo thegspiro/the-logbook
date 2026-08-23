@@ -42,6 +42,7 @@ export const eventService = {
     end_before?: string;
     include_cancelled?: boolean;
     include_drafts?: boolean;
+    mandatory_only?: boolean;
     skip?: number;
     limit?: number;
   }): Promise<EventListItem[]> {

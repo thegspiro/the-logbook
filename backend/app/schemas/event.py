@@ -416,6 +416,20 @@ class EventListItem(UTCResponseBase):
     going_count: Optional[int] = None
     user_rsvp_status: Optional[str] = None
 
+    # Fields the member-facing list needs to tell an urgent event from a
+    # routine one without a per-card round trip. The check-in window is
+    # derived (EventService._get_check_in_window), not stored, and
+    # credited_hours is the *scheduled* duration credited by the org's active
+    # event-hour mappings — the real credit is the attended duration, settled
+    # at check-out.
+    rsvp_deadline: Optional[datetime] = None
+    max_attendees: Optional[int] = None
+    check_in_opens_at: Optional[datetime] = None
+    check_in_closes_at: Optional[datetime] = None
+    user_attended: bool = False
+    credited_hours: Optional[float] = None
+    hour_category_label: Optional[str] = None
+
     model_config = _response_config
 
 

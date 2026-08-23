@@ -232,6 +232,7 @@ async def list_events(
     end_before: datetime | None = None,
     include_cancelled: bool = False,
     include_drafts: bool = False,
+    mandatory_only: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -246,6 +247,9 @@ async def list_events(
 
     Use `end_after` to filter events that end on or after a given time
     (useful for showing only current and future events).
+
+    Use `mandatory_only` to narrow to mandatory events — the events list uses
+    it to find recent mandatory events the member never checked in to.
 
     **Authentication required**
     """
@@ -267,6 +271,7 @@ async def list_events(
         end_before=end_before,
         include_cancelled=include_cancelled,
         include_drafts=include_drafts,
+        mandatory_only=mandatory_only,
         skip=skip,
         limit=limit,
     )
@@ -308,6 +313,13 @@ async def list_events(
                 rsvp_count=row["rsvp_count"],
                 going_count=row["going_count"],
                 user_rsvp_status=row["user_rsvp_status"],
+                rsvp_deadline=event.rsvp_deadline,
+                max_attendees=event.max_attendees,
+                check_in_opens_at=row["check_in_opens_at"],
+                check_in_closes_at=row["check_in_closes_at"],
+                user_attended=row["user_attended"],
+                credited_hours=row["credited_hours"],
+                hour_category_label=row["hour_category_label"],
             )
         )
 
