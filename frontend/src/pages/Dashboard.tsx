@@ -8,6 +8,7 @@ import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import SchedulingWidgets from '../components/dashboard/SchedulingWidgets';
 import DashboardOrganizationWidgets from '../components/dashboard/DashboardOrganizationWidgets';
 import { AssetWidgetRegistry } from '../components/dashboard/AssetWidgetRegistry';
 import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistry';
@@ -1651,6 +1652,8 @@ const Dashboard: React.FC = () => {
                   </div>
                 ))}
             </div>
+
+            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
 
             {canViewOrganization && setupProgress && (
               <OrganizationSetupWidget
