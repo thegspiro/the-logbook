@@ -1193,7 +1193,32 @@ class Seeder:
                 ),
             },
         )
+        self._rename_paired_location(org_name, hq_name, hq_address)
         return [renamed if f is stray else f for f in existing]
+
+    def _rename_paired_location(
+        self, org_name: str, hq_name: str, hq_address: str
+    ) -> None:
+        """Rename the Location onboarding created alongside the facility.
+
+        ``_create_facility_with_location`` mints both records, and renaming the
+        facility alone leaves the Location still called after the department.
+        That one is the more visible of the two: Locations are what the events
+        picker, the room-display codes and ``/locations/qr-codes`` list, so the
+        stray fronted the Check-In QR Codes directory as
+        "Oakville Fire Department #101" above the three real stations.
+        """
+        for location in items(self.api.get("/locations"), "locations"):
+            if location.get("name") != org_name:
+                continue
+            location_id = pick(location, "id")
+            if not location_id:
+                continue
+            self.api.patch(
+                f"/locations/{location_id}",
+                {"name": hq_name, "address": hq_address},
+            )
+            return
 
     def seed_facilities(self) -> list[dict]:
         existing = items(self.api.get("/facilities"), "facilities")
