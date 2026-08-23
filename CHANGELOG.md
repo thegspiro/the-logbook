@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment checks: replacing expired stock retires units, not whole lots (2026-08-23)
+
+**Fixed**
+
+- **Swapping one box out of a multi-unit lot deleted every unit in it.** A lot
+  aboard is one row carrying a quantity, so a bracket holding four boxes of one
+  lot is a single row of four. Replacing one box removed the row: the three
+  boxes still in the bag vanished from the apparatus count, all four were
+  recorded as disposed of, and the position read three short of a par it
+  actually met — while ready stock had been drawn down by one and one fresh
+  unit added. The retirement now works in units, oldest row first, and removes
+  a row only once it is emptied. Two expired boxes remain two exchanges.
+- **An in-date lot could be retired under an expired-stock disposition.** The
+  check form offers a replacement only on a position reading expired, but that
+  is a property of the screen rather than of the API, and the endpoint now
+  admits ordinary check submitters. The service verifies the named lot is
+  actually expired before retiring it, so the disposition cannot file a false
+  account of a unit that left the truck.
+- **A submitter could bind a checklist position to any catalog item.** The
+  first swap onto an unlinked position establishes its inventory link
+  permanently, and that decision has its own `equipment_check.manage` screen.
+  Opening the swap endpoint to `equipment_check.submit` (so crews can replace
+  expired stock themselves, rather than hunting for an officer while the item
+  stays force-failed) made the first-swap side effect a way around that review.
+  Submitters may now swap onto positions already linked and are refused on ones
+  that are not; officers still create the link. This narrows the grant recorded
+  against EC-3, which was raised because the endpoint had carried no permission
+  at all.
+- **Staff-entered attendance advanced a pipeline off a meeting it never
+  recorded.** Matching an existing prospect on a staff check-in set
+  `EventExternalAttendee.prospect_id` and nothing else, so the applicant's
+  linked-events section and the by-event applicant filter — both of which read
+  `prospect_event_links` — went on reporting the prospect as never having
+  attended. Check-in now writes the same link the kiosk path does.
+
 ### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
 
 **Fixed**
