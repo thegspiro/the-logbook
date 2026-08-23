@@ -21,6 +21,65 @@ function versionJsonPlugin(): Plugin {
   };
 }
 
+/**
+ * Inline the Web Push handlers into the generated service worker.
+ *
+ * Workbox's `importScripts` option emits a bare `importScripts("/push-sw.js?v=…")`
+ * inside the generated worker's module factory — *before* `precacheAndRoute`,
+ * `skipWaiting` and `clientsClaim`, which live in that same factory. So a failed
+ * request for one optional file does not merely degrade push — it aborts the
+ * factory, and the freshly downloaded worker installs with no precache, no
+ * routes, and no claim on the page. The OLD worker keeps control and keeps
+ * serving its OLD precached index.html, forever. The device is pinned to a stale
+ * build and the only way out is clearing site data by hand.
+ *
+ * That is why the app "never updates in Brave until you clear the cache": Brave
+ * runs importScripts requests issued from a service worker through its content
+ * blocker, including first-party ones, and including when Shields are down for
+ * the site (brave/brave-browser#35461, #53810). Chrome makes the same request
+ * without inspecting it, which is why the identical build updates fine there.
+ *
+ * Inlining removes the request altogether — nothing left to block, to cache, or
+ * to invalidate — while keeping the build on generateSW. `public/push-sw.js` is
+ * still shipped so workers installed before this change keep importing it.
+ */
+function inlinePushWorkerPlugin(): Plugin {
+  return {
+    name: 'inline-push-worker',
+    apply: 'build',
+    // Must run after vite-plugin-pwa has written dist/sw.js. That plugin is
+    // `enforce: 'post'`, so this one has to be too, and has to be listed after
+    // it. The assertions below turn a wrong order into a failed build rather
+    // than a silently un-inlined worker.
+    enforce: 'post',
+    closeBundle() {
+      const outDir = path.resolve(import.meta.dirname, 'dist');
+      const swPath = path.join(outDir, 'sw.js');
+      const pushSource = fs.readFileSync(path.resolve(import.meta.dirname, 'public/push-sw.js'), 'utf8');
+      const sw = fs.readFileSync(swPath, 'utf8');
+
+      if (/importScripts\(["'][^"']*push-sw\.js/.test(sw)) {
+        throw new Error(
+          'inline-push-worker: dist/sw.js still importScripts push-sw.js — remove the workbox `importScripts` option.'
+        );
+      }
+
+      // Prepended, not appended: the generated worker registers its own
+      // listeners when its module factory runs, and these must be attached
+      // whatever that factory does. Wrapped in a block so a future top-level
+      // declaration in push-sw.js cannot collide with the minified worker.
+      fs.writeFileSync(swPath, `{\n${pushSource}\n}\n${sw}`);
+
+      const written = fs.readFileSync(swPath, 'utf8');
+      for (const listener of ['push', 'notificationclick']) {
+        if (!written.includes(`addEventListener('${listener}'`)) {
+          throw new Error(`inline-push-worker: dist/sw.js is missing the '${listener}' handler after inlining.`);
+        }
+      }
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
@@ -39,12 +98,11 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       workbox: {
-        // Web Push handlers. Kept as a separate plain-JS file so the build can
-        // stay on generateSW — moving to injectManifest just to register two
-        // event listeners would mean hand-maintaining everything below.
-        // The build id in the URL also invalidates push-worker imports that an
-        // existing installation cached before no-store headers were deployed.
-        importScripts: [`/push-sw.js?v=${BUILD_ID}`],
+        // Web Push handlers are NOT pulled in with workbox's `importScripts`
+        // option. That emits a request the whole worker depends on, and a
+        // blocker or a bad cache entry on that one file leaves the new worker
+        // unable to precache or claim the page — see inlinePushWorkerPlugin,
+        // which concatenates the handlers into dist/sw.js instead.
         // Precache every generated JavaScript chunk. The entry chunk has static
         // imports outside the index/vendor naming convention (shared API,
         // stores, dialogs, and route registries), so filtering by filename can
@@ -184,6 +242,7 @@ export default defineConfig({
         ],
       },
     }),
+    inlinePushWorkerPlugin(),
   ],
   resolve: {
     alias: {

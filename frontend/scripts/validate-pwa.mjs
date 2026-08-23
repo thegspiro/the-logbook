@@ -56,6 +56,19 @@ await assertDistAsset('push-sw.js', 'push service worker');
 assert.match(serviceWorker, /NavigationRoute/, 'the service worker must provide an offline navigation fallback');
 assert.match(serviceWorker, /index\.html/, 'the application shell must be precached');
 assert.match(serviceWorker, /NetworkOnly/, 'sensitive API and version requests must remain network-only');
-assert.match(serviceWorker, /push-sw\.js\?v=/, 'the push worker must be imported with a cache-busting build id');
+// Inlined, never importScripts'd: a blocked or stale request for the push
+// worker would abort the generated worker's module factory before it precaches
+// or claims the page, pinning the device to the previous build.
+assert.doesNotMatch(
+  serviceWorker,
+  /importScripts\(["'][^"']*push-sw\.js/,
+  'the push worker must be inlined into sw.js, not fetched with importScripts'
+);
+assert.match(serviceWorker, /addEventListener\('push'/, 'the push handler must be inlined into sw.js');
+assert.match(
+  serviceWorker,
+  /addEventListener\('notificationclick'/,
+  'the notification-click handler must be inlined into sw.js'
+);
 
 console.log('PWA validation passed: manifest, install assets, app shell, and service worker are present.');

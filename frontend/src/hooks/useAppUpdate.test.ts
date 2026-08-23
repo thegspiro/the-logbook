@@ -19,6 +19,9 @@ describe('useAppUpdate', () => {
     fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true });
+    // The escalation ladder is persisted, so it would otherwise leak between
+    // tests and make later ones start a rung up.
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -330,5 +333,56 @@ describe('useAppUpdate', () => {
 
     expect(result.current.updateAvailable).toBe(false);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the update as blocked once recovery is exhausted for that build', async () => {
+    localStorage.setItem(
+      'logbook:update-attempts',
+      JSON.stringify({ buildId: 'new-build-456', attempts: 2, at: Date.now() })
+    );
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'new-build-456' }),
+    });
+
+    const { result } = renderHook(() => useAppUpdate(), { wrapper });
+
+    await waitFor(() => expect(result.current.updateAvailable).toBe(true));
+    expect(result.current.updateBlocked).toBe(true);
+  });
+
+  it("does not inherit another build's failed attempts", async () => {
+    localStorage.setItem(
+      'logbook:update-attempts',
+      JSON.stringify({ buildId: 'old-stuck-build', attempts: 2, at: Date.now() })
+    );
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'new-build-456' }),
+    });
+
+    const { result } = renderHook(() => useAppUpdate(), { wrapper });
+
+    await waitFor(() => expect(result.current.updateAvailable).toBe(true));
+    expect(result.current.updateBlocked).toBe(false);
+  });
+
+  it('clears the escalation state once the running build matches the server', async () => {
+    localStorage.setItem(
+      'logbook:update-attempts',
+      JSON.stringify({ buildId: 'test-build-123', attempts: 2, at: Date.now() })
+    );
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'test-build-123' }),
+    });
+
+    const { result } = renderHook(() => useAppUpdate(), { wrapper });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    // Matching build ids are the only proof an update actually took, so the
+    // next deployment must start from a plain reload again.
+    expect(localStorage.getItem('logbook:update-attempts')).toBeNull();
+    expect(result.current.updateBlocked).toBe(false);
   });
 });

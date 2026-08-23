@@ -1,12 +1,22 @@
 /* global self, clients */
 /**
- * Web Push handlers, pulled into the generated service worker via
- * `workbox.importScripts` in vite.config.ts.
+ * Web Push handlers, concatenated into the generated service worker at build
+ * time by `inlinePushWorkerPlugin` in vite.config.ts.
  *
  * This lives as a separate plain-JS file rather than a custom service worker so
  * the build can stay on Workbox's generateSW mode — switching to injectManifest
  * to add two event listeners would mean hand-maintaining the precache and
  * runtime-caching rules that config already expresses.
+ *
+ * It is inlined rather than pulled in with `importScripts` because that request
+ * is a single point of failure for the whole worker: when it fails, the
+ * generated worker's module factory aborts before it can precache or claim the
+ * page, and the device stays pinned to the previous build. See the plugin for
+ * the full account.
+ *
+ * The file is still deployed at /push-sw.js: service workers installed before
+ * the switch to inlining continue to import it, and they keep working until
+ * their next successful update.
  *
  * Payloads are JSON produced by PushService.send_to_user:
  *   { title, body, url, tag }
@@ -67,6 +77,6 @@ self.addEventListener('notificationclick', (event) => {
       }
 
       if (clients.openWindow) await clients.openWindow(target);
-    })(),
+    })()
   );
 });
