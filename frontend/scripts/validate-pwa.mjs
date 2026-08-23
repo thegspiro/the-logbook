@@ -52,10 +52,34 @@ for (const screenshot of manifest.screenshots ?? []) {
   await assertDistAsset(screenshot.src, `screenshot ${screenshot.src}`);
 }
 
+// Still deployed: workers installed before the handlers were inlined keep
+// importing it until their next successful update.
 await assertDistAsset('push-sw.js', 'push service worker');
+// ...but never precached. Workbox fetches every precache entry during `install`
+// and rejects the install if one fails, so a precached push-sw.js would take
+// the whole worker down over a file the new worker does not even use — the
+// exact failure inlining exists to remove.
+assert.doesNotMatch(
+  serviceWorker,
+  /[{,]\s*(?:url:|["']url["']:)\s*["']\/?push-sw\.js["']/,
+  'push-sw.js must be excluded from the precache manifest (workbox globIgnores)'
+);
 assert.match(serviceWorker, /NavigationRoute/, 'the service worker must provide an offline navigation fallback');
 assert.match(serviceWorker, /index\.html/, 'the application shell must be precached');
 assert.match(serviceWorker, /NetworkOnly/, 'sensitive API and version requests must remain network-only');
-assert.match(serviceWorker, /push-sw\.js\?v=/, 'the push worker must be imported with a cache-busting build id');
+// Inlined, never importScripts'd: a blocked or stale request for the push
+// worker would abort the generated worker's module factory before it precaches
+// or claims the page, pinning the device to the previous build.
+assert.doesNotMatch(
+  serviceWorker,
+  /importScripts\(["'][^"']*push-sw\.js/,
+  'the push worker must be inlined into sw.js, not fetched with importScripts'
+);
+assert.match(serviceWorker, /addEventListener\('push'/, 'the push handler must be inlined into sw.js');
+assert.match(
+  serviceWorker,
+  /addEventListener\('notificationclick'/,
+  'the notification-click handler must be inlined into sw.js'
+);
 
 console.log('PWA validation passed: manifest, install assets, app shell, and service worker are present.');

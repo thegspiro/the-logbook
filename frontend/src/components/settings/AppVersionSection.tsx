@@ -14,7 +14,7 @@ import { RefreshCw, Trash2, CheckCircle, WifiOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { fetchServerBuildId, formatBuildId, getCurrentBuildId } from '../../utils/appVersion';
-import { reloadForNewVersion } from '../../utils/serviceWorkerUpdate';
+import { applyAppUpdate } from '../../utils/updateRecovery';
 import { forceAppRefresh } from '../../utils/forceAppRefresh';
 
 export const AppVersionSection: React.FC = () => {
@@ -44,11 +44,21 @@ export const AppVersionSection: React.FC = () => {
         return;
       }
 
-      toast.success('A new version is available — updating now.');
       // Swaps the service worker before reloading. A bare reload on an
       // installed PWA is served by the OLD worker's precached index.html and
-      // looks like it did nothing.
-      await reloadForNewVersion();
+      // looks like it did nothing. applyAppUpdate additionally clears the
+      // caches when a previous attempt at this same build already failed.
+      const remedy = await applyAppUpdate(serverBuildId);
+
+      if (remedy === 'exhausted') {
+        // Two reloads have already failed to move this device onto that build,
+        // so promising a third would be a lie. Force refresh, immediately
+        // below, is the remedy that has not been tried.
+        toast.error('A new version is available, but this device could not install it. Try Force refresh below.');
+        return;
+      }
+
+      toast.success('A new version is available — updating now.');
     } finally {
       setChecking(false);
     }

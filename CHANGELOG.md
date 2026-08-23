@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
+
+**Fixed**
+
+- **The Web Push handlers are now concatenated into the generated service
+  worker at build time instead of being pulled in with `importScripts`.** That
+  call sat inside the generated worker's module factory, ahead of
+  `precacheAndRoute`, `skipWaiting` and `clientsClaim`. So one failed request
+  for one optional file did not degrade push — it aborted the factory, and the
+  freshly downloaded worker installed with no precache and no claim on the
+  page. The old worker kept control and kept serving its old precached
+  `index.html` indefinitely, which is exactly "the app doesn't update until I
+  clear the cache".
+- **Why Brave specifically:** Brave runs `importScripts` requests issued from a
+  service worker through its content blocker, including first-party ones and
+  including when Shields are down for the site
+  ([brave/brave-browser#35461](https://github.com/brave/brave-browser/issues/35461),
+  [#53810](https://github.com/brave/brave-browser/issues/53810)). Chrome makes
+  the same request without inspecting it, so the identical build updated fine
+  there and the failure looked browser-specific rather than structural.
+- `/push-sw.js` is still deployed, and still served `no-store`: workers
+  installed before this change keep importing it until their next successful
+  update, which the change itself makes possible. It is **excluded from the new
+  worker's precache** (`globIgnores`), because workbox fetches every precache
+  entry during `install` and rejects the install if one fails — leaving it in
+  the manifest would have moved the single point of failure from `importScripts`
+  to the install event rather than removing it, over a file the new worker no
+  longer uses.
+- **User settings now follow `?tab=` on an in-place navigation, not only on
+  mount, and mirror the selected section back into the URL.** The banner above
+  links to `/account?tab=app` from anywhere in the app, including from that page
+  with another section already open; `activeTab` was seeded from the query
+  string once at `useState` time, so such a link changed the URL and nothing
+  else. A forced password change or MFA enrollment still wins over the
+  parameter.
+
+**Added**
+
+- **An escalation ladder for a device that will not move onto a new build**
+  (`utils/updateRecovery.ts`). Detection already worked; applying was a plain
+  reload, and when that reload came back on the _old_ build nothing noticed —
+  the next check saw the same mismatch and reloaded again, indefinitely.
+  Attempts are now counted per target build: the first is the plain reload, the
+  second additionally deletes every Cache Storage entry first (the same thing
+  members were doing by hand), and after that the app stops reloading itself
+  and the banner switches to pointing at Settings → App → Force refresh.
+- The ladder deliberately stops short of unregistering the service worker: a
+  push subscription belongs to the registration and nothing re-subscribes
+  automatically, so silently dropping callout notifications to fix a stale
+  build is the wrong trade. It also refuses to purge while the server is
+  unreachable, which would leave the device with no working copy of the app,
+  and leaves that attempt uncounted so the purge is still owed once there is a
+  connection to do it safely.
+- `useAppUpdate` now clears the ladder whenever the running build matches the
+  server — the only proof an update actually took — so the next deployment
+  starts from a plain reload again.
+- `validate-pwa.mjs` asserts the push handlers are inlined and that no
+  `importScripts` of `push-sw.js` survives in `dist/sw.js`, and the build
+  plugin fails loudly rather than silently shipping an un-inlined worker.
+- `infrastructure/nginx/nginx.conf` gained the `location = /version.json`
+  `no-store` rule the container-level config already had.
+
 ### Equipment checks: replacing expired stock retires units, not whole lots (2026-08-23)
 
 **Fixed**
