@@ -1,5 +1,43 @@
 # Screenshot currency
 
+## Captured 2026-08-23 — the room tree, and a fixture that was never written down
+
+`06-24-rooms-nested-tree`, `06-25-room-located-inside` and
+`06-26-room-delete-subrooms` are re-captured, opened, and checked. Two things
+came out of it that outlast the images.
+
+**The room fixture existed only in one database.** The 2026-08-17 entry below
+says these three "are driven from `manifest.mjs` against a seeded demo
+department, so they re-shoot rather than going stale". Half of that was true:
+the manifest drives the capture, but `seed_demo_data.py` never contained the
+word "Volunteer Office". The tree was built by hand during that capture session
+and lived only in whichever database it was using. Dropping that database
+destroyed it, and all three shots failed with a 20-second locator timeout on a
+room nothing had created. The tree is now seeded (`HQ_ROOMS`), hung off the
+facility named in `FACILITIES[0]` rather than off "whichever the API returns
+first" — a tree that moved between runs would point three shots at an empty
+Rooms section without failing anything.
+
+**The delete confirmation misstated what it was about to do.** It counted
+descendants: deleting Volunteer Office — two sub-rooms, one grandchild —
+promised that "3 sub-rooms will move up a level". The backend re-parents
+`WHERE parent_room_id = room_id`, so **2** move; Locker Cage keeps its own
+parent and rides along inside that subtree. The dialog also contradicted the
+row badge directly above it, which has always shown the direct count. On a
+confirmation whose only job is to state the consequence of something
+irreversible, that is worth more than the screenshot. Fixed, with a test that
+fails against the old implementation; `06-26` was re-shot afterwards and now
+reads "Its 2 sub-rooms".
+
+**The stray facility is gone from the pictures.** All three previously showed a
+facility header reading "Oakville Fire Department / Station 1" — the record
+onboarding auto-creates and the seeder then duplicated. They now read
+"Station 1 - Headquarters".
+
+Guide 19's rooms marker asked to reuse this capture rather than take its own
+("shared with lesson 06; capture once, reuse"), so it now references
+`06-24-rooms-nested-tree.png` directly. 439 of 485 filled.
+
 ## Captured 2026-08-23 — the close-out wizard, and why it had never shot
 
 `03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,

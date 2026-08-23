@@ -846,6 +846,28 @@ FACILITIES = [
     ("Training & Administration Center", "22 Depot Street", 2004, 9200, 1),
 ]
 
+# Rooms nested inside rooms, at headquarters.
+#
+# Three guide-06 captures (06-24 nested tree, 06-25 "Located Inside", 06-26 the
+# delete-with-sub-rooms confirmation) and guide 19's rooms marker all photograph
+# this tree, and it needs three levels to show anything: a container reporting
+# how many rooms it holds, a sub-room that is itself a container, and a leaf.
+#
+# It was built by hand during the 2026-08-17 capture run and never written
+# down, so it lived only in whichever database that session happened to be
+# using. Dropping that database destroyed it, and the three shots -- which the
+# currency log described as re-shooting rather than going stale -- failed with
+# a 20s locator timeout on a room nothing had created.
+#
+# ``(name, room_type, floor, capacity, parent name or None)``. Order matters:
+# a parent has to exist before the row naming it.
+HQ_ROOMS = [
+    ("Volunteer Office", "office", 1, 8, None),
+    ("Quartermaster's Storage", "storage", 1, 2, "Volunteer Office"),
+    ("Locker Cage", "storage", 1, None, "Quartermaster's Storage"),
+    ("Records Closet", "storage", 1, None, "Volunteer Office"),
+]
+
 
 class Seeder:
     def __init__(self, api: Api, base_url: str, bulk_prospects: int = 0) -> None:
@@ -1248,6 +1270,58 @@ class Seeder:
                     },
                 )
             )
+        return created
+
+    def seed_rooms(self, facilities: list[dict]) -> list[dict]:
+        """Build the nested room tree at headquarters.
+
+        Hung off the first facility in FACILITIES rather than "whichever the
+        API returns first": the captures open the facility by that name, and a
+        tree that moved between runs would point three shots at an empty Rooms
+        section without failing anything.
+        """
+        hq_name = FACILITIES[0][0]
+        hq = next((f for f in facilities if f.get("name") == hq_name), None)
+        if not hq:
+            self.blocked.append(
+                f"rooms: no facility named {hq_name!r} to hang the tree on"
+            )
+            return []
+
+        facility_id = pick(hq, "id")
+        existing = items(
+            self.api.get(f"/facilities/rooms?facility_id={facility_id}"), "rooms"
+        )
+        by_name = {r.get("name"): r for r in existing}
+
+        created: list[dict] = []
+        for name, room_type, floor, capacity, parent_name in HQ_ROOMS:
+            if name in by_name:
+                continue
+            parent = by_name.get(parent_name) if parent_name else None
+            if parent_name and not parent:
+                # The parent failed to create, so this row would silently land
+                # at the top level and flatten the tree the shots are of.
+                self.blocked.append(
+                    f"rooms: {name!r} needs {parent_name!r}, which is not there"
+                )
+                continue
+            payload = {
+                "facility_id": facility_id,
+                "name": name,
+                "floor": floor,
+                "room_type": room_type,
+                # Cold Zone renders as a badge on every row, which is what the
+                # tree capture shows beside the sub-room counts.
+                "zone_classification": "cold",
+            }
+            if capacity is not None:
+                payload["capacity"] = capacity
+            if parent:
+                payload["parent_room_id"] = pick(parent, "id")
+            room = self.api.post("/facilities/rooms", payload)
+            by_name[name] = room
+            created.append(room)
         return created
 
     def seed_locations(self, facilities: list[dict]) -> list[dict]:
@@ -11773,6 +11847,7 @@ class Seeder:
         self.step("member changes", lambda: self.seed_member_changes(members))
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
+        self.step("rooms", lambda: self.seed_rooms(facilities))
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
         evoc_levels = self.step("evoc levels", self.seed_evoc_levels) or []
         self.step(

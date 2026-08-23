@@ -258,7 +258,7 @@ re-syncs Locations; clearing floor/capacity/description now persists on save.
 The full walkthrough with screenshot markers lives in
 [Apparatus & Facilities → Nesting rooms inside rooms](./06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
 
-> **[SCREENSHOT NEEDED — nested Rooms tree with counts and add-a-room-inside action (shared with lesson 06; capture once, reuse).]**
+![The Rooms section as a containment tree: sub-rooms indented under the room holding them, each container reporting how many it holds](./images/06-24-rooms-nested-tree.png)
 
 ## Privacy and access tightening (August 15–16)
 
