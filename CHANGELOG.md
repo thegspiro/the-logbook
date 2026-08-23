@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Nine settings screens, five navigation idioms, one shell (2026-08-23)
+
+**Changed**
+
+- **Every settings screen now renders through the same shell.** Nine screens
+  called themselves "settings" and shared almost nothing: five navigation
+  idioms, four save models, four container widths, and four different page
+  title sizes — 30px on User Settings, 24px on Elections, 20px on Scheduling,
+  and no title at all on Organization or Events settings. They now share one
+  chrome, one 960px column (replacing `max-w-4xl`, `max-w-5xl`, `max-w-6xl` and
+  the `max-w-[1600px]` Email Templates had grown to), and one title that names
+  the page rather than the module.
+- **Sections run across the top; a section's own pages take a left rail.**
+  Sections read as a segmented pill row in blue-muted; sub-pages take the 3px
+  red left marker the navigation already used for a partially-active group.
+  Neither treatment is new to the product. A section with no sub-pages drops
+  the rail entirely rather than showing an empty one, and no screen carries two
+  stacked horizontal strips any more.
+- **Settings save as you change them, and one pill in the header says whether
+  it stuck.** This replaces per-block Save buttons on General, Modules, Members,
+  Ranks, Events and Elections. Election Settings in particular had a single Save
+  button at the top right covering five screens' worth of fields, so changing a
+  value near the bottom gave no indication anything still needed saving.
+- **The per-toggle success toast is gone.** Events Settings fired one on every
+  switch, so flipping four visibility toggles produced four stacked
+  confirmations — and a real failure would have arrived looking like the fourth.
+  Failures still toast, once, and never roll the field back: restoring the
+  stored value is indistinguishable from the keystrokes never registering, and
+  it destroys the only copy of what the member meant to type.
+- **Authentication, Email, Storage and User Settings keep an explicit Save.**
+  These write credentials. A half-typed SSO secret dispatched on a debounce can
+  lock a department out of its own sign-in.
+- **EVOC Levels is no longer a top-level section beside Email and Storage.** It
+  is a second rank ladder, so it is now the Ranks section's second page. Its
+  `apparatus.manage` gate drops that one page rather than the whole section.
+- **Election Settings' seven raw red checkboxes became switches**, and the
+  switch itself is now one shared component instead of two copies.
+
+**Fixed**
+
+- **The MFA and email switches remounted on every render.** `EmailSettingsSection`
+  declared its `Toggle` inside its own component body, making it a fresh
+  component type each render — React unmounted and remounted the switch whenever
+  anything else in the form changed, discarding its focus and cutting its
+  transition short mid-slide.
+- **Violet is gone from the settings surfaces.** `#7c3aed` / `violet-600` /
+  `violet-500/15` are declared in no theme, so they never adapted in dark or
+  high-contrast mode — the same mid-purple rendered against slate-900 as against
+  white. Each usage moved to the token that already carried its meaning.
+
 ### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
 
 **Fixed**
