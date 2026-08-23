@@ -1814,6 +1814,15 @@ async def swap_item_lot(
     it. This mirrors the deployed-lot editor, which already admits submitters
     and narrows what they may rewrite rather than shutting them out.
     """
+    # Tying a checklist position to a catalog item for the first time is a
+    # setup decision with its own manage-only screen, and the first swap does
+    # it as a side effect. Submitters may move stock onto positions already
+    # linked; they may not create the link.
+    permissions = _collect_user_permissions(current_user)
+    can_link_catalog = _has_permission(
+        "equipment_check.manage", permissions
+    ) or _has_permission("inventory.manage", permissions)
+
     service = EquipmentCheckService(db)
     try:
         result = await service.swap_item_lot(
@@ -1824,7 +1833,10 @@ async def swap_item_lot(
             quantity=data.quantity,
             replaced_deployed_lot_id=data.replaced_deployed_lot_id,
             disposition=data.disposition.value if data.disposition else None,
+            allow_first_link=can_link_catalog,
         )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if result is None:
