@@ -30,6 +30,23 @@ ORG = "org-1"
 TZ = "America/New_York"
 
 
+def _viewer(user_id="viewer-1", permissions=("scheduling.view",)):
+    """A calling user with an explicit permission set.
+
+    Shaped for `_collect_user_permissions`: positions carry a list of
+    permission strings, and `rank` contributes its own defaults.
+    """
+    return SimpleNamespace(
+        id=user_id,
+        organization_id=ORG,
+        positions=[SimpleNamespace(permissions=list(permissions))],
+        rank=None,
+        first_name="View",
+        last_name="Er",
+        username="viewer",
+    )
+
+
 def _user(first="Ada", last="Rivera", username="arivera"):
     return SimpleNamespace(
         id=f"u-{username}", first_name=first, last_name=last, username=username
@@ -90,10 +107,14 @@ class TestRegistry:
             "scheduling.manage",
         )
 
-    def test_a_check_sheet_needs_an_apparatus_permission(self):
+    def test_a_check_sheet_needs_an_equipment_check_permission(self):
+        # Not apparatus.*: that is a rank default, and gating on it would hand
+        # every member the department's whole checklist configuration. This
+        # matches GET /templates/{id}.
         assert required_permissions_for_document("apparatus_check_sheet") == (
-            "apparatus.view",
-            "apparatus.manage",
+            "equipment_check.view",
+            "equipment_check.submit",
+            "equipment_check.manage",
         )
 
     def test_an_unknown_document_has_no_permissions(self):
@@ -105,7 +126,7 @@ class TestShiftRoster:
         # The org filter makes another department's shift indistinguishable
         # from one that does not exist, which is the point.
         db = _db(scalars=[None])
-        assert await build_shift_roster(db, ORG, "shift-1", TZ) is None
+        assert await build_shift_roster(db, ORG, "shift-1", TZ, _viewer()) is None
 
     async def test_the_officer_is_at_the_top(self):
         # A roster is read at shift change to find who is in charge.
@@ -117,7 +138,7 @@ class TestShiftRoster:
                 (_assignment("driver"), _user("Jon", "Okafor")),
             ],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         names = [row.left for row in _rows_of(doc, "Crew")]
         assert names[0].startswith("Ada Rivera")
         assert names[1].startswith("Jon Okafor")
@@ -131,7 +152,7 @@ class TestShiftRoster:
                 (_assignment(status="cancelled"), _user("Also", "Away")),
             ],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         printed = " ".join(row.left for row in _rows_of(doc, "Crew"))
         assert "Ada Rivera" in printed
         assert "Gone Away" not in printed
@@ -143,7 +164,7 @@ class TestShiftRoster:
             scalars=[_shift()],
             rows=[(_assignment(status="assigned"), _user("Ada", "Rivera"))],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert "unconfirmed" in next(_rows_of(doc, "Crew")).left
 
     async def test_a_confirmed_seat_carries_no_marks(self):
@@ -151,7 +172,7 @@ class TestShiftRoster:
             scalars=[_shift()],
             rows=[(_assignment(status="confirmed"), _user("Ada", "Rivera"))],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert next(_rows_of(doc, "Crew")).left == "Ada Rivera"
 
     async def test_a_training_seat_is_marked(self):
@@ -159,7 +180,7 @@ class TestShiftRoster:
             scalars=[_shift()],
             rows=[(_assignment(training=True), _user("Mo", "Bell"))],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert "training" in next(_rows_of(doc, "Crew")).left
 
     async def test_the_position_is_the_right_hand_column(self):
@@ -167,7 +188,7 @@ class TestShiftRoster:
             scalars=[_shift()],
             rows=[(_assignment("driver"), _user("Jon", "Okafor"))],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert next(_rows_of(doc, "Crew")).right == "DRIVER"
 
     async def test_minimum_staffing_appears_in_the_heading(self):
@@ -175,30 +196,81 @@ class TestShiftRoster:
             scalars=[_shift(min_staffing=4)],
             rows=[(_assignment(), _user())],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         heading = doc.sections[0].heading
         assert "1 of 4 minimum" in heading
 
     async def test_an_empty_shift_says_so(self):
         db = _db(scalars=[_shift()], rows=[])
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert "No one assigned" in next(_rows_of(doc, "Crew")).left
 
     async def test_times_are_local_not_utc(self):
         # 12:00 UTC is 08:00 in New York; printing UTC would have every shift
         # starting at the wrong time.
         db = _db(scalars=[_shift()], rows=[(_assignment(), _user())])
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert "08:00" in doc.subtitle
 
-    async def test_the_pass_down_is_carried_to_the_next_crew(self):
+    async def test_the_pass_down_reaches_the_crew_it_belongs_to(self):
+        # Somebody actually rostered on the shift is the incoming crew.
+        rostered = _assignment(status="confirmed")
+        rostered.user_id = "viewer-1"
+        db = _db(
+            scalars=[_shift(pass_down_notes="Ladder 2 out of service")],
+            rows=[(rostered, _user())],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert "Pass-down" in [s.heading for s in doc.sections]
+
+    async def test_the_pass_down_is_withheld_from_everyone_else(self):
+        # Pass-downs are stripped from the ordinary shift reads and served only
+        # by the handoff endpoint, which requires scheduling.manage, being the
+        # shift officer, or holding an active assignment. A roster printed on a
+        # flat scheduling.view grant must not route around that.
         db = _db(
             scalars=[_shift(pass_down_notes="Ladder 2 out of service")],
             rows=[(_assignment(), _user())],
         )
-        doc = await build_shift_roster(db, ORG, "shift-1", TZ)
-        headings = [s.heading for s in doc.sections]
-        assert "Pass-down" in headings
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert "Pass-down" not in [s.heading for s in doc.sections]
+        assert "Ladder 2" not in str(doc.to_dict())
+
+    async def test_a_shift_manager_sees_the_pass_down(self):
+        db = _db(
+            scalars=[_shift(pass_down_notes="Ladder 2 out of service")],
+            rows=[(_assignment(), _user())],
+        )
+        doc = await build_shift_roster(
+            db, ORG, "shift-1", TZ, _viewer(permissions=("scheduling.manage",))
+        )
+        assert "Pass-down" in [s.heading for s in doc.sections]
+
+    async def test_the_shift_officer_sees_the_pass_down(self):
+        db = _db(
+            scalars=[
+                _shift(
+                    pass_down_notes="Ladder 2 out of service",
+                    shift_officer_id="viewer-1",
+                ),
+                _user(),
+            ],
+            rows=[(_assignment(), _user())],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert "Pass-down" in [s.heading for s in doc.sections]
+
+    async def test_a_declined_assignment_does_not_confer_pass_down_access(self):
+        # Declined is not "on the shift" — the handoff rule counts only
+        # assigned and confirmed.
+        declined = _assignment(status="declined")
+        declined.user_id = "viewer-1"
+        db = _db(
+            scalars=[_shift(pass_down_notes="Ladder 2 out of service")],
+            rows=[(declined, _user())],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert "Pass-down" not in [s.heading for s in doc.sections]
 
     async def test_the_apparatus_is_named_in_the_subtitle(self):
         db = _db(scalars=[_shift(apparatus_id="ap-1")], rows=[(_assignment(), _user())])
@@ -206,7 +278,7 @@ class TestShiftRoster:
             "app.utils.apparatus_ref.resolve_apparatus_labels",
             AsyncMock(return_value={"ap-1": "Engine 1"}),
         ):
-            doc = await build_shift_roster(db, ORG, "shift-1", TZ)
+            doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
         assert "Engine 1" in doc.subtitle
 
 
@@ -248,51 +320,69 @@ def _template(compartments=(), **kwargs):
     return SimpleNamespace(**base)
 
 
+def _check_sheet(template, positions=None):
+    """Patch the canonical template read the builder now goes through."""
+    return patch.multiple(
+        "app.services.equipment_check_service.EquipmentCheckService",
+        get_template=AsyncMock(return_value=template),
+        get_user_check_positions=AsyncMock(return_value=positions or set()),
+    )
+
+
+def _check_viewer(permissions=("equipment_check.view",)):
+    return _viewer(permissions=permissions)
+
+
 class TestCheckSheet:
     async def test_a_missing_template_yields_nothing(self):
-        db = _db(scalars=[None])
-        assert await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ) is None
+        with _check_sheet(None):
+            assert (
+                await build_apparatus_check_sheet(
+                    MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+                )
+                is None
+            )
 
     async def test_items_are_checkboxes(self):
         # The sheet exists to be marked on while walking round the truck.
-        db = _db(
-            scalars=[_template([_compartment("c1", "Cab", items=[_item("Radio")])])]
-        )
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(
+            _template([_compartment("c1", "Cab", items=[_item("Radio")])])
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         row = next(r for r in _rows_of(doc, "Cab") if r.left.startswith("Radio"))
         assert row.checkbox is True
 
     async def test_compartments_are_sections_in_sort_order(self):
-        db = _db(
-            scalars=[
-                _template(
-                    [
-                        _compartment("c2", "Rear", sort=2, items=[_item("Axe")]),
-                        _compartment("c1", "Cab", sort=1, items=[_item("Radio")]),
-                    ]
-                )
-            ]
-        )
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(
+            _template(
+                [
+                    _compartment("c2", "Rear", sort=2, items=[_item("Axe")]),
+                    _compartment("c1", "Cab", sort=1, items=[_item("Radio")]),
+                ]
+            )
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         headings = [s.heading for s in doc.sections if s.heading != "Signed"]
         assert headings == ["Cab", "Rear"]
 
     async def test_a_nested_container_stays_under_its_parent(self):
         # A bag inside a compartment is a place inside the one already open,
         # not a new trip across the truck.
-        db = _db(
-            scalars=[
-                _template(
-                    [
-                        _compartment("c1", "Cab", items=[_item("Radio")]),
-                        _compartment(
-                            "c2", "EMS Bag", parent="c1", items=[_item("Gauze")]
-                        ),
-                    ]
-                )
-            ]
-        )
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(
+            _template(
+                [
+                    _compartment("c1", "Cab", items=[_item("Radio")]),
+                    _compartment("c2", "EMS Bag", parent="c1", items=[_item("Gauze")]),
+                ]
+            )
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         headings = [s.heading for s in doc.sections if s.heading != "Signed"]
         assert headings == ["Cab"]
 
@@ -303,74 +393,112 @@ class TestCheckSheet:
         assert gauze.indent > 0
 
     async def test_a_required_item_is_starred(self):
-        db = _db(
-            scalars=[
-                _template(
-                    [_compartment("c1", "Cab", items=[_item("Radio", required=True)])]
-                )
-            ]
-        )
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(
+            _template(
+                [_compartment("c1", "Cab", items=[_item("Radio", required=True)])]
+            )
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         assert next(_rows_of(doc, "Cab")).left.endswith("*")
 
     async def test_a_quantity_item_shows_what_correct_looks_like(self):
-        db = _db(
-            scalars=[
-                _template(
-                    [
-                        _compartment(
-                            "c1",
-                            "Cab",
-                            items=[
-                                _item(
-                                    "Flares",
-                                    check_type="quantity",
-                                    required_quantity=6,
-                                )
-                            ],
-                        )
-                    ]
-                )
-            ]
-        )
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(
+            _template(
+                [
+                    _compartment(
+                        "c1",
+                        "Cab",
+                        items=[
+                            _item(
+                                "Flares",
+                                check_type="quantity",
+                                required_quantity=6,
+                            )
+                        ],
+                    )
+                ]
+            )
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         assert next(_rows_of(doc, "Cab")).right == "qty 6"
 
     async def test_a_level_item_shows_its_minimum(self):
-        db = _db(
-            scalars=[
-                _template(
-                    [
-                        _compartment(
-                            "c1",
-                            "Cab",
-                            items=[
-                                _item(
-                                    "SCBA",
-                                    check_type="level",
-                                    min_level=4500,
-                                    level_unit="psi",
-                                )
-                            ],
-                        )
-                    ]
-                )
-            ]
-        )
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(
+            _template(
+                [
+                    _compartment(
+                        "c1",
+                        "Cab",
+                        items=[
+                            _item(
+                                "SCBA",
+                                check_type="level",
+                                min_level=4500,
+                                level_unit="psi",
+                            )
+                        ],
+                    )
+                ]
+            )
+        ):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         assert next(_rows_of(doc, "Cab")).right == "min 4500psi"
 
     async def test_there_is_somewhere_to_sign(self):
         # A sheet handed in unsigned proves nothing.
-        db = _db(scalars=[_template([_compartment("c1", "Cab", items=[_item()])])])
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(_template([_compartment("c1", "Cab", items=[_item()])])):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         signed = [s for s in doc.sections if s.heading == "Signed"]
         assert signed
         assert any("Checked by" in row.left for row in signed[0].rows)
 
+    async def test_a_submit_only_member_is_narrowed_to_their_positions(self):
+        # list_templates and GET /templates/{id} both restrict a submit-only
+        # caller to the checklists for positions they actually check. Reading
+        # the table directly would have handed them the rest.
+        with _check_sheet(
+            _template([_compartment("c1", "Cab", items=[_item("Radio")])]),
+            positions={"driver"},
+        ):
+            from app.services.equipment_check_service import EquipmentCheckService
+
+            await build_apparatus_check_sheet(
+                MagicMock(),
+                ORG,
+                "tpl-1",
+                TZ,
+                _check_viewer(permissions=("equipment_check.submit",)),
+            )
+            # Captured inside the block: patch.multiple with explicit mocks
+            # yields an empty dict, and outside the block the name is restored.
+            get_template = EquipmentCheckService.get_template
+        assert get_template.await_args.kwargs["visible_positions"] == {"driver"}
+
+    async def test_a_full_viewer_is_not_narrowed(self):
+        with _check_sheet(
+            _template([_compartment("c1", "Cab", items=[_item("Radio")])])
+        ):
+            from app.services.equipment_check_service import EquipmentCheckService
+
+            await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
+            get_template = EquipmentCheckService.get_template
+        assert get_template.await_args.kwargs["visible_positions"] is None
+
     async def test_an_empty_template_says_so(self):
-        db = _db(scalars=[_template([])])
-        doc = await build_apparatus_check_sheet(db, ORG, "tpl-1", TZ)
+        with _check_sheet(_template([])):
+            doc = await build_apparatus_check_sheet(
+                MagicMock(), ORG, "tpl-1", TZ, _check_viewer()
+            )
         assert any(
             "No items" in row.left for section in doc.sections for row in section.rows
         )
@@ -435,7 +563,7 @@ class TestPrinterSelection:
     async def test_an_unknown_document_is_rejected(self):
         svc = PrintDocumentService(MagicMock())
         with pytest.raises(ValueError, match="Unknown document"):
-            await svc.build(ORG, "payroll_run", "x")
+            await svc.build(ORG, "payroll_run", "x", _viewer())
 
 
 class TestDocumentRenderer:
@@ -525,7 +653,9 @@ class TestServiceBuild:
                 all=MagicMock(return_value=[(_assignment(), _user())])
             )
         )
-        doc = await PrintDocumentService(db).build(ORG, "shift_roster", "shift-1")
+        doc = await PrintDocumentService(db).build(
+            ORG, "shift_roster", "shift-1", _viewer()
+        )
         # 12:00 UTC is 07:00 in Chicago, 08:00 in New York — so this asserts
         # the org's own zone is used rather than the module default.
         assert "07:00" in doc.subtitle
@@ -537,7 +667,9 @@ class TestServiceBuild:
                 all=MagicMock(return_value=[(_assignment(), _user())])
             )
         )
-        data = await PrintDocumentService(db).preview(ORG, "shift_roster", "shift-1")
+        data = await PrintDocumentService(db).preview(
+            ORG, "shift_roster", "shift-1", _viewer()
+        )
         assert data["title"] == "Shift Roster"
         assert data["sections"][0]["rows"][0]["left"] == "Ada Rivera"
 
@@ -545,4 +677,4 @@ class TestServiceBuild:
         db = _db(scalars=[TZ, None])
         svc = PrintDocumentService(db)
         with pytest.raises(ValueError, match="Record not found"):
-            await svc.build(ORG, "shift_roster", "shift-1")
+            await svc.build(ORG, "shift_roster", "shift-1", _viewer())

@@ -27,14 +27,15 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
 from app.utils.scheduling_dates import DEFAULT_TIMEZONE
 
-# A builder resolves one record, org-scoped, into a finished document.
+# A builder resolves one record, org-scoped, into a finished document. The
+# calling user is passed because a module permission is not always the whole
+# access rule: a record can carry a section with its own, narrower one.
 DocumentBuilder = Callable[
-    [AsyncSession, str, str, str], Awaitable[Optional[PrintDocument]]
+    [AsyncSession, str, str, str, Any], Awaitable[Optional[PrintDocument]]
 ]
 
 # Officers first, then the driver, then everyone else. A roster is read at
@@ -90,8 +91,34 @@ def _person_name(user) -> str:
     return name or (user.username or "Member")
 
 
+def _may_see_pass_down(shift, assignments, viewer) -> bool:
+    """Whether *viewer* may read this shift's pass-down notes.
+
+    Mirrors ``_authorize_handoff_access`` in the scheduling endpoints, which is
+    the canonical rule: shift managers, the named shift officer, or somebody
+    actually rostered on the shift. Pass-downs are deliberately withheld from
+    the ordinary shift reads (``list_shifts`` and ``get_shift`` both pop the
+    field) and served only by the handoff endpoint, so a roster printed on a
+    flat ``scheduling.view`` grant must not become a way around that.
+    """
+    from app.api.dependencies import user_has_permission
+
+    if user_has_permission(viewer, "scheduling.manage"):
+        return True
+    if shift.shift_officer_id and str(shift.shift_officer_id) == str(viewer.id):
+        return True
+    return any(
+        str(assignment.user_id) == str(viewer.id)
+        and str(
+            getattr(assignment.assignment_status, "value", assignment.assignment_status)
+        )
+        in ("assigned", "confirmed")
+        for assignment, _user in assignments
+    )
+
+
 async def build_shift_roster(
-    db: AsyncSession, organization_id: str, record_id: str, tz_name: str
+    db: AsyncSession, organization_id: str, record_id: str, tz_name: str, viewer
 ) -> Optional[PrintDocument]:
     """The crew on one shift, in the order a roster is read."""
     from app.models.training import Shift, ShiftAssignment
@@ -201,8 +228,9 @@ async def build_shift_roster(
             DocumentSection(heading="Notes", rows=[DocumentRow(left=str(shift.notes))])
         )
     # The pass-down is the reason the previous crew wrote anything down, so it
-    # goes on the sheet the next crew is holding.
-    if shift.pass_down_notes:
+    # goes on the sheet the next crew is holding — but only for the crew it
+    # belongs to. See _may_see_pass_down.
+    if shift.pass_down_notes and _may_see_pass_down(shift, assignments, viewer):
         sections.append(
             DocumentSection(
                 heading="Pass-down",
@@ -235,22 +263,35 @@ def _item_expectation(item) -> Optional[str]:
 
 
 async def build_apparatus_check_sheet(
-    db: AsyncSession, organization_id: str, record_id: str, tz_name: str
+    db: AsyncSession, organization_id: str, record_id: str, tz_name: str, viewer
 ) -> Optional[PrintDocument]:
-    """A checklist template as a sheet somebody carries round the truck."""
-    from app.models.apparatus import CheckTemplateCompartment, EquipmentCheckTemplate
+    """A checklist template as a sheet somebody carries round the truck.
 
-    template = await db.scalar(
-        select(EquipmentCheckTemplate)
-        .where(
-            EquipmentCheckTemplate.id == str(record_id),
-            EquipmentCheckTemplate.organization_id == str(organization_id),
+    Read through :class:`EquipmentCheckService` rather than with a query of our
+    own, so this inherits the narrowing the module already applies: a member
+    who only holds ``equipment_check.submit`` sees the checklists for the
+    positions they actually check, and not the rest of the department's.
+    Querying the table directly would quietly hand them all of it.
+    """
+    from app.api.dependencies import _collect_user_permissions, _has_permission
+    from app.services.equipment_check_service import EquipmentCheckService
+
+    service = EquipmentCheckService(db)
+    permissions = _collect_user_permissions(viewer)
+    visible_positions = None
+    if not (
+        _has_permission("equipment_check.view", permissions)
+        or _has_permission("equipment_check.manage", permissions)
+    ):
+        visible_positions = await service.get_user_check_positions(
+            str(viewer.id), str(organization_id)
         )
-        .options(
-            selectinload(EquipmentCheckTemplate.compartments).selectinload(
-                CheckTemplateCompartment.items
-            )
-        )
+
+    template = await service.get_template(
+        str(record_id),
+        str(organization_id),
+        visible_positions=visible_positions,
+        submitter_user_id=str(viewer.id),
     )
     if template is None:
         return None
@@ -348,8 +389,15 @@ MODULE_DOCUMENTS: Dict[str, Tuple[Tuple[str, ...], DocumentBuilder]] = {
         ("scheduling.view", "scheduling.manage"),
         build_shift_roster,
     ),
+    # The equipment_check family, matching GET /templates/{id} — not
+    # apparatus.*, which is a rank default and would hand every member the
+    # department's whole checklist configuration.
     "apparatus_check_sheet": (
-        ("apparatus.view", "apparatus.manage"),
+        (
+            "equipment_check.view",
+            "equipment_check.submit",
+            "equipment_check.manage",
+        ),
         build_apparatus_check_sheet,
     ),
 }
@@ -377,7 +425,7 @@ class PrintDocumentService:
         self.db = db
 
     async def build(
-        self, organization_id, document: str, record_id: str
+        self, organization_id, document: str, record_id: str, viewer
     ) -> PrintDocument:
         entry = MODULE_DOCUMENTS.get(document)
         if entry is None:
@@ -385,15 +433,19 @@ class PrintDocumentService:
         _, builder = entry
 
         tz_name = await _org_timezone(self.db, str(organization_id))
-        built = await builder(self.db, str(organization_id), str(record_id), tz_name)
+        built = await builder(
+            self.db, str(organization_id), str(record_id), tz_name, viewer
+        )
         if built is None:
             raise ValueError("Record not found")
         return built
 
     async def preview(
-        self, organization_id, document: str, record_id: str
+        self, organization_id, document: str, record_id: str, viewer
     ) -> Dict[str, Any]:
-        return (await self.build(organization_id, document, record_id)).to_dict()
+        return (
+            await self.build(organization_id, document, record_id, viewer)
+        ).to_dict()
 
     async def _resolve_receipt_printer(self, organization_id, printer_id):
         """Pick the printer to send a document to.
@@ -439,6 +491,7 @@ class PrintDocumentService:
         organization_id,
         document: str,
         record_id: str,
+        viewer,
         printer_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build a document and send it to a receipt printer."""
@@ -446,7 +499,7 @@ class PrintDocumentService:
         from app.utils.escpos_renderer import render_escpos_document
         from app.utils.printer_transport import send_to_printer
 
-        built = await self.build(organization_id, document, record_id)
+        built = await self.build(organization_id, document, record_id, viewer)
         printer = await self._resolve_receipt_printer(organization_id, printer_id)
 
         payload = render_escpos_document(built, printer.label_format)

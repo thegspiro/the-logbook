@@ -214,7 +214,12 @@ Open a shift and click **Print roster**. The sheet carries:
   who is in charge, so that name is at the top rather than wherever the
   alphabet puts it;
 - a count against minimum staffing, so a short crew is visible at a glance;
-- the pass-down notes from the outgoing crew, and any shift notes.
+- any shift notes;
+- the pass-down notes from the outgoing crew — **only for the crew they belong
+  to**. Pass-downs are operationally sensitive, so the printed roster applies
+  the same rule as the handoff screen: they appear for `scheduling.manage`
+  holders, the named shift officer, and members actually rostered on the shift.
+  Everyone else gets the roster without that section.
 
 Someone who declined or was cancelled is **not** printed — the oncoming crew
 should not be looking for a person who is not coming. A seat that nobody has
@@ -225,7 +230,10 @@ Times are printed in the department's configured timezone, not UTC.
 
 ### Apparatus check sheet
 
-**Required permission:** `apparatus.view`
+**Required permission:** `equipment_check.view`, `equipment_check.submit`, or
+`equipment_check.manage` — the same permissions that open the template itself.
+A member who only holds `equipment_check.submit` gets the checklists for the
+positions they actually check, exactly as they do on screen.
 
 From **Equipment Check Templates**, click the printer icon on a template. The
 sheet is the checklist as something to carry round the truck:

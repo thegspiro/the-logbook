@@ -6,10 +6,14 @@ live records on request and printed on a receipt printer at the watch desk;
 nothing is stored.
 
 Each document declares the permissions accepted to print it (see
-``MODULE_DOCUMENTS``), and the check is the same one the label endpoints make:
-printing a roster reveals exactly what the scheduling screen already shows to
-the same person, so it is gated on that module's own permission rather than on
-anything to do with printers.
+``MODULE_DOCUMENTS``), gated on the same permission family the module's own
+read endpoint uses rather than on anything to do with printers.
+
+A module permission is not always the whole rule, though: a record can carry a
+section with a narrower one of its own — a shift's pass-down notes are for the
+incoming crew, not for everyone who can view the schedule. Builders therefore
+receive the calling user and apply those per-record rules themselves, so a
+printed document can never surface more than the screen would.
 """
 
 from typing import Optional
@@ -68,7 +72,7 @@ async def preview_station_document(
     _authorize_document(current_user, data.document)
     try:
         return await PrintDocumentService(db).preview(
-            current_user.organization_id, data.document, data.record_id
+            current_user.organization_id, data.document, data.record_id, current_user
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -87,6 +91,7 @@ async def print_station_document(
             current_user.organization_id,
             data.document,
             data.record_id,
+            current_user,
             data.printer_id,
         )
     except ValueError as e:
