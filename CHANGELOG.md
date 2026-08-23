@@ -7,6 +7,214 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
+
+**Fixed**
+
+- **The Web Push handlers are now concatenated into the generated service
+  worker at build time instead of being pulled in with `importScripts`.** That
+  call sat inside the generated worker's module factory, ahead of
+  `precacheAndRoute`, `skipWaiting` and `clientsClaim`. So one failed request
+  for one optional file did not degrade push — it aborted the factory, and the
+  freshly downloaded worker installed with no precache and no claim on the
+  page. The old worker kept control and kept serving its old precached
+  `index.html` indefinitely, which is exactly "the app doesn't update until I
+  clear the cache".
+- **Why Brave specifically:** Brave runs `importScripts` requests issued from a
+  service worker through its content blocker, including first-party ones and
+  including when Shields are down for the site
+  ([brave/brave-browser#35461](https://github.com/brave/brave-browser/issues/35461),
+  [#53810](https://github.com/brave/brave-browser/issues/53810)). Chrome makes
+  the same request without inspecting it, so the identical build updated fine
+  there and the failure looked browser-specific rather than structural.
+- `/push-sw.js` is still deployed, and still served `no-store`: workers
+  installed before this change keep importing it until their next successful
+  update, which the change itself makes possible. It is **excluded from the new
+  worker's precache** (`globIgnores`), because workbox fetches every precache
+  entry during `install` and rejects the install if one fails — leaving it in
+  the manifest would have moved the single point of failure from `importScripts`
+  to the install event rather than removing it, over a file the new worker no
+  longer uses.
+- **User settings now follow `?tab=` on an in-place navigation, not only on
+  mount, and mirror the selected section back into the URL.** The banner above
+  links to `/account?tab=app` from anywhere in the app, including from that page
+  with another section already open; `activeTab` was seeded from the query
+  string once at `useState` time, so such a link changed the URL and nothing
+  else. A forced password change or MFA enrollment still wins over the
+  parameter.
+
+**Added**
+
+- **An escalation ladder for a device that will not move onto a new build**
+  (`utils/updateRecovery.ts`). Detection already worked; applying was a plain
+  reload, and when that reload came back on the _old_ build nothing noticed —
+  the next check saw the same mismatch and reloaded again, indefinitely.
+  Attempts are now counted per target build: the first is the plain reload, the
+  second additionally deletes every Cache Storage entry first (the same thing
+  members were doing by hand), and after that the app stops reloading itself
+  and the banner switches to pointing at Settings → App → Force refresh.
+- The ladder deliberately stops short of unregistering the service worker: a
+  push subscription belongs to the registration and nothing re-subscribes
+  automatically, so silently dropping callout notifications to fix a stale
+  build is the wrong trade. It also refuses to purge while the server is
+  unreachable, which would leave the device with no working copy of the app,
+  and leaves that attempt uncounted so the purge is still owed once there is a
+  connection to do it safely.
+- `useAppUpdate` now clears the ladder whenever the running build matches the
+  server — the only proof an update actually took — so the next deployment
+  starts from a plain reload again.
+- `validate-pwa.mjs` asserts the push handlers are inlined and that no
+  `importScripts` of `push-sw.js` survives in `dist/sw.js`, and the build
+  plugin fails loudly rather than silently shipping an un-inlined worker.
+- `infrastructure/nginx/nginx.conf` gained the `location = /version.json`
+  `no-store` rule the container-level config already had.
+
+### Equipment checks: replacing expired stock retires units, not whole lots (2026-08-23)
+
+**Fixed**
+
+- **Swapping one box out of a multi-unit lot deleted every unit in it.** A lot
+  aboard is one row carrying a quantity, so a bracket holding four boxes of one
+  lot is a single row of four. Replacing one box removed the row: the three
+  boxes still in the bag vanished from the apparatus count, all four were
+  recorded as disposed of, and the position read three short of a par it
+  actually met — while ready stock had been drawn down by one and one fresh
+  unit added. The retirement now works in units, oldest row first, and removes
+  a row only once it is emptied. Two expired boxes remain two exchanges.
+- **An in-date lot could be retired under an expired-stock disposition.** The
+  check form offers a replacement only on a position reading expired, but that
+  is a property of the screen rather than of the API, and the endpoint now
+  admits ordinary check submitters. The service verifies the named lot is
+  actually expired before retiring it, so the disposition cannot file a false
+  account of a unit that left the truck.
+- **A submitter could bind a checklist position to any catalog item.** The
+  first swap onto an unlinked position establishes its inventory link
+  permanently, and that decision has its own `equipment_check.manage` screen.
+  Opening the swap endpoint to `equipment_check.submit` (so crews can replace
+  expired stock themselves, rather than hunting for an officer while the item
+  stays force-failed) made the first-swap side effect a way around that review.
+  Submitters may now swap onto positions already linked and are refused on ones
+  that are not; officers still create the link. This narrows the grant recorded
+  against EC-3, which was raised because the endpoint had carried no permission
+  at all.
+- **Staff-entered attendance advanced a pipeline off a meeting it never
+  recorded.** Matching an existing prospect on a staff check-in set
+  `EventExternalAttendee.prospect_id` and nothing else, so the applicant's
+  linked-events section and the by-event applicant filter — both of which read
+  `prospect_event_links` — went on reporting the prospect as never having
+  attended. Check-in now writes the same link the kiosk path does.
+
+### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
+
+**Fixed**
+
+- **One escaped mock made the backend suite look flaky for a day.**
+  `TestConcurrentShiftTemplateSubmission` ran two `submit_check` coroutines
+  through `asyncio.gather`, and each entered the same
+  `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+  `unittest.mock.patch` records whatever it finds as "the original", so the
+  second enter saved the first one's mock and its exit reinstalled it — leaving
+  an `AsyncMock` on the module for the rest of the session. Every later test
+  reaching `if ref.full is not None` died on it, and because `pytest-randomly`
+  reshuffles module order per run, _which_ tests those were changed run to run.
+  The same commit passed and failed on alternate CI runs, and the failure always
+  surfaced in a file unrelated to the one that caused it.
+- An autouse guard now records every module- and class-level target a patch
+  touches and checks after each test that it still holds a real value. A leak
+  fails the test that caused it, names the attribute, explains the concurrency
+  trap, and restores the original so the rest of the run stays meaningful.
+  Instance targets are ignored: they cannot outlive their test.
+
+### CI: a green PR took 28 minutes to do 39 minutes of work, almost all of it queueing (2026-08-23)
+
+**Changed**
+
+- **A green PR run went from 28m28s to 6–10 minutes.** Almost none of that gap
+  was test speed. Measured on run 32650130001: `Backend Lint` waited 3m40s to
+  run 1m16s, `Backend Unit Tests` waited 5m13s to run 3m52s, and
+  `Integration MySQL` waited **14m37s** to run 4m39s. The three-hop chain
+  (lint → unit → db) put 23m30s of pure queueing on a critical path holding
+  9m47s of work, because every `needs:` edge is a _re-queue_.
+- **The `needs:` edges are gone** from `backend-test-integration`,
+  `backend-test-contract`, `docker-build` and `frontend-e2e`; every job now
+  starts in the first wave. They existed to avoid spending a database runner
+  when the cheap checks were already red — but this repository is public, so
+  runner minutes are free (a run's billable total is literally 0), and the
+  guard was spending the one resource that is scarce. `ci-success` still
+  enforces that every job ran, so this removed serialization, not gating.
+- **`frontend-lint`, `frontend-security` and `frontend-build` are now one
+  `frontend-checks` job.** Each paid the same checkout + setup-node + npm ci to
+  do 108s, 18s and 27s of work, and waited 3m29s, 2m44s and 8m47s in the queue
+  to do it. This also removed a real duplication: `npm run build` _is_
+  `tsc-native.mjs && vite build`, so the separate `npm run typecheck` step was
+  a second full compile of the same tree.
+- **Every commit on `main` now gets its own concurrency group**, in `ci.yml` as
+  well as `secret-scan` and `supply-chain`. `cancel-in-progress: false` does
+  not guarantee a run per commit: GitHub keeps at most one running and one
+  _pending_ run per group, so when three or more main runs overlap each new
+  arrival evicts the pending one. `8c61c948` (#1709) merged and had its run
+  evicted 17 seconds later by the next merge; it sits on `main` with no CI
+  record at all. The cost is deliberate — a merge train of N commits now runs
+  N full matrices concurrently rather than collapsing to two — and if PR
+  latency degrades the fix is a cheaper main run, not a shared group.
+
+**Added**
+
+- **`scripts/check_ci_gate.py`, run as a step of `ci-success` itself.**
+  `ci-success` is the single check branch protection should require, and it
+  only gates a job named in its `needs:` list — so a job added to `ci.yml`
+  without a matching entry runs, reports its own status, and is required by
+  nothing. Neither half looks wrong in review. The checker also rejects a gate
+  whose `if:` is not genuinely unconditional: `always() && needs.x.result ==
+'...'` and `!always()` both contain the substring and both leave the job
+  skippable. It runs _inside_ the gate on purpose — anywhere else, dropping a
+  job from `needs:` detaches the checker from what it validates.
+  `scripts/test_check_ci_gate.py` covers the logic (12 cases).
+
+**Notes**
+
+- The MariaDB leg of the contract matrix was briefly removed and **restored**.
+  Response shapes come from Pydantic serializers and cannot vary by engine —
+  true of the _assertions_, and beside the point about the _execution_:
+  `case.call_and_validate()` issues a real request and the test asserts
+  `status_code < 500`, making that suite broad smoke coverage of the SQL behind
+  every `/api/public/` route. Nothing else covers those paths on MariaDB — the
+  integration matrix excludes the module by its `slow` marker, and the only
+  other test touching `get_form_by_slug` has no `integration` marker and so
+  runs in the database-less unit job.
+
+### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
+
+**Added**
+
+- **Three new dashboard aggregates, each authorized per module and per
+  permission.** `GET /dashboard/widgets` (with `period` of `month`,
+  `quarter`, `year` or `rolling_30`), `GET /dashboard/operations`, and
+  `GET /dashboard/asset-widgets`. Every section is gated independently, and
+  **a section the caller cannot see is omitted rather than emptied** — an
+  absent section is deliberately indistinguishable from one with no data, so
+  the dashboard cannot be used to probe for access.
+- `settings.manage` is **intentionally not financial access**: organization
+  monetary totals require `finance.manage`, fundraising totals require
+  `fundraising.view` plus the `grants` module, and outreach totals require
+  `events.manage`.
+- Asset widgets return **counts and fixed links only**. Managing inventory
+  does not reveal apparatus or facilities, and protected facility fields
+  (codes, accounts, budgets, leases) cannot leak through a general dashboard
+  endpoint.
+- Training-officer widget visibility is a per-user choice stored in
+  `localStorage` under `training-officer-dashboard.widgets.v1`, kept separate
+  from the member-facing main dashboard so an officer's layout does not
+  follow them onto a shared screen.
+
+**Known limitation**
+
+- `widgetRegistry.ts` declares eight widgets but only `department-setup` is
+  read by any screen, and five of the eight `aggregatePath` values have no
+  backend endpoint. Nothing fetches them today, so nothing is broken — but
+  the file reads as authoritative. Tracked as **DASH-1** in
+  [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+
 ### Training Admin: cover the tab accessibility behaviour (2026-08-23)
 
 **Added**
@@ -20,6 +228,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and for activating a section from the keyboard and restoring URL state on
   browser back.
 
+### Equipment checks: one submission per shift, enforced by the database (2026-08-22)
+
+**Fixed**
+
+- **A shift could carry two equipment checks for the same template.** Nothing
+  stopped a second submission — a retried request, a double tap, or an
+  offline queue replaying after reconnect all created a fresh check, and the
+  apparatus then had two conflicting records of the same inspection.
+  `uq_shift_equipment_check_shift_template` makes one check per
+  `(shift_id, template_id)` a schema rule rather than a UI convention.
+- **A queued offline submission could not be retried safely.** The client now
+  mints a `client_submission_id` **before the request leaves the phone**, and
+  `uq_shift_equipment_check_client_submission` resolves a retry to the row
+  the first attempt created. A crew that completes a check in a dead spot and
+  reconnects at the station gets one check, not one per retry.
+- Queued equipment-check **photo** ids were repaired in the same pass — a
+  retried photo could previously attach to the wrong check.
+
+**Added**
+
+- **An idempotency ledger for bulk item creation.**
+  `equipment_check_bulk_requests` is keyed on
+  `(compartment_id, idempotency_key)` and stores a `payload_hash` alongside
+  the `item_ids` the original request created. A retry with the same key and
+  the same payload replays those ids; **the same key with a different payload
+  is rejected** rather than quietly creating a second set of items.
+- Equipment checks validate against their template, and check timing is
+  enforced server-side — the client no longer supplies its own timing value.
+- Compartment parents are cycle-checked, so a compartment can no longer be
+  made its own ancestor.
+- `check_items.compartment_path` widened from `VARCHAR(200)` to `TEXT`, which
+  is what allows full nested storage paths in item snapshots.
+
+**Changed**
+
+- Standalone (non-shift) equipment checks now require `equipment_check.manage`.
+- Expired-equipment failures are **derived** rather than stored, so a lot that
+  expires after a check was recorded is reflected without rewriting history.
+- Shift lot details are inventory-owned rather than duplicated onto the check.
+
+**Migration note**
+
+- `a17c4e9d2b61` keeps one canonical row per `(shift_id, template_id)`,
+  preferring a completed row and then the earliest check. Historical
+  duplicates are **detached** (their `shift_id` is nulled and an explanatory
+  note appended), not deleted — their item snapshots are retained, because a
+  safety record should not disappear to satisfy a new constraint. The
+  downgrade drops the constraints but cannot re-associate detached rows.
+
 ### Security documentation: dynamic testing guide (2026-08-22)
 
 **Documentation**
@@ -28,6 +285,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boundaries and gives authorized staging testers prioritized checks for
   authentication, tenant isolation, public tokens, uploads and exports, SSRF,
   webhooks, background jobs, and high-impact business workflows.
+
+### Governance: departments can propose and publish their own legal notices (2026-08-20)
+
+**Added**
+
+- **Governance → Legal Documents (`/governance/legal`).** The secretary and
+  department leaders can read the wording published on `/privacy` and
+  `/terms` and propose alternatives that fit local rules.
+- **Proposing and publishing are separate grants.** `legal.propose` drafts;
+  `legal.publish` makes a draft public. A department that wants two pairs of
+  eyes on its privacy notice gets that from the permission model rather than
+  from procedure.
+- New table `legal_document_revisions` with `document_type`
+  (`privacy_policy` | `terms_of_service`) and `status` (`draft` |
+  `published` | `archived`). At most one `published` revision per document
+  type per organization.
+- `change_note` is **required at the schema layer**. The whole point of
+  proposing rather than editing in place is that somebody later can see the
+  bylaw, SOP, statute or counsel note behind the wording.
+- Endpoints: `GET /legal-documents`, `POST /legal-documents/revisions`,
+  `PUT`/`DELETE …/revisions/{id}`, `POST …/revisions/{id}/publish`,
+  `POST /legal-documents/{document_type}/revert-to-default`.
+
+**Notes**
+
+- **The live text is not in the new table.** It stays in
+  `organizations.settings["legal"]`, because the anonymous public endpoint
+  must read it with no join and no auth. The table is the governance record
+  around it — who proposed which wording, why, who published it, and what
+  the page said before.
+- Archived revisions are **kept, never deleted**: the question a records
+  request actually asks is what the notice said on a given date.
+- `created_by` and `published_by` are `ON DELETE SET NULL` — the wording
+  published on a date is a department record and outlives the account that
+  drafted it.
+- `effective_date` is free text and is never parsed. Departments date
+  policies however their records officer does ("March 3, 2026", "FY26-Q1").
+  Clearing it sends an explicit `null` (`blankToNull`), so the clear
+  persists instead of being dropped from an `exclude_unset` payload.
+
+### Scheduling: swap and time-off requests are paginated (2026-08-20)
+
+**Changed — breaking API response shape**
+
+- `GET /scheduling/swap-requests` and `GET /scheduling/time-off` now return
+  `{ items, total, skip, limit }`. **They previously returned a bare array.**
+  Any integration, export or script that reads either endpoint as a list must
+  be updated — indexing the response directly will now yield the object's
+  keys rather than requests.
+- Schemas: `ShiftSwapRequestsPage`, `ShiftTimeOffRequestsPage`.
+
+### Scheduling: a requester cannot approve their own request (2026-08-20)
+
+**Fixed**
+
+- **Separation of duties on swap and time-off review.** A member holding
+  `scheduling.manage` could review their own swap or time-off request. A
+  permission grant is not a second person, and on a small department the
+  officer requesting the swap is frequently the one who can approve it. Both
+  review paths now reject a self-review outright ("Requesters cannot review
+  their own swap requests" / "…time-off requests").
+- Scheduling requests are restricted to their participants, so a request is
+  no longer readable by members who are not party to it.
+
+### Events: a Recruitment event type, and prospects tied to the event that brought them (2026-08-20)
+
+**Added**
+
+- **`recruitment` event type** for open houses and recruitment nights.
+  Departments previously filed these under `public_education` or `other`, so
+  a membership-pipeline stage could not point at "the next recruitment event"
+  without also matching every fire-safety demo on the calendar.
+- New recruitment events **default to guest sign-in**, because a recruitment
+  event whose attendees never reach the pipeline has not recruited anybody.
+- The event page shows the applicants an event brought in, and the pipeline
+  board can be filtered by the event applicants came from.
+
+**Notes**
+
+- `recruitment` is appended **after** `other` rather than placed beside the
+  other outward-facing types where it would read better. MySQL stores an
+  `ENUM` as the member's **ordinal**, so inserting mid-list would reassign
+  the type of every event already stored — a row holding ordinal 6
+  (`ceremony`) would come back as whatever now sits sixth.
+
+### Exports: every CSV goes through one escaper, and three holes in it are closed (2026-08-20)
+
+**Fixed**
+
+- **Two exporters escaped nothing.** The event attendance export
+  quote-escaped only the notes column, so a member named `Smith, John`
+  shifted every column after it; the reports module quoted values without
+  neutralizing them. The events page had two export paths and only one had
+  been converted, so bulk "Export CSV" still built its rows by hand.
+- Consolidating onto the single `utils/csv.ts` owner then exposed three
+  defects in the surviving implementation:
+  - `'=+@-'.includes('')` is `true`, so **every empty or whitespace-only cell
+    was prefixed with an apostrophe** — a stray quote in every export
+    containing a blank.
+  - One copy skipped whitespace before testing and the other did not, so each
+    caught a leading formula the other missed. Both rules now apply: a
+    leading tab or CR triggers on the raw first character, `=+@-` on the
+    first non-whitespace one.
+  - Cells were quoted unconditionally. Minimal quoting is what the
+    member-import error report was written for — a person corrects that file
+    and re-uploads it.
+
+**Security**
+
+- Vendor website links are validated by scheme, closing a stored-XSS path
+  where a `javascript:` href could be saved and rendered.
+- "Copy error details" redacts URLs, so a token embedded in a URL no longer
+  travels to the clipboard and into a support ticket.
+- Sentry and Loguru sinks hardened; sensitive exception diagnostics disabled
+  in production.
+- In-flight request deduplication is isolated per session, so one session can
+  no longer receive another's in-flight response.
+- Public election ballot writes are serialized.
+
+### Migrations: three revision-id collisions were silently skipping upgrades (2026-08-20)
+
+**Fixed**
+
+- **A valid Alembic stamp for a migration that never ran.** Three migrations
+  were released under one revision id and later renumbered; the original id
+  now belongs to a different migration. A database upgraded during those
+  windows is therefore treated as having run work it never ran, and the stamp
+  itself cannot distinguish the two histories.
+- The fix repeats the idempotent work downstream, guarded by schema
+  inspection — a **no-op on a healthy database**, and a repair on an affected
+  one:
+  - `7ed8593bc904` — storage-area barcode backfill and its series counter.
+  - `5c2f6a8b1d34` — creates `push_subscriptions` where it is absent.
+  - `9f6d1c2a4b70` — makes `documents.file_name` / `file_path` nullable on
+    databases that had already applied the amended revision.
 
 ### Navigation: browser tabs now identify the current page (2026-08-20)
 
@@ -77,6 +469,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer rendered and floating the buttons above a band of dead space. Page-level
   action bars sit outside those subtrees and keep the allowance, because the bar
   is still on screen for them.
+
+### Scheduling: crew seat lists are stored in one shape (2026-08-19)
+
+**Fixed**
+
+- **The templates screen crashed with React error #31.** `shifts.positions`,
+  `shift_templates.positions` and `basic_apparatus.positions` are untyped
+  JSON that three writers filled three different ways: bare strings from
+  onboarding and the pre-2026-08 UI, `{"position", "required"}` objects from
+  the current template form, and — on templates only — an event-metadata dict
+  that is not a seat list at all. Every reader had to tell those apart, and
+  the templates screen did not: it rendered an entry straight into a span and
+  took the page down. The frontend types said `string[]`; the column had held
+  objects for months.
+- Seat lists are now `[{"position": str, "required": bool}]`, one entry per
+  seat, normalized on **every write path**
+  (`app/utils/positions.normalize_stored_positions`) and at the API read
+  boundary. Migration `1eeb053d59b7` settles the rows already stored.
+
+**Notes**
+
+- **`1eeb053d59b7` is not reversible.** It expands a legacy `count` into that
+  many seats, which is the point: collapsing it would cut a three-firefighter
+  template to one, permanently.
+- The four normalizers are deliberate and must not be collapsed into one —
+  see [pitfall #20](CLAUDE.md). Saving the _display_ normalizer's output
+  turns an event template's resources into a flat seat list and loses the
+  structure the event screens read.
 
 ### CI: an unbounded `apt-get` was silently skipping the backend suite (2026-08-19)
 
@@ -9827,7 +10247,7 @@ Large-page components decomposed into focused, maintainable sub-components:
 | Reminder for shift already started | Skipped — only shifts starting within lookahead window |
 | All positions filled via bulk assign | "Fill All Open" button hidden |
 | Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Notes cleared to empty string | Converted to `undefined` via `\|\|` to prevent 422 |
 | Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)

@@ -1652,6 +1652,8 @@ const Dashboard: React.FC = () => {
                 ))}
             </div>
 
+            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
+
             {canViewOrganization && setupProgress && (
               <OrganizationSetupWidget
                 completed={setupProgress.completed}
@@ -1659,8 +1661,6 @@ const Dashboard: React.FC = () => {
                 onOpen={() => void navigate('/setup')}
               />
             )}
-
-            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
 
             <AssetWidgetRegistry widgets={assetWidgets} />
           </div>

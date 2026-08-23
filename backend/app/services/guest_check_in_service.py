@@ -187,7 +187,7 @@ class GuestCheckInService:
                 organization_id, email
             )
             if existing is not None:
-                await self._link_prospect_to_event(existing, event)
+                await self.link_prospect_to_event(existing, event)
                 return existing, False
 
             prospect = await pipeline_service.create_prospect(
@@ -207,7 +207,7 @@ class GuestCheckInService:
                     },
                 },
             )
-            await self._link_prospect_to_event(prospect, event)
+            await self.link_prospect_to_event(prospect, event)
             return prospect, True
         except Exception as exc:
             logger.error(
@@ -217,7 +217,7 @@ class GuestCheckInService:
             )
             return None, False
 
-    async def _link_prospect_to_event(
+    async def link_prospect_to_event(
         self, prospect: ProspectiveMember, event: Event
     ) -> None:
         """Attach the prospect to the event, if not already attached.
@@ -225,6 +225,11 @@ class GuestCheckInService:
         ``prospect_event_links`` carries a unique (prospect, event) index, so a
         second sign-in must find the existing row rather than insert a clashing
         one.
+
+        Public because staff-entered attendance links a prospect too, and the
+        link is what the applicant's linked-events section and the by-event
+        applicant filter both read — setting ``prospect_id`` alone advanced the
+        pipeline off an attendance that then appeared nowhere.
         """
         existing = await self.db.execute(
             select(ProspectEventLink).where(

@@ -93,6 +93,55 @@ member-facing conveniences.
 
 ---
 
+## Requests: Pagination and Separation of Duties (2026-08-20)
+
+### The Requests tab is paginated
+
+`GET /scheduling/swap-requests` and `GET /scheduling/time-off` now return
+`{ items, total, skip, limit }` instead of a bare array. **This is a breaking
+change for anything reading those endpoints directly** — see
+[API Reference](API-Reference#breaking-response-shape-change-2026-08-20).
+
+A department that had accumulated a season's worth of swap history was loading
+all of it to render one screen; the Requests tab now pages through it.
+
+### A requester cannot approve their own request
+
+Holding `scheduling.manage` no longer lets a member review a request they are
+**party to**. Both review paths reject it outright:
+
+> Requesters cannot review their own swap requests
+> Target participants cannot manager-review swap requests
+> Requesters cannot review their own time-off requests
+
+Note that a swap has **two** blocked parties, not one: the member who raised
+it and the member it targets. Manager approval stays distinct from participant
+acceptance — the person being asked to take the shift cannot also be the
+person who signs off on it.
+
+This matters most on exactly the departments where it is least convenient. On
+a small combination department the officer requesting Saturday off is
+frequently the same person who holds the permission to approve it — and a
+permission grant is not a second person. The rule is enforced in the service
+layer, so it applies however the request is reached.
+
+Scheduling requests are additionally **restricted to their participants**: a
+swap request is no longer readable by members who are not party to it.
+
+### Edge cases
+
+- The rule keys on the **participants**, not the shift's owner. An officer may
+  still review a swap between two other members on their own shift.
+- **A rejected self-review leaves the request completely pending.** The check
+  runs before any field is changed or any assignment cancelled, so a blocked
+  attempt does not half-apply and does not consume the request — somebody else
+  can still action it.
+- The swap check runs inside the row lock (`with_for_update`), so two
+  reviewers racing cannot slip a self-approval through between the read and
+  the write.
+- Pagination defaults apply to the API, not to exports: an export still covers
+  the full filtered set.
+
 ## Call Volume Without an RMS (2026-08-18 → 08-19)
 
 A department that does not run incident reporting still has to answer _"how
@@ -292,7 +341,7 @@ days, so the platoons tile to exactly one on-duty platoon per day:
 > hold `scheduling.manage` will now get a permission error.** Grant it to the
 > roles that need the roster.
 
-### Shift Roster Visibility *(2026-08-17)*
+### Shift Roster Visibility _(2026-08-17)_
 
 The shift detail view's hold-over roster is derived from **who is on approved
 leave**. `GET /scheduling/shifts/{id}` now returns `platoon_roster` only to
@@ -301,7 +350,7 @@ own **shift officer**. Everyone else receives an empty roster — it is not
 fetched at all — while every other detail on the shift (time, apparatus,
 assignments, check-in state) remains visible to any member.
 
-### Generation and Pattern Fixes *(2026-08-17)*
+### Generation and Pattern Fixes _(2026-08-17)_
 
 - **Soft-deleted and anonymized members are no longer staffed onto generated
   platoon shifts.** Generation filtered on the member's `status` column, which
@@ -863,7 +912,7 @@ Powered by `GET /api/v1/training/module-config/skill-names`.
 ### Bug Fixes (2026-04-07)
 
 | Issue                                        | Fix                                                   |
-| -------------------------------------------- | ----------------------------------------------------- |
+| -------------------------------------------- | ----------------------------------------------------- | --------------------- | ------------------------------------------------- |
 | Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` |
 | `??` → `                                     |                                                       | ` for optional fields | 35 instances in prospective-members and apparatus |
 | `shift_date` type mismatch                   | Changed from optional to required in TS types         |

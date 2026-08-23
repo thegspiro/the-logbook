@@ -2057,3 +2057,88 @@ look there.
 ## August 12–14, 2026 update
 
 The station-board, calendar-year admin-hours summary, related-notification cleanup, and operator upgrade notes are covered in [the August 12–14 release lesson](./19-august-2026-release-changes.md#dashboard-and-admin-hours).
+
+## August 19–23, 2026 update — Governance → Legal Documents
+
+**Where:** Governance → **Legal Documents** (`/governance/legal`)
+**Who:** `legal.propose` (draft), `legal.publish` (publish), or
+`settings.manage` (both)
+
+Your `/privacy` and `/terms` pages no longer have to carry the platform's
+wording. A department can write its own — which matters because
+record-retention rules, volunteer versus career status, and state law all
+differ, and boilerplate written for the platform does not describe what your
+department actually does with member data.
+
+Full walkthrough and edge cases:
+[release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice).
+
+> **[SCREENSHOT NEEDED — Governance → Legal Documents landing view with both
+> > document cards (Privacy Notice, Terms of Service), one showing a published
+> > revision and one showing a draft, so the status difference is visible.]**
+
+### Drafting and publishing are separate permissions
+
+| You hold          | You can                                              | You cannot  |
+| ----------------- | ---------------------------------------------------- | ----------- |
+| `legal.propose`   | Read both notices; draft, edit and delete a draft    | **Publish** |
+| `legal.publish`   | All of the above, plus publish and revert to default | —           |
+| `settings.manage` | Reaches the screen and can publish                   | —           |
+
+This is how a department gets "the secretary drafts, an officer approves"
+without running it as an off-system procedure. A department that does not want
+the ceremony gives one person `settings.manage`.
+
+> **[SCREENSHOT NEEDED — the revision editor captured under an account holding
+> > only `legal.propose`, so the Publish control is visibly absent. That absence
+> > is the subject of the shot; caption it explicitly.]**
+
+### What gets recorded
+
+- **A change note is required** on every revision — the bylaw, SOP, statute or
+  counsel note behind the wording. The point of proposing a revision rather
+  than editing the page in place is that somebody in two years can see why.
+- **"Last updated" is free text** and is never interpreted. `March 3, 2026`,
+  `FY26-Q1` and `Adopted at the 3/3/26 business meeting` all work and display
+  exactly as typed. Clearing it genuinely clears it.
+- **Old versions are archived, never deleted.** A records request does not ask
+  what your notice says — it asks what it said on the day the member joined.
+- **Removing the member who wrote a revision does not remove the revision.**
+  Their name is cleared; the wording stays, because it is a department record.
+
+### Edge cases
+
+- A **draft is not public**; nothing changes on the live pages until somebody
+  publishes.
+- **One version is live at a time** per document.
+- **Revert to default** restores the platform wording and needs
+  `legal.publish`.
+- **There is no approval queue.** Saving a draft notifies nobody. Review before
+  publishing is a process you run, not a workflow the module enforces.
+
+> **[SCREENSHOT NEEDED — the revision history for one document showing a
+> > published revision plus at least one archived revision, each with its change
+> > note and the publishing member. Seed three revisions so it reads as a
+> > history.]**
+
+## August 19–23, 2026 update — exports and dashboards
+
+**Re-export any attendance file you kept.** The event attendance export
+mis-escaped commas: a member recorded as `Smith, John` split across two cells
+and pushed every following column sideways. Every export in the product now
+goes through one escaper, blank cells no longer pick up a stray apostrophe,
+and spreadsheet formula characters are neutralized consistently.
+
+**New dashboard sections** are gated by both module and permission, and a
+section you cannot see is **omitted rather than shown empty** — so the
+dashboard cannot be used to work out what exists elsewhere in the department.
+
+Worth knowing when assigning roles: **`settings.manage` is deliberately not
+financial access.** Money totals need `finance.manage`, fundraising needs
+`fundraising.view`, outreach needs `events.manage`. Asset widgets show counts
+and links only — never facility codes, accounts, budgets or leases.
+
+> **[SCREENSHOT NEEDED — the organization dashboard under two accounts side by
+> > side: one holding `finance.manage` and one without it, showing the finance
+> > section present in the first and absent (not empty) in the second. The
+> > comparison is the point.]**

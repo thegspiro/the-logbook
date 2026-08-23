@@ -32,6 +32,13 @@ function subHeaderName(child: CheckTemplateCompartment, depth: number): string {
  * its own items first; every descendant is appended below a synthetic header
  * item that names it (with its container type and depth), so no items are ever
  * dropped regardless of nesting depth.
+ *
+ * A sealed container is the exception: it becomes its own card rather than
+ * being merged into its parent. The seal is a claim about one bag, and the
+ * gesture that clears its contents has to act on that bag alone — merged into
+ * a parent it would either clear the parent's own items too or have nothing to
+ * attach itself to. Its card is named with its full storage path so two bags
+ * with the same name in different cabinets stay distinguishable.
  */
 export function flattenCompartmentTree(raw: CheckTemplateCompartment[]): FlattenedCompartments {
   const childrenByParent = new Map<string, CheckTemplateCompartment[]>();
@@ -82,13 +89,43 @@ export function flattenCompartmentTree(raw: CheckTemplateCompartment[]): Flatten
     }
   };
 
-  const compartments: CheckTemplateCompartment[] = topLevel.map((comp) => {
+  // Sealed descendants are pulled out of their parent and emitted as their own
+  // cards, immediately after it, so the seal has a group of its own to clear.
+  const promoted = new Map<string, CheckTemplateCompartment[]>();
+
+  const collectSealed = (comp: CheckTemplateCompartment, parentPath: string, rootId: string) => {
+    for (const child of childrenByParent.get(comp.id) ?? []) {
+      const childPath = `${parentPath} › ${child.name}`;
+      if (child.isSealed && !seen.has(child.id)) {
+        seen.add(child.id);
+        // Its own sealed descendants come out first, for the same reason it
+        // did: a pouch sealed inside this bag is a separate claim. An outer
+        // seal found broken says nothing about an inner one still intact, and
+        // merged in here that inner seal would have no card to be recorded on.
+        collectSealed(child, childPath, rootId);
+        const ownItems: CheckTemplateItem[] = [...child.items];
+        for (const item of child.items) pathById.set(item.id, childPath);
+        collectDescendants(child, childPath, 1, ownItems);
+        promoted.set(rootId, [...(promoted.get(rootId) ?? []), { ...child, name: childPath, items: ownItems }]);
+        continue;
+      }
+      collectSealed(child, childPath, rootId);
+    }
+  };
+
+  const compartments: CheckTemplateCompartment[] = [];
+  for (const comp of topLevel) {
     seen.add(comp.id);
+    // Sealed children first: collectDescendants below skips anything already
+    // seen, which is what keeps a promoted bag out of its parent's list.
+    collectSealed(comp, comp.name, comp.id);
+
     const mergedItems: CheckTemplateItem[] = [...comp.items];
     for (const item of comp.items) pathById.set(item.id, comp.name);
     collectDescendants(comp, comp.name, 1, mergedItems);
-    return { ...comp, items: mergedItems };
-  });
+    compartments.push({ ...comp, items: mergedItems });
+    compartments.push(...(promoted.get(comp.id) ?? []));
+  }
 
   return { compartments, storagePathByItemId: pathById };
 }

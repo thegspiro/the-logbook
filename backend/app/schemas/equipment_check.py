@@ -6,9 +6,10 @@ and shift equipment check submissions.
 """
 
 from datetime import date, datetime
+from enum import Enum
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -186,6 +187,7 @@ class CheckTemplateCompartmentCreate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: bool = False
     container_type: str = Field("compartment", max_length=50)
+    is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
 
@@ -199,6 +201,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: Optional[bool] = None
     container_type: Optional[str] = Field(None, max_length=50)
+    is_sealed: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
 
 
@@ -219,6 +222,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     image_url: Optional[str] = None
     is_header: bool = False
     container_type: str = "compartment"
+    is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
@@ -239,6 +243,14 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
         if v is None:
             return "compartment"
         return str(v)
+
+    @field_validator("is_sealed", mode="before")
+    @classmethod
+    def coerce_is_sealed(cls, v: object) -> bool:
+        """Rows created before the is_sealed column was added store NULL."""
+        if v is None:
+            return False
+        return bool(v)
 
 
 # ============================================
@@ -345,11 +357,30 @@ class CheckItemResultSubmit(BaseModel):
     notes: Optional[str] = None
 
 
+class CheckSealSubmit(BaseModel):
+    """The tamper seal a crew read on one sealed container.
+
+    Recorded whether or not the seal cleared anything: a broken seal is the
+    more important of the two records, because it is what says the contents
+    were counted by hand and why.
+    """
+
+    template_compartment_id: str
+    # Nested containers are submitted as their full storage path, so the
+    # snapshot is unbounded for the same reason item snapshots are.
+    compartment_name: str
+    seal_number: Optional[str] = Field(None, max_length=100)
+    intact: bool = True
+    cleared_item_count: int = Field(0, ge=0)
+    notes: Optional[str] = None
+
+
 class ShiftEquipmentCheckCreate(BaseModel):
     """Schema for submitting an equipment check tied to a shift."""
 
     template_id: str
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
+    seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
     client_submission_id: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -361,6 +392,7 @@ class StandaloneEquipmentCheckCreate(BaseModel):
     template_id: str
     apparatus_id: Optional[str] = None
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
+    seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 
@@ -369,8 +401,23 @@ class EquipmentCheckCompleteItems(BaseModel):
     """Schema for completing remaining items on an incomplete check."""
 
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
+    seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
+
+
+class LastSealRecord(BaseModel):
+    """What the previous crew read on one sealed container.
+
+    The form compares the number in front of the crew against this one: equal
+    means nothing was opened since, which is what the shortcut rests on.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    seal_number: Optional[str] = None
+    intact: bool = True
+    checked_at: Optional[datetime] = None
 
 
 class ShiftEquipmentCheckItemResponse(UTCResponseBase):
@@ -870,12 +917,45 @@ class ItemDeployment(BaseModel):
     is_expired: bool = False
 
 
+class ExpiredStockDisposition(str, Enum):
+    """What became of a unit taken off the apparatus for being expired.
+
+    Departments do not handle this the same way: some destroy the unit on the
+    spot, some hand it straight back to the supplying pharmacy, and some pull
+    it off the truck to be exchanged by somebody else days later. All three
+    remove it from the apparatus — which is the part the record must reflect
+    either way — so the disposition is recorded rather than assumed, and
+    ``AWAITING_EXCHANGE`` is what makes the third case findable afterwards.
+    """
+
+    DISCARDED = "discarded"
+    RETURNED_FOR_EXCHANGE = "returned_for_exchange"
+    AWAITING_EXCHANGE = "awaiting_exchange"
+
+
 class LotSwapRequest(BaseModel):
     """Move units from a ready-stock lot onto the apparatus."""
 
     inventory_lot_id: str
     # Defaults to one, which is the whole story for a single-unit bracket.
     quantity: int = Field(1, ge=1)
+    # A disposition is what separates a replacement from a top-up: it says
+    # units are coming *off*, and where they went. A two-of-four restock sends
+    # none and retires nothing, so a swap never removes stock by inference.
+    #
+    # ``replaced_deployed_lot_id`` narrows a replacement to one lot, which is
+    # what a position carrying several boxes needs. A position whose units were
+    # never lot-tracked has no id to send — it is one undifferentiated blob
+    # with a single date — so the disposition stands alone and retires whatever
+    # of it is expired.
+    replaced_deployed_lot_id: Optional[str] = None
+    disposition: Optional[ExpiredStockDisposition] = None
+
+    @model_validator(mode="after")
+    def _require_disposition_for_a_replacement(self) -> "LotSwapRequest":
+        if self.replaced_deployed_lot_id and self.disposition is None:
+            raise ValueError("disposition is required when replacing a deployed lot")
+        return self
 
 
 class LotSwapResponse(BaseModel):
@@ -891,6 +971,12 @@ class LotSwapResponse(BaseModel):
     # because the truck is still short.
     restock_needed: bool = False
     quantity_on_truck: Optional[int] = None
+    # The position's lots after the swap. A caller that replaced expired stock
+    # reads its exposure from this collection, so returning it is what lets the
+    # check form clear the expiry verdict without re-fetching the template.
+    lots_aboard: List["DeployedLot"] = []
+    replaced_lot_number: Optional[str] = None
+    disposition: Optional[ExpiredStockDisposition] = None
 
 
 # ============================================

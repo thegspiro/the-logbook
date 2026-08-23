@@ -349,10 +349,11 @@ Member credit is a third thing again, and is never the shift's number restated.
 A member who came on at 0300 was not on the 2200 call.
 
 > **[SCREENSHOT NEEDED — Reports → Call Volume for a count-only department,
-> showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
-> cards and the footnote beneath them. Caption it alongside the same report for
-> a detailed-mode department so a reader can see the labels differ and
-> understand why]**
+>
+> > showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
+> > cards and the footnote beneath them. Caption it alongside the same report for
+> > a detailed-mode department so a reader can see the labels differ and
+> > understand why]**
 
 ### Read the report label before you quote the number
 
@@ -554,9 +555,10 @@ members that the rest of the schedule does not.
   `scheduling.manage` will now get a permission error there.
 
 > **[SCREENSHOT NEEDED — the shift detail page as a scheduler with the
-> hold-over roster populated, paired with the same shift as an ordinary member
-> with the roster absent. Seed at least one member on approved leave so the
-> availability distinction is visible, and caption which account is which.]**
+>
+> > hold-over roster populated, paired with the same shift as an ordinary member
+> > with the roster absent. Seed at least one member on approved leave so the
+> > availability distinction is visible, and caption which account is which.]**
 
 ---
 
@@ -1518,7 +1520,8 @@ wizard replaces that screen and has to carry everything it could do. The
 override is still logged and still audited.
 
 > **[SCREENSHOT NEEDED — close-out wizard with outstanding end-of-shift checks,
-> showing the warning, the override checkbox, and the reason field it requires]**
+>
+> > showing the warning, the override checkbox, and the reason field it requires]**
 
 #### Wizard edge cases
 
@@ -2685,3 +2688,63 @@ ahead — no need to press "Generate" each cycle.
 ## August 12–14, 2026 update
 
 Scheduling settings, rank-backed apparatus seats, checklist access, and calendar-context changes from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#apparatus-crew-seats-and-scheduling-settings), including its screenshot requirement and cross-organization cache edge case.
+
+## August 19–23, 2026 update — request review and pagination
+
+Full detail, with edge cases and screenshot states, is in the
+[August 19–23 section of the release lesson](./19-august-2026-release-changes.md#scheduling-you-can-no-longer-approve-your-own-swap).
+
+**You can no longer review a request you are part of.** On a swap, two people
+are blocked: the member who raised it **and** the member it targets. On
+time-off, the requester is blocked. Holding `scheduling.manage` does not
+override this — a permission grant is not a second person.
+
+A blocked attempt changes nothing: the request stays pending for somebody else
+to action.
+
+> **[SCREENSHOT NEEDED — Scheduling → Requests viewed by the member who raised
+>
+> > the top request, showing the rejection message "Requesters cannot review
+> > their own swap requests". Seed one request raised by the capturing account
+> > and one raised by another member so the available actions differ visibly
+> > between the two rows.]**
+
+**Plan the second approver.** If exactly one person in your department holds
+`scheduling.manage` and that person also requests swaps, nobody can approve
+their requests. Grant a second person before a Saturday morning discovers it.
+
+**The Requests tab is paged.** Long histories no longer load in one request.
+If you have a script or integration reading swap or time-off requests from the
+API, the response shape changed — it is now an object with an `items` list
+rather than a plain list.
+
+> **[SCREENSHOT NEEDED — Scheduling → Requests with the pagination control
+>
+> > populated. Seed more than one page of requests (at least 60) so the control
+> > is genuinely active rather than a disabled stub.]**
+
+## August 19–23, 2026 update — equipment checks survive a dead spot
+
+A check completed with no signal and submitted on reconnect can no longer
+create a duplicate. One check per shift per template is enforced by the
+database, and the phone tags its submission before sending, so a replayed
+queue, a double tap on **Submit**, or a dropped connection all resolve to the
+same record.
+
+Also changed:
+
+- **Standalone (non-shift) equipment checks now require
+  `equipment_check.manage`.** A member who could previously start an ad-hoc
+  check may find the control gone — that is the permission change, not a
+  fault.
+- **Deep nested storage paths now fit** in a check item's recorded location.
+- **A compartment cannot be made its own parent.**
+- **Expired-equipment failures are worked out when the check is read**, so a
+  lot that expires after submission shows up without the record being
+  rewritten.
+- **Timing is recorded by the server**, not supplied by the phone.
+
+> **[SCREENSHOT NEEDED — a submitted shift equipment check on a 390x844
+>
+> > viewport. If the harness can simulate the queued/offline state, capture that
+> > too; if it cannot, say so in the caption rather than staging it.]**

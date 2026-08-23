@@ -21,8 +21,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: supply-chain-${{ github.ref }}
-  cancel-in-progress: true
+  # PR pushes share a group per ref, so a superseded push is cancelled. Runs
+  # for main get a group of their own PER COMMIT, which is stronger than
+  # `cancel-in-progress: false` and is what an audit record actually needs.
+  #
+  # `cancel-in-progress: false` alone is not enough: GitHub keeps at most one
+  # running and one *pending* run per group, so when three or more main runs
+  # overlap, each new arrival evicts the pending one and that commit's scan is
+  # never recorded — the exact gap this is meant to close (ISO/IEC 27001
+  # A.8.8: "no record" is the outcome to avoid). Keying main runs on the SHA
+  # gives each commit its own group, where there is nothing to evict it from.
+  group: supply-chain-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   trivy-vulns:

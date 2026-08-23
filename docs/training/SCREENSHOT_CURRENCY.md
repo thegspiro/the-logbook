@@ -167,6 +167,112 @@ end-of-shift checks, and Reports → Call Volume in count-only mode. Their
 blockers are recorded under the 08-17 → 08-19 entry below and neither is fixed
 by the above.
 
+## Flagged by the 2026-08-19 → 08-23 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
+
+**One change invalidates captures in bulk rather than individually.** The
+mobile bottom navigation used to paint over open dialogs; it now hides while
+one is open. That means **every phone capture showing a dialog was taken
+against the defect** — the bar in those shots is not a UI element the reader
+should expect to see, it is the bug. This is a re-capture _class_, not a list,
+and it is called out first because a targeted list will miss shots nobody
+remembers taking at a narrow viewport.
+
+Beyond that: one genuinely new screen (Governance → Legal Documents), a new
+event type in a picker that appears in several captures, a paginated Requests
+tab, and new dashboard sections.
+
+### REPLACE — existing images now show a screen that no longer matches
+
+| Image                                                                                                                     | Guide          | Why                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Any phone capture containing a dialog, drawer or bottom sheet**                                                         | all            | The bottom navigation no longer renders while an overlay is open. Every such shot predates the fix and shows the bar sitting on top of the dialog — the exact defect that was repaired. Re-shoot at 390×844 |
+| `10-04-mobile-dashboard.png`                                                                                              | 10             | New dashboard widget sections; also subject to the dialog rule if any overlay is open in frame                                                                                                              |
+| `10-12-mobile-bottom-nav.png`                                                                                             | 10             | Still correct as a shot of the bar itself, but now **needs a companion** showing the bar _absent_ behind an open dialog. Alone it now teaches the wrong expectation                                         |
+| `03-11-swap-requests-tab.png`                                                                                             | 03             | The Requests tab is paginated, and the review controls now differ depending on whether the viewing member raised the request. The current shot shows neither                                                |
+| `04-05-create-event.png`                                                                                                  | 04             | The event type picker gained **Recruitment**. A reader comparing their screen to this one will conclude their build is older                                                                                |
+| `04-09-event-templates.png`                                                                                               | 04             | Same picker, same problem, in the template form                                                                                                                                                             |
+| `04-02-event-detail.png`                                                                                                  | 04             | The event page now shows the applicants an event brought in. The current shot has no such section                                                                                                           |
+| `04-01-events-list.png`                                                                                                   | 04             | Only if shot at a narrow viewport — the events page was cut down for phones. Desktop captures are unaffected                                                                                                |
+| `03-22-equipment-check-builder.png`                                                                                       | 03             | Responsive builder actions changed, and compartment paths can now be deeper than the old shot shows                                                                                                         |
+| `03-25-equipment-checks-tab.png`                                                                                          | 03             | Expired-equipment failures are now derived at read time, so the status column can differ from a shot taken at submission time                                                                               |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png`, `00-20-member-dashboard.png`, `02-17-officer-dashboard.png` | 00, 02, 10     | New permission-scoped widget sections. **Caption which permissions the capturing account held** — the sections a reader sees depend on their own grants, and an uncaptioned shot reads as a promise         |
+| `06-09-facilities-dashboard.png`, `05-02-inventory-dashboard.png`                                                         | 05, 06         | Asset widgets are new on the organization dashboard                                                                                                                                                         |
+| **Any capture showing browser tab chrome**                                                                                | all            | Tab titles were generic before this window and are page-specific now. Only affects shots that include the tab strip                                                                                         |
+| **Documents, training, audit and check-in tables at narrow viewports**                                                    | 07, 02, 08, 04 | These now reflow into stacked cards instead of scrolling sideways. Any phone capture of them shows the old behaviour                                                                                        |
+
+### SCREENSHOT NEEDED (new captures)
+
+Marked in the guides as `**[SCREENSHOT NEEDED — …]**` and counted by
+`status_report.py`. Repeated here with the demo-data state each needs, because
+that is what a capture run has to set up and the marker cannot carry.
+
+**Guide 08 / release lesson — Governance → Legal Documents (4 markers)**
+
+- **Landing view**, both document cards. _Demo data:_ one document with a
+  published revision, one with an unpublished draft, so the status difference
+  is visible in a single frame. Use a demo department name — this page shows
+  the department's own legal wording and a real one should not be published to
+  a guide.
+- **Revision editor** showing the body, the **required change note** filled in,
+  and the free-text "Last updated" field. _Demo data:_ capture under an account
+  holding **only `legal.propose`**, so the Publish control is absent. That
+  absence is the subject of the shot and must be captioned, or it reads as a
+  missing feature.
+- **Revision history** for one document. _Demo data:_ **three** revisions — one
+  published, two archived — each with a change note and a publishing member.
+  Two rows read as an accident; three read as a history.
+- **A published revision reflected on `/privacy`.** _Demo data:_ the same
+  department, showing that what was published is what the public page serves.
+
+**Guide 03 — scheduling (3 markers)**
+
+- **Requests tab under the member who raised the top request**, showing the
+  rejection "Requesters cannot review their own swap requests". _Demo data:_
+  one request raised by the capturing account **and** one raised by another
+  member, so the available actions differ visibly between two rows in the same
+  frame. A single-row shot cannot show a rule about who you are.
+- **Requests tab with pagination populated.** _Demo data:_ **at least 60**
+  requests, so the control is active rather than a disabled stub.
+- **Submitted shift equipment check at 390×844.** _Demo data:_ a completed
+  check. If the harness can simulate the offline/queued state, capture that
+  too; **if it cannot, say so in the caption rather than staging it** — a faked
+  offline badge is the kind of detail a reader who has actually been in a dead
+  spot will catch.
+
+**Guide 04 — events (2 markers)**
+
+- **Event form with Recruitment selected**, both guest switches on, and the
+  teal banner reading "Guests who sign in at this event will be added to the
+  prospective members pipeline."
+- **Event detail showing linked prospects.** _Demo data:_ a recruitment event
+  with **at least three** guest sign-ins converted to prospects.
+
+**Guide 10 — mobile (2 markers)**
+
+- **A tall dialog at 390×844 scrolled to its action row, with the bottom
+  navigation absent.** _Demo data:_ any dialog taller than the viewport. This
+  is the reference shot for the whole re-capture class above.
+- **A reflowed table at 390×844 beside the same table on desktop.** The
+  **pair** is the point — a single shot does not show a reflow.
+
+**Guide 08 — dashboards (1 marker)**
+
+- **The organization dashboard under two accounts side by side**: one holding
+  `finance.manage`, one without. _Demo data:_ seeded finance figures. The
+  finance section must be **present in one and absent — not empty — in the
+  other**. The comparison is the entire lesson; either shot alone teaches
+  nothing.
+
+### Do not capture
+
+- **The public `/privacy` page of a real department.** Use demo wording. This
+  screen now shows department-authored legal text, and publishing a real
+  department's notice into a training guide is a different act from publishing
+  a screenshot of a generic settings page.
+
 ## Flagged by the 2026-08-17 → 08-19 changes
 
 Full reason/data-path context in
