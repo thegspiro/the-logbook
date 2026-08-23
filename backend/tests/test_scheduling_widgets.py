@@ -1,6 +1,6 @@
 """Scheduling-widget window, lifecycle, and configuration regressions."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -50,8 +50,9 @@ async def test_overnight_shift_counts_for_today_and_finalized_shift_is_closed():
     )
     overnight = SimpleNamespace(
         id="shift-1",
-        start_time=datetime(2026, 8, 20, 22, tzinfo=timezone.utc),
-        end_time=datetime(2026, 8, 21, 8, tzinfo=timezone.utc),
+        # MySQL commonly returns timezone-aware columns as naive UTC values.
+        start_time=datetime(2026, 8, 20, 22),
+        end_time=datetime(2026, 8, 21, 8),
         positions=[{"position": "officer", "required": True}],
         min_staffing=1,
         is_finalized=True,

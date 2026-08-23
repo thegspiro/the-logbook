@@ -20,6 +20,13 @@ ACTIVE_ASSIGNMENTS = {
 }
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Normalize MySQL's timezone-naive UTC datetimes for safe comparisons."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def organization_window(
     timezone_name: str, start: date, end: date
 ) -> tuple[datetime, datetime]:
@@ -97,22 +104,31 @@ class SchedulingWidgetService:
         today_staffing = sum(
             by_shift[str(shift.id)]
             for shift in shifts
-            if shift.start_time < today_end
-            and (shift.end_time or shift.start_time) > today_start
+            if _as_utc(shift.start_time) < today_end
+            and _as_utc(shift.end_time or shift.start_time) > today_start
         )
         gaps = 0
         open_slots = 0
         for shift in shifts:
-            required_positions = [
-                slot
-                for slot in normalize_stored_positions(shift.positions)
-                if slot.get("required", True)
-                and (not position or slot.get("position") == position)
-            ]
-            required = max(len(required_positions), shift.min_staffing or 0)
+            normalized_positions = normalize_stored_positions(shift.positions)
+            required_positions = (
+                [
+                    slot
+                    for slot in normalized_positions
+                    if slot.get("required", True)
+                    and (not position or slot.get("position") == position)
+                ]
+                if isinstance(normalized_positions, list)
+                else []
+            )
+            required = (
+                len(required_positions)
+                if position
+                else max(len(required_positions), shift.min_staffing or 0)
+            )
             missing = max(required - by_shift[str(shift.id)], 0)
             open_slots += missing
-            gaps += int(missing > 0 and shift.start_time >= today_end)
+            gaps += int(missing > 0 and _as_utc(shift.start_time) >= today_end)
 
         pending = sum(
             item.assignment_status == AssignmentStatus.PENDING.value
@@ -121,7 +137,7 @@ class SchedulingWidgetService:
         incomplete = sum(
             not shift.is_finalized
             and shift.end_time
-            and shift.end_time < datetime.now(timezone.utc)
+            and _as_utc(shift.end_time) < datetime.now(timezone.utc)
             for shift in shifts
         )
         loads = Counter(

@@ -14,18 +14,18 @@ import { getErrorMessage } from '../../utils/errorHandling';
 
 const DEFAULT_FILTERS: SchedulingWidgetFilters = { horizon_days: 14 };
 const WIDGETS = [
-  ['today_staffing', 'Today’s Staffing', 'today_staffing', Users, 'tab=calendar'],
+  ['today_staffing', 'Today’s Staffing', 'today_staffing', Users, 'tab=schedule'],
   ['future_coverage_gaps', 'Future Coverage Gaps', 'future_coverage_gaps', AlertTriangle, 'tab=open-shifts'],
   ['open_slots', 'Open Slots', 'open_slots', UserRoundPlus, 'tab=open-shifts'],
   ['pending_staffing_changes', 'Pending Changes', 'pending_staffing_changes', CalendarClock, 'tab=requests'],
-  ['incomplete_closeouts', 'Incomplete Closeouts', 'incomplete_closeouts', ClipboardX, 'tab=reports'],
-  ['workload_balance', 'Workload Balance', 'workload_imbalance', Gauge, 'tab=reports'],
+  ['incomplete_closeouts', 'Incomplete Closeouts', 'incomplete_closeouts', ClipboardX, 'tab=shift-reports'],
+  ['workload_balance', 'Workload Balance', 'workload_imbalance', Gauge, 'tab=shift-reports'],
   [
     'special_operations',
     'Special Operations',
     'special_operations',
     ShieldAlert,
-    'tab=calendar&special_operations=true',
+    'tab=schedule&special_operations=true',
   ],
 ] as const;
 
