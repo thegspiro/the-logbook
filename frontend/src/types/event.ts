@@ -183,6 +183,12 @@ export interface RSVP {
   checked_in_at?: string | undefined;
   checked_out_at?: string | undefined;
   attendance_duration_minutes?: number | undefined;
+  /**
+   * Minutes this member's self check-in preceded the scheduled start, or
+   * absent when it did not. Their credited time starts at the scheduled start
+   * either way; this is what an organizer looks at to decide whether it should.
+   */
+  early_check_in_minutes?: number | null | undefined;
   override_check_in_at?: string | undefined;
   override_check_out_at?: string | undefined;
   override_duration_minutes?: number | undefined;
@@ -271,6 +277,14 @@ export interface CheckInActivity {
   checked_in_at: string;
   rsvp_status: RSVPStatus;
   guest_count: number;
+  /**
+   * Minutes this check-in preceded the event's scheduled start, or null when
+   * it did not. The member's credited time starts at the scheduled start
+   * regardless; this is what an organizer looks at to decide whether it should.
+   */
+  early_check_in_minutes: number | null;
+  /** True once a manager has set an explicit check-in time for this member. */
+  check_in_overridden: boolean;
 }
 
 export interface CheckInMonitoringStats {
@@ -287,6 +301,14 @@ export interface CheckInMonitoringStats {
   total_checked_in: number;
   check_in_rate: number;
   recent_check_ins: CheckInActivity[];
+  /**
+   * Members who tapped in materially before the event started and that nobody
+   * has ruled on yet. Not a slice of `recent_check_ins` and not capped at ten.
+   */
+  early_check_ins: CheckInActivity[];
+  early_check_in_count: number;
+  /** How early counts as early, decided by the server. */
+  early_check_in_threshold_minutes: number;
   avg_check_in_time_minutes: number | null;
   last_check_in_at: string | null;
 }

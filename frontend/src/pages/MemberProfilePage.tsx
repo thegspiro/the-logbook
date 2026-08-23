@@ -43,6 +43,7 @@ import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 
 // Types for inventory data
 interface InventoryItem {
@@ -533,6 +534,7 @@ export const MemberProfilePage: React.FC = () => {
 
   // Check if current user can edit this profile (self or admin)
   const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
+  const canManageIdCards = checkPermission('members.manage_id_cards');
   const canEdit = currentUser?.id === userId || isAdmin;
   // Emergency contacts are leadership-only server-side (members.manage or the
   // member themselves). Mirror that gate here so everyone else sees no section
@@ -731,6 +733,16 @@ export const MemberProfilePage: React.FC = () => {
                 <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Administrative Hours</h2>
                 <div className="text-theme-text-muted py-4 text-center">Loading admin hours...</div>
               </div>
+            )}
+
+            {/* ID cards (NFC). Officers only — a member cannot register,
+                relabel or revoke a card, not even their own, and the panel
+                hides itself when the organization has cards turned off. */}
+            {canManageIdCards && userId && (
+              <MemberIdCardsPanel
+                userId={userId}
+                memberName={user ? `${user.first_name} ${user.last_name}`.trim() : undefined}
+              />
             )}
 
             {/* Assigned Inventory - Only shown if inventory module is enabled */}
