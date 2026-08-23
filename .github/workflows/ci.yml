@@ -15,9 +15,18 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Superseded PR pushes are cancelled, but a run for main is always allowed
-  # to finish: two merges in quick succession would otherwise cancel the
-  # first, leaving no record of whether that commit was ever green.
+  # Superseded PR pushes are cancelled; a main run that has started is never
+  # cancelled, so two merges in quick succession both keep their record of
+  # whether that commit was green.
+  #
+  # Precisely: GitHub keeps at most one running and one *pending* run per
+  # group, so with three or more main runs overlapping, the middle one can
+  # still be evicted from the pending slot before it starts. secret-scan and
+  # supply-chain key main runs on the SHA to close that gap, because an audit
+  # record has to exist for every commit. It is left open here on purpose —
+  # per-commit groups would run the full 12-job matrix concurrently for every
+  # commit of a merge train, and on this repository CI throughput is the
+  # constraint being managed, not the audit trail.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
@@ -148,7 +157,17 @@ jobs:
       # stops checking is the failure mode they exist to prevent. Every case in
       # test_check_endpoint_permissions.py is a way that checker was wrong
       # before 2026-08-18, each in the direction that made an unchecked route
-      # look fine. Stdlib unittest, no dependencies, well under a second.
+      # look fine. Stdlib unittest, with the single exception below.
+      #
+      # test_check_ci_gate.py covers the logic of scripts/check_ci_gate.py,
+      # which guards the `ci-success` gate against silently dropping a job.
+      # The checker itself runs as a step of `ci-success` (it has to — see the
+      # comment on that job); this is the regression suite for its logic, and
+      # it imports the checker, which is the one dependency this suite needs.
+      - name: Install script-test dependency
+        if: "!cancelled()"
+        run: pip install 'PyYAML==6.0.2'
+
       - name: Run repo-root script tests
         if: "!cancelled()"
         working-directory: .
@@ -318,7 +337,25 @@ jobs:
     name: Backend Integration Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [backend-lint, backend-test]
+    # No `needs:`. This job used to sit behind `needs: [backend-lint,
+    # backend-test]` as a fail-fast guard — don't spend a database runner if
+    # the cheap checks are already red. That guard was costing far more than
+    # it saved. Every `needs:` edge is a *re-queue*, and on a repository this
+    # busy a re-queue is the expensive part: on 2026-08-23 these jobs waited
+    # 14m37s in the queue to run 4m39s of tests, and the three-hop chain
+    # (lint -> unit -> db) put 23m30s of pure queueing on a critical path
+    # holding 9m47s of work. The run took 28m28s wall-clock to do 39 minutes
+    # of work that had no reason to be serialized.
+    #
+    # The guard was also protecting the wrong resource. This repository is
+    # public, so runner minutes are free (a run's billable total is literally
+    # 0) — the scarce resource is the contributor's wall-clock time, which is
+    # exactly what the chain was spending. Starting in the first wave costs
+    # some wasted runner time on the minority of runs that fail lint, and
+    # returns ~15 minutes on every run that passes.
+    #
+    # `ci-success` is what enforces that everything actually ran, so removing
+    # the edge loses no gating — only the serialization.
     strategy:
       # MariaDB is a supported deployment target (docker-compose.arm.yml ships
       # mariadb:10.11 for ARM/Raspberry Pi), but for a long time CI only ever
@@ -462,13 +499,33 @@ jobs:
     name: Backend API Contract Tests (${{ matrix.db.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [backend-lint, backend-test]
+    # No `needs:` — see the note on backend-test-integration. This was behind
+    # `needs: [backend-lint, backend-test]` for the same fail-fast reason and
+    # paid the same re-queue penalty.
     strategy:
-      # Same reasoning as backend-test-integration: MariaDB is a supported
-      # target (docker-compose.arm.yml), so the contract suite has to hold on
-      # it too. Response shapes are engine-agnostic, but this suite boots the
-      # real app against a real database, so it also covers startup, the
-      # migration chain, and schema repair on each engine.
+      # Both engines, and the MariaDB leg is NOT redundant with the integration
+      # matrix — it was briefly dropped on 2026-08-23 on the argument that
+      # response shapes come from Pydantic serializers and cannot vary by
+      # engine. That argument is true about the *assertions* and beside the
+      # point about the *execution*.
+      #
+      # `case.call_and_validate()` issues a real request and the test then
+      # asserts `status_code < 500`, so this suite is also broad smoke coverage
+      # of the SQL behind every `/api/public/` route — exactly the
+      # engine-specific class of bug MariaDB is in CI to catch (the DATETIME
+      # "+00:00" literal that MariaDB rejects with error 1292 was one).
+      #
+      # Nothing else covers those paths on MariaDB. The integration matrix runs
+      # `-m "integration and not docker and not slow"` and this module is marked
+      # `slow`, so it is excluded there by construction; the only other test
+      # touching `get_form_by_slug` (tests/test_forms_service.py) carries no
+      # `integration` marker and therefore runs in the unit job, which has no
+      # database at all. Dropping this leg left `/api/public/v1/forms/{slug}`
+      # executing SQL that no MariaDB job ever ran.
+      #
+      # It is also close to free now that the job graph is flat: it starts in
+      # the first wave and finishes in ~3m, well inside the ~4m40s the
+      # integration legs take, so it is not on the critical path.
       fail-fast: false
       matrix:
         db:
@@ -547,7 +604,9 @@ jobs:
     name: Docker Image Build & Container Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [backend-lint, frontend-lint]
+    # No `needs:` — see the note on backend-test-integration. This was behind
+    # `needs: [backend-lint, frontend-lint]` for the same fail-fast reason and
+    # paid the same re-queue penalty.
     defaults:
       run:
         working-directory: backend
@@ -599,8 +658,25 @@ jobs:
   # ──────────────────────────────────────────────
   # Frontend
   # ──────────────────────────────────────────────
-  frontend-lint:
-    name: Frontend Lint & Typecheck
+  # Lint + typecheck, the dependency audit, and build + PWA artifact
+  # validation were three separate jobs. Each paid the same checkout +
+  # setup-node + npm ci (~20s), and between them they did under two minutes
+  # of actual work — so most of their cost was setup and queue wait rather
+  # than checking anything. On 2026-08-23 they waited 3m29s, 2m44s and 8m47s
+  # in the queue to run 108s, 18s and 27s of work respectively.
+  #
+  # Folding them into one job is not just cheaper — it removes a real
+  # duplication. `npm run build` is `tsc-native.mjs && vite build`, so the
+  # separate `npm run typecheck` step was a second full compile of the same
+  # tree; the build now carries the typecheck, and a type error fails here
+  # exactly as it did before.
+  #
+  # Steps are ordered cheapest-signal-first, and each carries `!cancelled()` so
+  # one run reports every problem rather than only the first. That mirrors the
+  # backend-lint reasoning: under fail-fast a single ESLint violation would
+  # report "Frontend Checks failed" having never built the app at all.
+  frontend-checks:
+    name: Frontend Lint, Typecheck & Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -621,8 +697,21 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      - name: Run TypeScript type checking
-        run: npm run typecheck
+      # Also the typecheck: `npm run build` runs tsc-native before vite build.
+      - name: Build (runs tsc, then bundles)
+        if: "!cancelled()"
+        run: npm run build
+
+      - name: Validate production PWA artifacts
+        if: "!cancelled()"
+        run: node scripts/validate-pwa.mjs
+
+      # Blocking at high/critical. If an advisory can only be fixed by a
+      # breaking major upgrade, track the accepted risk in docs/COMPLIANCE.md
+      # instead of silencing it here.
+      - name: Run npm audit (fail on high/critical)
+        if: "!cancelled()"
+        run: npm audit --omit=dev --audit-level=high
 
   frontend-test:
     name: Frontend Tests
@@ -646,62 +735,11 @@ jobs:
       - name: Run tests with coverage
         run: npx vitest run --coverage
 
-  frontend-security:
-    name: Frontend Security Audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Blocking at high/critical. If an advisory can only be fixed by a
-      # breaking major upgrade, track the accepted risk in docs/COMPLIANCE.md
-      # instead of silencing it here.
-      - name: Run npm audit (fail on high/critical)
-        run: npm audit --omit=dev --audit-level=high
-
-  frontend-build:
-    name: Frontend Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [frontend-lint, frontend-test]
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Validate production PWA artifacts
-        run: node scripts/validate-pwa.mjs
-
   frontend-e2e:
     name: Frontend E2E (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [frontend-lint]
+    # No `needs:` — see the note on backend-test-integration.
     defaults:
       run:
         working-directory: frontend
@@ -836,6 +874,23 @@ jobs:
   # treats skipped, cancelled and failed alike, so "we did not test this" can
   # never again present as an absence of bad news.
   #
+  # Those `needs:` edges were removed on 2026-08-23 (see the note on
+  # backend-test-integration), so a cascade of skips is no longer the likely
+  # route here — but the handling stays. It costs nothing, and it is what
+  # catches a job that skips itself for any other reason.
+  #
+  # `scripts/check_ci_gate.py` asserts that the `needs:` list below names every
+  # other job in this file, and that this job is still unconditional. A job
+  # added here but not there would run, report its own status, and be required
+  # by nothing — invisible in review, since neither half looks wrong on its own.
+  #
+  # It runs as a step of THIS job, deliberately. Anywhere else it can be
+  # detached from the gate it validates: drop `backend-lint` from the `needs:`
+  # list and a checker living in `backend-lint` goes red while this job, no
+  # longer waiting on it, goes green on its remaining dependencies — the exact
+  # omission it exists to block, merging with the checker red. Run from here,
+  # the gate cannot be green unless the check passed.
+  #
   # Consequence worth knowing before adding `paths`/`paths-ignore` filters to
   # any job above: a filtered-out job reports `skipped` and would fail this
   # gate. Route path filtering through the workflow-level `on:` triggers, or
@@ -853,15 +908,19 @@ jobs:
       - backend-test-integration
       - backend-test-contract
       - docker-build
-      - frontend-lint
+      - frontend-checks
       - frontend-test
-      - frontend-security
-      - frontend-build
       - frontend-e2e
       - docs-links
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
       - name: Verify every job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
@@ -894,3 +953,14 @@ jobs:
               print(f"  - {job}: {result}{hint}")
           sys.exit(1)
           PYEOF
+
+      # `!cancelled()` so an incomplete gate is reported even when the run is
+      # already failing for another reason — the two problems are independent
+      # and a reviewer needs to see both.
+      - name: Install gate-check dependency
+        if: "!cancelled()"
+        run: pip install 'PyYAML==6.0.2'
+
+      - name: Verify this gate requires every job
+        if: "!cancelled()"
+        run: python3 scripts/check_ci_gate.py
