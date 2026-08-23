@@ -42,7 +42,7 @@ const template = {
           compartmentId: 'cab',
           name: 'Radio',
           sortOrder: 0,
-          checkType: 'pass_fail',
+          checkType: 'function',
           isRequired: true,
           hasExpiration: false,
           expirationWarningDays: 30,
