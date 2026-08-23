@@ -12,8 +12,19 @@ What is ruled out, so the next attempt does not repeat it: the Trauma Bag stop
 _is_ open (`aria-expanded` reads true before anything is clicked), its pass/fail
 item and the gloves' own lot and expiry row both render, and no compartment on
 this template is sealed — `is_sealed` is 0 for all three — so the
-seal-clears-counts branch in `checkLapModel` is not what is hiding it. What is
-missing is the quantity stepper and the item's own name. The shot's `prepare`
+seal-clears-counts branch in `checkLapModel` is not what is hiding it.
+
+**The missing stepper turned out to be the smaller half of the finding.**
+`03-72-check-item-controls`, shot from the same screen, shows Nitrile Gloves
+rendering **Pass / Fail / Not on truck / Out of service** — the _function_
+control — while the API serves that item as `checkType: "quantity"` and
+`normalizeCheckType` maps `quantity` to `count`. On the same screen
+`03-70-check-form-carryover` shows Naloxone, also `quantity`, _with_ the
+stepper. So the type reaches the client intact, and the same type renders two
+different controls depending on something else. A crew answering the gloves that
+way records no count at all, and "Set all to par" has nothing to act on. Written
+down rather than patched blind: it is a behaviour question for whoever owns the
+lap design, not a screenshot one. The shot's `prepare`
 was made lap-aware anyway (it reads `aria-expanded` instead of blind-toggling,
 and accepts both the old `Decrease X quantity` and the new `One fewer X`
 labels), and is left failing rather than quietly dropped.
