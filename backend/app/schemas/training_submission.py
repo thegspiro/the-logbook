@@ -96,6 +96,10 @@ class TrainingSubmissionCreate(BaseModel):
     category_id: Optional[UUID] = None
     attachments: Optional[list[str]] = None
 
+    # A draft is parked in the member's own list and never reaches the review
+    # queue until POST /{id}/submit promotes it.
+    save_as_draft: bool = False
+
     @field_validator("training_type")
     @classmethod
     def _validate_training_type(cls, v: str) -> str:
@@ -142,6 +146,43 @@ class TrainingSubmissionUpdate(BaseModel):
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
+class SubmissionAttachment(BaseModel):
+    """Client-safe view of one stored attachment.
+
+    The stored dict also carries the server file path; it is deliberately not
+    declared here so it can never reach a client through the response model.
+    """
+
+    index: int
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    uploaded_at: Optional[str] = None
+
+
+def sanitize_attachments(attachments: Optional[list]) -> list[dict]:
+    """Strip server file paths, exposing only client-safe metadata + index.
+
+    Entries predating the upload endpoint are bare strings (the column was
+    typed ``list[str]``); they carry a name and nothing else.
+    """
+    result: list[dict] = []
+    for i, a in enumerate(attachments or []):
+        if isinstance(a, dict):
+            result.append(
+                {
+                    "index": i,
+                    "file_name": a.get("file_name"),
+                    "file_type": a.get("file_type"),
+                    "file_size": a.get("file_size"),
+                    "uploaded_at": a.get("uploaded_at"),
+                }
+            )
+        else:
+            result.append({"index": i, "file_name": str(a)})
+    return result
+
+
 class TrainingSubmissionResponse(UTCResponseBase):
     """Response schema for a training submission"""
 
@@ -169,7 +210,7 @@ class TrainingSubmissionResponse(UTCResponseBase):
     expiration_date: Optional[date]
 
     category_id: Optional[UUID]
-    attachments: Optional[list[str]]
+    attachments: Optional[list[SubmissionAttachment]] = None
 
     status: str
     reviewed_by: Optional[UUID]
@@ -181,6 +222,13 @@ class TrainingSubmissionResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _strip_file_paths(cls, v: Optional[list]) -> Optional[list[dict]]:
+        if v is None:
+            return None
+        return sanitize_attachments(v)
 
 
 class SubmissionReviewRequest(BaseModel):
