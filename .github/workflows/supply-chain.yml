@@ -22,7 +22,12 @@ permissions:
 
 concurrency:
   group: supply-chain-${{ github.ref }}
-  cancel-in-progress: true
+  # Matches ci.yml: a superseded PR push is cancelled, but a run for main is
+  # always allowed to finish. Two merges in quick succession would otherwise
+  # cancel the first, leaving no record of whether that commit was ever
+  # scanned — and for a workflow whose whole purpose is an audit record
+  # (ISO/IEC 27001 A.8.8), "no record" is the outcome to avoid.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   trivy-vulns:
