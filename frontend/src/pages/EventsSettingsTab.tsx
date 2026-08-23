@@ -15,7 +15,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { Settings, Loader2, FileText, ExternalLink, ClipboardList, Clock, Mail, Tag } from 'lucide-react';
+import { Settings, Loader2, FileText, ExternalLink, ClipboardList, Clock, Mail, Tag, LayoutGrid } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
 import type { EventModuleSettings, EventType, EventCategoryConfig, EmailTemplate } from '../types/event';
@@ -31,6 +31,7 @@ import {
 } from './events-settings';
 import type { OrgMember, EventRequestFormSummary } from './events-settings';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
+import { AdminMetricsSettings } from '../components/admin';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,8 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
-type SectionKey = 'visibility' | 'categories' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form';
+type SectionKey =
+  'visibility' | 'categories' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form' | 'metrics';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
@@ -55,6 +57,7 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'Request processing config' },
   { key: 'email', label: 'Email', icon: Mail, description: 'Triggers and email templates' },
   { key: 'form', label: 'Public Form', icon: ExternalLink, description: 'Public event request form' },
+  { key: 'metrics', label: 'Headline Metrics', icon: LayoutGrid, description: 'The four cards above this page' },
 ];
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
@@ -568,6 +571,8 @@ const EventsSettingsTab: React.FC = () => {
             onNewTemplateTriggerChange={setNewTemplateTrigger}
           />
         );
+      case 'metrics':
+        return <AdminMetricsSettings moduleKey="events" moduleLabel="Events" permission="events.manage" />;
       case 'form':
         return (
           <FormSection

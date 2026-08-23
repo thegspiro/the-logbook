@@ -67,6 +67,7 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   LastCheckItemResult,
+  LastSealRecord,
   ComplianceReport,
   FailureLogResponse,
   ItemTrendResponse,
@@ -1022,6 +1023,14 @@ export const schedulingService = {
   async getLastCheckResults(templateId: string, apparatusId?: string): Promise<Record<string, LastCheckItemResult>> {
     const response = await api.get<Record<string, LastCheckItemResult>>(
       `/equipment-checks/templates/${templateId}/last-results`,
+      { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
+    );
+    return response.data;
+  },
+  /** Keyed by compartment id — what each sealed container carried last count. */
+  async getLastCheckSeals(templateId: string, apparatusId?: string): Promise<Record<string, LastSealRecord>> {
+    const response = await api.get<Record<string, LastSealRecord>>(
+      `/equipment-checks/templates/${templateId}/last-seals`,
       { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
     );
     return response.data;

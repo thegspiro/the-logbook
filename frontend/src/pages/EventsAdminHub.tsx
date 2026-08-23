@@ -1,14 +1,18 @@
 /**
  * Events Admin Hub
  *
- * Consolidated admin page for event coordinators.
- * Provides a tabbed interface to create events and view analytics.
+ * Consolidated admin page for event coordinators, rendered in the shared
+ * administration frame: header, four headline metrics, the "Needs attention"
+ * queue, then the tab bar and the tab's own body.
  *
  * Requires: events.manage permission
  */
 
-import React, { Suspense, useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Plus, QrCode, Settings } from 'lucide-react';
+import { AdminHubFrame } from '../components/admin';
+import type { AdminHubAction, AdminHubTab } from '../components/admin';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 const EventCreatePage = lazyWithRetry(() => import('./EventCreatePage').then((m) => ({ default: m.EventCreatePage })));
@@ -20,7 +24,8 @@ const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 
 type AdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
 
-const tabs: { id: AdminTab; label: string }[] = [
+/** Settings is always last — the frame's rule, on every module. */
+const tabs: AdminHubTab<AdminTab>[] = [
   { id: 'create', label: 'Create Event' },
   { id: 'past_events', label: 'Past Events' },
   { id: 'requests', label: 'Requests' },
@@ -37,6 +42,7 @@ const TabLoading = () => (
 
 export const EventsAdminHub: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
     tabParam && tabs.some((t) => t.id === tabParam) ? tabParam : 'create'
@@ -48,41 +54,35 @@ export const EventsAdminHub: React.FC = () => {
     }
   }, [tabParam]);
 
-  const handleTabChange = (tab: AdminTab) => {
-    setActiveTab(tab);
-    setSearchParams({ tab });
-  };
+  const handleTabChange = useCallback(
+    (tab: AdminTab) => {
+      setActiveTab(tab);
+      setSearchParams({ tab });
+    },
+    [setSearchParams]
+  );
+
+  const actions: AdminHubAction[] = [
+    { key: 'qr', label: 'QR code analytics', icon: QrCode, onClick: () => handleTabChange('analytics') },
+    { key: 'settings', label: 'Events settings', icon: Settings, onClick: () => handleTabChange('settings') },
+  ];
 
   return (
-    <div>
-      {/* Header + Tab Bar */}
-      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-theme-text-primary text-2xl font-bold">Events Administration</h1>
-          <p className="text-theme-text-muted mt-1 text-sm">Create and manage events, view analytics</p>
-        </div>
-
-        <div className="border-theme-surface-border border-b">
-          <div className="flex space-x-1 overflow-x-auto" role="tablist" aria-label="Events admin tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                role="tab"
-                onClick={() => handleTabChange(tab.id)}
-                className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                  activeTab === tab.id
-                    ? 'text-theme-text-primary border-red-500'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                }`}
-                aria-selected={activeTab === tab.id}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
+    <AdminHubFrame<AdminTab>
+      moduleKey="events"
+      title="Events Administration"
+      description="Create and manage events, view analytics"
+      actions={actions}
+      primaryAction={{
+        key: 'create',
+        label: 'Create Event',
+        icon: Plus,
+        onClick: () => void navigate('/events/new'),
+      }}
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+    >
       {/* Tab Content - each child handles its own layout */}
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'create' && <EventCreatePage />}
@@ -92,7 +92,7 @@ export const EventsAdminHub: React.FC = () => {
         {activeTab === 'community' && <CommunityEngagementTab />}
         {activeTab === 'settings' && <EventsSettingsTab />}
       </Suspense>
-    </div>
+    </AdminHubFrame>
   );
 };
 

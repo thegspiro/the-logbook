@@ -233,6 +233,8 @@ interface CompartmentFormState {
   imageUrl: string;
   isHeader: boolean;
   containerType: string;
+  /** Closed with a numbered tamper seal — see CheckTemplateCompartment.isSealed. */
+  isSealed: boolean;
   parentCompartmentId: string;
   items: ItemFormState[];
 }
@@ -248,6 +250,7 @@ function emptyCompartment(): CompartmentFormState {
     imageUrl: '',
     isHeader: false,
     containerType: 'compartment',
+    isSealed: false,
     parentCompartmentId: '',
     items: [],
   };
@@ -452,6 +455,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: c.imageUrl ?? '',
           isHeader: c.isHeader ?? false,
           containerType: c.containerType ?? 'compartment',
+          isSealed: c.isSealed ?? false,
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
             id: item.id,
@@ -563,6 +567,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: created.imageUrl ?? '',
           isHeader: false,
           containerType: created.containerType ?? 'compartment',
+          isSealed: created.isSealed ?? false,
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
@@ -601,6 +606,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: created.imageUrl ?? '',
           isHeader: true,
           containerType: created.containerType ?? 'compartment',
+          isSealed: false,
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
@@ -659,6 +665,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: comp.imageUrl,
       isHeader: comp.isHeader,
       containerType: comp.containerType,
+      isSealed: comp.isSealed,
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
@@ -1354,6 +1361,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           image_url: c.imageUrl.trim() || undefined,
           is_header: c.isHeader || undefined,
           container_type: c.containerType || undefined,
+          is_sealed: c.isSealed,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
             name: item.name || 'Untitled Item',
@@ -1404,6 +1412,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 image_url: comp.imageUrl.trim() || undefined,
                 is_header: comp.isHeader,
                 container_type: comp.containerType || undefined,
+                is_sealed: comp.isSealed,
                 parent_compartment_id: comp.parentCompartmentId || undefined,
               })
             );
@@ -1459,6 +1468,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             image_url: c.imageUrl.trim() || undefined,
             is_header: c.isHeader || undefined,
             container_type: c.containerType || undefined,
+            is_sealed: c.isSealed,
             parent_compartment_id: c.parentCompartmentId || undefined,
             items: c.items.map((item, itemIdx) => ({
               name: item.name || 'Untitled Item',
@@ -1550,6 +1560,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: '',
       isHeader: false,
       containerType: 'compartment',
+      // A vehicle preset describes compartments, not sealed kits; a department
+      // that carries a sealed bag marks it after loading the preset.
+      isSealed: false,
       parentCompartmentId: '',
       items: comp.items.map((item) => ({
         ...emptyItem(),
@@ -1615,6 +1628,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         description: c.description,
         isHeader: c.isHeader || undefined,
         containerType: c.containerType || undefined,
+        isSealed: c.isSealed,
         items: c.items.map((item) => ({
           name: item.name,
           description: item.description,
@@ -1664,6 +1678,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             description?: string;
             isHeader?: boolean;
             containerType?: string;
+            isSealed?: boolean;
             items?: Array<Record<string, unknown>>;
           }>;
         };
@@ -1700,6 +1715,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: '',
           isHeader: Boolean(c.isHeader),
           containerType: c.containerType || 'compartment',
+          isSealed: Boolean(c.isSealed),
           parentCompartmentId: '',
           items: (c.items ?? []).map((item) => ({
             ...emptyItem(),
@@ -1859,6 +1875,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: '',
       isHeader: false,
       containerType: 'compartment',
+      isSealed: false,
       parentCompartmentId: '',
       items,
     }));
@@ -1927,6 +1944,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
         ...(c.isHeader ? { isHeader: true } : {}),
         containerType: c.containerType || 'compartment',
+        isSealed: c.isSealed,
         ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
         items: c.items.map((item, iIdx): CheckTemplateItem => ({
           id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
@@ -3066,6 +3084,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* A sealed container's contents cannot change while it sits
+                  shut, so a crew that finds the seal intact and matching the
+                  last count does not need to open it. Only dates and pressures
+                  still need eyes on — those move on their own. */}
+              <div className="sm:col-span-2">
+                <label className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox mt-0.5"
+                    checked={comp.isSealed}
+                    onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
+                  />
+                  <span>
+                    <span className="text-theme-text-primary block text-sm font-medium">Closed with a tamper seal</span>
+                    <span className="text-theme-text-muted block text-xs">
+                      A crew that finds the seal intact and matching the last count clears every presence and quantity
+                      check inside in one tap. Expiry dates and readings still have to be checked.
+                    </span>
+                  </span>
+                </label>
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>

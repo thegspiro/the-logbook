@@ -186,6 +186,7 @@ class CheckTemplateCompartmentCreate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: bool = False
     container_type: str = Field("compartment", max_length=50)
+    is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
 
@@ -199,6 +200,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: Optional[bool] = None
     container_type: Optional[str] = Field(None, max_length=50)
+    is_sealed: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
 
 
@@ -219,6 +221,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     image_url: Optional[str] = None
     is_header: bool = False
     container_type: str = "compartment"
+    is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
@@ -239,6 +242,14 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
         if v is None:
             return "compartment"
         return str(v)
+
+    @field_validator("is_sealed", mode="before")
+    @classmethod
+    def coerce_is_sealed(cls, v: object) -> bool:
+        """Rows created before the is_sealed column was added store NULL."""
+        if v is None:
+            return False
+        return bool(v)
 
 
 # ============================================
@@ -345,11 +356,30 @@ class CheckItemResultSubmit(BaseModel):
     notes: Optional[str] = None
 
 
+class CheckSealSubmit(BaseModel):
+    """The tamper seal a crew read on one sealed container.
+
+    Recorded whether or not the seal cleared anything: a broken seal is the
+    more important of the two records, because it is what says the contents
+    were counted by hand and why.
+    """
+
+    template_compartment_id: str
+    # Nested containers are submitted as their full storage path, so the
+    # snapshot is unbounded for the same reason item snapshots are.
+    compartment_name: str
+    seal_number: Optional[str] = Field(None, max_length=100)
+    intact: bool = True
+    cleared_item_count: int = Field(0, ge=0)
+    notes: Optional[str] = None
+
+
 class ShiftEquipmentCheckCreate(BaseModel):
     """Schema for submitting an equipment check tied to a shift."""
 
     template_id: str
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
+    seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
     client_submission_id: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -361,6 +391,7 @@ class StandaloneEquipmentCheckCreate(BaseModel):
     template_id: str
     apparatus_id: Optional[str] = None
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
+    seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 
@@ -369,8 +400,23 @@ class EquipmentCheckCompleteItems(BaseModel):
     """Schema for completing remaining items on an incomplete check."""
 
     items: List[CheckItemResultSubmit] = Field(..., min_length=1)
+    seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
+
+
+class LastSealRecord(BaseModel):
+    """What the previous crew read on one sealed container.
+
+    The form compares the number in front of the crew against this one: equal
+    means nothing was opened since, which is what the shortcut rests on.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    seal_number: Optional[str] = None
+    intact: bool = True
+    checked_at: Optional[datetime] = None
 
 
 class ShiftEquipmentCheckItemResponse(UTCResponseBase):
