@@ -1616,11 +1616,11 @@ class EventService:
 
         updated_count = 0
         for rsvp in rsvps:
-            check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
+            # Credit runs from the scheduled start, not from whenever the tap
+            # landed — see _credited_check_in_time.
+            check_in_time = self._credited_check_in_time(event, rsvp)
             if not check_in_time:
                 continue
-            if check_in_time.tzinfo is None:
-                check_in_time = check_in_time.replace(tzinfo=dt_timezone.utc)
 
             duration_minutes = (effective_end - check_in_time).total_seconds() / 60
             duration_minutes = max(0, int(duration_minutes))
@@ -1649,14 +1649,14 @@ class EventService:
         admin_hours_service = AdminHoursService(self.db)
         event_type_val = event.event_type.value if event.event_type else None
         for rsvp in rsvps:
-            check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
+            # Same clamp as above: the window handed to admin hours has to
+            # match the duration credited, or the two disagree on the record.
+            check_in_time = self._credited_check_in_time(event, rsvp)
             duration = (
                 rsvp.override_duration_minutes or rsvp.attendance_duration_minutes
             )
             if not check_in_time or not duration or duration <= 0:
                 continue
-            if check_in_time.tzinfo is None:
-                check_in_time = check_in_time.replace(tzinfo=dt_timezone.utc)
             check_out_time = rsvp.checked_out_at or effective_end
             try:
                 await admin_hours_service.credit_event_attendance(
@@ -1834,6 +1834,74 @@ class EventService:
             "require_checkout": event.require_checkout or False,
             "timezone": org_timezone,
         }, None
+
+    # A self check-in this far ahead of the scheduled start is worth putting in
+    # front of the event's manager. Below it, an early tap is somebody walking
+    # through the door as the event begins, and listing those would bury the
+    # one that matters under a page of "2 minutes early".
+    EARLY_CHECK_IN_WARNING_MINUTES = 10
+
+    @staticmethod
+    def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+        """Treat a naive datetime as UTC.
+
+        MySQL DATETIME carries no offset, so a value read back through
+        DateTime(timezone=True) arrives naive; subtracting it from an aware one
+        raises TypeError.
+        """
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+
+    @classmethod
+    def _minutes_before_start(cls, event: Event, moment: datetime) -> Optional[int]:
+        """Whole minutes between ``moment`` and the event's scheduled start.
+
+        None when the moment is at or after the start, so the column reads as
+        "not early" rather than as zero — a stored 0 and an absent value would
+        otherwise be indistinguishable in every query that filters on it.
+        """
+        scheduled_start = cls._as_utc(event.start_datetime)
+        if scheduled_start is None:
+            return None
+        moment_utc = cls._as_utc(moment)
+        if moment_utc is None:
+            return None
+        minutes = int((scheduled_start - moment_utc).total_seconds() / 60)
+        return minutes if minutes > 0 else None
+
+    @classmethod
+    def _credited_check_in_time(
+        cls, event: Event, rsvp: EventRSVP
+    ) -> Optional[datetime]:
+        """When this member's attendance starts counting.
+
+        A training runs from the moment it is scheduled to start. Somebody who
+        taps their ID card in the parking lot forty minutes early was not being
+        trained for those forty minutes, and crediting them inflates the hours
+        that flow on to training records, admin hours categories and every
+        compliance report built on top of them. So a self-recorded check-in is
+        clamped forward to the scheduled start; a late one is left alone, since
+        arriving late really does mean less time.
+
+        A manager's ``override_check_in_at`` is honoured verbatim and never
+        clamped. That is the escape hatch for the case the clamp gets wrong —
+        volunteers who genuinely were setting up an hour before the doors
+        opened — and it is a deliberate act by somebody accountable for it,
+        which a tap is not.
+        """
+        override = cls._as_utc(rsvp.override_check_in_at)
+        if override:
+            return override
+
+        checked_in_at = cls._as_utc(rsvp.checked_in_at)
+        if checked_in_at is None:
+            return None
+
+        scheduled_start = cls._as_utc(event.start_datetime)
+        if scheduled_start is None:
+            return checked_in_at
+        return max(checked_in_at, scheduled_start)
 
     @staticmethod
     def _get_check_in_window(
@@ -2063,12 +2131,14 @@ class EventService:
 
             rsvp.checked_out_at = now
 
-            # Calculate attendance duration
-            check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
-            check_out_time = now
-            if check_in_time and check_out_time:
-                duration = (check_out_time - check_in_time).total_seconds() / 60
-                rsvp.attendance_duration_minutes = int(duration)
+            # Calculate attendance duration, credited from the scheduled start
+            # rather than from an early tap (see _credited_check_in_time). A
+            # member who tapped in forty minutes early and out on time attended
+            # the event, not the parking lot.
+            check_in_time = self._credited_check_in_time(event, rsvp)
+            if check_in_time:
+                duration = (now - check_in_time).total_seconds() / 60
+                rsvp.attendance_duration_minutes = max(0, int(duration))
 
             await self.db.commit()
             await self.db.refresh(rsvp)
@@ -2082,6 +2152,12 @@ class EventService:
 
         rsvp.checked_in = True
         rsvp.checked_in_at = now
+        # Record how far ahead of the scheduled start this landed, so the
+        # event's manager is shown who tapped in early instead of having to
+        # compare timestamps by eye. Deliberately a snapshot of what was true
+        # at the tap: it is an observation about when the member arrived, not a
+        # value to recompute if the organizer later moves the event.
+        rsvp.early_check_in_minutes = self._minutes_before_start(event, now)
 
         await self.db.commit()
         await self.db.refresh(rsvp)
@@ -2219,22 +2295,41 @@ class EventService:
             else 0
         )
 
-        # Get recent check-ins (last 10)
+        # Get recent check-ins (last 10), plus every materially early one.
+        #
+        # The early list is not capped at ten and is not a slice of the recent
+        # list: it is the whole point of the panel above it, and a manager who
+        # can only see the ten most recent taps cannot act on the one from an
+        # hour ago that is still wrong.
         recent_check_ins = []
+        early_check_ins = []
         for rsvp, user in rsvps_with_users:
-            if rsvp.checked_in and rsvp.checked_in_at:
-                recent_check_ins.append(
-                    {
-                        "user_id": str(user.id),
-                        "user_name": f"{user.first_name} {user.last_name}",
-                        "user_email": user.email,
-                        "checked_in_at": rsvp.checked_in_at,
-                        "rsvp_status": rsvp.status.value,
-                        "guest_count": rsvp.guest_count or 0,
-                    }
-                )
-                if len(recent_check_ins) >= 10:
-                    break
+            if not (rsvp.checked_in and rsvp.checked_in_at):
+                continue
+            entry = {
+                "user_id": str(user.id),
+                "user_name": f"{user.first_name} {user.last_name}",
+                "user_email": user.email,
+                "checked_in_at": rsvp.checked_in_at,
+                "rsvp_status": rsvp.status.value,
+                "guest_count": rsvp.guest_count or 0,
+                "early_check_in_minutes": rsvp.early_check_in_minutes,
+                # An override is the manager having already ruled on this tap,
+                # so it stops being something to flag at them.
+                "check_in_overridden": rsvp.override_check_in_at is not None,
+            }
+            if len(recent_check_ins) < 10:
+                recent_check_ins.append(entry)
+            if (
+                rsvp.early_check_in_minutes is not None
+                and rsvp.early_check_in_minutes >= self.EARLY_CHECK_IN_WARNING_MINUTES
+                and rsvp.override_check_in_at is None
+            ):
+                early_check_ins.append(entry)
+
+        early_check_ins.sort(
+            key=lambda e: e["early_check_in_minutes"] or 0, reverse=True
+        )
 
         # Calculate average check-in time (minutes before event start)
         avg_check_in_time = None
@@ -2267,6 +2362,9 @@ class EventService:
             "total_checked_in": total_checked_in,
             "check_in_rate": round(check_in_rate, 2),
             "recent_check_ins": recent_check_ins,
+            "early_check_ins": early_check_ins,
+            "early_check_in_count": len(early_check_ins),
+            "early_check_in_threshold_minutes": self.EARLY_CHECK_IN_WARNING_MINUTES,
             "avg_check_in_time_minutes": (
                 round(avg_check_in_time, 2) if avg_check_in_time else None
             ),

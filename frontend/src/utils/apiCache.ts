@@ -41,6 +41,7 @@ const UNCACHEABLE_PREFIXES = [
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
+  '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data

@@ -7,6 +7,157 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
+
+**Fixed**
+
+- **Arriving early inflated attendance hours.** Check-in typically opens an
+  hour before a 19:00 drill, so a member who tapped in at 18:20 was credited
+  from 18:20 — forty extra minutes that flowed straight through to their
+  training record, to any admin hours category the event maps to, and to every
+  compliance report built on those. A training runs from the moment it is
+  scheduled to start; nobody was being trained in the parking lot.
+- Attendance is now credited from the event's **scheduled start** whenever a
+  self-recorded check-in precedes it. Arriving _late_ is untouched — that
+  really does mean less time — and it applies wherever duration is computed:
+  end-of-event finalization, a member checking themselves out, and the admin
+  hours window handed on from either.
+- **A manager's `override_check_in_at` is honoured verbatim and never
+  clamped.** That is the escape hatch for the case the clamp gets wrong —
+  volunteers who genuinely were setting up an hour before the doors opened —
+  and it is a deliberate act by somebody accountable for it, which a tap is
+  not.
+
+**Added**
+
+- **The event's manager is told who tapped in early.** A panel on the check-in
+  monitoring dashboard names them and says how far ahead of the start each one
+  landed ("John Doe — tapped in 42 minutes early, at 6:18 PM"), with the same
+  flag beside the member on the event's attendance list, where their times are
+  edited. Members already ruled on with an override drop off both.
+- The panel says what was already done rather than asking for a correction:
+  the hours are credited from the start time, and the organizer only needs to
+  act for somebody who really was working beforehand. A prompt to go and fix
+  something that is already right would bury the one case that needs them.
+- `EventRSVP.early_check_in_minutes` records how far ahead of the scheduled
+  start a self check-in landed. Deliberately a snapshot of what was true at the
+  tap — an observation about when the member arrived, not a value to recompute
+  if the organizer later moves the event — and not set for manager-recorded
+  check-ins, since an officer checking somebody in early is doing it on purpose.
+- `GET /events/{id}/check-in-monitoring` gains `early_check_ins`,
+  `early_check_in_count` and `early_check_in_threshold_minutes`. The early list
+  is not a slice of `recent_check_ins` and is not capped at ten: a manager who
+  can only see the ten most recent taps cannot act on the one from an hour ago.
+
+**Notes**
+
+- This applies to every self check-in, not only NFC card taps — a QR scan an
+  hour early had exactly the same effect and was credited the same way.
+- Shift attendance is deliberately unchanged. A shift really does run from when
+  the crew arrives, so the actual check-in time is the right one there; it is
+  fixed-duration events (trainings, meetings, drills) where the scheduled start
+  is the honest number.
+
+### NFC ID cards: tap a member's card to check them in (2026-08-23)
+
+**Added**
+
+- **NFC tags can now be bound to members, not just to places.** Until now a tag
+  was a _destination_ — a sticker on a bay door carrying a URL, which sent the
+  member's own phone to a check-in page. A card is the inverse: the tag inside
+  a member's ID card identifies the person holding it, and a station reads it
+  to check them in. Both now exist side by side; neither replaces the other.
+- **An officer issues the card and hands it over.** From the new **ID Cards**
+  section of a member's profile, either write a freshly minted code to a blank
+  NFC tag (a sticker inside an ID card, a fob) or record the chip serial of a
+  card that is already printed and cannot be written to. The written-code route
+  is the one to prefer: the code is 128 random bits from the platform CSPRNG,
+  it is not printed on the card, and a tag can be wiped and reissued to
+  somebody else.
+- **A check-in station at `/members/check-in-station`.** Pick a shift, an event
+  or meeting, or an admin hours category, arm the reader, and members tap and
+  walk in — nobody touches the screen between taps. One tap serves arrival and
+  departure by default; a station covering only one direction can be fixed to
+  it.
+- **Two readers, because departments have both.** Web NFC (Chrome on Android,
+  over HTTPS) reads the card on a tablet at the door. A USB reader — the desk
+  kind that types the serial like a keyboard — works everywhere else, including
+  the iPhones and desktops Web NFC has never shipped on. Keystrokes are
+  captured page-wide rather than into a focused box: a kiosk loses focus to the
+  first stray tap on the screen, and a station that silently stops reading is
+  worse than one that was never armed.
+- Two new permissions, both deliberately narrow. `members.manage_id_cards`
+  issues and revokes cards: handing out a credential is a different act from
+  editing a profile, and the officer who does one is rarely the one who does
+  the other. `members.check_in` operates a station: recording attendance for
+  other members confers no ability to edit the shift or event it writes to.
+  Positions and ranks that already carry `members.manage` receive both.
+- Everything lives in the **membership module** (`modules/membership/`) — the
+  panel, the station page, the service, the types and the card helpers —
+  alongside the member records the cards belong to.
+
+**Security**
+
+- **There is no self-service path, by design.** A member cannot register,
+  relabel or revoke a card, not even their own, and no route here is addressed
+  to the calling member. The surface that lets somebody see their own card is
+  the surface a later change turns into one that lets them register one; a
+  credential that records attendance is issued by somebody accountable for
+  handing it over.
+- **A card credential is stored hashed, never in clear text.** The serial (or
+  the written code) is the whole of the credential — anything holding one can
+  clone it onto a writable tag — so a plaintext column would make a database
+  dump a stack of working ID cards. Lookups go by SHA-256 of the normalized
+  value, peppered with the installation's `ENCRYPTION_SALT` so the hashes are
+  not portable between deployments and the small, structured space of card UIDs
+  cannot simply be enumerated. Only the last four characters are kept, for
+  telling two of a member's cards apart on screen.
+- The unique constraint is per organization, not global: two departments on one
+  platform are separate tenants, and a card issued in one must not be
+  discoverable by registering it in the other.
+- A duplicate-registration refusal does not name the member currently holding
+  the card — otherwise card issuing would turn a pile of found cards into a
+  staff directory.
+- `/nfc-tags` is excluded from the client API cache alongside the other
+  PII-bearing endpoints.
+- Card issue, status change, deletion and every recorded tap are written to the
+  audit log.
+
+**Configuration**
+
+- **The whole feature is an integration a department turns on.** A new **NFC ID
+  Cards** entry under Settings → Integrations; while it is off, no card can be
+  issued and no card can be read. The check is enforced on the server, on every
+  `/nfc-tags` route — hiding a screen leaves its endpoints reachable, and these
+  endpoints issue and consume credentials. It fails closed: an organization
+  whose catalog row has never been seeded has not turned anything on, and both
+  halves (`enabled` **and** `status == "connected"`) have to agree, so
+  disconnecting really does stop the cards working.
+- With it off, the profile section, the station page and both navigation
+  entries are absent rather than empty — an empty "ID Cards" panel reads as
+  "none issued", which is a different statement from "this department does not
+  use cards".
+
+**Notes**
+
+- A tap that lands within a minute of the check-in it would otherwise close is
+  read as a bounce and reports the current state instead: a card held against
+  the reader a beat too long fires twice, and inverting on the second read
+  would file a zero-minute shift.
+- A station forwards both the written code and the chip serial, and the server
+  tries the code first. A blank tag can be wiped and reissued, so the serial
+  underneath may still be registered to whoever held it before.
+- The station reports a training-pipeline phase warning rather than overriding
+  it. A member can read and override that warning on their own screen; a
+  station has nobody to ask, and answering for the officer who set the gate is
+  the wrong default.
+- Reporting a card lost is terminal — whoever picked it up can still tap it —
+  so it is never reactivated and a replacement is a fresh registration.
+  Suspension is the reversible state.
+- Retired and on-leave members can still tap in. They attend meetings and
+  banquets, which is exactly what a station records. Suspended, dropped,
+  archived and deleted members cannot.
+
 ### Equipment checks: four item types, and the groundwork for walking a check as a lap (2026-08-23)
 
 **Changed**

@@ -460,6 +460,11 @@ class RSVPResponse(RSVPBase, UTCResponseBase):
     # Attendance duration (populated when event has actual times)
     attendance_duration_minutes: Optional[int] = None
 
+    # Minutes this member's self check-in preceded the scheduled start, or None
+    # when it did not. Their credited time starts at the scheduled start either
+    # way; this is what an organizer looks at to decide whether it should.
+    early_check_in_minutes: Optional[int] = None
+
     # Override fields (for manager adjustments)
     override_check_in_at: Optional[datetime] = None
     override_check_out_at: Optional[datetime] = None
@@ -659,6 +664,12 @@ class CheckInActivity(UTCResponseBase):
     checked_in_at: datetime
     rsvp_status: str
     guest_count: int
+    # How far ahead of the event's scheduled start this check-in landed, or
+    # None when it did not precede the start.
+    early_check_in_minutes: Optional[int] = None
+    # True once a manager has set an explicit check-in time for this member,
+    # which is them having already ruled on the early tap.
+    check_in_overridden: bool = False
 
 
 class CheckInMonitoringStats(UTCResponseBase):
@@ -681,6 +692,16 @@ class CheckInMonitoringStats(UTCResponseBase):
 
     # Recent activity
     recent_check_ins: List[CheckInActivity]
+
+    # Members whose check-in landed materially before the event started and
+    # that nobody has ruled on yet. Not a slice of `recent_check_ins` and not
+    # capped: a manager who can only see the ten most recent taps cannot act on
+    # the one from an hour ago that is still wrong.
+    early_check_ins: List[CheckInActivity] = []
+    early_check_in_count: int = 0
+    # The cutoff `early_check_ins` was built with, so the screen can say how
+    # early counts as early rather than hardcoding a second copy of it.
+    early_check_in_threshold_minutes: int = 0
 
     # Time-based stats
     avg_check_in_time_minutes: Optional[float] = None  # Average time before event start
