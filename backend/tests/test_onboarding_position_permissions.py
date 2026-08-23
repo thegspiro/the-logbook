@@ -137,3 +137,37 @@ def test_view_only_drops_default_write_permissions_across_modules():
     }
     assert merged.isdisjoint(hidden_writes)
     assert "facilities.view_sensitive" in merged
+
+
+def test_member_keeps_storefront_order_with_store_view_alone():
+    """Browsing the store is useless without being able to check out.
+
+    ``storefront.order`` is the same shape as ``scheduling.swap``: an action a
+    plain member holds alongside baseline view access, which the two-checkbox
+    editor cannot express. It rode along as an un-submitted module's default
+    until the Department Store was added to the frontend registry — from that
+    point the module *is* submitted, so without an explicit carry-over a member
+    saved from the position editor browses the catalog and gets a 403 at
+    checkout.
+    """
+    defaults = DEFAULT_POSITIONS["member"]["permissions"]
+    submitted = {"storefront": RolePermission(view=True, manage=False)}
+    merged = _merged(submitted, defaults)
+    assert "storefront.view" in merged
+    assert "storefront.order" in merged
+
+
+def test_unchecking_the_store_revokes_ordering_too():
+    defaults = ["storefront.view", "storefront.order"]
+    submitted = {"storefront": RolePermission(view=False, manage=False)}
+    merged = _merged(submitted, defaults)
+    assert "storefront.order" not in merged
+    assert "storefront.view" not in merged
+
+
+def test_store_manage_covers_ordering_through_the_wildcard():
+    defaults = ["storefront.view", "storefront.order", "storefront.manage"]
+    submitted = {"storefront": RolePermission(view=True, manage=True)}
+    merged = _merged(submitted, defaults)
+    assert "storefront.order" not in merged
+    assert permission_matches("storefront.order", set(merged))
