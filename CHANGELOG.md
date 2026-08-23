@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment checks: four item types, and the groundwork for walking a check as a lap (2026-08-23)
+
+**Changed**
+
+- **`check_type` carried nine values; seven were checks storing only four
+  kinds of answer.** A number, a pass/fail, a quantity, a date. The extra
+  values were layout decisions wearing a type's clothing: `present` and
+  `functional` both store pass/fail and differ only in what the crew is asked
+  to do — a sentence on the item, not a column — and `reading` and `level`
+  both store a number against a threshold. An admin had to choose between
+  near-synonyms, and the form carried a distinct control for each, so the same
+  question rendered two ways depending on which name somebody picked years
+  earlier.
+- They collapse to **`level` / `function` / `count` / `expiry`**. `header` and
+  `text` are untouched: they are not checks, they are the layout, and the point
+  of naming the four is that a type is no longer allowed to be a layout choice.
+- `app/utils/check_types.py` is the write-side authority (the same pattern as
+  `app/utils/positions.py`). The request schema still **accepts** the legacy
+  names — an older client should not break over a rename it never asked for —
+  but normalizes before storing. It is deliberately stricter than the reader:
+  an unknown value at a request boundary is the caller's mistake and is
+  rejected, where the same value read back from a column falls back to
+  `function`.
+
+**Added**
+
+- **A control per type, each with its own pass rule.** Level stores the number
+  rather than reducing it to a tick, because the trend is the useful part, and
+  an emptied box reads as "not read yet" rather than zero. Function opens a
+  note and a photo on every fail, and **neither blocks the walk** — a crew held
+  at a textarea at 07:00 abandons the check, so an unwritten note is flagged on
+  the finished check instead. Count treats short of par as a **restock line,
+  not a failure**. Expiry confirms the date already on record rather than
+  asking for it again, and stays amber on every shift inside the pull window.
+- **The lap**: stops in walking order, the current one open in place and
+  finished ones collapsed to a line, any stop reachable at any point. A
+  collapsed stop shows its item count, and switches to naming its fault once it
+  has one. The bulk "All good" **refuses to confirm a level** — that would be a
+  fabricated record on the one type whose whole purpose is the stored value —
+  and its label follows what the stop holds ("All at par" for a bag of counts).
+- **Seals.** `check_template_compartments.is_sealed` marks a container sealed
+  in normal operation; `apparatus_compartment_seals` holds the state per
+  apparatus — current tag, intact or broken, when and on what run, and the tag
+  to apply when it is re-sealed. An intact tag is evidence nobody has been
+  inside since the last full count, so the check reads the tag and the pockets
+  are not counted at all; break it and every pocket counts again. The state is
+  deliberately not on the check or the template, because a seal is broken at
+  02:41 on a call and re-sealed hours later by a different crew.
+- The template builder names **what each type stores** beside its label, and
+  carries a seal toggle beside the container type.
+
+**Migration notes**
+
+- `c3f81a4d5e72`. **The type collapse does not reverse**: three legacy names
+  become `function` and two become `level`, and no column remembers which. The
+  downgrade deliberately does not guess — a wrong guess renders the wrong
+  control on a safety checklist.
+- What the old names carried implicitly is preserved rather than dropped.
+  Items with an empty description get the instruction their old type implied
+  ("Confirm the item is in place." / "Switch it on and confirm it works.");
+  an item whose author described the test keeps their own words. The seeded
+  preset library got the same treatment — 185 of its 232 items were
+  pass/fail-family with no description, so collapsing them would have left a
+  crew with "Works / Fails" and no test written on the item.
+
+**Not yet wired**
+
+- The lap and its controls are built and tested but **the live check screen
+  still renders the previous flat compartment list**. Swapping it rewrites that
+  screen and the tests that pin its current markup, which is a deliberate
+  follow-up rather than something to slip in alongside the model change.
+
 ### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
 
 **Added**
@@ -10063,16 +10135,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
