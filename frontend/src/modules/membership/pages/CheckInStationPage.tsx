@@ -54,6 +54,7 @@ import {
   NFC_ID_CARDS_INTEGRATION,
 } from '../constants/idCards';
 import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegrations';
+import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { NfcCheckInDirection, NfcCheckInTarget } from '../../../constants/enums';
 import type { NfcStationCheckInResult } from '../types/idCard';
 
@@ -73,6 +74,15 @@ const DUPLICATE_TAP_MS = 4000;
 
 /** How long a result stays on screen before the station returns to "ready". */
 const RESULT_VISIBLE_MS = 7000;
+
+/**
+ * How often an armed station re-checks that its target still exists.
+ *
+ * Five minutes: long enough not to matter next to the traffic a station
+ * generates by being used, short enough that a shift which ended is caught
+ * before a whole relief crew has tapped into it.
+ */
+const TARGET_REFRESH_MS = 5 * 60 * 1000;
 
 /**
  * A USB reader types its whole serial in a burst and ends with Enter. A gap
@@ -108,13 +118,49 @@ const CheckInStationPage: React.FC = () => {
 
   // Latest values for the page-wide key handler and the scan callback, both of
   // which are registered once and must not re-register on every keystroke.
-  const stateRef = useRef({ armed, targetId, targetType, direction, busy });
-  stateRef.current = { armed, targetId, targetType, direction, busy };
+  const stateRef = useRef({ armed, targetId, targetType, direction, busy, cardsEnabled });
+  stateRef.current = { armed, targetId, targetType, direction, busy, cardsEnabled };
   const lastTapRef = useRef<{ serial: string; at: number } | null>(null);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Assigned once `disarm` exists below; the refresh above needs to reach it.
+  const disarmRef = useRef<() => void>(() => {});
 
   // ---------------------------------------------------------------- targets
 
+  const fetchTargets = useCallback(async (): Promise<TargetOption[]> => {
+    if (targetType === NfcCheckInTarget.SHIFT) {
+      const today = getTodayLocalDate(tz);
+      const { shifts } = await schedulingService.getShifts({ start_date: today, end_date: today });
+      return shifts
+        .filter((s) => !s.is_finalized)
+        .map((s) => ({
+          id: s.id,
+          label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
+          sublabel: `${formatTime(s.start_time, tz)}${s.end_time ? `–${formatTime(s.end_time, tz)}` : ''}`,
+        }));
+    }
+    if (targetType === NfcCheckInTarget.EVENT) {
+      // A window rather than "today": a drill that started last night and
+      // a breakfast that starts in three hours are both things somebody
+      // could be standing at a station for.
+      const now = Date.now();
+      const events = await eventService.getEvents({
+        start_after: new Date(now - 12 * 60 * 60 * 1000).toISOString(),
+        start_before: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+      });
+      return events
+        .filter((e) => !e.is_cancelled && !e.is_draft)
+        .map((e) => ({
+          id: e.id,
+          label: e.title,
+          sublabel: formatTime(e.start_datetime, tz),
+        }));
+    }
+    const categories = await adminHoursCategoryService.list();
+    return categories.map((c) => ({ id: c.id, label: c.name }));
+  }, [targetType, tz]);
+
+  // Load the list for a newly chosen kind of target, selecting the first.
   useEffect(() => {
     if (!cardsEnabled) return;
     let cancelled = false;
@@ -123,37 +169,7 @@ const CheckInStationPage: React.FC = () => {
       setTargetsError(null);
       setTargetId('');
       try {
-        let options: TargetOption[] = [];
-        if (targetType === NfcCheckInTarget.SHIFT) {
-          const today = getTodayLocalDate(tz);
-          const { shifts } = await schedulingService.getShifts({ start_date: today, end_date: today });
-          options = shifts
-            .filter((s) => !s.is_finalized)
-            .map((s) => ({
-              id: s.id,
-              label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
-              sublabel: `${formatTime(s.start_time, tz)}${s.end_time ? `–${formatTime(s.end_time, tz)}` : ''}`,
-            }));
-        } else if (targetType === NfcCheckInTarget.EVENT) {
-          // A window rather than "today": a drill that started last night and
-          // a breakfast that starts in three hours are both things somebody
-          // could be standing at a station for.
-          const now = Date.now();
-          const events = await eventService.getEvents({
-            start_after: new Date(now - 12 * 60 * 60 * 1000).toISOString(),
-            start_before: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
-          });
-          options = events
-            .filter((e) => !e.is_cancelled && !e.is_draft)
-            .map((e) => ({
-              id: e.id,
-              label: e.title,
-              sublabel: formatTime(e.start_datetime, tz),
-            }));
-        } else {
-          const categories = await adminHoursCategoryService.list();
-          options = categories.map((c) => ({ id: c.id, label: c.name }));
-        }
+        const options = await fetchTargets();
         if (cancelled) return;
         setTargets(options);
         setTargetId(options[0]?.id ?? '');
@@ -167,7 +183,64 @@ const CheckInStationPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [targetType, tz, cardsEnabled]);
+  }, [fetchTargets, cardsEnabled]);
+
+  /**
+   * Re-check that the selected target is still a thing to check into.
+   *
+   * A station is armed once and then left alone for hours, so the list it was
+   * armed against goes stale in a way nobody is watching: a shift ends, an
+   * officer finalizes it, the small hours roll into a new duty day. Taps kept
+   * landing on yesterday's shift, and the only sign was attendance appearing
+   * somewhere nobody looked.
+   *
+   * Keeps the operator's selection when it survives the refresh — silently
+   * moving an armed station onto a different shift would be worse than the
+   * staleness it fixes.
+   */
+  const refreshTargets = useCallback(async () => {
+    if (!stateRef.current.cardsEnabled) return;
+    let options: TargetOption[];
+    try {
+      options = await fetchTargets();
+    } catch {
+      // Leave the station on what it has. A failed refresh is not evidence the
+      // target ended, and disarming on a dropped request would take a working
+      // station down for a blip of station Wi-Fi.
+      return;
+    }
+    setTargets(options);
+
+    const selected = stateRef.current.targetId;
+    if (!selected || options.some((option) => option.id === selected)) return;
+
+    setTargetId(options[0]?.id ?? '');
+    if (stateRef.current.armed) {
+      disarmRef.current();
+      setResult(null);
+      setTargetsError(
+        'That shift or event has ended, so the reader stopped. Pick what members are checking into now and start it again.'
+      );
+    }
+  }, [fetchTargets]);
+
+  // A wall-mounted tablet never changes visibility or focus, so the poll is
+  // what actually covers the unattended case; the listeners cover a phone
+  // coming back out of a pocket.
+  useEffect(() => {
+    if (!cardsEnabled) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshTargets();
+    };
+    const interval = setInterval(() => void refreshTargets(), TARGET_REFRESH_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [refreshTargets, cardsEnabled]);
 
   // ------------------------------------------------------------------ taps
 
@@ -184,6 +257,13 @@ const CheckInStationPage: React.FC = () => {
       const state = stateRef.current;
       if (!serial || !state.targetId || state.busy) return;
       if (!isPlausibleCardSerial(serial)) return;
+
+      // A card held against the reader is a person standing at the device, but
+      // Web NFC fires no mouse, key, scroll or touch event, so the session
+      // timer counted a station in constant use as idle and logged it out
+      // mid-drill. Signalled before the request, so a refused tap keeps the
+      // session alive too — somebody is still there either way.
+      signalUserActivity();
 
       // Only a payload that looks like a code this system issued is forwarded.
       // A transit card or a hotel key read at the door carries text of its own,
@@ -236,6 +316,7 @@ const CheckInStationPage: React.FC = () => {
     stop();
     setArmed(false);
   }, [stop]);
+  disarmRef.current = disarm;
 
   const arm = useCallback(() => {
     setArmed(true);

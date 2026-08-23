@@ -5,6 +5,7 @@ import { renderWithRouter } from '../../../test/utils';
 
 const mockStationCheckIn = vi.fn();
 const mockIsConnected = vi.fn();
+const mockSignalUserActivity = vi.fn();
 const mockGetShifts = vi.fn();
 const mockGetEvents = vi.fn();
 const mockListCategories = vi.fn();
@@ -25,6 +26,10 @@ vi.mock('../../scheduling/services/api', () => ({
 
 vi.mock('../../admin-hours/services/api', () => ({
   adminHoursCategoryService: { list: (...args: unknown[]) => mockListCategories(...args) as unknown },
+}));
+
+vi.mock('../../../hooks/useIdleTimer', () => ({
+  signalUserActivity: (...args: unknown[]) => mockSignalUserActivity(...args) as unknown,
 }));
 
 vi.mock('../../../hooks/useConnectedIntegrations', () => ({
@@ -207,5 +212,89 @@ describe('CheckInStationPage', () => {
     expect(await screen.findByText(/turned off/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start the reader/i })).not.toBeInTheDocument();
     expect(mockGetShifts).not.toHaveBeenCalled();
+  });
+
+  it('counts a tap as user activity so the session does not time out', async () => {
+    // Web NFC fires no mouse, key, scroll or touch event, so a station in
+    // constant use looked idle to the HIPAA session timer and logged itself
+    // out mid-drill.
+    const user = userEvent.setup();
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+    await user.click(screen.getByRole('button', { name: /start the reader/i }));
+
+    await tapWedgeCard('04A2245B7C1180');
+
+    expect(mockSignalUserActivity).toHaveBeenCalled();
+  });
+
+  it('keeps the session alive even when the card is refused', async () => {
+    // Somebody is standing at the device either way.
+    const user = userEvent.setup();
+    mockStationCheckIn.mockResolvedValue({ status: 'unknown_card', message: 'Not registered.' });
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+    await user.click(screen.getByRole('button', { name: /start the reader/i }));
+
+    await tapWedgeCard('04A2245B7C1180');
+
+    expect(mockSignalUserActivity).toHaveBeenCalled();
+  });
+
+  it('stops the reader when the shift it was armed against ends', async () => {
+    // A station is armed once and left for hours. Taps kept landing on
+    // yesterday's shift, and the only sign was attendance appearing somewhere
+    // nobody looked.
+    const user = userEvent.setup();
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+    await user.click(screen.getByRole('button', { name: /start the reader/i }));
+    expect(screen.getByRole('button', { name: /stop the reader/i })).toBeInTheDocument();
+
+    mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 50 });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(await screen.findByText(/has ended, so the reader stopped/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start the reader/i })).toBeInTheDocument();
+  });
+
+  it('keeps the operator on their chosen target across a refresh', async () => {
+    // Silently moving an armed station onto a different shift would be worse
+    // than the staleness this fixes.
+    const user = userEvent.setup();
+    mockGetShifts.mockResolvedValue({
+      shifts: [
+        { id: 'shift-1', apparatus_unit_number: 'E4', start_time: '2026-08-23T12:00:00Z', is_finalized: false },
+        { id: 'shift-2', apparatus_unit_number: 'L1', start_time: '2026-08-23T12:00:00Z', is_finalized: false },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 50,
+    });
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+    await user.selectOptions(screen.getByLabelText(/today's shifts/i), 'shift-2');
+    await user.click(screen.getByRole('button', { name: /start the reader/i }));
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await tapWedgeCard('04A2245B7C1180');
+
+    expect(mockStationCheckIn).toHaveBeenCalledWith(expect.objectContaining({ target_id: 'shift-2' }));
+    expect(screen.getByRole('button', { name: /stop the reader/i })).toBeInTheDocument();
+  });
+
+  it('leaves a running station alone when the refresh itself fails', async () => {
+    // A dropped request is not evidence the shift ended; disarming on a blip
+    // of station Wi-Fi would take a working station down.
+    const user = userEvent.setup();
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+    await user.click(screen.getByRole('button', { name: /start the reader/i }));
+
+    mockGetShifts.mockRejectedValue(new Error('network'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(screen.getByRole('button', { name: /stop the reader/i })).toBeInTheDocument();
   });
 });
