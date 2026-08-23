@@ -85,9 +85,6 @@ async def _submit(db, shift, monkeypatch):
     """
     svc = EquipmentCheckService(db)
     monkeypatch.setattr(
-        svc, "_load_template_items_map", AsyncMock(return_value={}), raising=True
-    )
-    monkeypatch.setattr(
         svc, "_create_check_items", AsyncMock(return_value=None), raising=True
     )
     monkeypatch.setattr(

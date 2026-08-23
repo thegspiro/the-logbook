@@ -16,6 +16,7 @@ const mockUploadCheckItemPhotos = vi.fn();
 const mockListPendingChecks = vi.fn();
 const mockDequeueCheck = vi.fn();
 const mockMarkCheckSubmitted = vi.fn();
+const mockMarkPhotosUploaded = vi.fn();
 const mockEnqueueCheck = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
@@ -41,6 +42,7 @@ vi.mock('../../utils/offlineQueue', () => ({
   listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
   dequeueCheck: (...a: unknown[]) => mockDequeueCheck(...a) as unknown,
   markCheckSubmitted: (...a: unknown[]) => mockMarkCheckSubmitted(...a) as unknown,
+  markPhotosUploaded: (...a: unknown[]) => mockMarkPhotosUploaded(...a) as unknown,
   markRetry: vi.fn(),
   pendingCount: vi.fn().mockResolvedValue(0),
 }));
@@ -118,6 +120,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     mockListPendingChecks.mockResolvedValue([]);
     mockUploadCheckItemPhotos.mockResolvedValue({ photoUrls: [], count: 1 });
     mockMarkCheckSubmitted.mockResolvedValue({});
+    mockMarkPhotosUploaded.mockResolvedValue({});
     mockSubmitCheck.mockResolvedValue({ id: 'check-1', items: [] });
     mockEnqueueCheck.mockResolvedValue('queued-check-1');
     mockUpdateDeployedLot.mockResolvedValue({
@@ -154,6 +157,10 @@ describe('EquipmentCheckForm quantity seeding', () => {
       expect(mockUploadCheckItemPhotos).toHaveBeenCalledWith('check-1', 'check-item-77', [expect.any(File)]);
     });
     expect(mockMarkCheckSubmitted).toHaveBeenCalledWith('queue-1', 'check-1', { 'ti-1': 'check-item-77' });
+    // Checkpointed before the entry is dropped: the upload endpoint appends to
+    // photo_urls, so a group still queued after a successful POST is uploaded
+    // twice on the next drain.
+    expect(mockMarkPhotosUploaded).toHaveBeenCalledWith('queue-1', 'ti-1');
     expect(mockDequeueCheck).toHaveBeenCalledWith('queue-1');
   });
 

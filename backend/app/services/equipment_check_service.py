@@ -1022,43 +1022,6 @@ class EquipmentCheckService:
             apparatus.has_deficiency = False
             apparatus.deficiency_since = None
 
-    async def _load_template_items_map(
-        self,
-        items_data: List[Dict[str, Any]],
-        organization_id: str,
-        template_id: str,
-    ) -> Dict[str, CheckTemplateItem]:
-        """Load CheckTemplateItem records referenced by the submitted items.
-
-        Scoped to the caller's org via the compartment→template join:
-        _create_check_items writes serial/lot numbers back onto these rows, so
-        a foreign template_item_id must never resolve to a loaded record.
-        """
-        template_item_ids = [
-            i.get("template_item_id") for i in items_data if i.get("template_item_id")
-        ]
-        template_items_map: Dict[str, CheckTemplateItem] = {}
-        if template_item_ids:
-            tmpl_result = await self.db.execute(
-                select(CheckTemplateItem)
-                .join(
-                    CheckTemplateCompartment,
-                    CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
-                )
-                .join(
-                    EquipmentCheckTemplate,
-                    CheckTemplateCompartment.template_id == EquipmentCheckTemplate.id,
-                )
-                .where(
-                    CheckTemplateItem.id.in_(template_item_ids),
-                    EquipmentCheckTemplate.organization_id == organization_id,
-                    EquipmentCheckTemplate.id == template_id,
-                )
-            )
-            for ti in tmpl_result.scalars().all():
-                template_items_map[str(ti.id)] = ti
-        return template_items_map
-
     async def _load_checkable_template_items(
         self, organization_id: str, template_id: str
     ) -> Dict[str, CheckTemplateItem]:
@@ -1123,17 +1086,32 @@ class EquipmentCheckService:
             )
 
         for item, template_item_id in zip(items_data, submitted_ids):
-            template_item = template_items_map[template_item_id]
             item["template_item_id"] = template_item_id
-            item["item_name"] = template_item.name
-            item["compartment_name"] = template_item._check_compartment_name
-            item["check_type"] = template_item.check_type
-            item["required_quantity"] = template_item.required_quantity
-            item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
-            item["level_unit"] = template_item.level_unit
-            item["serial_number"] = template_item.serial_number
-            item["lot_number"] = template_item.lot_number
-            item["expiration_date"] = template_item.expiration_date
+            EquipmentCheckService._snapshot_from_template(
+                item, template_items_map[template_item_id]
+            )
+
+    @staticmethod
+    def _snapshot_from_template(
+        item: Dict[str, Any],
+        template_item: CheckTemplateItem,
+    ) -> None:
+        """Overwrite an item's descriptive fields with the template's own.
+
+        None of these is an observation the crew makes — they identify *which*
+        unit was checked. Taking them from the request lets a client file a
+        result whose serial or lot disagrees with the authoritative row it
+        claims to answer, and every report downstream reads the snapshot.
+        """
+        item["item_name"] = template_item.name
+        item["compartment_name"] = template_item._check_compartment_name
+        item["check_type"] = template_item.check_type
+        item["required_quantity"] = template_item.required_quantity
+        item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
+        item["level_unit"] = template_item.level_unit
+        item["serial_number"] = template_item.serial_number
+        item["lot_number"] = template_item.lot_number
+        item["expiration_date"] = template_item.expiration_date
 
     # ------------------------------------------------------------------
     # Check Submission
@@ -1210,8 +1188,14 @@ class EquipmentCheckService:
                     raise EquipmentCheckConflictError(
                         "This client submission ID was already used for another check"
                     )
-                if retry.overall_status != "incomplete":
-                    return await self.get_check(retry.id, organization_id)
+                # Returned whatever its aggregate status. A key is minted fresh
+                # per submission attempt, so a repeat is always a replay of the
+                # same payload rather than new intent; an accepted-but-incomplete
+                # draft that fell through to revalidation here answered a
+                # successful retry with a 400 whenever the template had since
+                # been edited, reassigned or disabled — and the offline queue
+                # counts that 400 toward the ceiling that discards the entry.
+                return await self.get_check(retry.id, organization_id)
 
         if template_id:
             position = getattr(assignment, "position", None)
@@ -1471,13 +1455,28 @@ class EquipmentCheckService:
 
         # See submit_check: the template map decides expiry, so it is loaded
         # before the status computation rather than just before the write.
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id, template_id
+        # Loaded with the compartment label (rather than by submitted id) so the
+        # snapshot below can take every identifying field from the template.
+        template_items_map = await self._load_checkable_template_items(
+            organization_id, str(template_id)
         )
-        submitted_ids = {item["template_item_id"] for item in items_data}
+        submitted_ids = {item.get("template_item_id") for item in items_data}
+        if None in submitted_ids:
+            raise ValueError("template_item_id is required for every item")
         invalid = submitted_ids - template_items_map.keys()
         if invalid:
-            raise ValueError(f"Items do not belong to template: {', '.join(invalid)}")
+            raise ValueError(
+                f"Items do not belong to template: {', '.join(sorted(invalid))}"
+            )
+        # A standalone check may deliberately cover part of a template, so
+        # completeness is not required here as it is for a shift check — but
+        # the rows it does carry are snapshotted from the authoritative record
+        # all the same. Without this, serial and lot numbers reached the stored
+        # result (and every report reading it) straight from the request.
+        for item in items_data:
+            self._snapshot_from_template(
+                item, template_items_map[item["template_item_id"]]
+            )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )

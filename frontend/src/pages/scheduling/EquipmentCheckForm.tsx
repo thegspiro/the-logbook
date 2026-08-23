@@ -51,6 +51,7 @@ import {
   listPendingChecks,
   dequeueCheck,
   markCheckSubmitted,
+  markPhotosUploaded,
   markRetry,
   pendingCount as getPendingCount,
   CHECK_QUEUE_MAX_RETRIES,
@@ -390,6 +391,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             }
             const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
             await schedulingService.uploadCheckItemPhotos(checkId, checkItemId, files);
+            // Checkpoint before the next group can fail. The endpoint appends
+            // to the item's photo_urls and caps it at three, so a group left
+            // queued after a successful POST is re-uploaded on the next drain
+            // — filing duplicate evidence, or tripping the cap and returning a
+            // permanent 400 that eventually discards the photos still missing.
+            await markPhotosUploaded(entry.id, templateItemId);
           }
 
           await dequeueCheck(entry.id);
@@ -759,7 +766,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Unsaved changes warning
   // --------------------------------------------------------------------------
 
-  const hasProgress = checkedItems > 0;
+  // Work the crew actually recorded, not `checkedItems`: that counter treats an
+  // expired item as checked because expiry force-fails it on sight, so merely
+  // opening a form containing one armed the beforeunload prompt and warned
+  // about unsaved changes nobody had made. A carried quantity is excluded for
+  // the same reason — it is seeded without a status precisely because it is a
+  // starting point rather than an answer, and every quantity the crew does
+  // enter sets a status alongside it.
+  const hasProgress = useMemo(
+    () =>
+      Boolean(overallNotes) ||
+      Object.values(results).some((result) => result.status !== 'not_checked' || Boolean(result.notes)),
+    [results, overallNotes]
+  );
   // True while any quantity still shows a number nobody has confirmed this
   // pass; the banner explains those and retires itself once they are gone.
   const hasCarriedCounts = useMemo(
@@ -846,14 +865,25 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [updateResult, focusNextItem]
   );
 
-  /** Items in this compartment a crew still has to record something for. */
+  /**
+   * Items in this compartment a crew still has to record something for.
+   *
+   * Overrides are applied before the expiry filter, not after: a position
+   * whose stock was just swapped is no longer expired, and reading the raw
+   * template row here left it filtered out while the compartment header
+   * counted it as checkable. "Confirm Counts" and "Set all to Par" then
+   * iterated a list the corrected item was missing from and appeared to do
+   * nothing.
+   */
   const checkableIn = useCallback(
     (compartment: CheckTemplateCompartment) =>
-      compartment.items.filter(
-        (item) =>
-          item.checkType !== 'header' && item.checkType !== 'text' && getExpirationStatus(item, today) !== 'expired'
-      ),
-    [today]
+      compartment.items
+        .map(applyOverride)
+        .filter(
+          (item) =>
+            item.checkType !== 'header' && item.checkType !== 'text' && getExpirationStatus(item, today) !== 'expired'
+        ),
+    [today, applyOverride]
   );
 
   /**

@@ -276,6 +276,8 @@ export const TrainingAdminPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const pageTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const innerTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const moreItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   // Resolve initial state from URL params (supports both old and new format)
@@ -318,23 +320,92 @@ export const TrainingAdminPage: React.FC = () => {
     setIsMoreOpen(false);
   };
 
+  // Entering the open menu is a side effect of it opening, not of a click:
+  // the trigger is also reachable by keyboard, and either route has to land
+  // the user on a menu item for the arrow keys below to have somewhere to go.
+  useEffect(() => {
+    if (!isMoreOpen) return;
+    const firstId = overflowPages.find(({ id }) => id === activePage)?.id ?? overflowPages[0]?.id;
+    if (firstId) moreItemRefs.current[firstId]?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMoreOpen]);
+
+  /**
+   * Close the More menu and put focus back where the user left it.
+   *
+   * A menu that closes while focus is still on one of its now-removed items
+   * drops focus to the document body, stranding a keyboard user at the top of
+   * the page. `returnFocus` is false only when the caller is navigating away
+   * to a section tab that takes focus itself.
+   */
+  const closeMoreMenu = (returnFocus = true) => {
+    setIsMoreOpen(false);
+    if (returnFocus) moreTriggerRef.current?.focus();
+  };
+
+  /**
+   * `role="menu"` advertises a keyboard contract the browser does not supply.
+   * Without this the popup opened with focus left on the trigger and neither
+   * arrow keys, Home/End nor Escape did anything, so a screen-reader user was
+   * told these sections existed and had no way to reach them.
+   */
+  const handleMoreMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const ids = overflowPages.map((page) => page.id);
+    if (ids.length === 0) return;
+    const focusedIndex = ids.findIndex((id) => moreItemRefs.current[id] === document.activeElement);
+
+    let nextIndex: number | undefined;
+    if (event.key === 'ArrowDown') nextIndex = (focusedIndex + 1) % ids.length;
+    if (event.key === 'ArrowUp') nextIndex = (focusedIndex - 1 + ids.length) % ids.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = ids.length - 1;
+
+    if (nextIndex !== undefined) {
+      event.preventDefault();
+      const nextId = ids[nextIndex];
+      if (nextId !== undefined) moreItemRefs.current[nextId]?.focus();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMoreMenu();
+    }
+    // Tab moves on through the page rather than being trapped, so the menu
+    // dismisses itself and leaves focus where the browser puts it next.
+    if (event.key === 'Tab') setIsMoreOpen(false);
+  };
+
+  const handleMoreTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    setIsMoreOpen(true);
+  };
+
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
     setSearchParams({ page: activePage, tab: tabId });
   };
 
+  /**
+   * `focusedId` is the tab the keystroke came from, not the selected one.
+   *
+   * Browser back/forward changes the selection without moving focus, so the
+   * two diverge: deriving the step from the selected tab then moved focus from
+   * somewhere the user was not, skipping over the tab they were actually on.
+   */
   const handleTabKeyDown = <T extends string>(
     event: React.KeyboardEvent<HTMLButtonElement>,
     ids: T[],
-    activeId: T,
+    focusedId: T,
     activate: (id: T) => void,
     refs: React.RefObject<Record<string, HTMLButtonElement | null>>
   ) => {
     let nextIndex: number | undefined;
-    const activeIndex = ids.indexOf(activeId);
+    const focusedIndex = ids.indexOf(focusedId);
 
-    if (event.key === 'ArrowRight') nextIndex = (activeIndex + 1) % ids.length;
-    if (event.key === 'ArrowLeft') nextIndex = (activeIndex - 1 + ids.length) % ids.length;
+    if (event.key === 'ArrowRight') nextIndex = (focusedIndex + 1) % ids.length;
+    if (event.key === 'ArrowLeft') nextIndex = (focusedIndex - 1 + ids.length) % ids.length;
     if (event.key === 'Home') nextIndex = 0;
     if (event.key === 'End') nextIndex = ids.length - 1;
 
@@ -428,7 +499,7 @@ export const TrainingAdminPage: React.FC = () => {
                   handleTabKeyDown(
                     event,
                     primaryPages.map((item) => item.id),
-                    activePage,
+                    page.id,
                     handlePageChange,
                     pageTabRefs
                   )
@@ -450,7 +521,9 @@ export const TrainingAdminPage: React.FC = () => {
           <div className="relative">
             <button
               type="button"
+              ref={moreTriggerRef}
               onClick={() => setIsMoreOpen((open) => !open)}
+              onKeyDown={handleMoreTriggerKeyDown}
               aria-expanded={isMoreOpen}
               aria-haspopup="menu"
               className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
@@ -466,6 +539,7 @@ export const TrainingAdminPage: React.FC = () => {
               <div
                 role="menu"
                 aria-label="More training admin sections"
+                onKeyDown={handleMoreMenuKeyDown}
                 className="border-theme-surface-border bg-theme-surface-primary absolute right-0 z-20 mt-2 w-64 rounded-lg border p-1 shadow-lg"
               >
                 {overflowPages.map((page) => {
@@ -476,6 +550,9 @@ export const TrainingAdminPage: React.FC = () => {
                       key={page.id}
                       type="button"
                       role="menuitem"
+                      ref={(element) => {
+                        moreItemRefs.current[page.id] = element;
+                      }}
                       aria-current={isActive ? 'page' : undefined}
                       onClick={() => handlePageChange(page.id)}
                       className={`focus:ring-theme-focus-ring flex w-full items-start gap-3 rounded-md px-3 py-2 text-left focus:ring-2 focus:outline-hidden ${
@@ -545,7 +622,7 @@ export const TrainingAdminPage: React.FC = () => {
                     handleTabKeyDown(
                       event,
                       currentPage.tabs.map((item) => item.id),
-                      activeTab,
+                      tab.id,
                       handleTabChange,
                       innerTabRefs
                     )
@@ -566,15 +643,33 @@ export const TrainingAdminPage: React.FC = () => {
             </div>
           </div>
 
-          <div
-            id={`training-admin-tabpanel-${activePage}-${activeTab}`}
-            role="tabpanel"
-            aria-labelledby={`training-admin-tab-${activePage}-${activeTab}`}
-          >
-            <Suspense fallback={<TabLoading />}>
-              <TabContent page={activePage} tab={activeTab} />
-            </Suspense>
-          </div>
+          {/*
+            One panel per tab, not one for the selected tab. Every inner tab
+            advertises its panel through `aria-controls`, and rendering only
+            the active one left every inactive tab pointing at an ID that was
+            not in the document — so assistive technology could not resolve the
+            panel a tab claimed to control. Only the selected panel holds
+            content: mounting all of them would have each tab's page fetch its
+            data on arrival at the section.
+          */}
+          {currentPage.tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <div
+                key={tab.id}
+                id={`training-admin-tabpanel-${activePage}-${tab.id}`}
+                role="tabpanel"
+                aria-labelledby={`training-admin-tab-${activePage}-${tab.id}`}
+                hidden={!isActive}
+              >
+                {isActive && (
+                  <Suspense fallback={<TabLoading />}>
+                    <TabContent page={activePage} tab={tab.id} />
+                  </Suspense>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
