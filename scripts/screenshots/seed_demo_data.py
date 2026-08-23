@@ -1111,8 +1111,60 @@ class Seeder:
 
     # -- facilities & apparatus --------------------------------------
 
+    def _adopt_headquarters_facility(self, existing: list[dict]) -> list[dict]:
+        """Rename onboarding's auto-created headquarters into Station 1.
+
+        Creating the organization also creates a facility named after it
+        (`OnboardingService._create_headquarters_facility`), and the stations
+        step is documented as adding the stations *beyond* headquarters. This
+        seeder's FACILITIES list names its own "Station 1 - Headquarters", so
+        without this the demo department owns two headquarters and a facility
+        named after the department itself — a row no real department has, which
+        fronted the facility list in two captures.
+
+        Adopting the record rather than deleting it is also what a real
+        administrator does with it, so the seeded state stays a picture of the
+        product rather than of the seeder.
+        """
+        hq_name, hq_address, hq_year, hq_sqft, hq_bays = FACILITIES[0]
+        if any(f.get("name") == hq_name for f in existing):
+            return existing
+
+        org_name = (self.api.get("/organization/profile") or {}).get("name")
+        if not org_name:
+            return existing
+
+        stray = next((f for f in existing if f.get("name") == org_name), None)
+        if not stray:
+            return existing
+
+        facility_id = pick(stray, "id")
+        if not facility_id:
+            return existing
+
+        renamed = self.api.patch(
+            f"/facilities/{facility_id}",
+            {
+                "name": hq_name,
+                "address_line1": hq_address,
+                "city": "Oakville",
+                "state": "VA",
+                "zip_code": "22046",
+                "year_built": hq_year,
+                "square_footage": hq_sqft,
+                "num_bays": hq_bays,
+                "num_floors": 2,
+                "sleeping_quarters": 8 if hq_bays > 2 else 4,
+                "description": (
+                    f"{hq_name} houses front-line apparatus and crew quarters."
+                ),
+            },
+        )
+        return [renamed if f is stray else f for f in existing]
+
     def seed_facilities(self) -> list[dict]:
         existing = items(self.api.get("/facilities"), "facilities")
+        existing = self._adopt_headquarters_facility(existing)
         names = {f.get("name") for f in existing}
         created = list(existing)
         for name, address, year, sqft, bays in FACILITIES:

@@ -785,6 +785,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
             _manual_head = _heads[-1]
             logger.info(f"Stamping alembic_version to {_manual_head} via SQL")
             with engine.connect() as _sc:
+                _sc.execute(text(_ALEMBIC_VERSION_DDL))
                 _sc.execute(text("DELETE FROM alembic_version"))
                 _sc.execute(
                     text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
@@ -800,6 +801,20 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     except Exception:
         logger.info("Database stamped (could not resolve head for display)")
     logger.info("Fast-path database initialization complete")
+
+
+# Both direct-SQL stamp paths below run on databases that may never have had
+# an alembic_version table: the fast path builds the schema from the models
+# rather than from migrations, and the recovery path runs after an upgrade that
+# failed before Alembic created it. DELETE against a missing table aborts
+# startup with a bare 1146, which reads as a corrupt database rather than a
+# first-run one. Alembic's own column definition is version_num VARCHAR(32)
+# NOT NULL with a primary key, and must stay in sync with it.
+_ALEMBIC_VERSION_DDL = (
+    "CREATE TABLE IF NOT EXISTS alembic_version ("
+    "version_num VARCHAR(32) NOT NULL, "
+    "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+)
 
 
 def _wait_for_mysql(engine, startup_status):
@@ -1201,6 +1216,7 @@ def run_migrations():
                     # re-builds the revision graph which can fail on union
                     # filesystems (Unraid shfs) when files are invisible.
                     with engine.begin() as stamp_conn:
+                        stamp_conn.execute(text(_ALEMBIC_VERSION_DDL))
                         stamp_conn.execute(text("DELETE FROM alembic_version"))
                         stamp_conn.execute(
                             text(
