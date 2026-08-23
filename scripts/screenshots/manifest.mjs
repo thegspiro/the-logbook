@@ -5048,14 +5048,24 @@ export const SHOTS = [
     line: 418,
     anchor: 'The Test Records tab filtered to "Awaiting',
     alt: "Officer review queue — completed results awaiting validation, each row with its accept, notify and void controls and a bulk Accept above them",
-    route: "/training/admin?tab=tests",
+    // ?page=skills-testing, like 09-14: the bare ?tab=tests now lands on
+    // the admin hub's default section instead of the test records.
+    route: "/training/admin?page=skills-testing&tab=tests",
     fullPage: true,
     // The queue is a filter on the records tab rather than a page of its own,
     // and it is an option in the status dropdown — not a button or a tab — so
     // the shot has to select it. Without this the capture shows "All Statuses"
     // and pictures the whole history instead of the queue.
     prepare: async (page) => {
-      const status = page.locator("select").first();
+      // Picked by the option it must offer, not by being the first select on
+      // the page -- the admin hub grew a section navigator ("Dashboard /
+      // Records / Setup / ...") which now holds that position, and selecting
+      // pending_validation on it timed out with the status filter untouched a
+      // few hundred pixels away.
+      const status = page
+        .locator("select")
+        .filter({ has: page.locator('option[value="pending_validation"]') })
+        .first();
       await status.waitFor({ state: "visible", timeout: 15_000 });
       await status.selectOption("pending_validation");
       // Waits on the row badge, scoped to a span. The dropdown's own option
@@ -10225,6 +10235,57 @@ export const SHOTS = [
       await clickByName(/Change payment method/i)(page);
       await page.waitForTimeout(800);
     },
+    fullPage: true,
+  },
+  {
+    // The blank sheet, printed from a published template. The route reads the
+    // template from ?id, so it is discovered at capture time like every other
+    // detail shot -- the seeder mints template ids afresh on each run.
+    id: "09-22-template-print-sheet",
+    doc: "09-skills-testing.md",
+    line: 1242,
+    anchor: "the Templates tab row actions with **Print** visible",
+    alt: "A blank skill sheet as it prints: the sections, the criteria, and a marking box beside each step for the examiner to fill in by hand",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/templates?limit=50",
+      (id) => `/training/skills-testing/print/template?id=${id}`,
+      "templates",
+      // The weighted sheet: it is the one carrying more than one section and a
+      // mix of scored and pass/fail criteria, which is what the marker asks to
+      // be visible in a single frame. A pass/fail-throughout template prints
+      // one kind of box and teaches nothing about the difference.
+      (template) =>
+        (template.status ?? "") === "published" &&
+        /Handline Advance/.test(template.name ?? ""),
+    ),
+    fullPage: true,
+  },
+  {
+    // The officer's view of a validated result. Shot as the administrator
+    // because the examiner's written notes are the half that disappears under
+    // a restricted disclosure -- the candidate's view of this same record is
+    // the shot below, and the pair is the teaching point.
+    id: "09-23-scorecard-print-officer",
+    doc: "09-skills-testing.md",
+    line: 1244,
+    anchor: "a completed scorecard print preview showing the per-step marks",
+    alt: "A validated scorecard as it prints: per-step marks, the section arithmetic behind the 78% total, a step marked 5 of 10 with the examiner's note explaining the deduction, and the validating officer's sign-off",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=200",
+      (id) => `/training/skills-testing/print/scorecard?id=${id}`,
+      "tests",
+      // Validated, not merely completed: the print page refuses a result that
+      // is still awaiting an officer, which is the guide's own edge case. Not
+      // voided, because a rebuilt fixture leaves its predecessor behind -- a
+      // validated result cannot be deleted -- and the withdrawn copy carries
+      // the same scores as the live one.
+      (test) =>
+        Boolean(test.validated_at ?? test.validatedAt) &&
+        !(test.voided_at ?? test.voidedAt) &&
+        test.result === "pass",
+    ),
     fullPage: true,
   },
   {

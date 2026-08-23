@@ -612,6 +612,11 @@ SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
 #
 # Matched on exactly, so it is a marker rather than prose — edit it and the next
 # seeder run creates a second fixture beside the first instead of reusing it.
+# Identifies the validated scorecard fixture among the several tests seeded on
+# the same weighted template. Changing this text orphans the existing one: the
+# seeder will build a second rather than find the first.
+SCORECARD_TEST_NOTE = "Annual handline evaluation, weighted sheet."
+
 CLOSEOUT_SHIFT_NOTE = (
     "Close-out wizard fixture — 24-hour tour, four crew, count-only captures."
 )
@@ -8190,10 +8195,44 @@ class Seeder:
             return None
         template_id = pick(scored_template, "id")
 
-        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        # Identified by the state that makes it this fixture, not by "any
+        # completed test on the weighted template": five seeded tests share that
+        # template — the pending-validation pair, the failed one, an in-progress
+        # one and this — so the looser guard returned whichever the API listed
+        # first and the scorecard fixture was never rebuilt, silently keeping
+        # whatever numbers an older run had left.
+        #
+        # Deliberately not matched on SCORECARD_TEST_NOTE, which would read
+        # better: the list response has no `notes` field, so that guard can
+        # never match and the seeder builds one more validated result on every
+        # run. It did, twice, before this was caught. The note stays on the
+        # record for whoever opens it; the guard uses what the list actually
+        # carries.
+        #
+        # A validated result cannot be deleted, only voided, so a rebuilt
+        # fixture leaves its predecessor behind — hence the voided check.
+        existing = items(
+            self.api.get("/training/skills-testing/tests?limit=200"), "tests"
+        )
+        candidate_name = None
+        for member in members:
+            if pick(member, "username") == DEMO_MEMBER_USERNAME:
+                candidate_name = (
+                    f"{pick(member, 'first_name', 'firstName') or ''} "
+                    f"{pick(member, 'last_name', 'lastName') or ''}"
+                ).strip()
+                break
         for test in existing:
-            if pick(test, "template_id", "templateId") == template_id and pick(
-                test, "completed_at", "completedAt"
+            if (
+                pick(test, "template_id", "templateId") == template_id
+                and pick(test, "completed_at", "completedAt")
+                and pick(test, "validated_at", "validatedAt")
+                and not pick(test, "voided_at", "voidedAt")
+                and pick(test, "result") == "pass"
+                and (
+                    not candidate_name
+                    or pick(test, "candidate_name", "candidateName") == candidate_name
+                )
             ):
                 return test
 
@@ -8222,7 +8261,7 @@ class Seeder:
             {
                 "template_id": template_id,
                 "candidate_id": pick(candidate, "id"),
-                "notes": "Annual handline evaluation, weighted sheet.",
+                "notes": SCORECARD_TEST_NOTE,
             },
         )
         test_id = pick(test, "id")
@@ -8231,12 +8270,22 @@ class Seeder:
 
         # Deliberately short of full marks on two steps, so the section totals
         # differ from one another and the percentage is not a flat 100.
+        #
+        # One of them is also marked *failed* while the test still passes
+        # overall. That combination is the whole of the "a failed step deducts
+        # points without failing the test" rule, and it is what the scorecard
+        # print captures teach: 9 + 5 + 10 + 15 = 39 of 50, which is 78% and
+        # clears the 70% mark with a failed row visible in the breakdown.
+        # Keep the arithmetic above the pass mark if these numbers are edited —
+        # dropping under it turns the fixture into a second failed test, which
+        # `seed_failed_test` already provides and which teaches the opposite.
         awarded = {
             "Selects and stretches the correct line": 9,
-            "Advances without kinks or snags": 8,
+            "Advances without kinks or snags": 5,
             "Bleeds the line and sets the pattern": 10,
             "Maintains control under flow": 15,
         }
+        FAILED_STEP = "Advances without kinks or snags"
 
         detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
         section_results = []
@@ -8256,11 +8305,11 @@ class Seeder:
                     {
                         "criterion_id": f"criterion-{si}-{ci}",
                         "criterion_label": label,
-                        "passed": True,
+                        "passed": label != FAILED_STEP,
                         "score": score,
                         "notes": (
-                            "Slight kink at the stairwell turn."
-                            if label == "Advances without kinks or snags"
+                            "Kinked at the stairwell turn and had to be reset."
+                            if label == FAILED_STEP
                             else None
                         ),
                     }
