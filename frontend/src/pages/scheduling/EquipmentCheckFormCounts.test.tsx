@@ -404,7 +404,6 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.queryByLabelText('Expiration')).not.toBeInTheDocument();
     expect(mockUpdateDeployedLot).not.toHaveBeenCalled();
   });
-
   it('derives an expired unanswered item as failed everywhere, including submission', async () => {
     const user = userEvent.setup();
     render({ hasExpiration: true, expirationDate: '2020-01-01' });
