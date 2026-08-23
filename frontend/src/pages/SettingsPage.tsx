@@ -150,6 +150,14 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
 ];
 
 /** First sub-page of each section, used when a section is selected fresh. */
+/**
+ * Sections whose controls write on change. The rest keep an explicit Save
+ * because they write credentials, and the autosave pill is hidden on those —
+ * a pill still reading "All changes saved" from an earlier section would be
+ * describing a write that is not going to happen.
+ */
+const AUTOSAVED_SECTIONS = new Set<SectionKey>(['general', 'modules', 'members', 'ranks']);
+
 const DEFAULT_SUB_PAGE = new Map<SectionKey, SubPageKey | null>(
   SECTIONS.map((section) => [section.key, section.subPages?.[0]?.key ?? null])
 );
@@ -334,7 +342,19 @@ export const SettingsPage: React.FC = () => {
   );
   const sectionKeys = useMemo(() => new Set<string>(sections.map((s) => s.key)), [sections]);
 
-  const initialTab = searchParams.get('tab');
+  const requestedTab = searchParams.get('tab');
+  const requestedPage = searchParams.get('page');
+
+  /**
+   * EVOC was a top-level section until this screen gained sub-pages, and the
+   * old UI put `?tab=evoc` in the address bar itself — so those links are in
+   * members' bookmarks and in messages already sent. Without this they would
+   * fail the section check and land silently on General, which looks like the
+   * settings were moved out from under them rather than merely renamed.
+   */
+  const initialTab = requestedTab === 'evoc' ? 'ranks' : requestedTab;
+  const initialPage = requestedTab === 'evoc' ? 'evoc' : requestedPage;
+
   const [activeSection, setActiveSection] = useState<SectionKey>(
     initialTab && sectionKeys.has(initialTab) ? (initialTab as SectionKey) : 'general'
   );
@@ -343,9 +363,8 @@ export const SettingsPage: React.FC = () => {
     const section = sections.find(
       (s) => s.key === (initialTab && sectionKeys.has(initialTab) ? initialTab : 'general')
     );
-    const requested = searchParams.get('page');
-    const isValid = section?.subPages?.some((page) => page.key === requested) ?? false;
-    return isValid ? (requested as SubPageKey) : (section?.subPages?.[0]?.key ?? null);
+    const isValid = section?.subPages?.some((page) => page.key === initialPage) ?? false;
+    return isValid ? (initialPage as SubPageKey) : (section?.subPages?.[0]?.key ?? null);
   });
 
   const { saveState, save, saveDebounced, retry } = useSettingsAutosave();
@@ -481,13 +500,21 @@ export const SettingsPage: React.FC = () => {
           organizationService.getProfile(),
           fetchRanks(),
         ]);
+        // The autosave savers read these refs at fire time, so the loaded
+        // values have to land in both or the first edit would write a payload
+        // built on the pre-load defaults.
         setContactSettings(settingsData.contact_info_visibility);
-        if (settingsData.membership_id) setMembershipId(settingsData.membership_id);
+        contactSettingsRef.current = settingsData.contact_info_visibility;
+        if (settingsData.membership_id) {
+          setMembershipId(settingsData.membership_id);
+          membershipIdRef.current = settingsData.membership_id;
+        }
         if (settingsData.email_service) setEmailSettings(settingsData.email_service);
         if (settingsData.file_storage) setStorageSettings(settingsData.file_storage);
         if (settingsData.auth) setAuthSettings(settingsData.auth);
         setModuleSettings(modulesData.module_settings);
         setProfile(profileData);
+        profileRef.current = profileData;
       } catch {
         toast.error('Unable to load settings.');
       } finally {
@@ -523,40 +550,51 @@ export const SettingsPage: React.FC = () => {
     );
   }, []);
 
+  /**
+   * Mirrors `profile` for the savers to read at fire time.
+   *
+   * A debounced write that closed over the value it was scheduled with would
+   * send that snapshot 600ms later, undoing anything changed in between — flip
+   * a switch while a typed name is still pending and the pending save writes
+   * the switch back to its old value.
+   */
+  const profileRef = useRef<OrganizationProfile | null>(profile);
+
+  const applyProfile = (next: OrganizationProfile, { immediate }: { immediate: boolean }) => {
+    profileRef.current = next;
+    setProfile(next);
+    const write = () => persistProfile(profileRef.current ?? next);
+    // A picked logo or timezone is a finished decision; a typed name is not.
+    if (immediate) {
+      void save(write);
+    } else {
+      saveDebounced('profile', write);
+    }
+  };
+
   const updateProfileField = <K extends keyof OrganizationProfile>(
     field: K,
     value: OrganizationProfile[K],
     { immediate = false }: { immediate?: boolean } = {}
   ) => {
-    if (!profile) return;
-    const next = { ...profile, [field]: value };
-    setProfile(next);
-    // A picked logo or timezone is a finished decision; a typed name is not.
-    if (immediate) {
-      void save(() => persistProfile(next));
-    } else {
-      saveDebounced('profile', () => persistProfile(next));
-    }
+    const current = profileRef.current ?? profile;
+    if (!current) return;
+    applyProfile({ ...current, [field]: value }, { immediate });
   };
 
   const updateAddressField = (field: string, value: string) => {
-    if (!profile) return;
-    const next = {
-      ...profile,
-      mailing_address: { ...profile.mailing_address, [field]: value },
-    };
-    setProfile(next);
-    saveDebounced('profile', () => persistProfile(next));
+    const current = profileRef.current ?? profile;
+    if (!current) return;
+    applyProfile({ ...current, mailing_address: { ...current.mailing_address, [field]: value } }, { immediate: false });
   };
 
   const updatePhysicalAddressField = (field: string, value: string) => {
-    if (!profile) return;
-    const next = {
-      ...profile,
-      physical_address: { ...profile.physical_address, [field]: value },
-    };
-    setProfile(next);
-    saveDebounced('profile', () => persistProfile(next));
+    const current = profileRef.current ?? profile;
+    if (!current) return;
+    applyProfile(
+      { ...current, physical_address: { ...current.physical_address, [field]: value } },
+      { immediate: false }
+    );
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -591,18 +629,25 @@ export const SettingsPage: React.FC = () => {
 
   // ── Contact info handlers ──
 
+  const contactSettingsRef = useRef<ContactInfoSettings>(contactSettings);
+
   const updateContactSetting = (patch: Partial<ContactInfoSettings>) => {
-    const next = { ...contactSettings, ...patch };
+    const next = { ...contactSettingsRef.current, ...patch };
+    contactSettingsRef.current = next;
     setContactSettings(next);
     void save(() => organizationService.updateContactInfoSettings(next));
   };
 
   // ── Membership ID handlers ──
 
+  const membershipIdRef = useRef<MembershipIdSettings>(membershipId);
+
   const updateMembershipIdSetting = (patch: Partial<MembershipIdSettings>, { immediate = false } = {}) => {
-    const next = { ...membershipId, ...patch };
+    const next = { ...membershipIdRef.current, ...patch };
+    membershipIdRef.current = next;
     setMembershipId(next);
-    const write = () => organizationService.updateMembershipIdSettings(next);
+    // Read at fire time, for the same reason as the profile above.
+    const write = () => organizationService.updateMembershipIdSettings(membershipIdRef.current);
     if (immediate) {
       void save(write);
     } else {
@@ -1354,7 +1399,7 @@ export const SettingsPage: React.FC = () => {
         navLabel="Settings sections"
         title="Organization Settings"
         subtitle="Department-wide configuration"
-        saveState={saveState}
+        saveState={AUTOSAVED_SECTIONS.has(activeSection) ? saveState : undefined}
         onRetrySave={retry}
         headerAside={
           <HelpLink

@@ -64,8 +64,11 @@ interface SettingsLayoutProps<K extends string, S extends string> {
   title: string;
   /** One line under the title. Defaults to the active section's description. */
   subtitle?: string;
-  /** Autosave status. Omitted on screens that still save explicitly. */
-  saveState?: SaveState;
+  /**
+   * Autosave status. Omitted on screens — and sections — that still save
+   * explicitly; `| undefined` because callers pass it conditionally.
+   */
+  saveState?: SaveState | undefined;
   onRetrySave?: (() => void) | undefined;
   /**
    * Extra header controls, rendered left of the autosave pill — a HelpLink for
@@ -103,8 +106,12 @@ export function SettingsLayout<K extends string, S extends string = string>({
       {/* One content column at every settings screen, replacing the max-w-4xl /
           5xl / 6xl / 1600px the nine screens had drifted into. */}
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5">
-        <header className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
+        {/* Wraps rather than squeezing: a title, a subtitle and a status pill
+            (or a breadcrumb trail, on Email Templates) do not fit one row on a
+            small phone, and a non-shrinking aside beside a shrinking title
+            crushes the title first. Below sm the aside drops to its own line. */}
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {onBack ? (
               <button
                 type="button"
@@ -123,7 +130,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
               <p className="text-theme-text-muted mt-0.5 text-sm">{subtitle ?? current?.description}</p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {headerAside}
             {saveState ? <SaveStatusPill state={saveState} onRetry={onRetrySave} /> : null}
           </div>

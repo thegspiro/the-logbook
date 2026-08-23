@@ -6,7 +6,7 @@
  * Requires `elections.manage` permission.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Loader2, Settings as SettingsIcon, UserCheck, ToggleRight, Send, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -74,6 +74,8 @@ export const ElectionsSettingsPage: React.FC = () => {
         electionService.getElections('draft'),
       ]);
       setSettings(settingsData);
+      // The savers read this ref, so the loaded values have to land in both.
+      settingsRef.current = settingsData;
       setElections(electionsData);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load settings'));
@@ -110,14 +112,23 @@ export const ElectionsSettingsPage: React.FC = () => {
   // page previously held one Save button at the top-right for five screens'
   // worth of fields, so a member who changed a value near the bottom had no
   // indication that anything still needed saving.
+  /**
+   * Mirrors `settings` so a write sends the object as it stands when the
+   * request goes out. These writes send the whole settings object, so a
+   * debounced save closing over its scheduled snapshot would undo any switch
+   * flipped while it was pending.
+   */
+  const settingsRef = useRef<ElectionSettings>(settings);
+
   const updateField = <K extends keyof ElectionSettings>(
     key: K,
     value: ElectionSettings[K],
     { immediate = true }: { immediate?: boolean } = {}
   ) => {
-    const next = { ...settings, [key]: value };
+    const next = { ...settingsRef.current, [key]: value };
+    settingsRef.current = next;
     setSettings(next);
-    const write = () => electionService.updateSettings(next);
+    const write = () => electionService.updateSettings(settingsRef.current);
     if (immediate) {
       void save(write, { errorMessage: 'Failed to save settings' });
     } else {

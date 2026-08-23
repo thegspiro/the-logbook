@@ -170,9 +170,18 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     if (!settings) return null;
     setSaving(true);
     try {
-      const result = await save(() => eventService.updateModuleSettings(patch), { errorMessage: errorMsg });
-      if (result) setSettings(result);
-      return result;
+      // The state update lives *inside* the saver so a retry from the status
+      // pill redoes it too. Applying the response outside would leave a
+      // successful retry writing the server while the switch it came from
+      // stayed visibly unchanged.
+      return await save(
+        async () => {
+          const result = await eventService.updateModuleSettings(patch);
+          setSettings(result);
+          return result;
+        },
+        { errorMessage: errorMsg }
+      );
     } finally {
       setSaving(false);
     }
