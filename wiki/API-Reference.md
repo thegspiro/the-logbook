@@ -16,6 +16,23 @@ The Logbook provides a RESTful API built with FastAPI. Interactive documentation
 
 ---
 
+## Breaking response-shape change _(2026-08-20)_
+
+`GET /api/v1/scheduling/swap-requests` and `GET /api/v1/scheduling/time-off`
+**no longer return a bare array.** Both now return a page object:
+
+```json
+{ "items": [ ... ], "total": 128, "skip": 0, "limit": 50 }
+```
+
+Anything that consumed either endpoint as a list — an integration, an export
+script, a dashboard — must read `items`. Indexing the response directly now
+yields object keys rather than requests.
+
+Schemas: `ShiftSwapRequestsPage`, `ShiftTimeOffRequestsPage`.
+
+---
+
 ## Authentication
 
 All authenticated endpoints require a JWT token in the `Authorization` header:
@@ -237,6 +254,126 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 ```
 POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
 ```
+
+## Legal Documents _(2026-08-20)_
+
+Governance record for the wording served on the public `/privacy` and
+`/terms` pages. **Proposing and publishing are separate grants.**
+
+```
+GET    /api/v1/legal-documents                                # Current + revisions
+POST   /api/v1/legal-documents/revisions                      # Draft a revision
+PUT    /api/v1/legal-documents/revisions/{id}                 # Edit a draft
+DELETE /api/v1/legal-documents/revisions/{id}                 # Discard a draft
+POST   /api/v1/legal-documents/revisions/{id}/publish         # Make it public
+POST   /api/v1/legal-documents/{document_type}/revert-to-default
+```
+
+| Endpoint                     | Permission (any of)                                 |
+| ---------------------------- | --------------------------------------------------- |
+| Read / draft / edit / delete | `legal.propose`, `legal.publish`, `settings.manage` |
+| Publish, revert to default   | `legal.publish`, `settings.manage`                  |
+
+`document_type` ∈ `privacy_policy` | `terms_of_service`.
+
+**Notes.**
+
+- The **published text is not served from this API.** It lives in
+  `organizations.settings["legal"]`, which the anonymous public page endpoint
+  reads with no join and no auth. These endpoints manage the governance record
+  around it.
+- `change_note` is **required** on a revision.
+- `effective_date` is free text (max 64 chars) and is never parsed — it is
+  displayed as "Last updated". Send an explicit `null` to clear it; an omitted
+  key means "leave it alone".
+- Publishing archives the previously published revision. Archived revisions
+  are never deleted.
+
+---
+
+## Dashboard Widgets _(2026-08-23)_
+
+Three aggregate endpoints for the dashboard. All authenticate as the current
+user; **each section is gated independently by module and permission**, and a
+section the caller cannot see is **omitted rather than returned empty** — the
+response cannot be used to probe for access.
+
+```
+GET /api/v1/dashboard/widgets?period=month|quarter|year|rolling_30
+GET /api/v1/dashboard/operations
+GET /api/v1/dashboard/asset-widgets
+```
+
+### `/dashboard/widgets`
+
+| Section       | Requires                                   |
+| ------------- | ------------------------------------------ |
+| `finance`     | `finance.manage`                           |
+| `fundraising` | `grants` module **and** `fundraising.view` |
+| `community`   | `events.manage`                            |
+
+`settings.manage` is **intentionally not financial access.** Any of the three
+sections may be `null`.
+
+### `/dashboard/operations`
+
+| Section                  | Requires (any of)                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `operational_readiness`  | `scheduling.manage`                                                                                        |
+| `critical_exceptions`    | `meetings.manage`, `minutes.manage`, `scheduling.manage`, `equipment_check.manage`, `notifications.manage` |
+| `membership_health`      | `members.manage`                                                                                           |
+| `upcoming_command_dates` | `events.manage`                                                                                            |
+| `period_trends`          | `training.manage`                                                                                          |
+| `pending_approvals`      | `admin_hours.manage`                                                                                       |
+
+Dates are resolved in the organization's configured timezone, falling back to
+UTC if it is unset or unrecognized.
+
+### `/dashboard/asset-widgets`
+
+Returns **counts and fixed links only** for Inventory, Apparatus and
+Facilities, each authorized independently — managing inventory does not reveal
+apparatus or facilities. Protected facility fields (codes, accounts, budgets,
+leases) are deliberately not reachable through this endpoint.
+
+---
+
+## Scheduling Requests — Pagination _(2026-08-20)_
+
+```
+GET /api/v1/scheduling/swap-requests?skip=0&limit=50
+GET /api/v1/scheduling/time-off?skip=0&limit=50
+```
+
+Both return `{ items, total, skip, limit }` — see the
+[breaking change notice](#breaking-response-shape-change-2026-08-20) above.
+
+**Access rules changed with it.** Scheduling requests are restricted to their
+participants, and **a requester cannot review their own swap or time-off
+request even holding `scheduling.manage`** — the review path rejects a
+self-review outright ("Requesters cannot review their own swap requests").
+
+---
+
+## Equipment Check — Idempotent Submission _(2026-08-22)_
+
+Shift equipment-check submissions are now atomic and safe to retry.
+
+- **One check per `(shift_id, template_id)`**, enforced by
+  `uq_shift_equipment_check_shift_template`.
+- The client mints a **`client_submission_id` before sending**. A retry — from
+  an offline queue replaying on reconnect, a double tap, or a dropped
+  connection — resolves to the row the first attempt created, via
+  `uq_shift_equipment_check_client_submission` on
+  `(organization_id, client_submission_id)`.
+- **Bulk item creation is keyed on `(compartment_id, idempotency_key)`** with a
+  stored `payload_hash`. Same key + same payload replays the original
+  `item_ids`; **same key + different payload is rejected.**
+- Standalone (non-shift) checks require `equipment_check.manage`.
+- Check timing is enforced server-side — the client no longer supplies it.
+- Compartment parents are cycle-checked.
+
+---
 
 ## Shift Close-Out _(2026-08-19)_
 

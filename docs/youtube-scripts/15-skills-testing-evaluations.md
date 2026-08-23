@@ -580,8 +580,10 @@ requirement returning to incomplete on the member's pipeline.]**
 **[CALLOUT: "Any member can run a practice test on a peer"]**
 
 > "Now **any member** can run a practice test on a peer. Two probies can drill
-> each other on a Saturday without an officer standing there. Official tests still
-> need `training.manage`."
+> each other on a Saturday without an officer standing there. And an official
+> test is the same — any member can run one. What needs an officer is
+> **validating** it afterward. Until that signature, it's a submission, not a
+> record."
 
 > "The candidate can see their own practice results, and delete them. They're
 > their notes. They're kept for a year and then they're gone. They never count
