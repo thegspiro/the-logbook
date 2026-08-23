@@ -28,7 +28,7 @@ interface EmailTemplatesState {
   previewTemplate: (
     templateId: string,
     context?: Record<string, unknown>,
-    overrides?: { subject?: string; html_body?: string; css_styles?: string },
+    overrides?: { subject?: string; html_body?: string; text_body?: string; css_styles?: string; footer_key?: string },
     memberId?: string
   ) => Promise<void>;
   clearPreview: () => void;

@@ -16,6 +16,7 @@ set cannot.
 No DB: everything here is module-level data or a pure function.
 """
 
+import pathlib
 import re
 
 import pytest
@@ -315,3 +316,50 @@ class TestEveryTemplateRendersIntoTheShell:
         # the preview is where an admin would have to notice it.
         leftover = set(re.findall(r"\{\{\s*(\w+)\s*\}\}", self._render(defn)))
         assert not leftover, f"{defn['type'].value} previews with {sorted(leftover)}"
+
+
+class TestTheEditorsBlockPaletteMatchesTheShell:
+    """The frontend palette may only offer blocks this stylesheet styles.
+
+    The palette is the sanctioned answer to "what does a correct body look
+    like", so it is the one place a wrong class does real damage: an admin
+    who inserts a block has every reason to believe it works. And a class
+    with no rule does not error — it arrives in somebody's inbox unstyled,
+    with nothing to notice at the moment the mistake is made.
+
+    Reading a TypeScript file from a Python test is unusual, and deliberate:
+    the alternative is two lists of class names in two languages that nobody
+    diffs.
+    """
+
+    BLOCKS = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "modules"
+        / "communications"
+        / "constants"
+        / "blocks.ts"
+    )
+
+    def _source(self) -> str:
+        if not self.BLOCKS.exists():
+            pytest.skip(f"{self.BLOCKS} not present in this checkout")
+        return self.BLOCKS.read_text()
+
+    def test_every_class_the_palette_inserts_is_defined(self):
+        defined = set(re.findall(r"^\.([\w-]+)", DEFAULT_CSS, re.M))
+        used = set(re.findall(r"class=\\?[\"']([\w-]+)", self._source()))
+        assert used, "found no class attributes — has the file's shape changed?"
+        assert used <= defined, (
+            f"the block palette offers {sorted(used - defined)}, which "
+            "DEFAULT_CSS does not define"
+        )
+
+    def test_the_palette_offers_a_block_for_each_shell_feature(self):
+        # Not an exhaustive list — the point is that the three that carry the
+        # accent, and are therefore the three hardest to hand-write
+        # correctly, are all reachable without typing a tag.
+        source = self._source()
+        for needed in ("details", "button", "alert"):
+            assert f"id: '{needed}'" in source, f"no {needed} block in the palette"

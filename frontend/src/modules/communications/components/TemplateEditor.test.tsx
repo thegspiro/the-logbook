@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
 import { TemplateEditor } from './TemplateEditor';
-import type { EmailTemplate } from '../types';
+import { useTemplateDraft } from '../hooks/useTemplateDraft';
+import { EMAIL_BLOCKS } from '../constants/blocks';
+import type { EmailTemplate, EmailTemplateUpdate } from '../types';
 
 const makeTemplate = (overrides: Partial<EmailTemplate> = {}): EmailTemplate => ({
   id: 'tmpl-1',
@@ -26,41 +29,73 @@ const makeTemplate = (overrides: Partial<EmailTemplate> = {}): EmailTemplate => 
   ...overrides,
 });
 
+/**
+ * Save and the draft now live in the page, not the editor card, so a test of
+ * the editor has to supply what the page supplies. This harness is the page's
+ * half: it owns the draft and renders the Save button beside the form, which
+ * is also what lets these tests keep asserting on save behaviour.
+ */
+const Harness: React.FC<{
+  template: EmailTemplate;
+  onSave?: (data: EmailTemplateUpdate) => void;
+  isSaving?: boolean;
+}> = ({ template, onSave = vi.fn(), isSaving = false }) => {
+  const draft = useTemplateDraft(template);
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!draft.isDirty || isSaving || draft.hasValidationErrors}
+        onClick={() => {
+          onSave(draft.buildUpdate());
+        }}
+      >
+        Save
+      </button>
+      <TemplateEditor template={template} draft={draft} />
+    </>
+  );
+};
+
 describe('TemplateEditor', () => {
   it('renders subject and HTML body fields', () => {
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
+    render(<Harness template={makeTemplate()} />);
 
     expect(screen.getByLabelText('Subject Line')).toHaveValue('Welcome to {{organization_name}}');
     expect(screen.getByLabelText('HTML Body')).toHaveValue('<p>Hello {{first_name}}</p>');
   });
 
-  it('shows save button disabled when no changes', () => {
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
+  it('does not draw its own save button', () => {
+    // Save moved to the sticky page header: with the editor and the preview
+    // side by side it scrolled out of sight while the fields it saves stayed
+    // on screen. Two save buttons would be worse than the scroll.
+    render(<TemplateEditor template={makeTemplate()} draft={makeDraft()} />);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    expect(saveButton).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /discard/i })).not.toBeInTheDocument();
+  });
+
+  it('shows save button disabled when no changes', () => {
+    render(<Harness template={makeTemplate()} />);
+
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
   });
 
   it('enables save button after editing', async () => {
     const user = userEvent.setup();
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
+    render(<Harness template={makeTemplate()} />);
 
     const subjectInput = screen.getByLabelText('Subject Line');
     await user.clear(subjectInput);
     await user.type(subjectInput, 'New Subject');
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    expect(saveButton).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /save/i })).not.toBeDisabled();
   });
 
-  it('calls onSave with changed fields', async () => {
+  it('builds an update containing only the changed fields', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={onSave} />);
+    render(<Harness template={makeTemplate()} onSave={onSave} />);
 
     const subjectInput = screen.getByLabelText('Subject Line');
     await user.clear(subjectInput);
@@ -73,10 +108,8 @@ describe('TemplateEditor', () => {
 
   it('shows available variables panel', async () => {
     const user = userEvent.setup();
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
+    render(<Harness template={makeTemplate()} />);
 
-    // Open the variables panel
     await user.click(screen.getByText(/available variables/i));
 
     expect(screen.getByText('{{first_name}}')).toBeInTheDocument();
@@ -84,38 +117,101 @@ describe('TemplateEditor', () => {
   });
 
   it('shows loading state when saving', () => {
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={true} onSave={vi.fn()} />);
+    render(<Harness template={makeTemplate()} isSaving={true} />);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    expect(saveButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
   });
 
   it('shows collapsible plain-text body', async () => {
     const user = userEvent.setup();
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
+    render(<Harness template={makeTemplate()} />);
 
-    // Initially the text body field should not be visible
     expect(screen.queryByLabelText(/plain-text/i)).not.toBeInTheDocument();
 
-    // Click to expand
     await user.click(screen.getByText(/plain-text body/i));
 
-    // Now the textarea should be visible with the value
-    const textarea = screen.getByPlaceholderText(/plain text version/i);
-    expect(textarea).toHaveValue('Hello {{first_name}}');
+    expect(screen.getByPlaceholderText(/plain text version/i)).toHaveValue('Hello {{first_name}}');
   });
 
   it('shows collapsible CSS styles', async () => {
     const user = userEvent.setup();
-    const template = makeTemplate();
-    render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
+    render(<Harness template={makeTemplate()} />);
 
-    // Click to expand CSS
     await user.click(screen.getByText(/css styles/i));
 
-    const textarea = screen.getByPlaceholderText(/\.container/i);
-    expect(textarea).toHaveValue('body { color: #333; }');
+    expect(screen.getByPlaceholderText(/\.container/i)).toHaveValue('body { color: #333; }');
+  });
+
+  describe('block palette', () => {
+    it('offers every block', () => {
+      render(<Harness template={makeTemplate()} />);
+
+      for (const block of EMAIL_BLOCKS) {
+        expect(screen.getByRole('button', { name: block.label })).toBeInTheDocument();
+      }
+    });
+
+    it('inserts a block at the cursor rather than appending', async () => {
+      const user = userEvent.setup();
+      render(<Harness template={makeTemplate({ html_body: '<p>A</p><p>B</p>' })} />);
+
+      const body = screen.getByLabelText<HTMLTextAreaElement>('HTML Body');
+      // Between the two paragraphs.
+      body.focus();
+      body.setSelectionRange(8, 8);
+
+      await user.click(screen.getByRole('button', { name: 'Section heading' }));
+
+      expect(body).toHaveValue('<p>A</p><h2>Section heading</h2><p>B</p>');
+    });
+
+    it('replaces the selection when there is one', async () => {
+      const user = userEvent.setup();
+      render(<Harness template={makeTemplate({ html_body: '<p>OLD</p>' })} />);
+
+      const body = screen.getByLabelText<HTMLTextAreaElement>('HTML Body');
+      body.focus();
+      body.setSelectionRange(0, body.value.length);
+
+      await user.click(screen.getByRole('button', { name: 'Paragraph' }));
+
+      expect(body).toHaveValue('<p>Write the sentence a member needs to read here.</p>');
+    });
+
+    it('makes the body dirty, so the change is saveable', async () => {
+      const user = userEvent.setup();
+      render(<Harness template={makeTemplate()} />);
+
+      expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: 'Alert' }));
+      expect(screen.getByRole('button', { name: /save/i })).not.toBeDisabled();
+    });
   });
 });
+
+/** A draft object for the one test that renders the editor without a page. */
+function makeDraft() {
+  const noop = () => undefined;
+  return {
+    subject: '',
+    setSubject: noop,
+    htmlBody: '',
+    setHtmlBody: noop,
+    textBody: '',
+    setTextBody: noop,
+    cssStyles: '',
+    setCssStyles: noop,
+    footerKey: '',
+    setFooterKey: noop,
+    defaultCc: '',
+    setDefaultCc: noop,
+    defaultBcc: '',
+    setDefaultBcc: noop,
+    ccError: null,
+    bccError: null,
+    hasValidationErrors: false,
+    isDirty: false,
+    buildUpdate: () => ({}),
+    discard: noop,
+  };
+}
