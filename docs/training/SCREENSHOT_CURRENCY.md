@@ -2,6 +2,28 @@
 
 ## Re-captured 2026-08-23 — the phone sweep at 390x844, and what it exposed
 
+**Amended after merging main's shift-check lap redesign.** `CheckLap`,
+`CheckItemControls` and `checkLapModel` landed after the sweep and rebuild this
+screen around walking-order stops. Five of the six equipment-check captures
+re-shot cleanly against it and were checked; `03-71-set-all-to-par-confirm` did
+not, and its committed image now predates the redesign as well.
+
+What is ruled out, so the next attempt does not repeat it: the Trauma Bag stop
+_is_ open (`aria-expanded` reads true before anything is clicked), its pass/fail
+item and the gloves' own lot and expiry row both render, and no compartment on
+this template is sealed — `is_sealed` is 0 for all three — so the
+seal-clears-counts branch in `checkLapModel` is not what is hiding it. What is
+missing is the quantity stepper and the item's own name. The shot's `prepare`
+was made lap-aware anyway (it reads `aria-expanded` instead of blind-toggling,
+and accepts both the old `Decrease X quantity` and the new `One fewer X`
+labels), and is left failing rather than quietly dropped.
+
+**Two of main's renames cost a shot each, silently.** The phone menu control
+became "Open full navigation menu" and the quantity stepper became
+"One fewer <item>". Both matchers now carry the older spellings alongside the
+current one — a capture that fails is cheap, a capture that succeeds against
+the wrong element is not.
+
 All 21 phone-width captures re-shot and opened. The trigger was the entry below:
 the mobile bottom bar no longer paints over an open dialog, so every phone
 capture containing one pictured the defect. That is confirmed fixed — `03-71`

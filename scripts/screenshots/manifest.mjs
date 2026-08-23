@@ -5759,13 +5759,44 @@ export const SHOTS = [
       await clickByName("Medic 3 Supply Check")(page);
       await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
 
+      // Compartments start collapsed apart from one, and which one is not
+      // fixed, so Trauma Bag's items may or may not be in the DOM: the wait
+      // above passes on the header alone and the stepper lookup below then
+      // timed out against a compartment that was merely closed. Toggling
+      // blindly is worse than not toggling -- it closes an already-open one.
+      // Read aria-expanded and only click when it needs opening.
+      const traumaBag = page
+        .getByRole("button", { name: /^Trauma Bag, / })
+        .first();
+      await traumaBag.waitFor({ state: "visible", timeout: 20_000 });
+      if ((await traumaBag.getAttribute("aria-expanded")) !== "true") {
+        await traumaBag.click({ timeout: 10_000 });
+      }
+      // KNOWN BROKEN since main's lap redesign (CheckLap / CheckItemControls).
+      // Trauma Bag renders -- its pass/fail item and the gloves' own lot and
+      // expiry row are both on screen -- but the quantity stepper this shot
+      // needs is not, and neither is the item's name. Ruled out: the stop is
+      // open (aria-expanded true before any click), and no compartment on this
+      // template is sealed (`is_sealed = 0` for all three), so the
+      // seal-clears-counts path in checkLapModel is not what is hiding it.
+      // The committed image predates the redesign and is therefore also stale;
+      // both need someone who knows what the lap intends a count to look like.
+      await page
+        .getByLabel(/^(One fewer|Decrease) Nitrile Gloves/)
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+
       // Trauma Bag arrives with one item already short (gauze, 18 of 24).
       // Counting the gloves down gives the dialog a second row, which is what
       // it is for — a single-item warning reads as a quirk, two reads as the
       // claim it actually is.
-      const decrease = page.getByLabel(
-        "Decrease Nitrile Gloves — Large quantity",
-      );
+      // "One fewer <item>" since the stepper moved into CheckItemControls;
+      // the older "Decrease <item> quantity" spelling is kept alongside it so a
+      // rename does not silently cost the shot again.
+      const decrease = page
+        .getByLabel("One fewer Nitrile Gloves — Large")
+        .or(page.getByLabel("Decrease Nitrile Gloves — Large quantity"))
+        .first();
       await decrease.scrollIntoViewIfNeeded();
       for (let i = 0; i < 2; i += 1) {
         await decrease.click();
