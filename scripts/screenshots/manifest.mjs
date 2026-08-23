@@ -1067,6 +1067,29 @@ async function runImpactAnalysis(page) {
   await page.waitForTimeout(3000);
 }
 
+/**
+ * Navigate a signed-out page to a published public form.
+ *
+ * The slug is minted per seed, and these shots have no session, so the lookup
+ * borrows the administrator's. `/f/{slug}` serves published forms only, which
+ * is what the seeder publishes.
+ */
+export async function openPublicForm(page, helpers) {
+  const admin = await helpers.lookupPage();
+  const slug = await admin.evaluate(async () => {
+    const response = await fetch("/api/v1/forms", { credentials: "include" });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const forms = Array.isArray(body) ? body : body.forms || body.items || [];
+    const target = forms.find((f) => f.is_public && f.public_slug);
+    return target ? target.public_slug : null;
+  });
+  if (!slug) throw new Error("no published public form to capture");
+  await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
+    waitUntil: "domcontentloaded",
+  });
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -5151,28 +5174,7 @@ export const SHOTS = [
     auth: "anonymous",
     theme: "dark",
     fullPage: true,
-    prepare: async (page, helpers) => {
-      // The slug is minted per seed, and this shot is signed out, so the
-      // lookup borrows the administrator's session. `/f/{slug}` serves
-      // published public forms only — the seeder publishes one.
-      const admin = await helpers.lookupPage();
-      const slug = await admin.evaluate(async () => {
-        const response = await fetch("/api/v1/forms", {
-          credentials: "include",
-        });
-        if (!response.ok) return null;
-        const body = await response.json();
-        const forms = Array.isArray(body)
-          ? body
-          : body.forms || body.items || [];
-        const target = forms.find((f) => f.is_public && f.public_slug);
-        return target ? target.public_slug : null;
-      });
-      if (!slug) throw new Error("no published public form to capture");
-      await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
-        waitUntil: "domcontentloaded",
-      });
-    },
+    prepare: openPublicForm,
   },
   {
     id: "10-13-mobile-header-menu",
@@ -5248,7 +5250,9 @@ export const SHOTS = [
         // this does not break again the next time it is reworded. The control
         // moved into the bottom bar, so the phone header carries no hamburger
         // and matching the old name alone timed out with the button on screen.
-        .getByRole("button", { name: /Open (full navigation|main|navigation) menu/ })
+        .getByRole("button", {
+          name: /Open (full navigation|main|navigation) menu/,
+        })
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1_200);
@@ -10287,6 +10291,128 @@ export const SHOTS = [
         test.result === "pass",
     ),
     fullPage: true,
+  },
+  {
+    // New screen in this release. Seeded with one published notice and one
+    // draft so the two states sit side by side -- with nothing adopted both
+    // cards show the platform default, which pictures the feature unused.
+    id: "19-09-legal-documents",
+    doc: "19-august-2026-release-changes.md",
+    line: 545,
+    anchor: "Governance → Legal Documents landing view, showing",
+    alt: "Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft",
+    route: "/governance/legal",
+    fullPage: true,
+  },
+  {
+    // Recruitment is create-only for the automatic switches, so this has to be
+    // the new-event form rather than an edit of a seeded event -- changing an
+    // existing event's type deliberately does not flip them, and a capture
+    // taken that way would show the banner absent and teach the opposite.
+    id: "19-10-event-recruitment-type",
+    doc: "19-august-2026-release-changes.md",
+    line: 703,
+    anchor: "the event form with Recruitment selected, showing",
+    alt: "A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline",
+    route: "/events/new",
+    prepare: async (page) => {
+      const type = page
+        .locator("select")
+        .filter({ has: page.locator('option[value="recruitment"]') })
+        .first();
+      await type.waitFor({ state: "visible", timeout: 20_000 });
+      await type.selectOption("recruitment");
+      // The switches and the banner are painted from the type change, not with
+      // the form, so shooting immediately catches the pre-selection state.
+      await page.waitForTimeout(900);
+    },
+    fullPage: true,
+  },
+  {
+    // Half of a pair. The dashboard's Organization tab is addressable by
+    // ?tab=organization, so neither of these needs a click that could land on
+    // the wrong control.
+    id: "08-75-org-dashboard-with-finance",
+    doc: "08-admin-reports.md",
+    line: 2141,
+    anchor: "the organization dashboard under two accounts side by",
+    alt: "The Organization dashboard as an administrator holding finance.manage: the money sections are present alongside the operational ones",
+    route: "/dashboard?tab=organization",
+    fullPage: true,
+  },
+  {
+    // The same tab as an ordinary member. The point is that the finance
+    // sections are *absent* rather than empty -- an empty card would tell a
+    // member the department has finance data and they are not trusted with it,
+    // which is the inference the omission is designed to prevent. Shot as the
+    // member for that reason; an admin capture cannot show an absence.
+    id: "08-76-org-dashboard-without-finance",
+    doc: "08-admin-reports.md",
+    line: 2141,
+    anchor: "__paired-with-08-75__",
+    alt: "The same dashboard as a member without finance.manage: the money sections are not rendered at all, rather than shown empty",
+    route: "/dashboard?tab=organization",
+    auth: "member",
+    fullPage: true,
+    allowEmptyState:
+      "A member without the finance, fundraising or outreach permissions is " +
+      "meant to see fewer sections here -- the omission is the subject of the " +
+      "shot, so an empty-state match on the remaining page is expected rather " +
+      "than a sign the demo data is missing.",
+  },
+  {
+    // The gutter is the subject, so this one is deliberately NOT fullPage: a
+    // full-page capture stitches the whole document and has no scrollbar in it
+    // at all, which is the one thing this shot exists to show. Viewport-sized,
+    // on a page long enough to scroll.
+    id: "19-11-dark-scrollbar-gutter",
+    doc: "19-august-2026-release-changes.md",
+    line: 222,
+    anchor: "a public page (`/f/{slug}` or an application-status link) in dark",
+    alt: "A public form in dark mode at full window width, the themed background now carried all the way through the scrollbar gutter at the right edge",
+    route: "/login",
+    auth: "anonymous",
+    theme: "dark",
+    fullPage: false,
+    prepare: openPublicForm,
+  },
+  {
+    // Clipped to the Notifications panel. The three choices cannot be shown
+    // "visible" as the marker asks: this is a native <select>, and an open
+    // select popup is drawn by the OS rather than the page, so it never appears
+    // in a screenshot. The guide already tables all three above the image; what
+    // the capture can honestly show is which one a new optional event starts
+    // on, which is the other half of that marker.
+    id: "04-42-reminder-audience",
+    doc: "04-events-meetings.md",
+    line: 1539,
+    anchor: "Create Event → Notifications with all three",
+    alt: "The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Notifications'))",
+    prepare: async (page) => {
+      await page
+        .locator("#reminder-target")
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
+  },
+  {
+    // The panel beside it, clipped the same way. Flexible and 60 minutes are
+    // what a new event starts on, so no interaction is needed -- and shooting
+    // the default is the point, since the guide's caution is that 60 does not
+    // apply to every mode.
+    id: "04-43-checkin-flexible-default",
+    doc: "04-events-meetings.md",
+    line: 1573,
+    anchor: "Check-In Settings showing Flexible and 60 minutes before",
+    alt: "Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Check-In Settings'))",
+    prepare: async (page) => {
+      await page
+        .locator("#checkin-window")
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
   },
   {
     id: "03-43-time-off-request-form",

@@ -617,6 +617,57 @@ SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
 # seeder will build a second rather than find the first.
 SCORECARD_TEST_NOTE = "Annual handline evaluation, weighted sheet."
 
+PRIVACY_REVISIONS = [
+    (
+        """\
+Oakville Fire Department operates this member intranet to run department
+operations. The department is the data controller for everything in it.
+
+What we keep: membership records, training and certification history, shift and
+attendance records, and the emergency contact details you give us.
+
+Who sees it: access follows your role.
+
+Questions about your record go to the department secretary, not to the software
+vendor.""",
+        "Replaced the platform boilerplate with the department's own wording.",
+    ),
+    (
+        """\
+Oakville Fire Department operates this member intranet to run department
+operations. The department is the data controller for everything in it.
+
+What we keep: membership records, training and certification history, shift and
+attendance records, and the emergency contact details you give us.
+
+How long: personnel records for the length of membership plus seven years, per
+the department's retention schedule and the Virginia Public Records Act.
+
+Who sees it: access follows your role. Medical and screening records are held
+separately and reached only by the members named in the department's HIPAA
+policy.
+
+Questions about your record go to the department secretary, not to the software
+vendor. The department decides what is collected, who may read it, and when it
+is destroyed.""",
+        "Added the retention schedule and the separate handling of medical "
+        "records, per counsel's note of 21 August.",
+    ),
+]
+
+TERMS_DRAFT_BODY = """\
+DRAFT — not yet adopted.
+
+This system is department property provided for department business. Your
+access exists because of your standing as a member and changes or ends with it.
+
+You are responsible for what happens under your account. Do not share your
+sign-in. Report a lost device to a duty officer the same day.
+
+Records created here — training entries, shift reports, incident notes — are
+department records, not personal ones. Treat this as a department system rather
+than a private one."""
+
 CLOSEOUT_SHIFT_NOTE = (
     "Close-out wizard fixture — 24-hour tour, four crew, count-only captures."
 )
@@ -6461,6 +6512,78 @@ class Seeder:
 
     # -- documents ---------------------------------------------------
 
+    def seed_legal_documents(self) -> list[dict]:
+        """One published notice and one draft, so the two states differ on screen.
+
+        Guide 19's Legal Documents captures turn on the difference between a
+        document a department has adopted and one still being written: the
+        landing view shows a published status and a "Last updated" line against
+        one card and a draft against the other. With nothing seeded the screen
+        renders both cards on the platform default, which is a true screen and
+        the wrong one — it shows the feature unused.
+
+        Privacy is published and Terms is left as a draft rather than the other
+        way round, because the published-page capture (`19-03-privacy-header`)
+        reads /privacy: a department that has adopted its own wording is what
+        that shot should show.
+        """
+        overview = self.api.get("/legal-documents") or {}
+        documents = overview.get("documents") or []
+        by_type = {str(pick(d, "document_type", "documentType")): d for d in documents}
+
+        def has_revision(document_type: str) -> bool:
+            doc = by_type.get(document_type) or {}
+            return bool((doc.get("history") or []) or (doc.get("drafts") or []))
+
+        created: list[dict] = []
+
+        # Two published revisions, not one: the revision-history captures need a
+        # superseded entry to show, and a document with a single revision has no
+        # history worth photographing. Each is created only if its own change
+        # note is missing, so re-running adds neither.
+        # Read off the overview: there is no per-document revisions endpoint,
+        # and the overview already carries both `history` and `drafts` for each
+        # document, which is every revision this needs to recognise.
+        privacy = by_type.get("privacy_policy") or {}
+        published_notes = {
+            str(pick(r, "change_note", "changeNote") or "")
+            for r in (privacy.get("history") or []) + (privacy.get("drafts") or [])
+        }
+        for body, note in PRIVACY_REVISIONS:
+            if note in published_notes:
+                continue
+            revision = self.api.post(
+                "/legal-documents/revisions",
+                {
+                    "document_type": "privacy_policy",
+                    "body": body,
+                    "change_note": note,
+                    "effective_date": str(TODAY),
+                },
+            )
+            revision_id = pick(revision, "id")
+            if revision_id:
+                self.api.post(f"/legal-documents/revisions/{revision_id}/publish", {})
+            created.append(revision)
+
+        if not has_revision("terms_of_service"):
+            # Deliberately left unpublished: the draft state is half the shot.
+            created.append(
+                self.api.post(
+                    "/legal-documents/revisions",
+                    {
+                        "document_type": "terms_of_service",
+                        "body": TERMS_DRAFT_BODY,
+                        "change_note": (
+                            "First pass at department terms. Awaiting the "
+                            "chief's review before publishing."
+                        ),
+                    },
+                )
+            )
+
+        return created
+
     def seed_documents(self) -> list[dict]:
         folders = items(self.api.get("/documents/folders"), "folders")
         existing = {f.get("name") for f in folders}
@@ -12127,6 +12250,7 @@ class Seeder:
         )
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
+        self.step("legal documents", self.seed_legal_documents)
         self.step("notification rules", self.seed_notification_rules)
         # After scheduling (needs upcoming crewed shifts) — the reminder task
         # notifies each rostered member, the administrator among them.
