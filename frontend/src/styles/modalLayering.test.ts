@@ -91,3 +91,46 @@ describe('bottom navigation vs dialogs contract', () => {
     expect(stylesheet).toMatch(/\.has-bottom-nav \{\s*--bottom-nav-height:\s*3\.5rem/);
   });
 });
+
+/**
+ * Hiding the bar only helps the overlays that say they are open. This is the
+ * half a reviewer caught on #1576: the registration was wired into `useDialog`,
+ * so it reached every dialog routing through that hook and none of the
+ * hand-rolled ones. Thirteen files rendered an overlay and registered nothing —
+ * among them a bottom sheet whose Add stock / Cancel buttons sit exactly where
+ * the bar does.
+ *
+ * The original coverage check keyed on panel classes, which is why it missed
+ * them: a hand-rolled panel is a bare `<div className="bg-theme-surface ...">`.
+ * Keying on the scrim instead is what makes this reliable — an overlay must
+ * have one, whatever its panel looks like.
+ */
+describe('overlay registration contract', () => {
+  // A decorative scrim, not a modal: it sits at `-z-10` behind a menu anchored
+  // above the bar, so the bar is the thing it is anchored to. Hiding it there
+  // would move the menu out from under the user's thumb.
+  const NOT_A_MODAL = ['components/ux/FloatingActionButton.tsx'];
+
+  it('registers every overlay so the bottom bar is lifted off it', () => {
+    const unregistered: string[] = [];
+
+    for (const file of collectTsxFiles(srcDir)) {
+      const relative = file.slice(srcDir.length + 1);
+      if (relative.includes('.test.') || NOT_A_MODAL.includes(relative)) continue;
+
+      const source = readFileSync(file, 'utf8');
+      if (!/\b(?:modal-overlay|drawer-panel)\b/.test(source)) continue;
+      // Either directly, or through a wrapper that registers on its behalf.
+      if (/\buseOverlaySurface\b|\buseDialog\b|\bDialogPanel\b|components\/Modal/.test(source)) continue;
+
+      unregistered.push(relative);
+    }
+
+    expect(unregistered).toEqual([]);
+  });
+
+  it('registers from useDialog, so the wrappers cover their call sites', () => {
+    const dialog = readFileSync(join(srcDir, 'hooks/useDialog.ts'), 'utf8');
+    expect(dialog).toMatch(/useOverlaySurface\(isOpen\)/);
+  });
+});
