@@ -10,10 +10,12 @@ would leak another org's apparatus name.
 Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.services.equipment_check_service import EquipmentCheckService
 
@@ -439,20 +441,21 @@ class TestAuthoritativeCheckTiming:
                 AsyncMock(return_value={"item-1": MagicMock()}),
             ),
             patch.object(service, "get_check", AsyncMock(return_value=check)),
-            patch.object(
-                service, "_apply_found_values_to_template", return_value=False
-            ),
             patch.object(service, "_resolve_expiration", return_value=None),
         ):
             await service.complete_incomplete_check(
                 "check-1",
                 "org-1",
                 "user-1",
-                {"items": [{"template_item_id": "item-1", "status": "pass"}]},
+                {
+                    "client_submission_id": "completion-1",
+                    "items": [{"template_item_id": "item-1", "status": "pass"}],
+                },
             )
 
         assert check.check_timing == "end_of_shift"
         assert check.overall_status == "pass"
+        assert check.client_submission_id == "completion-1"
 
 
 class TestShiftCheckCompletionStatus:
@@ -629,22 +632,103 @@ class TestItemFkValidation:
 
 
 class TestCompartmentParentValidation:
-    """EC2-3: a reassigned parent_compartment_id must be in-org."""
+    """A compartment hierarchy stays within its template and remains acyclic."""
 
-    async def test_update_compartment_rejects_foreign_parent(self, service, mock_db):
-        # 1st _get_compartment: the compartment itself (in-org). 2nd: the foreign
-        # parent (None) -> rejected.
+    @staticmethod
+    def compartment(compartment_id, parent_id=None, template_id="tmpl-1"):
+        return SimpleNamespace(
+            id=compartment_id,
+            parent_compartment_id=parent_id,
+            template_id=template_id,
+        )
+
+    async def test_rejects_self_parenting(self, service, mock_db):
+        compartment = self.compartment("comp-1")
         with patch.object(
             service,
             "_get_compartment",
             new_callable=AsyncMock,
-            side_effect=[MagicMock(), None],
+            return_value=compartment,
         ):
-            with pytest.raises(ValueError, match="Invalid parent compartment"):
+            with pytest.raises(ValueError, match="cannot be stored inside itself"):
                 await service.update_compartment(
-                    "comp-1", "org-1", {"parent_compartment_id": "foreign-comp"}
+                    "comp-1", "org-1", {"parent_compartment_id": "comp-1"}
                 )
         mock_db.commit.assert_not_awaited()
+
+    async def test_rejects_two_node_cycle(self, service, mock_db):
+        compartment = self.compartment("a")
+        child = self.compartment("b", "a")
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            side_effect=[compartment, child],
+        ):
+            with pytest.raises(ValueError, match="cannot be stored inside itself"):
+                await service.update_compartment(
+                    "a", "org-1", {"parent_compartment_id": "b"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_rejects_three_node_cycle(self, service, mock_db):
+        compartment = self.compartment("a")
+        grandchild = self.compartment("c", "b")
+        child = self.compartment("b", "a")
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            side_effect=[compartment, grandchild, child],
+        ):
+            with pytest.raises(ValueError, match="cannot be stored inside itself"):
+                await service.update_compartment(
+                    "a", "org-1", {"parent_compartment_id": "c"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_rejects_parent_from_another_template_in_same_org(
+        self, service, mock_db
+    ):
+        template = SimpleNamespace(id="tmpl-1")
+        foreign_parent = self.compartment("other-parent", template_id="tmpl-2")
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=foreign_parent,
+            ),
+        ):
+            with pytest.raises(ValueError, match="same template"):
+                await service.add_compartment(
+                    "tmpl-1",
+                    "org-1",
+                    {"name": "Child", "parent_compartment_id": "other-parent"},
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_accepts_valid_multi_level_hierarchy(self, service, mock_db):
+        compartment = self.compartment("leaf")
+        parent = self.compartment("middle", "root")
+        root = self.compartment("root")
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = compartment
+        mock_db.execute.return_value = result
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            side_effect=[compartment, parent, root],
+        ):
+            await service.update_compartment(
+                "leaf", "org-1", {"parent_compartment_id": "middle"}
+            )
+        assert compartment.parent_compartment_id == "middle"
+        mock_db.commit.assert_awaited_once()
 
 
 class TestSubmitCheckResumeOverride:
@@ -730,6 +814,145 @@ class TestSubmitCheckResumeOverride:
                 allow_manage=False,
             )
         assert complete.await_args.kwargs["allow_any"] is False
+
+    async def test_completed_idempotent_retry_precedes_template_validation(
+        self, service, mock_db
+    ):
+        shift = MagicMock(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        completed = MagicMock(
+            id="chk-1",
+            shift_id="shift-1",
+            template_id="tmpl-1",
+            overall_status="pass",
+        )
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        retry_result = MagicMock()
+        retry_result.scalars.return_value.first.return_value = completed
+        mock_db.execute = AsyncMock(side_effect=[shift_result, retry_result])
+
+        with (
+            patch.object(service, "_resolve_templates", AsyncMock()) as resolve,
+            patch.object(
+                service, "get_check", AsyncMock(return_value=completed)
+            ) as get_check,
+        ):
+            result = await service.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="manager-1",
+                data={
+                    "template_id": "tmpl-1",
+                    "client_submission_id": "retry-1",
+                    "items": [{"status": "pass"}],
+                },
+                allow_manage=True,
+            )
+
+        assert result is completed
+        resolve.assert_not_awaited()
+        get_check.assert_awaited_once_with("chk-1", "org-1")
+
+
+class TestConcurrentShiftTemplateSubmission:
+    async def test_one_record_and_one_set_of_operational_effects(self):
+        """Both requests miss the advisory read; the flush is the race gate."""
+
+        shift = SimpleNamespace(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        template = SimpleNamespace(id="tmpl-1", check_timing="start_of_shift")
+        both_at_flush = asyncio.Event()
+        winner_persisted = asyncio.Event()
+        flush_count = 0
+        persisted = []
+        effects = 0
+
+        class RaceSession:
+            def __init__(self, winner: bool):
+                self.winner = winner
+                self.execute_count = 0
+                self.candidate = None
+
+            async def execute(self, _statement):
+                self.execute_count += 1
+                value = shift if self.execute_count == 1 else None
+                if self.execute_count == 4:
+                    value = persisted[0]
+                result = MagicMock()
+                result.scalars.return_value.first.return_value = value
+                return result
+
+            def add(self, candidate):
+                self.candidate = candidate
+
+            async def flush(self):
+                nonlocal flush_count
+                flush_count += 1
+                if flush_count == 2:
+                    both_at_flush.set()
+                await both_at_flush.wait()
+                if self.winner:
+                    persisted.append(self.candidate)
+                    winner_persisted.set()
+                    return
+                await winner_persisted.wait()
+                raise IntegrityError("insert", {}, Exception("duplicate"))
+
+            async def rollback(self):
+                return None
+
+            async def commit(self):
+                return None
+
+        winner_service = EquipmentCheckService(RaceSession(winner=True))
+        loser_service = EquipmentCheckService(RaceSession(winner=False))
+
+        async def run(service):
+            async def create_items(*_args, **_kwargs):
+                nonlocal effects
+                effects += 1
+                return []
+
+            with (
+                patch.object(
+                    service, "_resolve_templates", AsyncMock(return_value=[template])
+                ),
+                patch.object(
+                    service,
+                    "_load_checkable_template_items",
+                    AsyncMock(return_value={}),
+                ),
+                patch.object(service, "_validate_and_snapshot_submission"),
+                patch.object(service, "_create_check_items", create_items),
+                patch.object(
+                    service, "_update_apparatus_deficiency", AsyncMock()
+                ) as deficiency,
+                patch.object(
+                    service, "get_check", AsyncMock(side_effect=lambda *_: persisted[0])
+                ),
+                patch(
+                    "app.services.equipment_check_service.resolve_apparatus_ref",
+                    AsyncMock(return_value=SimpleNamespace(full_id=None)),
+                ),
+            ):
+                result = await service.submit_check(
+                    shift_id="shift-1",
+                    organization_id="org-1",
+                    checked_by="user-1",
+                    data={
+                        "template_id": "tmpl-1",
+                        "client_submission_id": "stable-request-1",
+                        "items": [{"status": "pass"}],
+                    },
+                    allow_manage=True,
+                )
+                return result, deficiency.await_count
+
+        first, second = await asyncio.gather(run(winner_service), run(loser_service))
+
+        assert len(persisted) == 1
+        assert first[0] is second[0] is persisted[0]
+        assert effects == 1
+        assert first[1] + second[1] == 1
 
 
 class TestFailureAlertDetails:

@@ -29,6 +29,12 @@ def test_update_backup_uses_private_permissions():
     assert 'chmod 600 "$BACKUP_FILE"' in script
 
 
+def test_update_readiness_requires_successful_health_response():
+    script = UPDATE_SCRIPT.read_text()
+
+    assert 'curl -fsS "http://localhost:$BACKEND_PORT/health"' in script
+
+
 def test_example_environment_uses_https_origin():
     example = EXAMPLE_ENV.read_text()
 

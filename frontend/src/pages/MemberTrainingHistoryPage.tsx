@@ -23,6 +23,7 @@ import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod }
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -33,6 +34,9 @@ const RecordAttachmentsModal: React.FC<{
   courseName: string;
   onClose: () => void;
 }> = ({ recordId, courseName, onClose }) => {
+  // Mounted only while open.
+  useOverlaySurface();
+
   const [attachments, setAttachments] = useState<TrainingAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -363,7 +367,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('csv')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
                 CSV
@@ -371,7 +375,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('pdf')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
                 PDF
@@ -383,7 +387,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     '_blank'
                   )
                 }
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
                 Print Record
               </button>
@@ -480,7 +484,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               }
             />
           ) : (
-            <div className="overflow-x-auto">
+            <div>
               <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
                 <thead className="bg-theme-surface-secondary">
                   <tr>

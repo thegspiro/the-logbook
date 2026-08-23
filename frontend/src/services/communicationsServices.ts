@@ -145,6 +145,22 @@ export interface AdminSummary {
   pending_admin_hours_approvals: number;
 }
 
+export interface OperationsItem {
+  key: string;
+  label: string;
+  severity: 'ok' | 'info' | 'warning' | 'critical';
+  count: number;
+  oldest_age_days?: number;
+  most_urgent?: string;
+  href: string;
+}
+
+export interface OperationsDashboard {
+  generated_at: string;
+  timezone: string;
+  sections: Array<{ key: string; title: string; items: OperationsItem[] }>;
+}
+
 export interface ActionItemSummary {
   id: string;
   source: string;
@@ -163,6 +179,35 @@ export interface CommunityEngagement {
   total_member_attendees: number;
   total_external_attendees: number;
   upcoming_public_events: number;
+}
+
+export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';
+export interface MainDashboardWidgets {
+  period: WidgetPeriod;
+  period_label: string;
+  finance: null | {
+    dues_due: number;
+    dues_paid: number;
+    overdue_dues: number;
+    cash_in: number;
+    cash_out: number;
+    net_cash_flow: number;
+    budgeted: number;
+    spent: number;
+    encumbered: number;
+  };
+  fundraising: null | {
+    grant_deadlines_30_days: number;
+    application_stages: Record<string, number>;
+    campaign_raised: number;
+    campaign_goal: number;
+  };
+  community: null | {
+    public_events: number;
+    member_attendees: number;
+    external_attendees: number;
+    pending_public_requests: number;
+  };
 }
 
 export interface ComplianceMatrixMember {

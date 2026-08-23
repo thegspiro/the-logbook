@@ -410,6 +410,24 @@ class ProspectListResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class ProspectSourceEventResponse(UTCResponseBase):
+    """One event that applicants are linked to, with how many.
+
+    ``prospect_count`` is a distinct count of applicants, not of links: the
+    unique index on ``prospect_event_links`` already prevents a duplicate pair,
+    but the count is what a coordinator reads as "this open house brought in
+    nine people", so it must not drift if that ever changes.
+    """
+
+    event_id: str
+    title: str
+    event_type: str
+    start_datetime: datetime
+    prospect_count: int
+
+    model_config = _response_config
+
+
 class PaginatedProspectListResponse(BaseModel):
     """Paginated response wrapping a list of prospects with total count."""
 

@@ -1,7 +1,61 @@
 # Application Review — Elections (Tier B)
 
 **Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-08-21 (pass 5)
+
+---
+
+## Pass 5 (2026-08-21) — public ballot input and write-in authorization
+
+Reviewed the authenticated management/voting routes and all public token routes
+from request validation through persistence. Tenant scoping, token hashing,
+eligibility snapshots, candidate ownership checks, rate limiting, vote deduplication,
+and anonymous-vote metadata purging remain intact.
+
+### ELEC2-3 — MEDIUM — Disabled write-ins accepted by token bulk ballot — ✅ FIXED
+
+The public bulk-ballot service created a write-in candidate whenever the payload
+selected `write_in`, but did not enforce the election's `allow_write_ins` setting.
+A token holder could therefore add and vote for a write-in candidate even when the
+ballot UI hid that option. The service now rejects the selection before creating a
+candidate when write-ins are disabled; a database-backed regression test covers the
+disabled setting.
+
+### ELEC2-4 — LOW — Public ballot payloads lacked defensive size/uniqueness bounds — ✅ FIXED
+
+Token strings, ballot lists, item ids, choices, and write-in names were accepted
+without complete request-layer bounds. Duplicate entries for one ballot item were
+also ambiguous and unnecessarily exercised persistence-level deduplication. Public
+token credentials are now capped at 256 characters; ballot submissions at 250
+items; item ids at the persisted 100-character safe format; choices/write-ins at
+200 characters; and duplicate item entries are rejected. Authenticated bulk votes
+receive the same 250-entry cap.
+
+### ELEC2-5 — HIGH — Token submissions did not serialize lifecycle/replay checks — ✅ FIXED
+
+Authenticated voting already locked the election row before eligibility and
+duplicate checks, but both token write paths validated before taking any row lock.
+Two concurrent requests could therefore validate the same unused token, and
+concurrent ballots could update `last_chain_hash` from the same predecessor,
+forking the tamper-evident vote chain. Token submissions now lock the election and
+token rows, in that order, then re-check token use/expiry and election status/window
+under the locks before inspecting candidates or creating votes. Focused DB-free
+tests cover a token consumed and an election closed between optimistic validation
+and lock acquisition.
+
+### ELEC2-6 — LOW — Public schemas silently discarded unexpected fields — ✅ FIXED
+
+The single-token vote schema inherited the authenticated `VoteCreate` payload,
+requiring an `election_id` that the service ignored in favor of the token's bound
+election. Public ballot models also used Pydantic's default behavior of silently
+discarding unknown keys. The token vote now declares only the fields it consumes,
+and all public token/ballot request layers reject extra fields rather than accepting
+ambiguous or security-looking client input.
+
+**Completion gate (pass 5):** focused DB-free tests 9 passed; black and flake8
+clean. The database-backed regression test could not run locally because MySQL was
+not available on `localhost:3306`.
 
 ---
 
@@ -171,7 +225,7 @@ resolved.
 
 None found beyond the deliberate shared-source-of-truth the R-7 fix introduced
 (`annotate_ballot_items_for_user`, from which the eligibility filter derives) —
-which is *de*-duplication, the correct direction.
+which is _de_-duplication, the correct direction.
 
 ## Dead code
 
@@ -195,18 +249,19 @@ this pass adds:
    `ip_address` is in the hash-chain input. That is correct (tamper-evidence
    over scrubbing), but it means a pre-change anonymous election's audit trail
    still carries voter IPs. Worth a one-line note in the operator/forensics docs
-   so it isn't mistaken for a leak — the *forensics API* is threshold-only, but
-   the *raw audit rows* from before the change are not.
+   so it isn't mistaken for a leak — the _forensics API_ is threshold-only, but
+   the _raw audit rows_ from before the change are not.
 2. **No further code work identified.** This module is at the point where the
    next increment is product/feature decisions, not defect-fixing.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no change this iteration) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ unchanged — no code modified. Full suite baseline (2517 passed, 0 failed) stands. |
+| Check                | Result                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `tsc --noEmit`       | ✅ 0 errors (no change this iteration)                                               |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                      |
+| `black --check`      | ✅ 503 files unchanged                                                               |
+| `eslint`             | ✅ clean                                                                             |
+| backend tests        | ✅ unchanged — no code modified. Full suite baseline (2517 passed, 0 failed) stands. |
+
 </content>

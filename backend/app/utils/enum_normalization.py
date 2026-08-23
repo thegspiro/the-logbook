@@ -71,7 +71,7 @@ def _enum_clause(values: list[str]) -> str:
 async def _current_enum_values(
     db: AsyncSession, schema: str, table: str, column: str
 ) -> list[str] | None:
-    """Return the column's ENUM label list, or None if it is not an ENUM."""
+    """Return ENUM labels, an empty list for another type, or None if absent."""
     row = (
         await db.execute(
             text("""
@@ -85,8 +85,13 @@ async def _current_enum_values(
         )
     ).fetchone()
 
-    if not row or not row[0] or not str(row[0]).startswith("enum("):
+    if not row:
         return None
+    if not row[0] or not str(row[0]).startswith("enum("):
+        # A prior normalization may have committed the ENUM→VARCHAR DDL before
+        # a later statement failed. Treat an existing non-ENUM column as work
+        # to do so a subsequent startup restores the database constraint.
+        return []
 
     import re
 
@@ -97,7 +102,8 @@ async def _normalize_one(db: AsyncSession, schema: str, spec: _EnumColumn) -> bo
     target = [m.value for m in spec.enum_class]
     current = await _current_enum_values(db, schema, spec.table, spec.column)
 
-    # Not an ENUM (e.g. legacy VARCHAR column) or already canonical → nothing to do.
+    # A missing column or an already canonical ENUM needs no work. Existing
+    # non-ENUM columns return [] and continue through the repair path below.
     if current is None or set(current) == set(target):
         return False
 

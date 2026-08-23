@@ -23,6 +23,7 @@ import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -40,6 +41,9 @@ interface MemberIdScannerModalProps {
 // ── Component ──────────────────────────────────────────────────────
 
 export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOpen, onClose, onMemberIdentified }) => {
+  // Before the `if (!isOpen) return null` below — hooks may not sit after it.
+  useOverlaySurface(isOpen);
+
   const [error, setError] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);

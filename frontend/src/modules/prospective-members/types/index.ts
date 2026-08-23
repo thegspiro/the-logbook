@@ -628,6 +628,17 @@ export interface ApplicantListFilters {
   target_membership_type?: TargetMembershipType | undefined;
   search?: string | undefined;
   include_inactive?: boolean | undefined;
+  /** Only applicants linked to this event — what one open house brought in. */
+  event_id?: string | undefined;
+}
+
+/** An event applicants are linked to, for the "came from" filter. */
+export interface ProspectSourceEvent {
+  event_id: string;
+  title: string;
+  event_type: string;
+  start_datetime: string;
+  prospect_count: number;
 }
 
 // =============================================================================

@@ -46,6 +46,7 @@ import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModa
 import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
+import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import { buildCsv, downloadCsv } from '../utils/csv';
 
 /**
@@ -156,6 +157,8 @@ export const EventDetailPage: React.FC = () => {
   const override = useOverrideAttendance({
     eventId,
     timezone: tz,
+    officialStartTime: event?.actual_start_time ?? event?.start_datetime,
+    officialEndTime: event?.actual_end_time ?? event?.end_datetime,
     onSuccess: async () => {
       await fetchRSVPs();
       await fetchStats();
@@ -511,9 +514,9 @@ export const EventDetailPage: React.FC = () => {
 
   const openRecordTimesModal = () => {
     if (event) {
-      // Pre-fill with existing actual times if they exist
-      setActualStartTime(event.actual_start_time ? formatForDateTimeInput(event.actual_start_time, tz) : '');
-      setActualEndTime(event.actual_end_time ? formatForDateTimeInput(event.actual_end_time, tz) : '');
+      // Prefer recorded official times, using the schedule until they are recorded.
+      setActualStartTime(formatForDateTimeInput(event.actual_start_time ?? event.start_datetime, tz));
+      setActualEndTime(formatForDateTimeInput(event.actual_end_time ?? event.end_datetime, tz));
     }
     setShowRecordTimesModal(true);
     setSubmitError(null);
@@ -1238,6 +1241,10 @@ export const EventDetailPage: React.FC = () => {
             {event.event_type === EventTypeEnum.TRAINING && (
               <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} />
             )}
+
+            {/* Pipeline meeting stages can also link prospects to ordinary
+                business events, so this is intentionally not type-gated. */}
+            <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
 
             {/* Attachments */}
             {event.attachments && event.attachments.length > 0 && (

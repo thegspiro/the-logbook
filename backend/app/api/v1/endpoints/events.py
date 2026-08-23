@@ -84,6 +84,7 @@ from app.services.event_service import (
     PHASE_GATE_PREFIX,
     EventService,
 )
+from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
@@ -434,6 +435,11 @@ EVENT_SETTINGS_DEFAULTS = {
         "fundraiser",
         "ceremony",
         "other",
+        # Not in visible_event_types: recruitment is an occasional outreach
+        # type, so it lands under the "Other" tab rather than taking a primary
+        # filter slot. A department that runs them regularly can promote it in
+        # Events settings.
+        "recruitment",
     ],
     "visible_event_types": [
         "business_meeting",
@@ -2776,6 +2782,22 @@ async def check_in_external_attendee(
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
     await db.commit()
+
+    # Attendance is already durable before pipeline automation runs. Resolve
+    # the event in the caller's organization rather than trusting the path id
+    # alone, then let the shared attendance hook apply its type/category rules.
+    if attendee.prospect_id:
+        event_result = await db.execute(
+            select(Event).where(
+                Event.id == str(event_id),
+                Event.organization_id == current_user.organization_id,
+            )
+        )
+        event = event_result.scalar_one_or_none()
+        if event is not None:
+            await GuestCheckInService(db).try_advance_attendance_pipeline(
+                str(attendee.prospect_id), event
+            )
     return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
 
 

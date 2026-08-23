@@ -16,21 +16,31 @@ Covered here:
 - Attendance at an unrelated event does not
 - Which event a meeting stage is waiting on (including recurring stages, whose
   pinned event id goes stale the moment that occurrence passes)
+- Required document uploads advance only after every configured type is attached
+  to the current stage
 """
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import CheckInWindowType, Event, EventType
+from app.api.v1.endpoints.events import check_in_external_attendee
+from app.models.event import (
+    CheckInWindowType,
+    Event,
+    EventExternalAttendee,
+    EventType,
+)
 from app.models.medical_screening import (
     ScreeningRecord,
     ScreeningStatus,
     ScreeningType,
 )
+from app.models.membership_pipeline import PipelineStepType
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.medical_screening_service import MedicalScreeningService
 from app.services.membership_pipeline_service import MembershipPipelineService
@@ -55,6 +65,27 @@ async def org(db_session: AsyncSession):
     )
     await db_session.flush()
     return org_id
+
+
+@pytest.fixture
+async def interviewer(db_session: AsyncSession, org):
+    user_id = _uid()
+    await db_session.execute(
+        text(
+            "INSERT INTO users "
+            "(id, organization_id, username, first_name, last_name, email, "
+            "password_hash, status) VALUES "
+            "(:id, :org, :username, 'Ira', 'Viewer', :email, 'hashed', 'active')"
+        ),
+        {
+            "id": user_id,
+            "org": org,
+            "username": f"interviewer-{user_id[:8]}",
+            "email": f"interviewer-{user_id[:8]}@example.com",
+        },
+    )
+    await db_session.flush()
+    return user_id
 
 
 async def _pipeline_parked_on(
@@ -104,13 +135,228 @@ async def _current_step_id(svc, prospect_id, org_id) -> str:
     return str(prospect.current_step_id)
 
 
+async def _upload_document(
+    svc: MembershipPipelineService,
+    prospect,
+    org_id: str,
+    document_type: str,
+    step_id: str | None,
+):
+    token = _uid()[:8]
+    return await svc.add_prospect_document(
+        prospect_id=prospect.id,
+        organization_id=org_id,
+        document_type=document_type,
+        file_name=f"{token}.pdf",
+        file_path=f"/app/uploads/{token}.pdf",
+        step_id=step_id,
+    )
+
+
+# =========================================================================
+# Document upload stage
+# =========================================================================
+
+
+class TestDocumentUploadAutoAdvance:
+    async def test_partial_upload_defers_then_final_required_type_advances(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={
+                "required_document_types": ["Background Check", "Photo ID"],
+                "auto_advance": True,
+            },
+        )
+
+        await _upload_document(svc, prospect, org, " background check ", gate.id)
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+        # Matching is deliberately case-insensitive for these free-text labels.
+        await _upload_document(svc, prospect, org, "PHOTO ID", gate.id)
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_unrelated_type_does_not_satisfy_a_required_type(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={
+                "required_document_types": ["Photo ID"],
+                "auto_advance": True,
+            },
+        )
+
+        await _upload_document(svc, prospect, org, "Resume", gate.id)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_documents_on_another_stage_or_without_a_stage_do_not_count(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={
+                "required_document_types": ["Photo ID"],
+                "auto_advance": True,
+            },
+        )
+        pipeline = await svc.get_pipeline(prospect.pipeline_id, org)
+        other_step = next(
+            step for step in pipeline.steps if str(step.id) != str(gate.id)
+        )
+
+        await _upload_document(svc, prospect, org, "Photo ID", other_step.id)
+        await _upload_document(svc, prospect, org, "Photo ID", None)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+        await _upload_document(svc, prospect, org, "Photo ID", gate.id)
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_auto_advance_disabled_records_upload_without_moving(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="document_upload",
+            config={"required_document_types": ["Photo ID"], "auto_advance": False},
+        )
+
+        document = await _upload_document(svc, prospect, org, "Photo ID", gate.id)
+
+        assert document is not None
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+# =========================================================================
+# Interview stage updates
+# =========================================================================
+
+
+class TestInterviewUpdateAutoAdvance:
+    async def _interview(
+        self,
+        db_session: AsyncSession,
+        org_id: str,
+        interviewer_id: str,
+        *,
+        auto_advance: bool = True,
+        step_id: str | None = None,
+    ):
+        config = {
+            "required_count": 1,
+            "required_recommendation": "recommend",
+        }
+        if auto_advance:
+            config["auto_advance"] = True
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org_id,
+            step_type="interview_requirement",
+            config=config,
+        )
+        interview = await svc.create_interview(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            interviewer_id=interviewer_id,
+            recommendation="undecided",
+            step_id=step_id or str(gate.id),
+        )
+        return svc, prospect, gate, interview
+
+    async def test_required_recommendation_update_advances(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate, interview = await self._interview(
+            db_session, org, interviewer
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="recommend"
+        )
+
+        updated = await svc.get_prospect(prospect.id, org)
+        assert str(updated.current_step_id) != str(gate.id)
+        progress = next(
+            p for p in updated.step_progress if str(p.step_id) == str(gate.id)
+        )
+        assert progress.action_result["interview_id"] == interview.id
+        assert progress.completed_by == interviewer
+
+    async def test_update_that_still_does_not_qualify_stays_put(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate, interview = await self._interview(
+            db_session, org, interviewer
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="do_not_recommend"
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_interview_for_non_current_stage_does_not_advance(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="checkbox",
+            config={},
+        )
+        pipeline = await svc.get_pipeline(prospect.pipeline_id, org)
+        later = next(step for step in pipeline.steps if str(step.id) != str(gate.id))
+        later.step_type = PipelineStepType.INTERVIEW_REQUIREMENT
+        later.config = {
+            "required_count": 1,
+            "required_recommendation": "recommend",
+            "auto_advance": True,
+        }
+        await db_session.commit()
+        interview = await svc.create_interview(
+            prospect.id,
+            org,
+            interviewer,
+            recommendation="undecided",
+            step_id=str(later.id),
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="recommend"
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_stage_without_auto_advance_stays_put(
+        self, db_session: AsyncSession, org, interviewer
+    ):
+        svc, prospect, gate, interview = await self._interview(
+            db_session, org, interviewer, auto_advance=False
+        )
+
+        await svc.update_interview(
+            interview.id, org, interviewer, recommendation="recommend"
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
 # =========================================================================
 # Medical screening stage
 # =========================================================================
 
 
 class TestMedicalScreeningAutoAdvance:
-
     async def _record(
         self,
         db_session: AsyncSession,
@@ -376,7 +622,6 @@ class TestMeetingStageMatching:
 
 
 class TestMeetingAutoAdvanceOnCheckIn:
-
     async def _check_in(self, db_session, event, org_id, email):
         return await GuestCheckInService(db_session).check_in_guest(
             event=event,
@@ -455,5 +700,98 @@ class TestMeetingAutoAdvanceOnCheckIn:
 
         assert error is None
         assert attendee is not None
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestMeetingAutoAdvanceOnStaffCheckIn:
+    """Staff-entered external attendance uses the same pipeline hook."""
+
+    async def _staff_check_in(
+        self,
+        db_session: AsyncSession,
+        org_id: str,
+        event: Event,
+        prospect_id: str | None,
+    ) -> EventExternalAttendee:
+        attendee = EventExternalAttendee(
+            id=_uid(),
+            organization_id=org_id,
+            event_id=str(event.id),
+            name="Dana Reed",
+            email=f"staff-{_uid()[:8]}@example.com",
+            prospect_id=prospect_id,
+        )
+        db_session.add_all([event, attendee])
+        await db_session.commit()
+
+        await check_in_external_attendee(
+            event_id=uuid.UUID(str(event.id)),
+            attendee_id=uuid.UUID(str(attendee.id)),
+            db=db_session,
+            current_user=SimpleNamespace(organization_id=org_id),
+        )
+        await db_session.refresh(attendee)
+        return attendee
+
+    async def test_linked_prospect_advances(self, db_session: AsyncSession, org):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+
+        attendee = await self._staff_check_in(
+            db_session, org, _make_event(org), prospect.id
+        )
+
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_unrelated_event_only_records_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+        event = _make_event(org, event_type=EventType.TRAINING)
+
+        attendee = await self._staff_check_in(db_session, org, event, prospect.id)
+
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_attendee_without_prospect_link_only_records_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        attendee = await self._staff_check_in(db_session, org, _make_event(org), None)
+
+        assert attendee.checked_in is True
+        assert attendee.prospect_id is None
+
+    async def test_auto_advance_disabled_only_records_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={"linked_event_type": "business_meeting", "auto_advance": False},
+        )
+
+        attendee = await self._staff_check_in(
+            db_session, org, _make_event(org), prospect.id
+        )
+
         assert attendee.checked_in is True
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
