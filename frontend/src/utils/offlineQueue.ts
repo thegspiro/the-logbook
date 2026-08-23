@@ -79,6 +79,14 @@ export async function enqueueCheck(
   payload: ShiftEquipmentCheckCreate,
   photoItems: { itemId: string; files: File[] }[]
 ): Promise<string> {
+  // Generate this once, before persisting. Every drain attempt reuses the
+  // stored payload, allowing the API to recognize a retry after its response
+  // was lost rather than reporting a second completed check.
+  const id = queueId();
+  const stablePayload = {
+    ...payload,
+    client_submission_id: payload.client_submission_id ?? id,
+  };
   const photos: QueuedPhoto[] = [];
   for (const group of photoItems) {
     for (const file of group.files) {
@@ -91,9 +99,9 @@ export async function enqueueCheck(
   }
 
   const entry: QueuedCheck = {
-    id: queueId(),
+    id,
     shiftId,
-    payload,
+    payload: stablePayload,
     photos,
     queuedAt: Date.now(),
     retries: 0,

@@ -312,10 +312,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     {}
   );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
-  // Lots corrected during this check, so the row reflects the box the crew is
-  // holding without waiting for a template re-fetch.
-  const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
-  const [lotBusyId, setLotBusyId] = useState<string | null>(null);
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(Boolean(swapTarget));
@@ -985,6 +981,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (!confirmed) return;
     }
 
+    const clientSubmissionId = crypto.randomUUID();
     setSubmitting(true);
     try {
       // Collect items with photo files for post-submit upload
@@ -1029,6 +1026,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const basePayload = {
         template_id: template.id,
         check_timing: template.checkTiming,
+        client_submission_id: clientSubmissionId,
         items,
         notes: overallNotes || undefined,
       };
@@ -1131,6 +1129,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const fallbackPayload: ShiftEquipmentCheckCreate = {
           template_id: template.id,
           check_timing: template.checkTiming,
+          client_submission_id: clientSubmissionId,
           items: fallbackItems,
           notes: overallNotes || undefined,
         };
