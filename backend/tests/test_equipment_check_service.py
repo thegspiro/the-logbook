@@ -929,10 +929,6 @@ class TestConcurrentShiftTemplateSubmission:
                 patch.object(
                     service, "get_check", AsyncMock(side_effect=lambda *_: persisted[0])
                 ),
-                patch(
-                    "app.services.equipment_check_service.resolve_apparatus_ref",
-                    AsyncMock(return_value=SimpleNamespace(full_id=None)),
-                ),
             ):
                 result = await service.submit_check(
                     shift_id="shift-1",
