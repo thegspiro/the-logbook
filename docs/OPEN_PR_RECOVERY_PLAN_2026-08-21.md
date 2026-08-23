@@ -164,3 +164,16 @@ cd frontend && npm run validate
 The final API-contract gate must run in GitHub Actions against both MySQL 8.0
 and MariaDB 10.11. Local collection verifies the Schemathesis dependency stack,
 but does not replace either database job.
+
+## Queue refresh — 2026-08-23
+
+After `main` advanced to `b1497efc`, all thirteen open feature heads (#1654,
+#1659, #1662, #1686, #1687, #1692, #1695, #1698, #1709, #1710, #1715,
+#1718, and #1719) were merged with that exact base and pushed. The merge
+strategy preserved each feature branch's non-overlapping commits while using
+the current `main` implementation for overlapping conflict hunks.
+
+The refresh removed every stale-base `DIRTY` merge state present before the
+update and triggered CI against the integrated heads. Follow-up fixes, if any,
+should be based only on failures from these new merge commits rather than the
+superseded pre-refresh runs.
