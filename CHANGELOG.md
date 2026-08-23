@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
+
+**Fixed**
+
+- **One escaped mock made the backend suite look flaky for a day.**
+  `TestConcurrentShiftTemplateSubmission` ran two `submit_check` coroutines
+  through `asyncio.gather`, and each entered the same
+  `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+  `unittest.mock.patch` records whatever it finds as "the original", so the
+  second enter saved the first one's mock and its exit reinstalled it — leaving
+  an `AsyncMock` on the module for the rest of the session. Every later test
+  reaching `if ref.full is not None` died on it, and because `pytest-randomly`
+  reshuffles module order per run, _which_ tests those were changed run to run.
+  The same commit passed and failed on alternate CI runs, and the failure always
+  surfaced in a file unrelated to the one that caused it.
+- An autouse guard now records every module- and class-level target a patch
+  touches and checks after each test that it still holds a real value. A leak
+  fails the test that caused it, names the attribute, explains the concurrency
+  trap, and restores the original so the rest of the run stays meaningful.
+  Instance targets are ignored: they cannot outlive their test.
+
 ### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
 
 **Added**
@@ -10063,16 +10084,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 
