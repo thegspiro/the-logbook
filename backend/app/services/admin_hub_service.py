@@ -22,7 +22,7 @@ from typing import Awaitable, Callable, Optional, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -188,6 +188,16 @@ async def _count_and_oldest(db: AsyncSession, model, *criteria, date_column):
     return int(row[0] or 0), row[1]
 
 
+def _module_off_reason(metric: MetricSpec) -> str:
+    """Why a metric cannot be chosen, in words an officer can act on.
+
+    Shared by the settings list and the save guard: the two used to phrase the
+    same fact differently, and the save error was the one that leaked the
+    internal module key ("needs the prospective_members module").
+    """
+    return metric.module_off_reason or f"Needs the {metric.requires_module} module"
+
+
 def _quarter_start(today: date) -> date:
     return date(today.year, ((today.month - 1) // 3) * 3 + 1, 1)
 
@@ -213,6 +223,19 @@ def _attention_context(attention: list[AdminAttentionItem]) -> str:
 #: Outer-query alias for the expired-screening lookup, so its correlated
 #: "is there still cover?" subquery can name the same table twice.
 _EXPIRED_ALIAS = aliased(ScreeningRecord)
+
+#: Outer-query alias for the missed-appointment lookup, for the same reason.
+_OVERDUE_ALIAS = aliased(ScreeningRecord)
+
+#: Statuses that mean the member turned up. A failed screening and one still
+#: under review are both *completed* appointments — they are somebody else's
+#: problem (compliance, the reviewer), not a booking nobody kept.
+_ATTENDED_STATUSES = (
+    ScreeningStatus.PASSED,
+    ScreeningStatus.COMPLETED,
+    ScreeningStatus.FAILED,
+    ScreeningStatus.PENDING_REVIEW,
+)
 
 
 def _active_member_criteria():
@@ -399,16 +422,68 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             )
         )
 
-    overdue_count, oldest_due = await _count_and_oldest(
-        ctx.db,
-        ScreeningRecord,
-        ScreeningRecord.organization_id == ctx.organization_id,
-        ScreeningRecord.user_id.isnot(None),
-        ScreeningRecord.status == ScreeningStatus.SCHEDULED,
-        ScreeningRecord.scheduled_date.isnot(None),
-        ScreeningRecord.scheduled_date < ctx.today,
-        date_column=ScreeningRecord.scheduled_date,
+    # Same shape as the expired lookup above, and for the same reason: a missed
+    # appointment is never edited, it is answered by a *new* record. Counting
+    # stale SCHEDULED rows outright therefore reports the member who rebooked
+    # and passed as one who "never completed" it, and keeps reporting them
+    # forever — the row that says they missed a Tuesday in March is permanent.
+    #
+    # An appointment is answered by any of three things: the member attended
+    # (a settled record dated on or after the one they missed), the
+    # requirement was waived, or they hold a later booking that has not come
+    # round yet. A settled record with no completed_date is not evidence of
+    # *when* they attended, so it answers nothing — over-reporting a
+    # "reschedule this" is the safer direction than hiding a member who never
+    # had their physical.
+    answered = (
+        select(ScreeningRecord.id)
+        .where(
+            ScreeningRecord.organization_id == ctx.organization_id,
+            ScreeningRecord.user_id == _OVERDUE_ALIAS.user_id,
+            ScreeningRecord.screening_type == _OVERDUE_ALIAS.screening_type,
+            ScreeningRecord.id != _OVERDUE_ALIAS.id,
+            or_(
+                ScreeningRecord.status == ScreeningStatus.WAIVED,
+                and_(
+                    ScreeningRecord.status.in_(_ATTENDED_STATUSES),
+                    ScreeningRecord.completed_date.isnot(None),
+                    ScreeningRecord.completed_date >= _OVERDUE_ALIAS.scheduled_date,
+                ),
+                and_(
+                    ScreeningRecord.status == ScreeningStatus.SCHEDULED,
+                    ScreeningRecord.scheduled_date.isnot(None),
+                    ScreeningRecord.scheduled_date >= ctx.today,
+                ),
+            ),
+        )
+        .exists()
     )
+    missed = (
+        select(
+            _OVERDUE_ALIAS.user_id,
+            _OVERDUE_ALIAS.screening_type,
+            func.min(_OVERDUE_ALIAS.scheduled_date).label("missed_on"),
+        )
+        .join(User, _OVERDUE_ALIAS.user_id == User.id)
+        .where(
+            _OVERDUE_ALIAS.organization_id == ctx.organization_id,
+            _OVERDUE_ALIAS.status == ScreeningStatus.SCHEDULED,
+            _OVERDUE_ALIAS.scheduled_date.isnot(None),
+            _OVERDUE_ALIAS.scheduled_date < ctx.today,
+            # An appointment somebody off the roster missed is history, not work.
+            User.organization_id == ctx.organization_id,
+            *_active_member_criteria(),
+            ~answered,
+        )
+        .group_by(_OVERDUE_ALIAS.user_id, _OVERDUE_ALIAS.screening_type)
+        .subquery()
+    )
+    overdue_row = (
+        await ctx.db.execute(
+            select(func.count(), func.min(missed.c.missed_on)).select_from(missed)
+        )
+    ).one()
+    overdue_count, oldest_due = int(overdue_row[0] or 0), overdue_row[1]
     if overdue_count:
         age = _age_days(oldest_due, ctx.today)
         items.append(
@@ -1546,9 +1621,7 @@ class AdminHubService:
                 metric.requires_module
                 and metric.requires_module not in ctx.enabled_modules
             ):
-                reason = metric.module_off_reason or (
-                    f"Needs the {metric.requires_module} module"
-                )
+                reason = _module_off_reason(metric)
             elif metric.availability is not None:
                 try:
                     reason = await metric.availability(ctx)
@@ -1628,9 +1701,8 @@ class AdminHubService:
                 metric.requires_module
                 and metric.requires_module not in ctx.enabled_modules
             ):
-                raise ValueError(
-                    f"'{metric.label}' needs the {metric.requires_module} module"
-                )
+                reason = _module_off_reason(metric)
+                raise ValueError(f"'{metric.label}' cannot be shown — {reason}")
             if metric.availability is not None and await metric.availability(ctx):
                 raise ValueError(f"'{metric.label}' is not available yet")
         if len(set(payload.metric_keys)) != len(payload.metric_keys):
