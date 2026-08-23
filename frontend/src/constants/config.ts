@@ -21,6 +21,21 @@ export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 // ============================================
 export const AUTO_SAVE_INTERVAL_MS = 30_000; // 30 seconds
 
+/**
+ * How long a settings field waits after the last keystroke before it writes.
+ * Long enough that typing a department name is one save rather than twenty,
+ * short enough that a member who types and immediately navigates away has
+ * still had the write dispatched.
+ */
+export const SETTINGS_AUTOSAVE_DEBOUNCE_MS = 600;
+
+/**
+ * Minimum time the settings autosave pill stays on "Saving…". A write that
+ * resolves in 40ms would otherwise flash the pill through two states too fast
+ * to read, which looks like a glitch rather than a save.
+ */
+export const SETTINGS_SAVE_MIN_VISIBLE_MS = 700;
+
 // ============================================
 // File uploads
 // ============================================

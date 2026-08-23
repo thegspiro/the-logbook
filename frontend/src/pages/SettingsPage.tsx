@@ -28,7 +28,6 @@ import {
   Upload,
   Shield,
   Users,
-  Hash,
   Truck,
   MessageSquare,
   Briefcase,
@@ -65,31 +64,94 @@ import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import RanksSettingsSection from '../components/settings/RanksSettingsSection';
 import EvocLevelsSettingsSection from '../components/settings/EvocLevelsSettingsSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
+import SettingsPanelHead from '../components/settings/SettingsPanelHead';
+import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 
 // ── Section definitions ──
 
-type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'evoc' | 'email' | 'storage' | 'authentication';
+type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'authentication';
 
-const SECTIONS: SettingsSection<SectionKey>[] = [
+/**
+ * Sub-pages across every section. One flat union rather than one per section:
+ * the URL carries a single `?page=` value, so the parser needs one type to
+ * validate against, and the shell keys the rail off the active section anyway.
+ */
+type SubPageKey =
+  | 'profile'
+  | 'contact'
+  | 'addresses'
+  | 'standard'
+  | 'additional'
+  | 'visibility'
+  | 'ids'
+  | 'operational'
+  | 'evoc'
+  | 'signin'
+  | 'mfa';
+
+const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
   {
     key: 'general',
     label: 'General',
     icon: Building2,
     description: 'Department name, logo, timezone, and contact info',
+    subPages: [
+      { key: 'profile', label: 'Profile', hint: 'Name, logo, timezone' },
+      { key: 'contact', label: 'Contact', hint: 'Phone, email, website' },
+      { key: 'addresses', label: 'Addresses', hint: 'Mailing and physical' },
+    ],
   },
-  { key: 'modules', label: 'Modules', icon: Package, description: 'Enable or disable optional features' },
-  { key: 'members', label: 'Members', icon: Users, description: 'Contact visibility and membership IDs' },
-  { key: 'ranks', label: 'Ranks', icon: Shield, description: 'Operational rank configuration' },
   {
-    key: 'evoc',
-    label: 'EVOC Levels',
-    icon: Truck,
-    description: 'Driver certification ladder and certifying programs',
+    key: 'modules',
+    label: 'Modules',
+    icon: Package,
+    description: 'Enable or disable optional features',
+    subPages: [
+      { key: 'standard', label: 'Standard Modules', hint: 'On by default' },
+      { key: 'additional', label: 'Additional Modules', hint: 'Opt-in' },
+    ],
+  },
+  {
+    key: 'members',
+    label: 'Members',
+    icon: Users,
+    description: 'Contact visibility and membership IDs',
+    subPages: [
+      { key: 'visibility', label: 'Contact Visibility', hint: 'What members see of each other' },
+      { key: 'ids', label: 'Membership IDs', hint: 'Numbering and prefixes' },
+    ],
+  },
+  {
+    key: 'ranks',
+    label: 'Ranks',
+    icon: Shield,
+    // EVOC was its own top-level section, which put a driver-certification
+    // ladder beside Email and Storage as though it were a department-wide
+    // platform choice. It is a second rank ladder, so it belongs under Ranks.
+    description: 'Operational rank ladder and driver certification',
+    subPages: [
+      { key: 'operational', label: 'Operational Ranks', hint: 'Order and eligibility' },
+      { key: 'evoc', label: 'EVOC Levels', hint: 'Driver certification ladder' },
+    ],
   },
   { key: 'email', label: 'Email', icon: Mail, description: 'Email platform and notification settings' },
   { key: 'storage', label: 'Storage', icon: HardDrive, description: 'File storage platform configuration' },
-  { key: 'authentication', label: 'Authentication', icon: Key, description: 'User sign-in and SSO provider' },
+  {
+    key: 'authentication',
+    label: 'Authentication',
+    icon: Key,
+    description: 'User sign-in and SSO provider',
+    subPages: [
+      { key: 'signin', label: 'Sign-in', hint: 'Local accounts and SSO' },
+      { key: 'mfa', label: 'MFA Policy', hint: 'Who must enrol' },
+    ],
+  },
 ];
+
+/** First sub-page of each section, used when a section is selected fresh. */
+const DEFAULT_SUB_PAGE = new Map<SectionKey, SubPageKey | null>(
+  SECTIONS.map((section) => [section.key, section.subPages?.[0]?.key ?? null])
+);
 
 // ── Module definitions ──
 
@@ -230,8 +292,6 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
   },
 ];
 
-const CONFIGURABLE_MODULES: ConfigurableModule[] = [...STANDARD_MODULES, ...ADDITIONAL_MODULES];
-
 // ── Timezone helper ──
 
 const COMMON_TIMEZONES = [
@@ -284,8 +344,18 @@ export const SettingsPage: React.FC = () => {
   // settings.manage grant does not cover — hide the section rather than show a
   // tab that can only 403.
   const canManageEvoc = checkPermission('apparatus.manage');
+  // EVOC is a sub-page of Ranks rather than a section of its own, so the gate
+  // drops that one page and leaves the rest of the rail — a section is only
+  // dropped outright when every page under it is gated, which is not the case
+  // here (Operational Ranks stays).
   const sections = useMemo(
-    () => SECTIONS.filter((section) => section.key !== 'evoc' || canManageEvoc),
+    () =>
+      SECTIONS.map((section) => {
+        if (section.key !== 'ranks' || canManageEvoc) {
+          return section;
+        }
+        return { ...section, subPages: (section.subPages ?? []).filter((page) => page.key !== 'evoc') };
+      }),
     [canManageEvoc]
   );
   const sectionKeys = useMemo(() => new Set<string>(sections.map((s) => s.key)), [sections]);
@@ -294,12 +364,21 @@ export const SettingsPage: React.FC = () => {
   const [activeSection, setActiveSection] = useState<SectionKey>(
     initialTab && sectionKeys.has(initialTab) ? (initialTab as SectionKey) : 'general'
   );
+
+  const [activeSubPage, setActiveSubPage] = useState<SubPageKey | null>(() => {
+    const section = sections.find(
+      (s) => s.key === (initialTab && sectionKeys.has(initialTab) ? initialTab : 'general')
+    );
+    const requested = searchParams.get('page');
+    const isValid = section?.subPages?.some((page) => page.key === requested) ?? false;
+    return isValid ? (requested as SubPageKey) : (section?.subPages?.[0]?.key ?? null);
+  });
+
+  const { saveState, save, saveDebounced, retry } = useSettingsAutosave();
   const [loading, setLoading] = useState(true);
 
   // General / profile state
   const [profile, setProfile] = useState<OrganizationProfile | null>(null);
-  const [profileDirty, setProfileDirty] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Module state
@@ -313,7 +392,6 @@ export const SettingsPage: React.FC = () => {
     show_phone: true,
     show_mobile: true,
   });
-  const [savingContact, setSavingContact] = useState(false);
 
   // Membership ID state
   const [membershipId, setMembershipId] = useState<MembershipIdSettings>({
@@ -322,7 +400,6 @@ export const SettingsPage: React.FC = () => {
     prefix: '',
     next_number: 1,
   });
-  const [savingMembershipId, setSavingMembershipId] = useState(false);
 
   // Email settings state
   const [emailSettings, setEmailSettings] = useState<EmailServiceSettings>({
@@ -358,12 +435,40 @@ export const SettingsPage: React.FC = () => {
   // Rank validation state
   const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
 
-  const switchSection = useCallback(
-    (key: SectionKey) => {
-      setActiveSection(key);
-      setSearchParams(key === 'general' ? {} : { tab: key }, { replace: true });
+  // Both levels are mirrored to the URL with `replace`, so a settings screen
+  // can be linked to and refreshed without stacking a history entry per click.
+  const writeUrl = useCallback(
+    (section: SectionKey, page: SubPageKey | null) => {
+      const next: Record<string, string> = {};
+      if (section !== 'general') {
+        next['tab'] = section;
+      }
+      // The first sub-page is what a bare `?tab=` already means, so leaving it
+      // out keeps the common link short and the two forms equivalent.
+      if (page !== null && page !== DEFAULT_SUB_PAGE.get(section)) {
+        next['page'] = page;
+      }
+      setSearchParams(next, { replace: true });
     },
     [setSearchParams]
+  );
+
+  const switchSection = useCallback(
+    (key: SectionKey) => {
+      const first = sections.find((s) => s.key === key)?.subPages?.[0]?.key ?? null;
+      setActiveSection(key);
+      setActiveSubPage(first);
+      writeUrl(key, first);
+    },
+    [sections, writeUrl]
+  );
+
+  const switchSubPage = useCallback(
+    (key: SubPageKey) => {
+      setActiveSubPage(key);
+      writeUrl(activeSection, key);
+    },
+    [activeSection, writeUrl]
   );
 
   // ── Data loading ──
@@ -420,28 +525,64 @@ export const SettingsPage: React.FC = () => {
 
   // ── Profile handlers ──
 
-  const updateProfileField = <K extends keyof OrganizationProfile>(field: K, value: OrganizationProfile[K]) => {
+  /**
+   * Writes the profile and re-syncs the branding the app shell reads.
+   *
+   * Deliberately does not feed the response back into `profile`. Saves are
+   * debounced behind the member's typing, so a response landing mid-keystroke
+   * would overwrite the characters typed since the request went out — the
+   * field would appear to swallow input at random. The local value is already
+   * what they asked for; only the branding mirror needs the server's copy.
+   */
+  const persistProfile = useCallback(async (next: OrganizationProfile) => {
+    const updated = await organizationService.updateProfile(next);
+    localStorage.setItem('departmentName', updated.name);
+    if (updated.logo) {
+      localStorage.setItem('logoData', updated.logo);
+    } else {
+      localStorage.removeItem('logoData');
+    }
+    window.dispatchEvent(
+      new CustomEvent('branding-updated', {
+        detail: { name: updated.name, logo: updated.logo },
+      })
+    );
+  }, []);
+
+  const updateProfileField = <K extends keyof OrganizationProfile>(
+    field: K,
+    value: OrganizationProfile[K],
+    { immediate = false }: { immediate?: boolean } = {}
+  ) => {
     if (!profile) return;
-    setProfile({ ...profile, [field]: value });
-    setProfileDirty(true);
+    const next = { ...profile, [field]: value };
+    setProfile(next);
+    // A picked logo or timezone is a finished decision; a typed name is not.
+    if (immediate) {
+      void save(() => persistProfile(next));
+    } else {
+      saveDebounced('profile', () => persistProfile(next));
+    }
   };
 
   const updateAddressField = (field: string, value: string) => {
     if (!profile) return;
-    setProfile({
+    const next = {
       ...profile,
       mailing_address: { ...profile.mailing_address, [field]: value },
-    });
-    setProfileDirty(true);
+    };
+    setProfile(next);
+    saveDebounced('profile', () => persistProfile(next));
   };
 
   const updatePhysicalAddressField = (field: string, value: string) => {
     if (!profile) return;
-    setProfile({
+    const next = {
       ...profile,
       physical_address: { ...profile.physical_address, [field]: value },
-    });
-    setProfileDirty(true);
+    };
+    setProfile(next);
+    saveDebounced('profile', () => persistProfile(next));
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -453,84 +594,45 @@ export const SettingsPage: React.FC = () => {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      updateProfileField('logo', reader.result as string);
+      updateProfileField('logo', reader.result as string, { immediate: true });
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSaveProfile = async () => {
-    if (!profile) return;
-    setSavingProfile(true);
-    try {
-      const updated = await organizationService.updateProfile(profile);
-      setProfile(updated);
-      setProfileDirty(false);
-      // Sync branding to localStorage (keys match AppLayout)
-      localStorage.setItem('departmentName', updated.name);
-      if (updated.logo) {
-        localStorage.setItem('logoData', updated.logo);
-      } else {
-        localStorage.removeItem('logoData');
-      }
-      // Notify AppLayout to re-render with new branding
-      window.dispatchEvent(
-        new CustomEvent('branding-updated', {
-          detail: { name: updated.name, logo: updated.logo },
-        })
-      );
-      toast.success('Profile saved');
-    } catch {
-      toast.error('Failed to save profile');
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
   // ── Module handlers ──
 
-  const handleModuleToggle = async (moduleKey: keyof ModuleSettingsData) => {
+  const handleModuleToggle = (moduleKey: keyof ModuleSettingsData) => {
     if (!moduleSettings || togglingModule) return;
     const newValue = !moduleSettings[moduleKey];
     setTogglingModule(moduleKey);
-    try {
-      const result = await organizationService.updateModuleSettings({ [moduleKey]: newValue });
-      setModuleSettings(result.module_settings);
-      const name = CONFIGURABLE_MODULES.find((m) => m.key === moduleKey)?.name || moduleKey;
-      toast.success(`${name} ${newValue ? 'enabled' : 'disabled'}`);
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(status === 403 ? 'Permission denied.' : 'Failed to update module.');
-    } finally {
-      setTogglingModule(null);
-    }
+    void save(async () => {
+      try {
+        const result = await organizationService.updateModuleSettings({ [moduleKey]: newValue });
+        setModuleSettings(result.module_settings);
+      } finally {
+        setTogglingModule(null);
+      }
+    });
   };
 
   // ── Contact info handlers ──
 
-  const handleSaveContact = async () => {
-    setSavingContact(true);
-    try {
-      await organizationService.updateContactInfoSettings(contactSettings);
-      toast.success('Contact visibility saved');
-    } catch {
-      toast.error('Failed to save');
-    } finally {
-      setSavingContact(false);
-    }
+  const updateContactSetting = (patch: Partial<ContactInfoSettings>) => {
+    const next = { ...contactSettings, ...patch };
+    setContactSettings(next);
+    void save(() => organizationService.updateContactInfoSettings(next));
   };
 
   // ── Membership ID handlers ──
 
-  const handleSaveMembershipId = async () => {
-    setSavingMembershipId(true);
-    try {
-      await organizationService.updateMembershipIdSettings(membershipId);
-      toast.success('Membership ID settings saved');
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save.');
-    } finally {
-      setSavingMembershipId(false);
+  const updateMembershipIdSetting = (patch: Partial<MembershipIdSettings>, { immediate = false } = {}) => {
+    const next = { ...membershipId, ...patch };
+    setMembershipId(next);
+    const write = () => organizationService.updateMembershipIdSettings(next);
+    if (immediate) {
+      void save(write);
+    } else {
+      saveDebounced('membership-id', write);
     }
   };
 
@@ -677,8 +779,6 @@ export const SettingsPage: React.FC = () => {
     );
   }
 
-  const enabledCount = moduleSettings ? CONFIGURABLE_MODULES.filter((m) => moduleSettings[m.key]).length : 0;
-
   // ── Render section content ──
 
   const renderContent = () => {
@@ -687,13 +787,181 @@ export const SettingsPage: React.FC = () => {
       // GENERAL
       // ════════════════════════════════════════════
       case 'general':
+        if (activeSubPage === 'contact') {
+          return (
+            <div className="space-y-6">
+              <SettingsPanelHead
+                title="Contact Information"
+                description="How the public and other agencies reach the station."
+              />
+              {/* Contact */}
+              <div>
+                <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
+                  <Phone className="text-theme-text-muted h-4 w-4" /> Contact Information
+                </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-theme-text-muted mb-1 block text-xs">Phone</label>
+                    <input
+                      type="text"
+                      value={profile?.phone || ''}
+                      onChange={(e) => updateProfileField('phone', e.target.value)}
+                      placeholder="(555) 123-4567"
+                      className="form-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-theme-text-muted mb-1 block text-xs">Email</label>
+                    <input
+                      type="email"
+                      value={profile?.email || ''}
+                      onChange={(e) => updateProfileField('email', e.target.value)}
+                      placeholder="info@firedept.org"
+                      className="form-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-theme-text-muted mb-1 block text-xs">Website</label>
+                    <input
+                      type="url"
+                      value={profile?.website || ''}
+                      onChange={(e) => updateProfileField('website', e.target.value)}
+                      placeholder="https://firedept.org"
+                      className="form-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-theme-text-muted mb-1 block text-xs">County</label>
+                    <input
+                      type="text"
+                      value={profile?.county || ''}
+                      onChange={(e) => updateProfileField('county', e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (activeSubPage === 'addresses') {
+          return (
+            <div className="space-y-6">
+              <SettingsPanelHead title="Addresses" description="Mailing and physical location." />
+              {/* Mailing Address */}
+              <div>
+                <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
+                  <MapPin className="text-theme-text-muted h-4 w-4" /> Mailing Address
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  <input
+                    type="text"
+                    value={profile?.mailing_address?.line1 || ''}
+                    onChange={(e) => updateAddressField('line1', e.target.value)}
+                    placeholder="Address line 1"
+                    className="form-input"
+                  />
+                  <input
+                    type="text"
+                    value={profile?.mailing_address?.line2 || ''}
+                    onChange={(e) => updateAddressField('line2', e.target.value)}
+                    placeholder="Address line 2 (optional)"
+                    className="form-input"
+                  />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      value={profile?.mailing_address?.city || ''}
+                      onChange={(e) => updateAddressField('city', e.target.value)}
+                      placeholder="City"
+                      className="form-input"
+                    />
+                    <input
+                      type="text"
+                      value={profile?.mailing_address?.state || ''}
+                      onChange={(e) => updateAddressField('state', e.target.value)}
+                      placeholder="State"
+                      className="form-input"
+                    />
+                    <input
+                      type="text"
+                      value={profile?.mailing_address?.zip || ''}
+                      onChange={(e) => updateAddressField('zip', e.target.value)}
+                      placeholder="ZIP"
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Physical Address */}
+              <div>
+                <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
+                  <MapPin className="text-theme-text-muted h-4 w-4" /> Physical Address
+                </p>
+                <label className="text-theme-text-secondary mb-3 flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={profile?.physical_address_same ?? true}
+                    onChange={(e) => updateProfileField('physical_address_same', e.target.checked)}
+                    className="border-theme-input-border rounded text-red-600 focus:ring-red-500"
+                  />
+                  Same as mailing address
+                </label>
+                {!profile?.physical_address_same && (
+                  <div className="grid grid-cols-1 gap-3">
+                    <input
+                      type="text"
+                      value={profile?.physical_address?.line1 || ''}
+                      onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
+                      placeholder="Address line 1"
+                      className="form-input"
+                    />
+                    <input
+                      type="text"
+                      value={profile?.physical_address?.line2 || ''}
+                      onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
+                      placeholder="Address line 2 (optional)"
+                      className="form-input"
+                    />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <input
+                        type="text"
+                        value={profile?.physical_address?.city || ''}
+                        onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
+                        placeholder="City"
+                        className="form-input"
+                      />
+                      <input
+                        type="text"
+                        value={profile?.physical_address?.state || ''}
+                        onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
+                        placeholder="State"
+                        className="form-input"
+                      />
+                      <input
+                        type="text"
+                        value={profile?.physical_address?.zip || ''}
+                        onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
+                        placeholder="ZIP"
+                        className="form-input"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-theme-text-primary text-lg font-semibold">Department Profile</h3>
-              <p className="text-theme-text-muted mt-1 text-sm">Basic information about your department.</p>
-            </div>
-
+            <SettingsPanelHead
+              title="Department Profile"
+              description="Basic information about your department."
+              meta="Visible to every member"
+            />
             {/* Logo */}
             <div className="flex items-start gap-4">
               <div className="border-theme-surface-border bg-theme-surface-secondary flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed">
@@ -737,7 +1005,7 @@ export const SettingsPage: React.FC = () => {
                 <label className="text-theme-text-primary mb-1 block text-sm font-medium">Timezone</label>
                 <select
                   value={profile?.timezone || 'America/New_York'}
-                  onChange={(e) => updateProfileField('timezone', e.target.value)}
+                  onChange={(e) => updateProfileField('timezone', e.target.value, { immediate: true })}
                   className="form-input"
                 >
                   {COMMON_TIMEZONES.map((tz) => (
@@ -747,171 +1015,6 @@ export const SettingsPage: React.FC = () => {
                   ))}
                 </select>
               </div>
-            </div>
-
-            {/* Contact */}
-            <div>
-              <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
-                <Phone className="text-theme-text-muted h-4 w-4" /> Contact Information
-              </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs">Phone</label>
-                  <input
-                    type="text"
-                    value={profile?.phone || ''}
-                    onChange={(e) => updateProfileField('phone', e.target.value)}
-                    placeholder="(555) 123-4567"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs">Email</label>
-                  <input
-                    type="email"
-                    value={profile?.email || ''}
-                    onChange={(e) => updateProfileField('email', e.target.value)}
-                    placeholder="info@firedept.org"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs">Website</label>
-                  <input
-                    type="url"
-                    value={profile?.website || ''}
-                    onChange={(e) => updateProfileField('website', e.target.value)}
-                    placeholder="https://firedept.org"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label className="text-theme-text-muted mb-1 block text-xs">County</label>
-                  <input
-                    type="text"
-                    value={profile?.county || ''}
-                    onChange={(e) => updateProfileField('county', e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Mailing Address */}
-            <div>
-              <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
-                <MapPin className="text-theme-text-muted h-4 w-4" /> Mailing Address
-              </p>
-              <div className="grid grid-cols-1 gap-3">
-                <input
-                  type="text"
-                  value={profile?.mailing_address?.line1 || ''}
-                  onChange={(e) => updateAddressField('line1', e.target.value)}
-                  placeholder="Address line 1"
-                  className="form-input"
-                />
-                <input
-                  type="text"
-                  value={profile?.mailing_address?.line2 || ''}
-                  onChange={(e) => updateAddressField('line2', e.target.value)}
-                  placeholder="Address line 2 (optional)"
-                  className="form-input"
-                />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <input
-                    type="text"
-                    value={profile?.mailing_address?.city || ''}
-                    onChange={(e) => updateAddressField('city', e.target.value)}
-                    placeholder="City"
-                    className="form-input"
-                  />
-                  <input
-                    type="text"
-                    value={profile?.mailing_address?.state || ''}
-                    onChange={(e) => updateAddressField('state', e.target.value)}
-                    placeholder="State"
-                    className="form-input"
-                  />
-                  <input
-                    type="text"
-                    value={profile?.mailing_address?.zip || ''}
-                    onChange={(e) => updateAddressField('zip', e.target.value)}
-                    placeholder="ZIP"
-                    className="form-input"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Physical Address */}
-            <div>
-              <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
-                <MapPin className="text-theme-text-muted h-4 w-4" /> Physical Address
-              </p>
-              <label className="text-theme-text-secondary mb-3 flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={profile?.physical_address_same ?? true}
-                  onChange={(e) => updateProfileField('physical_address_same', e.target.checked)}
-                  className="border-theme-input-border rounded text-red-600 focus:ring-red-500"
-                />
-                Same as mailing address
-              </label>
-              {!profile?.physical_address_same && (
-                <div className="grid grid-cols-1 gap-3">
-                  <input
-                    type="text"
-                    value={profile?.physical_address?.line1 || ''}
-                    onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
-                    placeholder="Address line 1"
-                    className="form-input"
-                  />
-                  <input
-                    type="text"
-                    value={profile?.physical_address?.line2 || ''}
-                    onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
-                    placeholder="Address line 2 (optional)"
-                    className="form-input"
-                  />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <input
-                      type="text"
-                      value={profile?.physical_address?.city || ''}
-                      onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
-                      placeholder="City"
-                      className="form-input"
-                    />
-                    <input
-                      type="text"
-                      value={profile?.physical_address?.state || ''}
-                      onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
-                      placeholder="State"
-                      className="form-input"
-                    />
-                    <input
-                      type="text"
-                      value={profile?.physical_address?.zip || ''}
-                      onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
-                      placeholder="ZIP"
-                      className="form-input"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Save */}
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => {
-                  void handleSaveProfile();
-                }}
-                disabled={savingProfile || !profileDirty}
-                className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingProfile && <Loader2 className="h-4 w-4 animate-spin" />}
-                {savingProfile ? 'Saving...' : 'Save Profile'}
-              </button>
             </div>
           </div>
         );
@@ -991,35 +1094,28 @@ export const SettingsPage: React.FC = () => {
           );
         };
 
-        return (
-          <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-theme-text-primary text-lg font-semibold">Modules</h3>
-                <p className="text-theme-text-muted mt-1 text-sm">
-                  Enable or disable optional modules. Core modules (Members, Events, Documents) are always active.
-                </p>
-              </div>
-              <span className="bg-theme-accent-green-muted text-theme-accent-green shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap sm:self-auto">
-                {enabledCount} / {CONFIGURABLE_MODULES.length} enabled
-              </span>
-            </div>
-
-            {/* Standard modules */}
+        if (activeSubPage === 'additional') {
+          const enabled = ADDITIONAL_MODULES.filter((m) => moduleSettings?.[m.key]).length;
+          return (
             <div>
-              <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
-                Standard Modules
-              </h4>
-              <div className="space-y-1.5">{STANDARD_MODULES.map(renderModuleRow)}</div>
-            </div>
-
-            {/* Additional modules */}
-            <div>
-              <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
-                Additional Modules
-              </h4>
+              <SettingsPanelHead
+                title="Additional Modules"
+                description="Disabled by default, opt-in per department."
+                meta={`${enabled} / ${ADDITIONAL_MODULES.length} enabled`}
+              />
               <div className="space-y-1.5">{ADDITIONAL_MODULES.map(renderModuleRow)}</div>
             </div>
+          );
+        }
+
+        return (
+          <div>
+            <SettingsPanelHead
+              title="Standard Modules"
+              description="Enabled by default for all organizations. Members, Events and Documents are core and always active."
+              meta={`${STANDARD_MODULES.filter((m) => moduleSettings?.[m.key]).length} / ${STANDARD_MODULES.length} enabled`}
+            />
+            <div className="space-y-1.5">{STANDARD_MODULES.map(renderModuleRow)}</div>
           </div>
         );
       }
@@ -1028,83 +1124,14 @@ export const SettingsPage: React.FC = () => {
       // MEMBERS
       // ════════════════════════════════════════════
       case 'members':
-        return (
-          <div className="space-y-8">
-            {/* Contact Info Visibility */}
+        if (activeSubPage === 'ids') {
+          return (
             <div>
-              <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-                <Mail className="text-theme-text-muted h-5 w-5" />
-                Contact Information Visibility
-              </h3>
-              <p className="text-theme-text-muted mt-1 mb-4 text-sm">
-                Control whether contact information is displayed on the member list page.
-              </p>
-
-              <div className="space-y-3">
-                <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
-                  <div>
-                    <p className="text-theme-text-primary text-sm font-medium">Show Contact Information</p>
-                    <p className="text-theme-text-muted text-xs">Enable display of contact info for all members</p>
-                  </div>
-                  <Toggle
-                    checked={contactSettings.enabled}
-                    onChange={() => setContactSettings((s) => ({ ...s, enabled: !s.enabled }))}
-                  />
-                </div>
-
-                {contactSettings.enabled && (
-                  <div className="space-y-3 pl-4">
-                    <div className="flex items-center justify-between py-2">
-                      <p className="text-theme-text-primary text-sm">Show Email Addresses</p>
-                      <Toggle
-                        checked={contactSettings.show_email}
-                        onChange={() => setContactSettings((s) => ({ ...s, show_email: !s.show_email }))}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <p className="text-theme-text-primary text-sm">Show Phone Numbers</p>
-                      <Toggle
-                        checked={contactSettings.show_phone}
-                        onChange={() => setContactSettings((s) => ({ ...s, show_phone: !s.show_phone }))}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <p className="text-theme-text-primary text-sm">Show Mobile Numbers</p>
-                      <Toggle
-                        checked={contactSettings.show_mobile}
-                        onChange={() => setContactSettings((s) => ({ ...s, show_mobile: !s.show_mobile }))}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => {
-                    void handleSaveContact();
-                  }}
-                  disabled={savingContact}
-                  className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savingContact && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {savingContact ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </div>
-
-            <div className="border-theme-surface-border border-t" />
-
-            {/* Membership ID */}
-            <div>
-              <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
-                <Hash className="text-theme-text-muted h-5 w-5" />
-                Membership ID Number
-              </h3>
-              <p className="text-theme-text-muted mt-1 mb-4 text-sm">
-                Configure membership ID numbers. Each member can be assigned a unique ID displayed on their profile.
-              </p>
-
+              <SettingsPanelHead
+                title="Membership ID Number"
+                description="Each member can be assigned a unique ID displayed on their profile."
+                meta={membershipId.enabled ? `Next: ${membershipId.prefix}${membershipId.next_number}` : undefined}
+              />
               <div className="space-y-3">
                 <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
                   <div>
@@ -1113,7 +1140,7 @@ export const SettingsPage: React.FC = () => {
                   </div>
                   <Toggle
                     checked={membershipId.enabled}
-                    onChange={() => setMembershipId((s) => ({ ...s, enabled: !s.enabled }))}
+                    onChange={() => updateMembershipIdSetting({ enabled: !membershipId.enabled }, { immediate: true })}
                   />
                 </div>
 
@@ -1128,7 +1155,9 @@ export const SettingsPage: React.FC = () => {
                       </div>
                       <Toggle
                         checked={membershipId.auto_generate}
-                        onChange={() => setMembershipId((s) => ({ ...s, auto_generate: !s.auto_generate }))}
+                        onChange={() =>
+                          updateMembershipIdSetting({ auto_generate: !membershipId.auto_generate }, { immediate: true })
+                        }
                       />
                     </div>
 
@@ -1141,7 +1170,7 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         maxLength={10}
                         value={membershipId.prefix}
-                        onChange={(e) => setMembershipId((s) => ({ ...s, prefix: e.target.value }))}
+                        onChange={(e) => updateMembershipIdSetting({ prefix: e.target.value })}
                         placeholder="e.g. FD-"
                         className="form-input w-40"
                       />
@@ -1158,7 +1187,7 @@ export const SettingsPage: React.FC = () => {
                           min={1}
                           value={membershipId.next_number}
                           onChange={(e) =>
-                            setMembershipId((s) => ({ ...s, next_number: Math.max(1, parseInt(e.target.value) || 1) }))
+                            updateMembershipIdSetting({ next_number: Math.max(1, parseInt(e.target.value) || 1) })
                           }
                           className="form-input w-40"
                         />
@@ -1167,19 +1196,53 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          );
+        }
 
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => {
-                    void handleSaveMembershipId();
-                  }}
-                  disabled={savingMembershipId}
-                  className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savingMembershipId && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {savingMembershipId ? 'Saving...' : 'Save'}
-                </button>
+        return (
+          <div>
+            <SettingsPanelHead
+              title="Contact Information Visibility"
+              description="Control what appears on the member list page."
+            />
+            <div className="space-y-3">
+              <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Show Contact Information</p>
+                  <p className="text-theme-text-muted text-xs">Enable display of contact info for all members</p>
+                </div>
+                <Toggle
+                  checked={contactSettings.enabled}
+                  onChange={() => updateContactSetting({ enabled: !contactSettings.enabled })}
+                />
               </div>
+
+              {contactSettings.enabled && (
+                <div className="space-y-3 pl-4">
+                  <div className="flex items-center justify-between py-2">
+                    <p className="text-theme-text-primary text-sm">Show Email Addresses</p>
+                    <Toggle
+                      checked={contactSettings.show_email}
+                      onChange={() => updateContactSetting({ show_email: !contactSettings.show_email })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <p className="text-theme-text-primary text-sm">Show Phone Numbers</p>
+                    <Toggle
+                      checked={contactSettings.show_phone}
+                      onChange={() => updateContactSetting({ show_phone: !contactSettings.show_phone })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <p className="text-theme-text-primary text-sm">Show Mobile Numbers</p>
+                    <Toggle
+                      checked={contactSettings.show_mobile}
+                      onChange={() => updateContactSetting({ show_mobile: !contactSettings.show_mobile })}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1188,6 +1251,19 @@ export const SettingsPage: React.FC = () => {
       // RANKS
       // ════════════════════════════════════════════
       case 'ranks':
+        // EVOC is the same section's second page now, not a section of its own.
+        if (activeSubPage === 'evoc') {
+          return (
+            <div>
+              <SettingsPanelHead
+                title="EVOC Levels"
+                description="Driver certification ladder and certifying programs."
+              />
+              <EvocLevelsSettingsSection />
+            </div>
+          );
+        }
+
         return (
           <RanksSettingsSection
             ranks={ranks}
@@ -1220,12 +1296,6 @@ export const SettingsPage: React.FC = () => {
             }}
           />
         );
-
-      // ════════════════════════════════════════════
-      // EVOC LEVELS
-      // ════════════════════════════════════════════
-      case 'evoc':
-        return <EvocLevelsSettingsSection />;
 
       // ════════════════════════════════════════════
       // EMAIL
@@ -1266,8 +1336,22 @@ export const SettingsPage: React.FC = () => {
       // AUTHENTICATION
       // ════════════════════════════════════════════
       case 'authentication':
+        // Authentication keeps an explicit Save rather than autosaving: these
+        // write credentials and change who can get in, and a half-typed SSO
+        // secret dispatched on a debounce can lock the department out of its
+        // own sign-in. The pill stays absent here for the same reason.
+        if (activeSubPage === 'mfa') {
+          return (
+            <div>
+              <SettingsPanelHead title="MFA Policy" description="Two-factor requirements for the department." />
+              <MfaPolicyCard />
+            </div>
+          );
+        }
+
         return (
-          <div className="space-y-6">
+          <div>
+            <SettingsPanelHead title="Sign-in" description="How members sign in." />
             <AuthSettingsSection
               authSettings={authSettings}
               onAuthSettingsChange={setAuthSettings}
@@ -1278,7 +1362,6 @@ export const SettingsPage: React.FC = () => {
                 void handleSaveAuth();
               }}
             />
-            <MfaPolicyCard />
           </div>
         );
     }
@@ -1288,24 +1371,22 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <SettingsLayout
+      <SettingsLayout<SectionKey, SubPageKey>
         sections={sections}
         activeSection={activeSection}
         onSectionChange={switchSection}
+        activeSubPage={activeSubPage}
+        onSubPageChange={switchSubPage}
         navLabel="Settings sections"
-        header={
-          <div className="mb-8 flex items-start justify-between">
-            <div>
-              <h2 className="text-theme-text-primary text-2xl font-bold">Organization Settings</h2>
-              <p className="text-theme-text-muted mt-1 text-sm">
-                Manage your department profile, modules, and configuration.
-              </p>
-            </div>
-            <HelpLink
-              topic="settings"
-              tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
-            />
-          </div>
+        title="Organization Settings"
+        subtitle="Department-wide configuration"
+        saveState={saveState}
+        onRetrySave={retry}
+        headerAside={
+          <HelpLink
+            topic="settings"
+            tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
+          />
         }
       >
         {renderContent()}
