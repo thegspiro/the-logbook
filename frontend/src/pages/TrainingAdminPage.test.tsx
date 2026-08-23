@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -92,6 +92,63 @@ describe('TrainingAdminPage', () => {
     expect(screen.getByRole('combobox', { name: 'Training admin section' })).toHaveValue('skills-testing');
     expect(screen.getByRole('combobox', { name: 'Skills Testing destination' })).toHaveValue('tests');
     expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Records');
+  });
+
+  // The keyboard and tab-panel behaviour below is live code with no other
+  // coverage: the roving focus, the arrow/Home/End handling and the
+  // aria-controls wiring all shipped with the accessibility work, and the
+  // merge that restored the component did not restore its tests.
+  it('wires both navigation levels to their tab panels', async () => {
+    renderWithRouter(<TrainingAdminPage />);
+    const sectionTablist = screen.getByRole('tablist', { name: 'Training admin sections' });
+    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+
+    expect(within(sectionTablist).getAllByRole('tab')).toHaveLength(3);
+    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
+    expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+
+    const contentPanel = screen.getByRole('tabpanel', { name: 'Overview' });
+    expect(overviewTab).toHaveAttribute('aria-controls', contentPanel.id);
+    expect(screen.getByRole('tabpanel', { name: 'Dashboard' })).toBeInTheDocument();
+  });
+
+  it('uses roving focus and arrow, Home, and End keys for inner tabs', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+
+    overviewTab.focus();
+    await user.keyboard('{ArrowRight}');
+    const complianceTab = screen.getByRole('tab', { name: 'Compliance Matrix' });
+    expect(complianceTab).toHaveFocus();
+    expect(complianceTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).toHaveAttribute('tabindex', '-1');
+    expect(window.location.search).toBe('?page=dashboard&tab=compliance');
+
+    await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'Training Waivers' })).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
+  });
+
+  it('activates top-level tabs from the keyboard and restores URL state on browser back', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingAdminPage />);
+    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
+
+    dashboardTab.focus();
+    await user.keyboard('{ArrowRight}');
+    const recordsTab = screen.getByRole('tab', { name: 'Records' });
+    expect(recordsTab).toHaveFocus();
+    expect(recordsTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tablist', { name: 'Records tabs' })).toBeInTheDocument();
+    expect(window.location.search).toBe('?page=records&tab=submissions');
+
+    window.history.back();
+    await waitFor(() => expect(dashboardTab).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
   });
 
   it('updates the section description and actions after navigation', async () => {
