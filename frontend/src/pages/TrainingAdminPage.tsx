@@ -25,8 +25,10 @@ import {
   TrendingUp,
   Shield,
   ChevronDown,
+  Plus,
 } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
+import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 // Lazy-loaded tab components
@@ -121,6 +123,7 @@ const pages: PageDef[] = [
       { id: 'manual-entry', label: 'Manual Entry' },
       { id: 'integrations', label: 'Integrations' },
       { id: 'import', label: 'Import History' },
+      { id: 'metrics', label: 'Headline Metrics' },
     ],
     defaultTab: 'requirements',
     actions: [{ label: 'Manage requirements', tab: 'requirements' }],
@@ -188,6 +191,7 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   pipelines: { page: 'setup', tab: 'pipelines' },
   integrations: { page: 'setup', tab: 'integrations' },
   import: { page: 'setup', tab: 'import' },
+  metrics: { page: 'setup', tab: 'metrics' },
   templates: { page: 'skills-testing', tab: 'templates' },
   tests: { page: 'skills-testing', tab: 'tests' },
   recertification: { page: 'enhancements', tab: 'recertification' },
@@ -223,7 +227,11 @@ const TabLoading = () => (
 
 // ── Tab content renderer ────────────────────────────────────────
 
-const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
+const TabContent: React.FC<{ page: PageId; tab: string; onMetricsSaved: () => void }> = ({
+  page,
+  tab,
+  onMetricsSaved,
+}) => {
   // Dashboard sub-page
   if (page === 'dashboard') {
     if (tab === 'overview') return <TrainingOfficerDashboard />;
@@ -249,6 +257,17 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
     if (tab === 'manual-entry') return <ManualEntrySettingsPanel />;
     if (tab === 'integrations') return <ExternalTrainingPage />;
     if (tab === 'import') return <HistoricalImportPage />;
+    if (tab === 'metrics')
+      return (
+        <div className="py-6">
+          <AdminMetricsSettings
+            moduleKey="training"
+            moduleLabel="Training"
+            permission="training.manage"
+            onSaved={onMetricsSaved}
+          />
+        </div>
+      );
   }
 
   // Skills Testing sub-page
@@ -279,6 +298,9 @@ export const TrainingAdminPage: React.FC = () => {
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const moreItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  // Bumped when the metrics settings tab saves, so the row above it reflects
+  // the new selection without a page reload.
+  const [frameToken, setFrameToken] = useState(0);
 
   // Resolve initial state from URL params (supports both old and new format)
   const resolveInitial = (): { page: PageId; tab: string } => {
@@ -420,187 +442,199 @@ export const TrainingAdminPage: React.FC = () => {
 
   const currentPage = getPage(activePage);
 
-  return (
-    <div>
-      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-        {/* Page Header */}
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Training Administration</h1>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              Manage training submissions, requirements, sessions, and more
-            </p>
-          </div>
-          <HelpLink
-            topic="training"
-            tooltip="Track NFPA compliance, manage training requirements, review submissions, and set up certification pipelines. The compliance matrix shows department-wide training status."
-          />
-        </div>
-
-        {/* Narrow-screen navigation uses native controls rather than horizontal scrolling. */}
-        <div className="mb-6 grid gap-4 md:hidden">
-          <label className="text-theme-text-primary text-sm font-medium" htmlFor="training-admin-page">
-            Section
-          </label>
-          <select
-            id="training-admin-page"
-            aria-label="Training admin section"
-            value={activePage}
-            onChange={(event) => handlePageChange(event.target.value as PageId)}
-            className="border-theme-surface-border bg-theme-surface-primary text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
-          >
-            <optgroup label="Primary">
-              {primaryPages.map((page) => (
-                <option key={page.id} value={page.id}>
-                  {page.label}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="More">
-              {overflowPages.map((page) => (
-                <option key={page.id} value={page.id}>
-                  {page.label}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          <label className="text-theme-text-primary text-sm font-medium" htmlFor="training-admin-tab">
-            {currentPage.label} destination
-          </label>
-          <select
-            id="training-admin-tab"
-            aria-label={`${currentPage.label} destination`}
-            value={activeTab}
-            onChange={(event) => handleTabChange(event.target.value)}
-            className="border-theme-surface-border bg-theme-surface-primary text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
-          >
-            {currentPage.tabs.map((tab) => (
-              <option key={tab.id} value={tab.id}>
-                {tab.label}
+  // Training keeps its own two-level navigation — six sections, each with its
+  // own tabs — so it fills the frame's nav slot rather than taking the
+  // standard single tab bar. Everything above it is the shared frame.
+  const nav = (
+    <>
+      {/* Narrow-screen navigation uses native controls rather than horizontal scrolling. */}
+      <div className="grid gap-4 md:hidden">
+        <label className="text-theme-text-primary text-sm font-medium" htmlFor="training-admin-page">
+          Section
+        </label>
+        <select
+          id="training-admin-page"
+          aria-label="Training admin section"
+          value={activePage}
+          onChange={(event) => handlePageChange(event.target.value as PageId)}
+          className="border-theme-surface-border bg-theme-surface-primary text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
+        >
+          <optgroup label="Primary">
+            {primaryPages.map((page) => (
+              <option key={page.id} value={page.id}>
+                {page.label}
               </option>
             ))}
-          </select>
-        </div>
+          </optgroup>
+          <optgroup label="More">
+            {overflowPages.map((page) => (
+              <option key={page.id} value={page.id}>
+                {page.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        <label className="text-theme-text-primary text-sm font-medium" htmlFor="training-admin-tab">
+          {currentPage.label} destination
+        </label>
+        <select
+          id="training-admin-tab"
+          aria-label={`${currentPage.label} destination`}
+          value={activeTab}
+          onChange={(event) => handleTabChange(event.target.value)}
+          className="border-theme-surface-border bg-theme-surface-primary text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
+        >
+          {currentPage.tabs.map((tab) => (
+            <option key={tab.id} value={tab.id}>
+              {tab.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* Desktop navigation keeps frequent workflows prominent and tucks the rest into More. */}
-        <div className="mb-6 hidden items-center space-x-2 md:flex" role="tablist" aria-label="Training admin sections">
-          {primaryPages.map((page) => {
-            const Icon = page.icon;
-            const isActive = activePage === page.id;
-            return (
-              <button
-                key={page.id}
-                id={`training-admin-section-tab-${page.id}`}
-                ref={(element) => {
-                  pageTabRefs.current[page.id] = element;
-                }}
-                onClick={() => handlePageChange(page.id)}
-                onKeyDown={(event) =>
-                  handleTabKeyDown(
-                    event,
-                    primaryPages.map((item) => item.id),
-                    page.id,
-                    handlePageChange,
-                    pageTabRefs
-                  )
-                }
-                role="tab"
-                aria-selected={isActive}
-                aria-current={isActive ? 'page' : undefined}
-                className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
-                  isActive
-                    ? 'bg-red-600 text-white'
-                    : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-                }`}
-              >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                <span>{page.label}</span>
-              </button>
-            );
-          })}
-          <div className="relative">
+      {/* Desktop navigation keeps frequent workflows prominent and tucks the rest into More. */}
+      <div className="hidden items-center space-x-2 md:flex" role="tablist" aria-label="Training admin sections">
+        {primaryPages.map((page) => {
+          const Icon = page.icon;
+          const isActive = activePage === page.id;
+          return (
             <button
-              type="button"
-              ref={moreTriggerRef}
-              onClick={() => setIsMoreOpen((open) => !open)}
-              onKeyDown={handleMoreTriggerKeyDown}
-              aria-expanded={isMoreOpen}
-              aria-haspopup="menu"
-              className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
-                overflowPages.some(({ id }) => id === activePage)
+              key={page.id}
+              id={`training-admin-section-tab-${page.id}`}
+              ref={(element) => {
+                pageTabRefs.current[page.id] = element;
+              }}
+              onClick={() => handlePageChange(page.id)}
+              onKeyDown={(event) =>
+                handleTabKeyDown(
+                  event,
+                  primaryPages.map((item) => item.id),
+                  page.id,
+                  handlePageChange,
+                  pageTabRefs
+                )
+              }
+              role="tab"
+              aria-selected={isActive}
+              aria-current={isActive ? 'page' : undefined}
+              className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
+                isActive
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
-              <span>More</span>
-              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              <span>{page.label}</span>
             </button>
-            {isMoreOpen && (
-              <div
-                role="menu"
-                aria-label="More training admin sections"
-                onKeyDown={handleMoreMenuKeyDown}
-                className="border-theme-surface-border bg-theme-surface-primary absolute right-0 z-20 mt-2 w-64 rounded-lg border p-1 shadow-lg"
-              >
-                {overflowPages.map((page) => {
-                  const Icon = page.icon;
-                  const isActive = activePage === page.id;
-                  return (
-                    <button
-                      key={page.id}
-                      type="button"
-                      role="menuitem"
-                      ref={(element) => {
-                        moreItemRefs.current[page.id] = element;
-                      }}
-                      aria-current={isActive ? 'page' : undefined}
-                      onClick={() => handlePageChange(page.id)}
-                      className={`focus:ring-theme-focus-ring flex w-full items-start gap-3 rounded-md px-3 py-2 text-left focus:ring-2 focus:outline-hidden ${
-                        isActive
-                          ? 'bg-theme-surface-secondary text-theme-text-primary'
-                          : 'text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                      }`}
-                    >
-                      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span>
-                        <span className="block text-sm font-medium">{page.label}</span>
-                        <span className="mt-0.5 block text-xs">{page.description}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* The live region gives section changes useful context without announcing tab content. */}
-        <div
-          className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <p className="text-theme-text-muted text-sm">
-            <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
-            {currentPage.description}
-          </p>
-          {currentPage.actions && (
-            <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
-              {currentPage.actions.map((action) => (
-                <button
-                  key={action.label}
-                  type="button"
-                  onClick={() => handleTabChange(action.tab)}
-                  className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
-                >
-                  {action.label}
-                </button>
-              ))}
+          );
+        })}
+        <div className="relative">
+          <button
+            type="button"
+            ref={moreTriggerRef}
+            onClick={() => setIsMoreOpen((open) => !open)}
+            onKeyDown={handleMoreTriggerKeyDown}
+            aria-expanded={isMoreOpen}
+            aria-haspopup="menu"
+            className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
+              overflowPages.some(({ id }) => id === activePage)
+                ? 'bg-red-600 text-white'
+                : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+            }`}
+          >
+            <span>More</span>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </button>
+          {isMoreOpen && (
+            <div
+              role="menu"
+              aria-label="More training admin sections"
+              onKeyDown={handleMoreMenuKeyDown}
+              className="border-theme-surface-border bg-theme-surface-primary absolute right-0 z-20 mt-2 w-64 rounded-lg border p-1 shadow-lg"
+            >
+              {overflowPages.map((page) => {
+                const Icon = page.icon;
+                const isActive = activePage === page.id;
+                return (
+                  <button
+                    key={page.id}
+                    type="button"
+                    role="menuitem"
+                    ref={(element) => {
+                      moreItemRefs.current[page.id] = element;
+                    }}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => handlePageChange(page.id)}
+                    className={`focus:ring-theme-focus-ring flex w-full items-start gap-3 rounded-md px-3 py-2 text-left focus:ring-2 focus:outline-hidden ${
+                      isActive
+                        ? 'bg-theme-surface-secondary text-theme-text-primary'
+                        : 'text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>
+                      <span className="block text-sm font-medium">{page.label}</span>
+                      <span className="mt-0.5 block text-xs">{page.description}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
+      {/* The live region gives section changes useful context without announcing tab content. */}
+      <div
+        className="border-theme-surface-border bg-theme-surface-secondary flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <p className="text-theme-text-muted text-sm">
+          <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span> {currentPage.description}
+        </p>
+        {currentPage.actions && (
+          <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
+            {currentPage.actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => handleTabChange(action.tab)}
+                className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <AdminHubFrame
+      moduleKey="training"
+      title="Training Administration"
+      description="Manage training submissions, requirements, sessions, and more"
+      primaryAction={{
+        key: 'create-session',
+        label: 'Create Session',
+        icon: Plus,
+        onClick: () => {
+          setActivePage('records');
+          setActiveTab('sessions');
+          setSearchParams({ page: 'records', tab: 'sessions' });
+        },
+      }}
+      headerAside={
+        <HelpLink
+          topic="training"
+          tooltip="Track NFPA compliance, manage training requirements, review submissions, and set up certification pipelines. The compliance matrix shows department-wide training status."
+        />
+      }
+      nav={nav}
+      refreshToken={frameToken}
+    >
       <div
         id={`training-admin-section-panel-${activePage}`}
         role="tabpanel"
@@ -664,7 +698,11 @@ export const TrainingAdminPage: React.FC = () => {
               >
                 {isActive && (
                   <Suspense fallback={<TabLoading />}>
-                    <TabContent page={activePage} tab={tab.id} />
+                    <TabContent
+                      page={activePage}
+                      tab={tab.id}
+                      onMetricsSaved={() => setFrameToken((token) => token + 1)}
+                    />
                   </Suspense>
                 )}
               </div>
@@ -672,7 +710,7 @@ export const TrainingAdminPage: React.FC = () => {
           })}
         </div>
       </div>
-    </div>
+    </AdminHubFrame>
   );
 };
 

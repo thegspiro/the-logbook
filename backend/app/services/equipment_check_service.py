@@ -8,7 +8,7 @@ check submissions, checklist resolution by position, and item history.
 import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select
@@ -34,6 +34,7 @@ from app.models.training import (
     ShiftAssignment,
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
+    ShiftEquipmentCheckSeal,
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
@@ -993,6 +994,80 @@ class EquipmentCheckService:
             created.append(check_item)
         return created
 
+    async def _create_check_seals(
+        self,
+        check_id: str,
+        seals_data: List[Dict[str, Any]],
+        sealed_compartment_ids: Set[str],
+    ) -> List[ShiftEquipmentCheckSeal]:
+        """Record the tamper seals a crew read during one check.
+
+        Only compartments the template actually marks as sealed are recorded.
+        A seal submitted for an ordinary compartment is a client that has
+        drifted from the template, and storing it would put a claim on the
+        record that nobody was ever asked to make.
+
+        Replacing rather than appending: completing an incomplete check
+        re-reads the same bags, and two rows for one compartment would leave
+        the record unable to say which seal the crew actually saw.
+        """
+        seen: Dict[str, ShiftEquipmentCheckSeal] = {}
+        for seal_data in seals_data:
+            compartment_id = str(seal_data.get("template_compartment_id") or "")
+            if compartment_id not in sealed_compartment_ids:
+                continue
+            seal = ShiftEquipmentCheckSeal(
+                id=generate_uuid(),
+                check_id=check_id,
+                template_compartment_id=compartment_id,
+                compartment_name=seal_data.get("compartment_name", ""),
+                seal_number=(seal_data.get("seal_number") or None),
+                intact=bool(seal_data.get("intact", True)),
+                cleared_item_count=int(seal_data.get("cleared_item_count") or 0),
+                notes=seal_data.get("notes") or None,
+            )
+            seen[compartment_id] = seal
+
+        if not seen:
+            return []
+
+        existing = (
+            (
+                await self.db.execute(
+                    select(ShiftEquipmentCheckSeal).where(
+                        ShiftEquipmentCheckSeal.check_id == check_id,
+                        ShiftEquipmentCheckSeal.template_compartment_id.in_(
+                            list(seen.keys())
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in existing:
+            await self.db.delete(row)
+
+        for seal in seen.values():
+            self.db.add(seal)
+        return list(seen.values())
+
+    async def _sealed_compartment_ids(self, template_id: str) -> Set[str]:
+        """Ids of the template's compartments that carry a tamper seal."""
+        rows = (
+            (
+                await self.db.execute(
+                    select(CheckTemplateCompartment.id).where(
+                        CheckTemplateCompartment.template_id == template_id,
+                        CheckTemplateCompartment.is_sealed.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {str(row) for row in rows}
+
     async def _update_apparatus_deficiency(
         self,
         apparatus_id: Optional[str],
@@ -1164,6 +1239,7 @@ class EquipmentCheckService:
                 raise PermissionError("Not authorized to submit a check for this shift")
 
         items_data = data.pop("items", [])
+        seals_data = data.pop("seals", []) or []
         template_id = data.get("template_id")
         client_submission_id = data.get("client_submission_id")
         selected_template = None
@@ -1243,6 +1319,12 @@ class EquipmentCheckService:
                         checked_by=checked_by,
                         data={
                             "items": items_data,
+                            # The form always resubmits through submit_check, so
+                            # resuming a saved check lands here rather than in
+                            # the post-flush branch below. Dropping the seals
+                            # would file the passes an intact seal cleared while
+                            # discarding the record that justified them.
+                            "seals": seals_data,
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
                             "client_submission_id": client_submission_id,
@@ -1342,6 +1424,7 @@ class EquipmentCheckService:
                     checked_by=checked_by,
                     data={
                         "items": items_data,
+                        "seals": seals_data,
                         "notes": data.get("notes"),
                         "signature_data": data.get("signature_data"),
                         "client_submission_id": client_submission_id,
@@ -1360,6 +1443,12 @@ class EquipmentCheckService:
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
         )
+        if seals_data and template_id:
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(template_id),
+            )
 
         await self._update_apparatus_deficiency(
             shift.apparatus_id, organization_id, overall_status
@@ -1449,6 +1538,7 @@ class EquipmentCheckService:
                 raise ValueError("Apparatus not found")
 
         items_data = data.pop("items", [])
+        seals_data = data.pop("seals", []) or []
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
@@ -1504,6 +1594,12 @@ class EquipmentCheckService:
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
         )
+        if seals_data:
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(template_id),
+            )
 
         await self._update_apparatus_deficiency(
             apparatus_id, organization_id, overall_status
@@ -1562,6 +1658,7 @@ class EquipmentCheckService:
                 check.check_timing = template.check_timing
 
         items_data = data.get("items", [])
+        seals_data = data.get("seals", []) or []
         if not items_data:
             raise ValueError("At least one item is required")
 
@@ -1623,6 +1720,16 @@ class EquipmentCheckService:
                 check.id, missing_rows, template_items_map, organization_id
             )
             check.items.extend(created)
+
+        if seals_data and check.template_id:
+            # Replaces rather than appends: finishing an incomplete check
+            # re-reads the same bags, and the record has to say which seal the
+            # crew actually saw.
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(str(check.template_id)),
+            )
 
         # Ignore any historic/client-created rows that are not questions on the
         # selected template.  They must not inflate totals or satisfy completion.
@@ -1882,6 +1989,62 @@ class EquipmentCheckService:
                 "notes": item.notes,
             }
 
+        return results
+
+    async def get_last_check_seals(
+        self,
+        template_id: str,
+        organization_id: str,
+        apparatus_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Return the seal each sealed container carried at the last count.
+
+        Keyed by ``template_compartment_id``, so the form can put the number
+        the previous crew read next to the one in front of this crew. Equal
+        numbers are the whole basis of the shortcut: the bag has not been
+        opened since it was counted.
+        """
+        filters = [
+            ShiftEquipmentCheck.template_id == template_id,
+            ShiftEquipmentCheck.organization_id == organization_id,
+            ShiftEquipmentCheck.overall_status.in_(["pass", "fail"]),
+        ]
+        if apparatus_id:
+            filters.append(ShiftEquipmentCheck.apparatus_id == apparatus_id)
+
+        latest_check = (
+            await self.db.execute(
+                select(ShiftEquipmentCheck)
+                .where(*filters)
+                .order_by(ShiftEquipmentCheck.checked_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if not latest_check:
+            return {}
+
+        rows = (
+            (
+                await self.db.execute(
+                    select(ShiftEquipmentCheckSeal).where(
+                        ShiftEquipmentCheckSeal.check_id == latest_check.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        results: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if not row.template_compartment_id:
+                continue
+            results[row.template_compartment_id] = {
+                "seal_number": row.seal_number,
+                "intact": bool(row.intact),
+                "checked_at": latest_check.checked_at,
+            }
         return results
 
     # ------------------------------------------------------------------
@@ -3449,6 +3612,7 @@ class EquipmentCheckService:
             image_url=source.image_url,
             is_header=source.is_header,
             container_type=source.container_type,
+            is_sealed=source.is_sealed,
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)
