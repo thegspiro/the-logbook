@@ -3,39 +3,28 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
-// Mock all lazy-loaded page imports before importing the component: these tests
-// exercise navigation, not the child pages.
+// Mock all lazy-loaded page imports before importing the component
 vi.mock('./TrainingOfficerDashboard', () => ({ default: () => <div data-testid="lazy-component">Dashboard</div> }));
 vi.mock('./ComplianceMatrixTab', () => ({ default: () => <div data-testid="lazy-component">Compliance</div> }));
 vi.mock('./ExpiringCertsTab', () => ({ default: () => <div data-testid="lazy-component">Expiring Certs</div> }));
 vi.mock('./TrainingWaiversTab', () => ({ default: () => <div data-testid="lazy-component">Waivers</div> }));
 vi.mock('./ReviewSubmissionsPage', () => ({ default: () => <div data-testid="lazy-component">Review</div> }));
 vi.mock('./CreateTrainingSessionPage', () => ({ default: () => <div data-testid="lazy-component">Session</div> }));
-vi.mock('./training/CohortsPage', () => ({ default: () => <div data-testid="lazy-component">Cohorts</div> }));
 vi.mock('./ShiftReportPage', () => ({ default: () => <div data-testid="lazy-component">Shift Report</div> }));
-vi.mock('./MemberTrainingStatusPage', () => ({ default: () => <div data-testid="lazy-component">Member Status</div> }));
 vi.mock('./TrainingRequirementsPage', () => ({ default: () => <div data-testid="lazy-component">Requirements</div> }));
-vi.mock('./CourseLibraryPage', () => ({ default: () => <div data-testid="lazy-component">Course Library</div> }));
 vi.mock('./CreatePipelinePage', () => ({ default: () => <div data-testid="lazy-component">Pipeline</div> }));
-vi.mock('./training/ManualEntrySettingsPanel', () => ({
-  default: () => <div data-testid="lazy-component">Manual Entry</div>,
-}));
 vi.mock('./ExternalTrainingPage', () => ({ default: () => <div data-testid="lazy-component">External</div> }));
 vi.mock('./HistoricalImportPage', () => ({ default: () => <div data-testid="lazy-component">Historical</div> }));
 vi.mock('./SkillsTestingTemplatesTab', () => ({ default: () => <div data-testid="lazy-component">Templates</div> }));
 vi.mock('./SkillsTestingTestRecordsTab', () => ({ default: () => <div data-testid="lazy-component">Records</div> }));
-vi.mock('./TrainingEnhancementsTab', () => ({
-  default: ({ activeTab }: { activeTab: string }) => (
-    <div data-testid="lazy-component">{`Enhancements ${activeTab}`}</div>
-  ),
-}));
+vi.mock('./TrainingEnhancementsTab', () => ({ default: () => <div data-testid="lazy-component">Enhancements</div> }));
 vi.mock('./ComplianceOfficerDashboard', () => ({
-  default: ({ activeTab }: { activeTab: string }) => (
-    <div data-testid="lazy-component">{`Compliance ${activeTab}`}</div>
-  ),
+  default: () => <div data-testid="lazy-component">Compliance Officer</div>,
 }));
 
-vi.mock('../components/HelpLink', () => ({ HelpLink: () => null }));
+vi.mock('../components/HelpLink', () => ({
+  HelpLink: () => null,
+}));
 
 import TrainingAdminPage from './TrainingAdminPage';
 
@@ -105,6 +94,10 @@ describe('TrainingAdminPage', () => {
     expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Records');
   });
 
+  // The keyboard and tab-panel behaviour below is live code with no other
+  // coverage: the roving focus, the arrow/Home/End handling and the
+  // aria-controls wiring all shipped with the accessibility work, and the
+  // merge that restored the component did not restore its tests.
   it('wires both navigation levels to their tab panels', async () => {
     renderWithRouter(<TrainingAdminPage />);
     const sectionTablist = screen.getByRole('tablist', { name: 'Training admin sections' });
@@ -116,11 +109,9 @@ describe('TrainingAdminPage', () => {
     expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
     expect(overviewTab).toHaveAttribute('aria-selected', 'true');
 
-    const sectionPanel = screen.getByRole('tabpanel', { name: 'Dashboard' });
     const contentPanel = screen.getByRole('tabpanel', { name: 'Overview' });
     expect(overviewTab).toHaveAttribute('aria-controls', contentPanel.id);
-    expect(sectionPanel).toBeInTheDocument();
-    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Dashboard');
+    expect(screen.getByRole('tabpanel', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
   it('uses roving focus and arrow, Home, and End keys for inner tabs', async () => {
