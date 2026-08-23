@@ -250,15 +250,19 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
       );
       const info = shiftStatusInfo(updated, currentUserId);
       if (info.filled > info.capacity) {
-        // The server accepts a seat past the planned crew size rather than
-        // losing it, so say so instead of showing a silently over-full crew.
-        toast('This crew is now over its planned size — the duty officer can rebalance it.', { icon: '⚠️' });
+        // An officer can seat a crew past its planned size deliberately, so a
+        // member arriving on an over-full shift is told rather than left to
+        // read a roster that silently disagrees with the seat count.
+        toast('This crew is over its planned size — the duty officer can rebalance it.', { icon: '⚠️' });
       } else {
         toast.success('Seat claimed.');
       }
     } catch (err) {
       setShifts(before);
-      toast.error(getErrorMessage(err, 'The seat could not be claimed — it may have just been taken.'));
+      // The server is authoritative on whether a seat was still free, and its
+      // message names which race was lost — the position going, or the last
+      // seat. The fallback only covers a request that never got an answer.
+      toast.error(getErrorMessage(err, 'The seat could not be claimed. The calendar has been refreshed.'));
       void fetchShifts();
     } finally {
       setPendingShiftId(null);

@@ -10,7 +10,7 @@ the query that fetches the rows.
 
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -528,3 +528,86 @@ class TestEndClaim:
 def test_every_generated_date_lands_on_the_requested_weekday(pattern):
     for day in series_dates(pattern, TUESDAY, AUG_START, date(2027, 8, 31)):
         assert _weekday_sunday_first(day) == TUESDAY
+
+
+class TestApparatusNarrowingIsValidated:
+    """A client-supplied apparatus id is checked before it is stored (XC-1)."""
+
+    def _service(self):
+        service = _service_with_no_shifts()
+        service.db = SimpleNamespace(
+            add=lambda _obj: None,
+            flush=AsyncMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        return service
+
+    async def _create(self, service, apparatus_id):
+        return await service.create(
+            ORG,
+            USER,
+            pattern=StandingShiftPattern.WEEKLY,
+            weekday=TUESDAY,
+            period=StandingShiftPeriod.NIGHT,
+            position="firefighter",
+            start_date=AUG_START,
+            end_date=AUG_END,
+            apparatus_id=apparatus_id,
+        )
+
+    async def test_an_out_of_org_apparatus_is_refused(self):
+        # Storing it leaks nothing — it just pins the series to a unit that can
+        # never match, so the member's standing shift claims nothing, silently,
+        # for as long as it runs.
+        service = self._service()
+        with patch(
+            "app.services.standing_shift_service.apparatus_ref_exists",
+            AsyncMock(return_value=False),
+        ):
+            claim, _summary, error = await self._create(service, "someone-elses-engine")
+        assert claim is None
+        assert error == "Apparatus not found."
+
+    async def test_an_in_org_apparatus_is_accepted(self):
+        service = self._service()
+        with patch(
+            "app.services.standing_shift_service.apparatus_ref_exists",
+            AsyncMock(return_value=True),
+        ):
+            claim, _summary, error = await self._create(service, "engine-1")
+        assert error is None
+        assert claim is not None
+
+    async def test_no_apparatus_skips_the_lookup(self):
+        # The common case: a single-apparatus department claims "whichever
+        # shift runs that night" and never names a unit.
+        service = self._service()
+        checked = AsyncMock(return_value=False)
+        with patch("app.services.standing_shift_service.apparatus_ref_exists", checked):
+            claim, _summary, error = await self._create(service, None)
+        assert error is None
+        assert claim is not None
+        checked.assert_not_awaited()
+
+
+def _service_with_no_shifts():
+    service = StandingShiftService(db=None)
+    service._org_tz = AsyncMock(return_value=ZoneInfo("UTC"))
+    service._shifts_on_dates = AsyncMock(return_value={})
+    service._held_shift_ids = AsyncMock(return_value=set())
+    return service
+
+
+class TestOrgTimezoneIsShared:
+    """The standing series and shift generation must agree on the timezone."""
+
+    async def test_resolves_through_the_shared_helper(self):
+        service = StandingShiftService(db=SimpleNamespace())
+        with patch(
+            "app.services.standing_shift_service.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("America/Chicago")),
+        ) as resolver:
+            tz = await service._org_tz(ORG)
+        assert tz == ZoneInfo("America/Chicago")
+        resolver.assert_awaited_once()

@@ -389,11 +389,18 @@ after pattern generation). Without the second, a member's series would go quiet
 the moment the department generated next month's schedule — the very month they
 set it up for.
 
-Seating always goes through the ordinary signup path, so eligibility, capacity
-and driver qualification apply to every date exactly as they would to a single
-tap on the calendar. A date the signup path refuses is reported as _skipped_
-rather than failing the series: one full shift in November must not cost the
-member the other eleven months.
+Seating goes through `SchedulingService.seat_member_self_service`, which pins
+`self_signup=True` so eligibility, capacity, past-date and driver checks apply
+to every date exactly as they would to a single tap on the calendar. That
+wrapper exists rather than calling `create_assignment` directly because the
+flag defaults to False there — handing the raw method over is the silent way
+to seat a member on dates they could not have claimed by hand. A date the
+signup path refuses is reported as _skipped_ rather than failing the series:
+one full shift in November must not cost the member the other eleven months.
+
+`tests/test_standing_shift_wiring.py` guards both readers and this wrapper.
+The failure it exists for is invisible at the call site and shows up weeks
+later as members not being seated on a schedule that was generated normally.
 
 A claim names the half of the day it wants (`day` = a local start before noon,
 `night` = noon or later) rather than a template, because departments define
@@ -582,6 +589,15 @@ A day carrying three or more open seats across its shifts gets an `URGENT`
 flag. Filters (**All shifts / Needs staffing / My shifts**) _dim_ rather than
 hide, so the month keeps its shape and a member counting Tuesdays does not have
 to re-find them after switching.
+
+**Seat capacity is enforced on self-signup.** A shift with named positions was
+already capped seat by seat. A shift that names none has only `min_staffing` to
+say how big the crew is, and nothing read it — so the calendar could show
+"Full 4/4" while the server kept accepting a fifth. Both now refuse a
+self-service claim, with the message naming which race was lost. Officer
+assignment is deliberately _not_ capped: adding a fifth body is something an
+officer does on purpose, and refusing it would make the roster disagree with
+who is actually turning up.
 
 **One request per range.** Every shift response now carries `roster` — the
 occupied seats, with names and positions — so selecting a day costs no network

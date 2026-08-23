@@ -36,7 +36,8 @@ from app.models.training import (
     StandingShiftPattern,
     StandingShiftPeriod,
 )
-from app.models.user import Organization
+from app.utils.apparatus_ref import apparatus_ref_exists
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 # A standing claim may not be opened further out than this. Generating a
 # preview is cheap, but the create path writes an assignment per matching date
@@ -122,11 +123,10 @@ class StandingShiftService:
     # ------------------------------------------------------------------
 
     async def _org_tz(self, organization_id: UUID) -> ZoneInfo:
-        result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
-        org = result.scalar_one_or_none()
-        return ZoneInfo(org.timezone) if org and org.timezone else ZoneInfo("UTC")
+        # Shared with shift generation on purpose: the two must agree, or a
+        # department that never set a timezone gets one answer about which
+        # half of the day a shift starts in and the other gets the opposite.
+        return await resolve_scheduling_timezone(self.db, organization_id)
 
     @staticmethod
     def shift_period(shift: Shift, tz: ZoneInfo) -> StandingShiftPeriod:
@@ -321,6 +321,15 @@ class StandingShiftService:
             )
         if not 0 <= weekday <= 6:
             return None, {}, "Weekday must be between 0 (Sunday) and 6 (Saturday)."
+        # A client-supplied apparatus id must be real and in-org before it is
+        # stored (XC-1). It is only ever used as a match filter, so a foreign
+        # one leaks nothing — it pins the series to a unit that can never
+        # match, and the member gets a standing shift that silently claims
+        # nothing for as long as it runs.
+        if apparatus_id and not await apparatus_ref_exists(
+            self.db, apparatus_id, organization_id
+        ):
+            return None, {}, "Apparatus not found."
 
         claim = StandingShiftClaim(
             organization_id=str(organization_id),

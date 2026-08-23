@@ -2632,7 +2632,7 @@ async def create_standing_shift(
         start_date=payload.start_date,
         end_date=payload.end_date,
         apparatus_id=payload.apparatus_id,
-        assign=service.create_assignment,
+        assign=service.seat_member_self_service,
     )
     if error or claim is None:
         raise HTTPException(

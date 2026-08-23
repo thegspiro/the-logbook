@@ -60,6 +60,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
+from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions
 
 
@@ -721,6 +722,38 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def seat_member_self_service(
+        self,
+        organization_id: UUID,
+        shift_id: Any,
+        assignment_data: Dict[str, Any],
+        acting_user_id: UUID,
+    ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
+        """Seat a member on their own behalf, with the self-signup rules.
+
+        The seating callable handed to ``StandingShiftService``. It exists to
+        pin ``self_signup=True``: a standing claim stands in for the member
+        tapping the calendar, so it has to clear the same eligibility,
+        capacity, past-shift and driver checks that tap would. Calling
+        ``create_assignment`` directly defaults the flag to False and quietly
+        seats the member on dates they could not have claimed by hand.
+
+        A driver block arrives as a ``CodedValueError`` because the interactive
+        endpoint turns it into a specific 409 for the member to read. Across a
+        series it is one date to skip, not a reason to abandon the other
+        eleven months, so it is flattened to an error string here.
+        """
+        try:
+            return await self.create_assignment(
+                organization_id,
+                shift_id,
+                assignment_data,
+                acting_user_id,
+                self_signup=True,
+            )
+        except CodedValueError as exc:
+            return None, str(exc)
+
     async def apply_standing_claims(
         self, organization_id: UUID, shifts: List[Shift]
     ) -> int:
@@ -745,7 +778,7 @@ class SchedulingService:
             seated = 0
             for shift in shifts:
                 seated += await service.apply_to_shift(
-                    organization_id, shift, self.create_assignment
+                    organization_id, shift, self.seat_member_self_service
                 )
             return seated
         except Exception as exc:
@@ -2222,15 +2255,7 @@ class SchedulingService:
 
             # Fetch the organization timezone so template local times
             # are stored as proper UTC datetimes.
-            org_result = await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-            org = org_result.scalar_one_or_none()
-            org_tz = (
-                ZoneInfo(org.timezone)
-                if org and org.timezone
-                else ZoneInfo("America/New_York")
-            )
+            org_tz = await resolve_scheduling_timezone(self.db, organization_id)
 
             config = pattern.schedule_config or {}
 
@@ -2689,6 +2714,7 @@ class SchedulingService:
         require_mutable: bool = False,
         reject_past: bool = False,
         enforce_position_eligibility: bool = True,
+        enforce_capacity: bool = False,
         context: str = "shift",
     ) -> Optional[str]:
         """Validate the live state needed to place a member in a shift seat.
@@ -2697,6 +2723,14 @@ class SchedulingService:
         moving away or exchanging.  This lets swaps reuse exactly the duplicate,
         overlap, leave, eligibility, driver, and seat-capacity checks used by a
         new assignment without temporarily mutating rows to make the checks pass.
+
+        ``enforce_capacity`` caps the crew at ``min_staffing`` on a shift that
+        names no positions. Named positions are always capped seat-by-seat
+        below; this covers the other shape, where ``min_staffing`` is the only
+        statement of how many people the shift holds and nothing was checking
+        it. Off by default: an officer adding a fifth body to a four-seat shift
+        is doing it deliberately, and refusing that would make the roster lie
+        about who is actually turning up. Self-service signup passes it True.
         """
         excluded = {str(value) for value in (exclude_assignment_ids or set())}
         label = context.capitalize()
@@ -2778,6 +2812,26 @@ class SchedulingService:
 
         position_value = getattr(position, "value", position)
         slots = self.normalize_positions(shift.positions)
+
+        # Headcount cap for a shift with no named seats. Without this a member
+        # can keep claiming a shift the calendar already shows as full: the UI
+        # reads min_staffing as the seat count, and nothing on the server did.
+        if enforce_capacity and not slots and shift.min_staffing:
+            filled_query = (
+                select(func.count())
+                .select_from(ShiftAssignment)
+                .where(
+                    ShiftAssignment.shift_id == str(shift.id),
+                    ShiftAssignment.organization_id == str(organization_id),
+                    active,
+                )
+            )
+            if excluded:
+                filled_query = filled_query.where(ShiftAssignment.id.notin_(excluded))
+            filled = (await self.db.execute(filled_query)).scalar() or 0
+            if filled >= shift.min_staffing:
+                return f"The last seat on this {context} was just claimed"
+
         if slots and position_value:
             matching_slots = [
                 slot
@@ -2870,6 +2924,7 @@ class SchedulingService:
                 require_mutable=self_signup,
                 reject_past=self_signup,
                 enforce_position_eligibility=self_signup,
+                enforce_capacity=self_signup,
             )
             if validation_error:
                 return None, validation_error
