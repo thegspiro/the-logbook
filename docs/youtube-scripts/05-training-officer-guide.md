@@ -66,22 +66,39 @@ and skills testing status.]**
 
 **[SCREEN: Point to each section as you describe it]**
 
-> "**Compliance Overview** — the big number at the top. This is the percentage
+> "**Department Compliance** — the big number at the top. This is the percentage
 > of your department that's fully compliant with all required certifications.
 > The goal is 100%, but in reality, you'll spend most of your time managing the
 > gap."
 
 **[CALLOUT: Arrow pointing to compliance percentage]**
 
-> "**Expiring Soon** — certifications expiring in the next 30, 60, and 90 days.
-> This is your early warning system. If you see a cluster of CPR certs expiring
-> next month, it's time to schedule a CPR class."
+> "**Upcoming Expirations** — this is your early warning system. It looks
+> ninety days ahead and shows you the next five, each with the number of days
+> left. If you see a cluster of CPR certs going in the same month, that's your
+> cue to schedule a class."
 
-> "**Overdue Training** — members who are already past their certification
-> expiration dates. Red flags that need immediate attention."
+**[CALLOUT: "Ninety days ahead — and nothing behind you"]**
+
+> "One thing to know about that card, because it will catch you out. It only
+> looks **forward**. A member whose cert lapsed last month has already fallen
+> off it — they're past their date, so they're not 'upcoming' any more. Don't
+> use this as your overdue list. It's the ninety days in front of you, and
+> that's all it is."
+
+> "**Members Needing Intervention** — this is a different question. Not 'whose
+> card expires soon' but 'who has requirements they haven't met.' That's where
+> you'll find the people who need a conversation."
 
 > "**Recent Completions** — training that's been recently recorded, either by you
 > or by members submitting their own external training."
+
+**[PRODUCTION NOTE — CORRECTED 2026-08-23: this dashboard was rebuilt into a
+nine-widget grid. The card is titled **Department Compliance** on screen even
+though the Customize panel lists it as "Compliance Overview" — read the on-screen
+title. There is no longer any "Expiring Soon" or "Overdue Training" card; the
+previous narration named both. `expiring_records` is **not sorted**, so do not
+say "soonest first" on camera.]**
 
 ### EXPIRING CERTIFICATIONS TAB (2:30 – 3:30)
 

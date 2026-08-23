@@ -101,6 +101,77 @@ describe('ApplicantDocumentsSection', () => {
     );
   });
 
+  /**
+   * A document-upload stage advances only when a document exists for each of
+   * its configured type labels. Every upload used to be stored as
+   * 'application', so a stage naming anything else could never be satisfied
+   * from this screen — and no free-text box can be, since one typo produces a
+   * requirement that silently stays unmet.
+   */
+  describe('a stage that names required document types', () => {
+    const onDocumentStage = {
+      ...applicant,
+      current_stage_type: 'document_upload',
+      current_stage_config: {
+        required_document_types: ['Background Check', 'Photo ID', '   '],
+        allow_multiple: true,
+      },
+    } as unknown as Applicant;
+
+    it('offers each configured label as its own control', async () => {
+      mockGetDocuments.mockResolvedValue([]);
+      renderWithRouter(<ApplicantDocumentsSection applicant={onDocumentStage} tz="America/New_York" />);
+
+      expect(await screen.findByRole('button', { name: /Upload the Background Check document/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Upload the Photo ID document/ })).toBeInTheDocument();
+    });
+
+    // The stage builder seeds the list with one blank row.
+    it('ignores a blank row rather than offering a document called nothing', async () => {
+      mockGetDocuments.mockResolvedValue([]);
+      renderWithRouter(<ApplicantDocumentsSection applicant={onDocumentStage} tz="America/New_York" />);
+
+      await screen.findByRole('button', { name: /Upload the Background Check document/ });
+      expect(screen.getAllByRole('button', { name: /^Upload the .* document$/ })).toHaveLength(2);
+    });
+
+    it('files the upload under the label whose control was used', async () => {
+      mockGetDocuments.mockResolvedValue([]);
+      renderWithRouter(<ApplicantDocumentsSection applicant={onDocumentStage} tz="America/New_York" />);
+
+      await userEvent.click(await screen.findByRole('button', { name: /Upload the Photo ID document/ }));
+      const input = screen.getByLabelText('Upload a document for this applicant');
+      await userEvent.upload(input, new File(['x'], 'id.pdf', { type: 'application/pdf' }));
+
+      await waitFor(() =>
+        expect(mockUploadDocument).toHaveBeenCalledWith(
+          'app-1',
+          'stage-4',
+          'Photo ID',
+          expect.objectContaining({ name: 'id.pdf' })
+        )
+      );
+    });
+
+    // Graded the way the server grades it: NFKC + strip + casefold on both
+    // sides, so the tick cannot claim a requirement the stage still refuses.
+    it('marks a requirement met when a document of that type is already filed', async () => {
+      mockGetDocuments.mockResolvedValue([{ ...document, document_type: 'background check' }]);
+      renderWithRouter(<ApplicantDocumentsSection applicant={onDocumentStage} tz="America/New_York" />);
+
+      expect(await screen.findByRole('button', { name: /Replace the Background Check document/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Upload the Photo ID document/ })).toBeInTheDocument();
+    });
+
+    it('keeps the single generic control on a stage that names no types', async () => {
+      mockGetDocuments.mockResolvedValue([]);
+      renderWithRouter(<ApplicantDocumentsSection applicant={applicant} tz="America/New_York" />);
+
+      expect(await screen.findByRole('button', { name: /^Upload$/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Upload the .* document$/ })).not.toBeInTheDocument();
+    });
+  });
+
   it('offers no upload or delete on an applicant who is no longer active', async () => {
     renderWithRouter(
       <ApplicantDocumentsSection

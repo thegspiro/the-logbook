@@ -28,6 +28,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trap, and restores the original so the rest of the run stays meaningful.
   Instance targets are ignored: they cannot outlive their test.
 
+### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
+
+**Added**
+
+- **Three new dashboard aggregates, each authorized per module and per
+  permission.** `GET /dashboard/widgets` (with `period` of `month`,
+  `quarter`, `year` or `rolling_30`), `GET /dashboard/operations`, and
+  `GET /dashboard/asset-widgets`. Every section is gated independently, and
+  **a section the caller cannot see is omitted rather than emptied** — an
+  absent section is deliberately indistinguishable from one with no data, so
+  the dashboard cannot be used to probe for access.
+- `settings.manage` is **intentionally not financial access**: organization
+  monetary totals require `finance.manage`, fundraising totals require
+  `fundraising.view` plus the `grants` module, and outreach totals require
+  `events.manage`.
+- Asset widgets return **counts and fixed links only**. Managing inventory
+  does not reveal apparatus or facilities, and protected facility fields
+  (codes, accounts, budgets, leases) cannot leak through a general dashboard
+  endpoint.
+- Training-officer widget visibility is a per-user choice stored in
+  `localStorage` under `training-officer-dashboard.widgets.v1`, kept separate
+  from the member-facing main dashboard so an officer's layout does not
+  follow them onto a shared screen.
+
+**Known limitation**
+
+- `widgetRegistry.ts` declares eight widgets but only `department-setup` is
+  read by any screen, and five of the eight `aggregatePath` values have no
+  backend endpoint. Nothing fetches them today, so nothing is broken — but
+  the file reads as authoritative. Tracked as **DASH-1** in
+  [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+
 ### Training Admin: cover the tab accessibility behaviour (2026-08-23)
 
 **Added**
@@ -41,6 +73,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and for activating a section from the keyboard and restoring URL state on
   browser back.
 
+### Equipment checks: one submission per shift, enforced by the database (2026-08-22)
+
+**Fixed**
+
+- **A shift could carry two equipment checks for the same template.** Nothing
+  stopped a second submission — a retried request, a double tap, or an
+  offline queue replaying after reconnect all created a fresh check, and the
+  apparatus then had two conflicting records of the same inspection.
+  `uq_shift_equipment_check_shift_template` makes one check per
+  `(shift_id, template_id)` a schema rule rather than a UI convention.
+- **A queued offline submission could not be retried safely.** The client now
+  mints a `client_submission_id` **before the request leaves the phone**, and
+  `uq_shift_equipment_check_client_submission` resolves a retry to the row
+  the first attempt created. A crew that completes a check in a dead spot and
+  reconnects at the station gets one check, not one per retry.
+- Queued equipment-check **photo** ids were repaired in the same pass — a
+  retried photo could previously attach to the wrong check.
+
+**Added**
+
+- **An idempotency ledger for bulk item creation.**
+  `equipment_check_bulk_requests` is keyed on
+  `(compartment_id, idempotency_key)` and stores a `payload_hash` alongside
+  the `item_ids` the original request created. A retry with the same key and
+  the same payload replays those ids; **the same key with a different payload
+  is rejected** rather than quietly creating a second set of items.
+- Equipment checks validate against their template, and check timing is
+  enforced server-side — the client no longer supplies its own timing value.
+- Compartment parents are cycle-checked, so a compartment can no longer be
+  made its own ancestor.
+- `check_items.compartment_path` widened from `VARCHAR(200)` to `TEXT`, which
+  is what allows full nested storage paths in item snapshots.
+
+**Changed**
+
+- Standalone (non-shift) equipment checks now require `equipment_check.manage`.
+- Expired-equipment failures are **derived** rather than stored, so a lot that
+  expires after a check was recorded is reflected without rewriting history.
+- Shift lot details are inventory-owned rather than duplicated onto the check.
+
+**Migration note**
+
+- `a17c4e9d2b61` keeps one canonical row per `(shift_id, template_id)`,
+  preferring a completed row and then the earliest check. Historical
+  duplicates are **detached** (their `shift_id` is nulled and an explanatory
+  note appended), not deleted — their item snapshots are retained, because a
+  safety record should not disappear to satisfy a new constraint. The
+  downgrade drops the constraints but cannot re-associate detached rows.
+
 ### Security documentation: dynamic testing guide (2026-08-22)
 
 **Documentation**
@@ -49,6 +130,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boundaries and gives authorized staging testers prioritized checks for
   authentication, tenant isolation, public tokens, uploads and exports, SSRF,
   webhooks, background jobs, and high-impact business workflows.
+
+### Governance: departments can propose and publish their own legal notices (2026-08-20)
+
+**Added**
+
+- **Governance → Legal Documents (`/governance/legal`).** The secretary and
+  department leaders can read the wording published on `/privacy` and
+  `/terms` and propose alternatives that fit local rules.
+- **Proposing and publishing are separate grants.** `legal.propose` drafts;
+  `legal.publish` makes a draft public. A department that wants two pairs of
+  eyes on its privacy notice gets that from the permission model rather than
+  from procedure.
+- New table `legal_document_revisions` with `document_type`
+  (`privacy_policy` | `terms_of_service`) and `status` (`draft` |
+  `published` | `archived`). At most one `published` revision per document
+  type per organization.
+- `change_note` is **required at the schema layer**. The whole point of
+  proposing rather than editing in place is that somebody later can see the
+  bylaw, SOP, statute or counsel note behind the wording.
+- Endpoints: `GET /legal-documents`, `POST /legal-documents/revisions`,
+  `PUT`/`DELETE …/revisions/{id}`, `POST …/revisions/{id}/publish`,
+  `POST /legal-documents/{document_type}/revert-to-default`.
+
+**Notes**
+
+- **The live text is not in the new table.** It stays in
+  `organizations.settings["legal"]`, because the anonymous public endpoint
+  must read it with no join and no auth. The table is the governance record
+  around it — who proposed which wording, why, who published it, and what
+  the page said before.
+- Archived revisions are **kept, never deleted**: the question a records
+  request actually asks is what the notice said on a given date.
+- `created_by` and `published_by` are `ON DELETE SET NULL` — the wording
+  published on a date is a department record and outlives the account that
+  drafted it.
+- `effective_date` is free text and is never parsed. Departments date
+  policies however their records officer does ("March 3, 2026", "FY26-Q1").
+  Clearing it sends an explicit `null` (`blankToNull`), so the clear
+  persists instead of being dropped from an `exclude_unset` payload.
+
+### Scheduling: swap and time-off requests are paginated (2026-08-20)
+
+**Changed — breaking API response shape**
+
+- `GET /scheduling/swap-requests` and `GET /scheduling/time-off` now return
+  `{ items, total, skip, limit }`. **They previously returned a bare array.**
+  Any integration, export or script that reads either endpoint as a list must
+  be updated — indexing the response directly will now yield the object's
+  keys rather than requests.
+- Schemas: `ShiftSwapRequestsPage`, `ShiftTimeOffRequestsPage`.
+
+### Scheduling: a requester cannot approve their own request (2026-08-20)
+
+**Fixed**
+
+- **Separation of duties on swap and time-off review.** A member holding
+  `scheduling.manage` could review their own swap or time-off request. A
+  permission grant is not a second person, and on a small department the
+  officer requesting the swap is frequently the one who can approve it. Both
+  review paths now reject a self-review outright ("Requesters cannot review
+  their own swap requests" / "…time-off requests").
+- Scheduling requests are restricted to their participants, so a request is
+  no longer readable by members who are not party to it.
+
+### Events: a Recruitment event type, and prospects tied to the event that brought them (2026-08-20)
+
+**Added**
+
+- **`recruitment` event type** for open houses and recruitment nights.
+  Departments previously filed these under `public_education` or `other`, so
+  a membership-pipeline stage could not point at "the next recruitment event"
+  without also matching every fire-safety demo on the calendar.
+- New recruitment events **default to guest sign-in**, because a recruitment
+  event whose attendees never reach the pipeline has not recruited anybody.
+- The event page shows the applicants an event brought in, and the pipeline
+  board can be filtered by the event applicants came from.
+
+**Notes**
+
+- `recruitment` is appended **after** `other` rather than placed beside the
+  other outward-facing types where it would read better. MySQL stores an
+  `ENUM` as the member's **ordinal**, so inserting mid-list would reassign
+  the type of every event already stored — a row holding ordinal 6
+  (`ceremony`) would come back as whatever now sits sixth.
+
+### Exports: every CSV goes through one escaper, and three holes in it are closed (2026-08-20)
+
+**Fixed**
+
+- **Two exporters escaped nothing.** The event attendance export
+  quote-escaped only the notes column, so a member named `Smith, John`
+  shifted every column after it; the reports module quoted values without
+  neutralizing them. The events page had two export paths and only one had
+  been converted, so bulk "Export CSV" still built its rows by hand.
+- Consolidating onto the single `utils/csv.ts` owner then exposed three
+  defects in the surviving implementation:
+  - `'=+@-'.includes('')` is `true`, so **every empty or whitespace-only cell
+    was prefixed with an apostrophe** — a stray quote in every export
+    containing a blank.
+  - One copy skipped whitespace before testing and the other did not, so each
+    caught a leading formula the other missed. Both rules now apply: a
+    leading tab or CR triggers on the raw first character, `=+@-` on the
+    first non-whitespace one.
+  - Cells were quoted unconditionally. Minimal quoting is what the
+    member-import error report was written for — a person corrects that file
+    and re-uploads it.
+
+**Security**
+
+- Vendor website links are validated by scheme, closing a stored-XSS path
+  where a `javascript:` href could be saved and rendered.
+- "Copy error details" redacts URLs, so a token embedded in a URL no longer
+  travels to the clipboard and into a support ticket.
+- Sentry and Loguru sinks hardened; sensitive exception diagnostics disabled
+  in production.
+- In-flight request deduplication is isolated per session, so one session can
+  no longer receive another's in-flight response.
+- Public election ballot writes are serialized.
+
+### Migrations: three revision-id collisions were silently skipping upgrades (2026-08-20)
+
+**Fixed**
+
+- **A valid Alembic stamp for a migration that never ran.** Three migrations
+  were released under one revision id and later renumbered; the original id
+  now belongs to a different migration. A database upgraded during those
+  windows is therefore treated as having run work it never ran, and the stamp
+  itself cannot distinguish the two histories.
+- The fix repeats the idempotent work downstream, guarded by schema
+  inspection — a **no-op on a healthy database**, and a repair on an affected
+  one:
+  - `7ed8593bc904` — storage-area barcode backfill and its series counter.
+  - `5c2f6a8b1d34` — creates `push_subscriptions` where it is absent.
+  - `9f6d1c2a4b70` — makes `documents.file_name` / `file_path` nullable on
+    databases that had already applied the amended revision.
 
 ### Navigation: browser tabs now identify the current page (2026-08-20)
 
@@ -98,6 +314,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer rendered and floating the buttons above a band of dead space. Page-level
   action bars sit outside those subtrees and keep the allowance, because the bar
   is still on screen for them.
+
+### Scheduling: crew seat lists are stored in one shape (2026-08-19)
+
+**Fixed**
+
+- **The templates screen crashed with React error #31.** `shifts.positions`,
+  `shift_templates.positions` and `basic_apparatus.positions` are untyped
+  JSON that three writers filled three different ways: bare strings from
+  onboarding and the pre-2026-08 UI, `{"position", "required"}` objects from
+  the current template form, and — on templates only — an event-metadata dict
+  that is not a seat list at all. Every reader had to tell those apart, and
+  the templates screen did not: it rendered an entry straight into a span and
+  took the page down. The frontend types said `string[]`; the column had held
+  objects for months.
+- Seat lists are now `[{"position": str, "required": bool}]`, one entry per
+  seat, normalized on **every write path**
+  (`app/utils/positions.normalize_stored_positions`) and at the API read
+  boundary. Migration `1eeb053d59b7` settles the rows already stored.
+
+**Notes**
+
+- **`1eeb053d59b7` is not reversible.** It expands a legacy `count` into that
+  many seats, which is the point: collapsing it would cut a three-firefighter
+  template to one, permanently.
+- The four normalizers are deliberate and must not be collapsed into one —
+  see [pitfall #20](CLAUDE.md). Saving the _display_ normalizer's output
+  turns an event template's resources into a flat seat list and loses the
+  structure the event screens read.
 
 ### CI: an unbounded `apt-get` was silently skipping the backend suite (2026-08-19)
 
