@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import axios from 'axios';
 
-import DefaultPrivacyPolicy from './DefaultPrivacyPolicy';
-import DefaultTermsOfService from './DefaultTermsOfService';
+import LegalSections from './LegalSections';
+import { PRIVACY_POLICY_SECTIONS, TERMS_OF_SERVICE_SECTIONS } from './legalContent';
 import { bodyText } from './legalStyles';
 
 /**
@@ -23,11 +23,10 @@ interface LegalTextResponse {
 }
 
 /**
- * Revision date of the built-in defaults below. Reviewers of a privacy notice
- * expect to see when it last changed, so bump this whenever the default text
- * in DefaultPrivacyPolicy / DefaultTermsOfService is edited. A department
- * publishing its own wording supplies its own date via
- * settings["legal"]["last_updated"].
+ * Revision date of the built-in defaults. Reviewers of a privacy notice expect
+ * to see when it last changed, so bump this whenever the text in
+ * legalContent.ts is edited. A department publishing its own wording supplies
+ * its own date via settings["legal"]["last_updated"].
  */
 const DEFAULT_LEGAL_LAST_UPDATED = 'August 17, 2026';
 
@@ -93,10 +92,8 @@ const LegalPage: React.FC = () => {
 
         {customText ? (
           <CustomText text={customText} />
-        ) : isPrivacy ? (
-          <DefaultPrivacyPolicy orgName={orgName} />
         ) : (
-          <DefaultTermsOfService orgName={orgName} />
+          <LegalSections sections={isPrivacy ? PRIVACY_POLICY_SECTIONS : TERMS_OF_SERVICE_SECTIONS} orgName={orgName} />
         )}
 
         <footer className="border-theme-surface-border mt-12 border-t pt-4">

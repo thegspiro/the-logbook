@@ -15,11 +15,12 @@ PATCH  /users/leaves-of-absence/{id}             - Update a leave
 DELETE /users/leaves-of-absence/{id}             - Deactivate a leave
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -32,11 +33,49 @@ from app.api.dependencies import (
 )
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
-from app.models.user import User
+from app.models.user import MemberLeaveOfAbsence, User
 from app.services.member_leave_service import MemberLeaveService
 from app.services.scheduling_service import SchedulingService
 
 router = APIRouter()
+
+
+class LeaveWidgetResponse(BaseModel):
+    active: int
+    ending_within_30_days: int
+    open_ended: int
+    queue_url: str = "/members?leave=active"
+
+
+@router.get("/leaves-of-absence/widget-summary", response_model=LeaveWidgetResponse)
+async def leave_widget_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """Return oversight counts only, scoped to the officer's organization."""
+    today = date.today()
+    leaves = (
+        (
+            await db.execute(
+                select(MemberLeaveOfAbsence).where(
+                    MemberLeaveOfAbsence.organization_id
+                    == current_user.organization_id,
+                    MemberLeaveOfAbsence.active.is_(True),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return LeaveWidgetResponse(
+        active=len(leaves),
+        ending_within_30_days=sum(
+            1
+            for leave in leaves
+            if leave.end_date and today <= leave.end_date <= today + timedelta(days=30)
+        ),
+        open_ended=sum(1 for leave in leaves if leave.end_date is None),
+    )
 
 
 # ==================== Schemas ====================

@@ -43,7 +43,15 @@ describe('offlineQueue', () => {
 
       const pending = await listPendingChecks();
       expect(pending).toHaveLength(1);
-      expect(pending[0]).toEqual(expect.objectContaining({ id, shiftId: 'shift-1', payload, retries: 0 }));
+      expect(pending[0]).toEqual(
+        expect.objectContaining({
+          id,
+          shiftId: 'shift-1',
+          retries: 0,
+        })
+      );
+      expect(pending[0]?.payload.notes).toBe(payload.notes);
+      expect(pending[0]?.payload.client_submission_id).toBe(id);
     });
 
     it('starts an entry at zero retries and stamps when it was queued', async () => {
@@ -186,7 +194,8 @@ describe('offlineQueue', () => {
       await markRetry(id);
 
       const [entry] = await listPendingChecks();
-      expect(entry?.payload).toEqual(payload);
+      expect(entry?.payload).toEqual(expect.objectContaining(payload));
+      expect(entry?.payload.client_submission_id).toBe(id);
       expect(entry?.photos).toHaveLength(1);
       expect(entry?.shiftId).toBe('shift-1');
     });

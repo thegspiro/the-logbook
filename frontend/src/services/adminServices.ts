@@ -5,7 +5,15 @@
 import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { SecurityStatus, SecurityAlert } from './facilitiesServices';
-import type { DashboardStats, AdminSummary, ActionItemSummary, CommunityEngagement } from './communicationsServices';
+import type {
+  DashboardStats,
+  AdminSummary,
+  OperationsDashboard,
+  ActionItemSummary,
+  CommunityEngagement,
+  MainDashboardWidgets,
+  WidgetPeriod,
+} from './communicationsServices';
 import type { IntegrationConfig } from './trainingServices';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitiesServices';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
@@ -334,12 +342,26 @@ export const platformAnalyticsService = {
 };
 
 export const dashboardService = {
+  async getWidgets(period: WidgetPeriod): Promise<MainDashboardWidgets> {
+    const response = await api.get<MainDashboardWidgets>('/dashboard/widgets', { params: { period } });
+    return response.data;
+  },
+  async getAssetWidgets(): Promise<import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[]> {
+    const response = await api.get<{
+      widgets: import('../components/dashboard/AssetWidgetRegistry').AssetWidgetData[];
+    }>('/dashboard/asset-widgets');
+    return response.data.widgets;
+  },
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
     return response.data;
   },
   async getAdminSummary(): Promise<AdminSummary> {
     const response = await api.get<AdminSummary>('/dashboard/admin-summary');
+    return response.data;
+  },
+  async getOperations(): Promise<OperationsDashboard> {
+    const response = await api.get<OperationsDashboard>('/dashboard/operations');
     return response.data;
   },
   async getActionItems(params?: {

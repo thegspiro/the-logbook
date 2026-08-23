@@ -42,6 +42,7 @@ import TrainingSection from '../components/member-profile/TrainingSection';
 import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 // Types for inventory data
 interface InventoryItem {
@@ -134,6 +135,9 @@ export const MemberProfilePage: React.FC = () => {
 
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(statusModalOpen);
   const [statusChanging, setStatusChanging] = useState(false);
   const [newStatus, setNewStatus] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');

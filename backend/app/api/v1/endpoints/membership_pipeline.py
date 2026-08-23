@@ -24,10 +24,15 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from loguru import logger
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.api.prospect_privacy import (
     block_self_prospect_access,
     get_hidden_prospect_ids,
@@ -87,6 +92,70 @@ from app.services.membership_pipeline_service import MembershipPipelineService
 # serve the caller their own prospective-membership file. See
 # app/api/prospect_privacy.py for why.
 router = APIRouter(dependencies=[Depends(block_self_prospect_access)])
+
+
+class PipelineWidgetResponse(BaseModel):
+    """Privacy-preserving dashboard summary; never a substitute for the queue."""
+
+    total: int
+    by_status: dict[str, int]
+    aging: dict[str, int]
+    details: list[dict[str, str]] | None = None
+    queue_url: str = "/prospective-members?status=active"
+
+
+@router.get("/widget-summary", response_model=PipelineWidgetResponse)
+async def pipeline_widget_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
+):
+    """Aggregate the prospect workflow without exposing applicant records.
+
+    View-only users receive counts and aging buckets.  Names are deliberately
+    opt-in for managers, matching the detailed-record permission boundary.
+    """
+    from app.models.membership_pipeline import ProspectiveMember
+
+    now = datetime.now(timezone.utc)
+    rows = (
+        (
+            await db.execute(
+                select(ProspectiveMember).where(
+                    ProspectiveMember.organization_id == current_user.organization_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_status: dict[str, int] = {}
+    aging = {"0_7_days": 0, "8_30_days": 0, "31_plus_days": 0}
+    for prospect in rows:
+        status_value = getattr(prospect.status, "value", prospect.status)
+        by_status[str(status_value)] = by_status.get(str(status_value), 0) + 1
+        created = prospect.created_at
+        if created and created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age = (now - (created or now)).days
+        aging[
+            "0_7_days" if age <= 7 else "8_30_days" if age <= 30 else "31_plus_days"
+        ] += 1
+    can_detail = user_has_permission(current_user, "prospective_members.manage")
+    details = None
+    if can_detail:
+        details = [
+            {
+                "id": str(p.id),
+                "name": p.full_name,
+                "status": str(getattr(p.status, "value", p.status)),
+            }
+            for p in rows
+        ]
+    return PipelineWidgetResponse(
+        total=len(rows), by_status=by_status, aging=aging, details=details
+    )
 
 
 # ============================================
