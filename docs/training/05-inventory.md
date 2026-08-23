@@ -812,6 +812,10 @@ labels loaded in it are not the size you asked for.
 > code** as the barcode style. The page reports the problem rather than printing
 > an unreadable barcode, but QR is the answer to it.
 
+> **A receipt printer prints more than labels.** Once one is registered it also
+> prints the **shift roster** and **apparatus check sheets** — see
+> [Printing station documents](./03-scheduling.md#printing-station-documents).
+
 > **If the label is rejected as too small:** a barcode has a minimum readable
 > width, and a long value on a small label can exceed it. The page reports this
 > rather than printing an unscannable code. Use a larger label, or drop the

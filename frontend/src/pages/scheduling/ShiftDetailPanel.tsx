@@ -63,6 +63,8 @@ import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
+import { PrintDocumentButton } from '../../components/PrintDocumentButton';
+import { StationDocument } from '../../services/stationDocumentService';
 import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
@@ -1037,6 +1039,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                     Delete
                   </button>
+                  {/* Only appears when a receipt printer is registered. */}
+                  <PrintDocumentButton
+                    document={StationDocument.SHIFT_ROSTER}
+                    recordId={shift.id}
+                    label="Print roster"
+                  />
                 </>
               )}
               {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (

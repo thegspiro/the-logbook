@@ -8,6 +8,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { PrintDocumentButton } from '../../../components/PrintDocumentButton';
+import { StationDocument } from '../../../services/stationDocumentService';
 import {
   ClipboardCheck,
   Plus,
@@ -320,6 +322,13 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                   >
                     <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
                   </a>
+                  {/* Only appears when a receipt printer is registered. */}
+                  <PrintDocumentButton
+                    document={StationDocument.APPARATUS_CHECK_SHEET}
+                    recordId={template.id}
+                    label=""
+                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+                  />
                   <button
                     onClick={() => setCloneTarget(template)}
                     className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-blue-500/10 hover:text-blue-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"

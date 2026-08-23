@@ -33,6 +33,7 @@ from app.utils.label_renderer import (
     sanitize_barcode_value,
     validate_symbology,
 )
+from app.utils.print_document import PrintDocument
 
 # Receipt stock is sold by paper width, and the printable width is narrower
 # than the paper: the print head does not reach the edges. These are the
@@ -61,6 +62,9 @@ _ALIGN_CENTER = _ESC + b"a\x01"
 _ALIGN_LEFT = _ESC + b"a\x00"
 _SIZE_NORMAL = _GS + b"!\x00"
 _SIZE_DOUBLE = _GS + b"!\x11"  # double width and height
+_SIZE_DOUBLE_HEIGHT = _GS + b"!\x01"
+_BOLD_ON = _ESC + b"E\x01"
+_BOLD_OFF = _ESC + b"E\x00"
 _LF = b"\n"
 
 # GS k m n d1..dn — barcode. 73 selects Code 128, which unlike the older
@@ -273,4 +277,100 @@ def render_escpos(
             out += _ALIGN_LEFT
             out += _FEED_AND_CUT if cut else _FEED_ONLY
 
+    return bytes(out)
+
+
+# ---------------------------------------------------------------------------
+# Documents
+# ---------------------------------------------------------------------------
+#
+# A roster or a check sheet is not a label: it is a column of text on
+# continuous paper, as long as it needs to be. What it shares with a label is
+# the transport, the status query and the printer registration, which is why it
+# lives beside the label renderer rather than in a subsystem of its own.
+
+
+def _pad_columns(left: str, right: str, width: int) -> str:
+    """Left text and right text on one line, right-aligned to the margin.
+
+    When the pair will not fit, the *left* is truncated: the right column
+    carries a status or a count, which is the part that would be guessed at
+    wrongly if it were the half that got cut.
+    """
+    if not right:
+        return _truncate(left, width)
+    room = width - len(right) - 1
+    if room < 1:
+        return _truncate(right, width)
+    return _truncate(left, room).ljust(room) + " " + right
+
+
+def _document_row(row, width: int) -> bytes:
+    prefix = " " * (2 * max(0, row.indent))
+    if row.checkbox:
+        prefix += "[ ] "
+
+    body = _pad_columns(_clean(row.left), _clean(row.right or ""), width - len(prefix))
+    line = (prefix + body).rstrip()
+    if not line:
+        return b""
+
+    encoded = line.encode("ascii", errors="ignore") + _LF
+    if row.emphasis:
+        return _BOLD_ON + encoded + _BOLD_OFF
+    return encoded
+
+
+def render_escpos_document(
+    document: PrintDocument,
+    label_format: str = DEFAULT_PAPER,
+    cut: bool = True,
+) -> bytes:
+    """Render a :class:`PrintDocument` to an ESC/POS byte stream."""
+    if document is None:
+        raise ValueError("A document is required")
+
+    paper = ESCPOS_PAPER.get(label_format)
+    if paper is None:
+        raise ValueError(
+            f"Unknown receipt paper size: {label_format}. "
+            f"Supported: {', '.join(ESCPOS_PAPER)}"
+        )
+    width = int(paper["characters"])
+    rule = ("-" * width).encode("ascii")
+
+    out = bytearray()
+    out += _INIT
+    out += _ALIGN_CENTER
+
+    title = _clean(document.title) or "Document"
+    out += _SIZE_DOUBLE_HEIGHT + _BOLD_ON
+    out += _truncate(title, width).encode("ascii", errors="ignore") + _LF
+    out += _BOLD_OFF + _SIZE_NORMAL
+
+    subtitle = _clean(document.subtitle)
+    if subtitle:
+        out += _truncate(subtitle, width).encode("ascii", errors="ignore") + _LF
+
+    out += _ALIGN_LEFT
+    out += rule + _LF
+
+    for section in document.sections:
+        heading = _clean(section.heading)
+        if heading:
+            out += _BOLD_ON
+            out += _truncate(heading.upper(), width).encode("ascii", errors="ignore")
+            out += _LF + _BOLD_OFF
+        for row in section.rows:
+            out += _document_row(row, width)
+        out += _LF
+
+    footer = _clean(document.footer)
+    if footer:
+        out += rule + _LF
+        out += _ALIGN_CENTER
+        out += _truncate(footer, width).encode("ascii", errors="ignore") + _LF
+        out += _ALIGN_LEFT
+
+    out += _FEED_AND_CUT if cut else _FEED_ONLY
     return bytes(out)
