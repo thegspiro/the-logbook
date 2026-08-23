@@ -318,6 +318,8 @@ export interface CheckTemplateCompartment {
   imageUrl?: string;
   isHeader?: boolean;
   containerType?: string;
+  /** Sealed in normal operation — checked by its tag rather than counted. */
+  isSealed?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -331,6 +333,7 @@ export interface CheckTemplateCompartmentCreate {
   image_url?: string | undefined;
   is_header?: boolean | undefined;
   container_type?: string | undefined;
+  is_sealed?: boolean | undefined;
   parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
@@ -341,6 +344,7 @@ export interface CheckTemplateCompartmentUpdate {
   sort_order?: number | undefined;
   image_url?: string | undefined;
   is_header?: boolean | undefined;
+  is_sealed?: boolean | undefined;
   container_type?: string | undefined;
   parent_compartment_id?: string | undefined;
 }

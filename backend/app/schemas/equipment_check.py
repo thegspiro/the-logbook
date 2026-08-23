@@ -199,6 +199,10 @@ class CheckTemplateCompartmentCreate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: bool = False
     container_type: str = Field("compartment", max_length=50)
+    # This container is sealed in normal operation — a drug bag, an airway bag.
+    # An intact tag is what lets a crew check it by reading the tag rather than
+    # counting every pocket, so it changes what the check asks for.
+    is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
 
@@ -212,6 +216,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: Optional[bool] = None
     container_type: Optional[str] = Field(None, max_length=50)
+    is_sealed: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
 
 
@@ -232,6 +237,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     image_url: Optional[str] = None
     is_header: bool = False
     container_type: str = "compartment"
+    is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
@@ -241,6 +247,19 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     @classmethod
     def coerce_is_header(cls, v: object) -> bool:
         """Rows created before the is_header column was added store NULL."""
+        if v is None:
+            return False
+        return bool(v)
+
+    @field_validator("is_sealed", mode="before")
+    @classmethod
+    def coerce_is_sealed(cls, v: object) -> bool:
+        """A row materialized by the stamped create_all bootstrap can be NULL.
+
+        Defaulting to False is the safe direction: an unsealed container is
+        counted, and counting a bag that did not need it costs the crew time.
+        Defaulting to True would skip counting a bag nobody sealed.
+        """
         if v is None:
             return False
         return bool(v)

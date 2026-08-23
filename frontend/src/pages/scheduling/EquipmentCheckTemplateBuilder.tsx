@@ -89,6 +89,7 @@ import type {
 import {
   TEMPLATE_TYPE_LABELS,
   CONTAINER_TYPE_PRESETS,
+  CHECK_TYPE_STORES,
   containerTypeLabel,
   isPresetContainerType,
   normalizeCheckType,
@@ -234,6 +235,8 @@ interface CompartmentFormState {
   imageUrl: string;
   isHeader: boolean;
   containerType: string;
+  /** Sealed in normal operation — the check reads its tag instead of counting. */
+  isSealed: boolean;
   parentCompartmentId: string;
   items: ItemFormState[];
 }
@@ -249,6 +252,7 @@ function emptyCompartment(): CompartmentFormState {
     imageUrl: '',
     isHeader: false,
     containerType: 'compartment',
+    isSealed: false,
     parentCompartmentId: '',
     items: [],
   };
@@ -453,6 +457,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: c.imageUrl ?? '',
           isHeader: c.isHeader ?? false,
           containerType: c.containerType ?? 'compartment',
+          isSealed: c.isSealed ?? false,
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
             id: item.id,
@@ -564,6 +569,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: created.imageUrl ?? '',
           isHeader: false,
           containerType: created.containerType ?? 'compartment',
+          isSealed: created.isSealed ?? false,
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
@@ -602,6 +608,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: created.imageUrl ?? '',
           isHeader: true,
           containerType: created.containerType ?? 'compartment',
+          isSealed: created.isSealed ?? false,
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
@@ -660,6 +667,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: comp.imageUrl,
       isHeader: comp.isHeader,
       containerType: comp.containerType,
+      isSealed: comp.isSealed,
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
@@ -1405,6 +1413,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 image_url: comp.imageUrl.trim() || undefined,
                 is_header: comp.isHeader,
                 container_type: comp.containerType || undefined,
+                is_sealed: comp.isSealed,
                 parent_compartment_id: comp.parentCompartmentId || undefined,
               })
             );
@@ -1460,6 +1469,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             image_url: c.imageUrl.trim() || undefined,
             is_header: c.isHeader || undefined,
             container_type: c.containerType || undefined,
+            is_sealed: c.isSealed,
             parent_compartment_id: c.parentCompartmentId || undefined,
             items: c.items.map((item, itemIdx) => ({
               name: item.name || 'Untitled Item',
@@ -1551,6 +1561,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: '',
       isHeader: false,
       containerType: 'compartment',
+      isSealed: false,
       parentCompartmentId: '',
       items: comp.items.map((item) => ({
         ...emptyItem(),
@@ -1665,6 +1676,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             description?: string;
             isHeader?: boolean;
             containerType?: string;
+            isSealed?: boolean;
             items?: Array<Record<string, unknown>>;
           }>;
         };
@@ -1701,6 +1713,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           imageUrl: '',
           isHeader: Boolean(c.isHeader),
           containerType: c.containerType || 'compartment',
+          isSealed: Boolean(c.isSealed),
           parentCompartmentId: '',
           items: (c.items ?? []).map((item) => ({
             ...emptyItem(),
@@ -1852,6 +1865,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: '',
       isHeader: false,
       containerType: 'compartment',
+      isSealed: false,
       parentCompartmentId: '',
       items,
     }));
@@ -2417,6 +2431,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       {CHECK_TYPES.map((ct) => (
                         <option key={ct.value} value={ct.value}>
                           {ct.label}
+                          {CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]
+                            ? ` — ${CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]}`
+                            : ''}
                         </option>
                       ))}
                     </select>
@@ -3045,6 +3062,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </div>
                 );
               })()}
+              {/* A seal changes what the check asks for, so it belongs beside
+                  the container type rather than among the item fields: an
+                  intact tag means the crew reads the tag and the contents are
+                  not counted at all. */}
+              <div>
+                <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className={checkboxClass}
+                    data-testid={`is-sealed-${idx}`}
+                    checked={comp.isSealed}
+                    onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
+                  />
+                  <span>
+                    Sealed in normal operation
+                    <span className="text-theme-text-muted mt-0.5 block text-xs">
+                      Checked by reading its tag. While the seal holds the crew does not count what is inside — once it
+                      is broken, every pocket is counted again.
+                    </span>
+                  </span>
+                </label>
+              </div>
               <div>
                 <label className={labelClass}>Reparent: stored inside</label>
                 <select

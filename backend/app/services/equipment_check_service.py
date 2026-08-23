@@ -3327,6 +3327,10 @@ class EquipmentCheckService:
             image_url=source.image_url,
             is_header=source.is_header,
             container_type=source.container_type,
+            # Cloning a template must carry the seal flag: a duplicated drug
+            # bag that arrives unsealed silently turns a read-the-tag check
+            # into a count-every-pocket one on the copy.
+            is_sealed=source.is_sealed,
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)
