@@ -296,7 +296,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     onClick={() => onSelect(template)}
                     className={`flex w-full items-center space-x-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
                       isSelected
-                        ? 'border border-orange-500/30 bg-orange-500/10'
+                        ? 'border border-red-500/30 bg-red-500/10'
                         : 'hover:bg-theme-surface-hover border border-transparent'
                     }`}
                   >
@@ -304,7 +304,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected ? 'text-orange-600 dark:text-orange-400' : 'text-theme-text-primary'
+                          isSelected ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}

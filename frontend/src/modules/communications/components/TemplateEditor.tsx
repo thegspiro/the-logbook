@@ -184,7 +184,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving || hasValidationErrors}
-            className="flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary flex items-center space-x-2 disabled:cursor-not-allowed"
             title="Save changes (Ctrl+S)"
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -333,7 +333,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     key={v.name}
                     onClick={() => insertVariable(v)}
                     title={v.description}
-                    className="inline-flex items-center rounded-sm border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 font-mono text-xs text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                    className="inline-flex items-center rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
                   >
                     {`{{${v.name}}}`}
                   </button>

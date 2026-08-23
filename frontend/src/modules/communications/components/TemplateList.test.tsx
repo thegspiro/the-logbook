@@ -45,9 +45,9 @@ describe('TemplateList', () => {
 
     render(<TemplateList templates={templates} selectedId="1" onSelect={vi.fn()} />);
 
-    // The selected template's button carries the orange highlight class
+    // The selected template's button carries the primary highlight class
     const selected = screen.getByRole('button', { name: /Our Welcome Note/ });
-    expect(selected).toHaveClass('bg-orange-500/10');
+    expect(selected).toHaveClass('bg-red-500/10');
   });
 
   it('groups templates under category headers', () => {

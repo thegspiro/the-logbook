@@ -313,7 +313,7 @@ const FootersPanel: React.FC = () => {
               void handleSave();
             }}
             disabled={!isDirty || isSaving || hasErrors}
-            className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed"
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save

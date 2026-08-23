@@ -296,7 +296,7 @@ const EmailTemplatesPage: React.FC = () => {
         {/* Page Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-orange-600 p-2">
+            <div className="rounded-lg bg-red-600 p-2">
               <Mail className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -478,7 +478,7 @@ const EmailTemplatesPage: React.FC = () => {
                       onClick={() => setEditorView('edit')}
                       className={`flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                         editorView === 'edit'
-                          ? 'bg-theme-surface-secondary border-orange-500 text-orange-600 dark:text-orange-400'
+                          ? 'bg-theme-surface-secondary border-red-500 text-red-600 dark:text-red-400'
                           : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
                       }`}
                     >
@@ -492,7 +492,7 @@ const EmailTemplatesPage: React.FC = () => {
                       }}
                       className={`flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                         editorView === 'preview'
-                          ? 'bg-theme-surface-secondary border-orange-500 text-orange-600 dark:text-orange-400'
+                          ? 'bg-theme-surface-secondary border-red-500 text-red-600 dark:text-red-400'
                           : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
                       }`}
                     >

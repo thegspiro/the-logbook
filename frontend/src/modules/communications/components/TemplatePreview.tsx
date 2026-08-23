@@ -67,9 +67,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             <button
               onClick={() => setViewport('desktop')}
               className={`rounded-md p-1.5 transition-colors ${
-                viewport === 'desktop'
-                  ? 'bg-orange-600 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
+                viewport === 'desktop' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
               title="Desktop preview"
             >
@@ -78,9 +76,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             <button
               onClick={() => setViewport('mobile')}
               className={`rounded-md p-1.5 transition-colors ${
-                viewport === 'mobile'
-                  ? 'bg-orange-600 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
+                viewport === 'mobile' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
               title="Mobile preview"
             >
@@ -134,7 +130,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
         {isPreviewing && !preview ? (
           <div className="flex h-[600px] items-center justify-center">
             <div className="text-center">
-              <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-orange-500" />
+              <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-red-500" />
               <p className="text-theme-text-muted text-sm">Loading preview...</p>
             </div>
           </div>
