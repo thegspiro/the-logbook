@@ -111,6 +111,10 @@ export default defineConfig({
         // chunks are safe to precache, and correctness on a cold offline start
         // takes priority over reducing the installation download.
         globPatterns: ['**/*.{css,html,js}'],
+        // Keep publishing this compatibility file for already-installed
+        // workers, but do not make installation of the new worker depend on
+        // fetching it. The push handlers are inlined into sw.js above.
+        globIgnores: ['push-sw.js'],
         // Prevent the service worker from caching API responses
         // containing sensitive/PII data (HIPAA §164.312).
         navigateFallbackDenylist: [/^\/api/],

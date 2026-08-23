@@ -64,6 +64,11 @@ assert.doesNotMatch(
   /importScripts\(["'][^"']*push-sw\.js/,
   'the push worker must be inlined into sw.js, not fetched with importScripts'
 );
+assert.doesNotMatch(
+  serviceWorker,
+  /[{,]\s*(?:url:|["']url["']:)\s*["']\/?push-sw\.js["']/,
+  'the compatibility push worker must not be included in the precache manifest'
+);
 assert.match(serviceWorker, /addEventListener\('push'/, 'the push handler must be inlined into sw.js');
 assert.match(
   serviceWorker,
