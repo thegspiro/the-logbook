@@ -5203,7 +5203,7 @@ export const SHOTS = [
     // tab bar is `position: fixed`, and a full-page shot paints it once at its
     // viewport offset — across the "How to use" card that tells a member what
     // to do next, which is half the point of picturing the failure.
-    viewport: { width: 414, height: 1100 },
+    viewport: { width: 390, height: 1100 },
     prepare: async (page) => {
       // No fake media device is configured, so `getUserMedia` rejects and the
       // page renders its own failure banner. That is the point of the shot:
@@ -5234,10 +5234,24 @@ export const SHOTS = [
       // badge is only reachable with the menu open, and a shot of the bar
       // alone would picture the absence rather than the feature.
       await page
-        .getByRole("button", { name: /Open (main|navigation) menu/ })
+        // "Open full navigation menu" today; the two older labels are kept so
+        // this does not break again the next time it is reworded. The control
+        // moved into the bottom bar, so the phone header carries no hamburger
+        // and matching the old name alone timed out with the button on screen.
+        .getByRole("button", { name: /Open (full navigation|main|navigation) menu/ })
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1_200);
+      // The drawer scrolls, and Notifications sits below the fold on a 390-wide
+      // phone -- the shot came back showing Dashboard through Operations and
+      // then the theme controls, with the badge the caption is about never in
+      // frame. Scrolling to it is what a member does, and it keeps the shot
+      // honest about how far down the entry actually is.
+      await page
+        .getByRole("button", { name: /^Notifications/ })
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 });
+      await page.waitForTimeout(600);
     },
     fullPage: false,
   },
@@ -5275,7 +5289,7 @@ export const SHOTS = [
     // elements painted at their document offset — so on a page this long the
     // nav bar lands across the middle of the image, over real content. One
     // viewport is also the truer picture of a phone.
-    viewport: { width: 414, height: 1000 },
+    viewport: { width: 390, height: 1000 },
   },
   {
     id: "10-05-mobile-inventory",
@@ -5684,7 +5698,7 @@ export const SHOTS = [
       await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    viewport: { width: 414, height: 1050 },
+    viewport: { width: 390, height: 1050 },
   },
   {
     id: "03-72-check-item-controls",
@@ -5729,7 +5743,7 @@ export const SHOTS = [
       });
       await page.waitForTimeout(500);
     },
-    viewport: { width: 414, height: 900 },
+    viewport: { width: 390, height: 900 },
   },
   {
     id: "03-71-set-all-to-par-confirm",
@@ -5768,7 +5782,7 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     selector: '[role="dialog"]',
-    viewport: { width: 414, height: 1000 },
+    viewport: { width: 390, height: 1000 },
   },
   {
     id: "03-70-check-form-carryover",
@@ -5792,7 +5806,7 @@ export const SHOTS = [
     // Not fullPage: the whole checklist is eight items and four screens tall,
     // and the subject is the top of it — the banner, the progress counter and
     // the first compartment's counts.
-    viewport: { width: 414, height: 1000 },
+    viewport: { width: 390, height: 1000 },
   },
   {
     id: "03-69-catalog-quick-add",
@@ -9201,7 +9215,7 @@ export const SHOTS = [
     // viewport offset — across the middle of the list, over the one row whose
     // count ("18 of 24") the surrounding prose quotes. A frame tall enough to
     // hold the three compartments leaves the bar where a phone puts it.
-    viewport: { width: 414, height: 1500 },
+    viewport: { width: 390, height: 1500 },
     prepare: async (page) => {
       // The page opens on "Select an apparatus…", which is an empty state
       // rather than the screen. M-3 is the rig `seed_supply_tracking` stocks.

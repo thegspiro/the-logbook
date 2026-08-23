@@ -74,7 +74,11 @@ async function optimize(target) {
 
 /** Desktop framing matches the guides, which describe full-width layouts. */
 const DESKTOP = { width: 1440, height: 900 };
-const MOBILE = { width: 414, height: 896 };
+// iPhone 12/13/14 logical size. Narrower than the 414x896 (iPhone 11 Pro Max)
+// this used to be, and deliberately: 390 is the width the guides and the
+// screenshot audit both name, and the tighter one is the honest test of the
+// 44px touch minimum -- a row that fits at 414 can still collide at 390.
+const MOBILE = { width: 390, height: 844 };
 
 /**
  * A shot's `viewport`: "mobile", omitted for desktop, or an explicit
@@ -504,6 +508,25 @@ async function main() {
       await page.addStyleTag({
         content: ".skip-to-main { display: none !important; }",
       });
+
+      // Same stitching problem, same fix, for the phone's bottom navigation.
+      //
+      // It is `position: fixed` at the bottom of the viewport, so on a full-page
+      // capture it is painted into the first stitch at its document offset and
+      // ends up floating across the middle of the finished image, over real
+      // content -- 10-04-mobile-dashboard had it sitting under "Grant deadlines"
+      // with 3000px of page below it.
+      //
+      // A stitched image cannot place a viewport-pinned bar correctly at all:
+      // there is no single position in a 3620px-tall picture that means "pinned
+      // to the bottom of the screen". Hiding it is the honest option, and the
+      // bar has its own dedicated capture (10-12-mobile-bottom-nav), which is
+      // not full-page and so still shows it.
+      if (shot.fullPage) {
+        await page.addStyleTag({
+          content: 'nav[aria-label="Primary"] { display: none !important; }',
+        });
+      }
 
       const clip = shot.selector
         ? await page.locator(shot.selector).first()

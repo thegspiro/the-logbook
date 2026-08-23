@@ -1,5 +1,53 @@
 # Screenshot currency
 
+## Re-captured 2026-08-23 — the phone sweep at 390x844, and what it exposed
+
+All 21 phone-width captures re-shot and opened. The trigger was the entry below:
+the mobile bottom bar no longer paints over an open dialog, so every phone
+capture containing one pictured the defect. That is confirmed fixed — `03-71`
+(the set-all-to-par confirmation) and `03-96` (the lots-aboard sheet) now show
+the bar correctly absent, and `10-14` and `10-16`, which have no overlay, still
+show it.
+
+**The viewport is now 390x844, not 414x896.** Five guide markers and the audit
+below already name 390, so 414 was the outlier. The seven shots carrying an
+explicit `{ width: 414, height: N }` moved too, keeping their bespoke heights —
+a mobile set photographed at two widths is worse than either width.
+
+Three defects came out of the sweep, none of them the one it was looking for.
+
+**1. A sticky bar with no background, which read as a layout bug.** The
+equipment check form's Submit bar and page header carried `bg-theme-bg` and
+`bg-theme-background`. Neither token exists — the stylesheet defines
+`--color-theme-surface`, `--color-theme-nav-bg` and three `--color-theme-bg-*`
+gradient stops — so both compile to nothing and resolve to `rgba(0, 0, 0, 0)`
+in the running app. The item list scrolled visibly through the notes field and
+the Submit button, which looks like overlapping content rather than a missing
+colour, and is why it survived. Fixed here; `themeColorIntegrity.test.ts` now
+walks the source and fails on a background utility naming an undefined token,
+with the other 15 sites recorded as a ratchet baseline rather than pretended
+fixed — each needs a per-screen decision about which token it meant.
+
+_This was nearly misdiagnosed._ The overlap appeared when the width changed, so
+it looked like a 390 regression. It reproduces identically at 414 on the same
+code, and the geometry probe found no collision at either width — the DOM was
+never the problem.
+
+**2. A fixed bar stitched into the middle of a full-page image.** The bottom
+navigation is `position: fixed`, so on a full-page capture it is painted into
+the first stitch at its document offset: `10-04-mobile-dashboard` had it lying
+across "Grant deadlines" with 3000px of page below. No position in a 3620px-tall
+picture means "pinned to the bottom of the screen", so `capture.mjs` now hides
+it for full-page shots, exactly as it already does for the skip-to-main link.
+`10-12-mobile-bottom-nav` is not full-page and still shows the bar.
+
+**3. Two shots that were passing while picturing the wrong thing.**
+`10-15-mobile-menu-notifications` opened the drawer and stopped: the control had
+been renamed to "Open full navigation menu", and once that was fixed the
+Notifications badge the caption is about sat below the fold at 390. It now
+scrolls to it, which is what a member does. The matcher keeps the two older
+label spellings so the next rewording does not break it silently.
+
 ## Captured 2026-08-23 — the storefront, and three defects behind one placeholder
 
 `19-03-privacy-header`, `19-04-qr-directory-search`, `19-05-qr-regenerate-warning`,

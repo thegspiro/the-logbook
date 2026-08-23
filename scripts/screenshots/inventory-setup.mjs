@@ -55,7 +55,7 @@ const BASE = process.env.PREVIEW_URL ?? "http://localhost:4173";
 // Same framing as capture.mjs, so these sit beside the other guide images
 // rather than looking like they came from a different machine.
 const DESKTOP = { width: 1440, height: 900 };
-const MOBILE = { width: 414, height: 896 };
+const MOBILE = { width: 390, height: 844 };
 const OUT = process.argv[2] ?? "docs/training/images";
 
 const USER = {
