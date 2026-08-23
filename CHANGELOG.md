@@ -69,6 +69,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `infrastructure/nginx/nginx.conf` gained the `location = /version.json`
   `no-store` rule the container-level config already had.
 
+### Equipment checks: replacing expired stock retires units, not whole lots (2026-08-23)
+
+**Fixed**
+
+- **Swapping one box out of a multi-unit lot deleted every unit in it.** A lot
+  aboard is one row carrying a quantity, so a bracket holding four boxes of one
+  lot is a single row of four. Replacing one box removed the row: the three
+  boxes still in the bag vanished from the apparatus count, all four were
+  recorded as disposed of, and the position read three short of a par it
+  actually met — while ready stock had been drawn down by one and one fresh
+  unit added. The retirement now works in units, oldest row first, and removes
+  a row only once it is emptied. Two expired boxes remain two exchanges.
+- **An in-date lot could be retired under an expired-stock disposition.** The
+  check form offers a replacement only on a position reading expired, but that
+  is a property of the screen rather than of the API, and the endpoint now
+  admits ordinary check submitters. The service verifies the named lot is
+  actually expired before retiring it, so the disposition cannot file a false
+  account of a unit that left the truck.
+- **A submitter could bind a checklist position to any catalog item.** The
+  first swap onto an unlinked position establishes its inventory link
+  permanently, and that decision has its own `equipment_check.manage` screen.
+  Opening the swap endpoint to `equipment_check.submit` (so crews can replace
+  expired stock themselves, rather than hunting for an officer while the item
+  stays force-failed) made the first-swap side effect a way around that review.
+  Submitters may now swap onto positions already linked and are refused on ones
+  that are not; officers still create the link. This narrows the grant recorded
+  against EC-3, which was raised because the endpoint had carried no permission
+  at all.
+- **Staff-entered attendance advanced a pipeline off a meeting it never
+  recorded.** Matching an existing prospect on a staff check-in set
+  `EventExternalAttendee.prospect_id` and nothing else, so the applicant's
+  linked-events section and the by-event applicant filter — both of which read
+  `prospect_event_links` — went on reporting the prospect as never having
+  attended. Check-in now writes the same link the kiosk path does.
+
 ### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
 
 **Fixed**
@@ -89,6 +124,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails the test that caused it, names the attribute, explains the concurrency
   trap, and restores the original so the rest of the run stays meaningful.
   Instance targets are ignored: they cannot outlive their test.
+
+### CI: a green PR took 28 minutes to do 39 minutes of work, almost all of it queueing (2026-08-23)
+
+**Changed**
+
+- **A green PR run went from 28m28s to 6–10 minutes.** Almost none of that gap
+  was test speed. Measured on run 32650130001: `Backend Lint` waited 3m40s to
+  run 1m16s, `Backend Unit Tests` waited 5m13s to run 3m52s, and
+  `Integration MySQL` waited **14m37s** to run 4m39s. The three-hop chain
+  (lint → unit → db) put 23m30s of pure queueing on a critical path holding
+  9m47s of work, because every `needs:` edge is a _re-queue_.
+- **The `needs:` edges are gone** from `backend-test-integration`,
+  `backend-test-contract`, `docker-build` and `frontend-e2e`; every job now
+  starts in the first wave. They existed to avoid spending a database runner
+  when the cheap checks were already red — but this repository is public, so
+  runner minutes are free (a run's billable total is literally 0), and the
+  guard was spending the one resource that is scarce. `ci-success` still
+  enforces that every job ran, so this removed serialization, not gating.
+- **`frontend-lint`, `frontend-security` and `frontend-build` are now one
+  `frontend-checks` job.** Each paid the same checkout + setup-node + npm ci to
+  do 108s, 18s and 27s of work, and waited 3m29s, 2m44s and 8m47s in the queue
+  to do it. This also removed a real duplication: `npm run build` _is_
+  `tsc-native.mjs && vite build`, so the separate `npm run typecheck` step was
+  a second full compile of the same tree.
+- **Every commit on `main` now gets its own concurrency group**, in `ci.yml` as
+  well as `secret-scan` and `supply-chain`. `cancel-in-progress: false` does
+  not guarantee a run per commit: GitHub keeps at most one running and one
+  _pending_ run per group, so when three or more main runs overlap each new
+  arrival evicts the pending one. `8c61c948` (#1709) merged and had its run
+  evicted 17 seconds later by the next merge; it sits on `main` with no CI
+  record at all. The cost is deliberate — a merge train of N commits now runs
+  N full matrices concurrently rather than collapsing to two — and if PR
+  latency degrades the fix is a cheaper main run, not a shared group.
+
+**Added**
+
+- **`scripts/check_ci_gate.py`, run as a step of `ci-success` itself.**
+  `ci-success` is the single check branch protection should require, and it
+  only gates a job named in its `needs:` list — so a job added to `ci.yml`
+  without a matching entry runs, reports its own status, and is required by
+  nothing. Neither half looks wrong in review. The checker also rejects a gate
+  whose `if:` is not genuinely unconditional: `always() && needs.x.result ==
+'...'` and `!always()` both contain the substring and both leave the job
+  skippable. It runs _inside_ the gate on purpose — anywhere else, dropping a
+  job from `needs:` detaches the checker from what it validates.
+  `scripts/test_check_ci_gate.py` covers the logic (12 cases).
+
+**Notes**
+
+- The MariaDB leg of the contract matrix was briefly removed and **restored**.
+  Response shapes come from Pydantic serializers and cannot vary by engine —
+  true of the _assertions_, and beside the point about the _execution_:
+  `case.call_and_validate()` issues a real request and the test asserts
+  `status_code < 500`, making that suite broad smoke coverage of the SQL behind
+  every `/api/public/` route. Nothing else covers those paths on MariaDB — the
+  integration matrix excludes the module by its `slow` marker, and the only
+  other test touching `get_form_by_slug` has no `integration` marker and so
+  runs in the database-less unit job.
 
 ### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
 
@@ -10154,7 +10247,7 @@ Large-page components decomposed into focused, maintainable sub-components:
 | Reminder for shift already started | Skipped — only shifts starting within lookahead window |
 | All positions filled via bulk assign | "Fill All Open" button hidden |
 | Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Notes cleared to empty string | Converted to `undefined` via `\|\|` to prevent 422 |
 | Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)

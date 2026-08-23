@@ -2655,6 +2655,31 @@ class EquipmentCheckService:
         await self.db.commit()
         return self._restock_state(item)
 
+    @staticmethod
+    def _retire_replaced_units(
+        item: CheckTemplateItem,
+        lots: List[CheckItemDeployedLot],
+        quantity: int,
+    ) -> None:
+        """Take ``quantity`` units off the truck, oldest row first.
+
+        Units, not rows. A bracket holding four boxes of one lot is one row
+        with a quantity of four, and a crew swapping a single box exchanges one
+        of them — dropping the row would delete the three still in the bag,
+        count them all as disposed of, and leave the position reading three
+        short of a par it actually meets. A row is removed only once it is
+        emptied, which is what the single-unit case does on its first pass.
+        """
+        remaining = quantity
+        for lot in lots:
+            if remaining < 1:
+                break
+            taken = min(lot.quantity, remaining)
+            lot.quantity -= taken
+            remaining -= taken
+            if lot.quantity < 1:
+                item.deployed_lots.remove(lot)
+
     def _deployed_lot_payload(self, item: CheckTemplateItem) -> List[Dict[str, Any]]:
         """Each lot aboard, in the order a crew should draw from it."""
         return [
@@ -3023,6 +3048,7 @@ class EquipmentCheckService:
         quantity: int = 1,
         replaced_deployed_lot_id: Optional[str] = None,
         disposition: Optional[str] = None,
+        allow_first_link: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Move units from a ready-stock lot onto the apparatus.
 
@@ -3046,6 +3072,13 @@ class EquipmentCheckService:
         departments differ — destroyed here, handed back to the pharmacy there,
         pulled for somebody to exchange later somewhere else — and only the
         crew at the truck knows which happened.
+
+        ``allow_first_link=False`` (a submit-only caller) refuses a position
+        that is not yet tied to the catalog. Binding one is the first swap's
+        side effect below, and it is permanent: left open it would let a
+        submitter attach any catalog item to any checklist row and draw its
+        stock, going around the manage-only inventory-link screen where that
+        decision is supposed to be reviewed.
         """
         if quantity < 1:
             raise ValueError("Restock quantity must be at least 1")
@@ -3104,6 +3137,11 @@ class EquipmentCheckService:
 
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
+            if not allow_first_link:
+                raise PermissionError(
+                    "This position is not linked to the supply catalog yet; "
+                    "an officer has to link it before stock can be swapped in"
+                )
             item.inventory_item_id = lot.inventory_item_id
         if lot.lot_number is not None:
             item.lot_number = lot.lot_number
@@ -3147,6 +3185,7 @@ class EquipmentCheckService:
         # above, so the incoming units cannot be expired today — but it is what
         # stops a lot being named as its own replacement.
         incoming = existing if existing is not None else item.deployed_lots[-1]
+        today = date.today()
         replaced_lot_number: Optional[str] = None
         if replaced_deployed_lot_id:
             replaced = next(
@@ -3161,15 +3200,21 @@ class EquipmentCheckService:
                 raise ValueError("The lot being replaced is not aboard this item")
             if str(replaced.id) == str(incoming.id):
                 raise ValueError("A lot cannot replace itself")
+            # Checked here rather than trusted from the caller. The form only
+            # offers a replacement on a position reading expired, but that is a
+            # property of the screen, not of the API — and the disposition this
+            # records is specifically an expired-stock one, so retiring an
+            # in-date box under it would file a false account of the unit.
+            if not (replaced.expiration_date and replaced.expiration_date < today):
+                raise ValueError("That lot has not expired, so it cannot be replaced")
             replaced_lot_number = replaced.lot_number
-            item.deployed_lots.remove(replaced)
+            self._retire_replaced_units(item, [replaced], quantity)
         elif disposition:
             # No id to name: the position's units were never lot-tracked, so
             # _materialize_untracked_units has just given the blob aboard one
             # row carrying the position's own date. Retiring what is expired is
             # the only reading available, and the crew asked for a replacement
             # by reporting a disposition at all.
-            today = date.today()
             expired = [
                 deployed
                 for deployed in list(item.deployed_lots or [])
@@ -3180,8 +3225,7 @@ class EquipmentCheckService:
             if not expired:
                 raise ValueError("This position carries no expired stock to replace")
             replaced_lot_number = expired[0].lot_number
-            for deployed in expired:
-                item.deployed_lots.remove(deployed)
+            self._retire_replaced_units(item, expired, quantity)
 
         if self._target_quantity(item) is not None:
             item.quantity_on_truck = self._on_truck(item)

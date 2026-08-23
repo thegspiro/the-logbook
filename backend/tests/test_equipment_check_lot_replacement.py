@@ -204,11 +204,25 @@ class TestAPositionWhoseUnitsWereNeverLotTracked:
         with pytest.raises(ValueError, match="no expired stock"):
             await _swap(service, disposition="discarded")
 
-    async def test_every_expired_row_goes_and_the_fresh_one_stays(self, service, item):
+    # One unit in, one unit out. Two expired boxes are two exchanges, so the
+    # second stays aboard — and keeps the position reading expired, which is
+    # true: there is still an expired box in the bag.
+    async def test_one_swapped_unit_retires_one_expired_unit(self, service, item):
         item.deployed_lots.append(_deployed("dl-old-a", "OLD-1", -10))
         item.deployed_lots.append(_deployed("dl-old-b", "OLD-2", -40))
 
         await _swap(service, disposition="discarded")
+
+        assert sorted(lot.lot_number for lot in item.deployed_lots) == [
+            "NEW-9",
+            "OLD-2",
+        ]
+
+    async def test_a_multi_unit_swap_retires_that_many(self, service, item):
+        item.deployed_lots.append(_deployed("dl-old-a", "OLD-1", -10))
+        item.deployed_lots.append(_deployed("dl-old-b", "OLD-2", -40))
+
+        await _swap(service, disposition="discarded", quantity=2)
 
         assert [lot.lot_number for lot in item.deployed_lots] == ["NEW-9"]
 
@@ -222,6 +236,114 @@ class TestAPositionWhoseUnitsWereNeverLotTracked:
 
         with pytest.raises(ValueError, match="has expired and cannot be deployed"):
             await _swap(service, disposition="discarded")
+
+
+class TestUnitsRatherThanRows:
+    """A bracket holding four boxes of one lot is one row with a quantity.
+
+    Dropping that row to swap a single box deleted the three still in the bag,
+    recorded them all as disposed of, and left the position reading three short
+    of a par it actually met.
+    """
+
+    async def test_replacing_one_box_leaves_the_rest_of_its_lot_aboard(
+        self, service, item
+    ):
+        item.deployed_lots[0].quantity = 4
+
+        await _swap(
+            service,
+            replaced_deployed_lot_id="dl-expired",
+            disposition="discarded",
+        )
+
+        remaining = next(lot for lot in item.deployed_lots if lot.lot_number == "OLD-1")
+        assert remaining.quantity == 3
+
+    async def test_the_row_goes_once_its_last_unit_does(self, service, item):
+        item.deployed_lots[0].quantity = 2
+
+        await _swap(
+            service,
+            replaced_deployed_lot_id="dl-expired",
+            disposition="discarded",
+            quantity=2,
+        )
+
+        assert [lot.lot_number for lot in item.deployed_lots] == ["NEW-9"]
+
+    async def test_taking_more_than_the_lot_holds_empties_it_not_negative(
+        self, service, item
+    ):
+        item.deployed_lots[0].quantity = 1
+
+        await _swap(
+            service,
+            replaced_deployed_lot_id="dl-expired",
+            disposition="discarded",
+            quantity=3,
+        )
+
+        assert [lot.lot_number for lot in item.deployed_lots] == ["NEW-9"]
+
+
+class TestOnlyExpiredStockIsReplaceable:
+    """The form offers a replacement only on a position reading expired, but
+    that is a property of the screen and not of the API — and the disposition
+    this records is specifically an expired-stock one."""
+
+    async def test_an_in_date_lot_cannot_be_retired_under_a_disposition(
+        self, service, item
+    ):
+        item.deployed_lots.append(_deployed("dl-good", "GOOD-2", 200))
+
+        with pytest.raises(ValueError, match="has not expired"):
+            await _swap(
+                service,
+                replaced_deployed_lot_id="dl-good",
+                disposition="discarded",
+            )
+
+    async def test_a_lot_with_no_date_at_all_cannot_be_retired(self, service, item):
+        undated = _deployed("dl-undated", "NODATE", 0)
+        undated.expiration_date = None
+        item.deployed_lots.append(undated)
+
+        with pytest.raises(ValueError, match="has not expired"):
+            await _swap(
+                service,
+                replaced_deployed_lot_id="dl-undated",
+                disposition="discarded",
+            )
+
+
+class TestLinkingAPositionToTheCatalog:
+    """The first swap binds a checklist row to a catalog item, permanently.
+
+    That decision has its own manage-only screen. Left open to submitters, the
+    swap endpoint was a way around it: attach any catalog item to any row and
+    draw its stock.
+    """
+
+    async def test_a_submitter_cannot_link_an_unlinked_position(self, service, item):
+        item.inventory_item_id = None
+
+        with pytest.raises(PermissionError, match="not linked to the supply catalog"):
+            await _swap(service, allow_first_link=False)
+
+    async def test_a_manager_still_links_on_the_first_swap(self, service, item):
+        item.inventory_item_id = None
+
+        await _swap(service, allow_first_link=True)
+
+        assert item.inventory_item_id == "inv-item-1"
+
+    async def test_a_submitter_may_still_swap_an_already_linked_position(
+        self, service, item
+    ):
+        await _swap(service, allow_first_link=False)
+
+        assert "NEW-9" in [lot.lot_number for lot in item.deployed_lots]
 
 
 class TestToppingUpIsUnchanged:
