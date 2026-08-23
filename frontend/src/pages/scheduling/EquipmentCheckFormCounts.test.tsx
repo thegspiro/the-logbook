@@ -16,6 +16,7 @@ const mockUploadCheckItemPhotos = vi.fn();
 const mockListPendingChecks = vi.fn();
 const mockDequeueCheck = vi.fn();
 const mockMarkCheckSubmitted = vi.fn();
+const mockEnqueueCheck = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -36,7 +37,7 @@ vi.mock('../../services/inventoryService', () => ({
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
 vi.mock('../../utils/offlineQueue', () => ({
-  enqueueCheck: vi.fn(),
+  enqueueCheck: (...a: unknown[]) => mockEnqueueCheck(...a) as unknown,
   listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
   dequeueCheck: (...a: unknown[]) => mockDequeueCheck(...a) as unknown,
   markCheckSubmitted: (...a: unknown[]) => mockMarkCheckSubmitted(...a) as unknown,

@@ -974,17 +974,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
           item_name: item.name,
           check_type: item.checkType,
-          status: result?.status || 'not_checked',
+          status: getEffectiveStatus(item, result, today),
           quantity_found: result?.quantityFound,
           required_quantity: item.requiredQuantity ?? item.expectedQuantity,
           critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
           level_reading: result?.levelReading,
           level_unit: item.levelUnit || undefined,
-          serial_number: result?.serialNumber || undefined,
-          lot_number: result?.lotNumber || undefined,
-          serial_found: result?.serialFound || undefined,
-          lot_found: result?.lotFound || undefined,
-          expiration_found: result?.expirationFound || undefined,
+          serial_number: item.serialNumber || undefined,
+          lot_number: item.lotNumber || undefined,
           is_expired: getExpirationStatus(item, today) === 'expired',
           expiration_date: item.expirationDate || undefined,
           notes: result?.notes || undefined,
@@ -1014,58 +1011,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const basePayload = {
       template_id: template.id,
       check_timing: template.checkTiming,
+      client_submission_id: clientSubmissionId,
       items,
       notes: overallNotes || undefined,
     };
 
     try {
-      // Collect items with photo files for post-submit upload
-      const itemsWithPhotos: { itemId: string; files: File[] }[] = [];
-
-      const items: CheckItemResultSubmit[] = [];
-      for (const compartment of compartments) {
-        for (const rawItem of compartment.items) {
-          if (rawItem.checkType === 'header' || rawItem.checkType === 'text') continue;
-          // Reflect any in-check lot swap so the recorded snapshot carries the
-          // fresh unit's lot/expiration rather than the pre-swap values.
-          const item = applyOverride(rawItem);
-          const result = results[item.id];
-
-          if (result?.photoFiles && result.photoFiles.length > 0) {
-            itemsWithPhotos.push({
-              itemId: item.id,
-              files: result.photoFiles,
-            });
-          }
-
-          items.push({
-            template_item_id: item.id,
-            compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
-            item_name: item.name,
-            check_type: item.checkType,
-            status: getEffectiveStatus(item, result, today),
-            quantity_found: result?.quantityFound,
-            required_quantity: item.requiredQuantity ?? item.expectedQuantity,
-            critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
-            level_reading: result?.levelReading,
-            level_unit: item.levelUnit || undefined,
-            serial_number: item.serialNumber || undefined,
-            lot_number: item.lotNumber || undefined,
-            is_expired: getExpirationStatus(item, today) === 'expired',
-            expiration_date: item.expirationDate || undefined,
-            notes: result?.notes || undefined,
-          });
-        }
-      }
-
-      const basePayload = {
-        template_id: template.id,
-        check_timing: template.checkTiming,
-        client_submission_id: clientSubmissionId,
-        items,
-        notes: overallNotes || undefined,
-      };
-
       // Offline: queue for later sync (shift-based only; standalone requires connectivity)
       if (!navigator.onLine && shiftId) {
         const payload: ShiftEquipmentCheckCreate = basePayload;
@@ -1132,45 +1083,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return;
       }
       try {
-        const fallbackItems: CheckItemResultSubmit[] = [];
-        const fallbackPhotos: { itemId: string; files: File[] }[] = [];
-        for (const compartment of compartments) {
-          for (const rawItem of compartment.items) {
-            if (rawItem.checkType === 'header') continue;
-            const item = applyOverride(rawItem);
-            const result = results[item.id];
-            if (result?.photoFiles && result.photoFiles.length > 0) {
-              fallbackPhotos.push({ itemId: item.id, files: result.photoFiles });
-            }
-            fallbackItems.push({
-              template_item_id: item.id,
-              compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
-              item_name: item.name,
-              check_type: item.checkType,
-              status: getEffectiveStatus(item, result, today),
-              quantity_found: result?.quantityFound,
-              required_quantity: item.requiredQuantity ?? item.expectedQuantity,
-              critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
-              level_reading: result?.levelReading,
-              level_unit: item.levelUnit || undefined,
-              serial_number: item.serialNumber || undefined,
-              lot_number: item.lotNumber || undefined,
-              is_expired: getExpirationStatus(item, today) === 'expired',
-              expiration_date: item.expirationDate || undefined,
-              notes: result?.notes || undefined,
-            });
-          }
-        }
-        const fallbackPayload: ShiftEquipmentCheckCreate = {
-          template_id: template.id,
-          check_timing: template.checkTiming,
-          client_submission_id: clientSubmissionId,
-          items: fallbackItems,
-          notes: overallNotes || undefined,
-        };
         if (shiftId) {
-          const fallbackPayload: ShiftEquipmentCheckCreate = basePayload;
-          await enqueueCheck(shiftId, fallbackPayload, itemsWithPhotos);
+          await enqueueCheck(shiftId, basePayload, itemsWithPhotos);
         } else {
           toast.error('Failed to submit check. Please try again.');
           setSubmitting(false);
