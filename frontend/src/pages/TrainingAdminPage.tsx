@@ -274,9 +274,9 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
 
 export const TrainingAdminPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const pageTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const innerTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   // Resolve initial state from URL params (supports both old and new format)
   const resolveInitial = (): { page: PageId; tab: string } => {
@@ -427,7 +427,7 @@ export const TrainingAdminPage: React.FC = () => {
                 onKeyDown={(event) =>
                   handleTabKeyDown(
                     event,
-                    pages.map((item) => item.id),
+                    primaryPages.map((item) => item.id),
                     activePage,
                     handlePageChange,
                     pageTabRefs
@@ -496,6 +496,32 @@ export const TrainingAdminPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* The live region gives section changes useful context without announcing tab content. */}
+        <div
+          className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p className="text-theme-text-muted text-sm">
+            <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
+            {currentPage.description}
+          </p>
+          {currentPage.actions && (
+            <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
+              {currentPage.actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => handleTabChange(action.tab)}
+                  className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div
@@ -504,32 +530,6 @@ export const TrainingAdminPage: React.FC = () => {
         aria-labelledby={`training-admin-section-tab-${activePage}`}
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* The live region gives section changes useful context without announcing tab content. */}
-          <div
-            className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            <p className="text-theme-text-muted text-sm">
-              <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
-              {currentPage.description}
-            </p>
-            {currentPage.actions && (
-              <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
-                {currentPage.actions.map((action) => (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={() => handleTabChange(action.tab)}
-                    className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Inner tab bar */}
           <div className="border-theme-surface-border border-b">
             <div className="hscroll flex space-x-1" role="tablist" aria-label={`${currentPage.label} tabs`}>
@@ -565,16 +565,16 @@ export const TrainingAdminPage: React.FC = () => {
               ))}
             </div>
           </div>
-        </div>
-        {/* Tab Content - each child handles its own layout */}
-        <div
-          id={`training-admin-tabpanel-${activePage}-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`training-admin-tab-${activePage}-${activeTab}`}
-        >
-          <Suspense fallback={<TabLoading />}>
-            <TabContent page={activePage} tab={activeTab} />
-          </Suspense>
+
+          <div
+            id={`training-admin-tabpanel-${activePage}-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`training-admin-tab-${activePage}-${activeTab}`}
+          >
+            <Suspense fallback={<TabLoading />}>
+              <TabContent page={activePage} tab={activeTab} />
+            </Suspense>
+          </div>
         </div>
       </div>
     </div>

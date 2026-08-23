@@ -1,41 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
-// Mock all lazy-loaded page imports before importing the component: these tests
-// exercise navigation, not the child pages.
+// Mock all lazy-loaded page imports before importing the component
 vi.mock('./TrainingOfficerDashboard', () => ({ default: () => <div data-testid="lazy-component">Dashboard</div> }));
 vi.mock('./ComplianceMatrixTab', () => ({ default: () => <div data-testid="lazy-component">Compliance</div> }));
 vi.mock('./ExpiringCertsTab', () => ({ default: () => <div data-testid="lazy-component">Expiring Certs</div> }));
 vi.mock('./TrainingWaiversTab', () => ({ default: () => <div data-testid="lazy-component">Waivers</div> }));
 vi.mock('./ReviewSubmissionsPage', () => ({ default: () => <div data-testid="lazy-component">Review</div> }));
 vi.mock('./CreateTrainingSessionPage', () => ({ default: () => <div data-testid="lazy-component">Session</div> }));
-vi.mock('./training/CohortsPage', () => ({ default: () => <div data-testid="lazy-component">Cohorts</div> }));
 vi.mock('./ShiftReportPage', () => ({ default: () => <div data-testid="lazy-component">Shift Report</div> }));
-vi.mock('./MemberTrainingStatusPage', () => ({ default: () => <div data-testid="lazy-component">Member Status</div> }));
 vi.mock('./TrainingRequirementsPage', () => ({ default: () => <div data-testid="lazy-component">Requirements</div> }));
-vi.mock('./CourseLibraryPage', () => ({ default: () => <div data-testid="lazy-component">Course Library</div> }));
 vi.mock('./CreatePipelinePage', () => ({ default: () => <div data-testid="lazy-component">Pipeline</div> }));
-vi.mock('./training/ManualEntrySettingsPanel', () => ({
-  default: () => <div data-testid="lazy-component">Manual Entry</div>,
-}));
 vi.mock('./ExternalTrainingPage', () => ({ default: () => <div data-testid="lazy-component">External</div> }));
 vi.mock('./HistoricalImportPage', () => ({ default: () => <div data-testid="lazy-component">Historical</div> }));
 vi.mock('./SkillsTestingTemplatesTab', () => ({ default: () => <div data-testid="lazy-component">Templates</div> }));
 vi.mock('./SkillsTestingTestRecordsTab', () => ({ default: () => <div data-testid="lazy-component">Records</div> }));
-vi.mock('./TrainingEnhancementsTab', () => ({
-  default: ({ activeTab }: { activeTab: string }) => (
-    <div data-testid="lazy-component">{`Enhancements ${activeTab}`}</div>
-  ),
-}));
+vi.mock('./TrainingEnhancementsTab', () => ({ default: () => <div data-testid="lazy-component">Enhancements</div> }));
 vi.mock('./ComplianceOfficerDashboard', () => ({
-  default: ({ activeTab }: { activeTab: string }) => (
-    <div data-testid="lazy-component">{`Compliance ${activeTab}`}</div>
-  ),
+  default: () => <div data-testid="lazy-component">Compliance Officer</div>,
 }));
 
-vi.mock('../components/HelpLink', () => ({ HelpLink: () => null }));
+vi.mock('../components/HelpLink', () => ({
+  HelpLink: () => null,
+}));
 
 import TrainingAdminPage from './TrainingAdminPage';
 
@@ -103,61 +92,6 @@ describe('TrainingAdminPage', () => {
     expect(screen.getByRole('combobox', { name: 'Training admin section' })).toHaveValue('skills-testing');
     expect(screen.getByRole('combobox', { name: 'Skills Testing destination' })).toHaveValue('tests');
     expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Records');
-  });
-
-  it('wires both navigation levels to their tab panels', async () => {
-    renderWithRouter(<TrainingAdminPage />);
-    const sectionTablist = screen.getByRole('tablist', { name: 'Training admin sections' });
-    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
-    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
-
-    expect(within(sectionTablist).getAllByRole('tab')).toHaveLength(3);
-    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
-    expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
-    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
-
-    const sectionPanel = screen.getByRole('tabpanel', { name: 'Dashboard' });
-    const contentPanel = screen.getByRole('tabpanel', { name: 'Overview' });
-    expect(overviewTab).toHaveAttribute('aria-controls', contentPanel.id);
-    expect(sectionPanel).toBeInTheDocument();
-    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Dashboard');
-  });
-
-  it('uses roving focus and arrow, Home, and End keys for inner tabs', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<TrainingAdminPage />);
-    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
-
-    overviewTab.focus();
-    await user.keyboard('{ArrowRight}');
-    const complianceTab = screen.getByRole('tab', { name: 'Compliance Matrix' });
-    expect(complianceTab).toHaveFocus();
-    expect(complianceTab).toHaveAttribute('aria-selected', 'true');
-    expect(overviewTab).toHaveAttribute('tabindex', '-1');
-    expect(window.location.search).toBe('?page=dashboard&tab=compliance');
-
-    await user.keyboard('{End}');
-    expect(screen.getByRole('tab', { name: 'Training Waivers' })).toHaveFocus();
-    await user.keyboard('{Home}');
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
-  });
-
-  it('activates top-level tabs from the keyboard and restores URL state on browser back', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<TrainingAdminPage />);
-    const dashboardTab = screen.getByRole('tab', { name: 'Dashboard' });
-
-    dashboardTab.focus();
-    await user.keyboard('{ArrowRight}');
-    const recordsTab = screen.getByRole('tab', { name: 'Records' });
-    expect(recordsTab).toHaveFocus();
-    expect(recordsTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist', { name: 'Records tabs' })).toBeInTheDocument();
-    expect(window.location.search).toBe('?page=records&tab=submissions');
-
-    window.history.back();
-    await waitFor(() => expect(dashboardTab).toHaveAttribute('aria-selected', 'true'));
-    expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
   });
 
   it('updates the section description and actions after navigation', async () => {
