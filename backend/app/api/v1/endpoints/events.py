@@ -88,6 +88,7 @@ from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
+from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
 from app.utils.mime_validation import detect_mime_type
 
@@ -2781,6 +2782,20 @@ async def check_in_external_attendee(
 
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
+
+    # A staff-entered attendee is never given a prospect_id when it is created,
+    # so without this the pipeline branch below could only ever fire for kiosk
+    # guests — and the kiosk already runs the hook itself. Resolving it here
+    # rather than at creation also covers rows staff entered earlier. Only an
+    # existing active prospect is linked: opening a new one is the kiosk's
+    # behaviour, gated on the event's guest_check_in_creates_prospect setting.
+    if not attendee.prospect_id and attendee.email:
+        prospect = await MembershipPipelineService(db).find_active_prospect_by_email(
+            current_user.organization_id, attendee.email
+        )
+        if prospect is not None:
+            attendee.prospect_id = prospect.id
+
     await db.commit()
 
     # Attendance is already durable before pipeline automation runs. Resolve

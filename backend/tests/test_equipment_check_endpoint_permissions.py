@@ -26,19 +26,37 @@ def _permission_set(path: str, method: str) -> set[str]:
     pytest.fail(f"Permission dependency not found for {method} {path}")
 
 
-@pytest.mark.parametrize(
-    ("path", "method"),
-    [
-        ("/items/{template_item_id}/used", "DELETE"),
-        ("/items/{template_item_id}/swap", "POST"),
-    ],
-)
-def test_inventory_mutations_require_management_permission(path, method):
-    """Baseline check submitters must not mutate supply officers' records."""
-    permissions = _permission_set(path, method)
+def test_withdrawing_a_restock_report_requires_management_permission():
+    """Baseline check submitters must not clear the supply worklist.
+
+    Raising a restock report is the crew's (POST, submit-level); withdrawing
+    one is the officer deciding the shelf has been dealt with.
+    """
+    permissions = _permission_set("/items/{template_item_id}/used", "DELETE")
 
     assert permissions == {"equipment_check.manage", "inventory.manage"}
     assert "equipment_check.submit" not in permissions
+
+
+def test_swapping_stock_onto_a_truck_is_open_to_check_submitters():
+    """Replacing expired stock is the crew's job standing at the compartment.
+
+    EC-3 put a permission on this endpoint because it had none at all — any
+    member could consume ready stock unauthenticated by role. A submit-level
+    gate keeps that closed: the caller still needs a check permission, the
+    lot is still org-scoped, every stored value still comes from the
+    InventoryLot row rather than the request, and the swap is still recorded
+    against its author. Requiring a manage right on top of that did not
+    protect the record, it just meant an expired unit stayed on the truck
+    until an officer was found.
+    """
+    permissions = _permission_set("/items/{template_item_id}/swap", "POST")
+
+    assert permissions == {
+        "equipment_check.submit",
+        "equipment_check.manage",
+        "inventory.manage",
+    }
 
 
 def test_supply_overview_requires_officer_permission():

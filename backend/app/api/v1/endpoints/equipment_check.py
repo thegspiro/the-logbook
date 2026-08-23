@@ -1812,13 +1812,30 @@ async def swap_item_lot(
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.manage", "inventory.manage")
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
     ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.
 
     Decrements the lot's on-hand quantity and updates the deployed item's
     lot number and expiration to the fresher unit that was swapped in.
+
+    Naming ``replaced_deployed_lot_id`` also takes that lot off the truck and
+    records the disposition the crew reports for it; omitting it tops the
+    position up without retiring anything.
+
+    Open to ``equipment_check.submit``, not officers alone. Replacing expired
+    stock is the crew's job at the truck, and a gate they could not pass left
+    them looking at an expired unit, ready stock on the shelf, and no action
+    but to find an officer — while the item stayed force-failed. EC-3, which
+    put a permission here, was about the endpoint having had *none*: every
+    value this writes still comes from the org-scoped ``InventoryLot`` row
+    rather than the request, so a submitter can move real stock but cannot
+    invent a lot number or a date, and ``log_template_change`` records who did
+    it. This mirrors the deployed-lot editor, which already admits submitters
+    and narrows what they may rewrite rather than shutting them out.
     """
     service = EquipmentCheckService(db)
     try:
@@ -1828,6 +1845,8 @@ async def swap_item_lot(
             organization_id=str(current_user.organization_id),
             user=current_user,
             quantity=data.quantity,
+            replaced_deployed_lot_id=data.replaced_deployed_lot_id,
+            disposition=data.disposition.value if data.disposition else None,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

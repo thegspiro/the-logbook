@@ -714,6 +714,20 @@ export interface ItemDeployment {
   isExpired: boolean;
 }
 
+/**
+ * What became of a unit taken off the apparatus for being expired.
+ *
+ * Departments differ — destroyed on the spot, handed straight back to the
+ * supplying pharmacy, or pulled off the truck for somebody to exchange days
+ * later — so the crew reports it rather than the application assuming it.
+ */
+export const ExpiredStockDisposition = {
+  DISCARDED: 'discarded',
+  RETURNED_FOR_EXCHANGE: 'returned_for_exchange',
+  AWAITING_EXCHANGE: 'awaiting_exchange',
+} as const;
+export type ExpiredStockDisposition = (typeof ExpiredStockDisposition)[keyof typeof ExpiredStockDisposition];
+
 export interface LotSwapResult {
   templateItemId: string;
   lotNumber?: string;
@@ -722,6 +736,14 @@ export interface LotSwapResult {
   /** A full restock settles the report; a partial one leaves it standing. */
   restockNeeded?: boolean;
   quantityOnTruck?: number;
+  /**
+   * The position's lots after the swap. A position holding several lots is
+   * exposed by the earliest of them, so this — not the scalar expirationDate,
+   * which describes only the incoming unit — is what settles its verdict.
+   */
+  lotsAboard?: DeployedLot[];
+  replacedLotNumber?: string;
+  disposition?: ExpiredStockDisposition;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────
