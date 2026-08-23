@@ -2,32 +2,48 @@
 
 ## Re-captured 2026-08-23 — the phone sweep at 390x844, and what it exposed
 
-**Amended after merging main's shift-check lap redesign.** `CheckLap`,
-`CheckItemControls` and `checkLapModel` landed after the sweep and rebuild this
-screen around walking-order stops. Five of the six equipment-check captures
-re-shot cleanly against it and were checked; `03-71-set-all-to-par-confirm` did
-not, and its committed image now predates the redesign as well.
+**Corrected 2026-08-23 (later).** The amendment that stood here was wrong, and
+the way it was wrong is worth keeping.
 
-What is ruled out, so the next attempt does not repeat it: the Trauma Bag stop
-_is_ open (`aria-expanded` reads true before anything is clicked), its pass/fail
-item and the gloves' own lot and expiry row both render, and no compartment on
-this template is sealed — `is_sealed` is 0 for all three — so the
-seal-clears-counts branch in `checkLapModel` is not what is hiding it.
+It reported that `03-71-set-all-to-par-confirm` was blocked by main's lap
+redesign, and that `03-72` showed a `quantity` item rendering the pass/fail
+control while `03-70` rendered the same type as a stepper — read as a defect in
+the new code. **All four equipment-check captures shoot cleanly, and there is no
+such defect.** What differed was not the item, it was the process: a backend
+left running across the merge was still serving the pre-merge spellings
+(`quantity`, `pass_fail`) to a post-merge frontend. Restarting it made
+`03-71` capture on the first attempt and put the stepper back on the gloves.
 
-**The missing stepper turned out to be the smaller half of the finding.**
-`03-72-check-item-controls`, shot from the same screen, shows Nitrile Gloves
-rendering **Pass / Fail / Not on truck / Out of service** — the _function_
-control — while the API serves that item as `checkType: "quantity"` and
-`normalizeCheckType` maps `quantity` to `count`. On the same screen
-`03-70-check-form-carryover` shows Naloxone, also `quantity`, _with_ the
-stepper. So the type reaches the client intact, and the same type renders two
-different controls depending on something else. A crew answering the gloves that
-way records no count at all, and "Set all to par" has nothing to act on. Written
-down rather than patched blind: it is a behaviour question for whoever owns the
-lap design, not a screenshot one. The shot's `prepare`
-was made lap-aware anyway (it reads `aria-expanded` instead of blind-toggling,
-and accepts both the old `Decrease X quantity` and the new `One fewer X`
-labels), and is left failing rather than quietly dropped.
+Two things follow, and only one of them is a bug.
+
+**`CheckLap`, `CheckItemControls` and `checkLapModel` are not wired to
+anything.** Nothing outside those three files and their tests imports them; the
+live screen is still `EquipmentCheckForm`'s own renderer. So the lap redesign
+could not have broken a capture — it does not run. Worth knowing before anyone
+else reads a check-form symptom as lap behaviour.
+
+**The version skew that caused the false alarm is a real fragility.** The live
+form compares `item.checkType` against the canonical four directly and its
+control switch ends in `default: passFailButtons`, so a response carrying the
+older spellings does not fail — it _degrades_, rendering every count, level and
+expiry item as pass/fail. The crew answers Pass on a row meant to record a
+number, no quantity is stored, and "Set all to par" has nothing to act on.
+`pass_fail` is what hides it: that one lands on the right control by accident,
+so most of the form still looks right. A backend on the previous release is the
+ordinary state of a rolling deploy, which is exactly how this was hit.
+
+`normalizeCheckType` was written for this and its own comment says it belongs at
+the read boundary; nothing called it. `getEquipmentCheckTemplate` and
+`getEquipmentCheckTemplates` now do, alongside the `normalizeShift` /
+`normalizePositions` that already sit there, with tests that fail when the
+normalization is removed. Structural `header` and `text` rows are passed through
+untouched — canonicalizing those to `function` would put answer buttons under a
+section heading.
+
+**A screenshot caught this, and then nearly buried it.** The first diagnosis
+blamed the width, the second blamed a redesign that does not execute. Neither
+was reproduced against a restarted stack before being written down. A capture
+that disagrees with the code is worth a second process, not just a second look.
 
 **Two of main's renames cost a shot each, silently.** The phone menu control
 became "Open full navigation menu" and the quantity stepper became

@@ -5772,15 +5772,11 @@ export const SHOTS = [
       if ((await traumaBag.getAttribute("aria-expanded")) !== "true") {
         await traumaBag.click({ timeout: 10_000 });
       }
-      // KNOWN BROKEN since main's lap redesign (CheckLap / CheckItemControls).
-      // Trauma Bag renders -- its pass/fail item and the gloves' own lot and
-      // expiry row are both on screen -- but the quantity stepper this shot
-      // needs is not, and neither is the item's name. Ruled out: the stop is
-      // open (aria-expanded true before any click), and no compartment on this
-      // template is sealed (`is_sealed = 0` for all three), so the
-      // seal-clears-counts path in checkLapModel is not what is hiding it.
-      // The committed image predates the redesign and is therefore also stale;
-      // both need someone who knows what the lap intends a count to look like.
+      // Wait for the stepper rather than assuming it is painted. When this
+      // once came back as pass/fail buttons the cause was a backend left
+      // running across a deploy, still serving the pre-canonical check-type
+      // spellings; the read boundary normalizes them now, and failing here is
+      // the signal that something upstream is serving the old shape again.
       await page
         .getByLabel(/^(One fewer|Decrease) Nitrile Gloves/)
         .first()
