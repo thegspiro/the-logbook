@@ -4093,7 +4093,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {showPreview && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4">
           <div className="modal-panel-scroll relative flex flex-col items-center gap-3">
-            {/* Close button outside the phone frame */}
+            {/* Close button remains fully inside the scroll clipping box */}
             <button
               type="button"
               onClick={() => setShowPreview(false)}
