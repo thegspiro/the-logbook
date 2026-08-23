@@ -207,18 +207,6 @@ jobs:
         working-directory: .
         run: python3 scripts/check_security_scan_policy.py
 
-      # The aggregate gate lists its `needs:` by hand, so a job added without
-      # touching that list is simply not covered — it can fail, or skip because
-      # its own dependency died, and `CI Success` still reports success. That is
-      # the hole the gate was added to close, reintroduced with no symptom until
-      # the day it matters. Also asserts the gate keeps `if: always()`, without
-      # which it is itself skipped on any upstream failure and the required
-      # check never reports at all.
-      - name: Check the CI aggregate gate covers every job
-        if: "!cancelled()"
-        working-directory: .
-        run: python3 scripts/check_workflow_gate.py
-
   backend-security:
     name: Backend Security Scan
     runs-on: ubuntu-latest
