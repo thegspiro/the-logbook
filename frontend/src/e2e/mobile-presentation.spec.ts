@@ -54,6 +54,7 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
   { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
