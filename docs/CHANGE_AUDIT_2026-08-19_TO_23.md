@@ -24,7 +24,7 @@ disposition](#documentation-and-media-disposition) below.
 
 | Area                                            | PRs                                             | Pages / connection points                                                                                | API / data points                                                                                                                                                                                                                                                                                          | Boundary and edge cases                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ----------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Governance — Legal Documents                    | #1579, #1584                                    | `/governance/legal` (**new**); the public `/privacy` and `/terms` render what it publishes               | New table `legal_document_revisions`; new permissions `legal.propose`, `legal.publish`; `GET /legal-documents` (overview), `POST /legal-documents/revisions`, `PUT`/`DELETE …/revisions/{id}`, `POST …/revisions/{id}/publish`, `POST /legal-documents/{document_type}/revert-to-default`                  | Live text stays in `organizations.settings["legal"]` — that is what the **anonymous** public endpoint reads, with no join. The table is the governance record _around_ it. Proposing and publishing are **separate grants**: `legal.propose` cannot publish. At most one `published` revision per document type per org. Archived rows are never deleted, because the question a records request asks is what the notice said _on a given date_. `change_note` is required at the schema layer — the point of proposing rather than editing in place is that someone later can see why                                                                                                                                                                                                |
+| Governance — Legal Documents                    | #1579, #1584                                    | `/governance/legal` (**new**); the public `/privacy` and `/terms` render what it publishes               | New table `legal_document_revisions`; new permissions `legal.propose`, `legal.publish`; `GET /legal-documents` (overview), `POST /legal-documents/revisions`, `PUT`/`DELETE …/revisions/{id}`, `POST …/revisions/{id}/publish`, `POST /legal-documents/{document_type}/revert-to-default`                  | Live text stays in `organizations.settings["legal"]` — that is what the **anonymous** public endpoint reads, with no join. The table is the governance record _around_ it. Proposing and publishing are **separate grants**: `legal.propose` cannot publish. At most one `published` revision per document type per org. Archived rows are never deleted, because the question a records request asks is what the notice said _on a given date_. `change_note` is required at the schema layer — the point of proposing rather than editing in place is that someone later can see why                                                                                                                                                                                              |
 | Dashboard — widget layer                        | #1687, #1662, #1659, #1654                      | `/dashboard`; Chief operations dashboard; Organization dashboard asset widgets; training-officer widgets | `GET /dashboard/widgets?period=`, `GET /dashboard/operations`, `GET /dashboard/asset-widgets` (**all new**); `dashboard_widget_service.py`; `widgetRegistry.ts`, `chiefWidgetRegistry.ts`, `AssetWidgetRegistry.tsx`                                                                                       | Every section is permission-gated **and** module-gated independently. A missing section is deliberately indistinguishable from an empty one — callers cannot probe for access. `settings.manage` is intentionally **not** financial access: money needs `finance.manage`, fundraising `fundraising.view` + the `grants` module, outreach `events.manage`. Asset widgets return **counts and fixed links only**, so facility codes, accounts, budgets and leases cannot leak through a general dashboard endpoint. Training-officer widget choices live in `localStorage` under `training-officer-dashboard.widgets.v1`, separate from the member-facing dashboard. **See [DASH-1](#dash-1--the-main-widget-registry-is-mostly-unread) — most of `DASHBOARD_WIDGETS` has no reader** |
 | Equipment checks — atomic & idempotent          | #1654, #1659, #1662, #1710, #1719, #1643, #1641 | Shift detail → equipment check; equipment template builder; compartment tree                             | New table `equipment_check_bulk_requests`; new column `shift_equipment_checks.client_submission_id`; new constraints `uq_shift_equipment_check_shift_template`, `uq_shift_equipment_check_client_submission`; `check_items.compartment_path` widened `VARCHAR(200)` → `TEXT`; `equipmentCheckHierarchy.ts` | One check per `(shift_id, template_id)` is now a **database** rule, not a UI convention. The client mints `client_submission_id` before sending, so a retry from a queued offline submission resolves to the same row instead of a second one. Bulk item creation is keyed on `(compartment_id, idempotency_key)` with a `payload_hash`, so a retry with the _same_ key but different content is rejected rather than silently accepted. Compartment parents are cycle-checked. Standalone checks now require `equipment_check.manage`. Expired-equipment failures are **derived**, not stored                                                                                                                                                                                      |
 | Scheduling — request pagination                 | #1632                                           | Scheduling → Requests tab                                                                                | `GET /scheduling/swap-requests` and `GET /scheduling/time-off` now return `{items, total, skip, limit}` — **previously a bare array**                                                                                                                                                                      | **Breaking response-shape change.** Any integration or script reading these two endpoints as a list breaks. `ShiftSwapRequestsPage` / `ShiftTimeOffRequestsPage`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -274,23 +274,44 @@ Summary of what this window invalidated:
 ### YouTube script beats needing rewrite
 
 Full detail in
-[`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
-The material items:
+[`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md),
+which was **revised 2026-08-23** after a verification pass over all eighteen
+scripts. The first version of this list was written from the change list
+rather than from the scripts and was wrong in both directions — it invented a
+defect in script 03 and missed the three real ones.
 
-- **03 — IT Manager / System Admin.** The upgrade chapter must state the new
-  head and the two non-reversible migrations. A viewer who downgrades past
-  `1eeb053d59b7` loses seat counts permanently; that cannot be left to a
-  card.
-- **04 — Fire Chief / Leadership.** Gains Governance → Legal Documents, and
-  the propose/publish split is the whole point of the beat — a chief who
-  hears "you can edit your privacy notice" and not "publishing is a separate
-  grant" has learned the feature backwards.
-- **06 — Member Guide.** Any take showing a dialog on a phone was filmed
-  against the old, broken bottom bar.
+**Narration that was false, and is now rewritten in-script** (per the standing
+rule that no behavioural content lives only in SCRIPT_CURRENCY):
+
+| Script | Beat                                | Was                                                                                                                                                                                                                                                   |
+| ------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **08** | `SHORT 8C` (line 102)               | Told the viewer their swap partner would "accept or decline". **No such control exists** — the partner is notified but never decides, and since this window neither party may review the swap. The only item here a viewer _acts on_ and is harmed by |
+| **05** | `DASHBOARD OVERVIEW` (lines 76, 80) | Named **"Expiring Soon"** and **"Overdue Training"**, neither of which exists on the rebuilt nine-widget dashboard. The expirations card is forward-looking only — already-expired records are excluded by a lower bound                              |
+| **15** | `PRACTICE` (line 583)               | "Official tests still need `training.manage`." False — `create_test` needs only an authenticated user; the permission sits on **validation**. A leftover from 2026-08-08 that the file already contradicts twice                                      |
+
+**New material, correctly queued** (nothing existing is wrong):
+
+- **03 — IT Manager / System Admin.** Needs the new head, the two
+  non-reversible migrations, and the three renumber-repair revisions. **It does
+  not contain a rollback promise** — the earlier claim that it did was wrong.
+  Script **01** carries the series' only `alembic upgrade head` beat and needs
+  the same caveat appended.
+- **04 — Fire Chief / Leadership.** Gains Governance → Legal Documents; the
+  propose/publish split is the point of the beat. Also needs the swap
+  self-review rule said out loud — a chief who is the department's only
+  `scheduling.manage` holder cannot approve their own swap, and nobody else
+  can either.
 - **07 — Secretary / Administrative.** Legal Documents is a secretary
   workflow; new chapter.
-- **08 — Quick Tips & Shorts.** Candidate short on the offline equipment
-  check now that retries are safe.
+- **08 — Quick Tips & Shorts.** Three new shorts (offline equipment check,
+  recruitment nights, browser tab titles).
+- **06 — Member Guide.** Production only: the phone chapter's lots sheet
+  (line 472) was shot against the old bottom bar.
+
+**Verified clear** — flagged on suspicion, checked, and clean: **12** (no
+"back out" beat), **14** ("override" appears zero times), **09/10/11** (these
+are _training_ pipeline scripts; "prospect" appears zero times), **13**
+(storefront unchanged).
 
 ## Verification
 

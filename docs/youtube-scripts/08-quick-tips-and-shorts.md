@@ -97,17 +97,21 @@ the "Attending" list]**
 
 > "Click 'Request Swap.'"
 
-**[SCREEN: Show the swap options — propose a swap with someone or post as open]**
+**[SCREEN: Show the swap options — propose a swap with someone or post as open.
+Do NOT stage a target-side accept/decline control; none exists. — CORRECTED
+2026-08-23]**
 
-> "Option one: propose a direct swap with another member. They get notified
-> and accept or decline."
+> "Option one: name the member you want to swap with. They get notified —
+> but they don't approve it, and neither do you."
 
 > "Option two: post the shift as open for anyone to pick up."
 
 **[SCREEN: Select a swap partner or post as open. Submit.]**
 
-> "Submit, and your request goes to your officer for approval. You'll get a
-> notification when it's finalized."
+> "Either way it goes to an officer, and it has to be an officer who isn't in
+> the swap. Not you, not the person you named. That's deliberate — a swap is
+> signed off by somebody with no stake in it. You'll get a notification when
+> it's finalized."
 
 **[SCREEN: Show the pending swap notification]**
 

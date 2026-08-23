@@ -5,14 +5,59 @@
 Full reason/data-path context in
 [`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
 
-This window produced **two Wrong**, one **Dangerous-if-followed** (an upgrade
-instruction that can destroy data), and one new chapter's worth of material.
+This window produced **three Wrong** — all three now rewritten in-script — plus
+a substantial body of new material and a set of re-shoot notes.
 
-### 03 — IT Manager / System Admin · **DANGEROUS IF FOLLOWED — rewrite before recording**
+> **Revised 2026-08-23, after a verification pass over all eighteen scripts.**
+> The first version of this section was written from the change list rather
+> than from the scripts, and it was wrong in both directions:
+>
+> - It **invented one defect.** Script 03 was labelled "DANGEROUS IF FOLLOWED"
+>   for a rollback reassurance that does not appear in the file. See the
+>   correction under 03 below.
+> - It **missed all three real ones.** The false narration in scripts 05, 08
+>   and 15 is not mentioned anywhere in the original section.
+> - It **parked four determinations as conditionals** ("if the script
+>   demonstrates X…"). All four were checked and all four are clear — 12, 14,
+>   the duplication half of 15, and 09/10/11. A conditional in this file is a
+>   verification the author owed and did not do; the rule that no behavioural
+>   content lives only in SCRIPT_CURRENCY is not satisfied by filing a maybe.
+>
+> Corrections are recorded in place rather than by deleting the original
+> claims, so an editor who started work against them can see what changed.
 
-The upgrade chapter walks `alembic upgrade head` and then, as reassurance,
-tells the viewer they can downgrade if something goes wrong. **That
-reassurance is now false in two specific ways, and both destroy data.**
+**Rewritten in-script this window** (per the standing rule that no behavioural
+content lives only in SCRIPT_CURRENCY):
+
+| Script | Beat                                | Was                                                            |
+| ------ | ----------------------------------- | -------------------------------------------------------------- |
+| 08     | `SHORT 8C` (line 102)               | Promised the swap target an accept/decline that does not exist |
+| 05     | `DASHBOARD OVERVIEW` (lines 76, 80) | Named two dashboard cards that no longer exist                 |
+| 15     | `PRACTICE` (line 583)               | Claimed official tests require `training.manage`; they do not  |
+
+### 03 — IT Manager / System Admin · **ADDITION — migration material missing**
+
+> **Corrected 2026-08-23.** This entry was first written as
+> "DANGEROUS IF FOLLOWED", on the claim that the upgrade chapter "walks
+> `alembic upgrade head` and then, as reassurance, tells the viewer they can
+> downgrade if something goes wrong." **No such line exists in script 03.**
+> `### UPDATING THE LOGBOOK (31:30 – 33:00)` walks
+> `docker compose up -d --build`, states that migrations run on startup, and
+> says to restore from the mysqldump backup. `grep -n "upgrade head"` across
+> all eighteen script files hits only `01-installing-the-logbook.md:621` —
+> which already says _"Never downgrade just to repair a migration fork."_
+> Script 03 contains no `alembic` command at all.
+>
+> The severity label was wrong and the quoted defect was not in the file. It is
+> corrected here rather than quietly deleted, because an editor who had already
+> started rewriting against a phantom line needs to know why it vanished.
+>
+> What follows is the real gap: **nothing existing is wrong, material is
+> missing.**
+
+Nothing in script 03 needs unsaying. What it lacks is any statement of what
+this release's migrations cost if an operator reaches for a downgrade — and
+its audience is exactly the person who would.
 
 **1. The seat-list migration cannot be reversed.** `1eeb053d59b7` expands a
 legacy crew `count` into that many individual seats. Downgrading collapses
@@ -28,11 +73,20 @@ equipment-check de-duplication (`a17c4e9d2b61`) **detaches** historical
 duplicate checks rather than deleting them, and cannot re-attach them on
 downgrade. Item snapshots survive; the association does not.
 
-The line to record instead is not "you can roll back" but:
+The line to add, immediately after the existing backup instruction:
 
 > "Take the backup. On this release the backup **is** your rollback — two of
 > these migrations don't reverse cleanly, and one of them will quietly turn a
 > three-seat template into a one-seat template if you try."
+
+**Script 01 needs the same sentence.** Its
+`## AUGUST 14 RELEASE INSERT — TLS AND SAFE UPGRADES` (line 621) is the
+series' only `alembic upgrade head` beat, and its audience is the self-hoster
+who reaches for `alembic downgrade` when an upgrade misbehaves. Its existing
+"Never downgrade just to repair a migration fork" remains correct and is now
+load-bearing; append the same caveat so the two videos agree. Roughly
++12 seconds. Also worth naming there: `python scripts/validate_migrations.py`,
+and the current head `a17c4e9d2b61`.
 
 **Also in this chapter:** three migrations in this release exist to repair
 databases that Alembic believes are already up to date, because an earlier
@@ -107,7 +161,41 @@ release.** The event attendance export mis-escaped commas, so a member named
 secretary needs to hear, because the broken files are already sitting in
 folders.
 
-### 08 — Quick Tips & Shorts · **additions**
+### 08 — Quick Tips & Shorts · **WRONG — corrected in-script 2026-08-23**
+
+> **This entry originally read "additions"** and listed three new shorts. It
+> missed that an existing short teaches a workflow the product does not have.
+
+**Short 8C, "Submitting a Shift Swap Request", line 102:**
+
+> "Option one: propose a direct swap with another member. They get notified
+> and accept or decline."
+
+**The target has no accept or decline.** They are notified — `_notify_swap_request`
+does fire — but there is no control for them to respond with, and there never
+has been on any branch. `frontend/src/modules/scheduling/services/api.ts`
+exposes list, create, get, **review** and **cancel**; there is no accept path.
+Review requires `scheduling.manage`, and since this window
+`scheduling_service.py:3831-3841` rejects the reviewer if they are the
+requester **or** the target.
+
+So the short is now wrong twice over: it promises the partner a decision they
+cannot make, and it does so in a video whose own next line ("goes to your
+officer for approval") contradicts it.
+
+**This is the highest-stakes item in the window** — not the most wrong, but
+the only one a viewer _acts on_. A member follows the short, submits a swap,
+and waits for their partner to accept in the app. Nothing arrives, because
+nothing was ever going to. The shift comes around with the swap still pending.
+
+**Now rewritten in `08-quick-tips-and-shorts.md`** rather than left in this
+queue, per the standing rule. The replacement says the partner is notified but
+does not decide, and that the officer who signs off must be in neither seat.
+The screen direction now explicitly forbids staging a target-side
+accept/decline control. **Net +0 seconds** — absorb the extra few by trimming
+the closing tag line; the short must stay in format.
+
+**New shorts (genuine additions):**
 
 - **New short: "Finish the check in the dead spot."** Equipment checks are now
   safe to complete offline and submit on reconnect. Needs a real phone and a
@@ -120,67 +208,127 @@ folders.
   where nothing happens.
 - **Candidate short: "Which tab am I in?"** Browser tab titles. 20 seconds.
 
-### 05 / 16 — Training Officer (parts 1 and 2) · **B-roll stale, one behaviour change**
+### 05 / 16 — Training Officer (parts 1 and 2) · **WRONG — corrected in-script 2026-08-23**
 
-**The Training Admin screen looks different.** It now renders section
+> **This entry originally read "B-roll stale, one behaviour change"** and named
+> that change as prerequisite-gated credit bookkeeping. **It missed the actual
+> defect**, which is two chapters up and is the same class of error this file
+> caught one window ago in script 06's dashboard tour.
+
+`### DASHBOARD OVERVIEW (1:30 – 2:30)` in `05-training-officer-guide.md`
+narrated **two cards that no longer exist**:
+
+| Narrated                                                               | Reality                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **"Expiring Soon"** — "expiring in the next 30, 60, and 90 days"       | The widget is **Upcoming Expirations**: one fixed 90-day window, first five rows, `{days_left}d` per row. There is no 30/60/90 tiering                                                                                                                        |
+| **"Overdue Training"** — "members already past their expiration dates" | **No such card.** `training.py:197` filters `today <= expiration_date <= cutoff`, so already-expired records are excluded by the lower bound. The nearest survivor is **Members Needing Intervention**, which counts unmet requirements, not expiration dates |
+
+A presenter pointing at the screen and naming two absent cards is the worst
+kind of stale: the viewer concludes their build is broken or their permissions
+are wrong.
+
+**Both are now rewritten in `05-training-officer-guide.md`** rather than left
+in this queue, per the standing rule that no behavioural content lives only in
+SCRIPT_CURRENCY. Two further corrections were folded in while the beat was
+open: the compliance card renders as **Department Compliance** on screen (the
+Customize panel's "Compliance Overview" is a different label), and
+`expiring_records` is **unsorted** — do not say "soonest first" on camera. A
+callout was added making explicit that the expirations card looks only
+forward, so it is not an overdue list.
+
+**Chapter 2 needs a fresh take regardless** (the Training Admin rework,
+PRs #1716/#1720/#1717), so the rewrite costs nothing extra in production.
+Net **+0 to +10 seconds**.
+
+**Also, and separately:** the Training Admin screen now renders section
 descriptions and contextual actions, and its tabs were rebuilt for keyboard
 and screen-reader navigation (roving focus, arrow/Home/End, `aria-controls`).
 Any B-roll of that screen predates the change.
 
-**One behaviour change worth a line, not a chapter:** prerequisite-gated
-credit bookkeeping was corrected. A requirement locked behind a prerequisite
-no longer mis-tracks credit when the prerequisite is completed out of order.
-If either script narrates prerequisite behaviour, check the take against the
-current screen.
+**Prerequisite-gated credit bookkeeping** was corrected — a requirement locked
+behind a prerequisite no longer mis-tracks credit when the prerequisite is
+completed out of order. If either script narrates prerequisite behaviour,
+check the take against the current screen.
 
 Smaller items that affect what is on screen but need no new narration:
 action hints on **waived** requirements, the training detail visibility gate,
 category mappings that can now be cleared, and restored mobile export tap
 targets.
 
-### 12 — Elections Deep Dive · **one shooting note**
+### 12 — Elections Deep Dive · **verified clear 2026-08-23**
 
-**The ballot confirmation dialog can no longer be dismissed mid-submission**,
-and Escape no longer closes it while a vote is in flight. This is a
-deliberate guard against a half-submitted ballot.
+> **This entry originally read "one shooting note"** and asked whether the
+> script demonstrates backing out of the ballot confirmation. **It does not.**
+> Checked: there is no "you can back out here" beat anywhere in the file. Line
+> 374 already says the ballot _"submits atomically… there is no such thing as a
+> half-submitted ballot"_, which the new guard reinforces rather than
+> contradicts.
 
-If the script demonstrates "you can back out here", that beat is now wrong —
-you can back out _before_ you submit, not during. Re-check the take.
+The underlying change is real — the ballot confirmation can no longer be
+dismissed, Escape included, while a vote is in flight — but **no narration in
+script 12 needs changing.** Recorded so the next pass does not re-open it.
 
 Two fixes with no narration consequence: automatic election reminders now
 carry a working ballot link, and concurrent public ballot submissions are
 serialized.
 
-### 14 — Multi-Class Courses and Cohorts · **verify one beat**
+### 14 — Multi-Class Courses and Cohorts · **verified clear 2026-08-23**
 
-Cohort **class schedule overrides are now validated**. A cohort override that
+> **This entry originally read "verify one beat."** Verified: the string
+> "override" appears **zero times** in `14-multi-class-courses-and-cohorts.md`.
+> The script never demonstrates a cohort schedule override, so the new
+> validation cannot invalidate a take.
+
+Cohort class schedule overrides are now validated — a cohort override that
 conflicts with its parent class is rejected rather than accepted and failing
-later. If the script shows an override being entered, confirm the demo values
-still save — a take built on a previously-accepted invalid override will now
-show an error on camera.
+later. **No narration in script 14 needs changing.**
 
-### 15 — Skills Testing & Evaluations · **one correction**
+### 15 — Skills Testing & Evaluations · **WRONG — corrected in-script 2026-08-23**
 
-**Duplicating a skill template now preserves its requirement link.** The old
-behaviour dropped it, so a duplicated template no longer counted toward the
-requirement it was copied from. If the script narrates duplication as a
-shortcut, it can now say the link comes with it — and if it previously warned
-viewers to re-link by hand, **that warning is now wrong and must be cut.**
+> **The original entry here was about template duplication and was moot.**
+> Verified: the string "duplicat" appears **zero times** in
+> `15-skills-testing-evaluations.md`. There was no re-link warning to cut. The
+> duplication fix (a duplicated skill template now keeps its `requirement_id`)
+> is real but the script never narrates duplication.
+
+**What the pass missed, and what is now fixed in-script.**
+`### PRACTICE (18:45 – 20:00)` (line 583) said:
+
+> "Official tests still need `training.manage`."
+
+That is **false**, and the same file contradicts it twice — line 9 and the
+callout at line 144 ("Anyone can examine. Only an officer can validate"), and
+the whole of Chapter 3.5. `create_test` in
+`backend/app/api/v1/endpoints/skills_testing.py:1199` depends on
+`get_current_user` alone; `training.manage` sits on **`/tests/{id}/validate`**
+(line 1955), not on running a test.
+
+The line is now rewritten to say that any member can run an official test and
+that the officer's signature afterwards is what makes it count. **Roughly +10
+seconds; that beat needs a fresh take.**
+
+This sentence is not from this window — it is a leftover from the 2026-08-08
+permission change, which the script's own re-shoot notice and Production Notes
+cleaned up everywhere except here. Recorded as a window finding anyway,
+because a false permission claim in a shooting script does not become
+acceptable by being old.
 
 Also: practice skill-test seeding is idempotent, which matters only to
 whoever prepares the demo environment.
 
-### 09 / 10 / 11 — Training Pipelines · **check the prospect beats**
+### 09 / 10 / 11 — Training Pipelines · **verified clear 2026-08-23**
 
-The prospect pipeline gained event provenance: the board can be filtered by
-the event applicants came from, and the prospect API can answer "who came from
-this event". Interview stage progression retries after an update, and a
-duplicate-prospect race was fixed.
+> **This entry originally read "check the prospect beats."** Verified: the
+> string "prospect" appears **zero times** across all three files. These are
+> _training_ pipeline scripts — member progression through training phases —
+> not prospective-member pipeline scripts. The naming collision is what put
+> them on the list.
 
-If any of these scripts narrate "you can't tell where a prospect came from",
-that limitation is gone. The **Recruitment event type** (script 04, 08) is the
-front half of the same story and the two should not contradict each other on
-screen.
+The prospect pipeline did gain event provenance (the board filters by the event
+applicants came from; the API answers "who came from this event"), interview
+stage progression retries after an update, and a duplicate-prospect race was
+fixed — **but none of it touches these three scripts.** The **Recruitment event
+type** material belongs to scripts 04 and 08.
 
 ### 13 — Department Store · not affected
 
