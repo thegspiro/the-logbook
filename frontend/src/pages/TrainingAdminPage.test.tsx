@@ -151,6 +151,58 @@ describe('TrainingAdminPage', () => {
     expect(screen.getByRole('tablist', { name: 'Dashboard tabs' })).toBeInTheDocument();
   });
 
+  // Every section reachable, and every section's default destination actually
+  // renders its own child — a page whose entry is missing from TabContent's
+  // if-chain falls through to `return null` and shows an empty panel, which no
+  // single-page test would catch.
+  const sectionCases = [
+    ['dashboard', 'Dashboard', 'overview', 'Dashboard'],
+    ['records', 'Records', 'submissions', 'Review'],
+    ['setup', 'Setup', 'requirements', 'Requirements'],
+    ['skills-testing', 'Skills Testing', 'templates', 'Templates'],
+    ['enhancements', 'Program Management', 'recertification', 'Enhancements'],
+    ['compliance', 'Compliance', 'annual-report', 'Compliance Officer'],
+  ] as const;
+
+  it.each(sectionCases)(
+    'opens %s on its default destination and renders that child',
+    async (pageId, pageLabel, defaultTab, content) => {
+      const user = userEvent.setup();
+      renderWithRouter(<TrainingAdminPage />);
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Training admin section' }), pageId);
+
+      // The previous destination's mock stays mounted while the next lazy chunk
+      // resolves, so findByTestId would match the stale node and pass against
+      // the old content. Wait for the swap itself.
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
+      expect(window.location.search).toBe(`?page=${pageId}&tab=${defaultTab}`);
+      expect(screen.getByRole('combobox', { name: `${pageLabel} destination` })).toHaveValue(defaultTab);
+    }
+  );
+
+  // Switching destination within a section: the URL, the selected tab and the
+  // rendered child all have to move together.
+  const destinationCases = [
+    ['dashboard', 'Dashboard', 'Compliance Matrix', 'compliance', 'Compliance'],
+    ['records', 'Records', 'Shift Reports', 'shift-reports', 'Shift Report'],
+    ['setup', 'Setup', 'Integrations', 'integrations', 'External'],
+    ['skills-testing', 'Skills Testing', 'Test Records', 'tests', 'Records'],
+  ] as const;
+
+  it.each(destinationCases)('moves %s to its %s destination', async (pageId, pageLabel, tabLabel, tabId, content) => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', `/training/admin?page=${pageId}`);
+    renderWithRouter(<TrainingAdminPage />);
+
+    await user.click(screen.getByRole('tab', { name: tabLabel }));
+
+    await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent(content));
+    expect(window.location.search).toBe(`?page=${pageId}&tab=${tabId}`);
+    expect(screen.getByRole('tab', { name: tabLabel })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('combobox', { name: `${pageLabel} destination` })).toHaveValue(tabId);
+  });
+
   it('updates the section description and actions after navigation', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
