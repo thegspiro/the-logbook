@@ -715,10 +715,42 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(shift)
+            await self.apply_standing_claims(organization_id, [shift])
             return shift, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def apply_standing_claims(
+        self, organization_id: UUID, shifts: List[Shift]
+    ) -> int:
+        """Seat members whose standing claims match newly created shifts.
+
+        This is the reader that makes a standing shift more than a stored
+        preference: without it a member's series would go quiet the moment the
+        department generated the next month's schedule — the very month they
+        set it up for.
+
+        Runs after the shifts are committed and swallows its own failures. A
+        claim that cannot be honoured leaves a seat open on a roster an
+        officer can see; a claim that raised here would instead lose the whole
+        generation run that has already been written.
+        """
+        if not shifts:
+            return 0
+        try:
+            from app.services.standing_shift_service import StandingShiftService
+
+            service = StandingShiftService(self.db)
+            seated = 0
+            for shift in shifts:
+                seated += await service.apply_to_shift(
+                    organization_id, shift, self.create_assignment
+                )
+            return seated
+        except Exception as exc:
+            logger.warning("Standing shift claims could not be applied: {}", exc)
+            return 0
 
     async def get_shifts(
         self,
@@ -2550,6 +2582,8 @@ class SchedulingService:
             for shift in created_shifts:
                 await self.db.refresh(shift)
 
+            await self.apply_standing_claims(organization_id, created_shifts)
+
             self.last_generation_warnings = skipped_drivers
             return created_shifts, None
         except Exception as e:
@@ -4050,6 +4084,181 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def expire_stale_swap_offers(
+        self,
+        organization_id: UUID,
+        today: Optional[date] = None,
+    ) -> int:
+        """Close out offers nobody accepted before the shift came round.
+
+        An offer holds the seat with the member who made it: they stay on the
+        roster until someone accepts. Left pending, that arrangement quietly
+        survives the shift itself — the offerer believes they are covered, the
+        duty officer sees a name that will not turn up, and nobody is told.
+
+        The cutoff is the day before the shift, which is the last point at
+        which the department can still fill the seat a different way. Both
+        parties and the duty officer are notified, because the whole value of
+        expiring the offer is that somebody now knows.
+        """
+        cutoff = (today or date.today()) + timedelta(days=1)
+        result = await self.db.execute(
+            select(ShiftSwapRequest, Shift)
+            .join(Shift, ShiftSwapRequest.offering_shift_id == Shift.id)
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
+            .where(ShiftSwapRequest.status == SwapRequestStatus.PENDING)
+            .where(Shift.shift_date <= cutoff)
+        )
+        rows = result.all()
+        if not rows:
+            return 0
+
+        for swap_request, shift in rows:
+            swap_request.status = SwapRequestStatus.CANCELLED
+            swap_request.reviewer_notes = (
+                "Expired automatically — nobody accepted before the shift."
+            )
+            await self._notify_swap_expired(organization_id, swap_request, shift)
+
+        await self.db.commit()
+        return len(rows)
+
+    async def _notify_swap_expired(
+        self,
+        organization_id: UUID,
+        swap_request: ShiftSwapRequest,
+        shift: Shift,
+    ) -> None:
+        """Tell the offerer, the member they asked, and the duty officer.
+
+        Email-first, per the notification policy: the in-app entry is an
+        addition to the mail, never a substitute for it. Failures here are
+        logged rather than raised — an unsent notice must not roll back the
+        expiry itself, which is the part that keeps the roster honest.
+        """
+        from app.models.notification import NotificationChannel
+
+        shift_date_str = (
+            shift.shift_date.strftime("%b %d, %Y") if shift.shift_date else "the shift"
+        )
+        recipients: List[Tuple[str, str, str]] = []
+
+        if swap_request.requesting_user_id:
+            recipients.append(
+                (
+                    str(swap_request.requesting_user_id),
+                    f"Your {shift_date_str} shift is still yours",
+                    (
+                        f"Nobody accepted your offer to cover {shift_date_str}, "
+                        f"so the shift stays on your roster. The duty officer "
+                        f"has been notified."
+                    ),
+                )
+            )
+        if swap_request.target_user_id:
+            recipients.append(
+                (
+                    str(swap_request.target_user_id),
+                    f"Shift offer for {shift_date_str} expired",
+                    (
+                        f"The offer to cover the {shift_date_str} shift expired "
+                        f"before you responded. No action is needed."
+                    ),
+                )
+            )
+        if shift.shift_officer_id:
+            recipients.append(
+                (
+                    str(shift.shift_officer_id),
+                    f"Unaccepted shift offer for {shift_date_str}",
+                    (
+                        f"A member's offer to give up their seat on "
+                        f"{shift_date_str} expired unaccepted. They remain on "
+                        f"the roster."
+                    ),
+                )
+            )
+
+        seen: set[str] = set()
+        for recipient_id, subject, message in recipients:
+            if recipient_id in seen:
+                continue
+            seen.add(recipient_id)
+            try:
+                self.db.add(
+                    NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=str(organization_id),
+                        recipient_id=recipient_id,
+                        channel=NotificationChannel.IN_APP,
+                        category="shift_swap_expired",
+                        subject=subject,
+                        message=message,
+                        action_url="/scheduling?tab=requests",
+                        notification_metadata={
+                            "shift_id": str(shift.id),
+                            "swap_request_id": str(swap_request.id),
+                        },
+                        delivered=True,
+                    )
+                )
+                await self._email_swap_expiry(
+                    organization_id, recipient_id, subject, message
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Swap expiry notice for {} could not be sent: {}",
+                    recipient_id,
+                    exc,
+                )
+
+    async def _email_swap_expiry(
+        self,
+        organization_id: UUID,
+        recipient_id: str,
+        subject: str,
+        message: str,
+    ) -> None:
+        """The channel of record for an expired offer."""
+        import html as _html
+
+        from app.core.config import settings
+        from app.services.email_service import EmailService, wrap_email_body
+
+        user = (
+            await self.db.execute(select(User).where(User.id == recipient_id))
+        ).scalar_one_or_none()
+        if not user or not user.email:
+            return
+        if not (user.notification_preferences or {}).get("email_notifications", True):
+            return
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not org:
+            return
+
+        url = f"{settings.FRONTEND_URL}/scheduling?tab=requests"
+        html_body = wrap_email_body(
+            org,
+            subject,
+            f"<p>Hello {_html.escape(user.first_name or '')},</p>"
+            f"<p>{_html.escape(message)}</p>"
+            f'<p style="text-align: center;">'
+            f'<a href="{_html.escape(url)}" class="button" role="link">'
+            f"Open scheduling</a></p>",
+        )
+        await EmailService(organization=org).send_email(
+            to_emails=[user.email],
+            subject=subject,
+            html_body=html_body,
+            text_body=f"{message}\n\nOpen scheduling: {url}\n",
+            db=self.db,
+        )
+
     # ============================================
     # Time-Off Management
     # ============================================
@@ -4604,6 +4813,134 @@ class SchedulingService:
                     unavailable.add(str(uid))
 
         return sorted(unavailable)
+
+    async def get_trade_candidates(
+        self,
+        organization_id: UUID,
+        shift_id: UUID,
+        offering_user_id: UUID,
+        position: str,
+    ) -> List[Dict[str, Any]]:
+        """Members who could take over ``offering_user_id``'s seat on a shift.
+
+        Three exclusions, all of them about not sending an offer that cannot
+        be accepted:
+
+        * already on this shift, on leave, or on approved time off — the seat
+          would be double-booked or refused (``get_unavailable_user_ids``);
+        * not cleared for the seat's position — the signup endpoint would
+          reject the acceptance with a 403 anyway;
+        * already rostered on a shift that overlaps or abuts this one — a
+          department that runs 12-hour shifts does not want an accepted trade
+          to silently produce a 24-hour tour.
+
+        Each candidate carries the month's shift count and whether they owe
+        the offerer a trade, so the picker can rank by who is least loaded
+        rather than alphabetically.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return []
+
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        roster = await ShiftEligibilityService(self.db).get_position_roster(
+            str(organization_id), position
+        )
+        candidates = {
+            str(m["user_id"]): m
+            for m in roster.get("members", [])
+            if str(m["user_id"]) != str(offering_user_id)
+        }
+        if not candidates:
+            return []
+
+        for uid in await self.get_unavailable_user_ids(organization_id, shift_id):
+            candidates.pop(str(uid), None)
+        if not candidates:
+            return []
+
+        # Abutting counts as a conflict, not just overlapping: a night shift
+        # that starts the minute the day shift ends is exactly the back-to-back
+        # tour this is meant to catch. An hour of slack on each side absorbs
+        # the small gaps departments leave between tours.
+        margin = timedelta(hours=1)
+        busy_result = await self.db.execute(
+            select(ShiftAssignment.user_id)
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(ShiftAssignment.shift_id != str(shift_id))
+            .where(
+                ShiftAssignment.assignment_status.in_(
+                    [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+                )
+            )
+            .where(Shift.status != ShiftStatus.CANCELLED)
+            .where(Shift.start_time < (shift.end_time or shift.start_time) + margin)
+            .where(
+                func.coalesce(Shift.end_time, Shift.start_time)
+                > shift.start_time - margin
+            )
+        )
+        for uid in busy_result.scalars().all():
+            candidates.pop(str(uid), None)
+        if not candidates:
+            return []
+
+        user_ids = list(candidates.keys())
+
+        # Shift load for the month the offered shift falls in — the figure the
+        # picker shows next to each name.
+        month_start = shift.shift_date.replace(day=1)
+        month_end = date(
+            month_start.year + (1 if month_start.month == 12 else 0),
+            1 if month_start.month == 12 else month_start.month + 1,
+            1,
+        ) - timedelta(days=1)
+        load_result = await self.db.execute(
+            select(ShiftAssignment.user_id, func.count(ShiftAssignment.id))
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(ShiftAssignment.user_id.in_(user_ids))
+            .where(
+                ShiftAssignment.assignment_status.in_(
+                    [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+                )
+            )
+            .where(Shift.shift_date >= month_start)
+            .where(Shift.shift_date <= month_end)
+            .group_by(ShiftAssignment.user_id)
+        )
+        month_load = {str(row[0]): row[1] for row in load_result.all()}
+
+        # "Owes you a trade": the offerer previously took a seat this member
+        # gave up, via an approved swap the member initiated.
+        owed_result = await self.db.execute(
+            select(ShiftSwapRequest.requesting_user_id).where(
+                ShiftSwapRequest.organization_id == str(organization_id),
+                ShiftSwapRequest.target_user_id == str(offering_user_id),
+                ShiftSwapRequest.requesting_user_id.in_(user_ids),
+                ShiftSwapRequest.status == SwapRequestStatus.APPROVED,
+            )
+        )
+        owes_trade = {str(uid) for uid in owed_result.scalars().all() if uid}
+
+        results = [
+            {
+                "user_id": uid,
+                "user_name": member.get("user_name"),
+                "rank": member.get("rank"),
+                "rank_display_name": member.get("rank_display_name"),
+                "position": position,
+                "shifts_this_month": month_load.get(uid, 0),
+                "owes_trade": uid in owes_trade,
+            }
+            for uid, member in candidates.items()
+        ]
+        # Least-loaded first: the point of the list is spreading the work, and
+        # a name near the top is the one most likely to be picked.
+        results.sort(key=lambda m: (m["shifts_this_month"], m["user_name"] or ""))
+        return results
 
     # ============================================
     # Reporting

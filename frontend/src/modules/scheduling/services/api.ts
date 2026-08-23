@@ -59,6 +59,12 @@ import type {
   ShiftCallRecord,
   ShiftCallCreate,
   ShiftCallUpdate,
+  TradeCandidate,
+  StandingShiftClaim,
+  StandingShiftCreate,
+  StandingShiftCreateResult,
+  StandingShiftPreview,
+  StandingShiftPreviewParams,
 } from '../types';
 import type {
   EquipmentCheckTemplate,
@@ -102,6 +108,22 @@ export interface PositionSlot {
   required: boolean;
 }
 
+/**
+ * One occupied seat on a shift, carried on every shift the calendar fetches.
+ *
+ * The month fetch returns these so the day panel can render "who is on this
+ * shift" without a request per day, and so a calendar cell can be coloured by
+ * "you are on it" at all.
+ */
+export interface ShiftRosterSeat {
+  assignment_id: string;
+  user_id: string;
+  user_name?: string | null;
+  position?: string | null;
+  status?: string | null;
+  is_training?: boolean;
+}
+
 export interface ShiftRecord {
   id: string;
   organization_id: string;
@@ -124,6 +146,8 @@ export interface ShiftRecord {
   activities?: unknown;
   open_to_all_members?: boolean;
   attendee_count: number;
+  /** Occupied seats. Empty on responses served before the roster existed. */
+  roster?: ShiftRosterSeat[];
   call_count: number;
   total_hours?: number | null;
   is_finalized: boolean;
@@ -787,6 +811,45 @@ export const schedulingService = {
   },
   async withdrawSignup(shiftId: string): Promise<void> {
     await api.delete(`/scheduling/shifts/${shiftId}/signup`);
+  },
+
+  /** Members who could take over the caller's seat on a shift. */
+  async getTradeCandidates(shiftId: string): Promise<TradeCandidate[]> {
+    const response = await api.get<TradeCandidate[]>(`/scheduling/shifts/${shiftId}/trade-candidates`);
+    return asArray(response.data);
+  },
+
+  /** The caller's standing series this shift belongs to, or null. */
+  async getStandingClaimForShift(shiftId: string): Promise<StandingShiftClaim | null> {
+    const response = await api.get<StandingShiftClaim | null>(`/scheduling/shifts/${shiftId}/standing-claim`);
+    return response.data ?? null;
+  },
+
+  // --- Standing Shifts (recurring self-signup) ---
+  async getStandingShifts(activeOnly = true): Promise<StandingShiftClaim[]> {
+    const response = await api.get<StandingShiftClaim[]>('/scheduling/standing-shifts', {
+      params: { active_only: activeOnly },
+    });
+    return asArray(response.data);
+  },
+  async previewStandingShift(params: StandingShiftPreviewParams): Promise<StandingShiftPreview> {
+    const response = await api.get<StandingShiftPreview>('/scheduling/standing-shifts/preview', { params });
+    return { ...response.data, dates: asArray(response.data?.dates) };
+  },
+  async createStandingShift(data: StandingShiftCreate): Promise<StandingShiftCreateResult> {
+    const response = await api.post<StandingShiftCreateResult>('/scheduling/standing-shifts', data);
+    return response.data;
+  },
+  /**
+   * End a series. `releaseFuture` also gives up the dates not yet worked —
+   * off by default, because ending a series and emptying seats a duty officer
+   * has already counted on are separate decisions.
+   */
+  async endStandingShift(claimId: string, releaseFuture = false): Promise<{ released: number }> {
+    const response = await api.delete<{ released: number }>(`/scheduling/standing-shifts/${claimId}`, {
+      params: { release_future: releaseFuture },
+    });
+    return response.data;
   },
 
   // --- Open Shifts ---

@@ -167,6 +167,16 @@ SCHEDULE = {
         "recommended_time": "04:00",
         "cron": "0 4 * * *",
     },
+    "swap_offer_expiry": {
+        "description": (
+            "Expire shift-swap offers nobody accepted by the day before the "
+            "shift, and tell both members and the duty officer that the seat "
+            "is still the offerer's"
+        ),
+        "frequency": "daily",
+        "recommended_time": "05:30",
+        "cron": "30 5 * * *",
+    },
     "officer_directory_sync": {
         "description": "Refresh each organization's cached office directory so email signature variables ({{president_name}}, {{chief_title}}, ...) follow member record changes",
         "frequency": "daily",
@@ -656,6 +666,22 @@ async def run_shift_pattern_generation(db: AsyncSession) -> Dict[str, Any]:
         return await service.auto_generate_shifts_for_org(org.id, weeks)
 
     return await _for_each_org(db, "shift_pattern_generation", _process)
+
+
+async def run_swap_offer_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """Close out shift-swap offers that ran out of time.
+
+    A pending offer holds the seat with the member who made it. Without this
+    sweep the arrangement survives the shift itself: the offerer believes they
+    are covered, the duty officer sees a name that will not turn up, and
+    nothing tells either of them otherwise.
+    """
+    from app.services.scheduling_service import SchedulingService
+
+    async def _process(db_session, org):
+        return await SchedulingService(db_session).expire_stale_swap_offers(org.id)
+
+    return await _for_each_org(db, "swap_offer_expiry", _process)
 
 
 async def run_recert_resets(db: AsyncSession) -> Dict[str, Any]:
@@ -5096,6 +5122,7 @@ TASK_RUNNERS = {
     "expire_ip_exceptions": run_expire_ip_exceptions,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "shift_pattern_generation": run_shift_pattern_generation,
+    "swap_offer_expiry": run_swap_offer_expiry,
     "officer_directory_sync": run_officer_directory_sync,
 }
 
@@ -5144,6 +5171,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "recert_resets": 86400,
     "enrollment_expiry": 86400,
     "shift_pattern_generation": 86400,
+    "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,
     # Weekly
     "struggling_member_check": 604800,
