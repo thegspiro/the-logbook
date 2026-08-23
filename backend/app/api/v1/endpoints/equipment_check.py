@@ -894,6 +894,29 @@ async def get_last_check_results(
     )
 
 
+@router.get("/templates/{template_id}/last-seals")
+async def get_last_check_seals(
+    template_id: str,
+    apparatus_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    # EC-7: view OR submit, matching last-results — the same crew reads both.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
+):
+    """Get the seal each sealed container carried at the last completed check.
+
+    Keyed by compartment id. The check form compares the number the previous
+    crew recorded against the one in front of this crew: equal means the bag
+    has not been opened since it was counted, which is what lets the seal
+    clear the contents count in one tap.
+    """
+    service = EquipmentCheckService(db)
+    return await service.get_last_check_seals(
+        template_id, current_user.organization_id, apparatus_id
+    )
+
+
 # =====================================================================
 # My Checklists (Member Page)
 # =====================================================================

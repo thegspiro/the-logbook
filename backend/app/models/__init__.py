@@ -11,6 +11,7 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
     EventHourMapping,
 )
+from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
 from app.models.analytics import AnalyticsEvent
 from app.models.apparatus import (
     Apparatus,
@@ -331,6 +332,7 @@ from app.models.training import (
     ShiftCall,
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
+    ShiftEquipmentCheckSeal,
     SkillCheckoff,
     SkillEvaluation,
     TrainingApproval,
@@ -358,6 +360,9 @@ __all__ = [
     "AdminHoursEntry",
     "AdminHoursEntryMethod",
     "AdminHoursEntryStatus",
+    # Admin hub models
+    "AdminHubMetricPreference",
+    "DEPARTMENT_SCOPE",
     # User models
     "Organization",
     "User",
@@ -511,6 +516,7 @@ __all__ = [
     # Shift equipment check models
     "ShiftEquipmentCheck",
     "ShiftEquipmentCheckItem",
+    "ShiftEquipmentCheckSeal",
     # Scheduling module config
     "SchedulingModuleConfig",
     # Security alert models

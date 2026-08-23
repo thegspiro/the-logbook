@@ -4350,6 +4350,11 @@ class ShiftEquipmentCheck(Base):
         back_populates="check",
         cascade="all, delete-orphan",
     )
+    seals = relationship(
+        "ShiftEquipmentCheckSeal",
+        back_populates="check",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -4443,3 +4448,56 @@ class ShiftEquipmentCheckItem(Base):
         Index("idx_shift_equip_check_item_check", "check_id"),
         Index("idx_shift_equip_check_item_tmpl", "template_item_id"),
     )
+
+
+class ShiftEquipmentCheckSeal(Base):
+    """
+    The tamper seal a crew read on one sealed container during a check.
+
+    A seal that still carries the number from the last count is proof nobody
+    opened the bag, which is why confirming it clears the contents count in a
+    tap. The record is what makes that claim auditable afterwards: the number
+    read, whether it was intact, and how many positions the crew therefore did
+    not count by hand. Without those, a cleared bag is indistinguishable from
+    one nobody looked at.
+
+    The compartment name is snapshotted for the same reason item results are:
+    the template may be renamed or restructured, and the record has to keep
+    saying which bag was sealed.
+    """
+
+    __tablename__ = "shift_equipment_check_seals"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    check_id = Column(
+        String(36),
+        ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    template_compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Full nested storage paths may exceed the per-compartment name limit.
+    compartment_name = Column(Text, nullable=False)
+    seal_number = Column(String(100), nullable=True)
+    intact = Column(Boolean, default=True, nullable=False, server_default="1")
+    #: Positions the seal cleared rather than the crew counting them.
+    cleared_item_count = Column(Integer, nullable=False, default=0, server_default="0")
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    check = relationship("ShiftEquipmentCheck", back_populates="seals")
+
+    __table_args__ = (
+        Index("idx_shift_equip_check_seal_check", "check_id"),
+        Index("idx_shift_equip_check_seal_compartment", "template_compartment_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ShiftEquipmentCheckSeal(compartment={self.compartment_name}, "
+            f"intact={self.intact})>"
+        )
