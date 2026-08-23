@@ -108,6 +108,7 @@ opens.
 NFC tag**, and hold a blank tag to the back of the phone.
 
 > **[SCREENSHOT NEEDED — `/events/:id/qr-code` with the "Write to an NFC tag"
+>
 > > control visible beneath the QR code, mid-write, showing the "hold a tag to
 > > your phone" state]**
 
@@ -116,6 +117,7 @@ itself. With the app already open on screen, Android does _not_ hand the tag
 off — so use **Tap Tag** on the Events page instead.
 
 > **[SCREENSHOT NEEDED — the Events page with Tap Tag pressed and the scan
+>
 > > armed, waiting for a tag]**
 
 **Requirements: Chrome on Android, over HTTPS.** Web NFC exists nowhere else —
@@ -134,6 +136,7 @@ else leaves the scan waiting and says so, rather than sending you somewhere you
 did not intend to go.
 
 > **[SCREENSHOT NEEDED — Tap Tag after reading an unrecognized tag: the
+>
 > > explanatory message with the scan still armed. This is the security
 > > behaviour and a reader will not believe it without seeing it]**
 
@@ -1075,7 +1078,7 @@ Events support three check-in window modes that control when QR and manual check
 ## Troubleshooting
 
 | Issue                                                      | Solution                                                                                                                                                                                                                                                                                                                                  |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------------------------- |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | QR code not scanning                                       | Ensure good lighting and that the code is displayed at a readable size. Try the manual check-in option.                                                                                                                                                                                                                                   |
 | "Already checked in" error                                 | The member has already checked in. Use the monitoring view to verify or override times.                                                                                                                                                                                                                                                   |
 | Cannot RSVP to an event                                    | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to.                                                                                                                                                                                                                                 |
@@ -1105,7 +1108,7 @@ Events support three check-in window modes that control when QR and manual check
 | Recurring event dates seem wrong                           | Monthly-by-weekday events with "5th week" fall back to last occurrence. Annual Feb 29 events shift to Feb 28 in non-leap years. These are expected behaviors.                                                                                                                                                                             |
 | Custom categories sent as strings cause 422                | Fixed 2026-03-12 — schema now accepts objects (`{id, label, color}`). Existing string-format categories auto-migrate on next save.                                                                                                                                                                                                        |
 | Settings changes not persisting                            | Fixed 2026-03-12 — SQLAlchemy JSON column shallow copy issue. Pull latest to get `deepcopy()` fix.                                                                                                                                                                                                                                        |
-| Event form sending empty strings causes 422                | Fixed 2026-03-12 — `??` replaced with `                                                                                                                                                                                                                                                                                                   |     | `for all optional form fields to coerce empty strings to`undefined`. |
+| Event form sending empty strings causes 422                | Fixed 2026-03-12 — `??` replaced with `\|\|` for all optional form fields, to coerce empty strings to `undefined`.                                                                                                                                                                                                                        |
 | Calendar view not showing events                           | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter.                                                                                                                                                                            |
 | Analytics page shows no data                               | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window.                                                                                                                                                             |
 | Template picker shows no templates                         | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden.                                                                                                                                                                                       |
@@ -1597,6 +1600,7 @@ The event page now also shows the applicants an event brought in, and the
 pipeline board can be filtered by the event applicants came from.
 
 > **[SCREENSHOT NEEDED — an event detail page showing its linked prospects.
+>
 > > Seed a recruitment event with at least three guest sign-ins converted to
 > > prospects, so the list reads as a result rather than a single row.]**
 

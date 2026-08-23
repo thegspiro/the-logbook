@@ -15,9 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permission.** `GET /dashboard/widgets` (with `period` of `month`,
   `quarter`, `year` or `rolling_30`), `GET /dashboard/operations`, and
   `GET /dashboard/asset-widgets`. Every section is gated independently, and
-  **a section the caller cannot see is omitted rather than emptied** — an
-  absent section is deliberately indistinguishable from one with no data, so
-  the dashboard cannot be used to probe for access.
+  the three endpoints **do not behave identically**, and the difference
+  matters to an integrator: `/dashboard/operations` and `/dashboard/asset-widgets`
+  **omit** sections the caller cannot see, while `/dashboard/widgets`
+  explicitly serializes `finance`, `fundraising` and `community` as **`null`**.
+  Only `/dashboard/operations` checks module **and** permission for every
+  section; `/dashboard/widgets` module-gates only `fundraising` (`grants`), and
+  `/dashboard/asset-widgets` is permission-only.
 - `settings.manage` is **intentionally not financial access**: organization
   monetary totals require `finance.manage`, fundraising totals require
   `fundraising.view` plus the `grants` module, and outreach totals require
@@ -82,14 +86,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   enforced server-side — the client no longer supplies its own timing value.
 - Compartment parents are cycle-checked, so a compartment can no longer be
   made its own ancestor.
-- `check_items.compartment_path` widened from `VARCHAR(200)` to `TEXT`, which
+- `shift_equipment_check_items.compartment_name` widened from `VARCHAR(200)` to `TEXT`, which
   is what allows full nested storage paths in item snapshots.
 
 **Changed**
 
-- Standalone (non-shift) equipment checks now require `equipment_check.manage`.
-- Expired-equipment failures are **derived** rather than stored, so a lot that
-  expires after a check was recorded is reflected without rewriting history.
+- Standalone (non-shift) equipment checks accept `equipment_check.submit` **or**
+  `equipment_check.manage`; submitting is not a manager-only right.
+- Expired-equipment failures are **derived from authoritative inventory at
+  submission** rather than trusting the client's asserted flag, then stored
+  with the check. A lot expiring later does not retroactively fail an earlier
+  check — the record stands as taken.
 - Shift lot details are inventory-owned rather than duplicated onto the check.
 
 **Migration note**
@@ -123,8 +130,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from procedure.
 - New table `legal_document_revisions` with `document_type`
   (`privacy_policy` | `terms_of_service`) and `status` (`draft` |
-  `published` | `archived`). At most one `published` revision per document
-  type per organization.
+  `published` | `archived`). Publishing archives the previous published row,
+  so in practice one `published` revision per document type per organization —
+  though the index is non-unique, so this is a service convention rather than a
+  database guarantee.
 - `change_note` is **required at the schema layer**. The whole point of
   proposing rather than editing in place is that somebody later can see the
   bylaw, SOP, statute or counsel note behind the wording.
@@ -314,9 +323,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Notes**
 
-- **`1eeb053d59b7` is not reversible.** It expands a legacy `count` into that
-  many seats, which is the point: collapsing it would cut a three-firefighter
-  template to one, permanently.
+- **`1eeb053d59b7` does not reverse the normalization.** It expands a legacy
+  `count` into that many seats, and its `downgrade()` is a deliberate **no-op**
+  — the original `count` cannot be recovered from the expanded seats, so it
+  leaves the normalized array in place rather than guessing. **Downgrading
+  destroys no data**; it simply does not undo the change, and both old and new
+  readers understand the stored shape.
 - The four normalizers are deliberate and must not be collapsed into one —
   see [pitfall #20](CLAUDE.md). Saving the _display_ normalizer's output
   turns an event template's resources into a flat seat list and loses the
@@ -10064,7 +10076,7 @@ Large-page components decomposed into focused, maintainable sub-components:
 **Edge Cases:**
 
 | Scenario                                      | Behavior                                                                         |
-| --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
+| --------------------------------------------- | -------------------------------------------------------------------------------- |
 | Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
 | Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
 | Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |

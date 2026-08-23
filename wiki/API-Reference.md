@@ -294,9 +294,20 @@ POST   /api/v1/legal-documents/{document_type}/revert-to-default
 ## Dashboard Widgets _(2026-08-23)_
 
 Three aggregate endpoints for the dashboard. All authenticate as the current
-user; **each section is gated independently by module and permission**, and a
-section the caller cannot see is **omitted rather than returned empty** — the
-response cannot be used to probe for access.
+user and authorize each section independently, but **they do not all behave the
+same way** — do not generalize from one to the others:
+
+| Endpoint                   | Unauthorized section is…    | Module-gated?                                                            |
+| -------------------------- | --------------------------- | ------------------------------------------------------------------------ |
+| `/dashboard/widgets`       | **`null`** in the response  | Only `fundraising` (`grants`). Finance and community are permission-only |
+| `/dashboard/operations`    | **omitted** from `sections` | Yes — every section checks module **and** permission                     |
+| `/dashboard/asset-widgets` | **omitted** from `widgets`  | No — permission-only                                                     |
+
+Only `/dashboard/operations` combines module and permission checks throughout,
+and only the two list-based responses omit what the caller cannot see.
+`/dashboard/widgets` explicitly serializes `finance`, `fundraising` and
+`community` as `null`, so **an integrator can tell the difference between "no
+access" and "no data" on that endpoint** — the other two are opaque.
 
 ```
 GET /api/v1/dashboard/widgets?period=month|quarter|year|rolling_30
@@ -313,7 +324,9 @@ GET /api/v1/dashboard/asset-widgets
 | `community`   | `events.manage`                            |
 
 `settings.manage` is **intentionally not financial access.** Any of the three
-sections may be `null`.
+sections may be `null` — and `null` here means "you may not see this", which is
+**not** distinguishable from an empty period only because the sections that do
+have data are never `null`. Treat `null` as unauthorized.
 
 ### `/dashboard/operations`
 
@@ -332,9 +345,11 @@ UTC if it is unset or unrecognized.
 ### `/dashboard/asset-widgets`
 
 Returns **counts and fixed links only** for Inventory, Apparatus and
-Facilities, each authorized independently — managing inventory does not reveal
-apparatus or facilities. Protected facility fields (codes, accounts, budgets,
-leases) are deliberately not reachable through this endpoint.
+Facilities, gated on `inventory.view`, `apparatus.view` and `facilities.view`
+respectively — **permission-only; there is no module check here.** Each is
+authorized independently, so managing inventory does not reveal apparatus or
+facilities. Protected facility fields (codes, accounts, budgets, leases) are
+deliberately not reachable through this endpoint.
 
 ---
 
@@ -369,7 +384,8 @@ Shift equipment-check submissions are now atomic and safe to retry.
 - **Bulk item creation is keyed on `(compartment_id, idempotency_key)`** with a
   stored `payload_hash`. Same key + same payload replays the original
   `item_ids`; **same key + different payload is rejected.**
-- Standalone (non-shift) checks require `equipment_check.manage`.
+- Standalone (non-shift) checks require `equipment_check.submit` **or**
+  `equipment_check.manage` — submitting is not a manager-only right.
 - Check timing is enforced server-side — the client no longer supplies it.
 - Compartment parents are cycle-checked.
 

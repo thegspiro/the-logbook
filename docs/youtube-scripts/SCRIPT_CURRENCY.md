@@ -59,12 +59,21 @@ Nothing in script 03 needs unsaying. What it lacks is any statement of what
 this release's migrations cost if an operator reaches for a downgrade — and
 its audience is exactly the person who would.
 
-**1. The seat-list migration cannot be reversed.** `1eeb053d59b7` expands a
-legacy crew `count` into that many individual seats. Downgrading collapses
-them — a three-firefighter template comes back as one, permanently, with no
-migration that restores it.
+**1. The seat-list migration does not reverse.** `1eeb053d59b7` expands a
+legacy crew `count` into that many individual seats, and its `downgrade()` is a
+deliberate **no-op** — the original count cannot be recovered from the expanded
+seats, so it leaves them in place rather than guessing. **Downgrading destroys
+nothing here**; it simply does not put the old shape back.
 
-**2. Downgrading past both `compartment_path` migrations truncates storage
+> **Corrected 2026-08-23.** This entry first said downgrading "collapses them —
+> a three-firefighter template comes back as one, permanently." That is wrong:
+> `downgrade()` is literally `"""No-op — see the module docstring."""`, so no
+> seat is lost. The claim was caught by a review bot on PR #1730 after being
+> propagated into the audit, changelog, wiki and training lesson. **Do not
+> record the data-loss version** — it would have an IT manager tearing down a
+> restore over damage that cannot occur.
+
+**2. Downgrading past both `compartment_name` migrations truncates storage
 paths.** The column was widened to hold deep nested paths; the downgrade
 narrows it back to 200 characters, cutting whatever no longer fits.
 
@@ -75,9 +84,10 @@ downgrade. Item snapshots survive; the association does not.
 
 The line to add, immediately after the existing backup instruction:
 
-> "Take the backup. On this release the backup **is** your rollback — two of
-> these migrations don't reverse cleanly, and one of them will quietly turn a
-> three-seat template into a one-seat template if you try."
+> "Take the backup — and know what it's for. Two of these migrations don't
+> reverse cleanly. Nothing gets destroyed if you downgrade, but you won't get
+> the old shape back either, so the backup is the only thing that returns you
+> to where you started."
 
 **Script 01 needs the same sentence.** Its
 `## AUGUST 14 RELEASE INSERT — TLS AND SAFE UPGRADES` (line 621) is the

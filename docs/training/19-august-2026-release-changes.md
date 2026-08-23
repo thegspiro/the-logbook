@@ -421,6 +421,7 @@ calendar. Android only hands a tag to the browser when the app is _not_ in the
 foreground, which is the gap Tap Tag fills.
 
 > **[SCREENSHOT NEEDED — the admin hours category QR page with the NFC tag
+>
 > > writer beside the QR code]**
 
 **Requirements: Chrome on Android, over HTTPS.** Not iPhone, not desktop, not a
@@ -466,7 +467,8 @@ defaults silently, which is how production ends up running a development
 setting with nothing on screen to say so.
 
 > **[SCREENSHOT NEEDED — two terminal captures side by side: `python -m
-> app.preflight` exiting 0 on a good configuration, and exiting 1 on a broken
+app.preflight` exiting 0 on a good configuration, and exiting 1 on a broken
+>
 > > one with the blocking items listed]**
 
 ## Sign-in hardening
@@ -492,6 +494,7 @@ platform, controls member data**. The print layouts were rebuilt and both pages
 went through an accessibility pass.
 
 > **[SCREENSHOT NEEDED — the rewritten `/privacy` page header showing the
+>
 > > department-control statement above the fold]**
 
 ## Upgrade notes for administrators (August 17–19)
@@ -527,6 +530,7 @@ written for the platform does not describe what your department actually does
 with member data.
 
 > **[SCREENSHOT NEEDED — Governance → Legal Documents landing view, showing
+>
 > > both document cards (Privacy Notice and Terms of Service) with their current
 > > published status and "Last updated" line. Seed one published revision and one
 > > draft so the status difference is visible. Use a demo department name.]**
@@ -546,6 +550,7 @@ that from the permissions. A department that does not want the ceremony gives
 one person `settings.manage`.
 
 > **[SCREENSHOT NEEDED — the revision editor with the body text area, the
+>
 > > required "change note" field visibly filled in, and the "Last updated" free
 > > text field. Capture under an account holding only `legal.propose`, so the
 > > Publish control is absent — that absence is the point of the shot.]**
@@ -563,8 +568,13 @@ Anything. It is free text and is never interpreted — `March 3, 2026`,
 `FY26-Q1`, `Adopted at the 3/3/26 business meeting` all work, and all display
 exactly as typed. Date it the way your records officer dates things.
 
-**Clearing it works.** Empty the box and save, and it is genuinely cleared —
-not silently kept.
+**Clearing it is not the whole story.** Emptying the box does clear the field
+on that revision — but **the public page keeps whatever date it had.** One
+"Last updated" line is shared by both `/privacy` and `/terms` in the
+organization's settings, and publishing only ever _sets_ it, never removes it.
+That is deliberate: reverting your terms must not blank the date shown above a
+privacy notice that is still published. **To change what the public sees, put a
+new date in — clearing the box will not blank it.**
 
 ### Edge cases worth knowing
 
@@ -584,6 +594,7 @@ not silently kept.
   chase anyone.
 
 > **[SCREENSHOT NEEDED — the revision history for one document showing a
+>
 > > published revision and at least one archived revision with its change note
 > > and the member who published it. Seed three revisions so the archive is
 > > visibly a history rather than a single row.]**
@@ -605,11 +616,14 @@ small combination department the officer asking for Saturday off is very often
 the only person who can approve it. That is precisely the situation the rule
 exists for — a permission grant is not a second person.
 
-> **[SCREENSHOT NEEDED — the Requests tab under an account that raised one of
-> > the listed requests, showing the rejection message "Requesters cannot review
-> > their own swap requests". Seed at least one request raised by the
-> > screenshotting account and one raised by somebody else, so the difference in
-> > available actions is visible side by side.]**
+> **[SCREENSHOT NEEDED — the error state after a self-review attempt. Sign in
+> as the member who raised a pending swap, click **Approve** on their own
+> request, and capture the resulting error ("Requesters cannot review their own
+> swap requests") with the request still showing as pending behind it.
+> _Important:_ do **not** try to capture a difference in available controls —
+> `RequestsTab` renders Approve/Deny on every pending request whenever the
+> viewer has `scheduling.manage`, including their own, so the rows look
+> identical until the button is pressed. The error **is** the screenshot.]**
 
 ### Edge cases
 
@@ -634,6 +648,7 @@ list rather than a plain list. See the
 [API Reference](../../wiki/API-Reference.md).
 
 > **[SCREENSHOT NEEDED — Scheduling → Requests with pagination controls
+>
 > > visible at the bottom. Seed more requests than one page holds (at least 60)
 > > so the control is genuinely populated rather than a disabled stub.]**
 
@@ -651,6 +666,7 @@ The same protection covers a double tap on **Submit** and a dropped connection
 mid-save.
 
 > **[SCREENSHOT NEEDED — a completed shift equipment check on a phone viewport
+>
 > > (390x844), showing the submitted state. Pair with a second capture of the
 > > offline/queued state if the harness can simulate it; if it cannot, note the
 > > limitation in the caption rather than staging it.]**
@@ -661,12 +677,15 @@ mid-save.
   nested storage tree records its full path.
 - **A compartment cannot be its own parent** — the tree rejects a cycle rather
   than accepting it and failing later.
-- **Standalone (non-shift) checks now require `equipment_check.manage`.** A
-  member who could previously start an ad-hoc check outside a shift may find
-  the control gone; that is a permission change, not a fault.
-- **Expired-equipment failures are worked out when you look at the check**,
-  not frozen at submission. A lot that expires after the check was recorded
-  now shows up, without the record being rewritten.
+- **Standalone (non-shift) checks are unchanged for ordinary members.** The
+  endpoint accepts `equipment_check.submit` **or** `equipment_check.manage`, so
+  a member who could start an ad-hoc check before can still start one. Do not
+  change anybody's role over this.
+- **Expired-equipment failures are decided from inventory at submission**,
+  rather than from whatever the phone claimed. The result is then stored with
+  the check. A lot that expires _after_ the check was recorded does **not**
+  retroactively turn that check into a failure — the record stands as taken,
+  which is what makes it usable as evidence of the state at that time.
 - **Check timing is recorded by the server.** The phone no longer supplies it.
 
 ## Events: a Recruitment type that feeds the pipeline
@@ -679,6 +698,7 @@ Open houses and recruitment nights have their own event type. Pick
 attendees never reach the pipeline has not recruited anybody.
 
 > **[SCREENSHOT NEEDED — the event form with Recruitment selected, showing
+>
 > > both guest switches on and the teal banner explaining that guests will be
 > > added to the prospective members pipeline. This replaces any existing event
 > > type-picker capture, which predates the new type.]**
@@ -709,6 +729,7 @@ untappable, and the tap navigated the page out from under the dialog.
 The bar now hides while a dialog, drawer or bottom sheet is open.
 
 > **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport scrolled to its
+>
 > > action row, with the bottom navigation absent. Any existing phone dialog
 > > capture in the guides is now wrong and should be replaced with this one — the
 > > old shots were all taken with the bar covering the dialog.]**
@@ -747,13 +768,14 @@ neutralized everywhere rather than in some exports and not others.
   renumbered, so a database upgraded in those windows is stamped as having run
   work it never ran. The repairs repeat the work safely — on a healthy
   database they do nothing.
-- **Two migrations do not cleanly reverse.** The seat-list normalization
-  expands a legacy crew count into individual seats (downgrading would cut a
-  three-firefighter template to one, permanently), and the equipment-check
-  de-duplication detaches historical duplicates rather than deleting them, but
-  cannot re-attach them on downgrade. **Item snapshots are kept in both
-  cases** — no safety record is destroyed.
-- **Do not downgrade past both `compartment_path` migrations.** Doing so
+- **Two migrations do not cleanly reverse — and neither loses data.** The
+  seat-list normalization expands a legacy crew count into individual seats,
+  and its downgrade deliberately does nothing: the original count cannot be
+  recovered from the expanded seats, so it leaves them as they are rather than
+  guessing. The equipment-check de-duplication detaches historical duplicates
+  rather than deleting them, and cannot re-attach them on downgrade.
+  **Item snapshots are kept in both cases** — no safety record is destroyed.
+- **Do not downgrade past both `compartment_name` migrations.** Doing so
   narrows the column and truncates deep storage paths.
 - **Two new permissions** to assign if you want the Legal Documents screen used:
   `legal.propose` and `legal.publish`.

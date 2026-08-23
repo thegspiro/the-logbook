@@ -139,8 +139,9 @@ swap request is no longer readable by members who are not party to it.
 - The swap check runs inside the row lock (`with_for_update`), so two
   reviewers racing cannot slip a self-approval through between the read and
   the write.
-- Pagination defaults apply to the API, not to exports: an export still covers
-  the full filtered set.
+- There is **no swap/time-off request export**. Anything that needs the whole
+  set has to page through the API; `total` in the response is what tells a
+  caller how many pages remain.
 
 ## Call Volume Without an RMS (2026-08-18 → 08-19)
 
@@ -912,9 +913,9 @@ Powered by `GET /api/v1/training/module-config/skill-names`.
 ### Bug Fixes (2026-04-07)
 
 | Issue                                        | Fix                                                   |
-| -------------------------------------------- | ----------------------------------------------------- | --------------------- | ------------------------------------------------- |
+| -------------------------------------------- | ----------------------------------------------------- |
 | Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` |
-| `??` → `                                     |                                                       | ` for optional fields | 35 instances in prospective-members and apparatus |
+| `??` → `\|\|` for optional fields            | 35 instances in prospective-members and apparatus     |
 | `shift_date` type mismatch                   | Changed from optional to required in TS types         |
 | Unused `LogOut` import                       | Removed from `MyShiftsTab`                            |
 | Numeric column alignment                     | Center-aligned trainee summary table columns          |

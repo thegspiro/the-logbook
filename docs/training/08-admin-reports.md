@@ -2074,6 +2074,7 @@ Full walkthrough and edge cases:
 [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice).
 
 > **[SCREENSHOT NEEDED — Governance → Legal Documents landing view with both
+>
 > > document cards (Privacy Notice, Terms of Service), one showing a published
 > > revision and one showing a draft, so the status difference is visible.]**
 
@@ -2090,6 +2091,7 @@ without running it as an off-system procedure. A department that does not want
 the ceremony gives one person `settings.manage`.
 
 > **[SCREENSHOT NEEDED — the revision editor captured under an account holding
+>
 > > only `legal.propose`, so the Publish control is visibly absent. That absence
 > > is the subject of the shot; caption it explicitly.]**
 
@@ -2117,6 +2119,7 @@ the ceremony gives one person `settings.manage`.
   publishing is a process you run, not a workflow the module enforces.
 
 > **[SCREENSHOT NEEDED — the revision history for one document showing a
+>
 > > published revision plus at least one archived revision, each with its change
 > > note and the publishing member. Seed three revisions so it reads as a
 > > history.]**
@@ -2129,9 +2132,11 @@ and pushed every following column sideways. Every export in the product now
 goes through one escaper, blank cells no longer pick up a stray apostrophe,
 and spreadsheet formula characters are neutralized consistently.
 
-**New dashboard sections** are gated by both module and permission, and a
-section you cannot see is **omitted rather than shown empty** — so the
-dashboard cannot be used to work out what exists elsewhere in the department.
+**New dashboard sections** are authorized per section, so what you see depends
+on your own grants. Two of the three endpoints leave out what you cannot see;
+the main widgets endpoint returns those sections empty instead. Either way,
+**a section you cannot see is not a section that is broken** — it is one your
+role does not reach.
 
 Worth knowing when assigning roles: **`settings.manage` is deliberately not
 financial access.** Money totals need `finance.manage`, fundraising needs
@@ -2139,6 +2144,7 @@ financial access.** Money totals need `finance.manage`, fundraising needs
 and links only — never facility codes, accounts, budgets or leases.
 
 > **[SCREENSHOT NEEDED — the organization dashboard under two accounts side by
+>
 > > side: one holding `finance.manage` and one without it, showing the finance
 > > section present in the first and absent (not empty) in the second. The
 > > comparison is the point.]**

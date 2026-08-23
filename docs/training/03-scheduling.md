@@ -270,6 +270,7 @@ reports a number when they close the shift out, and nothing else is collected.
 at close-out.**
 
 > **[SCREENSHOT NEEDED — Scheduling → Settings → General, scrolled to the
+>
 > > _Shift close-out rules_ block, with the "Record a call count at close-out"
 > > toggle switched on and its explanatory paragraph legible]**
 
@@ -351,6 +352,7 @@ Member credit is a third thing again, and is never the shift's number restated.
 A member who came on at 0300 was not on the 2200 call.
 
 > **[SCREENSHOT NEEDED — Reports → Call Volume for a count-only department,
+>
 > > showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
 > > cards and the footnote beneath them. Caption it alongside the same report for
 > > a detailed-mode department so a reader can see the labels differ and
@@ -556,6 +558,7 @@ members that the rest of the schedule does not.
   `scheduling.manage` will now get a permission error there.
 
 > **[SCREENSHOT NEEDED — the shift detail page as a scheduler with the
+>
 > > hold-over roster populated, paired with the same shift as an ordinary member
 > > with the roster absent. Seed at least one member on approved leave so the
 > > availability distinction is visible, and caption which account is which.]**
@@ -1453,6 +1456,7 @@ deliberate: they used to be invisible, which meant no hours, no credit, and
 nothing on screen to tell the officer somebody had been missed.
 
 > **[SCREENSHOT NEEDED — close-out wizard step 1: the crew list with editable
+>
 > > on/off times, the combined-hours figure, and at least one member carrying the
 > > "missing check-out" flag. Use a four-person crew so the combined figure is
 > > visibly several times the shift length]**
@@ -1467,6 +1471,7 @@ One row per call type. Enter a number against each type you ran; the **total is
 calculated from those rows and cannot be typed into**.
 
 > **[SCREENSHOT NEEDED — close-out wizard step 2: the per-type rows with a
+>
 > > couple filled in, and the derived read-only total beside them. This is the
 > > screen that teaches "the rows are the only source" and it needs the picture]**
 
@@ -1501,6 +1506,7 @@ Every member starts credited with the apparatus's full count. Adjust anyone who
 came on late or left early.
 
 > **[SCREENSHOT NEEDED — close-out wizard step 3: per-member credit seeded from
+>
 > > the apparatus count, with one member adjusted downward, plus the pass-down
 > > notes field and the final "Close out shift" button]**
 
@@ -1520,6 +1526,7 @@ wizard replaces that screen and has to carry everything it could do. The
 override is still logged and still audited.
 
 > **[SCREENSHOT NEEDED — close-out wizard with outstanding end-of-shift checks,
+>
 > > showing the warning, the override checkbox, and the reason field it requires]**
 
 #### Wizard edge cases
@@ -2702,10 +2709,12 @@ A blocked attempt changes nothing: the request stays pending for somebody else
 to action.
 
 > **[SCREENSHOT NEEDED — Scheduling → Requests viewed by the member who raised
-> > the top request, showing the rejection message "Requesters cannot review
-> > their own swap requests". Seed one request raised by the capturing account
-> > and one raised by another member so the available actions differ visibly
-> > between the two rows.]**
+> clicking **Approve** on their own pending swap, showing the resulting error
+> "Requesters cannot review their own swap requests" with the request still
+> pending. Do **not** attempt a side-by-side of differing controls: Approve and
+> Deny render on every pending request for anyone holding `scheduling.manage`,
+> own requests included, so nothing distinguishes the rows until the button is
+> pressed.]**
 
 **Plan the second approver.** If exactly one person in your department holds
 `scheduling.manage` and that person also requests swaps, nobody can approve
@@ -2717,6 +2726,7 @@ API, the response shape changed — it is now an object with an `items` list
 rather than a plain list.
 
 > **[SCREENSHOT NEEDED — Scheduling → Requests with the pagination control
+>
 > > populated. Seed more than one page of requests (at least 60) so the control
 > > is genuinely active rather than a disabled stub.]**
 
@@ -2730,17 +2740,17 @@ same record.
 
 Also changed:
 
-- **Standalone (non-shift) equipment checks now require
-  `equipment_check.manage`.** A member who could previously start an ad-hoc
-  check may find the control gone — that is the permission change, not a
-  fault.
+- **Standalone (non-shift) equipment checks still accept
+  `equipment_check.submit`** as well as `equipment_check.manage`, so ordinary
+  members keep the ad-hoc check they had.
 - **Deep nested storage paths now fit** in a check item's recorded location.
 - **A compartment cannot be made its own parent.**
-- **Expired-equipment failures are worked out when the check is read**, so a
-  lot that expires after submission shows up without the record being
-  rewritten.
+- **Expired-equipment failures are decided from authoritative inventory at
+  submission** rather than from the client's assertion, then stored with the
+  check. A lot expiring later does not retroactively fail an earlier check.
 - **Timing is recorded by the server**, not supplied by the phone.
 
 > **[SCREENSHOT NEEDED — a submitted shift equipment check on a 390x844
+>
 > > viewport. If the harness can simulate the queued/offline state, capture that
 > > too; if it cannot, say so in the caption rather than staging it.]**
