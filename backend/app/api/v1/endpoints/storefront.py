@@ -82,6 +82,7 @@ from app.services.storefront_preview_service import (
 )
 from app.services.storefront_service import StorefrontService
 from app.utils.image_processing import optimize_image
+from app.utils.storefront_payments import build_payment_method_summaries
 
 router = APIRouter()
 
@@ -240,6 +241,7 @@ def _window_summary(window: StoreOrderWindow) -> Dict[str, Any]:
         "id": window.id,
         "name": window.name,
         "description": window.description,
+        "opens_at": window.opens_at,
         "closes_at": window.closes_at,
         "expected_delivery_date": window.expected_delivery_date,
         "pickup_instructions": window.pickup_instructions,
@@ -321,7 +323,9 @@ async def get_storefront(
         "shipping_flat_rate": settings.shipping_flat_rate,
         "tax_rate": settings.tax_rate,
         "accepted_payment_methods": settings.accepted_payment_methods or [],
+        "payment_methods": build_payment_method_summaries(settings),
         "payment_instructions": settings.payment_instructions,
+        "payment_policy": settings.payment_policy,
         "window": _window_summary(window) if window else None,
         "other_open_windows": [
             _window_summary(other) for other in data["other_open_windows"]

@@ -191,7 +191,7 @@ export const FunctionControl: React.FC<ControlProps> = ({ item, answer, onChange
           onClick={() => onChange({ status: 'fail' })}
           className={`${TOUCH} flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             failed
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : 'border-theme-surface-border text-theme-text-secondary border hover:border-red-600 hover:text-red-700'
           }`}
         >

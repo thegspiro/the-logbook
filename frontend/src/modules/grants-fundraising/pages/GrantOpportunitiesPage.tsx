@@ -205,7 +205,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
         </div>
         <button
           onClick={() => void navigate('/grants/opportunities/new')}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
         >
           <Plus className="h-4 w-4" />
           Add Opportunity
@@ -349,7 +349,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <Link
                       to={`/grants/applications/new?opportunity_id=${opp.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                       Apply

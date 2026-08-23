@@ -296,7 +296,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                   onClick={() => toggleCategory(cat.id)}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     formData.category_ids.includes(cat.id)
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
                   }`}
                 >

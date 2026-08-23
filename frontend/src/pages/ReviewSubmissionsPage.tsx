@@ -331,7 +331,7 @@ const ReviewPanel: React.FC<{
           onClick={() => setAction('reject')}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === 'reject'
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
@@ -1069,7 +1069,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             onClick={() => setActiveView('pending')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeView === 'pending'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
@@ -1085,7 +1085,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             onClick={() => setActiveView('all')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeView === 'all'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
@@ -1096,7 +1096,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             onClick={() => setActiveView('config')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeView === 'config'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >

@@ -455,9 +455,22 @@ export interface StorefrontWindowSummary {
   id: string;
   name: string;
   description?: string | null;
+  /** Drives the "how much of the window is gone" progress bar. Null on a
+   *  window a quartermaster opened by hand rather than on a schedule. */
+  opensAt?: string | null;
   closesAt?: string | null;
   expectedDeliveryDate?: string | null;
   pickupInstructions?: string | null;
+}
+
+/** One accepted payment method as the checkout screen shows it. Carries no
+ *  payment URL: before an order exists there is no amount and no order number
+ *  to prefill, and a $0 unreferenced link is worse than none. */
+export interface StorefrontPaymentMethodInfo {
+  method: string;
+  label: string;
+  handle?: string | null;
+  instructions?: string | null;
 }
 
 export interface Storefront {
@@ -474,7 +487,11 @@ export interface Storefront {
   shippingFlatRate?: string | null;
   taxRate: string;
   acceptedPaymentMethods: string[];
+  /** The same methods with their handles, for the checkout screen. */
+  paymentMethods: StorefrontPaymentMethodInfo[];
   paymentInstructions?: string | null;
+  /** Decides the "what happens after I submit" line at checkout. */
+  paymentPolicy: StorePaymentPolicy;
   window?: StorefrontWindowSummary | null;
   otherOpenWindows: StorefrontWindowSummary[];
   products: StorefrontProductOffer[];

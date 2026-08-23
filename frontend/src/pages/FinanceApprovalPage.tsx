@@ -190,7 +190,7 @@ export const FinanceApprovalPage: React.FC = () => {
         </button>
         <button
           type="button"
-          className="mobile-touch-target flex-1 rounded-md bg-red-600 px-4 font-medium text-white hover:bg-red-700 disabled:opacity-60"
+          className="mobile-touch-target flex-1 rounded-md bg-red-800 px-4 font-medium text-white hover:bg-red-900 disabled:opacity-60"
           disabled={submitting}
           onClick={() => void act('deny')}
         >

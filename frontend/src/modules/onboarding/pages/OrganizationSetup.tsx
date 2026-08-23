@@ -736,7 +736,7 @@ const OrganizationSetup: React.FC = () => {
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-800">
             <Building2 aria-hidden="true" className="h-8 w-8 text-white" />
           </div>
           <div className="mb-3 flex items-center justify-center space-x-3">
