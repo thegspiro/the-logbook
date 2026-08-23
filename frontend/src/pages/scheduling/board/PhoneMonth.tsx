@@ -19,7 +19,7 @@ import {
   type BoardFilter,
 } from '../../../modules/scheduling/utils/shiftBoard';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
-import { LEGEND_ORDER, STATUS_STYLES } from './statusStyles';
+import { STATUS_STYLES, legendFor } from './statusStyles';
 
 const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -34,6 +34,8 @@ export interface PhoneMonthProps {
   currentUserId: string | null | undefined;
   filter: BoardFilter;
   today?: Date;
+  /** Adds the "crew size not set" entry to the legend when it is in use. */
+  hasUnsizedShift?: boolean;
   onSelect: (date: Date) => void;
 }
 
@@ -45,6 +47,7 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
   currentUserId,
   filter,
   today = new Date(),
+  hasUnsizedShift = false,
   onSelect,
 }) => (
   <div>
@@ -105,7 +108,7 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
     </div>
 
     <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
-      {LEGEND_ORDER.map((status) => (
+      {legendFor(hasUnsizedShift).map((status) => (
         <li key={status} className="flex items-center gap-1.5">
           <span className={`h-[5px] w-4 rounded-full ${STATUS_STYLES[status].bar}`} aria-hidden="true" />
           <span className="text-theme-text-secondary text-[11px]">{STATUS_STYLES[status].label}</span>

@@ -147,7 +147,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
         >
           Give up this shift
         </button>
-      ) : info.openSeats === 0 ? (
+      ) : info.capacity !== null && info.openSeats === 0 ? (
         <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
           This crew is full. Nothing to claim here.
         </p>
@@ -160,7 +160,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
             isSheet ? 'min-h-[52px]' : 'min-h-[44px]'
           }`}
         >
-          {pending ? 'Working…' : 'Take a seat on this shift'}
+          {pending ? 'Working…' : info.capacity === null ? 'Join this shift' : 'Take a seat on this shift'}
         </button>
       ) : (
         // Naming the reason matters: a greyed-out button with no explanation

@@ -13,25 +13,29 @@ import { formatDateCustom } from '../../../utils/dateFormatting';
 import type { PositionSlot, ShiftRecord, ShiftRosterSeat } from '../services/api';
 
 /**
- * The four states a shift can be in, in precedence order.
+ * The states a shift can be in, in precedence order.
  *
  * `mine` deliberately wins over the staffing colours: a member scanning the
  * month is first asking "where am I already committed", and a blue cell that
  * also happens to be short is still one they cannot claim again.
+ *
+ * `unknown` is not a staffing level — it is the absence of one. A shift that
+ * names neither positions nor a minimum has never said how many people it
+ * takes, and guessing a number turns "we don't know" into "this is an
+ * emergency": a department that sets neither would open the page to a wall of
+ * red that means nothing. It reads as unset, and stays out of every count.
  */
 export const ShiftStatus = {
   MINE: 'mine',
   CRITICAL: 'critical',
   SHORT: 'short',
   FULL: 'full',
+  UNKNOWN: 'unknown',
 } as const;
 export type ShiftStatus = (typeof ShiftStatus)[keyof typeof ShiftStatus];
 
 /** A day carrying this many open seats or more is flagged URGENT. */
 export const URGENT_OPEN_SEATS = 3;
-
-/** Used only when a shift names neither positions nor a minimum staffing. */
-export const DEFAULT_CAPACITY = 4;
 
 export interface ShiftSeat {
   /** Seat label — "officer", "driver", … — or null for an unnamed seat. */
@@ -44,8 +48,10 @@ export interface ShiftSeat {
 
 export interface ShiftStatusInfo {
   status: ShiftStatus;
-  capacity: number;
+  /** null when the shift has never stated how many people it takes. */
+  capacity: number | null;
   filled: number;
+  /** Always 0 when capacity is unknown — an unknown is not a shortage. */
   openSeats: number;
   /** True when the current member holds a seat, whatever the staffing. */
   isMine: boolean;
@@ -55,18 +61,20 @@ const activeSeats = (shift: ShiftRecord): ShiftRosterSeat[] =>
   (shift.roster ?? []).filter((seat) => seat.status !== 'cancelled' && seat.status !== 'declined');
 
 /**
- * How many seats the shift has.
+ * How many seats the shift has, or null if it has never said.
  *
  * Seat *names* come from the shift's own position list where it has one, so a
  * three-seat brush truck is not reported as short against a department-wide
- * default. `min_staffing` is the fallback, and the constant is the last
- * resort — a shift with neither is not evidence that nobody is needed.
+ * default; `min_staffing` is the fallback. There is deliberately no third
+ * fallback: inventing a number would let the board announce a shortage the
+ * department never declared, on every shift created without a template or an
+ * apparatus.
  */
-export const shiftCapacity = (shift: ShiftRecord): number => {
+export const shiftCapacity = (shift: ShiftRecord): number | null => {
   const positions = shift.positions ?? shift.apparatus_positions ?? [];
   if (positions.length > 0) return positions.length;
   if (shift.min_staffing && shift.min_staffing > 0) return shift.min_staffing;
-  return Math.max(activeSeats(shift).length, DEFAULT_CAPACITY);
+  return null;
 };
 
 /**
@@ -110,8 +118,13 @@ export const buildSeats = (shift: ShiftRecord, currentUserId?: string | null): S
       isMine: !!currentUserId && String(member.user_id) === String(currentUserId),
     });
   }
-  while (seats.length < shiftCapacity(shift)) {
-    seats.push({ position: null, member: null, isMine: false });
+  // Pad out to the stated crew size. A shift that states none gets no padding
+  // — the list is exactly who is on it, with no invented empty chairs.
+  const capacity = shiftCapacity(shift);
+  if (capacity !== null) {
+    while (seats.length < capacity) {
+      seats.push({ position: null, member: null, isMine: false });
+    }
   }
   return seats;
 };
@@ -123,11 +136,12 @@ export const shiftStatusInfo = (shift: ShiftRecord, currentUserId?: string | nul
   // served before the roster field existed, so it is the more reliable count
   // whenever the two disagree.
   const filled = Math.max(seated.length, shift.attendee_count ?? 0);
-  const openSeats = Math.max(capacity - filled, 0);
+  const openSeats = capacity === null ? 0 : Math.max(capacity - filled, 0);
   const isMine = !!currentUserId && seated.some((seat) => String(seat.user_id) === String(currentUserId));
 
   let status: ShiftStatus;
   if (isMine) status = ShiftStatus.MINE;
+  else if (capacity === null) status = ShiftStatus.UNKNOWN;
   else if (openSeats >= 2) status = ShiftStatus.CRITICAL;
   else if (openSeats === 1) status = ShiftStatus.SHORT;
   else status = ShiftStatus.FULL;
@@ -135,8 +149,11 @@ export const shiftStatusInfo = (shift: ShiftRecord, currentUserId?: string | nul
   return { status, capacity, filled, openSeats, isMine };
 };
 
-/** "2 open" / "Full 4/4" / "You + 2/4" — the calendar chip's text. */
+/** "2 open" / "Full 4/4" / "You + 2/4" / "3 on" — the calendar chip's text. */
 export const chipLabel = (info: ShiftStatusInfo): string => {
+  // With no stated crew size there is no denominator to show, so the chip
+  // reports the headcount it does know rather than a ratio it does not.
+  if (info.capacity === null) return info.isMine ? `You + ${Math.max(info.filled - 1, 0)}` : `${info.filled} on`;
   if (info.isMine) return `You + ${Math.max(info.filled - 1, 0)}/${info.capacity}`;
   if (info.openSeats === 0) return `Full ${info.filled}/${info.capacity}`;
   return `${info.openSeats} open`;
@@ -145,27 +162,41 @@ export const chipLabel = (info: ShiftStatusInfo): string => {
 /** "2 of 4 seats open" / "Fully staffed" / "You're on it" — the panel badge. */
 export const statusBadgeLabel = (info: ShiftStatusInfo): string => {
   if (info.isMine) return "You're on it";
+  if (info.capacity === null) {
+    return `${info.filled} on the crew · size not set`;
+  }
   if (info.openSeats === 0) return 'Fully staffed';
   return `${info.openSeats} of ${info.capacity} seat${info.openSeats === 1 ? '' : 's'} open`;
 };
 
 export interface DaySummary {
+  /** Counts only shifts that stated a crew size. */
   openSeats: number;
   /** 3+ open seats across the day's shifts — the day needs a crew, not a seat. */
   urgent: boolean;
   hasMine: boolean;
   shiftCount: number;
+  /** True when a shift on this day has never stated how big its crew is. */
+  hasUnsizedShift: boolean;
 }
 
 export const daySummary = (shifts: ShiftRecord[], currentUserId?: string | null): DaySummary => {
   let openSeats = 0;
   let hasMine = false;
+  let hasUnsizedShift = false;
   for (const shift of shifts) {
     const info = shiftStatusInfo(shift, currentUserId);
     openSeats += info.openSeats;
     if (info.isMine) hasMine = true;
+    if (info.capacity === null) hasUnsizedShift = true;
   }
-  return { openSeats, urgent: openSeats >= URGENT_OPEN_SEATS, hasMine, shiftCount: shifts.length };
+  return {
+    openSeats,
+    urgent: openSeats >= URGENT_OPEN_SEATS,
+    hasMine,
+    shiftCount: shifts.length,
+    hasUnsizedShift,
+  };
 };
 
 /**
@@ -274,10 +305,21 @@ export const firstClaimableSeat = (
   shift: ShiftRecord,
   eligiblePositions: string[],
   currentUserId?: string | null
-): ShiftSeat | null =>
-  buildSeats(shift, currentUserId).find(
+): ShiftSeat | null => {
+  const open = buildSeats(shift, currentUserId).find(
     (seat) => seat.member === null && canTakeSeat(seat.position, eligiblePositions)
-  ) ?? null;
+  );
+  if (open) return open;
+
+  // A shift that never stated a crew size has no empty chairs to offer, but it
+  // is still a shift a member can join — refusing here would make "nobody has
+  // configured this yet" mean "you may not sign up", which is not the
+  // department's decision, just a gap in their setup.
+  if (shiftCapacity(shift) === null && eligiblePositions.length > 0) {
+    return { position: null, member: null, isMine: false };
+  }
+  return null;
+};
 
 export type BoardFilter = 'all' | 'needs' | 'mine';
 
@@ -289,7 +331,10 @@ export type BoardFilter = 'all' | 'needs' | 'mine';
  * after switching filters.
  */
 export const dayMatchesFilter = (summary: DaySummary, filter: BoardFilter): boolean => {
-  if (filter === 'needs') return summary.openSeats > 0;
+  // "Needs staffing" keeps a day whose crew size was never set: it may well
+  // need people, and dimming it would hide the shifts nobody has configured
+  // from the one filter an officer uses to find gaps.
+  if (filter === 'needs') return summary.openSeats > 0 || summary.hasUnsizedShift;
   if (filter === 'mine') return summary.hasMine;
   return true;
 };

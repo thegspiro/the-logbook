@@ -409,6 +409,14 @@ timezone — reading the hour off the stored UTC column would relabel a
 department's night shift twice a year as daylight saving moved it across
 midnight.
 
+A series runs for a member-chosen span, defaulting to a year out rather than
+to the end of the calendar year. A December horizon quietly shrinks as the
+year goes on — set one up in November and it covers six dates, on Boxing Day
+almost none, for no reason the member can see. The picker bounds itself to
+between a week and `MAX_SERIES_DAYS` (366) so an out-of-range date is refused
+while it is being chosen rather than as a 400 after saving; the server
+enforces the same cap.
+
 `DELETE` defaults to `release_future=false`. Ending a series and giving up the
 dates already on the roster are separate decisions: a member moving off
 Tuesdays next quarter still works the Tuesdays already rostered, and quietly
@@ -578,12 +586,24 @@ same shift.
 staffing colours: a member scanning the month is first asking where they are
 already committed, and a shift they hold is not one they can claim again.
 
-| State         | Meaning | Chip        |
-| ------------- | ------- | ----------- |
-| You are on it | Blue    | `You + 2/4` |
-| 2+ seats open | Red     | `2 open`    |
-| 1 seat open   | Amber   | `1 open`    |
-| Fully staffed | Green   | `Full 4/4`  |
+| State             | Meaning | Chip        |
+| ----------------- | ------- | ----------- |
+| You are on it     | Blue    | `You + 2/4` |
+| 2+ seats open     | Red     | `2 open`    |
+| 1 seat open       | Amber   | `1 open`    |
+| Fully staffed     | Green   | `Full 4/4`  |
+| Crew size not set | Grey    | `3 on`      |
+
+**"Crew size not set" is the absence of a staffing level, not one of them.** A
+shift naming neither positions nor `min_staffing` has never said how many
+people it takes, so `shiftCapacity` returns null rather than guessing:
+inventing a number turns "we don't know" into "this is an emergency", and a
+department that configures neither would open the page to a wall of red that
+means nothing. Such a shift stays out of the open-seat count and the `URGENT`
+flag, shows its headcount rather than a ratio, lists exactly who is on it with
+no invented empty chairs, and can still be joined. **Needs staffing** keeps it
+— it may well need people — and its legend entry appears only when something
+on screen is in that state.
 
 A day carrying three or more open seats across its shifts gets an `URGENT`
 flag. Filters (**All shifts / Needs staffing / My shifts**) _dim_ rather than

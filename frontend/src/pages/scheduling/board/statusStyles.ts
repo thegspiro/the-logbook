@@ -41,6 +41,15 @@ export const STATUS_STYLES: Record<ShiftStatus, StatusStyle> = {
     swatch: 'bg-green-50 border-green-200 dark:bg-green-500/20 dark:border-green-500/40',
     label: 'Fully staffed',
   },
+  [ShiftStatus.UNKNOWN]: {
+    // Deliberately the quietest thing on the calendar. It is not a staffing
+    // level, it is a shift nobody has told the system the size of, and it
+    // must not compete for attention with a crew that is genuinely short.
+    chip: 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted',
+    bar: 'bg-slate-300 dark:bg-slate-600',
+    swatch: 'bg-theme-surface-secondary border-theme-surface-border',
+    label: 'Crew size not set',
+  },
   [ShiftStatus.MINE]: {
     chip: 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-500/15 dark:border-blue-500/40 dark:text-blue-300',
     bar: 'bg-blue-400 dark:bg-blue-500/70',
@@ -56,3 +65,14 @@ export const LEGEND_ORDER: ShiftStatus[] = [
   ShiftStatus.FULL,
   ShiftStatus.MINE,
 ];
+
+/**
+ * The legend the board actually renders.
+ *
+ * "Crew size not set" is only explained when something on screen is in that
+ * state — a department that configures its shifts properly never sees the
+ * entry, and a permanent fifth swatch for a state they will never hit is
+ * noise in the one row that has to stay scannable.
+ */
+export const legendFor = (hasUnsizedShift: boolean): ShiftStatus[] =>
+  hasUnsizedShift ? [...LEGEND_ORDER, ShiftStatus.UNKNOWN] : LEGEND_ORDER;

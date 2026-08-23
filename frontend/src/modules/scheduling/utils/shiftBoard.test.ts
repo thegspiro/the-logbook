@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { ShiftRecord } from '../services/api';
 import {
-  DEFAULT_CAPACITY,
   ShiftStatus,
   buildSeats,
   chipLabel,
   dayMatchesFilter,
   daySummary,
+  firstClaimableSeat,
   isPastDay,
   memberInitials,
   monthMatrix,
@@ -64,17 +64,20 @@ describe('shiftCapacity', () => {
     expect(shiftCapacity(brush)).toBe(1);
   });
 
-  it('falls back to the default when the shift names neither', () => {
-    expect(shiftCapacity(shift({ positions: null, min_staffing: null }))).toBe(DEFAULT_CAPACITY);
+  it('reports no size at all when the shift names neither', () => {
+    // Inventing a number here is how a department that configures neither
+    // opens the page to a wall of red that means nothing.
+    expect(shiftCapacity(shift({ positions: null, min_staffing: null }))).toBeNull();
   });
 
-  it('never reports fewer seats than there are people on the shift', () => {
-    const overfull = shift({
+  it('still reports no size when people are already on an unsized shift', () => {
+    const crewed = shift({
       positions: null,
       min_staffing: null,
       roster: Array.from({ length: 6 }, (_, i) => seat(`u${i}`, 'firefighter')),
     });
-    expect(shiftCapacity(overfull)).toBe(6);
+    // Six people turning up is not the department stating the crew is six.
+    expect(shiftCapacity(crewed)).toBeNull();
   });
 });
 
@@ -213,7 +216,27 @@ describe('daySummary', () => {
   });
 
   it('is empty for a day with no shifts', () => {
-    expect(daySummary([], ME)).toEqual({ openSeats: 0, urgent: false, hasMine: false, shiftCount: 0 });
+    expect(daySummary([], ME)).toEqual({
+      openSeats: 0,
+      urgent: false,
+      hasMine: false,
+      shiftCount: 0,
+      hasUnsizedShift: false,
+    });
+  });
+
+  it('does not count an unsized shift as a shortage', () => {
+    const unsized = shift({ positions: null, min_staffing: null, attendee_count: 1 });
+    const summary = daySummary([unsized], ME);
+    expect(summary.openSeats).toBe(0);
+    expect(summary.urgent).toBe(false);
+    expect(summary.hasUnsizedShift).toBe(true);
+  });
+
+  it('an unsized shift does not drown out a real shortage beside it', () => {
+    const unsized = shift({ id: 's2', positions: null, min_staffing: null });
+    const short = shift({ attendee_count: 2 });
+    expect(daySummary([unsized, short], ME).openSeats).toBe(2);
   });
 });
 
@@ -321,5 +344,52 @@ describe('isPastDay', () => {
     expect(isPastDay(new Date(2026, 7, 25, 18, 0), today)).toBe(false);
     expect(isPastDay(new Date(2026, 7, 24), today)).toBe(true);
     expect(isPastDay(new Date(2026, 7, 26), today)).toBe(false);
+  });
+});
+
+describe('a shift that never stated its crew size', () => {
+  const unsized = (overrides: Partial<ShiftRecord> = {}) =>
+    shift({ positions: null, min_staffing: null, ...overrides });
+
+  it('reads as unset, not as an emergency', () => {
+    const info = shiftStatusInfo(unsized({ attendee_count: 1 }), ME);
+    expect(info.status).toBe(ShiftStatus.UNKNOWN);
+    expect(info.capacity).toBeNull();
+    expect(info.openSeats).toBe(0);
+  });
+
+  it('still shows as yours when you are on it', () => {
+    // Whether the department configured the shift has nothing to do with
+    // whether the member is committed to it.
+    const info = shiftStatusInfo(unsized({ roster: [seat(ME, 'firefighter')] }), ME);
+    expect(info.status).toBe(ShiftStatus.MINE);
+  });
+
+  it('reports the headcount rather than a ratio it cannot compute', () => {
+    expect(chipLabel(shiftStatusInfo(unsized({ attendee_count: 3 }), ME))).toBe('3 on');
+    expect(statusBadgeLabel(shiftStatusInfo(unsized({ attendee_count: 3 }), ME))).toBe('3 on the crew · size not set');
+  });
+
+  it('lists exactly who is on it, with no invented empty chairs', () => {
+    const seats = buildSeats(unsized({ roster: [seat('u1', 'firefighter')] }), ME);
+    expect(seats).toHaveLength(1);
+    expect(seats.every((s) => s.member !== null)).toBe(true);
+  });
+
+  it('can still be joined by an eligible member', () => {
+    // "Nobody has configured this yet" is not the department refusing signup.
+    const claimable = firstClaimableSeat(unsized(), ['firefighter'], ME);
+    expect(claimable).not.toBeNull();
+    expect(claimable?.position).toBeNull();
+  });
+
+  it('is not offered to a member cleared for nothing', () => {
+    expect(firstClaimableSeat(unsized(), [], ME)).toBeNull();
+  });
+
+  it('is kept by the "needs staffing" filter', () => {
+    // It may well need people; dimming it would hide the unconfigured shifts
+    // from the one filter an officer uses to find gaps.
+    expect(dayMatchesFilter(daySummary([unsized()], ME), 'needs')).toBe(true);
   });
 });

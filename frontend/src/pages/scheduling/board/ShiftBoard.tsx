@@ -33,7 +33,7 @@ import MonthGrid from './MonthGrid';
 import PhoneDaySheet from './PhoneDaySheet';
 import PhoneMonth from './PhoneMonth';
 import StandingShiftModal from './StandingShiftModal';
-import { LEGEND_ORDER, STATUS_STYLES } from './statusStyles';
+import { STATUS_STYLES, legendFor } from './statusStyles';
 
 /** The Sunday that starts the week containing `date`, as "YYYY-MM-DD". */
 const weekStartKey = (date: Date): string => toDateKey(weekDates(date)[0] ?? date);
@@ -110,6 +110,13 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   }, [shifts]);
 
   const selectedShifts = useMemo(() => shiftsByDate.get(toDateKey(selectedDate)) ?? [], [shiftsByDate, selectedDate]);
+
+  // Only explain the "crew size not set" colour when something on screen is
+  // in that state; a correctly configured department never sees the entry.
+  const hasUnsizedShift = useMemo(
+    () => shifts.some((shift) => shiftStatusInfo(shift, currentUserId).capacity === null),
+    [shifts, currentUserId]
+  );
 
   const openSeatsThisMonth = useMemo(
     () => shifts.reduce((total, shift) => total + shiftStatusInfo(shift, currentUserId).openSeats, 0),
@@ -249,7 +256,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
         `You are on the ${formatCalendarDate(shift.shift_date, { month: 'long', day: 'numeric' })} shift.`
       );
       const info = shiftStatusInfo(updated, currentUserId);
-      if (info.filled > info.capacity) {
+      if (info.capacity !== null && info.filled > info.capacity) {
         // An officer can seat a crew past its planned size deliberately, so a
         // member arriving on an over-full shift is told rather than left to
         // read a roster that silently disagrees with the seat count.
@@ -302,6 +309,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     timezone,
     filter,
     today,
+    hasUnsizedShift,
     onSelect: handleSelect,
   };
 
@@ -445,7 +453,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
           <div className="hidden gap-5 md:grid md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_400px]">
             <div className="flex min-h-0 flex-col">
               <div className="card mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 py-2.5">
-                {LEGEND_ORDER.map((status) => (
+                {legendFor(hasUnsizedShift).map((status) => (
                   <span key={status} className="flex items-center gap-1.5">
                     <span className={`h-3 w-3 rounded-sm border ${STATUS_STYLES[status].swatch}`} aria-hidden="true" />
                     <span className="text-theme-text-secondary text-xs">{STATUS_STYLES[status].label}</span>

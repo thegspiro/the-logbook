@@ -14,7 +14,12 @@ import { Loader2 } from 'lucide-react';
 import { Modal } from '../../../components/Modal';
 import { schedulingService } from '../../../modules/scheduling';
 import { StandingShiftPattern, StandingShiftPeriod, type StandingShiftPreview } from '../../../modules/scheduling';
-import { describeCoverage } from '../../../modules/scheduling/utils/standingShift';
+import {
+  defaultSeriesEnd,
+  describeCoverage,
+  seriesEndBounds,
+  seriesEndError,
+} from '../../../modules/scheduling/utils/standingShift';
 import { formatCalendarDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
@@ -41,9 +46,6 @@ export interface StandingShiftModalProps {
   onCreated: () => void;
 }
 
-/** The last day of the calendar year, the horizon the copy promises. */
-const endOfYear = (today: string): string => `${today.slice(0, 4)}-12-31`;
-
 export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
   initialWeekday,
   initialPeriod,
@@ -54,17 +56,27 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
   onCreated,
 }) => {
   const today = useMemo(() => getTodayLocalDate(timezone), [timezone]);
-  const endDate = useMemo(() => endOfYear(today), [today]);
+  const bounds = useMemo(() => seriesEndBounds(today), [today]);
 
   const [pattern, setPattern] = useState<StandingShiftPattern>(StandingShiftPattern.WEEKLY);
   const [weekday, setWeekday] = useState(initialWeekday);
   const [period, setPeriod] = useState<StandingShiftPeriod>(initialPeriod);
+  const [endDate, setEndDate] = useState(() => defaultSeriesEnd(today));
   const [preview, setPreview] = useState<StandingShiftPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const endDateError = seriesEndError(today, endDate);
+
   const loadPreview = useCallback(() => {
+    // An out-of-range date is refused by the picker's own message; asking the
+    // server about it would replace that with a less specific 400.
+    if (seriesEndError(today, endDate)) {
+      setLoading(false);
+      setPreview(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     schedulingService
@@ -127,7 +139,7 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
         <>
           <button
             type="button"
-            disabled={saving || loading || claimable === 0}
+            disabled={saving || loading || claimable === 0 || endDateError !== null}
             onClick={() => void handleSave()}
             className="btn-primary min-h-[42px] rounded-lg"
           >
@@ -201,6 +213,32 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
               label="Night · starts from noon"
             />
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="text-theme-text-muted mb-1.5 text-[10px] font-bold tracking-[0.12em] uppercase">
+            Runs until
+          </legend>
+          <input
+            type="date"
+            value={endDate}
+            min={bounds.min}
+            max={bounds.max}
+            onChange={(event) => setEndDate(event.target.value)}
+            className="form-input w-full sm:w-56"
+            aria-label="Last date this standing shift covers"
+            aria-invalid={endDateError !== null}
+            {...(endDateError ? { 'aria-describedby': 'standing-end-error' } : {})}
+          />
+          {endDateError ? (
+            <p id="standing-end-error" className="mt-1 text-xs font-semibold text-red-700 dark:text-red-300">
+              {endDateError}
+            </p>
+          ) : (
+            <p className="text-theme-text-muted mt-1 text-xs">
+              You can end the series early at any time, and giving up one date never ends it.
+            </p>
+          )}
         </fieldset>
 
         <section className="card-secondary p-4" aria-live="polite">
