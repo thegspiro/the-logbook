@@ -32,6 +32,8 @@ from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
+    CheckTemplateItemBulkCreate,
+    CheckTemplateItemBulkResponse,
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
@@ -62,7 +64,10 @@ from app.schemas.equipment_check import (
     SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    EquipmentCheckConflictError,
+    EquipmentCheckService,
+)
 from app.services.equipment_readiness_service import EquipmentReadinessService
 from app.utils.image_processing import optimize_image
 
@@ -554,6 +559,38 @@ async def add_item(
     return item
 
 
+@router.post(
+    "/compartments/{compartment_id}/items/bulk",
+    response_model=CheckTemplateItemBulkResponse,
+    status_code=201,
+)
+async def add_items_bulk(
+    compartment_id: str,
+    data: CheckTemplateItemBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Create an ordered item batch atomically; safe to retry with the same key."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.add_items_bulk(
+            compartment_id,
+            str(current_user.organization_id),
+            [item.model_dump() for item in data.items],
+            data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    items, replayed = result
+    return CheckTemplateItemBulkResponse(
+        items=items, created_count=0 if replayed else len(items), replayed=replayed
+    )
+
+
 @router.put(
     "/items/{item_id}",
     response_model=CheckTemplateItemResponse,
@@ -713,6 +750,8 @@ async def submit_check(
         return check
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    except EquipmentCheckConflictError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -725,7 +764,9 @@ async def submit_check(
 async def submit_standalone_check(
     data: StandaloneEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit a standalone equipment check not tied to a shift."""
     service = EquipmentCheckService(db)
@@ -748,7 +789,9 @@ async def complete_incomplete_check(
     check_id: str,
     data: EquipmentCheckCompleteItems,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Complete remaining items on an incomplete check."""
     service = EquipmentCheckService(db)

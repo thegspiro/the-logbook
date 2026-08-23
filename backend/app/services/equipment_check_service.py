@@ -5,10 +5,14 @@ Business logic for equipment check template management, shift equipment
 check submissions, checklist resolution by position, and item history.
 """
 
+import hashlib
+import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,6 +23,7 @@ from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
+    EquipmentCheckBulkRequest,
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
@@ -36,6 +41,10 @@ from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+
+
+class EquipmentCheckConflictError(ValueError):
+    """A completed shift/template check already owns this submission slot."""
 
 
 class EquipmentCheckService:
@@ -533,6 +542,144 @@ class EquipmentCheckService:
         await self.db.refresh(item)
         return item
 
+    async def add_items_bulk(
+        self,
+        compartment_id: str,
+        organization_id: str,
+        items_data: List[Dict[str, Any]],
+        idempotency_key: str,
+        user_id: str,
+        user_name: str,
+    ) -> Optional[tuple[List[CheckTemplateItem], bool]]:
+        """Validate and insert a batch atomically, returning it in input order.
+
+        A durable request fingerprint and stable item IDs make retries safe. A
+        repeated key must describe the identical request; it then returns the
+        original rows.
+        """
+        compartment = await self._get_compartment(compartment_id, organization_id)
+        if not compartment:
+            return None
+
+        try:
+            # Normalize and validate the complete batch before adding a pending row.
+            for data in items_data:
+                data["name"] = str(data.get("name", "")).strip()
+                if not data["name"]:
+                    raise ValueError("Item name cannot be blank")
+                await self._validate_item_fks(data, organization_id)
+
+            payload_hash = hashlib.sha256(
+                json.dumps(
+                    items_data, sort_keys=True, separators=(",", ":"), default=str
+                ).encode()
+            ).hexdigest()
+            ledger_result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = ledger_result.scalars().first()
+            if ledger:
+                return await self._replay_bulk_request(ledger, payload_hash)
+
+            # Serialize append-position allocation for distinct batches.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
+            ids = [
+                str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        f"equipment-check:{organization_id}:{compartment_id}:{idempotency_key}:{i}",
+                    )
+                )
+                for i in range(len(items_data))
+            ]
+            self.db.add(
+                EquipmentCheckBulkRequest(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    compartment_id=compartment_id,
+                    idempotency_key=idempotency_key,
+                    payload_hash=payload_hash,
+                    item_ids=ids,
+                )
+            )
+            await self.db.flush()
+
+            # This must also be a locking/current read. Under MySQL REPEATABLE
+            # READ, a plain aggregate would keep the snapshot established before
+            # we waited for the compartment lock and could miss a batch that just
+            # committed while we were waiting.
+            max_order = await self.db.scalar(
+                select(CheckTemplateItem.sort_order)
+                .where(CheckTemplateItem.compartment_id == compartment_id)
+                .order_by(CheckTemplateItem.sort_order.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            first_order = (max_order if max_order is not None else -1) + 1
+            created = []
+            for index, data in enumerate(items_data):
+                values = dict(data)
+                values["sort_order"] = first_order + index
+                item = CheckTemplateItem(
+                    id=ids[index], compartment_id=compartment_id, **values
+                )
+                self.db.add(item)
+                created.append(item)
+            await self.db.flush()
+            for item in created:
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=str(compartment.template_id),
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="add",
+                    entity_type="item",
+                    entity_id=str(item.id),
+                    entity_name=item.name,
+                    changes={"bulk_idempotency_key": idempotency_key},
+                )
+            await self.db.commit()
+            return created, False
+        except IntegrityError:
+            # A concurrent request with this key may have won the unique ledger
+            # insert. Reload it after rollback and return the winning batch.
+            await self.db.rollback()
+            result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = result.scalars().first()
+            if ledger:
+                return await self._replay_bulk_request(ledger, payload_hash)
+            raise
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def _replay_bulk_request(
+        self, ledger: EquipmentCheckBulkRequest, payload_hash: str
+    ) -> tuple[List[CheckTemplateItem], bool]:
+        if ledger.payload_hash != payload_hash:
+            raise ValueError("Idempotency key was already used with different items")
+        result = await self.db.execute(
+            select(CheckTemplateItem).where(CheckTemplateItem.id.in_(ledger.item_ids))
+        )
+        by_id = {str(item.id): item for item in result.scalars().all()}
+        if len(by_id) != len(ledger.item_ids):
+            raise ValueError("Idempotency record refers to an incomplete batch")
+        return [by_id[item_id] for item_id in ledger.item_ids], True
+
     async def update_item(
         self,
         item_id: str,
@@ -722,32 +869,15 @@ class EquipmentCheckService:
     ) -> Optional[date]:
         """Resolve the authoritative expiration for this item result.
 
-        The template is authoritative because changes to its expiration must
-        go through the validated inventory-lot swap flow. ``expiration_found``
-        remains part of the check result as an observation, but a check
-        submitter cannot use it to clear an expired equipment record.
+        Inventory-backed template data is authoritative. Shift checks only
+        report those values; lot numbers and expiration dates are changed by
+        inventory receiving, correction, and swap workflows.
         """
         if tmpl_item is not None:
             resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
         else:
             resolved = item_data.get("expiration_date")
 
-        # Trust the observation only in the conservative direction: a crew
-        # reading an already-past date off the unit means the thing on the
-        # truck is expired regardless of what the record promises, so the check
-        # must fail exactly as if the record itself were expired. The record is
-        # NOT updated here — the observed date lives on the check result and
-        # the swap flow remains the only writer of the template's date. A
-        # *later* observed date still never clears the record's verdict, and an
-        # item the record does not track (no resolved date) stays untracked.
-        observed = item_data.get("expiration_found")
-        if (
-            observed
-            and resolved is not None
-            and observed < resolved
-            and observed < date.today()
-        ):
-            return observed
         return resolved
 
     @classmethod
@@ -802,37 +932,6 @@ class EquipmentCheckService:
 
         return total, completed, failed, overall_status
 
-    @staticmethod
-    def _apply_found_values_to_template(
-        tmpl_item: Optional[CheckTemplateItem],
-        *,
-        serial_found: Optional[str] = None,
-        lot_found: Optional[str] = None,
-        expiration_found: Optional[date] = None,
-    ) -> bool:
-        """Write a swapped-in unit's identifiers back onto the template item.
-
-        Serial and lot observations remain synchronized for existing behavior.
-        Expiration observations are deliberately not applied here: only the
-        validated inventory-lot swap flow may change the authoritative date.
-
-        Returns True when the template actually changed.
-        """
-        if tmpl_item is None:
-            return False
-        serial_changed = serial_found and serial_found != (
-            tmpl_item.serial_number or ""
-        )
-        lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
-        if not (serial_changed or lot_changed):
-            return False
-
-        if serial_found:
-            tmpl_item.serial_number = serial_found
-        if lot_found:
-            tmpl_item.lot_number = lot_found
-        return True
-
     async def _create_check_items(
         self,
         check_id: str,
@@ -840,21 +939,11 @@ class EquipmentCheckService:
         template_items_map: Dict[str, CheckTemplateItem],
         organization_id: str,
     ) -> List[ShiftEquipmentCheckItem]:
-        """Create ORM check item records, updating template serials as needed."""
+        """Create check item snapshots from authoritative inventory data."""
         created: List[ShiftEquipmentCheckItem] = []
         for item_data in items_data:
             tmpl_item_id = item_data.get("template_item_id")
-            serial_found = item_data.get("serial_found")
-            lot_found = item_data.get("lot_found")
-            expiration_found = item_data.get("expiration_found")
-
             tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
-            updated_serial = self._apply_found_values_to_template(
-                tmpl_item,
-                serial_found=serial_found,
-                lot_found=lot_found,
-                expiration_found=expiration_found,
-            )
             # A check is a recount. quantity_found is a crew standing at the
             # compartment counting, so it outranks whatever the running total
             # had drifted to, and it settles a shortfall report if the truck is
@@ -891,10 +980,10 @@ class EquipmentCheckService:
                 level_unit=item_data.get("level_unit"),
                 serial_number=item_data.get("serial_number"),
                 lot_number=item_data.get("lot_number"),
-                serial_found=serial_found,
-                lot_found=lot_found,
-                expiration_found=expiration_found,
-                updated_serial=updated_serial,
+                serial_found=None,
+                lot_found=None,
+                expiration_found=None,
+                updated_serial=False,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
                 expiration_date=item_data.get("expiration_date"),
@@ -1058,7 +1147,13 @@ class EquipmentCheckService:
         data: Dict[str, Any],
         allow_manage: bool = False,
     ) -> ShiftEquipmentCheck:
-        """Submit an equipment check for a shift."""
+        """Submit an equipment check for a shift.
+
+        The database unique constraint is the concurrency authority.  The
+        early lookup provides a friendly fast path, while the flush below
+        claims the shift/template slot before item, inventory, deficiency, or
+        notification effects are produced.
+        """
         result = await self.db.execute(
             select(Shift).where(
                 Shift.id == shift_id,
@@ -1092,10 +1187,31 @@ class EquipmentCheckService:
 
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
+        client_submission_id = data.get("client_submission_id")
         selected_template = None
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
+
+        # Resolve an acknowledged retry before consulting mutable template
+        # state. The template may have been disabled, reassigned, deleted, or
+        # edited after this transaction committed but before its response was
+        # lost; none of those changes should turn a successful retry into 400.
+        if client_submission_id:
+            retry_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.organization_id == organization_id,
+                    ShiftEquipmentCheck.client_submission_id == client_submission_id,
+                )
+            )
+            retry = retry_result.scalars().first()
+            if retry is not None:
+                if retry.shift_id != shift_id or retry.template_id != template_id:
+                    raise EquipmentCheckConflictError(
+                        "This client submission ID was already used for another check"
+                    )
+                if retry.overall_status != "incomplete":
+                    return await self.get_check(retry.id, organization_id)
 
         if template_id:
             position = getattr(assignment, "position", None)
@@ -1145,10 +1261,16 @@ class EquipmentCheckService:
                             "items": items_data,
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
+                            "client_submission_id": client_submission_id,
                         },
                         allow_any=allow_manage,
                     )
-                raise ValueError(
+                if (
+                    client_submission_id
+                    and existing_check.client_submission_id == client_submission_id
+                ):
+                    return await self.get_check(existing_check.id, organization_id)
+                raise EquipmentCheckConflictError(
                     "A check for this template has already "
                     "been submitted for this shift"
                 )
@@ -1192,8 +1314,64 @@ class EquipmentCheckService:
             failed_items=failed,
             notes=data.get("notes"),
             signature_data=data.get("signature_data"),
+            client_submission_id=client_submission_id,
         )
         self.db.add(check)
+
+        # Claim the unique slot before any operational side effects. Concurrent
+        # transactions both can miss the advisory lookup above; precisely one
+        # flush succeeds and the loser deterministically resumes/returns the
+        # winner or receives a conflict.
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            await self.db.rollback()
+            ownership_predicates = [
+                and_(
+                    ShiftEquipmentCheck.shift_id == shift_id,
+                    ShiftEquipmentCheck.template_id == template_id,
+                )
+            ]
+            if client_submission_id:
+                ownership_predicates.append(
+                    and_(
+                        ShiftEquipmentCheck.organization_id == organization_id,
+                        ShiftEquipmentCheck.client_submission_id
+                        == client_submission_id,
+                    )
+                )
+            winner_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(or_(*ownership_predicates))
+            )
+            winner = winner_result.scalars().first()
+            if winner is None:
+                # The integrity failure was unrelated to idempotency.
+                raise
+            if winner.shift_id != shift_id or winner.template_id != template_id:
+                raise EquipmentCheckConflictError(
+                    "This client submission ID was already used for another check"
+                )
+            if winner.overall_status == "incomplete":
+                return await self.complete_incomplete_check(
+                    check_id=winner.id,
+                    organization_id=organization_id,
+                    checked_by=checked_by,
+                    data={
+                        "items": items_data,
+                        "notes": data.get("notes"),
+                        "signature_data": data.get("signature_data"),
+                        "client_submission_id": client_submission_id,
+                    },
+                    allow_any=allow_manage,
+                )
+            if (
+                client_submission_id
+                and winner.client_submission_id == client_submission_id
+            ):
+                return await self.get_check(winner.id, organization_id)
+            raise EquipmentCheckConflictError(
+                "A check for this template has already been submitted for this shift"
+            )
 
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
@@ -1427,30 +1605,14 @@ class EquipmentCheckService:
                     "level_reading", existing.level_reading
                 )
                 existing.notes = item_data.get("notes", existing.notes)
-                existing.serial_found = item_data.get(
-                    "serial_found", existing.serial_found
-                )
-                existing.lot_found = item_data.get("lot_found", existing.lot_found)
-                existing.expiration_found = (
-                    item_data.get("expiration_found") or existing.expiration_found
-                )
-
                 tmpl_item = template_items_map.get(tmpl_id or "")
-                if self._apply_found_values_to_template(
-                    tmpl_item,
-                    serial_found=existing.serial_found,
-                    lot_found=existing.lot_found,
-                    expiration_found=existing.expiration_found,
-                ):
-                    existing.updated_serial = True
-
-                expiration = self._resolve_expiration(
-                    {
-                        "expiration_found": existing.expiration_found,
-                        "expiration_date": existing.expiration_date,
-                    },
-                    tmpl_item,
-                )
+                # Lot metadata is inventory-owned. Ignore legacy/client
+                # observations when a saved incomplete check is resumed.
+                existing.serial_found = None
+                existing.lot_found = None
+                existing.expiration_found = None
+                existing.updated_serial = False
+                expiration = self._resolve_expiration({}, tmpl_item)
                 existing.expiration_date = expiration
                 existing.is_expired = bool(expiration and expiration < today)
 
@@ -1507,6 +1669,11 @@ class EquipmentCheckService:
             check.notes = data["notes"]
         if data.get("signature_data"):
             check.signature_data = data["signature_data"]
+        if data.get("client_submission_id"):
+            # Completing a draft is a distinct client operation. Persist its
+            # key so a lost completion response can replay to this now-complete
+            # record instead of conflicting with the draft's original key.
+            check.client_submission_id = data["client_submission_id"]
 
         await self.db.commit()
         return await self.get_check(check.id, organization_id)

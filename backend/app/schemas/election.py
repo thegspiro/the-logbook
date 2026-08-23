@@ -982,7 +982,7 @@ class BulkVoteCreate(BaseModel):
     """
 
     election_id: UUID
-    votes: List[BulkVoteItem] = Field(..., min_length=1)
+    votes: List[BulkVoteItem] = Field(..., min_length=1, max_length=250)
 
 
 class EmailBallot(BaseModel):
@@ -1234,9 +1234,16 @@ class BallotItemVote(BaseModel):
     Sending none of the three counts as an abstention.
     """
 
-    ballot_item_id: str = Field(..., description="ID of the ballot item being voted on")
+    ballot_item_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="ID of the ballot item being voted on",
+    )
     choice: Optional[str] = Field(
         None,
+        max_length=200,
         description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID",
     )
     candidate_ids: Optional[List[str]] = Field(
@@ -1247,7 +1254,10 @@ class BallotItemVote(BaseModel):
         None,
         description="Ordered candidate ids, index 0 = rank 1 (ranked choice)",
     )
-    write_in_name: Optional[str] = Field(None, description="Name for write-in votes")
+    write_in_name: Optional[str] = Field(
+        None, min_length=1, max_length=200, description="Name for write-in votes"
+    )
+    model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
     def validate_selection(self) -> "BallotItemVote":
@@ -1284,8 +1294,22 @@ class BallotSubmission(BaseModel):
     """Full ballot submission with all votes"""
 
     votes: List[BallotItemVote] = Field(
-        ..., description="List of votes, one per ballot item"
+        ...,
+        min_length=1,
+        max_length=250,
+        description="List of votes, one per ballot item",
     )
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("votes")
+    @classmethod
+    def ballot_items_must_be_unique(
+        cls, votes: List[BallotItemVote]
+    ) -> List[BallotItemVote]:
+        item_ids = [vote.ballot_item_id for vote in votes]
+        if len(item_ids) != len(set(item_ids)):
+            raise ValueError("Only one vote entry may be submitted per ballot item")
+        return votes
 
 
 class BallotSubmissionResponse(BaseModel):

@@ -189,6 +189,12 @@ export interface CheckTemplateItemCreate {
   expiration_warning_days?: number | undefined;
 }
 
+export interface CheckTemplateItemBulkResult {
+  items: CheckTemplateItem[];
+  createdCount: number;
+  replayed: boolean;
+}
+
 export interface CheckTemplateItemUpdate {
   name?: string | undefined;
   description?: string | undefined;
@@ -350,6 +356,7 @@ export interface CheckItemResultSubmit {
 export interface ShiftEquipmentCheckCreate {
   template_id: string;
   check_timing: string;
+  client_submission_id?: string | undefined;
   items: CheckItemResultSubmit[];
   notes?: string | undefined;
   signature_data?: string | undefined;

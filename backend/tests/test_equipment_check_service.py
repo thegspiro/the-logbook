@@ -10,10 +10,12 @@ would leak another org's apparatus name.
 Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.services.equipment_check_service import EquipmentCheckService
 
@@ -21,6 +23,7 @@ from app.services.equipment_check_service import EquipmentCheckService
 @pytest.fixture
 def mock_db():
     db = AsyncMock()
+    db.add = MagicMock()
     db.commit = AsyncMock()
     db.execute = AsyncMock()
     return db
@@ -106,6 +109,133 @@ class TestUpdateTemplateApparatusValidation:
         ):
             result = await service.update_template("tmpl-x", "org-1", {"name": "X"})
         assert result is None
+
+
+class TestBulkItemCreation:
+    """The batch validates first, orders deterministically, and is retry-safe."""
+
+    @staticmethod
+    def empty_result():
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        result.scalars.return_value.first.return_value = None
+        return result
+
+    async def test_orders_after_existing_items_and_commits_once(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_result()
+        mock_db.scalar.return_value = 7
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+        ):
+            created, replayed = await service.add_items_bulk(
+                "comp-1",
+                "org-1",
+                [{"name": "A"}, {"name": "B"}],
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+        assert [item.name for item in created] == ["A", "B"]
+        assert [item.sort_order for item in created] == [8, 9]
+        assert replayed is False
+        mock_db.commit.assert_awaited_once()
+
+    async def test_invalid_foreign_key_writes_nothing(self, service, mock_db):
+        validator = AsyncMock(side_effect=[None, ValueError("Invalid equipment")])
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", validator),
+        ):
+            with pytest.raises(ValueError, match="Invalid equipment"):
+                await service.add_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    [{"name": "A"}, {"name": "B", "equipment_id": "bad"}],
+                    "request-123",
+                    "user-1",
+                    "Tester",
+                )
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
+        mock_db.rollback.assert_awaited_once()
+
+    async def test_flush_failure_rolls_back_complete_batch(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_result()
+        mock_db.scalar.return_value = None
+        mock_db.flush.side_effect = RuntimeError("database failure")
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+        ):
+            with pytest.raises(RuntimeError, match="database failure"):
+                await service.add_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    [{"name": "A"}, {"name": "B"}],
+                    "request-123",
+                    "user-1",
+                    "Tester",
+                )
+        # The ledger is staged first; neither it nor either item can commit.
+        assert mock_db.add.call_count == 1
+        mock_db.commit.assert_not_awaited()
+        mock_db.rollback.assert_awaited_once()
+
+    async def test_retry_returns_original_rows_without_writing(self, service, mock_db):
+        payload = [{"name": "A"}, {"name": "B"}]
+        normalized_hash = (
+            __import__("hashlib")
+            .sha256(
+                __import__("json")
+                .dumps(payload, sort_keys=True, separators=(",", ":"))
+                .encode()
+            )
+            .hexdigest()
+        )
+        ledger = SimpleNamespace(
+            payload_hash=normalized_hash, item_ids=["first", "second"]
+        )
+        ledger_result = MagicMock()
+        ledger_result.scalars.return_value.first.return_value = ledger
+        original = [
+            SimpleNamespace(id="first", name="A"),
+            SimpleNamespace(id="second", name="B"),
+        ]
+        item_result = MagicMock()
+        item_result.scalars.return_value.all.return_value = original
+        mock_db.execute.side_effect = [ledger_result, item_result]
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+        ):
+            items, replayed = await service.add_items_bulk(
+                "comp-1", "org-1", payload, "request-123", "user-1", "Tester"
+            )
+        assert items == original
+        assert replayed is True
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_awaited()
 
 
 class TestSubmitterTemplateVisibility:
@@ -311,20 +441,21 @@ class TestAuthoritativeCheckTiming:
                 AsyncMock(return_value={"item-1": MagicMock()}),
             ),
             patch.object(service, "get_check", AsyncMock(return_value=check)),
-            patch.object(
-                service, "_apply_found_values_to_template", return_value=False
-            ),
             patch.object(service, "_resolve_expiration", return_value=None),
         ):
             await service.complete_incomplete_check(
                 "check-1",
                 "org-1",
                 "user-1",
-                {"items": [{"template_item_id": "item-1", "status": "pass"}]},
+                {
+                    "client_submission_id": "completion-1",
+                    "items": [{"template_item_id": "item-1", "status": "pass"}],
+                },
             )
 
         assert check.check_timing == "end_of_shift"
         assert check.overall_status == "pass"
+        assert check.client_submission_id == "completion-1"
 
 
 class TestShiftCheckCompletionStatus:
@@ -683,6 +814,145 @@ class TestSubmitCheckResumeOverride:
                 allow_manage=False,
             )
         assert complete.await_args.kwargs["allow_any"] is False
+
+    async def test_completed_idempotent_retry_precedes_template_validation(
+        self, service, mock_db
+    ):
+        shift = MagicMock(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        completed = MagicMock(
+            id="chk-1",
+            shift_id="shift-1",
+            template_id="tmpl-1",
+            overall_status="pass",
+        )
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        retry_result = MagicMock()
+        retry_result.scalars.return_value.first.return_value = completed
+        mock_db.execute = AsyncMock(side_effect=[shift_result, retry_result])
+
+        with (
+            patch.object(service, "_resolve_templates", AsyncMock()) as resolve,
+            patch.object(
+                service, "get_check", AsyncMock(return_value=completed)
+            ) as get_check,
+        ):
+            result = await service.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="manager-1",
+                data={
+                    "template_id": "tmpl-1",
+                    "client_submission_id": "retry-1",
+                    "items": [{"status": "pass"}],
+                },
+                allow_manage=True,
+            )
+
+        assert result is completed
+        resolve.assert_not_awaited()
+        get_check.assert_awaited_once_with("chk-1", "org-1")
+
+
+class TestConcurrentShiftTemplateSubmission:
+    async def test_one_record_and_one_set_of_operational_effects(self):
+        """Both requests miss the advisory read; the flush is the race gate."""
+
+        shift = SimpleNamespace(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        template = SimpleNamespace(id="tmpl-1", check_timing="start_of_shift")
+        both_at_flush = asyncio.Event()
+        winner_persisted = asyncio.Event()
+        flush_count = 0
+        persisted = []
+        effects = 0
+
+        class RaceSession:
+            def __init__(self, winner: bool):
+                self.winner = winner
+                self.execute_count = 0
+                self.candidate = None
+
+            async def execute(self, _statement):
+                self.execute_count += 1
+                value = shift if self.execute_count == 1 else None
+                if self.execute_count == 4:
+                    value = persisted[0]
+                result = MagicMock()
+                result.scalars.return_value.first.return_value = value
+                return result
+
+            def add(self, candidate):
+                self.candidate = candidate
+
+            async def flush(self):
+                nonlocal flush_count
+                flush_count += 1
+                if flush_count == 2:
+                    both_at_flush.set()
+                await both_at_flush.wait()
+                if self.winner:
+                    persisted.append(self.candidate)
+                    winner_persisted.set()
+                    return
+                await winner_persisted.wait()
+                raise IntegrityError("insert", {}, Exception("duplicate"))
+
+            async def rollback(self):
+                return None
+
+            async def commit(self):
+                return None
+
+        winner_service = EquipmentCheckService(RaceSession(winner=True))
+        loser_service = EquipmentCheckService(RaceSession(winner=False))
+
+        async def run(service):
+            async def create_items(*_args, **_kwargs):
+                nonlocal effects
+                effects += 1
+                return []
+
+            with (
+                patch.object(
+                    service, "_resolve_templates", AsyncMock(return_value=[template])
+                ),
+                patch.object(
+                    service,
+                    "_load_checkable_template_items",
+                    AsyncMock(return_value={}),
+                ),
+                patch.object(service, "_validate_and_snapshot_submission"),
+                patch.object(service, "_create_check_items", create_items),
+                patch.object(
+                    service, "_update_apparatus_deficiency", AsyncMock()
+                ) as deficiency,
+                patch.object(
+                    service, "get_check", AsyncMock(side_effect=lambda *_: persisted[0])
+                ),
+                patch(
+                    "app.services.equipment_check_service.resolve_apparatus_ref",
+                    AsyncMock(return_value=SimpleNamespace(full_id=None)),
+                ),
+            ):
+                result = await service.submit_check(
+                    shift_id="shift-1",
+                    organization_id="org-1",
+                    checked_by="user-1",
+                    data={
+                        "template_id": "tmpl-1",
+                        "client_submission_id": "stable-request-1",
+                        "items": [{"status": "pass"}],
+                    },
+                    allow_manage=True,
+                )
+                return result, deficiency.await_count
+
+        first, second = await asyncio.gather(run(winner_service), run(loser_service))
+
+        assert len(persisted) == 1
+        assert first[0] is second[0] is persisted[0]
+        assert effects == 1
+        assert first[1] + second[1] == 1
 
 
 class TestFailureAlertDetails:

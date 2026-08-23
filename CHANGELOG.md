@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security documentation: dynamic testing guide (2026-08-22)
+
+**Documentation**
+
+- Added a pre-DAST security testing guide that maps the application's trust
+  boundaries and gives authorized staging testers prioritized checks for
+  authentication, tenant isolation, public tokens, uploads and exports, SSRF,
+  webhooks, background jobs, and high-impact business workflows.
+
 ### Navigation: browser tabs now identify the current page (2026-08-20)
 
 **Fixed**

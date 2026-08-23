@@ -999,6 +999,13 @@ export const schedulingService = {
     const response = await api.post<CheckTemplateItem>(`/equipment-checks/compartments/${compartmentId}/items`, data);
     return response.data;
   },
+  async addCheckItemsBulk(compartmentId: string, items: CheckTemplateItemCreate[], idempotencyKey: string) {
+    const response = await api.post<import('../types/equipmentCheck').CheckTemplateItemBulkResult>(
+      `/equipment-checks/compartments/${compartmentId}/items/bulk`,
+      { items, idempotency_key: idempotencyKey }
+    );
+    return response.data;
+  },
   async updateCheckItem(itemId: string, data: CheckTemplateItemUpdate): Promise<CheckTemplateItem> {
     const response = await api.put<CheckTemplateItem>(`/equipment-checks/items/${itemId}`, data);
     return response.data;

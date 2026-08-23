@@ -150,8 +150,12 @@ export {
 export type {
   DashboardStats,
   AdminSummary,
+  OperationsDashboard,
+  OperationsItem,
   ActionItemSummary,
   CommunityEngagement,
+  MainDashboardWidgets,
+  WidgetPeriod,
   ComplianceMatrixMember,
   ComplianceMatrix,
   ExpiringCertification,
