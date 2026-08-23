@@ -1518,10 +1518,22 @@ class EventService:
         if not event:
             return None, "Event not found"
 
-        # Validate times if both are provided
-        if actual_start_time and actual_end_time:
-            if actual_end_time <= actual_start_time:
-                return None, "Actual end time must be after actual start time"
+        # Validate the resulting pair, including a previously recorded value when
+        # this request updates only one side of the interval.
+        effective_start = (
+            actual_start_time
+            if actual_start_time is not None
+            else event.actual_start_time
+        )
+        effective_end = (
+            actual_end_time if actual_end_time is not None else event.actual_end_time
+        )
+        if (
+            effective_start is not None
+            and effective_end is not None
+            and effective_end <= effective_start
+        ):
+            return None, "Actual end time must be after actual start time"
 
         # Update times
         if actual_start_time is not None:

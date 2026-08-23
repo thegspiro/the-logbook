@@ -27,6 +27,7 @@ import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLotCreate } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatCalendarDate } from '../../utils/dateFormatting';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 
@@ -53,6 +54,9 @@ const SupplyExpiringPage: React.FC = () => {
 
   // Inline add-stock modal
   const [stockTarget, setStockTarget] = useState<SupplyExpiringItem | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(stockTarget));
   const [lotForm, setLotForm] = useState<InventoryLotCreate>(emptyLotForm);
   const [saving, setSaving] = useState(false);
 

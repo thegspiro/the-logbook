@@ -27,6 +27,14 @@ export interface QueuedCheck {
   photos: QueuedPhoto[];
   queuedAt: number;
   retries: number;
+  /**
+   * Set as soon as the server accepts the check. Keeping this on the queued
+   * record lets photo retries resume without submitting the check a second
+   * time.
+   */
+  submittedCheckId?: string;
+  /** Submitted check-item IDs keyed by the template-item IDs in `photos`. */
+  submittedItemIds?: Record<string, string>;
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'error';
@@ -71,6 +79,14 @@ export async function enqueueCheck(
   payload: ShiftEquipmentCheckCreate,
   photoItems: { itemId: string; files: File[] }[]
 ): Promise<string> {
+  // Generate this once, before persisting. Every drain attempt reuses the
+  // stored payload, allowing the API to recognize a retry after its response
+  // was lost rather than reporting a second completed check.
+  const id = queueId();
+  const stablePayload = {
+    ...payload,
+    client_submission_id: payload.client_submission_id ?? id,
+  };
   const photos: QueuedPhoto[] = [];
   for (const group of photoItems) {
     for (const file of group.files) {
@@ -83,9 +99,9 @@ export async function enqueueCheck(
   }
 
   const entry: QueuedCheck = {
-    id: queueId(),
+    id,
     shiftId,
-    payload,
+    payload: stablePayload,
     photos,
     queuedAt: Date.now(),
     retries: 0,
@@ -148,6 +164,33 @@ export async function markRetry(id: string): Promise<QueuedCheck | null> {
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 
+  return entry;
+}
+
+/** Persist an accepted check before attempting any of its queued photo uploads. */
+export async function markCheckSubmitted(
+  id: string,
+  submittedCheckId: string,
+  submittedItemIds: Record<string, string>
+): Promise<QueuedCheck | null> {
+  const db = await openDB();
+  const entry = await new Promise<QueuedCheck | undefined>((resolve, reject) => {
+    const store = txStore(db, 'readonly');
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result as QueuedCheck | undefined);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+  });
+
+  if (!entry) return null;
+  entry.submittedCheckId = submittedCheckId;
+  entry.submittedItemIds = submittedItemIds;
+
+  await new Promise<void>((resolve, reject) => {
+    const store = txStore(db, 'readwrite');
+    const req = store.put(entry);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+  });
   return entry;
 }
 

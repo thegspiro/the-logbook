@@ -356,6 +356,7 @@ export interface CheckItemResultSubmit {
 export interface ShiftEquipmentCheckCreate {
   template_id: string;
   check_timing: string;
+  client_submission_id?: string | undefined;
   items: CheckItemResultSubmit[];
   notes?: string | undefined;
   signature_data?: string | undefined;
