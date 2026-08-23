@@ -185,6 +185,8 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage`  |
 | `/events/:id/analytics`  | Event Analytics     | `analytics.view` |
 
+> _(2026-08-23)_ **Check-In Monitoring** also lists members whose check-in landed before the event's scheduled start, with how early each one was. Their attendance is already credited from the scheduled start rather than from the tap, so the list is not a correction queue — it exists so an organizer can spot the member who really was working beforehand and set their check-in time by hand, which is credited verbatim. Members already given an explicit check-in time drop off the list.
+
 ### Events Module Pages (2026-03-13)
 
 | URL                 | Page                       | Permission       |

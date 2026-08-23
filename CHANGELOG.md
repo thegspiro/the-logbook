@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
+
+**Fixed**
+
+- **Arriving early inflated attendance hours.** Check-in typically opens an
+  hour before a 19:00 drill, so a member who tapped in at 18:20 was credited
+  from 18:20 — forty extra minutes that flowed straight through to their
+  training record, to any admin hours category the event maps to, and to every
+  compliance report built on those. A training runs from the moment it is
+  scheduled to start; nobody was being trained in the parking lot.
+- Attendance is now credited from the event's **scheduled start** whenever a
+  self-recorded check-in precedes it. Arriving _late_ is untouched — that
+  really does mean less time — and it applies wherever duration is computed:
+  end-of-event finalization, a member checking themselves out, and the admin
+  hours window handed on from either.
+- **A manager's `override_check_in_at` is honoured verbatim and never
+  clamped.** That is the escape hatch for the case the clamp gets wrong —
+  volunteers who genuinely were setting up an hour before the doors opened —
+  and it is a deliberate act by somebody accountable for it, which a tap is
+  not.
+
+**Added**
+
+- **The event's manager is told who tapped in early.** A panel on the check-in
+  monitoring dashboard names them and says how far ahead of the start each one
+  landed ("John Doe — tapped in 42 minutes early, at 6:18 PM"), with the same
+  flag beside the member on the event's attendance list, where their times are
+  edited. Members already ruled on with an override drop off both.
+- The panel says what was already done rather than asking for a correction:
+  the hours are credited from the start time, and the organizer only needs to
+  act for somebody who really was working beforehand. A prompt to go and fix
+  something that is already right would bury the one case that needs them.
+- `EventRSVP.early_check_in_minutes` records how far ahead of the scheduled
+  start a self check-in landed. Deliberately a snapshot of what was true at the
+  tap — an observation about when the member arrived, not a value to recompute
+  if the organizer later moves the event — and not set for manager-recorded
+  check-ins, since an officer checking somebody in early is doing it on purpose.
+- `GET /events/{id}/check-in-monitoring` gains `early_check_ins`,
+  `early_check_in_count` and `early_check_in_threshold_minutes`. The early list
+  is not a slice of `recent_check_ins` and is not capped at ten: a manager who
+  can only see the ten most recent taps cannot act on the one from an hour ago.
+
+**Notes**
+
+- This applies to every self check-in, not only NFC card taps — a QR scan an
+  hour early had exactly the same effect and was credited the same way.
+- Shift attendance is deliberately unchanged. A shift really does run from when
+  the crew arrives, so the actual check-in time is the right one there; it is
+  fixed-duration events (trainings, meetings, drills) where the scheduled start
+  is the honest number.
+
 ### NFC ID cards: tap a member's card to check them in (2026-08-23)
 
 **Added**

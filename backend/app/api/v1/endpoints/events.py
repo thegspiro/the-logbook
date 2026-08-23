@@ -206,6 +206,7 @@ def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
         checked_in_at=rsvp.checked_in_at,
         checked_out_at=rsvp.checked_out_at,
         attendance_duration_minutes=rsvp.attendance_duration_minutes,
+        early_check_in_minutes=rsvp.early_check_in_minutes,
         override_check_in_at=rsvp.override_check_in_at,
         override_check_out_at=rsvp.override_check_out_at,
         override_duration_minutes=rsvp.override_duration_minutes,
