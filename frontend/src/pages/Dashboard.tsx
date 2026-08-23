@@ -8,10 +8,12 @@ import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
 import DashboardReadiness from '../components/dashboard/DashboardReadiness';
+import SchedulingWidgets from '../components/dashboard/SchedulingWidgets';
 import DashboardOrganizationWidgets from '../components/dashboard/DashboardOrganizationWidgets';
 import { AssetWidgetRegistry } from '../components/dashboard/AssetWidgetRegistry';
 import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistry';
 import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDashboard';
+import SchedulingWidgets from '../components/dashboard/SchedulingWidgets';
 import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
@@ -168,6 +170,7 @@ const Dashboard: React.FC = () => {
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
   const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
+  const canViewScheduling = checkPermission('scheduling.view');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -1650,6 +1653,8 @@ const Dashboard: React.FC = () => {
                 ))}
             </div>
 
+            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
+
             {canViewOrganization && setupProgress && (
               <OrganizationSetupWidget
                 completed={setupProgress.completed}
@@ -1657,6 +1662,8 @@ const Dashboard: React.FC = () => {
                 onOpen={() => void navigate('/setup')}
               />
             )}
+
+            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
 
             <AssetWidgetRegistry widgets={assetWidgets} />
           </div>
