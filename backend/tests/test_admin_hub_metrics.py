@@ -202,7 +202,7 @@ class TestFormatting:
         assert _plural(2, "entry", "entries") == "entries"
 
     @pytest.mark.parametrize(
-        "today,expected",
+        ("today", "expected"),
         [
             (date(2026, 1, 5), date(2026, 1, 1)),
             (date(2026, 3, 31), date(2026, 1, 1)),
