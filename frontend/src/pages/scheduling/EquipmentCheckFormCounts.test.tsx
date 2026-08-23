@@ -3,6 +3,7 @@
  * count as having been checked.
  */
 
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -420,29 +421,45 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(dialog.getByText('Record 4 items at full?')).toBeInTheDocument();
   });
 
-  it('records a corrected date without leaving the check', async () => {
-    const user = userEvent.setup();
+  it('shows inventory lot data without offering a second editor', async () => {
     render({
       hasExpiration: true,
       lotsAboard: [{ id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 2, isExpired: false }],
     });
     await screen.findByText('LOT-A');
 
-    await user.click(screen.getByRole('button', { name: /Correct/ }));
-    const dateField = screen.getByLabelText('Expiration');
-    await user.clear(dateField);
-    await user.type(dateField, '2028-01-31');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByText('Inventory lots aboard')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Correct/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Expiration')).not.toBeInTheDocument();
+    expect(mockUpdateDeployedLot).not.toHaveBeenCalled();
+  });
+  it('derives an expired unanswered item as failed everywhere, including submission', async () => {
+    const user = userEvent.setup();
+    render({ hasExpiration: true, expirationDate: '2020-01-01' });
 
-    // The record follows the box the crew is holding, in the same act. The
-    // untouched lot number is omitted so the metadata-change permission
-    // gate doesn't reject a member's date correction.
-    await waitFor(() => {
-      expect(mockUpdateDeployedLot).toHaveBeenCalledWith('ti-1', 'dl-1', {
-        quantity: 2,
-        expirationDate: '2028-01-31',
-      });
-    });
-    expect(await screen.findByText('NEW-9')).toBeInTheDocument();
+    expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Front Bumper, 1 of 1 checked, Has Failures/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Submit Report' }));
+    await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
+    expect(mockSubmitCheck.mock.calls[0][1].items[0]).toMatchObject({ status: 'fail', is_expired: true });
+  });
+
+  it('renders an expired item safely under React Strict Mode', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderWithRouter(
+      <StrictMode>
+        <EquipmentCheckForm
+          shiftId="shift-1"
+          template={template({ hasExpiration: true, expirationDate: '2020-01-01' }) as never}
+        />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/update.*while rendering|cannot update/i);
+    consoleError.mockRestore();
   });
 });
