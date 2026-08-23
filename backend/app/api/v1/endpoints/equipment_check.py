@@ -64,7 +64,10 @@ from app.schemas.equipment_check import (
     SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    EquipmentCheckConflictError,
+    EquipmentCheckService,
+)
 from app.services.equipment_readiness_service import EquipmentReadinessService
 from app.utils.image_processing import optimize_image
 
@@ -747,6 +750,8 @@ async def submit_check(
         return check
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    except EquipmentCheckConflictError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -759,7 +764,9 @@ async def submit_check(
 async def submit_standalone_check(
     data: StandaloneEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit a standalone equipment check not tied to a shift."""
     service = EquipmentCheckService(db)
@@ -782,7 +789,9 @@ async def complete_incomplete_check(
     check_id: str,
     data: EquipmentCheckCompleteItems,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Complete remaining items on an incomplete check."""
     service = EquipmentCheckService(db)

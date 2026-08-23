@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**247 tables · 4246 columns · 803 foreign keys**
+**248 tables · 4259 columns · 806 foreign keys**
 
 ---
 
@@ -327,6 +327,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
+### Legal
+
+<sub>`app/models/legal.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`legal_document_revisions`](#legal_document_revisions) | `LegalDocumentRevision` | 12 | A proposed or published version of one public legal document. |
+
 ### Locations
 
 <sub>`app/models/location.py`</sub>
@@ -506,7 +514,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
 | [`shift_completion_reports`](#shift_completion_reports) | `ShiftCompletionReport` | 28 | Shift Completion Report model |
 | [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 23 | Individual item result within a completed equipment check. |
-| [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 17 | A completed equipment checklist submission for a shift. |
+| [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
@@ -2488,7 +2496,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no |  | `other` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no |  | `other` |  |
 | `default_title` | VARCHAR(200) | yes |  |  |  |
 | `default_description` | TEXT | yes |  |  |  |
 | `default_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` |
@@ -2529,7 +2537,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no | IDX | `other` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`, `recruitment`) | no | IDX | `other` |  |
 | `custom_category` | VARCHAR(100) | yes | IDX |  |  |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` |
 | `location` | VARCHAR(300) | yes |  |  |  |
@@ -5274,6 +5282,33 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Legal
+
+### `legal_document_revisions`
+
+**LegalDocumentRevision** · `app/models/legal.py`
+
+> A proposed or published version of one public legal document.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `document_type` | ENUM(`privacy_policy`, `terms_of_service`) | no |  |  |  |
+| `status` | ENUM(`draft`, `published`, `archived`) | no |  | `draft` |  |
+| `body` | TEXT | no |  |  |  |
+| `change_note` | TEXT | no |  |  |  |
+| `effective_date` | VARCHAR(64) | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `published_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_legal_revisions_org_type_status` (`organization_id`, `document_type`, `status`)
+
 ## Locations
 
 ### `locations`
@@ -7704,6 +7739,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `failed_items` | INTEGER | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `signature_data` | TEXT | yes |  |  |  |
+| `client_submission_id` | VARCHAR(100) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -7714,6 +7750,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_shift_equip_check_shift_tmpl` (`shift_id`, `template_id`)
 - `idx_shift_equip_check_template` (`template_id`)
 - `idx_shift_equip_check_user` (`checked_by`)
+
+**Constraints**
+
+- UNIQUE `uq_shift_equipment_check_client_submission` (`organization_id`, `client_submission_id`)
+- UNIQUE `uq_shift_equipment_check_shift_template` (`shift_id`, `template_id`)
 
 ### `shift_patterns`
 
@@ -8724,7 +8765,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (298 references)
+### → `users` (300 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8890,6 +8931,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | NO ACTION | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | NO ACTION | yes |
+| `legal_document_revisions` | `created_by` | SET NULL | yes |
+| `legal_document_revisions` | `published_by` | SET NULL | yes |
 | `locations` | `created_by` | NO ACTION | yes |
 | `maintenance_records` | `created_by` | NO ACTION | yes |
 | `maintenance_records` | `performed_by` | NO ACTION | yes |
@@ -9027,7 +9070,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (196 references)
+### → `organizations` (197 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9139,6 +9182,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
 | `manual_ballot_attestations` | `organization_id` | CASCADE | no |

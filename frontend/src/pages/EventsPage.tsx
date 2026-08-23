@@ -96,6 +96,7 @@ const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.SOCIAL,
   EventTypeEnum.FUNDRAISER,
   EventTypeEnum.CEREMONY,
+  EventTypeEnum.RECRUITMENT,
   EventTypeEnum.OTHER,
 ];
 
@@ -1328,8 +1329,8 @@ export const EventsPage: React.FC = () => {
                   <code className="bg-theme-surface-hover rounded px-1 py-0.5 text-xs">is_mandatory</code>.
                 </p>
                 <p className="text-theme-text-muted mb-4 text-xs">
-                  Valid event types: business_meeting, public_education, training, social, fundraiser, ceremony, other.
-                  Dates can be in formats like{' '}
+                  Valid event types: business_meeting, public_education, training, social, fundraiser, ceremony,
+                  recruitment, other. Dates can be in formats like{' '}
                   <code className="bg-theme-surface-hover rounded px-1 py-0.5">YYYY-MM-DD HH:MM</code> or{' '}
                   <code className="bg-theme-surface-hover rounded px-1 py-0.5">MM/DD/YYYY HH:MM</code>.
                 </p>

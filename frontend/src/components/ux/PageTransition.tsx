@@ -16,7 +16,6 @@ interface PageTransitionProps {
 // fallback. Long enough for a data fetch behind a skeleton, short enough that
 // a screen-reader user on a genuinely heading-less page still hears something.
 const HEADING_WATCH_TIMEOUT_MS = 5000;
-const APPLICATION_NAME = 'The Logbook';
 
 export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
   const location = useLocation();
@@ -37,16 +36,6 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
   // on children) is told apart from an actual navigation.
   const lastPath = useRef<string | null>(null);
 
-  // Public routes render outside this component. Clear any heading-derived
-  // title when the protected application layout unmounts so record details do
-  // not remain visible in the browser tab after logout or session expiry.
-  useEffect(
-    () => () => {
-      document.title = APPLICATION_NAME;
-    },
-    []
-  );
-
   useEffect(() => {
     setTransitioning(true);
     setDisplayedChildren(children);
@@ -57,10 +46,6 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
     if (lastPath.current !== location.pathname) {
       lastPath.current = location.pathname;
       announcedPath.current = null;
-      // A client-side navigation otherwise keeps the previous page's title in
-      // the browser tab and history until (or unless) the next page manages its
-      // own title. Clear it immediately, then replace it with the h1 below.
-      document.title = APPLICATION_NAME;
     }
 
     let observer: MutationObserver | null = null;
@@ -78,7 +63,6 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
         observer = null;
         if (fallbackTimer) clearTimeout(fallbackTimer);
         setAnnouncement(text);
-        if (text !== 'Page loaded') document.title = `${text} | ${APPLICATION_NAME}`;
       };
 
       const readHeading = () => contentRef.current?.querySelector('h1')?.textContent?.trim() ?? '';

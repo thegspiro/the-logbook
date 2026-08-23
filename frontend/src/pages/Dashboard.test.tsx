@@ -893,7 +893,9 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
         expect(mockGetSetupChecklist).toHaveBeenCalledTimes(1);
-        expect(mockGetInventorySummary).toHaveBeenCalledTimes(1);
+        // The legacy inventory summary no longer owns Organization-tab UI;
+        // asset widgets are permission-scoped independently.
+        expect(mockGetInventorySummary).not.toHaveBeenCalled();
       });
     });
 

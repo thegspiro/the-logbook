@@ -20,6 +20,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -34,14 +35,18 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.event import Event, EventRSVP
 from app.models.training import (
+    SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
     TrainingRecord,
     TrainingRequirement,
+    TrainingSession,
     TrainingStatus,
+    TrainingSubmission,
 )
-from app.models.user import User
+from app.models.user import User, UserStatus
 from app.schemas.training import (
     BulkTrainingRecordCreate,
     BulkTrainingRecordResult,
@@ -82,6 +87,264 @@ from app.utils.upload_limits import read_upload_limited
 router = APIRouter()
 
 MAX_TRAINING_CSV_BYTES = 10 * 1024 * 1024
+
+
+@router.get("/dashboard-summary")
+async def get_training_dashboard_summary(
+    expiration_days: int = Query(90, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Return bounded, officer-authorized data for training dashboard widgets.
+
+    This deliberately replaces the dashboard's former downloads of the complete
+    user and training-record collections.  Member names are only returned from
+    this ``training.manage`` endpoint, whose callers can already open both the
+    member and training detail views.  Count-only validation data never contains
+    member identity fields.
+    """
+    org_id = current_user.organization_id
+    today = date.today()
+    now = datetime.now(timezone.utc)
+    year_start = date(today.year, 1, 1)
+    recent_start = today - timedelta(days=30)
+    cutoff = today + timedelta(days=expiration_days)
+
+    members = list(
+        (
+            await db.execute(
+                select(User).where(
+                    User.organization_id == org_id,
+                    User.status == UserStatus.ACTIVE,
+                    User.compliance_exempt == False,  # noqa: E712
+                    User.deleted_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    requirements = list(
+        (
+            await db.execute(
+                select(TrainingRequirement).where(
+                    TrainingRequirement.organization_id == org_id,
+                    TrainingRequirement.active == True,  # noqa: E712
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    records = list(
+        (
+            await db.execute(
+                select(TrainingRecord).where(
+                    TrainingRecord.organization_id == org_id,
+                    (
+                        TrainingRecord.user_id.in_([m.id for m in members])
+                        if members
+                        else False
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_user: dict[str, list[TrainingRecord]] = {}
+    for record in records:
+        by_user.setdefault(str(record.user_id), []).append(record)
+    waivers = await fetch_org_waivers(db, str(org_id))
+    include_current = await get_org_include_current_month(db, str(org_id))
+
+    compliant = 0
+    intervention: list[dict] = []
+    risk_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
+    applicable_counts: dict[str, int] = {str(req.id): 0 for req in requirements}
+    for member in members:
+        applicable = [
+            r
+            for r in requirements
+            if not r.required_membership_types
+            or (member.membership_type or "active") in r.required_membership_types
+        ]
+        unmet: list[str] = []
+        for req in applicable:
+            applicable_counts[str(req.id)] += 1
+            req_status, _, _ = _evaluate_member_requirement(
+                req,
+                by_user.get(str(member.id), []),
+                today,
+                waivers=waivers.get(str(member.id), []),
+                org_include_current_month=include_current,
+            )
+            if req_status != TrainingStatus.COMPLETED.value:
+                unmet.append(str(req.id))
+                risk_counts[str(req.id)] += 1
+        if not unmet:
+            compliant += 1
+        else:
+            intervention.append(
+                {
+                    "member_id": str(member.id),
+                    "member_name": member.full_name or member.username,
+                    "unmet_count": len(unmet),
+                    "requirement_id": unmet[0],
+                }
+            )
+
+    expiring_records = [
+        r
+        for r in records
+        if r.status == TrainingStatus.COMPLETED
+        and r.expiration_date
+        and today <= r.expiration_date <= cutoff
+    ]
+    user_map = {str(m.id): m for m in members}
+    recent = sorted(
+        [
+            r
+            for r in records
+            if r.status == TrainingStatus.COMPLETED
+            and r.completion_date
+            and recent_start <= r.completion_date <= today
+        ],
+        key=lambda r: r.completion_date,
+        reverse=True,
+    )
+    year_records = [
+        r
+        for r in records
+        if r.status == TrainingStatus.COMPLETED
+        and r.completion_date
+        and year_start <= r.completion_date <= today
+    ]
+    total_hours = round(sum(r.hours_completed or 0 for r in year_records), 2)
+
+    pending = (
+        await db.scalar(
+            select(func.count(TrainingSubmission.id)).where(
+                TrainingSubmission.organization_id == org_id,
+                TrainingSubmission.status == SubmissionStatus.PENDING_REVIEW,
+            )
+        )
+        or 0
+    )
+
+    session_rows = (
+        await db.execute(
+            select(TrainingSession, Event)
+            .join(Event, TrainingSession.event_id == Event.id)
+            .where(
+                TrainingSession.organization_id == org_id,
+                Event.start_datetime >= now,
+                Event.max_attendees.isnot(None),
+            )
+            .order_by(Event.start_datetime)
+            .limit(5)
+        )
+    ).all()
+    capacities = []
+    for session, event in session_rows:
+        registered = (
+            await db.scalar(
+                select(func.count(EventRSVP.id)).where(
+                    EventRSVP.event_id == event.id,
+                    EventRSVP.status == "going",
+                )
+            )
+            or 0
+        )
+        capacities.append(
+            {
+                "session_id": str(session.id),
+                "title": event.title,
+                "start_datetime": event.start_datetime.isoformat(),
+                "capacity": event.max_attendees,
+                "registered": registered,
+                "remaining": max(0, event.max_attendees - registered),
+            }
+        )
+
+    tracked = len(members)
+    return {
+        "widget_metadata": {
+            key: {"module": "training", "permission": "training.manage"}
+            for key in (
+                "compliance-overview",
+                "upcoming-expirations",
+                "recent-completions",
+                "training-hours",
+                "requirements-status",
+                "members-needing-intervention",
+                "upcoming-session-capacity",
+                "pending-validation",
+                "requirements-at-risk",
+            )
+        },
+        "stats": {
+            "total_members": tracked,
+            "tracked_members": tracked,
+            "compliant_members": compliant,
+            "compliance_percentage": (
+                round(compliant / tracked * 100) if tracked else 100
+            ),
+            "expiring_count": len(expiring_records),
+            "completions_last_30_days": len(recent),
+            "total_hours_this_year": total_hours,
+            "average_hours_per_member": (
+                round(total_hours / tracked, 1) if tracked else 0
+            ),
+        },
+        "expirations": [
+            {
+                "id": str(r.id),
+                "member_id": str(r.user_id),
+                "member_name": user_map[str(r.user_id)].full_name
+                or user_map[str(r.user_id)].username,
+                "course_name": r.course_name,
+                "expiration_date": r.expiration_date.isoformat(),
+                "days_left": (r.expiration_date - today).days,
+            }
+            for r in expiring_records[:5]
+        ],
+        "recent_completions": [
+            {
+                "id": str(r.id),
+                "member_id": str(r.user_id),
+                "member_name": user_map[str(r.user_id)].full_name
+                or user_map[str(r.user_id)].username,
+                "course_name": r.course_name,
+                "completion_date": r.completion_date.isoformat(),
+                "hours_completed": r.hours_completed or 0,
+            }
+            for r in recent[:5]
+        ],
+        "requirements": [
+            {
+                "id": str(r.id),
+                "name": r.name,
+                "due_date": r.due_date.isoformat() if r.due_date else None,
+            }
+            for r in requirements[:5]
+        ],
+        "members_needing_intervention": sorted(
+            intervention, key=lambda x: x["unmet_count"], reverse=True
+        )[:5],
+        "upcoming_session_capacity": capacities,
+        "pending_validation": {"count": pending},
+        "requirements_at_risk": [
+            {
+                "requirement_id": str(r.id),
+                "name": r.name,
+                "members_at_risk": risk_counts[str(r.id)],
+                "applicable_members": applicable_counts[str(r.id)],
+            }
+            for r in requirements
+            if risk_counts[str(r.id)] > 0
+        ][:5],
+    }
 
 
 def _require_self_or_training_officer(current_user: User, user_id: UUID) -> None:
@@ -2116,10 +2379,6 @@ async def confirm_historical_import(
 # ============================================
 # Compliance Matrix
 # ============================================
-
-from pydantic import BaseModel
-
-from app.models.user import UserStatus
 
 
 class RequirementStatusItem(BaseModel):

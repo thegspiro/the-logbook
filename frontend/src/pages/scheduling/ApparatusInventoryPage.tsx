@@ -50,6 +50,7 @@ import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 /** The list endpoint's ceiling; asking for more is rejected outright. */
 const FLEET_PAGE_SIZE = 100;
@@ -81,9 +82,12 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [usedTarget, setUsedTarget] = useState<ApparatusInventoryItem | null>(null);
   const [swapTarget, setSwapTarget] = useState<ApparatusInventoryItem | null>(null);
+
   const [swapQuantity, setSwapQuantity] = useState(1);
   // The lots aboard for one position, opened from its "N lots" row.
   const [lotsTarget, setLotsTarget] = useState<ItemDeployedLots | null>(null);
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(lotsTarget) || Boolean(swapTarget));
   const [lotsBusy, setLotsBusy] = useState(false);
 
   useEffect(() => {
