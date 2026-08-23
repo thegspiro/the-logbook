@@ -1,5 +1,65 @@
 # Screenshot currency
 
+## Captured 2026-08-23 — the storefront, and three defects behind one placeholder
+
+`19-03-privacy-header`, `19-04-qr-directory-search`, `19-05-qr-regenerate-warning`,
+`19-06-store-admin-orders`, `19-07-member-payment-method` and
+`19-08-store-admin-activity` are captured, opened and checked. 445 of 485 filled.
+
+Guide 19's Store Admin marker could not be photographed at all until three
+defects were fixed, and each was invisible from the previous one.
+
+**1. The Store Admin landing page answered 500 whenever the store was in use.**
+`get_open_windows` did not eager-load `offerings`, and the endpoint serializes
+its result through `_window_payload`, which reads `window.offerings` and each
+`offering.product.name`. Under asyncio a lazy load there raises
+`MissingGreenlet` rather than emitting a query, so the dashboard failed for any
+department with an open order window — the only state in which the page has
+anything to show. `list_windows` and `get_window` already eager-load it.
+
+**2. Opening the Orders tab raised a dialog stuck on "Loading…".**
+`StoreAdminPage` holds `ordersDetailId` as `''` when nothing is deep-linked;
+`StoreOrdersTab` did `useState(initialOrderId ?? null)`, and `'' ?? null` is
+`''`. `OrderDetailModal` opens on `orderId !== null`, while its fetch is guarded
+by `if (!orderId) return` — so an empty string opened a dialog with no order
+behind it, over the list the administrator came to read. Pitfall #1 in its exact
+documented form; `||` was the fix.
+
+**3. The status filter silently showed the wrong rows.** Changing a filter
+starts a fetch without cancelling the one running, and the tab issues more than
+one unfiltered load while mounting. When an unfiltered response landed after the
+filtered one it overwrote it, leaving the control reading "Paid" over a list of
+every order — six rows read as though they were the two that were asked for. A
+request-sequence guard now lets only the newest response write. Both defects
+have tests that fail against the old implementation.
+
+**One placeholder asked for text the product does not have.** The marker wanted
+"the explanatory text that reporting payment is not payment processing" beside
+the payment-method editor. No such text exists anywhere in the member-facing
+storefront: the screen offers the department's handles, a method picker and an
+"I've sent payment" button, which reads as a checkout. Rather than caption a
+note that is not in the frame, the image is captioned for what it shows and the
+guide now states the distinction in prose and says plainly that the screen does
+not.
+
+**One marker needed two images.** The activity cards are on Overview and the
+list they describe is on Orders; no tab shows both. Split into `19-08` and
+`19-06` with a sentence tying them together — the workflow breakdown counts
+**Paid 2** and the filtered list returns those same two orders.
+
+**Seed gaps closed:** the order window is now opened explicitly rather than
+waiting for `autoOpen` to be noticed by a background task (a fresh database
+produced no orders at all, and the second seeding run silently produced them),
+and three member orders are placed and advanced so the list carries four
+distinct states. The administrator's own order is deliberately left unpaid —
+`18-04-my-orders-unpaid` pictures it.
+
+**A capture-harness lesson worth keeping:** the first version of `19-06` waited
+for `Showing 1 – 2 of 2`. That count depends on how many orders the seeder has
+advanced to paid, which moves between runs, so the shot passed or timed out
+according to the demo data rather than the page. It now waits for the filtered
+request itself.
+
 ## Captured 2026-08-23 — the room tree, and a fixture that was never written down
 
 `06-24-rooms-nested-tree`, `06-25-room-located-inside` and

@@ -198,4 +198,60 @@ describe('StoreOrdersTab payment handling', () => {
       expect(mockGetOrders).toHaveBeenLastCalledWith(expect.objectContaining({ openOnly: undefined }));
     });
   });
+
+  it('ignores a slower earlier fetch that lands after a filtered one', async () => {
+    // Changing a filter starts a new request without cancelling the running
+    // one, and they are not guaranteed to return in order. When the unfiltered
+    // load issued on mount landed last it overwrote the filtered result, so the
+    // status control read "Paid" over a list of every order -- six rows read as
+    // though they were the two that were asked for.
+    const paidOnly = order({ id: 'paid-1', orderNumber: 'ORD-2026-0002', status: 'paid' });
+    const everything = [order(), paidOnly];
+
+    // Keyed on the request rather than on call order: the tab issues more than
+    // one unfiltered load while mounting, so mockImplementationOnce chains line
+    // up against the wrong call. Every unfiltered fetch is held open; the
+    // filtered one answers immediately.
+    const held: (() => void)[] = [];
+    mockGetOrders.mockImplementation(async (params: { status?: string }) => {
+      if (params?.status === 'paid') return { items: [paidOnly], total: 1 };
+      return new Promise((resolve) => {
+        held.push(() => resolve({ items: everything, total: everything.length }));
+      });
+    });
+
+    const user = userEvent.setup();
+    renderTab();
+
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenCalled();
+    });
+
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'paid');
+    await waitFor(() => {
+      expect(screen.getByText(/ORD-2026-0002/)).toBeInTheDocument();
+    });
+
+    // The mount requests now come back, carrying the unfiltered list.
+    held.forEach((release) => release());
+
+    await waitFor(() => {
+      expect(screen.getByText(/ORD-2026-0002/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/ORD-2026-0001/)).not.toBeInTheDocument();
+  });
+
+  it('does not open the order dialog when no order is deep-linked', async () => {
+    // StoreAdminPage holds ordersDetailId as '' when nothing is deep-linked and
+    // passes it straight down. `'' ?? null` is '', and OrderDetailModal opens on
+    // `orderId !== null` -- so every visit to the Orders tab raised a dialog
+    // stuck on "Loading…" (its fetch is guarded by `if (!orderId) return`) on
+    // top of the list the administrator came to read.
+    renderTab({ initialOrderId: '' });
+
+    await waitFor(() => {
+      expect(mockGetOrders).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

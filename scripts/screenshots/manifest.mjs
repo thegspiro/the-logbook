@@ -10059,6 +10059,134 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // The rewrite's whole claim is in the first screen: the department, not the
+    // platform, controls the data. Shot signed out because /privacy is reachable
+    // from the sign-in page and that is where a member being onboarded meets it.
+    id: "19-03-privacy-header",
+    doc: "19-august-2026-release-changes.md",
+    line: 493,
+    anchor: "the rewritten `/privacy` page header showing the",
+    alt: "The rewritten Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it",
+    route: "/privacy",
+    auth: "anonymous",
+    fullPage: false,
+  },
+  {
+    // The directory is the page the release added; the search is what makes it
+    // a directory rather than a list. "Station" matches the seeded stations
+    // without naming a room, so nothing sensitive is on screen -- which the
+    // marker asks for explicitly.
+    id: "19-04-qr-directory-search",
+    doc: "19-august-2026-release-changes.md",
+    line: 80,
+    anchor: "Check-In QR Codes directory search results with Download PNG",
+    alt: "The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls",
+    route: "/locations/qr-codes",
+    prepare: async (page) => {
+      const search = page
+        .getByPlaceholder(/search/i)
+        .or(page.getByRole("searchbox"))
+        .first();
+      await search.waitFor({ state: "visible", timeout: 20_000 });
+      await search.fill("Station");
+      // The list filters as you type; give React a frame to settle before the
+      // shutter, or the capture catches the unfiltered list.
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    // The warning is the subject: a regenerated code silently invalidates a
+    // sign already printed and hung on a wall, and that consequence only exists
+    // in this dialog.
+    id: "19-05-qr-regenerate-warning",
+    doc: "19-august-2026-release-changes.md",
+    line: 82,
+    anchor: "regenerate-code confirmation explicitly warning that the",
+    alt: "The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued",
+    route: "/locations/qr-codes",
+    prepare: async (page) => {
+      await clickByName(/^Regenerate$/)(page);
+      await page
+        .getByRole("dialog")
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    // The release added the activity cards and made the list filter on the same
+    // states they count. Shot on the Orders tab with a status filter applied so
+    // the cards and the list the reader is being told they match are both in
+    // frame; the seeder now leaves orders in four distinct states so the
+    // workflow breakdown is not a column of zeroes with one number in it.
+    id: "19-06-store-admin-orders",
+    doc: "19-august-2026-release-changes.md",
+    line: 64,
+    anchor: "Store Admin with activity/status cards and a matching filtered",
+    alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
+    route: "/store/admin",
+    prepare: async (page) => {
+      // Scoped to the tab strip. A bare name match also hits the Overview's
+      // recent-order rows, and clicking one of those opens the order modal over
+      // the list -- which is what the first capture of this shot contained.
+      await page
+        .locator(".tab-scroll button")
+        .filter({ hasText: "Orders" })
+        .first()
+        .click({ timeout: 10_000 });
+      const status = page.locator("#order-status-filter");
+      await status.waitFor({ state: "visible", timeout: 20_000 });
+      // Wait for the filtered fetch itself, not for a row count. The list is
+      // still the unfiltered one until that response lands, and the count
+      // depends on how many orders the seeder has advanced to paid -- which
+      // moves between runs, so waiting for a specific "N of N" made the shot
+      // pass or time out depending on the demo data rather than on the page.
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes("/store/orders?") &&
+            response.url().includes("status=paid"),
+          { timeout: 20_000 },
+        ),
+        status.selectOption({ label: "Paid" }),
+      ]);
+    },
+    fullPage: true,
+  },
+  {
+    // The other half of the same release note. The activity cards and the
+    // order-workflow breakdown are on Overview; the list they describe is on
+    // Orders. One tab cannot show both, so the guide carries both images and
+    // says which is which rather than a caption claiming a screen that is not
+    // in the frame.
+    id: "19-08-store-admin-activity",
+    doc: "19-august-2026-release-changes.md",
+    line: 64,
+    anchor: "__paired-with-19-06__",
+    alt: "Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by",
+    route: "/store/admin",
+    fullPage: true,
+  },
+  {
+    // Shot as the member, not the administrator: this is the member's own
+    // order, and an admin looking at the same order gets the reconciliation
+    // controls instead of the "tell us how you paid" editor the guide means.
+    id: "19-07-member-payment-method",
+    doc: "19-august-2026-release-changes.md",
+    line: 66,
+    anchor: "member order payment-method editor plus the explanatory text",
+    alt: "A member changing the payment method on their own order: a method picker over the department's payment handles and the \"I've sent payment\" report",
+    route: "/store/orders",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName(/Change payment method/i)(page);
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
     id: "03-43-time-off-request-form",
     doc: "03-scheduling.md",
     line: 199,

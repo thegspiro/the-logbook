@@ -11682,7 +11682,7 @@ class Seeder:
 
     # -- storefront ---------------------------------------------------
 
-    def seed_storefront(self) -> dict[str, Any]:
+    def seed_storefront(self, members: list[dict] | None = None) -> dict[str, Any]:
         products = items(self.api.get("/store/products"), "products")
         names = {p.get("name") for p in products}
         blueprint = [
@@ -11763,9 +11763,40 @@ class Seeder:
                 )
             )
 
+        self._open_store_window(windows, window_name)
         self._seed_store_settings()
-        orders = self._seed_store_orders(products)
+        orders = self._seed_store_orders(products, members or [])
         return {"products": products, "windows": windows, "orders": orders}
+
+    def _open_store_window(self, windows: list[dict], window_name: str) -> None:
+        """Open the order window rather than waiting for autoOpen to notice it.
+
+        A window created with ``autoOpen`` starts ``scheduled`` and is promoted
+        by a background task, which on a fresh database has not run by the time
+        the next line places an order. The order was refused with "There is no
+        open order window" and reported as a store configuration fact, so the
+        first seed of a new database produced no orders at all and the second
+        one silently produced them — the window having opened in between.
+
+        Opening it here makes one seeding run enough. ``notifyMembers`` is off:
+        the announcement is a real email to every member and has nothing to do
+        with what the guides picture.
+        """
+        window = next((w for w in windows if w.get("name") == window_name), None)
+        if not window:
+            return
+        if str(pick(window, "status") or "").lower() == "open":
+            return
+        window_id = pick(window, "id")
+        if not window_id:
+            return
+        try:
+            self.api.post(
+                f"/store/windows/{window_id}/open",
+                {"notifyMembers": False},
+            )
+        except ApiError as exc:
+            self.blocked.append(f"store window open: {exc}")
 
     def _seed_store_settings(self) -> None:
         """Configure how members pay.
@@ -11797,16 +11828,29 @@ class Seeder:
             },
         )
 
-    def _seed_store_orders(self, products: list[dict]) -> list[dict]:
-        """Place an unpaid order for the demo administrator.
+    def _seed_store_orders(
+        self, products: list[dict], members: list[dict]
+    ) -> list[dict]:
+        """Place an unpaid order for the demo administrator, plus two members'.
 
         The My Orders guide pictures an order awaiting payment, and orders are
         first-person — `POST /store/orders` records the *calling* user, so this
         has to be the account the screenshots are captured as.
+
+        The member orders and the state spread run on every pass, not only when
+        the administrator has none. Guarding the whole method on the
+        administrator's own order meant a second seeding run — the ordinary
+        case, since the seeder runs before every capture — skipped both, and
+        Store Admin stayed a one-row list in a single state.
         """
-        existing = items(self.api.get("/store/orders/mine"), "orders")
-        if existing:
-            return existing
+        if not items(self.api.get("/store/orders/mine"), "orders"):
+            self._place_admin_store_order(products)
+        self._seed_member_store_orders(products, members)
+        self._spread_store_order_states()
+        return items(self.api.get("/store/orders/mine"), "orders")
+
+    def _place_admin_store_order(self, products: list[dict]) -> None:
+        """The administrator's own unpaid order, which My Orders pictures."""
         wanted = ("Department Job Shirt", "Ball Cap")
         lines = []
         for product in products:
@@ -11819,7 +11863,7 @@ class Seeder:
                 line["personalizationText"] = "D. RUIZ"
             lines.append(line)
         if not lines:
-            return existing
+            return
         try:
             self.api.post(
                 "/store/orders",
@@ -11836,7 +11880,111 @@ class Seeder:
             if exc.code != 400:
                 raise
             self.blocked.append(f"store order: {exc}")
-        return items(self.api.get("/store/orders/mine"), "orders")
+
+    def _seed_member_store_orders(
+        self, products: list[dict], members: list[dict]
+    ) -> None:
+        """Two more orders, placed by members rather than the administrator.
+
+        Orders are first-person -- ``POST /store/orders`` records the *calling*
+        user and there is no admin "order on behalf of" route -- so a demo whose
+        only order belongs to the administrator gives Store Admin a one-row list
+        and nothing to filter. Guide 19 pictures the activity cards against a
+        matching filtered list, which needs several orders in several states.
+
+        Same mechanism as ``seed_event_rsvps``: sign in as each member. Local
+        demo fixtures in a throwaway database, never real accounts.
+        """
+        existing = items(self.api.get("/store/orders"), "orders")
+        if len(existing) >= 4:
+            return
+
+        line_products = [
+            product
+            for product in products
+            if product.get("name") in ("Department Job Shirt", "Ball Cap")
+        ]
+        if not line_products:
+            return
+
+        for member in members[:3]:
+            user_id = pick(member, "id")
+            username = member.get("username")
+            if not user_id or not username:
+                continue
+            try:
+                session = self.member_session(self.base_url, user_id, username)
+            except ApiError as exc:
+                self.blocked.append(f"store order for {username}: {exc}")
+                continue
+            product = line_products[len(existing) % len(line_products)]
+            variants = items(product, "variants")
+            line = {"productId": pick(product, "id"), "quantity": 1}
+            if variants:
+                line["variantId"] = pick(variants[0], "id")
+            try:
+                session.post(
+                    "/store/orders",
+                    {
+                        "items": [line],
+                        "paymentMethod": "venmo",
+                        "fulfillmentMethod": "pickup",
+                    },
+                )
+            except ApiError as exc:
+                if exc.code != 400:
+                    raise
+                self.blocked.append(f"store order for {username}: {exc}")
+
+    def _spread_store_order_states(self) -> None:
+        """Leave the order list sitting in more than one state.
+
+        Store Admin's activity cards count orders by status and its list filters
+        on the same values, so a demo where every order is `submitted` gives the
+        cards one non-zero number and the filters nothing to distinguish. Guide
+        19 asks for at least three states on one screen.
+
+        Advanced through the real transition endpoint rather than written
+        directly, so an order that cannot legally reach a status stays where it
+        is instead of the demo asserting a state the product would refuse.
+        Notification is off: these are back-dated fixtures and the member does
+        not need an email per step.
+
+        **The administrator's own order is left where it is.** It is the one
+        `18-04-my-orders-unpaid` pictures — "an unpaid order with its balance
+        and payment options" — and advancing it to `paid` emptied that shot of
+        its subject while every gate stayed green.
+        """
+        mine = {
+            pick(order, "id")
+            for order in items(self.api.get("/store/orders/mine"), "orders")
+        }
+        orders = [
+            order
+            for order in items(self.api.get("/store/orders"), "orders")
+            if pick(order, "id") not in mine
+        ]
+        if len(orders) < 2:
+            return
+
+        # Ordered by how far along they are, so the cards read as a pipeline
+        # rather than as an arbitrary scatter.
+        wanted = ["paid", "ordered", "ready_for_pickup"]
+        for order, status in zip(orders, wanted):
+            if str(pick(order, "status") or "") == status:
+                continue
+            order_id = pick(order, "id")
+            if not order_id:
+                continue
+            try:
+                self.api.post(
+                    f"/store/orders/{order_id}/status",
+                    {"status": status, "notifyMember": False},
+                )
+            except ApiError as exc:
+                if exc.code != 400:
+                    raise
+                self.blocked.append(f"store order -> {status}: {exc}")
 
     # -- run ---------------------------------------------------------
 
@@ -11977,7 +12125,7 @@ class Seeder:
         self.step("compliance profiles", self.seed_compliance_profiles)
         self.step("external training provider", self.seed_external_provider)
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
-        self.step("storefront", self.seed_storefront)
+        self.step("storefront", lambda: self.seed_storefront(members))
         finance = self.step("finance", self.seed_finance) or {}
         self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))
         self.step("approval chains", self.seed_approval_chains)

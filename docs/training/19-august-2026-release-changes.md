@@ -61,9 +61,24 @@ fulfillment remain separate; variant/product locks are canonicalized; notice and
 email results do not reveal other recipients; counts and filters are scoped to
 the active organization.
 
-> **[SCREENSHOT NEEDED — Store Admin with activity/status cards and a matching filtered order list; seed orders in at least three states.]**
->
-> **[SCREENSHOT NEEDED — member order payment-method editor plus the explanatory text that reporting payment is not payment processing.]**
+![Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by](./images/19-08-store-admin-activity.png)
+
+The counts and the list are two tabs, so they are two pictures. Overview holds
+the cards above; Orders holds the list they describe. Read them together — the
+workflow breakdown counts **Paid 2**, and filtering the Orders list to Paid
+returns those same two orders:
+
+![Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches](./images/19-06-store-admin-orders.png)
+
+![A member changing the payment method on their own order: a method picker over the department's payment handles and the "I've sent payment" report](./images/19-07-member-payment-method.png)
+
+**Nothing on that screen says the department is not taking the money, so say it
+in training.** The picker records _how_ a member intends to pay and
+"I've sent payment" records _that they say they have_ — both are claims the
+treasurer then reconciles against the actual account. No card is charged and no
+transfer happens here. The screen offers a handle to pay through and a button to
+report having done so, which reads as a checkout to anyone who has not been told
+otherwise.
 
 ## Room and apparatus QR codes
 
@@ -77,9 +92,9 @@ bound; a stale printed sign stops working after rotation; sensitive facility
 fields require `facilities.view_sensitive`, while editing still requires
 `facilities.edit` or `facilities.manage`.
 
-> **[SCREENSHOT NEEDED — Check-In QR Codes directory search results with Download PNG and Print controls, using non-sensitive demo rooms.]**
->
-> **[SCREENSHOT NEEDED — regenerate-code confirmation explicitly warning that the previously printed code becomes invalid.]**
+![The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls](./images/19-04-qr-directory-search.png)
+
+![The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued](./images/19-05-qr-regenerate-warning.png)
 
 ## Apparatus crew seats and scheduling settings
 
@@ -490,8 +505,7 @@ Both pages were rewritten to state up front that **the department, not the
 platform, controls member data**. The print layouts were rebuilt and both pages
 went through an accessibility pass.
 
-> **[SCREENSHOT NEEDED — the rewritten `/privacy` page header showing the
-> department-control statement above the fold]**
+![The rewritten Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it](./images/19-03-privacy-header.png)
 
 ## Upgrade notes for administrators (August 17–19)
 
