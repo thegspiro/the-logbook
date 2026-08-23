@@ -12,6 +12,7 @@ import DashboardOrganizationWidgets from '../components/dashboard/DashboardOrgan
 import { AssetWidgetRegistry } from '../components/dashboard/AssetWidgetRegistry';
 import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistry';
 import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDashboard';
+import SchedulingWidgets from '../components/dashboard/SchedulingWidgets';
 import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
@@ -168,6 +169,7 @@ const Dashboard: React.FC = () => {
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
   const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
+  const canViewScheduling = checkPermission('scheduling.view');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -1657,6 +1659,8 @@ const Dashboard: React.FC = () => {
                 onOpen={() => void navigate('/setup')}
               />
             )}
+
+            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
 
             <AssetWidgetRegistry widgets={assetWidgets} />
           </div>
