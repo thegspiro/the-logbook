@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 58 theme classes across 22 files generated no CSS at all (2026-08-23)
+
+**Fixed**
+
+- **`bg-theme-bg` was never a utility.** Tailwind emits a `bg-theme-*` rule only
+  when a matching `--color-theme-*` variable is declared, and the only tokens
+  near that name were `--color-theme-bg-from` / `-via` / `-to`, the three stops
+  of the page gradient. The class was in use at 26 call sites and had never
+  produced a single rule. Nothing warns about this: the class sits in the DOM
+  looking exactly like one that works, and the element renders with no colour.
+- **Twelve of those were full-page wrappers, where it looked right anyway** —
+  the gradient lives on `html` and showed straight through — which is why
+  nobody had cause to look at the rest. The rest were four sticky bars that
+  were meant to occlude what scrolled under them and did not, and seven inset
+  panels drawn with a border and no fill.
+- **`--color-theme-bg` now exists**: the page canvas as one flat, opaque
+  colour, for anything that has to cover what scrolls beneath it. The surface
+  tokens cannot do that job — in dark mode they are translucent white by
+  design, meant to sit _on_ the gradient — so a sticky bar painted with one
+  shows the content sliding underneath. The page wrappers drop the class
+  instead of gaining a colour, so the gradient still shows.
+- **Nine more dead names turned up once there was something to check against.**
+  `focus-visible:ring-theme-focus` was missing its `-ring` suffix in two places,
+  so those controls had no visible focus ring for keyboard users at all;
+  `text-theme-text-tertiary` (14 uses), `bg-theme-surface-primary`,
+  `bg-theme-surface-alt`, `bg-theme-background`, `text-theme-primary`,
+  `text-theme-info` and `text-theme-success` all named tiers that do not exist.
+  Each now points at the token it meant.
+
+**Added**
+
+- **`themeTokenIntegrity.test.ts`** walks the source and fails on any
+  `bg-`/`text-`/`border-`/`ring-`… `-theme-*` class with no declared token,
+  naming the file and line. This bug is invisible by construction — no build
+  warning, no lint error, nothing at runtime — so a test is the only thing that
+  can see it.
+
 ### Every notification the platform sends has a new shell (2026-08-23)
 
 **Changed**

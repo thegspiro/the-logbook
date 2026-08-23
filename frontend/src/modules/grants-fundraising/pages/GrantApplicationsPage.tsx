@@ -148,7 +148,7 @@ const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, applications, t
   const colorClasses = APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
 
   return (
-    <div className="border-theme-surface-border bg-theme-bg flex h-full w-72 flex-shrink-0 flex-col rounded-lg border">
+    <div className="border-theme-surface-border bg-theme-surface-secondary flex h-full w-72 flex-shrink-0 flex-col rounded-lg border">
       {/* Column header */}
       <div className="border-theme-surface-border flex items-center justify-between border-b px-3 py-2">
         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${colorClasses}`}>
@@ -332,7 +332,7 @@ export const GrantApplicationsPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="bg-theme-bg min-h-screen">
+    <div className="min-h-screen">
       <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
         {/* Page header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

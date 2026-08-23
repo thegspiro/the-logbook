@@ -2212,7 +2212,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Overall notes + submit */}
         {!previewMode && (
-          <div className="bg-theme-background border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
+          <div className="bg-theme-bg border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>
               <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes

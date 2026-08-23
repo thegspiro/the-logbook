@@ -366,11 +366,12 @@ const EmailTemplatesPage: React.FC = () => {
             saves stayed on screen. `top-0` rather than an offset because this
             bar is the page's own chrome, not a floating element that has to
             clear the mobile bottom nav.
-            Opaque on a surface token rather than the page background: the app
-            background is a diagonal gradient with no flat colour to match, so
-            a bar that tried to blend into it would show the content scrolling
-            underneath. `bg-theme-bg` is not a defined utility. */}
-        <div className="bg-theme-surface border-theme-surface-border sticky top-0 z-30 -mx-4 mb-6 border-b px-4 py-3 shadow-sm sm:-mx-6 sm:px-6">
+            On bg-theme-bg, the flat opaque page canvas, not a surface token:
+            in dark mode the surface tokens are translucent white by design —
+            they are meant to sit *on* the gradient — so a sticky bar painted
+            with one shows the content sliding underneath it, which is the
+            single thing this bar exists to stop. */}
+        <div className="bg-theme-bg border-theme-surface-border sticky top-0 z-30 -mx-4 mb-6 border-b px-4 py-3 shadow-sm sm:-mx-6 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <div className="rounded-lg bg-red-600 p-2">

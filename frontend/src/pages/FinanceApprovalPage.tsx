@@ -88,7 +88,7 @@ export const FinanceApprovalPage: React.FC = () => {
   );
 
   const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="bg-theme-background flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <div className="card w-full max-w-md">
         <h1 className="text-theme-text-primary mb-4 text-xl font-semibold">Approval Request</h1>
         {children}
