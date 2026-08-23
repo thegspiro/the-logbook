@@ -2224,6 +2224,13 @@ class CheckTemplateCompartment(Base):
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # This container is closed with a numbered tamper seal — a drug bag, a
+    # trauma kit, a sealed pack. A seal that matches the last count is proof
+    # nothing inside was touched, so on the check form it clears the contents
+    # count in one tap and leaves only what a seal cannot vouch for: expiry
+    # dates and pressure readings, which move on their own while the bag sits
+    # shut.
+    is_sealed = Column(Boolean, default=False, nullable=False, server_default="0")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

@@ -60,12 +60,49 @@ export const UserSettingsPage: React.FC = () => {
   // (/account?tab=security for the MFA step), so honor ?tab= — but never over
   // a forced password change or MFA enrollment, which must not be navigated
   // away from.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const initialTab: TabType = TAB_IDS.includes(requestedTab as TabType) ? (requestedTab as TabType) : 'account';
   const [activeTab, setActiveTab] = useState<TabType>(
     forcePasswordChange ? 'password' : forceMfaSetup ? 'security' : initialTab
   );
+
+  // `?tab=` is not only an initial value. The update banner links to
+  // /account?tab=app from anywhere in the app, including from this page with
+  // another section already open — a client-side navigation that leaves this
+  // component mounted. Reading the parameter once at useState time meant such a
+  // link changed the query string and nothing else, so the section it promised
+  // was never shown.
+  //
+  // A forced password change or MFA enrollment still wins: those must not be
+  // navigated away from.
+  useEffect(() => {
+    if (forcePasswordChange || forceMfaSetup) return;
+    if (!requestedTab || !TAB_IDS.includes(requestedTab as TabType)) return;
+    setActiveTab(requestedTab as TabType);
+  }, [requestedTab, forcePasswordChange, forceMfaSetup]);
+
+  /**
+   * Select a section and mirror it into `?tab=`, matching the settings screens
+   * that render through SettingsLayout.
+   *
+   * The mirroring is what keeps the effect above usable: without it the URL
+   * would still say `?tab=app` after the member clicked away to another
+   * section, so returning via the banner's link would be a no-op navigation
+   * that changes nothing and re-selects nothing. Replace rather than push —
+   * switching sections is not a history entry worth backing through.
+   */
+  const selectTab = (tab: TabType): void => {
+    setActiveTab(tab);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.set('tab', tab);
+        return next;
+      },
+      { replace: true }
+    );
+  };
 
   // Profile state
   const [_profile, setProfile] = useState<UserWithRoles | null>(null);
@@ -459,7 +496,7 @@ export const UserSettingsPage: React.FC = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => selectTab(tab.id)}
                   className={`focus:ring-theme-focus-ring flex items-center space-x-2 border-b-2 px-1 pb-4 whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
                     activeTab === tab.id
                       ? 'text-theme-text-primary border-red-500'

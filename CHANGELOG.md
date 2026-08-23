@@ -7,6 +7,323 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
+
+**Fixed**
+
+- **Arriving early inflated attendance hours.** Check-in typically opens an
+  hour before a 19:00 drill, so a member who tapped in at 18:20 was credited
+  from 18:20 — forty extra minutes that flowed straight through to their
+  training record, to any admin hours category the event maps to, and to every
+  compliance report built on those. A training runs from the moment it is
+  scheduled to start; nobody was being trained in the parking lot.
+- Attendance is now credited from the event's **scheduled start** whenever a
+  self-recorded check-in precedes it. Arriving _late_ is untouched — that
+  really does mean less time — and it applies wherever duration is computed:
+  end-of-event finalization, a member checking themselves out, and the admin
+  hours window handed on from either.
+- **A manager's `override_check_in_at` is honoured verbatim and never
+  clamped.** That is the escape hatch for the case the clamp gets wrong —
+  volunteers who genuinely were setting up an hour before the doors opened —
+  and it is a deliberate act by somebody accountable for it, which a tap is
+  not.
+
+**Added**
+
+- **The event's manager is told who tapped in early.** A panel on the check-in
+  monitoring dashboard names them and says how far ahead of the start each one
+  landed ("John Doe — tapped in 42 minutes early, at 6:18 PM"), with the same
+  flag beside the member on the event's attendance list, where their times are
+  edited. Members already ruled on with an override drop off both.
+- The panel says what was already done rather than asking for a correction:
+  the hours are credited from the start time, and the organizer only needs to
+  act for somebody who really was working beforehand. A prompt to go and fix
+  something that is already right would bury the one case that needs them.
+- `EventRSVP.early_check_in_minutes` records how far ahead of the scheduled
+  start a self check-in landed. Deliberately a snapshot of what was true at the
+  tap — an observation about when the member arrived, not a value to recompute
+  if the organizer later moves the event — and not set for manager-recorded
+  check-ins, since an officer checking somebody in early is doing it on purpose.
+- `GET /events/{id}/check-in-monitoring` gains `early_check_ins`,
+  `early_check_in_count` and `early_check_in_threshold_minutes`. The early list
+  is not a slice of `recent_check_ins` and is not capped at ten: a manager who
+  can only see the ten most recent taps cannot act on the one from an hour ago.
+
+**Notes**
+
+- This applies to every self check-in, not only NFC card taps — a QR scan an
+  hour early had exactly the same effect and was credited the same way.
+- Shift attendance is deliberately unchanged. A shift really does run from when
+  the crew arrives, so the actual check-in time is the right one there; it is
+  fixed-duration events (trainings, meetings, drills) where the scheduled start
+  is the honest number.
+
+### NFC ID cards: tap a member's card to check them in (2026-08-23)
+
+**Added**
+
+- **NFC tags can now be bound to members, not just to places.** Until now a tag
+  was a _destination_ — a sticker on a bay door carrying a URL, which sent the
+  member's own phone to a check-in page. A card is the inverse: the tag inside
+  a member's ID card identifies the person holding it, and a station reads it
+  to check them in. Both now exist side by side; neither replaces the other.
+- **An officer issues the card and hands it over.** From the new **ID Cards**
+  section of a member's profile, either write a freshly minted code to a blank
+  NFC tag (a sticker inside an ID card, a fob) or record the chip serial of a
+  card that is already printed and cannot be written to. The written-code route
+  is the one to prefer: the code is 128 random bits from the platform CSPRNG,
+  it is not printed on the card, and a tag can be wiped and reissued to
+  somebody else.
+- **A check-in station at `/members/check-in-station`.** Pick a shift, an event
+  or meeting, or an admin hours category, arm the reader, and members tap and
+  walk in — nobody touches the screen between taps. One tap serves arrival and
+  departure by default; a station covering only one direction can be fixed to
+  it.
+- **Two readers, because departments have both.** Web NFC (Chrome on Android,
+  over HTTPS) reads the card on a tablet at the door. A USB reader — the desk
+  kind that types the serial like a keyboard — works everywhere else, including
+  the iPhones and desktops Web NFC has never shipped on. Keystrokes are
+  captured page-wide rather than into a focused box: a kiosk loses focus to the
+  first stray tap on the screen, and a station that silently stops reading is
+  worse than one that was never armed.
+- Two new permissions, both deliberately narrow. `members.manage_id_cards`
+  issues and revokes cards: handing out a credential is a different act from
+  editing a profile, and the officer who does one is rarely the one who does
+  the other. `members.check_in` operates a station: recording attendance for
+  other members confers no ability to edit the shift or event it writes to.
+  Positions and ranks that already carry `members.manage` receive both.
+- Everything lives in the **membership module** (`modules/membership/`) — the
+  panel, the station page, the service, the types and the card helpers —
+  alongside the member records the cards belong to.
+
+**Security**
+
+- **There is no self-service path, by design.** A member cannot register,
+  relabel or revoke a card, not even their own, and no route here is addressed
+  to the calling member. The surface that lets somebody see their own card is
+  the surface a later change turns into one that lets them register one; a
+  credential that records attendance is issued by somebody accountable for
+  handing it over.
+- **A card credential is stored hashed, never in clear text.** The serial (or
+  the written code) is the whole of the credential — anything holding one can
+  clone it onto a writable tag — so a plaintext column would make a database
+  dump a stack of working ID cards. Lookups go by SHA-256 of the normalized
+  value, peppered with the installation's `ENCRYPTION_SALT` so the hashes are
+  not portable between deployments and the small, structured space of card UIDs
+  cannot simply be enumerated. Only the last four characters are kept, for
+  telling two of a member's cards apart on screen.
+- The unique constraint is per organization, not global: two departments on one
+  platform are separate tenants, and a card issued in one must not be
+  discoverable by registering it in the other.
+- A duplicate-registration refusal does not name the member currently holding
+  the card — otherwise card issuing would turn a pile of found cards into a
+  staff directory.
+- `/nfc-tags` is excluded from the client API cache alongside the other
+  PII-bearing endpoints.
+- Card issue, status change, deletion and every recorded tap are written to the
+  audit log.
+
+**Configuration**
+
+- **The whole feature is an integration a department turns on.** A new **NFC ID
+  Cards** entry under Settings → Integrations; while it is off, no card can be
+  issued and no card can be read. The check is enforced on the server, on every
+  `/nfc-tags` route — hiding a screen leaves its endpoints reachable, and these
+  endpoints issue and consume credentials. It fails closed: an organization
+  whose catalog row has never been seeded has not turned anything on, and both
+  halves (`enabled` **and** `status == "connected"`) have to agree, so
+  disconnecting really does stop the cards working.
+- With it off, the profile section, the station page and both navigation
+  entries are absent rather than empty — an empty "ID Cards" panel reads as
+  "none issued", which is a different statement from "this department does not
+  use cards".
+
+**Notes**
+
+- A tap that lands within a minute of the check-in it would otherwise close is
+  read as a bounce and reports the current state instead: a card held against
+  the reader a beat too long fires twice, and inverting on the second read
+  would file a zero-minute shift.
+- A station forwards both the written code and the chip serial, and the server
+  tries the code first. A blank tag can be wiped and reissued, so the serial
+  underneath may still be registered to whoever held it before.
+- The station reports a training-pipeline phase warning rather than overriding
+  it. A member can read and override that warning on their own screen; a
+  station has nobody to ask, and answering for the officer who set the gate is
+  the wrong default.
+- Reporting a card lost is terminal — whoever picked it up can still tap it —
+  so it is never reactivated and a replacement is a fresh registration.
+  Suspension is the reversible state.
+- Retired and on-leave members can still tap in. They attend meetings and
+  banquets, which is exactly what a station records. Suspended, dropped,
+  archived and deleted members cannot.
+
+### Equipment checks: four item types, and the groundwork for walking a check as a lap (2026-08-23)
+
+**Changed**
+
+- **`check_type` carried nine values; seven were checks storing only four
+  kinds of answer.** A number, a pass/fail, a quantity, a date. The extra
+  values were layout decisions wearing a type's clothing: `present` and
+  `functional` both store pass/fail and differ only in what the crew is asked
+  to do — a sentence on the item, not a column — and `reading` and `level`
+  both store a number against a threshold. An admin had to choose between
+  near-synonyms, and the form carried a distinct control for each, so the same
+  question rendered two ways depending on which name somebody picked years
+  earlier.
+- They collapse to **`level` / `function` / `count` / `expiry`**. `header` and
+  `text` are untouched: they are not checks, they are the layout, and the point
+  of naming the four is that a type is no longer allowed to be a layout choice.
+- `app/utils/check_types.py` is the write-side authority (the same pattern as
+  `app/utils/positions.py`). The request schema still **accepts** the legacy
+  names — an older client should not break over a rename it never asked for —
+  but normalizes before storing. It is deliberately stricter than the reader:
+  an unknown value at a request boundary is the caller's mistake and is
+  rejected, where the same value read back from a column falls back to
+  `function`.
+
+**Added**
+
+- **A control per type, each with its own pass rule.** Level stores the number
+  rather than reducing it to a tick, because the trend is the useful part, and
+  an emptied box reads as "not read yet" rather than zero. Function opens a
+  note and a photo on every fail, and **neither blocks the walk** — a crew held
+  at a textarea at 07:00 abandons the check, so an unwritten note is flagged on
+  the finished check instead. Count treats short of par as a **restock line,
+  not a failure**. Expiry confirms the date already on record rather than
+  asking for it again, and stays amber on every shift inside the pull window.
+- **The lap**: stops in walking order, the current one open in place and
+  finished ones collapsed to a line, any stop reachable at any point. A
+  collapsed stop shows its item count, and switches to naming its fault once it
+  has one. The bulk "All good" **refuses to confirm a level** — that would be a
+  fabricated record on the one type whose whole purpose is the stored value —
+  and its label follows what the stop holds ("All at par" for a bag of counts).
+- The template builder names **what each type stores** beside its label, so
+  the choice reads as "what is being asked" rather than as a list of layouts.
+- The lap honours the **sealed-container rule that arrived separately on
+  main**: an intact seal clears the counting inside a bag, but never its expiry
+  dates or pressure readings, which move on their own while the bag sits shut.
+  A seal proves unchanged, not full — so an out-of-date vial cannot hide behind
+  an intact tag.
+
+**Migration notes**
+
+- `c3f81a4d5e72`. **The type collapse does not reverse**: three legacy names
+  become `function` and two become `level`, and no column remembers which. The
+  downgrade deliberately does not guess — a wrong guess renders the wrong
+  control on a safety checklist.
+- What the old names carried implicitly is preserved rather than dropped.
+  Items with an empty description get the instruction their old type implied
+  ("Confirm the item is in place." / "Switch it on and confirm it works.");
+  an item whose author described the test keeps their own words. The seeded
+  preset library got the same treatment — 185 of its 232 items were
+  pass/fail-family with no description, so collapsing them would have left a
+  crew with "Works / Fails" and no test written on the item.
+
+**Not yet wired**
+
+- The lap and its controls are built and tested but **the live check screen
+  still renders the previous flat compartment list**. Swapping it rewrites that
+  screen and the tests that pin its current markup, which is a deliberate
+  follow-up rather than something to slip in alongside the model change.
+
+### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
+
+**Fixed**
+
+- **The Web Push handlers are now concatenated into the generated service
+  worker at build time instead of being pulled in with `importScripts`.** That
+  call sat inside the generated worker's module factory, ahead of
+  `precacheAndRoute`, `skipWaiting` and `clientsClaim`. So one failed request
+  for one optional file did not degrade push — it aborted the factory, and the
+  freshly downloaded worker installed with no precache and no claim on the
+  page. The old worker kept control and kept serving its old precached
+  `index.html` indefinitely, which is exactly "the app doesn't update until I
+  clear the cache".
+- **Why Brave specifically:** Brave runs `importScripts` requests issued from a
+  service worker through its content blocker, including first-party ones and
+  including when Shields are down for the site
+  ([brave/brave-browser#35461](https://github.com/brave/brave-browser/issues/35461),
+  [#53810](https://github.com/brave/brave-browser/issues/53810)). Chrome makes
+  the same request without inspecting it, so the identical build updated fine
+  there and the failure looked browser-specific rather than structural.
+- `/push-sw.js` is still deployed, and still served `no-store`: workers
+  installed before this change keep importing it until their next successful
+  update, which the change itself makes possible. It is **excluded from the new
+  worker's precache** (`globIgnores`), because workbox fetches every precache
+  entry during `install` and rejects the install if one fails — leaving it in
+  the manifest would have moved the single point of failure from `importScripts`
+  to the install event rather than removing it, over a file the new worker no
+  longer uses.
+- **User settings now follow `?tab=` on an in-place navigation, not only on
+  mount, and mirror the selected section back into the URL.** The banner above
+  links to `/account?tab=app` from anywhere in the app, including from that page
+  with another section already open; `activeTab` was seeded from the query
+  string once at `useState` time, so such a link changed the URL and nothing
+  else. A forced password change or MFA enrollment still wins over the
+  parameter.
+
+**Added**
+
+- **An escalation ladder for a device that will not move onto a new build**
+  (`utils/updateRecovery.ts`). Detection already worked; applying was a plain
+  reload, and when that reload came back on the _old_ build nothing noticed —
+  the next check saw the same mismatch and reloaded again, indefinitely.
+  Attempts are now counted per target build: the first is the plain reload, the
+  second additionally deletes every Cache Storage entry first (the same thing
+  members were doing by hand), and after that the app stops reloading itself
+  and the banner switches to pointing at Settings → App → Force refresh.
+- The ladder deliberately stops short of unregistering the service worker: a
+  push subscription belongs to the registration and nothing re-subscribes
+  automatically, so silently dropping callout notifications to fix a stale
+  build is the wrong trade. It also refuses to purge while the server is
+  unreachable, which would leave the device with no working copy of the app,
+  and leaves that attempt uncounted so the purge is still owed once there is a
+  connection to do it safely.
+- `useAppUpdate` now clears the ladder whenever the running build matches the
+  server — the only proof an update actually took — so the next deployment
+  starts from a plain reload again.
+- `validate-pwa.mjs` asserts the push handlers are inlined and that no
+  `importScripts` of `push-sw.js` survives in `dist/sw.js`, and the build
+  plugin fails loudly rather than silently shipping an un-inlined worker.
+- `infrastructure/nginx/nginx.conf` gained the `location = /version.json`
+  `no-store` rule the container-level config already had.
+
+### Equipment checks: replacing expired stock retires units, not whole lots (2026-08-23)
+
+**Fixed**
+
+- **Swapping one box out of a multi-unit lot deleted every unit in it.** A lot
+  aboard is one row carrying a quantity, so a bracket holding four boxes of one
+  lot is a single row of four. Replacing one box removed the row: the three
+  boxes still in the bag vanished from the apparatus count, all four were
+  recorded as disposed of, and the position read three short of a par it
+  actually met — while ready stock had been drawn down by one and one fresh
+  unit added. The retirement now works in units, oldest row first, and removes
+  a row only once it is emptied. Two expired boxes remain two exchanges.
+- **An in-date lot could be retired under an expired-stock disposition.** The
+  check form offers a replacement only on a position reading expired, but that
+  is a property of the screen rather than of the API, and the endpoint now
+  admits ordinary check submitters. The service verifies the named lot is
+  actually expired before retiring it, so the disposition cannot file a false
+  account of a unit that left the truck.
+- **A submitter could bind a checklist position to any catalog item.** The
+  first swap onto an unlinked position establishes its inventory link
+  permanently, and that decision has its own `equipment_check.manage` screen.
+  Opening the swap endpoint to `equipment_check.submit` (so crews can replace
+  expired stock themselves, rather than hunting for an officer while the item
+  stays force-failed) made the first-swap side effect a way around that review.
+  Submitters may now swap onto positions already linked and are refused on ones
+  that are not; officers still create the link. This narrows the grant recorded
+  against EC-3, which was raised because the endpoint had carried no permission
+  at all.
+- **Staff-entered attendance advanced a pipeline off a meeting it never
+  recorded.** Matching an existing prospect on a staff check-in set
+  `EventExternalAttendee.prospect_id` and nothing else, so the applicant's
+  linked-events section and the by-event applicant filter — both of which read
+  `prospect_event_links` — went on reporting the prospect as never having
+  attended. Check-in now writes the same link the kiosk path does.
+
 ### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
 
 **Fixed**
@@ -27,6 +344,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails the test that caused it, names the attribute, explains the concurrency
   trap, and restores the original so the rest of the run stays meaningful.
   Instance targets are ignored: they cannot outlive their test.
+
+### CI: a green PR took 28 minutes to do 39 minutes of work, almost all of it queueing (2026-08-23)
+
+**Changed**
+
+- **A green PR run went from 28m28s to 6–10 minutes.** Almost none of that gap
+  was test speed. Measured on run 32650130001: `Backend Lint` waited 3m40s to
+  run 1m16s, `Backend Unit Tests` waited 5m13s to run 3m52s, and
+  `Integration MySQL` waited **14m37s** to run 4m39s. The three-hop chain
+  (lint → unit → db) put 23m30s of pure queueing on a critical path holding
+  9m47s of work, because every `needs:` edge is a _re-queue_.
+- **The `needs:` edges are gone** from `backend-test-integration`,
+  `backend-test-contract`, `docker-build` and `frontend-e2e`; every job now
+  starts in the first wave. They existed to avoid spending a database runner
+  when the cheap checks were already red — but this repository is public, so
+  runner minutes are free (a run's billable total is literally 0), and the
+  guard was spending the one resource that is scarce. `ci-success` still
+  enforces that every job ran, so this removed serialization, not gating.
+- **`frontend-lint`, `frontend-security` and `frontend-build` are now one
+  `frontend-checks` job.** Each paid the same checkout + setup-node + npm ci to
+  do 108s, 18s and 27s of work, and waited 3m29s, 2m44s and 8m47s in the queue
+  to do it. This also removed a real duplication: `npm run build` _is_
+  `tsc-native.mjs && vite build`, so the separate `npm run typecheck` step was
+  a second full compile of the same tree.
+- **Every commit on `main` now gets its own concurrency group**, in `ci.yml` as
+  well as `secret-scan` and `supply-chain`. `cancel-in-progress: false` does
+  not guarantee a run per commit: GitHub keeps at most one running and one
+  _pending_ run per group, so when three or more main runs overlap each new
+  arrival evicts the pending one. `8c61c948` (#1709) merged and had its run
+  evicted 17 seconds later by the next merge; it sits on `main` with no CI
+  record at all. The cost is deliberate — a merge train of N commits now runs
+  N full matrices concurrently rather than collapsing to two — and if PR
+  latency degrades the fix is a cheaper main run, not a shared group.
+
+**Added**
+
+- **`scripts/check_ci_gate.py`, run as a step of `ci-success` itself.**
+  `ci-success` is the single check branch protection should require, and it
+  only gates a job named in its `needs:` list — so a job added to `ci.yml`
+  without a matching entry runs, reports its own status, and is required by
+  nothing. Neither half looks wrong in review. The checker also rejects a gate
+  whose `if:` is not genuinely unconditional: `always() && needs.x.result ==
+'...'` and `!always()` both contain the substring and both leave the job
+  skippable. It runs _inside_ the gate on purpose — anywhere else, dropping a
+  job from `needs:` detaches the checker from what it validates.
+  `scripts/test_check_ci_gate.py` covers the logic (12 cases).
+
+**Notes**
+
+- The MariaDB leg of the contract matrix was briefly removed and **restored**.
+  Response shapes come from Pydantic serializers and cannot vary by engine —
+  true of the _assertions_, and beside the point about the _execution_:
+  `case.call_and_validate()` issues a real request and the test asserts
+  `status_code < 500`, making that suite broad smoke coverage of the SQL behind
+  every `/api/public/` route. Nothing else covers those paths on MariaDB — the
+  integration matrix excludes the module by its `slow` marker, and the only
+  other test touching `get_form_by_slug` has no `integration` marker and so
+  runs in the database-less unit job.
 
 ### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
 
@@ -10092,7 +10467,7 @@ Large-page components decomposed into focused, maintainable sub-components:
 | Reminder for shift already started | Skipped — only shifts starting within lookahead window |
 | All positions filled via bulk assign | "Fill All Open" button hidden |
 | Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Notes cleared to empty string | Converted to `undefined` via `\|\|` to prevent 422 |
 | Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)

@@ -26,6 +26,7 @@ import {
   UserPlus,
   Building2,
   Stethoscope,
+  Store,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -272,6 +273,30 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       view: ['View facility list', 'See building details', 'Check maintenance schedules'],
       manage: ['Add/edit facilities', 'Log maintenance', 'Manage inspections', 'Track facility systems'],
       defaultManagePositions: ['it_manager', 'facilities_manager'],
+    },
+  },
+
+  {
+    id: 'storefront',
+    name: 'Department Store',
+    description:
+      'Sell apparel and gear to members in time-boxed order windows, paid by Venmo, PayPal, cash or check. Tracks orders, payments, and the vendor purchase order.',
+    icon: Store,
+    priority: 'optional',
+    category: 'Operations',
+    permissions: {
+      viewDescription: 'Browse the store and track your own orders',
+      manageDescription: 'Manage the catalog, order windows, orders, and payments',
+      view: ['Browse the catalog', 'Place orders', 'Track your own orders and payments'],
+      manage: [
+        'Add/edit catalog items',
+        'Open and close order windows',
+        'Advance orders and record payments',
+        'Export the vendor purchase order',
+      ],
+      // Mirrors the seeded grants in core/permissions.py — the quartermaster
+      // runs the store in most departments.
+      defaultManagePositions: ['it_manager', 'quartermaster', 'president', 'fire_chief'],
     },
   },
 

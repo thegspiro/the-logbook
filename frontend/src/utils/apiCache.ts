@@ -41,6 +41,7 @@ const UNCACHEABLE_PREFIXES = [
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
+  '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
@@ -88,6 +89,7 @@ const UNCACHEABLE_PREFIXES = [
   '/roles/admin-access', // admin-status probe (authz decision — must not go stale)
   '/facilities/occupants', // facility occupant PII
   '/facilities/access-keys', // physical building access-key inventory
+  '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
 ] as const;
 
 /**

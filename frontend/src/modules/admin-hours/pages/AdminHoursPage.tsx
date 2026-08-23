@@ -1,25 +1,91 @@
 /**
  * Admin Hours Page
  *
- * Personal view for members to see their logged admin hours,
- * active session, and manually submit hours.
+ * Personal view for members to see their logged admin hours, their progress
+ * against the department's requirements, their active session, and to submit
+ * hours manually.
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, LogOut, Plus, Timer } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ListChecks,
+  LogOut,
+  Plus,
+  Target,
+  Timer,
+} from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
-import type { AdminHoursEntryCreate } from '../types';
+import type { AdminHoursComplianceItem, AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { formatDate, formatTime, localToUTC } from '../../../utils/dateFormatting';
+import { addCalendarDays, formatDate, formatTime, getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
+import { formatDuration } from '../utils/formatDuration';
+import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
 
 const PAGE_SIZE = 20;
 
+// `phrase` reads as a trailing clause ("No hours logged <phrase>"), which is
+// the only form that stays grammatical across a named window and all time.
+const PERIOD_OPTIONS = [
+  { value: 'all', label: 'All time', phrase: 'yet' },
+  { value: 'month', label: 'This month', phrase: 'this month' },
+  { value: '30-days', label: 'Last 30 days', phrase: 'in the last 30 days' },
+  { value: 'year', label: 'This year', phrase: 'this year' },
+] as const;
+
+type ReportingPeriod = (typeof PERIOD_OPTIONS)[number]['value'];
+
+/**
+ * Reporting periods are derived from the department's calendar date rather
+ * than the browser's: a member in a station west of the browser's timezone
+ * would otherwise see "this month" start a day early on the first of a month.
+ */
+const reportingDaysFor = (period: ReportingPeriod, timezone: string): { start: string; end: string } | null => {
+  if (period === 'all') return null;
+  const today = getTodayLocalDate(timezone);
+  if (period === 'year') return { start: `${today.slice(0, 4)}-01-01`, end: today };
+  if (period === 'month') return { start: `${today.slice(0, 7)}-01`, end: today };
+  return { start: addCalendarDays(today, -29), end: today };
+};
+
+const pluralEntries = (count: number): string => `${count} ${count === 1 ? 'entry' : 'entries'}`;
+
+const complianceStatusStyle = (status: string): { label: string; badge: string; bar: string } => {
+  switch (status) {
+    case 'compliant':
+      return {
+        label: 'On track',
+        badge: 'bg-green-500/20 text-green-700 dark:text-green-400',
+        bar: 'bg-green-500',
+      };
+    case 'at_risk':
+      return {
+        label: 'At risk',
+        badge: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
+        bar: 'bg-amber-500',
+      };
+    default:
+      return {
+        label: 'Behind',
+        badge: 'bg-red-500/20 text-red-700 dark:text-red-400',
+        bar: 'bg-red-500',
+      };
+  }
+};
+
 const AdminHoursPage: React.FC = () => {
   const tz = useTimezone();
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const {
     categories,
     myEntries,
@@ -27,13 +93,14 @@ const AdminHoursPage: React.FC = () => {
     entriesLoading,
     activeSession,
     activeSessionLoading,
-    summary,
+    mySummary,
+    mySummaryLoading,
     error,
     fetchCategories,
     fetchMyEntries,
     fetchActiveSession,
     clockOut,
-    fetchSummary,
+    fetchMySummary,
     clearError,
   } = useAdminHoursStore();
 
@@ -48,25 +115,77 @@ const AdminHoursPage: React.FC = () => {
   });
 
   // Filters
+  const [period, setPeriod] = useState<ReportingPeriod>('all');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [page, setPage] = useState(0);
 
-  const loadData = useCallback(() => {
-    void fetchCategories();
-    void fetchMyEntries({
+  const [compliance, setCompliance] = useState<AdminHoursComplianceItem[]>([]);
+
+  // The period drives both the totals and the entry list, so they are always
+  // describing the same window — a summary that disagreed with the list under
+  // it is the reading people trust least.
+  const dateBounds = useMemo(() => {
+    const days = reportingDaysFor(period, tz);
+    if (!days) return {};
+    return {
+      startDate: startOfReportingDayUTC(days.start, tz),
+      endDate: endOfReportingDayUTC(days.end, tz),
+    };
+  }, [period, tz]);
+
+  const periodOption = useMemo(
+    () => PERIOD_OPTIONS.find((option) => option.value === period) ?? PERIOD_OPTIONS[0],
+    [period]
+  );
+
+  const entryQuery = useMemo(
+    () => ({
       status: statusFilter || undefined,
       categoryId: categoryFilter || undefined,
+      ...dateBounds,
       skip: page * PAGE_SIZE,
       limit: PAGE_SIZE,
-    });
+    }),
+    [statusFilter, categoryFilter, dateBounds, page]
+  );
+
+  const loadData = useCallback(() => {
+    void fetchCategories();
+    void fetchMyEntries(entryQuery);
     void fetchActiveSession();
-    void fetchSummary();
-  }, [fetchCategories, fetchMyEntries, fetchActiveSession, fetchSummary, statusFilter, categoryFilter, page]);
+    // The summary endpoint returns organization-wide totals when no user is
+    // named, so a member holding admin_hours.manage saw the whole department's
+    // hours under "My Admin Hours". Always scope this page to the signed-in
+    // member.
+    if (currentUserId) {
+      void fetchMySummary({ userId: currentUserId, ...dateBounds });
+    }
+  }, [fetchCategories, fetchMyEntries, fetchActiveSession, fetchMySummary, entryQuery, dateBounds, currentUserId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    let cancelled = false;
+    void (async () => {
+      const { adminHoursComplianceService } = await import('../services/api');
+      try {
+        const items = await adminHoursComplianceService.getUserCompliance(currentUserId);
+        if (!cancelled) setCompliance(items);
+      } catch {
+        // Requirements are supplementary context; a department that has not
+        // configured a compliance profile is the common case, and the rest of
+        // the page must still render.
+        if (!cancelled) setCompliance([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
 
   // Refresh active session timer using local state
   const [localElapsed, setLocalElapsed] = useState<number | null>(null);
@@ -121,25 +240,15 @@ const AdminHoursPage: React.FC = () => {
       toast.success('Hours submitted');
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
-      void fetchMyEntries({
-        status: statusFilter || undefined,
-        categoryId: categoryFilter || undefined,
-        skip: page * PAGE_SIZE,
-        limit: PAGE_SIZE,
-      });
-      void fetchSummary();
+      void fetchMyEntries(entryQuery);
+      if (currentUserId) {
+        void fetchMySummary({ userId: currentUserId, ...dateBounds });
+      }
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to submit hours'));
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const formatDuration = (minutes: number | null) => {
-    if (minutes === null || minutes === undefined) return '-';
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
   const statusColor = (status: string) => {
@@ -179,6 +288,24 @@ const AdminHoursPage: React.FC = () => {
     return localElapsed >= activeSession.maxSessionMinutes * 0.8;
   }, [activeSession, localElapsed]);
 
+  const loggedCategories = useMemo(
+    () => [...(mySummary?.byCategory ?? [])].sort((a, b) => b.totalMinutes - a.totalMinutes),
+    [mySummary]
+  );
+
+  const loggedMinutesTotal = useMemo(
+    () => loggedCategories.reduce((total, category) => total + category.totalMinutes, 0),
+    [loggedCategories]
+  );
+
+  // Named rather than tiled: an empty category is worth one muted line telling
+  // a member where they have logged nothing, not a stat box reading zero.
+  const untouchedCategoryNames = useMemo(() => {
+    const logged = new Set(loggedCategories.map((category) => category.categoryId));
+    return categories.filter((category) => !logged.has(category.id)).map((category) => category.name);
+  }, [categories, loggedCategories]);
+
+  const hasAnyHours = (mySummary?.totalEntries ?? 0) > 0;
   const totalPages = Math.ceil(myEntriesTotal / PAGE_SIZE);
 
   return (
@@ -264,32 +391,199 @@ const AdminHoursPage: React.FC = () => {
         </div>
       )}
 
-      {/* Summary Cards */}
-      {summary && (
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="bg-theme-surface rounded-lg p-4 shadow-md">
-            <p className="text-theme-text-muted text-xs uppercase">Approved Hours</p>
-            <p className="text-theme-text-primary text-2xl font-bold">{summary.approvedHours}</p>
-          </div>
-          <div className="bg-theme-surface rounded-lg p-4 shadow-md">
-            <p className="text-theme-text-muted text-xs uppercase">Pending Hours</p>
-            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{summary.pendingHours}</p>
-          </div>
-          <div className="bg-theme-surface rounded-lg p-4 shadow-md">
-            <p className="text-theme-text-muted text-xs uppercase">Total Hours</p>
-            <p className="text-theme-text-primary text-2xl font-bold">{summary.totalHours}</p>
-          </div>
-          <div className="bg-theme-surface rounded-lg p-4 shadow-md">
-            <p className="text-theme-text-muted text-xs uppercase">Entries</p>
-            <p className="text-theme-text-primary text-2xl font-bold">{summary.totalEntries}</p>
-          </div>
-          {summary.byCategory.map((cat) => (
-            <div key={cat.categoryId} className="bg-theme-surface rounded-lg p-4 shadow-md">
-              <p className="text-theme-text-muted truncate text-xs uppercase">{cat.categoryName}</p>
-              <p className="text-theme-text-primary text-2xl font-bold">{cat.totalHours}h</p>
-              <p className="text-theme-text-muted text-xs">{cat.entryCount} entries</p>
+      {/* Requirements progress — only departments that configured admin hours
+          requirements for this member's profile get this section. */}
+      {compliance.length > 0 && (
+        <section className="card mb-6 p-5">
+          <div className="flex items-start gap-2">
+            <Target className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+            <div>
+              <h2 className="text-theme-text-primary font-semibold">My requirements</h2>
+              <p className="text-theme-text-secondary mt-0.5 text-sm">
+                Approved hours counted against the requirements set for you. Hours awaiting review do not count yet.
+              </p>
             </div>
-          ))}
+          </div>
+          <div className="mt-5 space-y-5">
+            {compliance.map((item) => {
+              const style = complianceStatusStyle(item.status);
+              const exactProgress =
+                item.requiredHours > 0 ? Math.min(100, (item.loggedHours / item.requiredHours) * 100) : 100;
+              const progress = Math.round(exactProgress);
+              const remaining = Math.max(0, Math.round((item.requiredHours - item.loggedHours) * 100) / 100);
+              return (
+                <div key={`${item.categoryId}-${item.frequency}`}>
+                  <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <span className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: item.categoryColor ?? '#6B7280' }}
+                      />
+                      {item.categoryName}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${style.badge}`}>
+                        {style.label}
+                      </span>
+                    </span>
+                    <span className="text-theme-text-primary text-sm font-semibold">
+                      {item.loggedHours} / {item.requiredHours} hrs{' '}
+                      <span className="text-theme-text-muted font-normal">
+                        · {item.frequency === 'quarterly' ? 'this quarter' : 'this year'}
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    className="bg-theme-surface-hover h-2 overflow-hidden rounded-full"
+                    role="progressbar"
+                    aria-label={`${item.categoryName}: ${progress}% of required hours`}
+                    aria-valuenow={progress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${exactProgress}%` }} />
+                  </div>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    {remaining > 0 ? `${remaining} hrs still needed` : 'Requirement met'} · period ends{' '}
+                    {formatDate(item.periodEnd, tz)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Reporting period */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+          <CalendarDays className="h-4 w-4" aria-hidden="true" />
+          <span>Showing</span>
+          <select
+            value={period}
+            onChange={(e) => {
+              setPeriod(e.target.value as ReportingPeriod);
+              setPage(0);
+            }}
+            className="form-input min-w-40 px-3 py-1.5 text-sm max-md:min-h-[44px]"
+          >
+            {PERIOD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {/* Summary */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <article className="card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-theme-text-secondary text-sm font-medium">Approved</p>
+            <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
+            {mySummary?.approvedHours ?? 0}
+            <span className="ml-1 text-base font-medium">hrs</span>
+          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            {pluralEntries(mySummary?.approvedEntries ?? 0)} credited
+          </p>
+        </article>
+        <article className="card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-theme-text-secondary text-sm font-medium">Awaiting review</p>
+            <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
+          </div>
+          <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
+            {mySummary?.pendingHours ?? 0}
+            <span className="ml-1 text-base font-medium">hrs</span>
+          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            {(mySummary?.pendingEntries ?? 0) === 0
+              ? 'Nothing waiting on an approver'
+              : `${pluralEntries(mySummary?.pendingEntries ?? 0)} with an approver`}
+          </p>
+        </article>
+        <article className="card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-theme-text-secondary text-sm font-medium">
+              Logged &mdash; {periodOption.label.toLowerCase()}
+            </p>
+            <Clock className="h-5 w-5 text-blue-500" aria-hidden="true" />
+          </div>
+          <p className="text-theme-text-primary mt-2 text-3xl font-bold">
+            {mySummary?.totalHours ?? 0}
+            <span className="ml-1 text-base font-medium">hrs</span>
+          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            {pluralEntries(mySummary?.totalEntries ?? 0)}, approved and pending
+          </p>
+        </article>
+      </div>
+
+      {/* Category breakdown */}
+      {hasAnyHours && (
+        <section className="card mb-6 p-5">
+          <h2 className="text-theme-text-primary font-semibold">Where my hours went</h2>
+          <p className="text-theme-text-secondary mt-0.5 text-sm">
+            Approved and pending hours combined, ranked by category.
+          </p>
+          <div className="mt-5 space-y-4">
+            {loggedCategories.map((category) => {
+              // Shares divide exact minutes, not the independently rounded
+              // totalHours: with small totals the rounded basis is materially
+              // wrong (two 1-minute categories each showed as 67%).
+              const exactShare = loggedMinutesTotal > 0 ? (category.totalMinutes / loggedMinutesTotal) * 100 : 0;
+              const share = Math.round(exactShare);
+              return (
+                <div key={category.categoryId}>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-4">
+                    <span className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: category.categoryColor ?? '#6B7280' }}
+                      />
+                      {category.categoryName}
+                    </span>
+                    <span className="text-theme-text-primary text-sm font-semibold">
+                      {category.totalHours} hrs{' '}
+                      <span className="text-theme-text-muted font-normal">
+                        · {category.entryCount} entries · {share}%
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    className="bg-theme-surface-hover h-2 overflow-hidden rounded-full"
+                    role="progressbar"
+                    aria-label={`${category.categoryName}: ${share}% of my logged hours`}
+                    aria-valuenow={share}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${exactShare}%`, backgroundColor: category.categoryColor ?? '#6B7280' }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {untouchedCategoryNames.length > 0 && (
+            <p className="text-theme-text-muted mt-5 text-xs">
+              No hours {periodOption.phrase} for: {untouchedCategoryNames.join(', ')}
+            </p>
+          )}
+        </section>
+      )}
+
+      {!hasAnyHours && !mySummaryLoading && (
+        <div className="card mb-6 px-4 py-10 text-center">
+          <Clock className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
+          <p className="text-theme-text-secondary">No hours logged {periodOption.phrase}</p>
+          <p className="text-theme-text-muted mt-1 text-sm">
+            Scan a category QR code to clock in, or log hours manually below.
+          </p>
         </div>
       )}
 
@@ -433,16 +727,19 @@ const AdminHoursPage: React.FC = () => {
 
       {/* Entries List */}
       <div className="bg-theme-surface rounded-lg shadow-md">
-        <div className="border-theme-surface-border border-b px-4 py-3">
+        <div className="border-theme-surface-border flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3">
           <h2 className="text-theme-text-primary font-semibold">My Hours</h2>
+          <span className="text-theme-text-muted text-xs">{periodOption.label}</span>
         </div>
         {entriesLoading ? (
           <div className="text-theme-text-secondary py-8 text-center">Loading...</div>
         ) : myEntries.length === 0 ? (
           <div className="py-12 text-center">
             <Clock className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-            <p className="text-theme-text-secondary">No hours logged yet</p>
-            <p className="text-theme-text-muted mt-1 text-sm">Scan a QR code or log hours manually to get started</p>
+            <p className="text-theme-text-secondary">No hours match these filters</p>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              Try a wider reporting period, or clear the status and category filters.
+            </p>
           </div>
         ) : (
           <>

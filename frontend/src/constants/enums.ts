@@ -21,6 +21,76 @@ export const NfcTagTarget = {
 export type NfcTagTarget = (typeof NfcTagTarget)[keyof typeof NfcTagTarget];
 
 // ============================================
+// NFC ID Cards (member credentials)
+// ============================================
+/**
+ * Lifecycle of a card issued to a member. Distinct from `NfcTagTarget` above:
+ * that names where a *destination* tag points, this is the state of a card
+ * that identifies a person.
+ *
+ * `LOST` is terminal and never returns to `ACTIVE` — whoever picked the card
+ * up can still tap it — so a replacement is a new registration.
+ */
+export const NfcCardStatus = {
+  ACTIVE: 'active',
+  SUSPENDED: 'suspended',
+  LOST: 'lost',
+  REVOKED: 'revoked',
+} as const;
+export type NfcCardStatus = (typeof NfcCardStatus)[keyof typeof NfcCardStatus];
+
+/**
+ * How a card was bound to its member.
+ *
+ * Decides what a replacement looks like: a `SERIAL` card is a printed ID card
+ * whose only identifier is the chip's own serial — nothing was written to it,
+ * and it cannot be reissued to somebody else. A `WRITTEN` card is a blank tag
+ * an officer wrote a generated code onto, which can be rewritten and reused.
+ */
+export const NfcCredentialType = {
+  SERIAL: 'serial',
+  WRITTEN: 'written',
+} as const;
+export type NfcCredentialType = (typeof NfcCredentialType)[keyof typeof NfcCredentialType];
+
+/** What a check-in station is recording attendance against. */
+export const NfcCheckInTarget = {
+  SHIFT: 'shift',
+  EVENT: 'event',
+  ADMIN_HOURS: 'admin_hours',
+} as const;
+export type NfcCheckInTarget = (typeof NfcCheckInTarget)[keyof typeof NfcCheckInTarget];
+
+/** Which way a tap moves the member. `AUTO` lets one tap serve both. */
+export const NfcCheckInDirection = {
+  AUTO: 'auto',
+  IN: 'in',
+  OUT: 'out',
+} as const;
+export type NfcCheckInDirection = (typeof NfcCheckInDirection)[keyof typeof NfcCheckInDirection];
+
+/** Outcome of a tap, as the station screen renders it. */
+export const NfcCheckInStatus = {
+  CHECKED_IN: 'checked_in',
+  CHECKED_OUT: 'checked_out',
+  ALREADY_CHECKED_IN: 'already_checked_in',
+  ALREADY_CHECKED_OUT: 'already_checked_out',
+  UNKNOWN_CARD: 'unknown_card',
+  CARD_INACTIVE: 'card_inactive',
+  MEMBER_INACTIVE: 'member_inactive',
+  REFUSED: 'refused',
+} as const;
+export type NfcCheckInStatus = (typeof NfcCheckInStatus)[keyof typeof NfcCheckInStatus];
+
+/** Badge classes per card status, matching the status-colour maps below. */
+export const NFC_CARD_STATUS_COLORS: Record<string, string> = {
+  active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  suspended: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  lost: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  revoked: 'bg-theme-surface-secondary text-theme-text-secondary',
+};
+
+// ============================================
 // User / Member Status
 // ============================================
 export const UserStatus = {

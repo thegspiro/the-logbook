@@ -206,6 +206,7 @@ def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
         checked_in_at=rsvp.checked_in_at,
         checked_out_at=rsvp.checked_out_at,
         attendance_duration_minutes=rsvp.attendance_duration_minutes,
+        early_check_in_minutes=rsvp.early_check_in_minutes,
         override_check_in_at=rsvp.override_check_in_at,
         override_check_out_at=rsvp.override_check_out_at,
         override_duration_minutes=rsvp.override_duration_minutes,
@@ -2783,6 +2784,16 @@ async def check_in_external_attendee(
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
 
+    # Resolved in the caller's organization rather than trusted from the path
+    # id. Both the link and the pipeline hook below need it.
+    event_result = await db.execute(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == current_user.organization_id,
+        )
+    )
+    event = event_result.scalar_one_or_none()
+
     # A staff-entered attendee is never given a prospect_id when it is created,
     # so without this the pipeline branch below could only ever fire for kiosk
     # guests — and the kiosk already runs the hook itself. Resolving it here
@@ -2795,24 +2806,22 @@ async def check_in_external_attendee(
         )
         if prospect is not None:
             attendee.prospect_id = prospect.id
+            # The same link the kiosk writes, for the same attendance. Setting
+            # prospect_id alone advanced the pipeline off a meeting that the
+            # applicant's linked-events section and the by-event applicant
+            # filter — both of which read prospect_event_links — went on
+            # reporting as never attended.
+            if event is not None:
+                await GuestCheckInService(db).link_prospect_to_event(prospect, event)
 
     await db.commit()
 
-    # Attendance is already durable before pipeline automation runs. Resolve
-    # the event in the caller's organization rather than trusting the path id
-    # alone, then let the shared attendance hook apply its type/category rules.
-    if attendee.prospect_id:
-        event_result = await db.execute(
-            select(Event).where(
-                Event.id == str(event_id),
-                Event.organization_id == current_user.organization_id,
-            )
+    # Attendance is already durable before pipeline automation runs; the hook
+    # applies its own type/category rules.
+    if attendee.prospect_id and event is not None:
+        await GuestCheckInService(db).try_advance_attendance_pipeline(
+            str(attendee.prospect_id), event
         )
-        event = event_result.scalar_one_or_none()
-        if event is not None:
-            await GuestCheckInService(db).try_advance_attendance_pipeline(
-                str(attendee.prospect_id), event
-            )
     return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
 
 

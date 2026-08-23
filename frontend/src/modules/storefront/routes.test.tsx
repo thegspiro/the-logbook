@@ -14,9 +14,19 @@ vi.mock('./pages/StoreAdminPage', () => ({
 }));
 
 const capturedPermissions: (string | undefined)[] = [];
+const capturedModules: (string | undefined)[] = [];
 vi.mock('../../components/ProtectedRoute', () => ({
-  ProtectedRoute: ({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: string }) => {
+  ProtectedRoute: ({
+    children,
+    requiredPermission,
+    requiredModule,
+  }: {
+    children: React.ReactNode;
+    requiredPermission?: string;
+    requiredModule?: string;
+  }) => {
     capturedPermissions.push(requiredPermission);
+    capturedModules.push(requiredModule);
     return <>{children}</>;
   },
 }));
@@ -25,6 +35,7 @@ import { getStorefrontRoutes } from './routes';
 
 function renderRoute(path: string) {
   capturedPermissions.length = 0;
+  capturedModules.length = 0;
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>{getStorefrontRoutes()}</Routes>
@@ -58,5 +69,13 @@ describe('getStorefrontRoutes', () => {
     renderRoute('/store/admin');
     await screen.findByTestId('store-admin-page');
     expect(capturedPermissions).toContain('storefront.manage');
+  });
+
+  // Permission alone left the URL reachable for a department that had the
+  // module off, which is how a store got configured that members could not see.
+  it.each(['/store', '/store/orders', '/store/admin'])('gates %s on the storefront module', async (path) => {
+    renderRoute(path);
+    await screen.findByText(/Storefront|MyOrders|StoreAdmin/);
+    expect(capturedModules).toContain('storefront');
   });
 });

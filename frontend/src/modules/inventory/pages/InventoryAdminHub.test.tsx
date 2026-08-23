@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -22,9 +22,26 @@ vi.mock('../../../services/api', () => ({
   },
 }));
 
+const mockGetAdminHubSummary = vi.fn();
+vi.mock('../../../services/adminHubService', () => ({
+  adminHubService: {
+    getSummary: (...args: unknown[]) => mockGetAdminHubSummary(...args) as unknown,
+  },
+}));
+
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
     selector({ checkPermission: (...args: unknown[]) => mockCheckPermission(...args) as boolean }),
+}));
+
+// The hook reads organizationService from the same module mocked above, so it
+// is stubbed here rather than left to resolve against a partial mock.
+const mockIsModuleOn = vi.fn();
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    enabledModules: null,
+    isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
+  }),
 }));
 
 import { InventoryAdminHub } from './InventoryAdminHub';
@@ -58,6 +75,36 @@ describe('InventoryAdminHub', () => {
       is_complete: true,
     });
     mockCheckPermission.mockReturnValue(true);
+    mockIsModuleOn.mockReturnValue(true);
+    mockGetAdminHubSummary.mockResolvedValue({
+      moduleKey: 'inventory',
+      generatedAt: '2026-08-23T12:00:00Z',
+      timezone: 'UTC',
+      metrics: [
+        { key: 'items_tracked', label: 'Items tracked', value: '150', context: 'in service', fixed: false },
+        {
+          key: 'issued_to_members',
+          label: 'Issued to members',
+          value: '40',
+          context: 'held by 12 members',
+          fixed: false,
+        },
+        { key: 'out_for_repair', label: 'Out for repair', value: '5', context: 'in maintenance', fixed: false },
+        { key: 'needs_attention', label: 'Needs attention', value: '1', context: 'nothing waiting', fixed: true },
+      ],
+      attention: [
+        {
+          key: 'below_par',
+          title: '2 items below par level',
+          detail: 'reorder before the next issue',
+          actionLabel: 'Build order',
+          href: '/inventory/admin/reorder',
+          severity: 'warning',
+          count: 2,
+          oldestAgeDays: null,
+        },
+      ],
+    });
   });
 
   it('renders the page title and subtitle', async () => {
@@ -69,47 +116,34 @@ describe('InventoryAdminHub', () => {
     });
   });
 
-  it('displays summary statistics after loading', async () => {
+  // The page's own stat strip and low-stock banner are gone: the frame's four
+  // headline metrics and its "Needs attention" queue say the same things once
+  // each. Two panels restating one number is the duplication the admin pattern
+  // exists to remove.
+  it('reports the department totals through the frame\u2019s metrics row', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('available')).toBeInTheDocument();
-    });
-    expect(screen.getByText('checked out')).toBeInTheDocument();
-    expect(screen.getByText('80')).toBeInTheDocument();
-    expect(screen.getByText('20')).toBeInTheDocument();
-    expect(screen.getByText('150')).toBeInTheDocument();
+    await screen.findByText('Items tracked');
+    // Scoped to the row: the Items nav card carries the same total, which is
+    // the point — one number, stated where each reader is looking.
+    const metrics = screen.getByRole('region', { name: 'Headline metrics' });
+    expect(within(metrics).getByText('150')).toBeInTheDocument();
+    expect(within(metrics).getByText('Out for repair')).toBeInTheDocument();
+    expect(screen.queryByText('checked out')).not.toBeInTheDocument();
   });
 
-  it('displays low stock alerts', async () => {
+  it('carries low stock as one queue row with an action that ends it', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText(/Low Stock Alerts/)).toBeInTheDocument();
-    });
-    expect(screen.getByText('Turnout Gear')).toBeInTheDocument();
-    expect(screen.getByText('Helmets')).toBeInTheDocument();
-  });
-
-  it('hides low stock section when there are no alerts', async () => {
-    mockGetLowStockItems.mockResolvedValue([]);
-    renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
-    });
+    await screen.findByText('2 items below par level');
+    expect(screen.getByRole('link', { name: 'Build order' })).toHaveAttribute('href', '/inventory/admin/reorder');
     expect(screen.queryByText(/Low Stock Alerts/)).not.toBeInTheDocument();
   });
 
-  it('shows "...and X more" when more than 5 alerts', async () => {
-    const manyAlerts = Array.from({ length: 8 }, (_, i) => ({
-      category_id: `cat-${i}`,
-      category_name: `Category ${i}`,
-      current_stock: i,
-      threshold: 10,
-    }));
-    mockGetLowStockItems.mockResolvedValue(manyAlerts);
+  it('still badges the reorder card with the number of low categories', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText(/and 3 more/)).toBeInTheDocument();
+      expect(screen.getByText('Reorder Requests')).toBeInTheDocument();
     });
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('renders all navigation cards', async () => {
@@ -193,6 +227,36 @@ describe('InventoryAdminHub', () => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
+  });
+
+  // The store is its own module with its own grant, and this card used to
+  // ignore both — it was the one unguarded door into a console a department
+  // had never enabled, which is how a store got configured that no member
+  // could see in their navigation.
+  it('hides the Department Store card when the module is off', async () => {
+    mockIsModuleOn.mockImplementation((key: unknown) => key !== 'storefront');
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+  });
+
+  it('hides the Department Store card without storefront.manage', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p !== 'storefront.manage');
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+  });
+
+  it('shows the Department Store card with the module on and the grant held', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Department Store').closest('a')).toHaveAttribute('href', '/store/admin');
   });
 
   it('shows badges on nav cards with counts', async () => {

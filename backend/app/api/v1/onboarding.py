@@ -1843,7 +1843,17 @@ async def save_session_organization(
         )
 
 
-_CARRYOVER_SUBPERMISSIONS = frozenset({"facilities.view_sensitive", "scheduling.swap"})
+_CARRYOVER_SUBPERMISSIONS = frozenset(
+    {
+        "facilities.view_sensitive",
+        "scheduling.swap",
+        # Browsing the store without being able to check out is not a state any
+        # department wants a member in, and the two-checkbox editor cannot
+        # express it. This rode along as an un-submitted module's default until
+        # the Department Store joined the frontend registry.
+        "storefront.order",
+    }
+)
 
 
 def _merge_default_permissions(
@@ -1862,9 +1872,10 @@ def _merge_default_permissions(
     1. Whole modules the frontend registry doesn't cover (audit, organization,
        users, locations, meetings, ...) — keep all their defaults.
     2. Sub-permissions within a submitted module that pair with baseline view
-       access rather than manage (facilities.view_sensitive, scheduling.swap —
-       members must keep shift-swap requests with scheduling view alone) — keep
-       them while the module retains view access. Other action permissions are
+       access rather than manage (facilities.view_sensitive, scheduling.swap,
+       storefront.order — members must keep shift-swap requests with scheduling
+       view alone, and store checkout with store view alone) — keep them while
+       the module retains view access. Other action permissions are
        not representable by the editor and must not survive when an admin
        clears Manage. A module saved with manage already carries the
        ``module.*`` wildcard, which covers every sub-permission without
