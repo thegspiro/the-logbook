@@ -91,6 +91,7 @@ import {
   CONTAINER_TYPE_PRESETS,
   containerTypeLabel,
   isPresetContainerType,
+  normalizeCheckType,
 } from '@/modules/scheduling/types/equipmentCheck';
 
 // ============================================================================
@@ -173,7 +174,7 @@ function emptyItem(): ItemFormState {
   return {
     name: '',
     description: '',
-    checkType: 'pass_fail',
+    checkType: 'function',
     isRequired: true,
     requiredQuantity: '',
     expectedQuantity: '',
@@ -1313,11 +1314,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
         }
-        if (item.checkType === 'quantity' && !item.requiredQuantity && !item.expectedQuantity) {
+        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
           warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
         if (
-          item.checkType === 'quantity' &&
+          item.checkType === 'count' &&
           item.criticalMinimumQuantity &&
           item.expectedQuantity &&
           Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
@@ -1327,7 +1328,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         if (item.checkType === 'level' && !item.minLevel) {
           warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
         }
-        if (item.checkType === 'date_lot' && !item.serialNumber && !item.lotNumber) {
+        if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
           warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
         }
       }
@@ -1705,7 +1706,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             ...emptyItem(),
             name: (item.name as string) || '',
             description: (item.description as string) ?? '',
-            checkType: ((item.checkType as string) || 'pass_fail') as CheckType,
+            checkType: normalizeCheckType(item.checkType as string),
             isRequired: Boolean(item.isRequired),
             requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
             expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
@@ -1773,7 +1774,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const rows = records.map((record) => ({
           compartment: csvValue(record, 'compartment', 'container', 'location'),
           name: csvValue(record, 'name', 'item', 'item name'),
-          checkType: csvValue(record, 'check type', 'type') || 'pass_fail',
+          checkType: csvValue(record, 'check type', 'type') || 'function',
           expectedQty: csvValue(record, 'expected qty', 'expected quantity', 'quantity', 'qty', 'par'),
           criticalMin: csvValue(record, 'critical min', 'critical minimum', 'minimum'),
           levelUnit: csvValue(record, 'level unit', 'unit'),
@@ -1829,18 +1830,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     for (const row of csvPreview) {
       const compName = row.compartment || 'Uncategorized';
       if (!compMap.has(compName)) compMap.set(compName, []);
-      const validCheckTypes = [
-        'pass_fail',
-        'present',
-        'functional',
-        'quantity',
-        'level',
-        'date_lot',
-        'reading',
-        'text',
-        'header',
-      ];
-      const checkType = (validCheckTypes.includes(row.checkType) ? row.checkType : 'pass_fail') as CheckType;
+      // A department's existing CSV still says "pass_fail" or "present".
+      // Accept the old vocabulary and normalize it, rather than rejecting a
+      // file that was valid last week.
+      const checkType = normalizeCheckType(row.checkType);
       compMap.get(compName)?.push({
         ...emptyItem(),
         name: row.name,
@@ -2450,7 +2443,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </div>
 
                   {/* Conditional: Quantity */}
-                  {item.checkType === 'quantity' && (
+                  {item.checkType === 'count' && (
                     <>
                       <div>
                         <label className={labelClass}>Expected Qty</label>
@@ -2558,7 +2551,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   )}
 
                   {/* Conditional: Serial/Lot */}
-                  {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
+                  {(item.checkType === 'expiry' || item.checkType === 'count') && (
                     <>
                       <div>
                         <label className={labelClass}>Serial #</label>
