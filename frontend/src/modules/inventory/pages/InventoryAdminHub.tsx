@@ -38,6 +38,7 @@ import { inventoryService } from '../../../services/api';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import type {
@@ -135,7 +136,15 @@ const TABS: AdminHubTab<AdminTab>[] = [
 ];
 
 export const InventoryAdminHub: React.FC = () => {
-  const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('inventory.manage');
+  const { isModuleOn } = useEnabledModules();
+  // The store is a separate module with its own grant. Gating this card the
+  // same way every navigation surface does keeps it from being the one door
+  // into a console the department has not enabled — which is how a store got
+  // set up that members could never see, since their side nav reads the same
+  // module flag this card was ignoring.
+  const canOpenStore = isModuleOn('storefront') && checkPermission('storefront.manage');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
@@ -427,12 +436,14 @@ export const InventoryAdminHub: React.FC = () => {
                   title="Import / Export"
                   description="Bulk import from CSV or export inventory data"
                 />
-                <NavCard
-                  to="/store/admin"
-                  icon={<Store className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
-                  title="Department Store"
-                  description="Order windows, catalog, and member order payments"
-                />
+                {canOpenStore && (
+                  <NavCard
+                    to="/store/admin"
+                    icon={<Store className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
+                    title="Department Store"
+                    description="Order windows, catalog, and member order payments"
+                  />
+                )}
               </div>
             </Section>
           </div>
