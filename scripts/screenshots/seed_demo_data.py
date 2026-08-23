@@ -199,6 +199,39 @@ PHASE_NUMBER_PREFIX = re.compile(r"^\s*Phase\s+\d+\s*[—–-]\s*")
 
 SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 
+# LB-SCHED-001: the member holds no EVOC certification high enough to drive
+# this rig. Matched on the error code rather than the sentence, which names the
+# level and the apparatus and so differs per refusal.
+DRIVER_NOT_QUALIFIED = re.compile(r"LB-SCHED-001")
+
+
+def is_expected_seat_refusal(exc: "ApiError") -> bool:
+    """Whether a refused shift assignment is the application working correctly.
+
+    Two refusals are ordinary and must not fail the seed:
+
+    * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
+      still on duty into the next date and the API declines to double-book
+      them. Rotating the pool reduces this but cannot eliminate it for every
+      roster size.
+    * **Driver not EVOC-qualified.** ``_require_evoc_on_apparatus`` puts a
+      minimum EVOC level on the heavier rigs precisely so this check fires, and
+      operators are certified for only the first four rigs — so a driver seat
+      landing on an uncertified member is the demonstration working, not a
+      seeding error.
+
+    Both leave the shift a seat short, which is what the Open Shifts tab exists
+    to show. Treating the second as fatal aborted the whole scheduling step: a
+    single EVOC refusal left the demo with 2 shifts and no scheduling
+    apparatus, which silently blocked the close-out fixture, the batch report
+    trainee, the shift reminder inbox and every guide-03 capture downstream of
+    them.
+    """
+    return exc.code == 400 and bool(
+        SHIFT_CONFLICT.search(exc.detail) or DRIVER_NOT_QUALIFIED.search(exc.detail)
+    )
+
+
 RSVP_CLOSED = re.compile(
     r"deadline has passed|already ended|no longer accepting" r"|does not require RSVP",
     re.IGNORECASE,
@@ -1329,9 +1362,7 @@ class Seeder:
         # to a 400 that failed the whole step -- which left `by_level` empty and
         # no apparatus with a required EVOC level, so the driver-eligibility
         # feature sat inert and 03-52 had nothing to photograph.
-        numbers = {
-            pick(level, "level_number", "levelNumber") for level in levels
-        }
+        numbers = {pick(level, "level_number", "levelNumber") for level in levels}
         blueprint = [
             (1, "Basic", "EVOC-1", "Emergency vehicle operation, non-transport."),
             (2, "Intermediate", "EVOC-2", "Engine and rescue apparatus."),
@@ -2189,14 +2220,11 @@ class Seeder:
                             {"user_id": user_id, "position": seats[slot]},
                         )
                     except ApiError as exc:
-                        # The night shift runs 19:00-07:00, so its crew is still
-                        # on duty into the next date and the API refuses to
-                        # double-book them. Rotating the pool reduces that but
-                        # cannot eliminate it for every roster size, and the
-                        # rule belongs to the app, not the seeder: a refusal on
-                        # these grounds means the shift is simply short a member,
-                        # which the Open Shifts tab is meant to show anyway.
-                        if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                        # A double-booking or an EVOC refusal is the app's own
+                        # rule, not a seeder fault: the shift is simply short a
+                        # member, which the Open Shifts tab is meant to show
+                        # anyway. See is_expected_seat_refusal.
+                        if not is_expected_seat_refusal(exc):
                             raise
 
                 # Put the demo administrator on today's first shift. Several
@@ -2471,9 +2499,10 @@ class Seeder:
                     {"user_id": user_id, "position": "firefighter"},
                 )
             except ApiError as exc:
-                # Same overlapping-shift refusal the create path tolerates: the
-                # member is already on duty, so the shift stays a seat short.
-                if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                # Same refusals the create path tolerates: the member is
+                # already on duty, or is not cleared to drive this rig, so the
+                # shift stays a seat short.
+                if not is_expected_seat_refusal(exc):
                     raise
             used += 1
         return used
@@ -5149,8 +5178,18 @@ class Seeder:
         return None
 
     def _closeout_apparatus(self) -> dict | None:
-        """Pick a unit that no engine-specific shot is competing for."""
-        fleet = items(self.api.get("/scheduling/apparatus"), "apparatus")
+        """Pick a unit that no engine-specific shot is competing for.
+
+        Reads ``/scheduling/apparatus-options``, the same endpoint the rest of
+        the scheduling seed assigns shifts from. ``/scheduling/apparatus`` is a
+        different resource — the scheduling module's own ``basic_apparatus``
+        table — which this demo never populates, so it answered ``[]`` and the
+        fixture reported "no non-engine apparatus to hang it on" against a
+        seven-unit fleet that plainly included the Medic the hint asks for.
+        """
+        fleet = items(
+            self.api.get("/scheduling/apparatus-options"), "options", "apparatus"
+        )
         preferred = [
             unit
             for unit in fleet
@@ -5183,10 +5222,11 @@ class Seeder:
                     {"user_id": user_id, "position": seats[len(seated)]},
                 )
             except ApiError as exc:
-                # Already rostered elsewhere that day. The ordinary schedule
-                # books most of the department, so this is the common case
-                # rather than an error — move to the next member.
-                if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                # Already rostered elsewhere that day, or not cleared to
+                # drive this rig. The ordinary schedule books most of the
+                # department, so this is the common case rather than an error
+                # — move to the next member.
+                if not is_expected_seat_refusal(exc):
                     raise
                 continue
             seated.append(user_id)
