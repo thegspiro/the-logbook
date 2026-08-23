@@ -369,6 +369,33 @@ describe('SubmitTrainingPage', () => {
     expect(screen.getByText('certificate.pdf')).toBeInTheDocument();
   });
 
+  it('keeps the receipt on screen while the lists refresh behind it', async () => {
+    // Caught in a browser, not here: the refresh after a save ran the page's
+    // loading branch, which unmounted the form and took the receipt with it.
+    // A test whose mocks resolve instantly never renders the spinner, so the
+    // confirmation screen passed its test and never appeared in the app.
+    let finishRefresh: (value: unknown) => void = () => {};
+    mockGetMySubmissions.mockResolvedValueOnce([]).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRefresh = resolve;
+        })
+    );
+
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    expect(await screen.findByText('Training Submitted')).toBeInTheDocument();
+    // The refresh is still in flight — the page must not swap to the spinner.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    finishRefresh([]);
+    expect(await screen.findByText('Training Submitted')).toBeInTheDocument();
+  });
+
   it('files a submission without an attachment directly, with no draft round trip', async () => {
     const user = userEvent.setup();
     renderWithRouter(<SubmitTrainingPage />);

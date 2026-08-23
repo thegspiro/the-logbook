@@ -775,6 +775,11 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   certification_number: { visible: true, required: false, label: 'Certificate / ID Number' },
   issuing_agency: { visible: true, required: false, label: 'Issuing Agency' },
   expiration_date: { visible: true, required: false, label: 'Expiration Date' },
+  // The submit form reads this one to decide whether to offer the certificate
+  // upload at all, and enforces `required` at the draft handoff. It is in the
+  // backend's default config, so leaving it out of this editor left a setting
+  // that only an API call could change.
+  attachments: { visible: true, required: false, label: 'Supporting Documents' },
 };
 
 const ConfigEditor: React.FC<{

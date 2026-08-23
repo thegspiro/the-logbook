@@ -1230,7 +1230,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAllSubmissions((open) => !open)}
-                  className="text-sm text-blue-700 dark:text-blue-400"
+                  className="max-md:mobile-touch-target text-sm text-blue-700 dark:text-blue-400"
                 >
                   {showAllSubmissions ? 'Show fewer' : `View all ${submissions.length}`}
                 </button>
@@ -1250,13 +1250,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 return (
                   <li
                     key={submission.id}
-                    className="border-theme-surface-border flex items-center justify-between gap-3 border-t py-2.5 first:border-t-0"
+                    className="border-theme-surface-border flex flex-col gap-1 border-t py-2.5 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                   >
+                    {/* Stacked on a phone: a badge and two 44px actions beside
+                        the title leave about 200px for a course name, which
+                        turns every row into an ellipsis. */}
                     <div className="min-w-0">
                       <p className="text-theme-text-primary truncate text-sm font-medium">{submission.course_name}</p>
                       <p className="text-theme-text-muted text-xs">{meta}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                       <StatusBadge status={submission.status} />
                       {/* Shown on every listed row, not only in the expanded
                           list: a member with three submissions would otherwise
@@ -1267,7 +1270,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                             type="button"
                             onClick={() => onEdit(submission)}
                             aria-label={`Edit ${submission.course_name}`}
-                            className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                            className="text-theme-text-muted hover:text-theme-text-primary max-md:mobile-touch-target rounded-sm p-1.5"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -1275,7 +1278,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                             type="button"
                             onClick={() => onDelete(submission.id)}
                             aria-label={`Delete ${submission.course_name}`}
-                            className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                            className="text-theme-text-muted max-md:mobile-touch-target rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1366,8 +1369,14 @@ const SubmitTrainingPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editingSubmission, setEditingSubmission] = useState<TrainingSubmission | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  /**
+   * `silent` refreshes the lists without swapping the page for the spinner.
+   * A loud refresh after a save unmounts the form — and with it the receipt
+   * the member is supposed to be reading, which is how the confirmation
+   * screen managed to pass its test and never appear in a browser.
+   */
+  const loadData = async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) setLoading(true);
     setLoadError(null);
     try {
       const [configData, categoriesData, submissionsData, requirementsData] = await Promise.all([
@@ -1382,10 +1391,12 @@ const SubmitTrainingPage: React.FC = () => {
       setSubmissions(submissionsData);
       setRequirements(requirementsData);
     } catch (_error) {
-      setLoadError('Failed to load submission form. Please try again.');
+      // A failed background refresh must not replace a form the member is
+      // still filling in — or a receipt they are still reading.
+      if (!options.silent) setLoadError('Failed to load submission form. Please try again.');
       toast.error('Failed to load submission form');
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   };
 
@@ -1407,7 +1418,7 @@ const SubmitTrainingPage: React.FC = () => {
       await trainingSubmissionService.deleteSubmission(submissionId);
       toast.success('Submission deleted');
       if (editingSubmission?.id === submissionId) setEditingSubmission(null);
-      void loadData();
+      void loadData({ silent: true });
     } catch {
       toast.error('Failed to delete submission');
     }
@@ -1483,7 +1494,7 @@ const SubmitTrainingPage: React.FC = () => {
           submissions={submissions}
           onSaved={(continueEditing) => {
             setEditingSubmission(continueEditing ?? null);
-            void loadData();
+            void loadData({ silent: true });
           }}
           onEdit={(submission) => setEditingSubmission(submission)}
           onDelete={(submissionId) => {
