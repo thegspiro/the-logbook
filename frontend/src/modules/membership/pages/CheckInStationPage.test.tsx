@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
+import { addCalendarDays, getTodayLocalDate } from '../../../utils/dateFormatting';
 
 const mockStationCheckIn = vi.fn();
 const mockIsConnected = vi.fn();
@@ -296,5 +297,73 @@ describe('CheckInStationPage', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(screen.getByRole('button', { name: /stop the reader/i })).toBeInTheDocument();
+  });
+
+  it('still offers an overnight shift that started yesterday', async () => {
+    // A shift is filed under the date it started. A 24-hour tour that began at
+    // 06:00 yesterday is the shift running at 02:00 now, and asking only for
+    // today's date made the crew on duty vanish from the station at midnight.
+    const stillRunning = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+    mockGetShifts.mockResolvedValue({
+      shifts: [
+        {
+          id: 'shift-overnight',
+          apparatus_unit_number: 'E4',
+          start_time: '2026-08-22T10:00:00Z',
+          end_time: stillRunning,
+          is_finalized: false,
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    renderWithRouter(<CheckInStationPage />);
+
+    expect(await screen.findByRole('option', { name: /E4/ })).toBeInTheDocument();
+    // Computed, not hardcoded: literal dates here would pass today and fail
+    // every day after.
+    const today = getTodayLocalDate();
+    expect(mockGetShifts).toHaveBeenCalledWith(
+      expect.objectContaining({ start_date: addCalendarDays(today, -1), end_date: today })
+    );
+  });
+
+  it('drops a yesterday-dated shift that has already ended', async () => {
+    // Otherwise widening the query to yesterday would offer every finished
+    // tour from the previous day.
+    mockGetShifts.mockResolvedValue({
+      shifts: [
+        {
+          id: 'shift-finished',
+          apparatus_unit_number: 'L1',
+          start_time: '2026-08-22T10:00:00Z',
+          end_time: '2026-08-22T22:00:00Z',
+          is_finalized: false,
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    renderWithRouter(<CheckInStationPage />);
+
+    await waitFor(() => expect(mockGetShifts).toHaveBeenCalled());
+    expect(screen.queryByRole('option', { name: /L1/ })).not.toBeInTheDocument();
+  });
+
+  it('asks the events API to exclude anything already finished', async () => {
+    // Filtering on start time alone left this morning's drill in the list, and
+    // since the list is ordered by start time it could be the default — so an
+    // operator could arm against an event whose window shut hours ago.
+    const user = userEvent.setup();
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+
+    await user.click(screen.getByRole('button', { name: /event or meeting/i }));
+
+    await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
+    const eventParams = mockGetEvents.mock.calls[0]?.[0] as { end_after?: string } | undefined;
+    expect(typeof eventParams?.end_after).toBe('string');
   });
 });

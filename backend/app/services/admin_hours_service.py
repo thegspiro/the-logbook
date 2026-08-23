@@ -196,8 +196,15 @@ class AdminHoursService:
         category_id: str,
         user_id: str,
         organization_id: str,
+        entry_method: AdminHoursEntryMethod = AdminHoursEntryMethod.QR_SCAN,
     ) -> AdminHoursEntry:
-        """Clock in a user to an admin hours category via QR scan."""
+        """Clock a user in to an admin hours category.
+
+        ``entry_method`` records how the session was started. It defaults to
+        the QR path this was written for; a caller that is something else — the
+        ID card station — must say so, or the entry claims a member scanned a
+        code when an officer tapped their card.
+        """
         category = await self.get_category(category_id, organization_id)
         if not category:
             raise ValueError("Category not found")
@@ -219,7 +226,7 @@ class AdminHoursService:
             user_id=user_id,
             category_id=category_id,
             clock_in_at=datetime.now(timezone.utc),
-            entry_method=AdminHoursEntryMethod.QR_SCAN,
+            entry_method=entry_method,
             status=AdminHoursEntryStatus.ACTIVE,
         )
         self.db.add(entry)
