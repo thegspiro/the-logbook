@@ -98,22 +98,7 @@ class TrainingSubmissionService:
         if hours_completed <= 0:
             raise ValueError("Hours completed must be greater than zero")
 
-        # Validate against config
-        if (
-            config.max_hours_per_submission
-            and hours_completed > config.max_hours_per_submission
-        ):
-            raise ValueError(
-                f"Hours exceed maximum of {config.max_hours_per_submission} per submission"
-            )
-
-        if (
-            config.allowed_training_types
-            and training_type not in config.allowed_training_types
-        ):
-            raise ValueError(
-                f"Training type '{training_type}' is not allowed for self-reporting"
-            )
+        self._assert_within_department_limits(config, training_type, hours_completed)
 
         if save_as_draft:
             status = SubmissionStatus.DRAFT
@@ -134,15 +119,20 @@ class TrainingSubmissionService:
             **{k: v for k, v in kwargs.items() if v is not None},
         )
         self.db.add(submission)
-        await self.db.commit()
+
+        # One transaction for the submission and any record it spawns, so a
+        # failed record insert cannot leave an approved submission that
+        # credits nothing and can never be retried.
+        if status == SubmissionStatus.APPROVED:
+            await self._record_if_auto_approved(submission)
+        else:
+            await self.db.commit()
         await self.db.refresh(submission)
 
         logger.info(
             f"Training submission created: {course_name} by {submitted_by} "
             f"({hours_completed}h, status={status.value})"
         )
-
-        await self._record_if_auto_approved(submission)
 
         return submission
 
@@ -183,6 +173,14 @@ class TrainingSubmissionService:
             raise ValueError("Only a draft can be submitted for review")
 
         config = await self.get_config(organization_id)
+        # A draft can sit for weeks. Re-check the department's restrictions as
+        # well as its routing: an entry the same member could no longer create
+        # must not reach the queue just because it was started earlier.
+        self._assert_within_department_limits(
+            config, submission.training_type, submission.hours_completed
+        )
+        self._assert_required_evidence(config, submission)
+
         submission.status = self._route_for_review(
             config,
             submission.training_type,
@@ -194,12 +192,62 @@ class TrainingSubmissionService:
                 "category_id": submission.category_id,
             },
         )
-        await self.db.commit()
+        # The review queue orders by submitted_at and the review card prints
+        # it. Left at the draft's creation time, a draft kept for a fortnight
+        # arrives already buried under submissions filed after it.
+        submission.submitted_at = datetime.now(timezone.utc)
+
+        # One transaction for the status change and the record it spawns. Two
+        # would leave a failed record insert behind an already-approved
+        # submission that no retry can reach — it is no longer a draft.
+        if submission.status == SubmissionStatus.APPROVED:
+            await self._record_if_auto_approved(submission)
+        else:
+            await self.db.commit()
         await self.db.refresh(submission)
 
-        await self._record_if_auto_approved(submission)
-
         return submission
+
+    @staticmethod
+    def _assert_within_department_limits(
+        config: SelfReportConfig, training_type: str, hours_completed: float
+    ) -> None:
+        """Reject an entry the department's self-report settings disallow."""
+        if (
+            config.max_hours_per_submission
+            and hours_completed > config.max_hours_per_submission
+        ):
+            raise ValueError(
+                f"Hours exceed maximum of {config.max_hours_per_submission} per submission"
+            )
+
+        if (
+            config.allowed_training_types
+            and training_type not in config.allowed_training_types
+        ):
+            raise ValueError(
+                f"Training type '{training_type}' is not allowed for self-reporting"
+            )
+
+    @staticmethod
+    def _assert_required_evidence(
+        config: SelfReportConfig, submission: TrainingSubmission
+    ) -> None:
+        """Enforce a department that requires supporting documents.
+
+        Only reachable at the draft handoff: an attachment cannot exist before
+        the row it hangs off, so a straight create has nothing to check. The
+        form routes a submission carrying a file through a draft for exactly
+        this reason.
+        """
+        field_config = config.field_config or {}
+        attachments_config = field_config.get("attachments") or {}
+        if not attachments_config.get("required"):
+            return
+        if not submission.attachments:
+            raise ValueError(
+                "This department requires supporting documents on a submission"
+            )
 
     def _route_for_review(
         self,

@@ -42,6 +42,7 @@ def _config(**overrides):
         auto_approve_under_hours=None,
         max_hours_per_submission=16,
         allowed_training_types=None,
+        field_config={},
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -395,3 +396,115 @@ class TestAttachments:
                 current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
             )
         assert exc.value.status_code == 400
+
+
+class TestDraftHandoffRevalidates:
+    """A draft can sit for weeks; the department's rules may tighten."""
+
+    async def _submit(self, config, **submission_overrides):
+        owner = str(uuid4())
+        draft = _submission(submitted_by=owner, **submission_overrides)
+        svc = TrainingSubmissionService(_Session())
+        svc.get_submission = AsyncMock(return_value=draft)
+        svc.get_config = AsyncMock(return_value=config)
+        svc._record_if_auto_approved = AsyncMock()
+        return await svc.submit_draft(draft.id, owner, draft.organization_id)
+
+    async def test_hours_over_a_lowered_maximum_are_rejected(self):
+        with pytest.raises(ValueError, match="exceed maximum"):
+            await self._submit(_config(max_hours_per_submission=1), hours_completed=4.0)
+
+    async def test_a_type_no_longer_allowed_is_rejected(self):
+        with pytest.raises(ValueError, match="not allowed"):
+            await self._submit(_config(allowed_training_types=["certification"]))
+
+    async def test_required_supporting_documents_are_enforced(self):
+        config = _config(
+            field_config={"attachments": {"visible": True, "required": True}}
+        )
+        with pytest.raises(ValueError, match="supporting documents"):
+            await self._submit(config, attachments=None)
+
+        result = await self._submit(config, attachments=[{"file_name": "cert.pdf"}])
+        assert result.status == SubmissionStatus.PENDING_REVIEW
+
+    async def test_the_handoff_timestamps_the_submission(self):
+        """The queue orders by submitted_at, so a promoted draft is filed now."""
+        result = await self._submit(_config())
+        assert result.submitted_at is not None
+
+    async def test_an_auto_approved_draft_commits_once(self):
+        """The status change and its record share a transaction.
+
+        Two commits would leave a failed record insert behind an approved
+        submission no retry can reach — it is no longer a draft.
+        """
+        owner = str(uuid4())
+        draft = _submission(submitted_by=owner)
+        session = _Session()
+        svc = TrainingSubmissionService(session)
+        svc.get_submission = AsyncMock(return_value=draft)
+        svc.get_config = AsyncMock(return_value=_config(require_approval=False))
+        svc._check_duplicate = AsyncMock(return_value=None)
+        svc._create_record_from_submission = AsyncMock()
+
+        result = await svc.submit_draft(draft.id, owner, draft.organization_id)
+
+        assert result.status == SubmissionStatus.APPROVED
+        # The record helper owns the commit on this path.
+        session.commit.assert_not_awaited()
+        svc._create_record_from_submission.assert_awaited_once()
+
+
+class TestAttachmentRoot:
+    def test_submission_evidence_lives_under_the_record_download_root(self):
+        """Approval copies these paths onto the TrainingRecord verbatim.
+
+        The record download route confines paths to TRAINING_ATTACHMENT_DIR, so
+        a sibling directory would 404 every approved certificate from the
+        member's own training history.
+        """
+        from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
+
+        assert training_submissions.SUBMISSION_ATTACHMENT_DIR.startswith(
+            TRAINING_ATTACHMENT_DIR + os.sep
+        )
+
+    def test_a_path_outside_the_root_is_never_returned(self):
+        assert training_submissions._confined_path({"file_path": "/etc/passwd"}) is None
+        assert training_submissions._confined_path("legacy-string") is None
+        assert (
+            training_submissions._confined_attachment_paths(
+                [{"file_path": "/etc/passwd"}, None]
+            )
+            == []
+        )
+
+
+class TestDeletingASubmission:
+    async def test_stored_evidence_is_removed_with_the_row(self, monkeypatch, tmp_path):
+        """A withdrawn certificate must not outlive its submission on disk."""
+        monkeypatch.setattr(
+            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
+        )
+        stored = tmp_path / "cert.pdf"
+        stored.write_bytes(b"%PDF")
+        submission = _submission(attachments=[{"file_path": str(stored)}])
+
+        service = SimpleNamespace(
+            get_submission=AsyncMock(return_value=submission),
+            delete_submission=AsyncMock(return_value=True),
+        )
+        monkeypatch.setattr(
+            training_submissions, "TrainingSubmissionService", lambda db: service
+        )
+
+        await training_submissions.delete_submission(
+            submission.id,
+            db=None,
+            current_user=SimpleNamespace(
+                id=submission.submitted_by, organization_id=submission.organization_id
+            ),
+        )
+
+        assert not stored.exists()

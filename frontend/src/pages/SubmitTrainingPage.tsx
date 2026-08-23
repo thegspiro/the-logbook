@@ -61,7 +61,13 @@ const STATUS_BADGE: Record<SubmissionStatus, { label: string; className: string 
 const DURATION_STEP_MINUTES = 15;
 const MIN_DURATION_MINUTES = 15;
 const DEFAULT_DURATION_MINUTES = 240;
-const DEFAULT_MAX_HOURS = 16;
+/**
+ * Ceiling for the stepper when the department has set no maximum (the column
+ * is nullable and null means "no limit"). A single entry is a start time plus
+ * a length, so a day is its natural bound; a longer course is logged one day
+ * at a time, which is what the copy at the ceiling says.
+ */
+const UNCONFIGURED_MAX_HOURS = 24;
 const QUICK_DURATIONS = [60, 120, 240, 480];
 
 /** A photo of a paper certificate is the expected case, so images come first. */
@@ -81,12 +87,19 @@ const REQUIRED_BY_DEFAULT: Record<string, boolean> = {
   instructor: true,
   description: true,
   certification_number: true,
-  expiration_date: true,
+  // Optional, matching the backend's own default config and the officer's
+  // settings screen: plenty of certifications never expire, and a department
+  // that wants the date can mark it required.
+  expiration_date: false,
   issuing_agency: false,
   location: false,
+  attachments: false,
 };
 
 const EDITABLE_STATUSES: SubmissionStatus[] = ['draft', 'pending_review', 'revision_requested'];
+
+/** Placeholder id the API service returns for a submission queued while offline. */
+const OFFLINE_SUBMISSION_ID = 'pending-sync';
 
 // ==================== Helpers ====================
 
@@ -122,7 +135,13 @@ function durationToHours(minutes: number): number {
 
 function attachmentRejection(file: File): string | null {
   if (file.size > MAX_ATTACHMENT_BYTES) return 'That file is over 10 MB. Try a smaller scan or photo.';
-  if (!ATTACHMENT_ACCEPT.split(',').includes(file.type)) return 'Attach a PDF, JPG, or PNG.';
+  // An empty or unfamiliar `File.type` is the browser's gap, not the member's:
+  // some OS/browser pairs report nothing for a perfectly good PDF. The upload
+  // endpoint reads the magic bytes and does not trust this value anyway, so
+  // only a type we positively recognise as wrong is turned away here.
+  if (file.type && !ATTACHMENT_ACCEPT.split(',').includes(file.type)) {
+    return 'Attach a PDF, JPG, or PNG.';
+  }
   return null;
 }
 
@@ -200,17 +219,26 @@ const AttachmentField: React.FC<{
   id: string;
   file: File | null;
   error: string;
+  required?: boolean;
+  invalid?: boolean;
   onSelect: (file: File | null) => void;
-}> = ({ id, file, error, onSelect }) => (
+}> = ({ id, file, error, required, invalid, onSelect }) => (
   <div>
     <label
       htmlFor={id}
-      className="border-theme-input-border bg-theme-surface-secondary text-theme-text-secondary hover:border-theme-text-muted/40 flex min-h-[44px] w-full cursor-pointer items-center gap-2.5 rounded-lg border border-dashed p-3 text-sm transition-colors"
+      className={`bg-theme-surface-secondary text-theme-text-secondary hover:border-theme-text-muted/40 flex min-h-[44px] w-full cursor-pointer items-center gap-2.5 rounded-lg border border-dashed p-3 text-sm transition-colors ${
+        invalid ? 'border-red-600 dark:border-red-500' : 'border-theme-input-border'
+      }`}
     >
       <Upload className="text-theme-text-muted h-[18px] w-[18px] shrink-0" />
       <span className="truncate">
         {file ? file.name : 'Attach certificate'}
-        {!file && <span className="text-theme-text-muted font-normal"> optional</span>}
+        {!file &&
+          (required ? (
+            <span className="text-red-700 dark:text-red-400"> *</span>
+          ) : (
+            <span className="text-theme-text-muted font-normal"> optional</span>
+          ))}
       </span>
     </label>
     <input
@@ -447,7 +475,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   }, [config.allowed_training_types]);
   const defaultTrainingType: TrainingType =
     (config.allowed_training_types?.[0] as TrainingType | undefined) ?? 'continuing_education';
-  const maxDurationMinutes = (config.max_hours_per_submission ?? DEFAULT_MAX_HOURS) * 60;
+  const maxDurationMinutes = (config.max_hours_per_submission || UNCONFIGURED_MAX_HOURS) * 60;
 
   const [courseName, setCourseName] = useState('');
   const [trainingType, setTrainingType] = useState<TrainingType>(defaultTrainingType);
@@ -533,6 +561,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 
   const parentCategories = useMemo(() => categories.filter((c) => !c.parent_category_id), [categories]);
   const showCategory = isFieldVisible('category_id') && parentCategories.length > 0;
+  // `attachments` is a field in the department's config like any other: an
+  // officer who hides supporting documents should not still be offered them.
+  const showAttachmentField = isFieldVisible('attachments');
+  const attachmentRequired = isFieldRequired('attachments');
 
   // Every active requirement, deduped by name — the datalist is a set of
   // suggestions, not a filter, so it is no longer narrowed by training type
@@ -549,9 +581,15 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   const hours = durationToHours(durationMinutes);
   const startMinutes = timeToMinutes(startTime);
   const endTime = startMinutes === null ? '' : minutesToTime(startMinutes + durationMinutes);
+  const runsPastMidnight = startMinutes !== null && startMinutes + durationMinutes >= 24 * 60;
   const endNote = endTime
-    ? `Runs ${formatTimeOfDay(startTime)} to ${formatTimeOfDay(endTime)}. Adjust in 15-minute steps.`
+    ? `Runs ${formatTimeOfDay(startTime)} to ${formatTimeOfDay(endTime)}${
+        runsPastMidnight ? ' the next day' : ''
+      }. Adjust in 15-minute steps.`
     : 'Set a start time to see the end time.';
+  // At the ceiling the member is not doing anything wrong — a longer course is
+  // simply logged a day at a time, so say that instead of leaving a dead button.
+  const atMaxDuration = durationMinutes >= maxDurationMinutes;
 
   const checklist: ChecklistRow[] = [
     { id: 'course_name', label: 'Course name', ok: !!courseName.trim(), required: true },
@@ -603,6 +641,9 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     if (isFieldVisible('instructor') && isFieldRequired('instructor') && !instructor.trim()) {
       missing.push('instructor');
     }
+    if (isFieldVisible('location') && isFieldRequired('location') && !location.trim()) {
+      missing.push('location');
+    }
     if (isFieldVisible('description') && isFieldRequired('description') && !description.trim()) {
       missing.push('description');
     }
@@ -614,9 +655,15 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       ) {
         missing.push('certification_number');
       }
+      if (isFieldVisible('issuing_agency') && isFieldRequired('issuing_agency') && !issuingAgency.trim()) {
+        missing.push('issuing_agency');
+      }
       if (isFieldVisible('expiration_date') && isFieldRequired('expiration_date') && !expirationDate) {
         missing.push('expiration_date');
       }
+    }
+    if (showAttachmentField && isFieldRequired('attachments') && !attachment && storedAttachments.length === 0) {
+      missing.push('attachments');
     }
     return missing;
   };
@@ -664,11 +711,13 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     expiration_date: blankToNull(certificationValues.expiration_date),
   });
 
-  const uploadAttachmentIfAny = async (submissionId: string) => {
+  const uploadAttachmentIfAny = async (
+    submissionId: string
+  ): Promise<{ name: string; attachments: SubmissionAttachment[] } | null> => {
     if (!attachment) return null;
     // An offline submission has no server id yet; the queued create flushes
     // without the file, so say so rather than dropping it silently.
-    if (!submissionId || submissionId === 'pending-sync') {
+    if (!submissionId || submissionId === OFFLINE_SUBMISSION_ID) {
       toast.error('Saved offline — attach the certificate once you are back online.');
       return null;
     }
@@ -677,8 +726,9 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       const name = attachment.name;
       // Consumed: saving again must not attach the same file a second time.
       setAttachment(null);
-      setStoredAttachments(result.attachments ?? []);
-      return name;
+      const attachments = result.attachments ?? [];
+      setStoredAttachments(attachments);
+      return { name, attachments };
     } catch {
       toast.error('Training saved, but the certificate did not upload. Open the submission to try again.');
       return null;
@@ -740,18 +790,26 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 
     const setBusy = options.asDraft ? setIsSavingDraft : setIsSubmitting;
     setBusy(true);
+    // A submission that is auto-approved on create is frozen the moment it
+    // exists — the attachment endpoint refuses it, and the training record has
+    // already been copied from it. So a new submission carrying a file is
+    // filed as a draft, given its evidence, and only then handed over.
+    const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const stageAsDraft = !options.asDraft && !!attachment && !offline;
+    let stagedDraftId: string | null = null;
     try {
       if (isEdit && editSubmission) {
         await trainingSubmissionService.updateSubmission(editSubmission.id, buildUpdatePayload());
-        const attachedName = await uploadAttachmentIfAny(editSubmission.id);
+        const uploaded = await uploadAttachmentIfAny(editSubmission.id);
         if (options.asDraft) {
           toast.success('Draft saved');
           // Stay on the draft: saving again has to update this one, not file
-          // a second copy of the same class.
-          onSaved(editSubmission);
+          // a second copy of the same class. Carry the upload's own metadata,
+          // since the submission in hand predates it.
+          onSaved(uploaded ? { ...editSubmission, attachments: uploaded.attachments } : editSubmission);
         } else if (editSubmission.status === 'draft') {
           const submitted = await trainingSubmissionService.submitDraft(editSubmission.id);
-          setReceipt(buildReceipt(attachedName, submitted.status === 'approved'));
+          setReceipt(buildReceipt(uploaded?.name ?? null, submitted.status === 'approved'));
           resetForm();
           onSaved();
         } else {
@@ -759,20 +817,38 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           onSaved();
         }
       } else {
-        const created = await trainingSubmissionService.createSubmission(buildCreatePayload(options.asDraft));
-        const attachedName = await uploadAttachmentIfAny(created.id);
+        const created = await trainingSubmissionService.createSubmission(
+          buildCreatePayload(options.asDraft || stageAsDraft)
+        );
+        const queuedOffline = created.id === OFFLINE_SUBMISSION_ID;
+        if (stageAsDraft && !queuedOffline) stagedDraftId = created.id;
+        const uploaded = await uploadAttachmentIfAny(created.id);
+
         if (options.asDraft) {
           toast.success('Draft saved. It stays in your list until you submit it.');
-          onSaved(created);
+          // A queued offline create has no server id yet, so there is nothing
+          // to keep editing — later saves would PATCH `/pending-sync`.
+          const savedDraft = uploaded ? { ...created, attachments: uploaded.attachments } : created;
+          onSaved(queuedOffline ? undefined : savedDraft);
         } else {
-          setReceipt(buildReceipt(attachedName, created.status === 'approved'));
+          const filed = stagedDraftId ? await trainingSubmissionService.submitDraft(stagedDraftId) : created;
+          stagedDraftId = null;
+          setReceipt(buildReceipt(uploaded?.name ?? null, filed.status === 'approved'));
           resetForm();
           onSaved();
         }
       }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Failed to submit training');
+      const message = typeof detail === 'string' ? detail : 'Failed to submit training';
+      // The staged draft survives a failed handoff, attachment and all — say
+      // where it went rather than leaving it to be found by accident.
+      setError(
+        stagedDraftId
+          ? `${message} Your entry is saved as a draft with its attachment — open it from Recent Submissions to submit.`
+          : message
+      );
+      if (stagedDraftId) onSaved();
     } finally {
       setBusy(false);
     }
@@ -963,6 +1039,12 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               />
             </div>
             <p className="text-theme-text-muted mt-2 text-xs">{endNote}</p>
+            {atMaxDuration && (
+              <p className="text-theme-text-muted mt-1 text-xs">
+                {formatDuration(maxDurationMinutes)} is the longest one entry can run
+                {config.max_hours_per_submission ? ' in this department' : ''}. Log a longer course one day at a time.
+              </p>
+            )}
           </div>
         </SectionCard>
 
@@ -1223,16 +1305,20 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         </div>
         <div className="divider" />
         <Checklist rows={checklist} />
-        <AttachmentField
-          id="training-attachment"
-          file={attachment}
-          error={attachmentError}
-          onSelect={(file) => {
-            const rejection = file ? attachmentRejection(file) : null;
-            setAttachmentError(rejection ?? '');
-            setAttachment(rejection ? null : file);
-          }}
-        />
+        {showAttachmentField && (
+          <AttachmentField
+            id="training-attachment"
+            file={attachment}
+            error={attachmentError}
+            required={attachmentRequired}
+            invalid={missingNow.includes('attachments')}
+            onSelect={(file) => {
+              const rejection = file ? attachmentRejection(file) : null;
+              setAttachmentError(rejection ?? '');
+              setAttachment(rejection ? null : file);
+            }}
+          />
+        )}
         <div className="hidden lg:block">{submitButton(submitLabel, '')}</div>
         {/* Nothing to draft once the department has the submission — from
             pending_review on, a save is an edit to something they can see. */}

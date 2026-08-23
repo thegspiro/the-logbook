@@ -20,6 +20,7 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -214,9 +215,22 @@ async def delete_submission(
     """Delete a submission (only by submitter, before approval)."""
     service = TrainingSubmissionService(db)
     async with handle_service_errors("Failed to delete submission"):
+        # Collected before the row goes: a withdrawn submission's certificate
+        # can carry PHI, and deleting only the row leaves the file in the
+        # uploads volume — and in its backups — indefinitely.
+        submission = await service.get_submission(
+            submission_id, current_user.organization_id
+        )
+        stored_paths = (
+            _confined_attachment_paths(submission.attachments) if submission else []
+        )
+
         await service.delete_submission(
             submission_id, current_user.id, current_user.organization_id
         )
+
+        for path in stored_paths:
+            await asyncio.to_thread(_remove_quietly, path)
 
 
 # ==================== Officer Review ====================
@@ -371,7 +385,16 @@ async def submit_draft(
 # A member attaches proof of the training they are reporting — a certificate
 # PDF or, far more often, a phone photo of a paper card. MIME type is verified
 # from the file's magic bytes, never the client-supplied Content-Type.
-SUBMISSION_ATTACHMENT_DIR = "/app/uploads/training_submission_attachments"
+#
+# Nested *inside* the training-record attachment root on purpose: approval
+# copies these attachment dicts verbatim onto the TrainingRecord, and the
+# record download route confines paths to TRAINING_ATTACHMENT_DIR. A sibling
+# directory would leave every approved member's certificate 404ing from their
+# own training history. tests/test_training_submission_drafts_attachments.py
+# asserts the nesting so a later tidy-up cannot quietly break it.
+SUBMISSION_ATTACHMENT_DIR = os.path.join(
+    TRAINING_ATTACHMENT_DIR, "self_reported_submissions"
+)
 ALLOWED_SUBMISSION_ATTACHMENT_MIME = {
     "application/pdf": ".pdf",
     "image/jpeg": ".jpg",
@@ -420,6 +443,27 @@ def _remove_quietly(path: str) -> None:
         os.remove(path)
     except OSError:
         pass
+
+
+def _confined_path(attachment) -> str | None:
+    """Real path of a stored attachment, or None if it escapes the root.
+
+    file_path is server-generated, but the column is client-writable through
+    the create/update schemas — this is what keeps that from becoming an
+    arbitrary file read (or, on delete, an arbitrary unlink).
+    """
+    if not isinstance(attachment, dict) or not attachment.get("file_path"):
+        return None
+    real_path = os.path.realpath(attachment["file_path"])
+    attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
+    if not real_path.startswith(attachment_root + os.sep):
+        return None
+    return real_path
+
+
+def _confined_attachment_paths(attachments) -> list[str]:
+    paths = [_confined_path(a) for a in attachments or []]
+    return [path for path in paths if path]
 
 
 @router.post("/{submission_id}/attachments")
@@ -542,16 +586,8 @@ async def download_submission_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     attachment = attachments[index]
-    if not isinstance(attachment, dict) or not attachment.get("file_path"):
-        raise HTTPException(status_code=404, detail="Attachment file unavailable")
-
-    # Confine the stored path to the attachment directory. file_path is
-    # server-generated, but the column is client-writable through the
-    # create/update schemas — this check is what keeps that from becoming an
-    # arbitrary file read.
-    real_path = os.path.realpath(attachment["file_path"])
-    attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
-    if not real_path.startswith(attachment_root + os.sep):
+    real_path = _confined_path(attachment)
+    if not real_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     if not await asyncio.to_thread(os.path.isfile, real_path):
@@ -595,8 +631,6 @@ async def delete_submission_attachment(
     flag_modified(submission, "attachments")
     await db.commit()
 
-    if isinstance(removed, dict) and removed.get("file_path"):
-        real_path = os.path.realpath(removed["file_path"])
-        attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
-        if real_path.startswith(attachment_root + os.sep):
-            await asyncio.to_thread(_remove_quietly, real_path)
+    removed_path = _confined_path(removed)
+    if removed_path:
+        await asyncio.to_thread(_remove_quietly, removed_path)

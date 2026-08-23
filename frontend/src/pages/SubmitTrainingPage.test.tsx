@@ -10,6 +10,7 @@ const mockGetCategories = vi.fn();
 const mockGetRequirementsEnhanced = vi.fn();
 const mockCreateSubmission = vi.fn();
 const mockUploadAttachment = vi.fn();
+const mockSubmitDraft = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
@@ -18,7 +19,7 @@ vi.mock('../services/api', () => ({
     createSubmission: (...args: unknown[]) => mockCreateSubmission(...args) as unknown,
     uploadAttachment: (...args: unknown[]) => mockUploadAttachment(...args) as unknown,
     updateSubmission: vi.fn(),
-    submitDraft: vi.fn(),
+    submitDraft: (...args: unknown[]) => mockSubmitDraft(...args) as unknown,
     deleteSubmission: vi.fn(),
     deleteAttachment: vi.fn(),
     getAttachments: vi.fn(),
@@ -106,7 +107,11 @@ describe('SubmitTrainingPage', () => {
       submitted_at: '2026-03-12T12:00:00Z',
       updated_at: '2026-03-12T12:00:00Z',
     });
-    mockUploadAttachment.mockResolvedValue({ submission_id: 'sub-new', attachments: [] });
+    mockUploadAttachment.mockResolvedValue({
+      submission_id: 'sub-new',
+      attachments: [{ index: 0, file_name: 'certificate.pdf' }],
+    });
+    mockSubmitDraft.mockResolvedValue({ id: 'sub-new', status: 'pending_review' });
     mockGetRequirementsEnhanced.mockResolvedValue([
       { id: 'requirement-cpr', name: 'CPR Certification', active: true, requirement_type: 'certification' },
       { id: 'requirement-cpr-duplicate', name: 'CPR Certification', active: true, requirement_type: 'certification' },
@@ -321,7 +326,7 @@ describe('SubmitTrainingPage', () => {
     renderWithRouter(<SubmitTrainingPage />);
 
     await screen.findByLabelText(/Course or class name/);
-    const input = screen.getByLabelText('Attach certificate optional', { selector: 'input' });
+    const input = screen.getByLabelText(/Attach certificate/, { selector: 'input' });
     // fireEvent, not user.upload: userEvent enforces the `accept` attribute,
     // and this asserts the guard behind it — a drag-drop or an "All files"
     // pick still has to be turned away.
@@ -337,26 +342,112 @@ describe('SubmitTrainingPage', () => {
     await screen.findByLabelText(/Course or class name/);
     const oversized = new File(['pdf'], 'scan.pdf', { type: 'application/pdf' });
     Object.defineProperty(oversized, 'size', { value: 11 * 1024 * 1024 });
-    await user.upload(screen.getByLabelText('Attach certificate optional', { selector: 'input' }), oversized);
+    await user.upload(screen.getByLabelText(/Attach certificate/, { selector: 'input' }), oversized);
 
     expect(await screen.findByText('That file is over 10 MB. Try a smaller scan or photo.')).toBeInTheDocument();
   });
 
-  it('uploads the attachment after the submission is created', async () => {
+  it('stages a submission with an attachment as a draft so the file lands before routing', async () => {
+    // An auto-approved submission is frozen the moment it exists — the
+    // attachment endpoint refuses it and its training record has already been
+    // copied — so the evidence has to be attached before the handoff.
     const user = userEvent.setup();
     renderWithRouter(<SubmitTrainingPage />);
 
     await screen.findByLabelText(/Course or class name/);
     await fillRequiredFields(user);
     const file = new File(['pdf'], 'certificate.pdf', { type: 'application/pdf' });
-    await user.upload(screen.getByLabelText('Attach certificate optional', { selector: 'input' }), file);
+    await user.upload(screen.getByLabelText(/Attach certificate/, { selector: 'input' }), file);
     await user.click(screen.getByRole('button', { name: /Submit Training/ }));
 
     await waitFor(() => {
       expect(mockUploadAttachment).toHaveBeenCalledWith('sub-new', file);
     });
+    expect(mockCreateSubmission).toHaveBeenCalledWith(expect.objectContaining({ save_as_draft: true }));
+    expect(mockSubmitDraft).toHaveBeenCalledWith('sub-new');
     expect(await screen.findByText('Attached')).toBeInTheDocument();
     expect(screen.getByText('certificate.pdf')).toBeInTheDocument();
+  });
+
+  it('files a submission without an attachment directly, with no draft round trip', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    await waitFor(() => expect(mockCreateSubmission).toHaveBeenCalled());
+    expect(mockCreateSubmission).toHaveBeenCalledWith(expect.not.objectContaining({ save_as_draft: true }));
+    expect(mockSubmitDraft).not.toHaveBeenCalled();
+  });
+
+  it('treats a department with no configured maximum as a day, not 16 hours', async () => {
+    mockGetConfig.mockResolvedValue({ ...mockConfig, max_hours_per_submission: null });
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    // 16h was the old fallback and would have stopped here.
+    for (let i = 0; i < 5; i++) {
+      await user.click(screen.getByRole('button', { name: 'Increase length by 15 minutes' }));
+    }
+    expect(screen.getAllByText('5h 15m').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/is the longest one entry can run/)).not.toBeInTheDocument();
+  });
+
+  it('enforces every field the department marked required', async () => {
+    mockGetConfig.mockResolvedValue({
+      ...mockConfig,
+      field_config: {
+        ...mockConfig.field_config,
+        location: { visible: true, required: true, label: 'Location' },
+        issuing_agency: { visible: true, required: true, label: 'Agency' },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    // noValidate means this custom check is the only enforcement there is.
+    expect(mockCreateSubmission).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/Location/)).toHaveFocus();
+  });
+
+  it('hides the attachment control when the department has turned it off', async () => {
+    mockGetConfig.mockResolvedValue({
+      ...mockConfig,
+      field_config: {
+        ...mockConfig.field_config,
+        attachments: { visible: false, required: false, label: 'Supporting Documents' },
+      },
+    });
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    expect(screen.queryByLabelText(/Attach certificate/)).not.toBeInTheDocument();
+  });
+
+  it('does not enter edit mode against the placeholder id of an offline draft', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mockCreateSubmission.mockResolvedValue({ id: 'pending-sync', status: 'pending_review' });
+    const user = userEvent.setup();
+    try {
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await user.type(await screen.findByLabelText(/Course or class name/), 'Logged at the station');
+      await user.type(screen.getByLabelText(/^Date/), '2026-03-12');
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      await waitFor(() => expect(mockCreateSubmission).toHaveBeenCalled());
+      // Editing mode would PATCH `/pending-sync`; the form must stay on a new entry.
+      expect(screen.queryByText(/Editing your submission/)).not.toBeInTheDocument();
+    } finally {
+      onLine.mockRestore();
+    }
   });
 
   it('handles config load failure', async () => {
