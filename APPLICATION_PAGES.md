@@ -247,7 +247,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` **OR** `facilities.manage` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` **OR** `facilities.manage` |
 
-> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent completed-maintenance activity, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent maintenance completions, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in; standalone Locations may reference a Facility but do not create or update Facility Rooms. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
 ---
 
@@ -502,6 +502,20 @@ Tab-based interface with the following views:
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
 
+> **`/scheduling/checkin` accepts `?shift=<id>` or `?apparatus=<id>`**
+> _(2026-08-18)_. Prefer the **apparatus** form for anything physically mounted:
+> it resolves at scan/tap time rather than naming a shift, so one sticker on the
+> truck serves every shift. A shift-keyed URL is dead the moment that shift
+> ends. **`get_active_shift_for_apparatus` is not a "currently running"
+> lookup**: it takes the _earliest-starting_ non-finalized shift dated today,
+> else one whose `end_time` is within the last two hours, else the next
+> upcoming — with no start/end window check and no `status == cancelled`
+> exclusion. Two shifts on one apparatus in a day, or a stale un-finalized row,
+> therefore resolve to the wrong shift; `ShiftCheckInPage` names the unit, date
+> and hours before the member confirms. `buildShiftCheckInUrl`
+> takes `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call
+> site; `shift` is read first when both are present.
+
 #### Position Qualification Roster (`/scheduling/qualifications`) _(documented 2026-08-18)_
 
 Answers "who is cleared to drive?" in one screen rather than one apparatus
@@ -565,6 +579,46 @@ Sections are defined in
 > **Settings → Ranks**.
 
 > The **Shift Reports** section links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports. It is a section navigator of its own eight sections, not a page of three cards.
+
+#### Shift Close-Out — two different screens _(2026-08-19)_
+
+Close-out is reached the same way in both cases — **Close out shift** on the
+shift detail panel, visible to `scheduling.manage` or the shift's own officer,
+on a past shift that is neither finalized nor cancelled. What opens depends on
+one organization setting, **Scheduling → Settings → General → Shift close-out
+rules → Record a call count at close-out**
+(`scheduling.call_tracking.mode`):
+
+| Mode                 | What opens                                      | Notes                                                                     |
+| -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `detailed` (default) | The single finalize checklist, unchanged        | Calls are logged per incident as `ShiftCall` rows                         |
+| `count_only`         | The three-step **close-out wizard**             | The officer reports a number; no incident detail is collected or accepted |
+| `off`                | The single finalize checklist, no call question |                                                                           |
+
+The wizard's three steps each save as they advance, so an interrupted close-out
+resumes rather than restarting:
+
+| Step | Question                              | Writes                                                                                                          |
+| ---- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1    | When was each member actually on?     | `PATCH /scheduling/shifts/{id}/closeout/attendance` → `ShiftAttendance` times; `shifts.closeout_step = 1`       |
+| 2    | How many calls did the apparatus run? | `PATCH /scheduling/shifts/{id}/closeout/calls` → `org_calls` + `org_call_responses`; `shifts.closeout_step = 2` |
+| 3    | Confirm each member's credit          | `POST /scheduling/shifts/{id}/finalize` → `ShiftAttendance.call_count`, `shifts.call_count`                     |
+
+> **The wizard replaces the checklist, so it carries everything the checklist
+> could do** — the end-of-shift-check override (still gated on a logged reason,
+> still audited as `shift_finalized_check_override`) and pass-down notes. Without
+> them a count-only department that enforces equipment checks could never close a
+> shift at all.
+
+> **The total on step 2 is derived from the per-type rows and is read-only.**
+> There is exactly one source for the number. A design with both a total field
+> and a breakdown needs a reconciliation rule per direction, and the downward one
+> was missing — revising a count down left the old total on screen, and that is
+> what got saved.
+
+> **Reopening a finalized shift restarts the wizard at step 1.**
+> `shifts.closeout_step` is cleared on finalize, and a finalized shift reports
+> step 0 regardless.
 
 ### Equipment Check Pages (2026-03-19)
 
@@ -733,6 +787,16 @@ lot's number or expiration date require `equipment_check.manage` or
 | `/action-items` | Action Items | Authenticated |
 
 > Unified cross-module action items view.
+
+---
+
+## Legal Documents (Governance)
+
+| URL                 | Page            | Permission                                            |
+| ------------------- | --------------- | ----------------------------------------------------- |
+| `/governance/legal` | Legal Documents | `legal.propose`, `legal.publish` or `settings.manage` |
+
+> Where the secretary and department leaders read the wording currently published on `/privacy` and `/terms` and propose alternatives that fit local bylaws, SOPs, and law. Proposing and publishing are separate grants: a proposal is a draft that changes nothing until somebody with `legal.publish` (Chief, President, IT Manager by default) publishes it. Publishing archives the previous version rather than deleting it, so the department can answer what a member was shown on a given date. Regular members hold neither grant and never see the screen. Not gated on a module flag — every deployment publishes the two public pages.
 
 ---
 
@@ -935,6 +999,77 @@ are opened from the corresponding module's list view.
 | `/training/print/compliance`        | Compliance matrix       | `training.manage`                            |
 | `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated                                |
 | `/scheduling/shift-reports/print`   | Shift report            | Authenticated                                |
+
+---
+
+## NFC Tags — a cross-module surface _(2026-08-18)_
+
+Not a page. NFC is a second way in to a check-in that already has a QR code, so
+it appears **on the QR pages** rather than getting screens of its own. A station
+can mount one reusable sticker instead of reprinting a sheet per event, and a
+member taps it — no camera, which is the part that fails in a dark apparatus bay
+or with gloves on.
+
+### Where the writer appears
+
+| Page                                    | Writes a tag pointing at             | Component                                     |
+| --------------------------------------- | ------------------------------------ | --------------------------------------------- |
+| `/events/:id/qr-code`                   | `/events/:id/check-in`               | `NfcTagWriter`                                |
+| `/admin-hours/categories/:id/qr-code`   | that category's clock-in URL         | `NfcTagWriter`                                |
+| Shift detail panel → QR block           | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriter`                                |
+| `/locations/qr-codes` (apparatus cards) | `/scheduling/checkin?apparatus=<id>` | `NfcTagWriteButton` (compact, toast feedback) |
+
+### Where the reader appears
+
+**Tap Tag** (`NfcTapButton`) reads a tag while the app is already open, and
+routes by what the tag _says_ rather than by where the button lives. It is on
+the **Events** page, **My Admin Hours**, and the **scheduling calendar**. It
+exists for the case Android does not cover on its own: with the app in the
+foreground the OS does not hand a URL tag off to the browser, so a member
+holding a phone they are already using would otherwise have to close the app to
+use the tag.
+
+### What a tag may point at
+
+`TAG_TARGETS` in `constants/nfc.ts`, keyed by `NfcTagTarget` in
+`constants/enums.ts`, is the whole reachable surface — adding a module means
+adding one spec, not another parser, and what a tag may point at stays
+reviewable in one place.
+
+> **A tag is untrusted input.** Anyone with a phone can write one, so the
+> payload is on par with a scanned QR code rather than with configuration.
+> `parseNfcTagPath` resolves it against the app's own origin and rejects
+> anything that does not land back on that exact origin — which also disposes of
+> `javascript:` and `data:`, whose origin parses as `"null"`. It returns the
+> **rebuilt** route, never the raw string, so a tap hands react-router a
+> fixed-shape path instead of assigning an attacker-supplied URL to
+> `window.location`. An unrecognized tag leaves the scan armed and says so
+> rather than navigating somewhere unintended.
+
+> **Only spec-named query parameters may carry an id.** Shift check-in is
+> `?shift=` or `?apparatus=`, so refusing every query parameter would have made
+> it untaggable. Each named value is validated against the same id pattern as a
+> path segment, only the first valid one survives, and the route is rebuilt from
+> those pieces — a tag cannot smuggle `?next=` past the parser by hanging it off
+> an otherwise legitimate route.
+
+> **`/display/:code` is deliberately not taggable.** It is a public,
+> unauthenticated kiosk screen keyed by a non-guessable code. Writing that code
+> to a tag anyone can read hands it to whoever walks past, and sending a member's
+> phone to a wall display is not a check-in. A test asserts it stays rejected,
+> and the same rule hides the **Write NFC tag** button on room kiosk cards while
+> showing it on the apparatus cards beside them.
+
+> **Web NFC is Android-Chromium only, and requires a secure context.** The two
+> compact controls — **Tap Tag** and the `/locations/qr-codes` **Write NFC tag**
+> button — render nothing where the API is absent, rather than offering a
+> control that cannot work. The full `NfcTagWriter` panel instead prints _why_,
+> because two very different failures present identically as a missing
+> `NDEFReader`: an insecure origin (plain HTTP over a LAN IP — browsers expose
+> Web NFC only in a secure context) versus a browser that never shipped the API.
+> Without that split an iPhone user and an admin on `http://` both see "NFC
+> unavailable" and neither learns what to do about it. QR remains the universal
+> path; NFC is strictly an addition.
 
 ---
 

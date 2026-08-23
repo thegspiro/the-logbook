@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { DialogPanel } from '@/components/ux/DialogPanel';
 import {
   ClipboardCheck,
   CheckCircle,
@@ -28,6 +29,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------
@@ -152,6 +154,9 @@ export const MyChecklistsPage: React.FC = () => {
 
   // Standalone check template picker
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(showTemplatePicker);
   const [availableTemplates, setAvailableTemplates] = useState<EquipmentCheckTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
@@ -765,7 +770,11 @@ export const MyChecklistsPage: React.FC = () => {
               onClick={() => setShowTemplatePicker(false)}
               aria-hidden="true"
             />
-            <div className="card relative w-full max-w-md shadow-xl">
+            {/* DialogPanel, not a bare div: without it this picker had no focus
+                trap, no body scroll lock, and no registration to lift the mobile
+                bottom bar — which is also z-50 and renders later, so it painted
+                over the end of the template list. */}
+            <DialogPanel onClose={() => setShowTemplatePicker(false)} className="relative w-full max-w-md">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
                 <h2 className="text-theme-text-primary text-base font-semibold">Pick a checklist</h2>
                 <button
@@ -836,7 +845,7 @@ export const MyChecklistsPage: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
+            </DialogPanel>
           </div>
         </div>
       )}

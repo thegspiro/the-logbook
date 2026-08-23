@@ -25,8 +25,8 @@ import json
 import os
 import re
 import struct
-import time as time_module
 import sys
+import time as time_module
 import urllib.error
 import urllib.request
 import uuid
@@ -575,6 +575,14 @@ ADMINISTRATIVE_USERNAMES = {"jwhitfield", "bhollis"}
 # firefighters while a two-person brush truck asks for an officer and a driver.
 SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
 
+# Identifies the close-out wizard's fixture shift across re-runs.
+#
+# Matched on exactly, so it is a marker rather than prose — edit it and the next
+# seeder run creates a second fixture beside the first instead of reusing it.
+CLOSEOUT_SHIFT_NOTE = (
+    "Close-out wizard fixture — 24-hour tour, four crew, count-only captures."
+)
+
 # One future shift is left crewed by its officer alone.
 #
 # Every other shift is staffed to its minimum or one short, which is what a real
@@ -911,11 +919,6 @@ class Seeder:
                     "phone": f"(703) 555-{2000 + index:04d}",
                     "mobile": f"(703) 555-{3000 + index:04d}",
                     "rank": rank,
-                    "membership_type": (
-                        "administrative"
-                        if username in ADMINISTRATIVE_USERNAMES
-                        else "active"
-                    ),
                     "hire_date": str(TODAY - timedelta(days=365 * (2 + index % 12))),
                     "address_street": f"{100 + index * 7} Sycamore Lane",
                     "address_city": "Oakville",
@@ -936,6 +939,18 @@ class Seeder:
                     "password": DEMO_MEMBER_PASSWORD,
                 },
             )
+            if username in ADMINISTRATIVE_USERNAMES and pick(record, "id"):
+                try:
+                    self.api.patch(
+                        f"/users/{pick(record, 'id')}/membership-type",
+                        {
+                            "membership_type": "administrative",
+                            "reason": "Moved to non-operational support role.",
+                        },
+                    )
+                    record["membership_type"] = "administrative"
+                except ApiError as exc:
+                    self.blocked.append(f"membership type: {exc}")
             created.append(record)
         self._fill_in_the_administrator(created)
         self._enable_two_factor_for_one_member(created)
@@ -1249,14 +1264,29 @@ class Seeder:
         driver against.
         """
         levels = items(self.api.get("/apparatus/evoc-levels"), "levels")
+        # A new organization is seeded with four levels (EVOC1..EVOC4) by the
+        # product itself, so this step normally has nothing to do. Returning
+        # them is not merely an optimisation: the blueprint below would collide
+        # with what is already there, and `by_level` is keyed on level_number,
+        # so inventing a parallel set is wrong even where it succeeds.
+        if levels:
+            return levels
         codes = {level.get("code") for level in levels}
+        # The backend enforces uniqueness on level_number, not code, so guarding
+        # on code alone let a differently-coded level of the same number through
+        # to a 400 that failed the whole step -- which left `by_level` empty and
+        # no apparatus with a required EVOC level, so the driver-eligibility
+        # feature sat inert and 03-52 had nothing to photograph.
+        numbers = {
+            pick(level, "level_number", "levelNumber") for level in levels
+        }
         blueprint = [
             (1, "Basic", "EVOC-1", "Emergency vehicle operation, non-transport."),
             (2, "Intermediate", "EVOC-2", "Engine and rescue apparatus."),
             (3, "Advanced", "EVOC-3", "Aerial and tiller-equipped apparatus."),
         ]
         for number, name, code, description in blueprint:
-            if code in codes:
+            if code in codes or number in numbers:
                 continue
             levels.append(
                 self.api.post(
@@ -4906,6 +4936,256 @@ class Seeder:
                 "part-answered check"
             )
 
+    # -- scheduling: count-only call tracking ------------------------
+
+    # The unit the close-out wizard captures are shot against.
+    #
+    # Deliberately NOT an Engine. `03-45-finalize-checklist` reaches for the
+    # newest un-finalized `/^Engine/` shift, and equipment-check templates
+    # resolve by apparatus type, so putting this fixture on an engine would let
+    # the two shots race for the same shift and quietly swap which screen each
+    # one photographed.
+    CLOSEOUT_UNIT_HINT = "Medic"
+
+    # A full 24-hour tour, four crew. Both numbers are load-bearing for the
+    # screenshots, not decoration: the wizard's step 1 shows *combined* hours
+    # summed across the crew, and the guide's whole point is that ~96 hours on a
+    # 24-hour shift is not a bug. A 12-hour shift with two people reads as 24
+    # and teaches nothing.
+    CLOSEOUT_CREW_SIZE = 4
+    CLOSEOUT_DAYS_AGO = 4
+
+    def seed_call_tracking_closeout(self, members: list[dict]) -> dict | None:
+        """A past 24-hour shift set up for the close-out wizard captures.
+
+        Six screenshot markers in guide 03 need a state no other seeded shift
+        provides, and they need it *simultaneously* — the wizard shows the whole
+        crew on one screen, so the interesting rows cannot be spread across
+        different shifts the way most fixtures are.
+
+        What this builds, and why each part is required by a specific shot:
+
+        * **A 24-hour tour with four crew.** Step 1 reports *combined* hours,
+          summed across everyone, which lands near 96. The guide teaches that
+          this is not the shift's length, and a fixture that produced a
+          plausible-looking 24 would make the caption read as a mistake.
+        * **One member with no check-out.** Step 1 flags them. Without one the
+          `missing_checkout` styling is never photographed.
+        * **One assigned member with no attendance row at all.** They are listed
+          with empty times to fill in. This is the regression the close-out
+          review found — such members used to be invisible, so the shot is the
+          evidence that they are not.
+        * **The department's call types**, so step 2 has named rows rather than
+          the built-in fallback. Written explicitly so a future change to
+          ``DEFAULT_CALL_TYPES`` cannot silently re-shoot a different list.
+
+        **The mode is deliberately left at ``detailed``.** Flipping the whole
+        demo department to ``count_only`` here would replace the finalize
+        checklist everywhere and break `03-45-finalize-checklist`, which
+        photographs precisely the screen that mode removes. Each capture that
+        needs count-only sets it in its own ``prepare`` step and each capture
+        that needs the checklist sets it back — the same self-healing pattern
+        capture.mjs already uses for ``navigationLayout``, and for the same
+        reason: a shot must not depend on what ran before it.
+        """
+        self._seed_call_types()
+        return self._seed_closeout_shift(members)
+
+    def _seed_call_types(self) -> None:
+        """Give the org an explicit call-type list.
+
+        ``get_call_tracking_settings`` degrades to a built-in list when the org
+        has none, so step 2 of the wizard would render either way — but it would
+        render whatever that default happens to be on the day. Writing the list
+        pins the screenshot to something this file controls.
+
+        Sent with ``mode`` set to the value already in effect. The payload
+        replaces the whole ``call_tracking`` object, so omitting the mode would
+        reset a department that had deliberately enabled count-only.
+        """
+        settings = self.api.get("/scheduling/settings") or {}
+        tracking = settings.get("call_tracking") or {}
+        if tracking.get("call_types"):
+            return
+        try:
+            self.api.put(
+                "/scheduling/settings",
+                {
+                    "call_tracking": {
+                        "mode": tracking.get("mode") or "detailed",
+                        "call_types": [
+                            {"slug": "fire", "label": "Fire"},
+                            {"slug": "ems", "label": "EMS"},
+                            {"slug": "mva", "label": "Motor Vehicle Accident"},
+                            {"slug": "rescue", "label": "Rescue"},
+                            {"slug": "hazmat", "label": "Hazmat"},
+                            {"slug": "service", "label": "Service Call"},
+                            {"slug": "alarm", "label": "Alarm / Good Intent"},
+                            {"slug": "mutual_aid", "label": "Mutual Aid"},
+                            {"slug": "other", "label": "Other"},
+                        ],
+                    }
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"call types: {exc}")
+
+    def _seed_closeout_shift(self, members: list[dict]) -> dict | None:
+        """Create (or find) the 24-hour four-person shift and stage its crew."""
+        existing = self._find_closeout_shift()
+        if existing:
+            return existing
+
+        unit = self._closeout_apparatus()
+        if not unit:
+            self.blocked.append(
+                "close-out fixture: no non-engine apparatus to hang it on"
+            )
+            return None
+
+        shift_day = TODAY - timedelta(days=self.CLOSEOUT_DAYS_AGO)
+        start_at = datetime.combine(
+            shift_day, time(hour=7), tzinfo=ORG_TIMEZONE
+        ).astimezone(timezone.utc)
+        # +1 day, 07:00 → a true 24-hour tour rather than 23 or 25. The wizard's
+        # combined-hours figure is read off this directly.
+        end_at = datetime.combine(
+            shift_day + timedelta(days=1), time(hour=7), tzinfo=ORG_TIMEZONE
+        ).astimezone(timezone.utc)
+
+        payload = {
+            "shift_date": str(shift_day),
+            "start_time": iso(start_at),
+            "end_time": iso(end_at),
+            "apparatus_id": pick(unit, "id"),
+            "min_staffing": self.CLOSEOUT_CREW_SIZE,
+            "positions": SHIFT_POSITIONS[: self.CLOSEOUT_CREW_SIZE],
+            "notes": CLOSEOUT_SHIFT_NOTE,
+        }
+        try:
+            shift = self.api.post("/scheduling/shifts", payload)
+        except ApiError as exc:
+            self.blocked.append(f"close-out fixture: create shift: {exc}")
+            return None
+
+        shift_id = pick(shift, "id")
+        crew = self._crew_the_closeout_shift(shift_id, members)
+        if crew:
+            self._stage_closeout_attendance(shift_id, crew, start_at, end_at)
+        return shift
+
+    def _find_closeout_shift(self) -> dict | None:
+        """The fixture from a previous run, if it is still usable.
+
+        Matched on the note rather than on date or apparatus: the seeder is
+        re-run against a database it has already populated, and a shift matched
+        by shape alone would collide with the ordinary schedule.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        for shift in shifts:
+            if str(pick(shift, "notes") or "").strip() != CLOSEOUT_SHIFT_NOTE:
+                continue
+            # A finalized fixture is spent — the wizard will not open on it, and
+            # reopening here would fight seed_finalized_shift for the same row.
+            if pick(shift, "is_finalized", "isFinalized"):
+                self.blocked.append(
+                    "close-out fixture: the seeded shift is already finalized; "
+                    "reopen it or clear the demo database before re-capturing"
+                )
+                return None
+            return shift
+        return None
+
+    def _closeout_apparatus(self) -> dict | None:
+        """Pick a unit that no engine-specific shot is competing for."""
+        fleet = items(self.api.get("/scheduling/apparatus"), "apparatus")
+        preferred = [
+            unit
+            for unit in fleet
+            if self.CLOSEOUT_UNIT_HINT.lower() in str(pick(unit, "name") or "").lower()
+        ]
+        non_engine = [
+            unit
+            for unit in fleet
+            if not str(pick(unit, "name") or "").lower().startswith("engine")
+        ]
+        for candidate in (preferred, non_engine, fleet):
+            if candidate:
+                return candidate[0]
+        return None
+
+    def _crew_the_closeout_shift(
+        self, shift_id: str | None, members: list[dict]
+    ) -> list[str]:
+        """Seat four members, skipping anyone already on duty that day."""
+        if not shift_id:
+            return []
+        seated: list[str] = []
+        seats = SHIFT_POSITIONS[: self.CLOSEOUT_CREW_SIZE]
+        for user_id in (pick(m, "id") for m in members):
+            if not user_id or len(seated) >= self.CLOSEOUT_CREW_SIZE:
+                continue
+            try:
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/assignments",
+                    {"user_id": user_id, "position": seats[len(seated)]},
+                )
+            except ApiError as exc:
+                # Already rostered elsewhere that day. The ordinary schedule
+                # books most of the department, so this is the common case
+                # rather than an error — move to the next member.
+                if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                    raise
+                continue
+            seated.append(user_id)
+        if len(seated) < self.CLOSEOUT_CREW_SIZE:
+            self.blocked.append(
+                f"close-out fixture: seated {len(seated)} of "
+                f"{self.CLOSEOUT_CREW_SIZE} — the combined-hours figure the "
+                "guide captions will not read as ~96"
+            )
+        return seated
+
+    def _stage_closeout_attendance(
+        self,
+        shift_id: str,
+        crew: list[str],
+        start_at: datetime,
+        end_at: datetime,
+    ) -> None:
+        """Check the crew in, leaving two rows deliberately incomplete.
+
+        The last member gets **no attendance row at all**, and the one before
+        them gets a check-in with **no check-out**. Both are states the wizard
+        renders specially and neither occurs anywhere else in the demo data,
+        because `_seed_shift_attendance` checks every past crew fully in and
+        out — which is right for every other shift and useless for this one.
+        """
+        # Left with no row on purpose; the wizard lists them with empty times.
+        never_checked_in = crew[-1] if len(crew) >= 2 else None
+        # Checked in, never out.
+        no_checkout = crew[-2] if len(crew) >= 3 else None
+
+        for index, user_id in enumerate(crew):
+            if user_id == never_checked_in:
+                continue
+            body: dict[str, Any] = {
+                "user_id": user_id,
+                # Staggered so the durations are not identical to the minute,
+                # which reads as generated data in a screenshot.
+                "checked_in_at": iso(start_at + timedelta(minutes=index * 4)),
+            }
+            if user_id != no_checkout:
+                body["checked_out_at"] = iso(
+                    end_at - timedelta(minutes=(index % 3) * 6)
+                )
+            try:
+                self.api.post(f"/scheduling/shifts/{shift_id}/attendance", body)
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"close-out fixture attendance: {exc}")
+
     # -- shift finalization ------------------------------------------
 
     def seed_finalized_shift(self) -> dict | None:
@@ -6289,7 +6569,7 @@ class Seeder:
                         # being asked of them, and "2 items" pictures the
                         # feature without demonstrating it.
                         requirement["checklist_items"] = CHECKLIST_ITEMS.get(
-                            name,
+                            req_name,
                             [
                                 "Reviewed with company officer",
                                 "Signed off in station logbook",
@@ -8238,7 +8518,10 @@ class Seeder:
         if not published or not candidate or not examiner:
             return None
 
-        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        existing = items(
+            self.api.get("/training/skills-testing/tests?include_practice=true"),
+            "tests",
+        )
         candidate_id = pick(candidate, "id")
         mine = [t for t in existing if pick(t, "candidate_id") == candidate_id]
         # Idempotent on the two states, not on a count: a re-run must not keep
@@ -8768,9 +9051,24 @@ class Seeder:
         Submitted through the same public endpoint the request form uses; the
         admin tab otherwise renders "No event requests yet" under a caption
         describing a queue.
+
+        Public intake is opt-in as of 2026-08-17 (EV-5) and defaults to off, so
+        this turns it on first — exactly what an administrator does under
+        **Events -> Settings -> Request pipeline -> Accept Public Requests**.
+        Without it the post fails with a 404 that reads "Organization not
+        found", because a closed department is deliberately indistinguishable
+        from one that does not exist; that is correct behaviour and a very
+        confusing seeder failure, since the organization plainly does exist.
         """
         if items(self.api.get("/event-requests?limit=5"), "requests"):
             return
+        # Left on afterwards rather than restored: the demo department is
+        # meant to look like one that accepts outreach, and guide 04 pictures
+        # the setting itself.
+        self.api.patch(
+            "/events/settings",
+            {"request_pipeline": {"accept_public_requests": True}},
+        )
         org_id = pick(self.api.get("/auth/me"), "organization_id")
         self.api.post(
             f"/event-requests/public?organization_id={org_id}",
@@ -11509,6 +11807,13 @@ class Seeder:
         # doing it first would put a second batch of drafts in the way of the
         # ones seed_shift_reports files deliberately.
         self.step("finalized shift", self.seed_finalized_shift)
+        # After finalization: seed_finalized_shift closes the *oldest* crewed
+        # past shift, and this fixture must not be the one it picks — the wizard
+        # cannot open on a finalized shift.
+        self.step(
+            "close-out wizard fixture",
+            lambda: self.seed_call_tracking_closeout(members),
+        )
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

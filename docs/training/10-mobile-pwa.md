@@ -451,6 +451,39 @@ Several features are specifically designed for mobile use:
 
 This is the most common mobile interaction — members scan QR codes at events and shift changes.
 
+### NFC Tag Check-In (Android only) _(2026-08-18)_
+
+Where a station has mounted an NFC tag, you can check in by holding your phone
+near it instead of scanning anything. No camera, which matters in a dark bay or
+with gloves on.
+
+1. Hold the back of your phone against the tag
+2. Android opens The Logbook's check-in page
+3. Tap **Confirm Check-In**
+
+**If the app is already open on screen, that will not happen** — Android only
+hands a tag off to the browser when the app is not in the foreground. Use **Tap
+Tag** in the app instead: it is on the Events page, My Admin Hours, and the
+scheduling calendar. Press it, then hold the phone to the tag.
+
+Tags exist for three things today: **event check-in**, **admin hours clock-in**,
+and **shift check-in** on an apparatus.
+
+> **[SCREENSHOT NEEDED — a phone holding against a mounted NFC tag on an
+> > apparatus, and the resulting shift check-in page naming the unit, date and
+> > hours. Two frames or one composite]**
+
+**This is Chrome on Android, over HTTPS, and nothing else.** iPhone cannot do
+it; Safari does not implement Web NFC and no iOS browser does. A desktop cannot
+do it. A department running on plain `http://` over the LAN cannot do it — the
+browser only exposes NFC on a secure connection. Where NFC is unavailable the
+buttons simply are not there, and the QR code is the way in.
+
+**An unrecognized tag will not take you anywhere.** The app only follows links
+that point back at your own Logbook, and only to check-in pages it recognizes.
+A tag somebody else wrote leaves the scan waiting with a message rather than
+opening whatever it says.
+
 ### Member ID Scanning (Inventory Checkout)
 
 1. Navigate to **Inventory > Members** on your phone
@@ -711,7 +744,7 @@ Sarah taps **Check Out**, selects herself as the borrower (her name is pre-fille
 
 > **Corrected 2026-08-12.** The item detail page has **no Check Out button**.
 > Its actions are Back, Print Barcode and (for a manager) Edit. A checkout is
-> made against a _member_, from **Inventory Admin > Members > Assign** — which
+> made against a _member_, from **Gear Admin > Members > Assign** — which
 > is why the walkthrough above has Sarah select herself as the borrower.
 
 ### Part 3: Offline Training Submission (Afternoon — No Signal)
@@ -746,3 +779,43 @@ A notification appears: "2 queued items synced successfully." Sarah taps it to v
 ---
 
 **Previous:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | **Next:** Return to [Training Guide Index](./README.md)
+
+## August 19–23, 2026 update — dialogs are tappable again
+
+If members have reported that a dialog's buttons "do nothing" on a phone, this
+release fixes it.
+
+The bottom navigation bar was painting **over** open dialogs. The buttons were
+not merely hidden — they were **untappable**, and the tap went to the
+navigation bar underneath, carrying the member out of the page they were
+working in. On a tall dialog the action row sat about 40px behind the bar; on a
+notched phone even a dialog sized to the viewport lost around 32px.
+
+The bar now hides while a dialog, drawer or bottom sheet is open, and returns
+when it closes.
+
+> **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport, scrolled to its
+> action row, with the bottom navigation absent. **Every existing phone dialog
+> capture across the guides is now wrong** and should be replaced with a shot
+> taken after this change — the old ones all show the bar covering the
+> dialog.]**
+
+### Also improved on phones this week
+
+- The **events page** was cut down to what actually fits on a phone.
+- **Equipment template actions** and the **checklist builder** are reachable
+  without sideways scrolling.
+- **Calendar month navigation** is responsive.
+- The **documents, training, audit and check-in tables** reflow into stacked
+  cards instead of scrolling sideways.
+- **Icon-only controls are named**, so a screen reader announces them.
+- Toast notifications are positioned and announced correctly on a phone.
+
+> **[SCREENSHOT NEEDED — one of the reflowed tables (documents or check-in) at
+> > 390x844 showing the stacked-card layout, beside the same table on desktop.
+> > The pair is the point; a single shot does not show the reflow.]**
+
+### Browser tabs
+
+Each tab now carries the page name rather than a generic app title, so several
+Logbook tabs open at once are finally distinguishable. Nothing to configure.

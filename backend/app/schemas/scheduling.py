@@ -489,6 +489,32 @@ class SchedulingSummary(BaseModel):
     hours_worked_this_month: float
 
 
+class SchedulingWidgetFilters(BaseModel):
+    """Saved defaults for the scheduling dashboard widgets."""
+
+    station_id: Optional[str] = Field(None, max_length=100)
+    platoon: Optional[str] = Field(None, max_length=20)
+    horizon_days: int = Field(14, ge=1, le=93)
+
+
+class SchedulingWidgetPreferences(BaseModel):
+    widgets: dict[str, SchedulingWidgetFilters] = Field(default_factory=dict)
+
+
+class SchedulingWidgetSummary(BaseModel):
+    timezone: str
+    window_start: datetime
+    window_end: datetime
+    today_staffing: int
+    future_coverage_gaps: int
+    open_slots: int
+    pending_staffing_changes: int
+    incomplete_closeouts: int
+    workload_imbalance: int
+    special_operations: int
+    scheduling_enabled: bool = True
+
+
 # ============================================
 # Shift Call Schemas
 # ============================================
@@ -865,6 +891,15 @@ class ShiftSwapRequestResponse(UTCResponseBase):
     model_config = _response_config
 
 
+class ShiftSwapRequestsPage(BaseModel):
+    """Paginated shift swap request response."""
+
+    items: List[ShiftSwapRequestResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 # ============================================
 # Shift Time Off Schemas
 # ============================================
@@ -909,6 +944,15 @@ class ShiftTimeOffResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+class ShiftTimeOffRequestsPage(BaseModel):
+    """Paginated time-off request response."""
+
+    items: List[ShiftTimeOffResponse]
+    total: int
+    skip: int
+    limit: int
 
 
 # ============================================
@@ -1037,7 +1081,11 @@ class ApparatusOption(BaseModel):
     unit_number: Optional[str] = None
     apparatus_type: str
     source: str  # "apparatus", "basic", or "default"
-    positions: Optional[List[str]] = None
+    # Seat lists are stored as {"position", "required"} slots (see
+    # app/utils/positions.py). Declared List[Any] like every other positions
+    # field in this module: a List[str] here rejected the canonical shape and
+    # 500'd the endpoint for any org whose apparatus had seats.
+    positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
 
 

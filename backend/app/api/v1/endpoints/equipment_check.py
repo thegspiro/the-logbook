@@ -32,6 +32,8 @@ from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
+    CheckTemplateItemBulkCreate,
+    CheckTemplateItemBulkResponse,
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
@@ -62,7 +64,10 @@ from app.schemas.equipment_check import (
     SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    EquipmentCheckConflictError,
+    EquipmentCheckService,
+)
 from app.services.equipment_readiness_service import EquipmentReadinessService
 from app.utils.image_processing import optimize_image
 
@@ -554,6 +559,38 @@ async def add_item(
     return item
 
 
+@router.post(
+    "/compartments/{compartment_id}/items/bulk",
+    response_model=CheckTemplateItemBulkResponse,
+    status_code=201,
+)
+async def add_items_bulk(
+    compartment_id: str,
+    data: CheckTemplateItemBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Create an ordered item batch atomically; safe to retry with the same key."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.add_items_bulk(
+            compartment_id,
+            str(current_user.organization_id),
+            [item.model_dump() for item in data.items],
+            data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    items, replayed = result
+    return CheckTemplateItemBulkResponse(
+        items=items, created_count=0 if replayed else len(items), replayed=replayed
+    )
+
+
 @router.put(
     "/items/{item_id}",
     response_model=CheckTemplateItemResponse,
@@ -713,6 +750,8 @@ async def submit_check(
         return check
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=safe_error_detail(e))
+    except EquipmentCheckConflictError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
@@ -725,7 +764,9 @@ async def submit_check(
 async def submit_standalone_check(
     data: StandaloneEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit a standalone equipment check not tied to a shift."""
     service = EquipmentCheckService(db)
@@ -748,7 +789,9 @@ async def complete_incomplete_check(
     check_id: str,
     data: EquipmentCheckCompleteItems,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Complete remaining items on an incomplete check."""
     service = EquipmentCheckService(db)
@@ -847,6 +890,29 @@ async def get_last_check_results(
     """
     service = EquipmentCheckService(db)
     return await service.get_last_check_results(
+        template_id, current_user.organization_id, apparatus_id
+    )
+
+
+@router.get("/templates/{template_id}/last-seals")
+async def get_last_check_seals(
+    template_id: str,
+    apparatus_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    # EC-7: view OR submit, matching last-results — the same crew reads both.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
+):
+    """Get the seal each sealed container carried at the last completed check.
+
+    Keyed by compartment id. The check form compares the number the previous
+    crew recorded against the one in front of this crew: equal means the bag
+    has not been opened since it was counted, which is what lets the seal
+    clear the contents count in one tap.
+    """
+    service = EquipmentCheckService(db)
+    return await service.get_last_check_seals(
         template_id, current_user.organization_id, apparatus_id
     )
 
@@ -1746,14 +1812,40 @@ async def swap_item_lot(
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.manage", "inventory.manage")
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
     ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.
 
     Decrements the lot's on-hand quantity and updates the deployed item's
     lot number and expiration to the fresher unit that was swapped in.
+
+    Naming ``replaced_deployed_lot_id`` also takes that lot off the truck and
+    records the disposition the crew reports for it; omitting it tops the
+    position up without retiring anything.
+
+    Open to ``equipment_check.submit``, not officers alone. Replacing expired
+    stock is the crew's job at the truck, and a gate they could not pass left
+    them looking at an expired unit, ready stock on the shelf, and no action
+    but to find an officer — while the item stayed force-failed. EC-3, which
+    put a permission here, was about the endpoint having had *none*: every
+    value this writes still comes from the org-scoped ``InventoryLot`` row
+    rather than the request, so a submitter can move real stock but cannot
+    invent a lot number or a date, and ``log_template_change`` records who did
+    it. This mirrors the deployed-lot editor, which already admits submitters
+    and narrows what they may rewrite rather than shutting them out.
     """
+    # Tying a checklist position to a catalog item for the first time is a
+    # setup decision with its own manage-only screen, and the first swap does
+    # it as a side effect. Submitters may move stock onto positions already
+    # linked; they may not create the link.
+    permissions = _collect_user_permissions(current_user)
+    can_link_catalog = _has_permission(
+        "equipment_check.manage", permissions
+    ) or _has_permission("inventory.manage", permissions)
+
     service = EquipmentCheckService(db)
     try:
         result = await service.swap_item_lot(
@@ -1762,7 +1854,12 @@ async def swap_item_lot(
             organization_id=str(current_user.organization_id),
             user=current_user,
             quantity=data.quantity,
+            replaced_deployed_lot_id=data.replaced_deployed_lot_id,
+            disposition=data.disposition.value if data.disposition else None,
+            allow_first_link=can_link_catalog,
         )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if result is None:

@@ -2224,6 +2224,13 @@ class CheckTemplateCompartment(Base):
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # This container is closed with a numbered tamper seal — a drug bag, a
+    # trauma kit, a sealed pack. A seal that matches the last count is proof
+    # nothing inside was touched, so on the check form it clears the contents
+    # count in one tap and leaves only what a seal cannot vouch for: expiry
+    # dates and pressure readings, which move on their own while the bag sits
+    # shut.
+    is_sealed = Column(Boolean, default=False, nullable=False, server_default="0")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -2344,6 +2351,36 @@ class CheckTemplateItem(Base):
         Index("idx_check_item_equipment", "equipment_id"),
         Index("idx_check_item_inventory", "inventory_item_id"),
         Index("idx_check_item_restock", "restock_needed"),
+    )
+
+
+class EquipmentCheckBulkRequest(Base):
+    """Durable idempotency ledger for atomic template-item batches."""
+
+    __tablename__ = "equipment_check_bulk_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    idempotency_key = Column(String(200), nullable=False)
+    payload_hash = Column(String(64), nullable=False)
+    item_ids = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            "uq_equipment_check_bulk_request",
+            "organization_id",
+            "compartment_id",
+            "idempotency_key",
+            unique=True,
+        ),
     )
 
 

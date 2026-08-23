@@ -361,7 +361,7 @@ const MinutesPage: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 flex items-center gap-3">
-                        <h3 className="text-theme-text-primary truncate text-lg font-semibold">{meeting.title}</h3>
+                        <h3 className="text-theme-text-primary line-clamp-2 text-lg font-semibold">{meeting.title}</h3>
                         <span className={`rounded-sm border px-2 py-0.5 text-xs ${typeInfo?.color}`}>
                           {typeInfo?.label}
                         </span>

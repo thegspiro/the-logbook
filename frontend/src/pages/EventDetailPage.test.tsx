@@ -33,6 +33,10 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+vi.mock('../components/event-detail/TrainingSessionLinkageCard', () => ({
+  default: () => null,
+}));
+
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -355,6 +359,39 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /delete event/i })).toBeInTheDocument();
       });
+    });
+
+    it('defaults official event times to the scheduled times', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: /more/i }));
+      await user.click(screen.getByRole('button', { name: /record times/i }));
+
+      expect(screen.getByLabelText('Actual Start Time')).toHaveValue('2030-04-15');
+      expect(screen.getByLabelText('Actual End Time')).toHaveValue('2030-04-15');
+      expect(screen.getByText('120 minutes')).toBeInTheDocument();
+    });
+
+    it('preserves already-recorded official event times', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        actual_start_time: '2030-04-15T18:30:00Z',
+        actual_end_time: '2030-04-15T19:45:00Z',
+      });
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: /more/i }));
+      await user.click(screen.getByRole('button', { name: /record times/i }));
+
+      expect(screen.getByText('75 minutes')).toBeInTheDocument();
+      expect(screen.getAllByText(/Currently:/)).toHaveLength(2);
     });
 
     it('should show Finalize Attendance as a primary action when the event is over', async () => {
@@ -866,6 +903,20 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByText('Dress Code')).toBeInTheDocument();
       expect(screen.getByText('Class B uniform')).toBeInTheDocument();
+    });
+
+    it('shows training details when only training fields are present', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...withCustomFields({ course_name: 'Fire Behavior', credit_hours: 4, instructor: 'Alex Rivera' }),
+        event_type: 'training',
+      } as unknown as Event);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Training Session Details')).toBeInTheDocument();
+      expect(screen.getByText('Fire Behavior')).toBeInTheDocument();
+      expect(screen.getByText('4 hours')).toBeInTheDocument();
+      expect(screen.getByText('Alex Rivera')).toBeInTheDocument();
     });
 
     it.each([

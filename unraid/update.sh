@@ -328,7 +328,7 @@ BACKEND_PORT="$(printf '%s' "$BACKEND_PORT" | tr -cd '0-9')"
 info "Waiting for the backend to report ready (http://localhost:$BACKEND_PORT/health)..."
 READY=""
 for _ in $(seq 1 120); do   # up to ~10 minutes (a large migration can be slow)
-    if curl -sS "http://localhost:$BACKEND_PORT/health" 2>/dev/null \
+    if curl -fsS "http://localhost:$BACKEND_PORT/health" 2>/dev/null \
         | grep -Eq '"ready"[[:space:]]*:[[:space:]]*true'; then
         READY="1"
         break

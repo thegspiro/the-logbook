@@ -37,6 +37,7 @@ const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'social', label: 'Social' },
   { value: 'fundraiser', label: 'Fundraiser' },
   { value: 'ceremony', label: 'Ceremony' },
+  { value: 'recruitment', label: 'Recruitment' },
   { value: 'other', label: 'Other' },
 ];
 

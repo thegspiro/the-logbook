@@ -670,6 +670,103 @@ class FacilitiesService:
             "upcoming_inspections": int(upcoming or 0),
         }
 
+    async def get_dashboard_summary(
+        self, organization_id: str, preview_limit: int = 5
+    ) -> dict:
+        """Return authoritative counts and globally ordered preview records.
+
+        Dashboard previews must not be derived from the first page of ordinary
+        list endpoints: doing so made the cards and their supporting rows
+        disagree once an organization had more than 100 records.
+        """
+        org_id = str(organization_id)
+        today = date.today()
+        upcoming_cutoff = today + timedelta(days=30)
+        counts = await self.get_dashboard_counts(org_id)
+
+        overdue_result = await self.db.execute(
+            select(FacilityMaintenance, Facility.name)
+            .join(Facility, Facility.id == FacilityMaintenance.facility_id)
+            .where(
+                FacilityMaintenance.organization_id == org_id,
+                Facility.organization_id == org_id,
+                FacilityMaintenance.is_overdue.is_(True),
+                FacilityMaintenance.is_completed.is_(False),
+            )
+            .order_by(
+                # MySQL/MariaDB do not support the SQL ``NULLS LAST``
+                # modifier emitted by SQLAlchemy's ``nullslast()``.  Sort on
+                # the null predicate first instead, which preserves the
+                # intended ordering across all supported database engines.
+                FacilityMaintenance.due_date.is_(None),
+                FacilityMaintenance.due_date.asc(),
+                FacilityMaintenance.updated_at.desc(),
+            )
+            .limit(preview_limit)
+        )
+        upcoming_result = await self.db.execute(
+            select(FacilityInspection, Facility.name)
+            .join(Facility, Facility.id == FacilityInspection.facility_id)
+            .where(
+                FacilityInspection.organization_id == org_id,
+                Facility.organization_id == org_id,
+                FacilityInspection.next_inspection_date >= today,
+                FacilityInspection.next_inspection_date <= upcoming_cutoff,
+            )
+            .order_by(
+                FacilityInspection.next_inspection_date.asc(),
+                FacilityInspection.updated_at.desc(),
+            )
+            .limit(preview_limit)
+        )
+        recent_result = await self.db.execute(
+            select(FacilityMaintenance, Facility.name)
+            .join(Facility, Facility.id == FacilityMaintenance.facility_id)
+            .where(
+                FacilityMaintenance.organization_id == org_id,
+                Facility.organization_id == org_id,
+                FacilityMaintenance.is_completed.is_(True),
+            )
+            .order_by(
+                FacilityMaintenance.completed_date.is_(None),
+                FacilityMaintenance.completed_date.desc(),
+                FacilityMaintenance.updated_at.desc(),
+            )
+            .limit(preview_limit)
+        )
+
+        def maintenance_preview(row) -> dict:
+            record, facility_name = row
+            return {
+                "id": record.id,
+                "facility_id": record.facility_id,
+                "facility_name": facility_name,
+                "description": record.description,
+                "due_date": record.due_date,
+                "completed_date": record.completed_date,
+                "updated_at": record.updated_at,
+            }
+
+        return {
+            **counts,
+            "overdue_maintenance_records": [
+                maintenance_preview(row) for row in overdue_result.all()
+            ],
+            "upcoming_inspection_records": [
+                {
+                    "id": inspection.id,
+                    "facility_id": inspection.facility_id,
+                    "facility_name": facility_name,
+                    "title": inspection.title,
+                    "next_inspection_date": inspection.next_inspection_date,
+                }
+                for inspection, facility_name in upcoming_result.all()
+            ],
+            "recent_maintenance_completions": [
+                maintenance_preview(row) for row in recent_result.all()
+            ],
+        }
+
     async def get_facility(
         self,
         facility_id: str,

@@ -24,10 +24,15 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from loguru import logger
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.api.prospect_privacy import (
     block_self_prospect_access,
     get_hidden_prospect_ids,
@@ -36,6 +41,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
+from app.models.event import Event
 from app.models.user import User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
@@ -69,6 +75,7 @@ from app.schemas.membership_pipeline import (
     ProspectEventLinkResponse,
     ProspectListResponse,
     ProspectResponse,
+    ProspectSourceEventResponse,
     ProspectUpdate,
     PurgeInactiveRequest,
     PurgeInactiveResponse,
@@ -85,6 +92,69 @@ from app.services.membership_pipeline_service import MembershipPipelineService
 # serve the caller their own prospective-membership file. See
 # app/api/prospect_privacy.py for why.
 router = APIRouter(dependencies=[Depends(block_self_prospect_access)])
+
+
+class PipelineWidgetResponse(BaseModel):
+    """Privacy-preserving dashboard summary; never a substitute for the queue."""
+
+    total: int
+    by_status: dict[str, int]
+    aging: dict[str, int]
+    details: list[dict[str, str]] | None = None
+    queue_url: str = "/prospective-members?status=active"
+
+
+@router.get("/widget-summary", response_model=PipelineWidgetResponse)
+async def pipeline_widget_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """Aggregate the prospect workflow without exposing applicant records.
+
+    View-only users receive counts and aging buckets.  Names are deliberately
+    opt-in for managers, matching the detailed-record permission boundary.
+    All results omit the caller's own prospective-membership record.
+    """
+    from app.models.membership_pipeline import ProspectiveMember
+
+    now = datetime.now(timezone.utc)
+    prospect_query = select(ProspectiveMember).where(
+        ProspectiveMember.organization_id == current_user.organization_id
+    )
+    if hidden_prospect_ids:
+        prospect_query = prospect_query.where(
+            ProspectiveMember.id.notin_(hidden_prospect_ids)
+        )
+    rows = (await db.execute(prospect_query)).scalars().all()
+    by_status: dict[str, int] = {}
+    aging = {"0_7_days": 0, "8_30_days": 0, "31_plus_days": 0}
+    for prospect in rows:
+        status_value = getattr(prospect.status, "value", prospect.status)
+        by_status[str(status_value)] = by_status.get(str(status_value), 0) + 1
+        created = prospect.created_at
+        if created and created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age = (now - (created or now)).days
+        aging[
+            "0_7_days" if age <= 7 else "8_30_days" if age <= 30 else "31_plus_days"
+        ] += 1
+    can_detail = user_has_permission(current_user, "prospective_members.manage")
+    details = None
+    if can_detail:
+        details = [
+            {
+                "id": str(p.id),
+                "name": p.full_name,
+                "status": str(getattr(p.status, "value", p.status)),
+            }
+            for p in rows
+        ]
+    return PipelineWidgetResponse(
+        total=len(rows), by_status=by_status, aging=aging, details=details
+    )
 
 
 # ============================================
@@ -744,6 +814,50 @@ def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
     )
 
 
+async def _require_org_event(db: AsyncSession, event_id: str, organization_id: str):
+    """Resolve an event id inside the caller's organization, or 404.
+
+    Fails the same way for an event that does not exist and one that belongs to
+    another department, so the response cannot be used to probe which event ids
+    are real elsewhere.
+    """
+    result = await db.execute(
+        select(Event.id).where(
+            Event.id == event_id,
+            Event.organization_id == organization_id,
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+
+@router.get("/source-events", response_model=list[ProspectSourceEventResponse])
+async def list_prospect_source_events(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.view", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    List the events recorded as applicant sources, newest first, with counts.
+
+    Backs the "came from" filter on the pipeline board. Only events with at
+    least one sourced applicant appear — offering the whole calendar would bury
+    the two open houses that matter under a year of business meetings.
+
+    **Requires permission: prospective_members.view or prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    rows = await service.list_source_events(
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
+    )
+    return [ProspectSourceEventResponse(**row) for row in rows]
+
+
 @router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
@@ -751,6 +865,9 @@ async def list_prospects(
         None, alias="status", description="Filter by status"
     ),
     search: str | None = Query(None, description="Search by name or email"),
+    event_id: UUID | None = Query(
+        None, description="Only prospects linked to this event"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -765,17 +882,29 @@ async def list_prospects(
     Returns a paginated response with ``items``, ``total``, ``limit``,
     and ``offset`` so clients can implement proper pagination.
 
+    ``event_id`` narrows the list to the applicants a given event produced or
+    was linked to — what an open house actually brought in.
+
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
 
     **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
+
+    if event_id is not None:
+        # A client-supplied FK, so confirm it is this organization's event
+        # before filtering on it (CLAUDE.md #14c). The prospect query is
+        # org-scoped either way, but an unchecked foreign id would come back as
+        # an empty applicant list rather than as the wrong-org id it is.
+        await _require_org_event(db, str(event_id), current_user.organization_id)
+
     prospects, total = await service.list_prospects(
         organization_id=current_user.organization_id,
         pipeline_id=str(pipeline_id) if pipeline_id else None,
         status=status_filter,
         search=search,
+        event_id=str(event_id) if event_id else None,
         limit=limit,
         offset=offset,
         exclude_prospect_ids=hidden_prospect_ids,

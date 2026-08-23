@@ -29,21 +29,97 @@ Username and password authentication with Argon2id password hashing.
 - Must change every 90 days
 - **Minimum password age of 1 day** (prevents rapidly cycling through the history to return to an old password)
 - Account locks after 5 failed attempts (30-minute lockout)
+- **Optionally rejected if the password appears in a known breach corpus**
+  _(2026-08-16)_ — off by default (`BREACHED_PASSWORD_CHECK_ENABLED`), and only
+  the first 5 characters of the SHA-1 hash are ever sent (k-anonymity). The
+  lookup **fails open**: it is supplementary, and an outage must not block a
+  password change while complexity, history, MFA and lockout all still apply.
+
+> **Lockout responses are generic by default** _(2026-08-17)_. A message that
+> distinguishes "locked" from "wrong password" confirms the account exists and
+> tells an attacker their spray is landing. The specific message is available
+> to operators through the audit log, not to the sign-in form.
+
+> **Account lockout is per-user, so it does not cover password spraying.** One
+> password tried against a thousand accounts never reaches five failures on any
+> of them. The **suspicious-IP throttle** — failed attempts per IP across _all_
+> accounts — is the control that covers that gap. See
+> [Configuration → Security → Attack Protection](Configuration-Security#attack-protection-2026-08-16--08-17).
 
 > **Forced-change exemption (2026-06-25):** When an account is flagged
 > `must_change_password` — a new admin-created user, a self-registration, or an
-> admin password reset with *force change* — the user must change their password
+> admin password reset with _force change_ — the user must change their password
 > on first login. That mandatory change is **exempt from the 1-day minimum
 > password age**, because the temporary password was just issued (its
 > `password_changed_at` is fresh) and would otherwise block the very change
 > being demanded. The exemption applies only while `must_change_password` is set;
 > once cleared, the minimum-age rule resumes for ordinary voluntary changes.
 
+### Breached-Password Rejection *(2026-08-17, opt-in)*
+
+Complexity rules say nothing about whether a password has already leaked.
+`Firetruck2024!` satisfies every rule above and appears in public breach
+corpora — which is exactly what credential stuffing tries first. The built-in
+common-password list covers a few dozen of the hundreds of millions that have
+leaked.
+
+When `BREACHED_PASSWORD_CHECK_ENABLED=true`, all five password-setting paths —
+registration, self-service change, reset-by-token, admin user creation and
+admin reset — additionally check the password against the Have I Been Pwned
+range API.
+
+**Privacy:** only the **first five hexadecimal characters** of the password's
+SHA-1 hash are transmitted. The provider returns every hash suffix sharing that
+prefix and the match is made in-process, so it never sees the password, its
+full hash, or which suffix was requested. No member identifier is sent. That
+SHA-1 is the corpus's lookup index, fixed by the provider's API — it is never
+stored and never compared against a stored credential; password storage remains
+bcrypt/Argon2.
+
+**Failure behaviour — fails open.** An unreachable or slow provider, an HTTP
+error, or an unparseable body all *accept* the password, and the degradation is
+logged. This check is supplementary; complexity rules, password history, MFA
+and lockout are unaffected by the outage, and a third-party failure must not
+stop a department setting passwords during an incident.
+
+**The rejection does not say how many times the password was seen.** A precise
+count is a free oracle over the breach corpus for anyone who can reach a
+password form, and it tells the member nothing actionable — they need a
+different password either way.
+
+See [Configuration → Security](Configuration-Security#breached-password-detection)
+for the settings.
+
+### Suspicious-IP Throttling *(2026-08-17, on by default)*
+
+The per-IP rate limit caps burst speed and the account lockout caps guesses
+against one user. Neither stops a **password spray**: one IP trying two
+passwords each against a thousand usernames stays under 5/minute and never
+reaches the 5-attempt lockout on any single account.
+
+Suspicious-IP throttling counts **failed** authentication attempts per IP
+across **all** accounts over a long window (default: 50 failures per hour) and
+blocks the IP for 15 minutes once the total crosses the threshold. It applies
+to `/auth/login`, `/auth/mfa/login`, and the pre-verification challenge
+rejections — those resolve no account, and would otherwise be the one unmetered
+door into the authentication surface.
+
+Two invariants that must survive any refactor:
+
+- A **fully** successful sign-in clears the IP's counter — never a correct
+  password alone. Otherwise an attacker holding one leaked password for an
+  MFA-protected account could zero the tally at will.
+- Clearing the counter **never lifts an active block**.
+
+The ledger is keyed on IP address only and holds no account or member data.
+Redis-backed and shared across workers, with a capped, evicted per-process
+fallback.
+
 ---
 
 ## OAuth
 
-Connect external identity providers for single sign-on. *(2026-05-29)* "Sign in
+Connect external identity providers for single sign-on. _(2026-05-29)_ "Sign in
 with Google" and "Sign in with Microsoft" (Azure AD, single-tenant) are
 implemented via the OpenID Connect authorization-code flow in
 `services/oauth_service.py`.
@@ -75,7 +151,7 @@ implemented via the OpenID Connect authorization-code flow in
    SPA landing page `/auth/callback` (`OAUTH_SUCCESS_REDIRECT`). On failure it
    redirects to `OAUTH_FAILURE_REDIRECT` (default `/login`) with an `error=`
    query param
-6. **MFA is enforced on the OAuth path too** *(2026-08-12)*. If the matched
+6. **MFA is enforced on the OAuth path too** _(2026-08-12)_. If the matched
    account has TOTP enabled, step 5 does **not** happen: no session cookies are
    issued and no session row is created. The callback instead redirects to
    `/auth/callback#mfa_token=<jwt>` — a 5-minute `mfa_pending` token carried in
@@ -122,30 +198,30 @@ AZURE_AD_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/microsoft/callba
 AZURE_AD_ALLOWED_DOMAINS=yourdept.org
 ```
 
-### Callback Error Codes *(2026-05-29)*
+### Callback Error Codes _(2026-05-29)_
 
 The callback redirects to `OAUTH_FAILURE_REDIRECT?error=<code>` for these
 recoverable failures:
 
-| Code | Meaning |
-|------|---------|
-| `access_denied` | The provider returned an error (e.g. user cancelled consent) |
-| `invalid_state` | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard) |
-| `token_exchange_failed` | Authorization-code exchange with the provider failed |
-| `missing_id_token` | Provider response contained no ID token |
-| `invalid_id_token` | ID token failed cryptographic verification (signature/audience/expiry) |
-| `invalid_issuer` | ID token issuer is not the expected provider |
-| `invalid_tenant` | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID` |
-| `unverified_email` | IdP did not mark the email as verified |
-| `no_email` | No email present in the verified claims |
-| `domain_not_allowed` | Email domain not in the configured allowlist |
-| `no_account` | No matching active local user for the verified email |
-| `inactive` | Matched local user is not active |
-| `account_conflict` | Email already bound to a different IdP subject/provider |
+| Code                    | Meaning                                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `access_denied`         | The provider returned an error (e.g. user cancelled consent)           |
+| `invalid_state`         | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard)   |
+| `token_exchange_failed` | Authorization-code exchange with the provider failed                   |
+| `missing_id_token`      | Provider response contained no ID token                                |
+| `invalid_id_token`      | ID token failed cryptographic verification (signature/audience/expiry) |
+| `invalid_issuer`        | ID token issuer is not the expected provider                           |
+| `invalid_tenant`        | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID`              |
+| `unverified_email`      | IdP did not mark the email as verified                                 |
+| `no_email`              | No email present in the verified claims                                |
+| `domain_not_allowed`    | Email domain not in the configured allowlist                           |
+| `no_account`            | No matching active local user for the verified email                   |
+| `inactive`              | Matched local user is not active                                       |
+| `account_conflict`      | Email already bound to a different IdP subject/provider                |
 
 ---
 
-## SAML and LDAP — Not Implemented *(clarified 2026-07-31)*
+## SAML and LDAP — Not Implemented _(clarified 2026-07-31)_
 
 Earlier revisions of this page described SAML 2.0 and LDAP/Active Directory
 sign-in with configuration steps. **Neither is implemented.** The
@@ -161,7 +237,7 @@ future addition, not because it half-works today.
 
 ---
 
-## Multi-Factor Authentication (MFA) *(2026-06-19)*
+## Multi-Factor Authentication (MFA) _(2026-06-19)_
 
 App-based **TOTP** two-factor authentication using apps like Google
 Authenticator, Authy, or 1Password. MFA is self-enrolled by default and can be
@@ -197,7 +273,7 @@ rest. A member who loses their authenticator and exhausts their recovery codes
 can have MFA reset by an administrator (Members admin → **Reset MFA**, or
 `POST /users/{user_id}/reset-mfa`), then re-enroll from Settings → Security.
 
-**Privilege ceiling on admin resets** *(2026-08-12)*: the admin
+**Privilege ceiling on admin resets** _(2026-08-12)_: the admin
 password-reset and MFA-reset endpoints now refuse to touch an account whose
 effective permissions exceed the caller's own. A `members.manage` holder can
 no longer reset the password or strip the second factor of a `security.manage`
@@ -217,7 +293,7 @@ API key sent in the `X-API-Key` header (not the session cookie / JWT used for
 the app):
 
 - **IP rate limit before bcrypt.** Key verification uses bcrypt (deliberately
-  slow); the per-IP rate limit now runs *before* the database lookup and bcrypt
+  slow); the per-IP rate limit now runs _before_ the database lookup and bcrypt
   step, so an unauthenticated flood of well-formed keys can't burn CPU.
 - **Selective lookup prefix.** Keys are `logbook_<random>`; the stored lookup
   prefix is the first 16 chars (`logbook_` + 8 key chars), so a lookup returns a
@@ -231,19 +307,19 @@ the app):
 
 ## Session Management
 
-| Feature | Details |
-|---------|---------|
-| Access token lifetime | 8 hours (configurable) |
-| Refresh token lifetime | 7 days (configurable) |
-| Inactivity timeout | 30 minutes (no mouse/keyboard/touch) |
-| Concurrent sessions | 3 per user (configurable) |
-| Session IP monitoring | Alerts on IP change during session |
+| Feature                | Details                              |
+| ---------------------- | ------------------------------------ |
+| Access token lifetime  | 8 hours (configurable)               |
+| Refresh token lifetime | 7 days (configurable)                |
+| Inactivity timeout     | 30 minutes (no mouse/keyboard/touch) |
+| Concurrent sessions    | 3 per user (configurable)            |
+| Session IP monitoring  | Alerts on IP change during session   |
 
-### Refresh Rotation Is Strict — No Replay Grace *(2026-08-12)*
+### Refresh Rotation Is Strict — No Replay Grace _(2026-08-12)_
 
 Refresh tokens rotate on every use, and a **used token is dead immediately**.
 The former 30-second "rotation grace window" — which handed the session's
-*current* token pair to anyone presenting the just-rotated previous token, to
+_current_ token pair to anyone presenting the just-rotated previous token, to
 tolerate multi-tab and app-boot races — is removed: it let a token thief take
 over a session for 30 seconds after every legitimate refresh. Presenting any
 stale refresh token is now treated as replay/theft and **revokes all of that
@@ -253,7 +329,7 @@ trade. The `REFRESH_ROTATION_GRACE_SECONDS` setting and the
 `user_sessions.previous_refresh_token` column still exist but are no longer
 consulted; the column is actively nulled on each rotation.
 
-### Deactivated Organizations Cannot Log In *(2026-08-12)*
+### Deactivated Organizations Cannot Log In _(2026-08-12)_
 
 Password login now joins on the organization and requires
 `organizations.active IS TRUE` — both when resolving the canonical org and in
@@ -263,7 +339,7 @@ a wrong password ("Incorrect username or password", with the usual dummy-hash
 timing defense), so org status is not enumerable. Two boundaries to know:
 the check runs at authentication time (existing sessions are not revoked when
 an org is deactivated, and expire naturally), and the **OAuth path does not
-yet perform an org-active check** — it rejects only inactive *users* (tracked
+yet perform an org-active check** — it rejects only inactive _users_ (tracked
 in KNOWN_LIMITATIONS).
 
 ---

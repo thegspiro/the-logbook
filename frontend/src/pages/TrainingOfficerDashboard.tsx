@@ -1,765 +1,124 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { GraduationCap, RefreshCw, Settings } from 'lucide-react';
+import { trainingService } from '../services/api';
+import type { TrainingDashboardSummary } from '../services/trainingServices';
 import {
-  GraduationCap,
-  Users,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  FileText,
-  Settings,
-  Plus,
-  TrendingUp,
-  Calendar,
-  Award,
-  RefreshCw,
-  ClipboardCheck,
-  ClipboardList,
-} from 'lucide-react';
-import { trainingService, userService, trainingSubmissionService } from '../services/api';
-import { formatDate, formatNumber } from '../utils/dateFormatting';
-import { useTimezone } from '../hooks/useTimezone';
-import type { TrainingRequirement } from '../types/training';
+  ComplianceOverviewWidget,
+  MembersNeedingInterventionWidget,
+  PendingValidationWidget,
+  RecentCompletionsWidget,
+  RequirementsAtRiskWidget,
+  RequirementsStatusWidget,
+  TRAINING_WIDGET_METADATA,
+  TrainingHoursSummaryWidget,
+  UpcomingExpirationsWidget,
+  UpcomingSessionCapacityWidget,
+  type TrainingWidgetId,
+} from '../components/dashboard/widgets/training';
 
-interface DashboardStats {
-  totalMembers: number;
-  trackedMembers: number; // Active, non-exempt members evaluated for compliance
-  compliantMembers: number;
-  compliancePercentage: number;
-  expiringCount: number;
-  completionsThisMonth: number;
-  totalHoursThisYear: number;
-  avgHoursPerMember: number;
-}
+import {
+  loadTrainingWidgetPreferences,
+  saveTrainingWidgetPreferences,
+} from '../components/dashboard/widgets/training/preferences';
 
-interface MemberSummary {
-  id: string;
-  name: string;
-  username: string;
-}
+const widgets: Record<TrainingWidgetId, React.FC<{ data: TrainingDashboardSummary }>> = {
+  'compliance-overview': ComplianceOverviewWidget,
+  'upcoming-expirations': UpcomingExpirationsWidget,
+  'recent-completions': RecentCompletionsWidget,
+  'training-hours': TrainingHoursSummaryWidget,
+  'requirements-status': RequirementsStatusWidget,
+  'members-needing-intervention': MembersNeedingInterventionWidget,
+  'upcoming-session-capacity': UpcomingSessionCapacityWidget,
+  'pending-validation': PendingValidationWidget,
+  'requirements-at-risk': RequirementsAtRiskWidget,
+};
 
-interface ExpirationItem {
-  id: string;
-  memberName: string;
-  memberId: string;
-  courseName: string;
-  daysLeft: number;
-  expirationDate: string;
-}
-
-interface CompletionItem {
-  id: string;
-  memberName: string;
-  memberId: string;
-  courseName: string;
-  completionDate: string;
-  hoursCompleted: number;
-}
-
-/**
- * Training Officer Dashboard
- *
- * Main hub for training management with real-time data from APIs.
- * Officers can toggle which metrics and tools they want visible.
- */
 const TrainingOfficerDashboard: React.FC = () => {
-  const navigate = useNavigate();
-  const tz = useTimezone();
-
-  // Data states
+  const [data, setData] = useState<TrainingDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalMembers: 0,
-    trackedMembers: 0,
-    compliantMembers: 0,
-    compliancePercentage: 0,
-    expiringCount: 0,
-    completionsThisMonth: 0,
-    totalHoursThisYear: 0,
-    avgHoursPerMember: 0,
-  });
-  const [expiringCertifications, setExpiringCertifications] = useState<ExpirationItem[]>([]);
-  const [recentCompletions, setRecentCompletions] = useState<CompletionItem[]>([]);
-  const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
-  const [pendingSubmissionCount, setPendingSubmissionCount] = useState(0);
-  const [_memberMap, setMemberMap] = useState<Map<string, MemberSummary>>(new Map());
-
-  // Widget visibility preferences
   const [showSettings, setShowSettings] = useState(false);
-  const [enabledWidgets, setEnabledWidgets] = useState({
-    'compliance-overview': true,
-    'upcoming-expirations': true,
-    'recent-completions': true,
-    'training-hours': true,
-    'requirements-status': true,
-  });
-
-  useEffect(() => {
-    void fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const [enabled, setEnabled] = useState(loadTrainingWidgetPreferences);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch all data in parallel (including compliance matrix from the server)
-      const [members, expiring, allRecords, reqs, pendingCount, complianceMatrix] = await Promise.all([
-        userService.getUsers(),
-        trainingService.getExpiringCertifications(90),
-        trainingService.getRecords(),
-        trainingService.getRequirements({ active_only: true }),
-        trainingSubmissionService.getPendingCount().catch(() => ({ pending_count: 0 })),
-        trainingService.getComplianceMatrix().catch(() => ({ members: [], requirements: [], generated_at: '' })),
-      ]);
-      setPendingSubmissionCount(pendingCount.pending_count);
-
-      // Build member map for lookups
-      const memberMapData = new Map<string, MemberSummary>();
-      members.forEach((m) => {
-        memberMapData.set(m.id, {
-          id: m.id,
-          name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username,
-          username: m.username,
-        });
-      });
-      setMemberMap(memberMapData);
-
-      // Process expiring certifications
-      const expiringItems: ExpirationItem[] = expiring
-        .map((record) => {
-          const member = memberMapData.get(record.user_id);
-          const expDate = new Date(record.expiration_date ?? '');
-          const now = new Date();
-          const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          return {
-            id: record.id,
-            memberName: member?.name || 'Unknown',
-            memberId: record.user_id,
-            courseName: record.course_name,
-            daysLeft,
-            expirationDate: record.expiration_date ?? '',
-          };
-        })
-        .sort((a, b) => a.daysLeft - b.daysLeft);
-      setExpiringCertifications(expiringItems);
-
-      // Process recent completions (last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const recentRecords = allRecords
-        .filter((r) => r.status === 'completed' && r.completion_date)
-        .filter((r) => new Date(r.completion_date ?? '') >= thirtyDaysAgo)
-        .sort((a, b) => new Date(b.completion_date ?? '').getTime() - new Date(a.completion_date ?? '').getTime());
-
-      const completionItems: CompletionItem[] = recentRecords.slice(0, 10).map((record) => {
-        const member = memberMapData.get(record.user_id);
-        return {
-          id: record.id,
-          memberName: member?.name || 'Unknown',
-          memberId: record.user_id,
-          courseName: record.course_name,
-          completionDate: record.completion_date ?? '',
-          hoursCompleted: record.hours_completed || 0,
-        };
-      });
-      setRecentCompletions(completionItems);
-
-      // Calculate stats
-      const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-      const completedThisYear = allRecords.filter(
-        (r) => r.status === 'completed' && r.completion_date && new Date(r.completion_date) >= startOfYear
-      );
-      const totalHours = completedThisYear.reduce((sum, r) => sum + (r.hours_completed || 0), 0);
-
-      // Use the server-side compliance matrix which correctly evaluates ALL
-      // requirement types (hours, courses, certifications, shifts, calls, etc.)
-      // with proper waiver adjustments and frequency windows.
-      // The compliance matrix only includes active, non-exempt members.
-      const trackedCount = complianceMatrix.members.length;
-      const compliantCount = (() => {
-        if (trackedCount > 0) {
-          // A member is fully compliant when their completion_pct is 100
-          return complianceMatrix.members.filter((m) => m.completion_pct >= 100).length;
-        }
-        // Fallback when no compliance matrix data (no active requirements)
-        // — count members with no expired certifications
-        const expiredByMember = new Map<string, number>();
-        allRecords.forEach((r) => {
-          if (r.expiration_date && new Date(r.expiration_date) < new Date()) {
-            expiredByMember.set(r.user_id, (expiredByMember.get(r.user_id) || 0) + 1);
-          }
-        });
-        return members.filter((m) => !expiredByMember.has(m.id)).length;
-      })();
-
-      // Use tracked (active, non-exempt) members as the denominator for
-      // compliance percentage so exempt/retired members don't dilute it.
-      const complianceDenominator = trackedCount > 0 ? trackedCount : members.length;
-
-      setStats({
-        totalMembers: members.length,
-        trackedMembers: trackedCount > 0 ? trackedCount : members.length,
-        compliantMembers: compliantCount,
-        compliancePercentage:
-          complianceDenominator > 0 ? Math.round((compliantCount / complianceDenominator) * 100) : 0,
-        expiringCount: expiringItems.length,
-        completionsThisMonth: recentRecords.length,
-        totalHoursThisYear: totalHours,
-        avgHoursPerMember: members.length > 0 ? Math.round((totalHours / members.length) * 10) / 10 : 0,
-      });
-
-      setRequirements(reqs);
-    } catch (_err) {
+      setData(await trainingService.getDashboardSummary(90));
+    } catch {
       setError('Unable to load training dashboard data. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleWidget = (widgetId: keyof typeof enabledWidgets) => {
-    setEnabledWidgets((prev) => ({
-      ...prev,
-      [widgetId]: !prev[widgetId],
-    }));
-  };
-
-  const formatRelativeDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffDays = Math.ceil((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
-    return formatDate(dateString, tz);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen">
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex h-64 items-center justify-center">
-            <div className="text-theme-text-primary flex items-center space-x-3" role="status" aria-live="polite">
-              <RefreshCw className="h-6 w-6 animate-spin" />
-              <span>Loading training dashboard...</span>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  }, []);
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+  const toggle = (id: TrainingWidgetId) =>
+    setEnabled((previous) => {
+      const next = { ...previous, [id]: !previous[id] };
+      saveTrainingWidgetPreferences(next);
+      return next;
+    });
 
   return (
-    <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
-              <GraduationCap className="h-8 w-8 shrink-0 text-red-700" />
-              <span>Training Officer Dashboard</span>
-            </h1>
-            <p className="text-theme-text-muted mt-1">Manage training, track compliance, and monitor certifications</p>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            {/* Refresh Button */}
-            <button
-              onClick={() => {
-                void fetchDashboardData();
-              }}
-              className="bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg p-2 transition-colors"
-              title="Refresh Data"
-            >
-              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* Quick Actions */}
-            <button
-              onClick={() => void navigate('/training/sessions/new')}
-              className="btn-success flex items-center space-x-2 font-medium"
-            >
-              <Plus className="h-5 w-5" />
-              <span>New Training Session</span>
-            </button>
-
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg p-2 transition-colors"
-              title="Dashboard Settings"
-            >
-              <Settings className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Error Banner */}
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-500/50 bg-red-500/10 p-4">
-            <p className="text-red-700">{error}</p>
-          </div>
-        )}
-
-        {/* Dashboard Settings Panel */}
-        {showSettings && (
-          <div className="card mb-6 p-6">
-            <h3 className="text-theme-text-primary mb-4 font-semibold">Customize Dashboard</h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {[
-                { id: 'compliance-overview', title: 'Compliance Overview', icon: CheckCircle },
-                { id: 'upcoming-expirations', title: 'Upcoming Expirations', icon: AlertTriangle },
-                { id: 'recent-completions', title: 'Recent Completions', icon: Award },
-                { id: 'training-hours', title: 'Training Hours Summary', icon: Clock },
-                { id: 'requirements-status', title: 'Requirements Status', icon: FileText },
-              ].map((widget) => {
-                const Icon = widget.icon;
-                return (
-                  <label
-                    key={widget.id}
-                    className="bg-theme-input-bg/50 hover:bg-theme-surface flex cursor-pointer items-center space-x-3 rounded-lg p-3 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={enabledWidgets[widget.id as keyof typeof enabledWidgets]}
-                      onChange={() => toggleWidget(widget.id as keyof typeof enabledWidgets)}
-                      className="form-checkbox"
-                    />
-                    <Icon className="text-theme-text-muted h-5 w-5" />
-                    <span className="text-theme-text-secondary text-sm">{widget.title}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Quick Stats */}
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
-          <StatCard
-            icon={Users}
-            label="Total Members"
-            value={stats.totalMembers.toString()}
-            color="blue"
-            onClick={() => void navigate('/members')}
-          />
-          <StatCard
-            icon={CheckCircle}
-            label="Compliant"
-            value={stats.compliantMembers.toString()}
-            subtitle={`${stats.compliancePercentage}%`}
-            color="green"
-            onClick={() => void navigate('/training/requirements')}
-          />
-          <StatCard
-            icon={AlertTriangle}
-            label="Need Attention"
-            value={stats.expiringCount.toString()}
-            subtitle="Expiring Soon"
-            color="yellow"
-            onClick={() => void navigate('/training/requirements')}
-          />
-          <StatCard
-            icon={Award}
-            label="This Month"
-            value={stats.completionsThisMonth.toString()}
-            subtitle="Completions"
-            color="purple"
-          />
-        </div>
-
-        {/* Main Navigation Cards */}
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <NavigationCard
-            icon={FileText}
-            title="Training Requirements"
-            description="Manage department, state, and national training requirements"
-            onClick={() => void navigate('/training/requirements')}
-            color="red"
-          />
-          <NavigationCard
-            icon={Users}
-            title="Member Progress"
-            description="Track individual member training progress and compliance"
-            onClick={() => void navigate('/members')}
-            color="blue"
-          />
-          <NavigationCard
-            icon={Calendar}
-            title="Training Sessions"
-            description="Schedule and manage upcoming training sessions"
-            onClick={() => void navigate('/training/sessions/new')}
-            color="green"
-          />
-          <NavigationCard
-            icon={GraduationCap}
-            title="Courses & Certifications"
-            description="Manage available courses and certification programs"
-            onClick={() => void navigate('/training/courses')}
-            color="purple"
-          />
-          <NavigationCard
-            icon={TrendingUp}
-            title="Reports & Analytics"
-            description="Generate compliance reports and training analytics"
-            onClick={() => void navigate('/reports')}
-            color="orange"
-          />
-          <NavigationCard
-            icon={ClipboardList}
-            title="Shift Reports"
-            description="File and review shift completion reports for trainees"
-            onClick={() => void navigate('/training/shift-reports')}
-            color="orange"
-          />
-          <NavigationCard
-            icon={ClipboardCheck}
-            title="Review Submissions"
-            description={
-              pendingSubmissionCount > 0
-                ? `${pendingSubmissionCount} pending submissions to review`
-                : 'Review member self-reported training'
-            }
-            onClick={() => void navigate('/training/submissions')}
-            color="yellow"
-          />
-          <NavigationCard
-            icon={FileText}
-            title="Submit Training"
-            description="Submit external training for yourself"
-            onClick={() => void navigate('/training/submit')}
-            color="cyan"
-          />
-          <NavigationCard
-            icon={Settings}
-            title="External Integrations"
-            description="Connect to Vector Solutions and other training platforms"
-            onClick={() => void navigate('/training/integrations')}
-            color="cyan"
-          />
-        </div>
-
-        {/* Customizable Widget Grid */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {enabledWidgets['compliance-overview'] && (
-            <div className="card">
-              <ComplianceOverviewWidget stats={stats} />
-            </div>
-          )}
-          {enabledWidgets['upcoming-expirations'] && (
-            <div className="card">
-              <UpcomingExpirationsWidget
-                expirations={expiringCertifications.slice(0, 5)}
-                onViewMember={(memberId) => void navigate(`/members/${memberId}/training`)}
-              />
-            </div>
-          )}
-          {enabledWidgets['recent-completions'] && (
-            <div className="card">
-              <RecentCompletionsWidget completions={recentCompletions.slice(0, 5)} formatDate={formatRelativeDate} />
-            </div>
-          )}
-          {enabledWidgets['training-hours'] && (
-            <div className="card">
-              <TrainingHoursSummaryWidget stats={stats} />
-            </div>
-          )}
-          {enabledWidgets['requirements-status'] && (
-            <div className="card">
-              <RequirementsStatusWidget requirements={requirements} />
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  );
-};
-
-// Stat Card Component
-interface StatCardProps {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  subtitle?: string;
-  color: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'orange' | 'cyan';
-  onClick?: () => void;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, value, subtitle, color, onClick }) => {
-  const colorClasses = {
-    blue: 'bg-blue-600',
-    green: 'bg-green-600',
-    yellow: 'bg-yellow-600',
-    red: 'bg-red-600',
-    purple: 'bg-purple-600',
-    orange: 'bg-orange-600',
-    cyan: 'bg-cyan-600',
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      className={`card p-6 ${onClick ? 'hover:bg-theme-surface-hover cursor-pointer transition-colors' : ''}`}
-    >
-      <div className="flex items-center justify-between">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <header className="mb-8 flex items-center justify-between">
         <div>
-          <p className="text-theme-text-muted text-sm font-medium">{label}</p>
-          <p className="text-theme-text-primary mt-1 text-3xl font-bold">{value}</p>
-          {subtitle && <p className="text-theme-text-muted mt-1 text-xs">{subtitle}</p>}
+          <h1 className="text-theme-text-primary flex items-center gap-3 text-3xl font-bold">
+            <GraduationCap className="h-8 w-8 text-red-700" />
+            Training Officer Dashboard
+          </h1>
+          <p className="text-theme-text-muted">Aggregated compliance, training, validation, and capacity signals</p>
         </div>
-        <div className={`${colorClasses[color]} rounded-full p-3`}>
-          <Icon className="h-6 w-6 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Navigation Card Component
-interface NavigationCardProps {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  color: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'orange' | 'cyan';
-  onClick: () => void;
-}
-
-const NavigationCard: React.FC<NavigationCardProps> = ({ icon: Icon, title, description, color, onClick }) => {
-  const colorClasses = {
-    blue: 'from-blue-600 to-blue-700',
-    green: 'from-green-600 to-green-700',
-    yellow: 'from-yellow-600 to-yellow-700',
-    red: 'from-red-600 to-red-700',
-    purple: 'from-purple-600 to-purple-700',
-    orange: 'from-orange-600 to-orange-700',
-    cyan: 'from-cyan-600 to-cyan-700',
-  };
-
-  return (
-    <button onClick={onClick} className="card group hover:bg-theme-surface-hover p-6 text-left transition-all">
-      <div
-        className={`bg-linear-to-br ${colorClasses[color]} mb-4 w-fit rounded-lg p-3 transition-transform group-hover:scale-110`}
-      >
-        <Icon className="h-6 w-6 text-white" />
-      </div>
-      <h3 className="text-theme-text-primary mb-2 text-lg font-bold">{title}</h3>
-      <p className="text-theme-text-muted text-sm">{description}</p>
-    </button>
-  );
-};
-
-// Widget Components with Real Data
-
-interface ComplianceOverviewWidgetProps {
-  stats: DashboardStats;
-}
-
-const ComplianceOverviewWidget: React.FC<ComplianceOverviewWidgetProps> = ({ stats }) => (
-  <div className="p-6">
-    <h3 className="text-theme-text-primary mb-4 font-semibold">Department Compliance</h3>
-    <div className="space-y-3">
-      <ComplianceBar
-        label="Member Compliance"
-        percentage={stats.compliancePercentage}
-        detail={`${stats.compliantMembers} of ${stats.trackedMembers} tracked members`}
-      />
-      <ComplianceBar
-        label="Training Hours Goal"
-        percentage={Math.min(100, Math.round((stats.totalHoursThisYear / Math.max(1, stats.totalMembers * 40)) * 100))}
-        detail={`${stats.totalHoursThisYear} total hours this year`}
-      />
-    </div>
-  </div>
-);
-
-interface UpcomingExpirationsWidgetProps {
-  expirations: ExpirationItem[];
-  onViewMember: (memberId: string) => void;
-}
-
-const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ expirations, onViewMember }) => (
-  <div className="p-6">
-    <h3 className="text-theme-text-primary mb-4 font-semibold">Upcoming Expirations</h3>
-    {expirations.length === 0 ? (
-      <p className="text-theme-text-muted text-sm">No certifications expiring soon!</p>
-    ) : (
-      <div className="space-y-3">
-        {expirations.map((item) => (
-          <div
-            key={item.id}
-            onClick={() => onViewMember(item.memberId)}
-            className="bg-theme-input-bg/50 hover:bg-theme-surface flex cursor-pointer items-center justify-between rounded-sm p-3 transition-colors"
+        <div className="flex gap-2">
+          <button title="Refresh Data" onClick={() => void fetchData()} className="bg-theme-input-bg rounded-lg p-2">
+            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            title="Dashboard Settings"
+            onClick={() => setShowSettings((x) => !x)}
+            className="bg-theme-input-bg rounded-lg p-2"
           >
-            <div>
-              <p className="text-theme-text-primary text-sm font-medium">{item.memberName}</p>
-              <p className="text-theme-text-muted text-xs">{item.courseName}</p>
-            </div>
-            <span
-              className={`rounded px-2 py-1 text-xs font-semibold ${
-                item.daysLeft < 0
-                  ? 'bg-red-600 text-white'
-                  : item.daysLeft <= 14
-                    ? 'bg-red-600 text-white'
-                    : item.daysLeft <= 30
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-yellow-600 text-white'
-              }`}
-            >
-              {item.daysLeft < 0 ? `Expired ${Math.abs(item.daysLeft)}d ago` : `${item.daysLeft} days`}
-            </span>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
-
-interface RecentCompletionsWidgetProps {
-  completions: CompletionItem[];
-  formatDate: (date: string) => string;
-}
-
-const RecentCompletionsWidget: React.FC<RecentCompletionsWidgetProps> = ({ completions, formatDate }) => (
-  <div className="p-6">
-    <h3 className="text-theme-text-primary mb-4 font-semibold">Recent Completions</h3>
-    {completions.length === 0 ? (
-      <p className="text-theme-text-muted text-sm">No recent completions.</p>
-    ) : (
-      <div className="space-y-3">
-        {completions.map((item) => (
-          <div key={item.id} className="bg-theme-input-bg/50 flex items-center space-x-3 rounded-sm p-3">
-            <CheckCircle className="h-5 w-5 shrink-0 text-green-700" />
-            <div className="min-w-0 flex-1">
-              <p className="text-theme-text-primary truncate text-sm font-medium">{item.memberName}</p>
-              <p className="text-theme-text-muted text-xs">{item.courseName}</p>
-            </div>
-            <span className="text-theme-text-muted text-xs whitespace-nowrap">{formatDate(item.completionDate)}</span>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
-
-interface TrainingHoursSummaryWidgetProps {
-  stats: DashboardStats;
-}
-
-const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({ stats }) => {
-  const yearGoal = Math.max(1, stats.totalMembers * 40); // Assuming 40 hours/year goal per member
-  const progressPercent = Math.min(100, Math.round((stats.totalHoursThisYear / yearGoal) * 100));
-
-  return (
-    <div className="p-6">
-      <h3 className="text-theme-text-primary mb-4 font-semibold">Training Hours (This Year)</h3>
-      <div className="space-y-4">
-        <div>
-          <div className="mb-1 flex justify-between text-sm">
-            <span className="text-theme-text-muted">Department Total</span>
-            <span className="text-theme-text-primary font-semibold">{formatNumber(stats.totalHoursThisYear)} hrs</span>
-          </div>
-          <div className="bg-theme-surface h-2 w-full rounded-full">
-            <div className="h-2 rounded-full bg-green-600" style={{ width: `${progressPercent}%` }}></div>
-          </div>
+            <Settings className="h-5 w-5" />
+          </button>
         </div>
-        <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
-          <div className="bg-theme-input-bg/50 rounded-sm p-3">
-            <p className="text-theme-text-muted text-xs">Average per Member</p>
-            <p className="text-theme-text-primary text-xl font-bold">{stats.avgHoursPerMember} hrs</p>
+      </header>
+      {showSettings && (
+        <section className="card mb-6 p-6">
+          <h2 className="mb-4 font-semibold">Customize this training dashboard</h2>
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+            {(
+              Object.entries(TRAINING_WIDGET_METADATA) as [
+                TrainingWidgetId,
+                (typeof TRAINING_WIDGET_METADATA)[TrainingWidgetId],
+              ][]
+            ).map(([id, meta]) => (
+              <label key={id} className="bg-theme-input-bg/50 flex cursor-pointer gap-3 rounded p-3">
+                <input type="checkbox" checked={enabled[id]} onChange={() => toggle(id)} />
+                <span>{meta.title}</span>
+              </label>
+            ))}
           </div>
-          <div className="bg-theme-input-bg/50 rounded-sm p-3">
-            <p className="text-theme-text-muted text-xs">Goal Progress</p>
-            <p className="text-theme-text-primary text-xl font-bold">{progressPercent}%</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface RequirementsStatusWidgetProps {
-  requirements: TrainingRequirement[];
-}
-
-const RequirementsStatusWidget: React.FC<RequirementsStatusWidgetProps> = ({ requirements }) => {
-  const now = new Date();
-
-  const getRequirementStatus = (req: TrainingRequirement): 'complete' | 'on-track' | 'needs-attention' => {
-    if (!req.due_date) return 'on-track';
-    const dueDate = new Date(req.due_date);
-    const daysUntilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysUntilDue < 0) return 'needs-attention';
-    if (daysUntilDue < 30) return 'needs-attention';
-    return 'on-track';
-  };
-
-  return (
-    <div className="p-6">
-      <h3 className="text-theme-text-primary mb-4 font-semibold">Requirements Status</h3>
-      {requirements.length === 0 ? (
-        <p className="text-theme-text-muted text-sm">No active requirements.</p>
-      ) : (
-        <div className="space-y-3">
-          {requirements.slice(0, 5).map((req) => {
-            const status = getRequirementStatus(req);
-            return <RequirementStatusItem key={req.id} name={req.name} status={status} />;
-          })}
-        </div>
+        </section>
       )}
-    </div>
+      {error && <div className="mb-6 rounded border border-red-500 p-4 text-red-700">{error}</div>}
+      {loading && !data ? (
+        <div role="status" className="text-theme-text-muted p-16 text-center">
+          Loading training dashboard…
+        </div>
+      ) : (
+        data && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {(Object.keys(widgets) as TrainingWidgetId[])
+              .filter((id) => enabled[id])
+              .map((id) => {
+                const Widget = widgets[id];
+                return <Widget key={id} data={data} />;
+              })}
+          </div>
+        )
+      )}
+    </main>
   );
 };
-
-// Helper Components
-
-interface ComplianceBarProps {
-  label: string;
-  percentage: number;
-  detail?: string;
-}
-
-const ComplianceBar: React.FC<ComplianceBarProps> = ({ label, percentage, detail }) => (
-  <div>
-    <div className="mb-1 flex justify-between text-sm">
-      <span className="text-theme-text-muted">{label}</span>
-      <span className="text-theme-text-primary font-semibold">{percentage}%</span>
-    </div>
-    <div className="bg-theme-surface h-2 w-full rounded-full">
-      <div
-        className={`h-2 rounded-full ${percentage >= 80 ? 'bg-green-600' : percentage >= 60 ? 'bg-yellow-600' : 'bg-red-600'}`}
-        style={{ width: `${percentage}%` }}
-      ></div>
-    </div>
-    {detail && <p className="text-theme-text-muted mt-1 text-xs">{detail}</p>}
-  </div>
-);
-
-interface RequirementStatusItemProps {
-  name: string;
-  status: 'complete' | 'on-track' | 'needs-attention';
-}
-
-const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, status }) => {
-  const statusConfig = {
-    complete: { color: 'bg-green-600', label: 'Complete' },
-    'on-track': { color: 'bg-blue-600', label: 'On Track' },
-    'needs-attention': { color: 'bg-yellow-600', label: 'Needs Attention' },
-  };
-
-  return (
-    <div className="bg-theme-input-bg/50 rounded-sm p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-theme-text-primary mr-2 flex-1 truncate text-sm font-medium">{name}</span>
-        <span
-          className={`rounded-sm px-2 py-1 text-xs font-semibold ${(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).color} text-theme-text-primary whitespace-nowrap`}
-        >
-          {(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).label}
-        </span>
-      </div>
-    </div>
-  );
-};
-
 export default TrainingOfficerDashboard;

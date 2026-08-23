@@ -84,9 +84,11 @@ from app.services.event_service import (
     PHASE_GATE_PREFIX,
     EventService,
 )
+from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
+from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
 from app.utils.mime_validation import detect_mime_type
 
@@ -434,6 +436,11 @@ EVENT_SETTINGS_DEFAULTS = {
         "fundraiser",
         "ceremony",
         "other",
+        # Not in visible_event_types: recruitment is an occasional outreach
+        # type, so it lands under the "Other" tab rather than taking a primary
+        # filter slot. A department that runs them regularly can promote it in
+        # Events settings.
+        "recruitment",
     ],
     "visible_event_types": [
         "business_meeting",
@@ -2775,7 +2782,45 @@ async def check_in_external_attendee(
 
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
+
+    # Resolved in the caller's organization rather than trusted from the path
+    # id. Both the link and the pipeline hook below need it.
+    event_result = await db.execute(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == current_user.organization_id,
+        )
+    )
+    event = event_result.scalar_one_or_none()
+
+    # A staff-entered attendee is never given a prospect_id when it is created,
+    # so without this the pipeline branch below could only ever fire for kiosk
+    # guests — and the kiosk already runs the hook itself. Resolving it here
+    # rather than at creation also covers rows staff entered earlier. Only an
+    # existing active prospect is linked: opening a new one is the kiosk's
+    # behaviour, gated on the event's guest_check_in_creates_prospect setting.
+    if not attendee.prospect_id and attendee.email:
+        prospect = await MembershipPipelineService(db).find_active_prospect_by_email(
+            current_user.organization_id, attendee.email
+        )
+        if prospect is not None:
+            attendee.prospect_id = prospect.id
+            # The same link the kiosk writes, for the same attendance. Setting
+            # prospect_id alone advanced the pipeline off a meeting that the
+            # applicant's linked-events section and the by-event applicant
+            # filter — both of which read prospect_event_links — went on
+            # reporting as never attended.
+            if event is not None:
+                await GuestCheckInService(db).link_prospect_to_event(prospect, event)
+
     await db.commit()
+
+    # Attendance is already durable before pipeline automation runs; the hook
+    # applies its own type/category rules.
+    if attendee.prospect_id and event is not None:
+        await GuestCheckInService(db).try_advance_attendance_pipeline(
+            str(attendee.prospect_id), event
+        )
     return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
 
 

@@ -101,6 +101,28 @@ class TestReferredByValidation:
         mock_assert.assert_not_awaited()
 
 
+class TestDuplicateProspectLookup:
+    async def test_current_read_uses_row_lock(self):
+        db = _get_prospect_db(None)
+
+        await MembershipPipelineService(db)._find_active_prospect_by_email(
+            "org1", "applicant@example.com", current_read=True
+        )
+
+        query = db.execute.await_args.args[0]
+        assert query._for_update_arg is not None
+
+    async def test_preflight_lookup_remains_nonlocking(self):
+        db = _get_prospect_db(None)
+
+        await MembershipPipelineService(db)._find_active_prospect_by_email(
+            "org1", "applicant@example.com"
+        )
+
+        query = db.execute.await_args.args[0]
+        assert query._for_update_arg is None
+
+
 class TestStepEmailTemplateValidation:
     """MP2-5 (pass 4): a step's client-supplied email_template_id (a FK to the
     org-scoped EmailTemplate) is validated in-org on every step writer."""

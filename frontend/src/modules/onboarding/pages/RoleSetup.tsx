@@ -1044,7 +1044,7 @@ const PositionSetup: React.FC = () => {
       {/* Custom Position Modal */}
       {showCustomModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4 backdrop-blur-xs"
+          className="modal-overlay z-50 flex items-center justify-center p-4 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-position-modal-title"
@@ -1052,7 +1052,7 @@ const PositionSetup: React.FC = () => {
             if (e.key === 'Escape') setShowCustomModal(false);
           }}
         >
-          <div ref={dialogRef} className="modal-panel w-full max-w-md p-6">
+          <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md p-6">
             <h3 id="custom-position-modal-title" className="text-theme-text-primary mb-4 text-xl font-bold">
               Create Custom Position
             </h3>

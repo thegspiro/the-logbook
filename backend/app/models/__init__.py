@@ -11,6 +11,7 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
     EventHourMapping,
 )
+from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
 from app.models.analytics import AnalyticsEvent
 from app.models.apparatus import (
     Apparatus,
@@ -229,6 +230,11 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.legal import (
+    LegalDocumentRevision,
+    LegalDocumentType,
+    LegalRevisionStatus,
+)
 from app.models.location import Location
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -326,6 +332,7 @@ from app.models.training import (
     ShiftCall,
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
+    ShiftEquipmentCheckSeal,
     SkillCheckoff,
     SkillEvaluation,
     TrainingApproval,
@@ -353,6 +360,9 @@ __all__ = [
     "AdminHoursEntry",
     "AdminHoursEntryMethod",
     "AdminHoursEntryStatus",
+    # Admin hub models
+    "AdminHubMetricPreference",
+    "DEPARTMENT_SCOPE",
     # User models
     "Organization",
     "User",
@@ -506,6 +516,7 @@ __all__ = [
     # Shift equipment check models
     "ShiftEquipmentCheck",
     "ShiftEquipmentCheckItem",
+    "ShiftEquipmentCheckSeal",
     # Scheduling module config
     "SchedulingModuleConfig",
     # Security alert models
@@ -693,4 +704,8 @@ __all__ = [
     # Consent models
     "ConsentType",
     "UserConsent",
+    # Legal document models
+    "LegalDocumentRevision",
+    "LegalDocumentType",
+    "LegalRevisionStatus",
 ]

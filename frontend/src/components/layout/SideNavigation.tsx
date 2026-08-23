@@ -36,6 +36,7 @@ import {
   Activity,
   CreditCard,
   ScanLine,
+  Scale,
   Stethoscope,
   Store,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
+import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -155,6 +157,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   // section items' gates — extend it there, never inline, so Side/Top
   // navigation cannot drift apart.
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
+  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -247,7 +250,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     },
     // When Facilities module is off, show a lightweight Locations page
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations', icon: MapPin } as NavItem]),
-    ...(isModuleOn('elections') || isModuleOn('minutes')
+    // Legal Documents is not behind a module flag: every deployment publishes
+    // /privacy and /terms, so the group has to appear for a department that
+    // runs neither elections nor minutes.
+    ...(isModuleOn('elections') || isModuleOn('minutes') || canReviewLegalDocuments
       ? [
           {
             label: 'Governance',
@@ -266,6 +272,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                       label: 'Action Items',
                       path: '/action-items',
                       icon: AlertTriangle,
+                    },
+                  ]
+                : []),
+              ...(canReviewLegalDocuments
+                ? [
+                    {
+                      label: 'Legal Documents',
+                      path: '/governance/legal',
+                      icon: Scale,
                     },
                   ]
                 : []),
@@ -549,6 +564,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     }
   };
 
+  const activeDestination = navItems
+    .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
+    .filter((item) => isActive(item.path))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+
   return (
     <>
       {/* Mobile Header */}
@@ -659,6 +679,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             className="-webkit-overflow-scrolling-touch flex-1 space-y-1 overflow-y-auto overscroll-contain p-4"
             aria-label="Side navigation"
           >
+            {mobileMenuOpen && activeDestination && (
+              <div className="bg-theme-surface-hover text-theme-text-primary mb-3 rounded-lg px-4 py-3 md:hidden">
+                <span className="text-theme-text-muted block text-[10px] font-bold tracking-widest uppercase">
+                  Current
+                </span>
+                <span className="text-sm font-semibold">{activeDestination.label}</span>
+              </div>
+            )}
             <ul role="list" className="space-y-1">
               {navItems.map((item, idx) => {
                 // Render section label dividers

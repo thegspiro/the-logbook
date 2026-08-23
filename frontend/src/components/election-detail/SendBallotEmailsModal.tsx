@@ -51,13 +51,13 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="send-email-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div ref={dialogRef} className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md">
         <div className="border-theme-surface-border border-b px-6 py-4">
           <h3 id="send-email-modal-title" className="text-theme-text-primary text-lg font-medium">
             {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}

@@ -37,6 +37,10 @@ describe('eventHelpers', () => {
       expect(getEventTypeLabel('ceremony')).toBe('Ceremony');
     });
 
+    it('returns "Recruitment" for recruitment', () => {
+      expect(getEventTypeLabel('recruitment')).toBe('Recruitment');
+    });
+
     it('returns "Other" for other', () => {
       expect(getEventTypeLabel('other')).toBe('Other');
     });
@@ -87,6 +91,12 @@ describe('eventHelpers', () => {
       const result = getEventTypeBadgeColor('ceremony');
       expect(result).toContain('bg-indigo-100');
       expect(result).toContain('text-indigo-800');
+    });
+
+    it('returns teal classes for recruitment', () => {
+      const result = getEventTypeBadgeColor('recruitment');
+      expect(result).toContain('bg-teal-100');
+      expect(result).toContain('text-teal-800');
     });
 
     it('returns gray classes for other', () => {

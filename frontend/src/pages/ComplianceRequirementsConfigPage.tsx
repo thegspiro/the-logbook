@@ -47,6 +47,7 @@ import type {
   ComplianceReportSummary,
   ComplianceReportGenerate,
 } from '../types/training';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -142,6 +143,9 @@ export default function ComplianceRequirementsConfigPage() {
 
   // Email modal state
   const [emailModalReportId, setEmailModalReportId] = useState<string | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(emailModalReportId));
   const [emailRecipients, setEmailRecipients] = useState('');
 
   const loadConfig = useCallback(async () => {
@@ -469,7 +473,7 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="card hscroll flex gap-1 p-1">
+      <div className="segmented-group hscroll flex gap-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
@@ -1350,8 +1354,8 @@ export default function ComplianceRequirementsConfigPage() {
 
       {/* Email Modal */}
       {emailModalReportId && (
-        <div className="modal-overlay flex items-center justify-center">
-          <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
+        <div className="modal-overlay z-50 flex items-center justify-center">
+          <div className="bg-theme-surface modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Email Report</h3>
               <button

@@ -42,6 +42,7 @@ import TrainingSection from '../components/member-profile/TrainingSection';
 import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
+import { useOverlaySurface } from '../hooks/useOverlaySurface';
 
 // Types for inventory data
 interface InventoryItem {
@@ -134,6 +135,9 @@ export const MemberProfilePage: React.FC = () => {
 
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(statusModalOpen);
   const [statusChanging, setStatusChanging] = useState(false);
   const [newStatus, setNewStatus] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');
@@ -1113,8 +1117,8 @@ export const MemberProfilePage: React.FC = () => {
 
         {/* Status Change Modal */}
         {statusModalOpen && (
-          <div className="modal-overlay flex items-center justify-center">
-            <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
+          <div className="modal-overlay z-50 flex items-center justify-center">
+            <div className="bg-theme-surface modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
               <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
               <div className="space-y-4">
                 <div>

@@ -659,12 +659,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Swap Request Modal */}
       {showSwapModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Request shift swap"
         >
-          <DialogPanel onClose={() => setShowSwapModal(false)} ref={swapModalRef} className="w-full max-w-md">
+          <DialogPanel
+            onClose={() => setShowSwapModal(false)}
+            ref={swapModalRef}
+            className="modal-panel-scroll w-full max-w-md"
+          >
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
               <p className="text-theme-text-secondary mt-1 text-sm">
@@ -773,12 +777,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Time Off Modal */}
       {showTimeOffModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Request time off"
         >
-          <DialogPanel onClose={() => setShowTimeOffModal(false)} ref={timeOffModalRef} className="w-full max-w-md">
+          <DialogPanel
+            onClose={() => setShowTimeOffModal(false)}
+            ref={timeOffModalRef}
+            className="modal-panel-scroll w-full max-w-md"
+          >
             <div className="border-theme-surface-border border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">Request Time Off</h2>
             </div>

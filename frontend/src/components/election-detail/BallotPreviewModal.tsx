@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import type { Election, Candidate, BallotItem } from '../../types/election';
 import { VoteType, BallotItemType } from '../../constants/enums';
 import { formatDate } from '../../utils/dateFormatting';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 interface BallotPreviewModalProps {
   election: Election;
@@ -11,6 +12,9 @@ interface BallotPreviewModalProps {
 }
 
 const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candidates, onClose, timezone }) => {
+  // Mounted only while open.
+  useOverlaySurface();
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -29,7 +33,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ballot-preview-title"

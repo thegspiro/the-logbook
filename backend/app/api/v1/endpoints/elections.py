@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -494,7 +494,8 @@ async def delete_saved_ballot_template(
 class BallotLookupRequest(BaseModel):
     """Ballot lookup payload — the token travels in the body, never a URL."""
 
-    token: str
+    token: str = Field(..., min_length=1, max_length=256)
+    model_config = ConfigDict(extra="forbid")
 
 
 class BallotLookupResponse(BaseModel):
@@ -565,10 +566,14 @@ async def lookup_ballot_by_token(
     )
 
 
-class VoteWithToken(VoteCreate):
+class VoteWithToken(BaseModel):
     """Vote payload that includes the voting token in the body (not URL)."""
 
-    token: str
+    token: str = Field(..., min_length=1, max_length=256)
+    candidate_id: UUID
+    position: Optional[str] = Field(None, max_length=100)
+    vote_rank: Optional[int] = Field(None, ge=1)
+    model_config = ConfigDict(extra="forbid")
 
 
 @router.post(
@@ -621,7 +626,8 @@ async def cast_vote_with_token(
 class BallotSubmissionWithToken(BallotSubmission):
     """Ballot submission that includes the voting token in the body."""
 
-    token: str
+    token: str = Field(..., min_length=1, max_length=256)
+    model_config = ConfigDict(extra="forbid")
 
 
 @router.post(
@@ -1412,6 +1418,8 @@ async def accept_nomination(
     Accept your nomination — only the nominee can accept.
 
     **Authentication required**
+
+    **Permissions required:** elections.view
     """
     service = ElectionService(db)
     ok, error = await service.respond_to_nomination(
@@ -1446,6 +1454,8 @@ async def decline_nomination(
     entry is removed; the audit log retains the record.
 
     **Authentication required**
+
+    **Permissions required:** elections.view
     """
     service = ElectionService(db)
     ok, error = await service.respond_to_nomination(

@@ -129,10 +129,59 @@ export function csvValue(record: Record<string, string>, ...names: string[]): st
  * characters so they cannot be used to bypass the neutralization.
  */
 export function escapeCsvCell(value: string): string {
+  // A leading tab or carriage return is itself a trigger — some importers strip
+  // it and act on what follows — so the raw first character is checked before
+  // whitespace is skipped. Skipping first would let "\tformula" through.
+  const first = value[0];
+  const leadingControl = first === '\t' || first === '\r';
+
+  // ...and the first character that is not whitespace is checked as well, so a
+  // cell like " =cmd" cannot smuggle a formula past on a leading space.
   let contentStart = 0;
   while (contentStart < value.length && value.charCodeAt(contentStart) <= 0x20) {
     contentStart += 1;
   }
-  const safeValue = '=+@-'.includes(value[contentStart] ?? '') ? `'${value}` : value;
-  return `"${safeValue.replace(/"/g, '""')}"`;
+  // `''.includes('')` is true, so the `?? ''` fallback this replaced prefixed an
+  // apostrophe onto every empty and whitespace-only cell — a column of stray
+  // quotes in each export that had a blank in it.
+  const trigger = value[contentStart];
+  const isFormula = leadingControl || (trigger !== undefined && '=+@-'.includes(trigger));
+  const safeValue = isFormula ? `'${value}` : value;
+
+  // Quote only where RFC 4180 requires it. The member-import error report is
+  // meant to be corrected and re-uploaded by a person, and quoting every cell
+  // makes that file markedly harder to read and edit by hand.
+  return /[",\r\n]/.test(safeValue) ? `"${safeValue.replace(/"/g, '""')}"` : safeValue;
+}
+
+/**
+ * What a CSV cell may hold. Deliberately not `unknown`: `String(someObject)`
+ * yields "[object Object]" in a column an officer then has to interpret, and
+ * the type is the only place that can be caught.
+ */
+export type CsvValue = string | number | boolean | null | undefined;
+
+/**
+ * A full CSV document from a header row plus data rows, every cell neutralized
+ * by `escapeCsvCell` above.
+ *
+ * CRLF line endings, per RFC 4180 — Excel on Windows is the most common
+ * consumer of these files and a bare LF leaves it reading multi-line cells
+ * wrongly.
+ */
+export function buildCsv(rows: readonly (readonly CsvValue[])[]): string {
+  return rows.map((row) => row.map((cell) => escapeCsvCell(cell == null ? '' : String(cell))).join(',')).join('\r\n');
+}
+
+/** Hand a built CSV to the browser as a download. */
+export function downloadCsv(contents: string, filename: string): void {
+  const blob = new Blob([contents], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }

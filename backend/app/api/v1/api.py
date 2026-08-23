@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
     admin_hours,
+    admin_hub,
     analytics,
     apparatus,
     audit_logs,
@@ -36,6 +37,7 @@ from app.api.v1.endpoints import (
     inventory,
     ip_security,
     labels,
+    legal_documents,
     locations,
     medical_screening,
     medical_supplies,
@@ -94,6 +96,7 @@ api_router.include_router(
 )
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hub"])
 api_router.include_router(training.router, prefix="/training", tags=["training"])
 api_router.include_router(
     training_programs.router, prefix="/training/programs", tags=["training-programs"]
@@ -138,6 +141,9 @@ api_router.include_router(
 )
 api_router.include_router(
     email_templates.router, prefix="/email-templates", tags=["email-templates"]
+)
+api_router.include_router(
+    legal_documents.router, prefix="/legal-documents", tags=["legal-documents"]
 )
 api_router.include_router(officers.router, prefix="/officers", tags=["officers"])
 api_router.include_router(
@@ -258,6 +264,7 @@ async def api_root():
             "security": "/api/v1/security",
             "ip_security": "/api/v1/ip-security",
             "email_templates": "/api/v1/email-templates",
+            "legal_documents": "/api/v1/legal-documents",
             "officers": "/api/v1/officers",
             "forms": "/api/v1/forms",
             "documents": "/api/v1/documents",

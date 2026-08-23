@@ -34,13 +34,13 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-election-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div ref={dialogRef} className="modal-panel w-full max-w-lg">
+      <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-lg">
         <div
           className={`border-b px-6 py-4 ${isDraft ? 'border-theme-surface-border' : 'border-red-500/30 bg-red-500/10'}`}
         >

@@ -8,6 +8,7 @@ The Events module manages department events with QR code check-in, recurring eve
 
 - **Event Creation** — Create one-time or recurring events with location, time, and attendance tracking
 - **QR Code Check-In** — Generate unique QR codes for event check-in; members scan to register attendance
+- **NFC Tag Check-In** — _(2026-08-18)_ Write the same check-in URL to a reusable NFC tag from `/events/:id/qr-code`, and read one with **Tap Tag** on the Events page. See [NFC Tags](#nfc-tags-2026-08-18) below
 - **Guest Check-In** — _(2026-08-09)_ Opt-in **second** QR code on the room display that a **non-member** can scan to sign themselves in, with no account and no login. Built for outreach — volunteer interest nights, open houses. Optionally opens a prospective-member record for each guest who leaves an email. See [Guest Check-In](#guest-check-in-2026-08-09) below
 - **Recurring Events** — Daily, weekly, monthly, monthly-by-weekday (e.g., "2nd Tuesday"), and annual recurrence patterns with end dates and series management
 - **Event Templates** — Save and reuse event configurations
@@ -481,3 +482,97 @@ scheduled end. Strict opens at actual/scheduled start; Window defaults to 15
 minutes on each side. An overlapping prior meeting can reduce the new event's
 lead time to 15 minutes. Guest early check-in remains blocked; a known member on
 a Flexible event can be admitted early with a localized informational notice.
+
+---
+
+## Recruitment Events and Prospect Provenance _(2026-08-20)_
+
+### A `recruitment` event type
+
+Open houses and recruitment nights now have an event type of their own.
+Departments previously filed them under `public_education` or `other`, which
+meant a membership-pipeline stage could not point at "the next recruitment
+event" without also matching every fire-safety demo on the calendar.
+
+**Choosing Recruitment on a new event switches guest sign-in on** — both
+`allow_guest_check_in` and `guest_check_in_creates_prospect`. A recruitment
+event whose attendees never reach the pipeline has not recruited anybody, and
+that pair of switches is the difference between a sign-in sheet and a list of
+prospects.
+
+The default is applied carefully rather than bluntly:
+
+- **Create only.** Changing an existing event's type to Recruitment does not
+  flip its switches — an event that has already been running with guest
+  sign-in off keeps that setting.
+- **It yields to you.** Once you touch either switch yourself, the automatic
+  default stops applying for the rest of that form session.
+- **It reverts cleanly.** If you pick Recruitment and then change to another
+  type, switches that were set _automatically_ are turned back off; switches
+  you set _yourself_ are left alone.
+
+A recruitment event whose guest sign-in is off shows a banner on the form
+explaining that prospects reach the pipeline by signing in as guests, with a
+button to turn it on. That banner is the backstop for the create-only rule —
+the usual failure is an outreach night whose attendees are recorded as
+external attendees and never become leads.
+
+### Seeing who an event brought in
+
+The event page shows the applicants that came from it, and the membership
+pipeline board can be filtered by the event applicants came from — so "did the
+October open house actually produce members?" is a question the product can
+answer rather than one somebody reconstructs from dates.
+
+### Why `recruitment` is last in the type list
+
+It is appended **after** `other`, rather than sitting beside the other
+outward-facing types where it would read better in the dropdown.
+
+MySQL stores an `ENUM` as the member's **ordinal**, not its name. Inserting a
+new value mid-list renumbers everything after it, so every event already
+stored would silently change type — a row holding ordinal 6 (`ceremony`) would
+come back as whatever now sits sixth. Appending leaves every existing ordinal
+untouched.
+
+This is worth knowing before anyone "tidies" the enum order.
+
+### Edge cases
+
+- Existing open houses filed under `public_education` or `other` are **not**
+  reclassified. The new type applies going forward; re-typing past events is a
+  manual choice.
+- Guest sign-in defaults on for **new** recruitment events only — switching an
+  existing event's type does not retroactively enable it. Watch for the banner
+  instead.
+- Event templates prefill the form the same way an edit does, so a template
+  does not trigger the automatic switch either. Only a genuinely new event
+  does.
+- Past recruitment events are grouped with `other` on the Past Events tab.
+
+## NFC Tags _(2026-08-18)_
+
+An NFC tag is a **second way in to a check-in that already has a QR code** —
+not a new flow. A station can mount one reusable sticker instead of reprinting
+a sheet, and a member taps it with their phone. No camera, which is the part
+that fails in a dark apparatus bay or with gloves on.
+
+**Writing a tag.** The tag writer sits on the same page as the QR code. Tap
+**Write to an NFC tag**, hold a blank tag to the phone, done.
+
+**Reading one.** Android hands a URL tag straight to the browser when the app
+is closed. When the app is already in the foreground the OS does not, so
+**Tap Tag** in the app reads it instead — it routes by what the tag says rather
+than by where the button lives.
+
+**A tag is untrusted input, and is treated as such.** Anyone with a phone can
+write one, so the payload is on par with a scanned QR code rather than with
+configuration. The parser resolves it against the app's own origin, rejects
+anything that lands anywhere else, accepts only known routes, and hands
+react-router a **rebuilt** path rather than the raw string. An unrecognized tag
+leaves the scan armed and says so rather than navigating somewhere unintended.
+
+**Requirements: Chrome on Android, over HTTPS.** Web NFC exists nowhere else,
+and browsers expose it only in a secure context — a LAN deployment on plain
+`http://` cannot use it. The writer panel says which of the two you are hitting
+rather than a bare "unavailable". QR remains the universal path.

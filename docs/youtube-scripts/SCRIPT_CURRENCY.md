@@ -1,5 +1,515 @@
 # Script currency
 
+## Flagged by the 2026-08-19 → 08-23 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
+
+This window produced **three Wrong** — all three now rewritten in-script — plus
+a substantial body of new material and a set of re-shoot notes.
+
+> **Revised 2026-08-23, after a verification pass over all eighteen scripts.**
+> The first version of this section was written from the change list rather
+> than from the scripts, and it was wrong in both directions:
+>
+> - It **invented one defect.** Script 03 was labelled "DANGEROUS IF FOLLOWED"
+>   for a rollback reassurance that does not appear in the file. See the
+>   correction under 03 below.
+> - It **missed all three real ones.** The false narration in scripts 05, 08
+>   and 15 is not mentioned anywhere in the original section.
+> - It **parked four determinations as conditionals** ("if the script
+>   demonstrates X…"). All four were checked and all four are clear — 12, 14,
+>   the duplication half of 15, and 09/10/11. A conditional in this file is a
+>   verification the author owed and did not do; the rule that no behavioural
+>   content lives only in SCRIPT_CURRENCY is not satisfied by filing a maybe.
+>
+> Corrections are recorded in place rather than by deleting the original
+> claims, so an editor who started work against them can see what changed.
+
+**Rewritten in-script this window** (per the standing rule that no behavioural
+content lives only in SCRIPT_CURRENCY):
+
+| Script | Beat                                | Was                                                            |
+| ------ | ----------------------------------- | -------------------------------------------------------------- |
+| 08     | `SHORT 8C` (line 102)               | Promised the swap target an accept/decline that does not exist |
+| 05     | `DASHBOARD OVERVIEW` (lines 76, 80) | Named two dashboard cards that no longer exist                 |
+| 15     | `PRACTICE` (line 583)               | Claimed official tests require `training.manage`; they do not  |
+
+### 03 — IT Manager / System Admin · **ADDITION — migration material missing**
+
+> **Corrected 2026-08-23.** This entry was first written as
+> "DANGEROUS IF FOLLOWED", on the claim that the upgrade chapter "walks
+> `alembic upgrade head` and then, as reassurance, tells the viewer they can
+> downgrade if something goes wrong." **No such line exists in script 03.**
+> `### UPDATING THE LOGBOOK (31:30 – 33:00)` walks
+> `docker compose up -d --build`, states that migrations run on startup, and
+> says to restore from the mysqldump backup. `grep -n "upgrade head"` across
+> all eighteen script files hits only `01-installing-the-logbook.md:621` —
+> which already says _"Never downgrade just to repair a migration fork."_
+> Script 03 contains no `alembic` command at all.
+>
+> The severity label was wrong and the quoted defect was not in the file. It is
+> corrected here rather than quietly deleted, because an editor who had already
+> started rewriting against a phantom line needs to know why it vanished.
+>
+> What follows is the real gap: **nothing existing is wrong, material is
+> missing.**
+
+Nothing in script 03 needs unsaying. What it lacks is any statement of what
+this release's migrations cost if an operator reaches for a downgrade — and
+its audience is exactly the person who would.
+
+**1. The seat-list migration cannot be reversed.** `1eeb053d59b7` expands a
+legacy crew `count` into that many individual seats. Downgrading collapses
+them — a three-firefighter template comes back as one, permanently, with no
+migration that restores it.
+
+**2. Downgrading past both `compartment_path` migrations truncates storage
+paths.** The column was widened to hold deep nested paths; the downgrade
+narrows it back to 200 characters, cutting whatever no longer fits.
+
+A third item is not destructive but will confuse anyone who checks: the
+equipment-check de-duplication (`a17c4e9d2b61`) **detaches** historical
+duplicate checks rather than deleting them, and cannot re-attach them on
+downgrade. Item snapshots survive; the association does not.
+
+The line to add, immediately after the existing backup instruction:
+
+> "Take the backup. On this release the backup **is** your rollback — two of
+> these migrations don't reverse cleanly, and one of them will quietly turn a
+> three-seat template into a one-seat template if you try."
+
+**Script 01 needs the same sentence.** Its
+`## AUGUST 14 RELEASE INSERT — TLS AND SAFE UPGRADES` (line 621) is the
+series' only `alembic upgrade head` beat, and its audience is the self-hoster
+who reaches for `alembic downgrade` when an upgrade misbehaves. Its existing
+"Never downgrade just to repair a migration fork" remains correct and is now
+load-bearing; append the same caveat so the two videos agree. Roughly
++12 seconds. Also worth naming there: `python scripts/validate_migrations.py`,
+and the current head `a17c4e9d2b61`.
+
+**Also in this chapter:** three migrations in this release exist to repair
+databases that Alembic believes are already up to date, because an earlier
+migration was released under one revision id and later renumbered. This is
+worth 20 seconds on camera — it is exactly the kind of thing an IT manager
+will otherwise interpret as a bug when they see repeated work in the log.
+
+**EDITOR:** the upgrade chapter grows by roughly **45–60 seconds**. Everything
+from that chapter onward re-times.
+
+### 04 — Fire Chief / Leadership · **WRONG — new chapter needed**
+
+Two items.
+
+**1. Governance → Legal Documents is a leadership feature and is absent from
+the script.** A chief can now have the department's own privacy notice and
+terms published rather than the platform's. The beat that matters is **not**
+"you can edit your privacy notice" — it is that **proposing and publishing are
+separate permissions**. A chief who hears the first half and not the second
+has learned the feature backwards and will hand `legal.publish` to everyone
+who needs to draft.
+
+Suggested framing:
+
+> "Your secretary can write it. Somebody else has to publish it. That's not
+> the product being awkward — that's the two-signature rule your bylaws
+> probably already have, enforced by the software instead of by memory."
+
+**2. The self-review rule needs saying out loud, with the failure mode.**
+Nobody can approve their own swap or time-off request any more, and on a swap
+that blocks **both** the requester and the target. This is correct and it will
+strand small departments: where exactly one person holds `scheduling.manage`
+and that person also swaps shifts, their requests cannot be approved by
+anybody.
+
+That is a chief-level action item, not a footnote:
+
+> "Before you upgrade — count how many people can approve a swap. If the
+> answer is one, and that person ever swaps a shift, make it two."
+
+### 06 — Member Guide · **WRONG — reshoot affected takes**
+
+Any take showing a **dialog on a phone** was filmed against the bottom-bar
+defect: the navigation bar sat on top of the dialog and swallowed taps. Those
+shots now show a bar that will not be there, and if the presenter reaches past
+it on camera the take teaches a workaround for a bug that no longer exists.
+
+**B-roll check:** every phone dialog sequence. The bar is absent while a dialog
+is open.
+
+Two additions for this script, both short:
+
+- **Browser tabs now name the page.** One line; members with several tabs open
+  have been complaining about this for months.
+- **Equipment checks are safe to finish with no signal.** A check completed in
+  a dead spot and submitted at the station no longer risks a duplicate. Worth
+  30 seconds because members have been taught to avoid exactly this.
+
+### 07 — Secretary / Administrative · **new chapter**
+
+Legal Documents is primarily a secretary workflow. New chapter covering:
+drafting a revision, the **required change note** (and why — somebody in two
+years needs to see the reason), the free-text "Last updated" field, and the
+fact that old versions are archived rather than replaced, because a records
+request asks what the notice said _on a date_.
+
+**Do not film against a real department's privacy notice.** Use demo wording.
+
+Also for this script: **re-export any attendance file kept from before this
+release.** The event attendance export mis-escaped commas, so a member named
+`Smith, John` shifted every column after them. That is a correction a
+secretary needs to hear, because the broken files are already sitting in
+folders.
+
+### 08 — Quick Tips & Shorts · **WRONG — corrected in-script 2026-08-23**
+
+> **This entry originally read "additions"** and listed three new shorts. It
+> missed that an existing short teaches a workflow the product does not have.
+
+**Short 8C, "Submitting a Shift Swap Request", line 102:**
+
+> "Option one: propose a direct swap with another member. They get notified
+> and accept or decline."
+
+**The target has no accept or decline.** They are notified — `_notify_swap_request`
+does fire — but there is no control for them to respond with, and there never
+has been on any branch. `frontend/src/modules/scheduling/services/api.ts`
+exposes list, create, get, **review** and **cancel**; there is no accept path.
+Review requires `scheduling.manage`, and since this window
+`scheduling_service.py:3831-3841` rejects the reviewer if they are the
+requester **or** the target.
+
+So the short is now wrong twice over: it promises the partner a decision they
+cannot make, and it does so in a video whose own next line ("goes to your
+officer for approval") contradicts it.
+
+**This is the highest-stakes item in the window** — not the most wrong, but
+the only one a viewer _acts on_. A member follows the short, submits a swap,
+and waits for their partner to accept in the app. Nothing arrives, because
+nothing was ever going to. The shift comes around with the swap still pending.
+
+**Now rewritten in `08-quick-tips-and-shorts.md`** rather than left in this
+queue, per the standing rule. The replacement says the partner is notified but
+does not decide, and that the officer who signs off must be in neither seat.
+The screen direction now explicitly forbids staging a target-side
+accept/decline control. **Net +0 seconds** — absorb the extra few by trimming
+the closing tag line; the short must stay in format.
+
+**New shorts (genuine additions):**
+
+- **New short: "Finish the check in the dead spot."** Equipment checks are now
+  safe to complete offline and submit on reconnect. Needs a real phone and a
+  real dead spot or a convincingly simulated one — this is a format where a
+  staged offline indicator will be spotted.
+- **New short: "Recruitment nights that actually feed the pipeline."** Picking
+  the Recruitment event type on a **new** event turns guest sign-in on.
+  **Shooting note:** it must be a new event — the switch does not fire when you
+  change an existing event's type, and filming it that way produces a take
+  where nothing happens.
+- **Candidate short: "Which tab am I in?"** Browser tab titles. 20 seconds.
+
+### 05 / 16 — Training Officer (parts 1 and 2) · **WRONG — corrected in-script 2026-08-23**
+
+> **This entry originally read "B-roll stale, one behaviour change"** and named
+> that change as prerequisite-gated credit bookkeeping. **It missed the actual
+> defect**, which is two chapters up and is the same class of error this file
+> caught one window ago in script 06's dashboard tour.
+
+`### DASHBOARD OVERVIEW (1:30 – 2:30)` in `05-training-officer-guide.md`
+narrated **two cards that no longer exist**:
+
+| Narrated                                                               | Reality                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **"Expiring Soon"** — "expiring in the next 30, 60, and 90 days"       | The widget is **Upcoming Expirations**: one fixed 90-day window, first five rows, `{days_left}d` per row. There is no 30/60/90 tiering                                                                                                                        |
+| **"Overdue Training"** — "members already past their expiration dates" | **No such card.** `training.py:197` filters `today <= expiration_date <= cutoff`, so already-expired records are excluded by the lower bound. The nearest survivor is **Members Needing Intervention**, which counts unmet requirements, not expiration dates |
+
+A presenter pointing at the screen and naming two absent cards is the worst
+kind of stale: the viewer concludes their build is broken or their permissions
+are wrong.
+
+**Both are now rewritten in `05-training-officer-guide.md`** rather than left
+in this queue, per the standing rule that no behavioural content lives only in
+SCRIPT_CURRENCY. Two further corrections were folded in while the beat was
+open: the compliance card renders as **Department Compliance** on screen (the
+Customize panel's "Compliance Overview" is a different label), and
+`expiring_records` is **unsorted** — do not say "soonest first" on camera. A
+callout was added making explicit that the expirations card looks only
+forward, so it is not an overdue list.
+
+**Chapter 2 needs a fresh take regardless** (the Training Admin rework,
+PRs #1716/#1720/#1717), so the rewrite costs nothing extra in production.
+Net **+0 to +10 seconds**.
+
+**Also, and separately:** the Training Admin screen now renders section
+descriptions and contextual actions, and its tabs were rebuilt for keyboard
+and screen-reader navigation (roving focus, arrow/Home/End, `aria-controls`).
+Any B-roll of that screen predates the change.
+
+**Prerequisite-gated credit bookkeeping** was corrected — a requirement locked
+behind a prerequisite no longer mis-tracks credit when the prerequisite is
+completed out of order. If either script narrates prerequisite behaviour,
+check the take against the current screen.
+
+Smaller items that affect what is on screen but need no new narration:
+action hints on **waived** requirements, the training detail visibility gate,
+category mappings that can now be cleared, and restored mobile export tap
+targets.
+
+### 12 — Elections Deep Dive · **verified clear 2026-08-23**
+
+> **This entry originally read "one shooting note"** and asked whether the
+> script demonstrates backing out of the ballot confirmation. **It does not.**
+> Checked: there is no "you can back out here" beat anywhere in the file. Line
+> 374 already says the ballot _"submits atomically… there is no such thing as a
+> half-submitted ballot"_, which the new guard reinforces rather than
+> contradicts.
+
+The underlying change is real — the ballot confirmation can no longer be
+dismissed, Escape included, while a vote is in flight — but **no narration in
+script 12 needs changing.** Recorded so the next pass does not re-open it.
+
+Two fixes with no narration consequence: automatic election reminders now
+carry a working ballot link, and concurrent public ballot submissions are
+serialized.
+
+### 14 — Multi-Class Courses and Cohorts · **verified clear 2026-08-23**
+
+> **This entry originally read "verify one beat."** Verified: the string
+> "override" appears **zero times** in `14-multi-class-courses-and-cohorts.md`.
+> The script never demonstrates a cohort schedule override, so the new
+> validation cannot invalidate a take.
+
+Cohort class schedule overrides are now validated — a cohort override that
+conflicts with its parent class is rejected rather than accepted and failing
+later. **No narration in script 14 needs changing.**
+
+### 15 — Skills Testing & Evaluations · **WRONG — corrected in-script 2026-08-23**
+
+> **The original entry here was about template duplication and was moot.**
+> Verified: the string "duplicat" appears **zero times** in
+> `15-skills-testing-evaluations.md`. There was no re-link warning to cut. The
+> duplication fix (a duplicated skill template now keeps its `requirement_id`)
+> is real but the script never narrates duplication.
+
+**What the pass missed, and what is now fixed in-script.**
+`### PRACTICE (18:45 – 20:00)` (line 583) said:
+
+> "Official tests still need `training.manage`."
+
+That is **false**, and the same file contradicts it twice — line 9 and the
+callout at line 144 ("Anyone can examine. Only an officer can validate"), and
+the whole of Chapter 3.5. `create_test` in
+`backend/app/api/v1/endpoints/skills_testing.py:1199` depends on
+`get_current_user` alone; `training.manage` sits on **`/tests/{id}/validate`**
+(line 1955), not on running a test.
+
+The line is now rewritten to say that any member can run an official test and
+that the officer's signature afterwards is what makes it count. **Roughly +10
+seconds; that beat needs a fresh take.**
+
+This sentence is not from this window — it is a leftover from the 2026-08-08
+permission change, which the script's own re-shoot notice and Production Notes
+cleaned up everywhere except here. Recorded as a window finding anyway,
+because a false permission claim in a shooting script does not become
+acceptable by being old.
+
+Also: practice skill-test seeding is idempotent, which matters only to
+whoever prepares the demo environment.
+
+### 09 / 10 / 11 — Training Pipelines · **verified clear 2026-08-23**
+
+> **This entry originally read "check the prospect beats."** Verified: the
+> string "prospect" appears **zero times** across all three files. These are
+> _training_ pipeline scripts — member progression through training phases —
+> not prospective-member pipeline scripts. The naming collision is what put
+> them on the list.
+
+The prospect pipeline did gain event provenance (the board filters by the event
+applicants came from; the API answers "who came from this event"), interview
+stage progression retries after an update, and a duplicate-prospect race was
+fixed — **but none of it touches these three scripts.** The **Recruitment event
+type** material belongs to scripts 04 and 08.
+
+### 13 — Department Store · not affected
+
+No storefront behaviour changed in this window. Verified against the commit
+range, not assumed.
+
+## Flagged by the 2026-08-17 → 08-19 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
+
+The window produced **one Wrong**, one **Dangerous-if-recorded** (a number a
+chief could put in a grant application), and a set of **additions** that are
+new material rather than corrections.
+
+### 04 — Fire Chief / Leadership · **WRONG — corrected in-script 2026-08-19**
+
+Two separate problems in the same script, and the second is the serious one.
+
+**1. The close-out chapter narrates a screen half the audience will not have.**
+`### SETTING SHIFT CLOSE-OUT RULES (19:45 – 20:15)` walks the close-out rules
+card and then describes what an officer sees at finalize. As of 2026-08-19 a
+department that has switched on **Record a call count at close-out** gets a
+**three-step wizard** instead of the single checklist — different screen,
+different flow, and the toggle that switches between them is _on the very card
+the presenter is standing on_ and is not mentioned.
+
+The card needs the new toggle named, and the officer-facing consequence stated:
+turning it on changes what your officers see at 0700 the same morning.
+
+**Both are now rewritten in `04-fire-chief-leadership-guide.md`** rather than
+left in this queue, per the standing rule that no behavioural content lives only
+in SCRIPT_CURRENCY.
+
+**2. The call-volume figure needs the caveat said out loud, on camera.**
+`### SCHEDULING REPORTS (21:30 – 22:15)` sends a chief to a report that, for a
+count-only department, is labelled **Unit Responses** and _is not a department
+call count_. Two units that closed out independently each reported their own
+call, so an MVA that an engine and a medic both ran appears twice.
+
+This script's audience is precisely the person who puts that number in a grant
+application or an ISO submission. **A narrator who says "here's your call
+volume" over that screen is teaching a reporting error with a funding
+consequence.** The caveat is one sentence and it must be in the take:
+
+> **Three additions to this beat _(2026-08-19, from the Codex review of
+> PR #1573)_.** They change what can safely be shown, not just what is said.
+> **(a)** Switching the demo department to per-incident mode does **not** make
+> "total calls" safe — that figure sums `calls_responded` across _per-trainee_
+> shift completion reports, so a shift with two enrolled trainees counts twice.
+> Neither mode yields a quotable incident count. **(b) Do not show a CSV
+> export in this chapter.** The export still labels the column "Total Calls" in
+> both modes, so it visibly contradicts the tile beside it on camera. **(c) Do
+> not promise a per-apparatus breakdown** — the API returns one, the screen does
+> not render it. Tracked as SCHED-13/15/16 in `docs/KNOWN_LIMITATIONS.md`.
+
+> "If your department records call counts at close-out, read the label — this
+> is _unit responses_, not incidents. An MVA two units ran shows up twice.
+> Reconcile mutual responses before this goes in a grant application."
+
+**B-roll check:** any planned shot of the finalize checklist must be captioned
+as the detailed-mode screen, or shot twice — once per mode.
+
+**EDITOR:** the close-out chapter grows by roughly **60–90 seconds** (the new
+toggle, the three wizard steps, and why they save as they go). Scheduling
+Reports grows by **~15 seconds** for the caveat. Both sit inside existing
+chapters, so **only the bands from 19:45 onward re-time**, not the whole script.
+Final timecodes are a recording-production task.
+
+### 08 — Quick Tips & Shorts · **written in-script 2026-08-19**
+
+- **Short 8J** (end-of-shift checks) still holds for detailed-mode
+  departments, but for a count-only department the override moved to the **last
+  step of the wizard** rather than the dialog it shows. A shooting note is now
+  in the short itself: film it on a detailed-mode department, which keeps the
+  take correct as filmed, and do not mix both screens into one 50-second clip —
+  a viewer has to recognise their own screen immediately or the format fails.
+- **New short 8AG, "Tap Instead of Scan"**, is written. Needs a **real Android
+  phone and a real tag**; it cannot be captured in the harness, and anyone who
+  has used NFC will spot a staged shot. Its production note also rules out
+  shooting it on a room kiosk card — those are deliberately not taggable, and
+  showing a viewer hunting for a button that is correctly absent teaches the
+  wrong thing.
+
+### 01 — Installing The Logbook · **written in-script 2026-08-19**
+
+A new chapter, **CHECK IT BEFORE YOU START IT (10:45 – 11:00)**, now sits ahead
+of START THE SERVICES in the script. It adds the preflight check before the
+first `docker compose up`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  run --rm --build backend python -m app.preflight
+```
+
+This is the single best 60 seconds available anywhere in the series. It converts
+"discover the configuration problem by losing the service" into a command run
+beforehand. Two details have to be in the narration or the advice is worse than
+useless:
+
+- **`--build`**, or the viewer checks the image they are replacing rather than
+  the one they are deploying.
+- **The same `-f` files the deployment uses**, or Compose evaluates only the
+  base development configuration and answers about a setup nobody runs.
+
+**EDITOR:** lands inside the existing pre-launch chapter. Budget **60–80
+seconds**; no chapter re-ordering.
+
+### 03 — IT Manager / System Admin · **written in-script 2026-08-19**
+
+Two sections added to the script body, both post-setup and both in scope:
+
+- **`python -m app.preflight --compose PATH`** — names the settings a compose
+  file _drops_, i.e. values sitting in `.env` that never reach the container.
+  Those used to become defaults silently, which is how a production stack ends
+  up running a development setting with nothing on screen to say so. This is an
+  IT manager's problem specifically, and belongs here rather than in 01.
+- **The sign-in hardening posture, and which way each control fails.** Worth
+  saying explicitly because the two directions are opposite and deliberate:
+  breached-password lookup **fails open** (it is supplementary — complexity,
+  history, MFA and lockout still apply, and an outage must not block a password
+  change), CAPTCHA **fails closed** (nothing sits behind it, so accepting
+  unverified traffic during an outage is the state an attacker wants). Also
+  worth one line: enabling CAPTCHA widens the CSP for the provider's widget
+  origins, and a misconfigured provider presents as _"the challenge never
+  appears"_ rather than as an error.
+
+Written as **Chapter 5 → "Brute-force protection, and which way each control
+fails"** and **Chapter 9 → "Ask before you restart"**.
+
+**Do not let a delivery pass compress the fail-open / fail-closed beat into
+"both are security checks."** That they fail in opposite directions is the
+entire content of the section — breached-password checking must not block a
+password change during an outage, and CAPTCHA must not admit unverified traffic
+during one. An editor smoothing those into one sentence removes the only thing
+a viewer needed to hear.
+
+**Demo environment:** the `--compose` beat needs a compose file that genuinely
+drops a setting present in `.env`. Without that fixture the command prints an
+empty list and the section has nothing behind it.
+
+**EDITOR:** ~2:30 total, both inside existing chapters. Chapter 5's addition
+re-times everything from 17:30 onward; Chapter 9's re-times only Chapter 9 and
+the last rows of the clip table.
+
+### 06 — Member Guide · **written in-script 2026-08-19**
+
+`### QR CODE CHECK-IN (6:30 – 7:30)` has gained the NFC alternative in-script.
+The added narration keeps it short, because for most members it is one extra
+option and one limitation:
+
+> "If your station has put up an NFC tag, you can just hold your phone against
+> it instead of scanning. If the app's already open on screen, use **Tap Tag**
+> on the Events page — Android won't hand the tag over while the app is in
+> front."
+
+**Say the limitation, do not bury it.** Chrome on Android, over HTTPS. iPhone
+cannot do this and neither can a desktop, and a member who tries it on an
+iPhone and fails will assume the app is broken rather than that their phone
+does not have the hardware API.
+
+**B-roll:** needs a real Android phone and a real tag. This cannot be captured
+in the screenshot harness, and a mocked-up shot will look wrong to anyone who
+has used one.
+
+**EDITOR:** ~25 seconds inside the existing chapter; the clip table entry at
+`| QR Code Check-In | 6:30–7:30 |` keeps its title or becomes "Checking In with
+a QR Code or a Tap".
+
+### 10 — Training Pipelines, Member · **verify only**
+
+Members whose training requirements count calls will see credit arrive from
+close-out rather than from per-incident logging if their department switched
+modes. Nothing in the script is wrong; check that no take says "each call your
+officer logs" in a way that implies the per-incident form.
+
+### Not affected
+
+**02, 05, 07, 09, 11, 12, 13, 14, 15, 16** — no behaviour in this window
+touches what they narrate.
+
 ## Flagged by the 2026-08-15 → 08-16 changes
 
 The window produced one **Wrong** (script 02's auto-save promise), several
@@ -95,23 +605,23 @@ Two items are already **written into the scripts** (same convention as the
 08-12 → 08-14 pass — each carries an inline **EDITOR** note at the insertion
 point):
 
-| Script | Applied update |
-|---|---|
+| Script | Applied update                                                                                                                                                                          |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **01** | Compose minimum raised to **v2.24.4+** in the prerequisites narration (production override now uses `volumes: !override`); on-screen `docker compose version` output must show ≥ 2.24.4 |
-| **12** | New ~15s beat in Chapter 5: pending nominations are member-visible only while the nomination window is open; managers always see the full list. Chapter 5 onward re-times by ~0:15 |
+| **12** | New ~15s beat in Chapter 5: pending nominations are member-visible only while the nomination window is open; managers always see the full list. Chapter 5 onward re-times by ~0:15      |
 
 The rest of the window's changes are **B-roll / verify** items — the words in
 the scripts remain true, but the screens behind them changed. Nothing is
 recorded yet, so these are capture-plan notes, not re-records:
 
-| Script | Kind | What changed on screen |
-|---|---|---|
-| **04** (Fire Chief) | B-roll only | The event-creation Location picker now indents sub-rooms under their container and shows a containment path for a selected nested room (facilities rooms can nest, 2026-08-16). If the demo department has nested rooms, the picker will not look like a flat list. Either seed flat-only demo rooms or let the tree show and don't remark on it. |
-| **06** (Member guide) | B-roll only + verify | Member Directory beat (18:00–18:30): a colleague's profile opened from the directory no longer shows MFA/verification/last-login/account timestamps or role permission lists to members — do not capture or gesture at an account-metadata block that is no longer there. The narration as written makes no such claim; keep it that way. |
-| **07** (Secretary) | B-roll only | Event form location field — same nested-room picker note as script 04. |
-| **08** (Short 8AF) | B-roll only | Room QR Codes directory: nested rooms display with their containment path, so "search for 'Training Room'" may surface "Training Room — Station 1"-style names. Still correct; choose demo data so the searched name is unambiguous. |
-| **03** (IT manager) | Verify before take | If the deployment chapter shows `docker compose` commands or version checks, apply the same v2.24.4+ floor as script 01. Also: `unraid/.env.example` now ships an HTTPS `ALLOWED_ORIGINS` example — any Unraid-flavored aside should not show the old `http://<LAN-IP>` form as the end state. |
-| **All** | B-roll only | Dark-mode captures of public pages (forms, ballots, status) render on the themed gradient now, not white — retake any dark-mode public-page B-roll captured before 2026-08-15. |
+| Script                | Kind                 | What changed on screen                                                                                                                                                                                                                                                                                                                            |
+| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **04** (Fire Chief)   | B-roll only          | The event-creation Location picker now indents sub-rooms under their container and shows a containment path for a selected nested room (facilities rooms can nest, 2026-08-16). If the demo department has nested rooms, the picker will not look like a flat list. Either seed flat-only demo rooms or let the tree show and don't remark on it. |
+| **06** (Member guide) | B-roll only + verify | Member Directory beat (18:00–18:30): a colleague's profile opened from the directory no longer shows MFA/verification/last-login/account timestamps or role permission lists to members — do not capture or gesture at an account-metadata block that is no longer there. The narration as written makes no such claim; keep it that way.         |
+| **07** (Secretary)    | B-roll only          | Event form location field — same nested-room picker note as script 04.                                                                                                                                                                                                                                                                            |
+| **08** (Short 8AF)    | B-roll only          | Room QR Codes directory: nested rooms display with their containment path, so "search for 'Training Room'" may surface "Training Room — Station 1"-style names. Still correct; choose demo data so the searched name is unambiguous.                                                                                                              |
+| **03** (IT manager)   | Verify before take   | If the deployment chapter shows `docker compose` commands or version checks, apply the same v2.24.4+ floor as script 01. Also: `unraid/.env.example` now ships an HTTPS `ALLOWED_ORIGINS` example — any Unraid-flavored aside should not show the old `http://<LAN-IP>` form as the end state.                                                    |
+| **All**               | B-roll only          | Dark-mode captures of public pages (forms, ballots, status) render on the themed gradient now, not white — retake any dark-mode public-page B-roll captured before 2026-08-15.                                                                                                                                                                    |
 
 No script narrates facility-room management in enough depth to need a nested
 rooms chapter today; if a Facilities deep-dive script is added later, the

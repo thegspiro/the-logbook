@@ -1512,6 +1512,7 @@ const CreatePipelinePage: React.FC = () => {
                   onClick={() => {
                     if (i <= stepIndex || canGoNext()) setCurrentStep(step.key);
                   }}
+                  aria-current={isActive ? 'step' : undefined}
                   className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-600 text-white'
@@ -1521,7 +1522,7 @@ const CreatePipelinePage: React.FC = () => {
                   }`}
                 >
                   {isComplete ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
-                  <span className="hidden sm:inline">{step.label}</span>
+                  <span className="sr-only sm:not-sr-only">{step.label}</span>
                 </button>
               </React.Fragment>
             );

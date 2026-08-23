@@ -49,7 +49,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="generate-modal-title"
@@ -57,7 +57,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div ref={dialogRef} className="modal-panel w-full max-w-md">
+      <div ref={dialogRef} className="modal-panel modal-panel-scroll w-full max-w-md">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="generate-modal-title" className="text-theme-text-primary text-xl font-bold">
             Generate Shifts

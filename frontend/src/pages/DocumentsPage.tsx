@@ -467,8 +467,13 @@ const DocumentsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="card overflow-hidden overflow-x-auto">
-                  <table className="w-full">
+                <div
+                  className="card overflow-hidden overflow-x-auto"
+                  data-mobile-scroll-region
+                  aria-label="Documents table"
+                  tabIndex={0}
+                >
+                  <table className="rwd-table w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th

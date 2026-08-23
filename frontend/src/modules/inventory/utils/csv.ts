@@ -1,8 +1,8 @@
-/** Escape a value for CSV while preventing spreadsheet formula execution. */
-export const csvEscape = (value: string): string => {
-  // Spreadsheet applications may execute formula-prefixed CSV cells even when
-  // they are correctly quoted. Prefix those values with an apostrophe so they
-  // are imported as text before applying normal CSV escaping.
-  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safeValue) ? `"${safeValue.replace(/"/g, '""')}"` : safeValue;
-};
+/**
+ * Escape a value for CSV while preventing spreadsheet formula execution.
+ *
+ * Re-exported rather than reimplemented: this was a third copy of the same
+ * rule, and the shared one additionally looks past leading whitespace, so a
+ * cell like " =cmd" could slip through here but not there.
+ */
+export { escapeCsvCell as csvEscape } from '@/utils/csv';

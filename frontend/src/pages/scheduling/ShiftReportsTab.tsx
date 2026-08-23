@@ -71,6 +71,7 @@ import {
   pendingReportCount,
 } from '../../utils/shiftReportOfflineQueue';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -144,6 +145,9 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Review modal
   const [reviewReportId, setReviewReportId] = useState<string | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(ackReportId) || Boolean(reviewReportId));
   const [reviewNotes, setReviewNotes] = useState('');
   const [redactFields, setRedactFields] = useState<string[]>([]);
   const [reviewing, setReviewing] = useState(false);
@@ -1390,7 +1394,7 @@ export const ShiftReportsTab: React.FC = () => {
     <div className="space-y-6">
       {/* View Toggle */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="card hscroll flex flex-1 items-center gap-1 p-1 sm:flex-none">
+        <div className="segmented-group hscroll flex flex-1 items-center gap-1 sm:flex-none">
           <button
             onClick={() => setViewMode('my-reports')}
             className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
@@ -2281,12 +2285,12 @@ export const ShiftReportsTab: React.FC = () => {
       {/* Acknowledge Modal */}
       {ackReportId && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Acknowledge Report"
         >
-          <div className="card w-full max-w-md space-y-4 p-5 sm:p-6">
+          <div className="card modal-panel-scroll w-full max-w-md space-y-4 p-5 sm:p-6">
             <h3 className="text-theme-text-primary text-lg font-semibold">Acknowledge Report</h3>
             <p className="text-theme-text-secondary text-sm">
               Acknowledging confirms you have reviewed this shift completion report.
@@ -2332,7 +2336,7 @@ export const ShiftReportsTab: React.FC = () => {
           const reviewReport = reports.find((r) => r.id === reviewReportId);
           return (
             <div
-              className="modal-overlay flex items-center justify-center p-4"
+              className="modal-overlay z-50 flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Review Report"

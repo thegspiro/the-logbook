@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 
 const mockForceAppRefresh = vi.fn();
+const mockPurgeAppCaches = vi.fn();
+const mockCanReachServer = vi.fn();
 const mockReloadForNewVersion = vi.fn();
 const mockFetchServerBuildId = vi.fn();
 const mockToastSuccess = vi.fn();
@@ -11,6 +13,10 @@ const mockToastError = vi.fn();
 
 vi.mock('../../utils/forceAppRefresh', () => ({
   forceAppRefresh: () => mockForceAppRefresh() as Promise<'reloading' | 'unreachable'>,
+  // Reached through the real updateRecovery module, which the component now
+  // applies updates with.
+  purgeAppCaches: () => mockPurgeAppCaches() as Promise<void>,
+  canReachServer: () => mockCanReachServer() as Promise<boolean>,
 }));
 
 vi.mock('../../utils/serviceWorkerUpdate', () => ({
@@ -40,6 +46,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockForceAppRefresh.mockResolvedValue('reloading');
   mockReloadForNewVersion.mockResolvedValue(undefined);
+  mockPurgeAppCaches.mockResolvedValue(undefined);
+  mockCanReachServer.mockResolvedValue(true);
+  // updateRecovery persists its escalation ladder, which would otherwise leak
+  // between tests.
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -134,5 +145,24 @@ describe('AppVersionSection', () => {
     expect(mockToastError).toHaveBeenCalledWith('Cannot reach the server — nothing was cleared.');
     // Left enabled so the member can retry once they have signal.
     await waitFor(() => expect(screen.getByRole('button', { name: /^force refresh$/i })).toBeEnabled());
+  });
+
+  it('says so instead of promising a reload when recovery is exhausted', async () => {
+    localStorage.setItem(
+      'logbook:update-attempts',
+      JSON.stringify({ buildId: 'server-build-9999999999', attempts: 2, at: Date.now() })
+    );
+    mockFetchServerBuildId.mockResolvedValue('server-build-9999999999');
+    renderWithRouter(<AppVersionSection />);
+
+    await userEvent.click(screen.getByRole('button', { name: /check for updates/i }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'A new version is available, but this device could not install it. Try Force refresh below.'
+      )
+    );
+    // Two reloads have already failed for this build; a third would be a lie.
+    expect(mockReloadForNewVersion).not.toHaveBeenCalled();
   });
 });

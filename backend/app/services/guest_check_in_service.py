@@ -128,7 +128,7 @@ class GuestCheckInService:
         # After the commit: advancing a stage commits, and the sign-in must be
         # durable before anything downstream of it runs.
         if prospect is not None:
-            await self._try_advance_meeting_stage(prospect, event)
+            await self.try_advance_attendance_pipeline(str(prospect.id), event)
 
         return attendee, None, prospect_created
 
@@ -187,7 +187,7 @@ class GuestCheckInService:
                 organization_id, email
             )
             if existing is not None:
-                await self._link_prospect_to_event(existing, event)
+                await self.link_prospect_to_event(existing, event)
                 return existing, False
 
             prospect = await pipeline_service.create_prospect(
@@ -207,7 +207,7 @@ class GuestCheckInService:
                     },
                 },
             )
-            await self._link_prospect_to_event(prospect, event)
+            await self.link_prospect_to_event(prospect, event)
             return prospect, True
         except Exception as exc:
             logger.error(
@@ -217,7 +217,7 @@ class GuestCheckInService:
             )
             return None, False
 
-    async def _link_prospect_to_event(
+    async def link_prospect_to_event(
         self, prospect: ProspectiveMember, event: Event
     ) -> None:
         """Attach the prospect to the event, if not already attached.
@@ -225,6 +225,11 @@ class GuestCheckInService:
         ``prospect_event_links`` carries a unique (prospect, event) index, so a
         second sign-in must find the existing row rather than insert a clashing
         one.
+
+        Public because staff-entered attendance links a prospect too, and the
+        link is what the applicant's linked-events section and the by-event
+        applicant filter both read — setting ``prospect_id`` alone advanced the
+        pipeline off an attendance that then appeared nowhere.
         """
         existing = await self.db.execute(
             select(ProspectEventLink).where(
@@ -276,10 +281,14 @@ class GuestCheckInService:
 
         return True
 
-    async def _try_advance_meeting_stage(
-        self, prospect: ProspectiveMember, event: Event
-    ) -> None:
+    async def try_advance_attendance_pipeline(
+        self, prospect_id: str, event: Event
+    ) -> bool:
         """Advance a prospect whose current stage is the meeting they attended.
+
+        This operation is shared by kiosk and staff-recorded attendance. It is
+        deliberately called only after attendance commits: pipeline failures
+        must never roll back a valid check-in.
 
         A meeting stage offers "auto-advance when attendance is recorded", and a
         kiosk sign-in is that attendance record — but nothing joined the two, so
@@ -291,9 +300,11 @@ class GuestCheckInService:
         is already committed by this point.
         """
         try:
-            await MembershipPipelineService(self.db).try_auto_advance_current_step(
-                prospect_id=str(prospect.id),
-                organization_id=str(prospect.organization_id),
+            return await MembershipPipelineService(
+                self.db
+            ).try_auto_advance_current_step(
+                prospect_id=str(prospect_id),
+                organization_id=str(event.organization_id),
                 step_type=PipelineStepType.MEETING,
                 trigger="event check-in",
                 action_result={
@@ -306,12 +317,13 @@ class GuestCheckInService:
             )
         except Exception as exc:
             logger.error(
-                "Guest check-in could not advance the meeting stage for "
-                "prospect {} at event {}: {}",
-                prospect.id,
+                "Attendance pipeline progression failed for prospect {} "
+                "at event {}: {}",
+                prospect_id,
                 event.id,
                 exc,
             )
+            return False
 
     @staticmethod
     def check_in_window_state(

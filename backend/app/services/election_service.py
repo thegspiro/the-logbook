@@ -4186,7 +4186,11 @@ class ElectionService:
                 try:
                     reminded, _failed, _skipped, _details = (
                         await self.remind_non_voters(
-                            UUID(str(election.id)), organization_id
+                            UUID(str(election.id)),
+                            organization_id,
+                            base_ballot_url=(
+                                f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+                            ),
                         )
                     )
                     actions += 1
@@ -7052,6 +7056,50 @@ Best regards,
 
         return election, voting_token, None
 
+    async def _lock_token_ballot_for_submission(
+        self, election: Election, voting_token: VotingToken
+    ) -> Tuple[Optional[Election], Optional[VotingToken], Optional[str]]:
+        """Serialize token submissions with election lifecycle and vote writes.
+
+        ``get_ballot_by_token`` commits its access counter, so its validation is
+        necessarily optimistic. Re-lock both rows in the same order used by the
+        rest of the voting lifecycle, then re-check mutable state. Besides closing
+        the token replay race, the election lock serializes updates to
+        ``last_chain_hash`` so concurrent ballots cannot fork the vote audit chain.
+        """
+        election_result = await self.db.execute(
+            select(Election).where(Election.id == election.id).with_for_update()
+        )
+        locked_election = election_result.scalar_one_or_none()
+        if not locked_election:
+            return None, None, "Election not found"
+
+        token_result = await self.db.execute(
+            select(VotingToken)
+            .where(VotingToken.id == voting_token.id)
+            .where(VotingToken.election_id == locked_election.id)
+            .with_for_update()
+        )
+        locked_token = token_result.scalar_one_or_none()
+        if not locked_token:
+            return None, None, "Invalid voting token"
+        if locked_token.used:
+            return None, None, "This ballot has already been fully submitted"
+
+        now = datetime.now(timezone.utc)
+        if now > self._ensure_utc(locked_token.expires_at):
+            return None, None, "Voting token has expired"
+        if locked_election.status != ElectionStatus.OPEN:
+            return None, None, "Election is not open for voting"
+        start = self._ensure_utc(locked_election.start_date)
+        end = self._ensure_utc(locked_election.end_date)
+        if start and now < start:
+            return None, None, "Voting has not started yet"
+        if end and now > end:
+            return None, None, "Voting has ended"
+
+        return locked_election, locked_token, None
+
     async def cast_vote_with_token(
         self,
         token: str,
@@ -7069,6 +7117,12 @@ Best regards,
         # Validate token and get ballot
         election, voting_token, error = await self.get_ballot_by_token(token)
 
+        if error:
+            return None, error
+
+        election, voting_token, error = await self._lock_token_ballot_for_submission(
+            election, voting_token
+        )
         if error:
             return None, error
 
@@ -7333,6 +7387,12 @@ Best regards,
         if error:
             return None, error
 
+        election, voting_token, error = await self._lock_token_ballot_for_submission(
+            election, voting_token
+        )
+        if error:
+            return None, error
+
         # Check if this token has already been used
         if voting_token.used:
             return None, "This ballot has already been submitted"
@@ -7531,6 +7591,11 @@ Best regards,
             candidate_id = None
 
             if choice == "write_in":
+                if not election.allow_write_ins:
+                    return (
+                        None,
+                        f"Write-in votes are not allowed for: {item_title}",
+                    )
                 if not write_in_name or not write_in_name.strip():
                     return (
                         None,

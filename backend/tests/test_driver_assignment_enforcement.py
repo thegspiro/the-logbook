@@ -125,7 +125,11 @@ class TestEnforcementIsWiredIntoBothWritePaths:
 
     def test_create_assignment_checks_qualification(self):
         source = inspect.getsource(SchedulingService.create_assignment)
-        assert "_check_driver_qualification" in source
+        assert "_validate_assignment_candidate" in source
+        validator_source = inspect.getsource(
+            SchedulingService._validate_assignment_candidate
+        )
+        assert "_check_driver_qualification" in validator_source
 
     def test_create_assignment_does_not_swallow_the_refusal(self):
         # A bare `except Exception` would flatten the coded refusal into an
@@ -143,7 +147,7 @@ class TestEnforcementIsWiredIntoBothWritePaths:
     def test_create_assignment_returns_before_persisting(self):
         # The check must gate the insert, not merely annotate it.
         source = inspect.getsource(SchedulingService.create_assignment)
-        check_at = source.index("_check_driver_qualification")
+        check_at = source.index("_validate_assignment_candidate")
         insert_at = source.index("assignment = ShiftAssignment(")
         assert check_at < insert_at
 

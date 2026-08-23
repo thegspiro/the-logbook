@@ -31,7 +31,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState('');
   const [signupShiftId, setSignupShiftId] = useState<string | null>(null);
-  const [signupPosition, setSignupPosition] = useState('firefighter');
+  const [signupPosition, setSignupPosition] = useState('');
   const [signingUp, setSigningUp] = useState(false);
 
   // Fetch eligible positions for the currently selected shift
@@ -40,6 +40,22 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
     isExcluded,
     loading: eligibilityLoading,
   } = useEligiblePositions(signupShiftId ?? undefined);
+
+  useEffect(() => {
+    if (!signupShiftId) {
+      setSignupPosition('');
+      return;
+    }
+
+    if (!eligibilityLoading) {
+      setSignupPosition((current) => (eligiblePositions.includes(current) ? current : (eligiblePositions[0] ?? '')));
+    }
+  }, [signupShiftId, eligiblePositions, eligibilityLoading]);
+
+  const closeSignupModal = () => {
+    setSignupShiftId(null);
+    setSignupPosition('');
+  };
 
   const loadShifts = useCallback(async () => {
     setLoading(true);
@@ -84,7 +100,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       const res = await schedulingService.signupForShift(shiftId, { position: signupPosition });
       toast.success('Signed up for shift — a manager will confirm your assignment');
       surfaceWarnings(res);
-      setSignupShiftId(null);
+      closeSignupModal();
       void loadShifts();
     } catch (signupErr) {
       const appError = toAppError(signupErr);
@@ -96,7 +112,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           });
           toast.success('Signed up for shift — a manager will confirm your assignment');
           surfaceWarnings(res);
-          setSignupShiftId(null);
+          closeSignupModal();
           void loadShifts();
           return;
         } catch {
@@ -222,7 +238,10 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <button
-                            onClick={() => setSignupShiftId(shift.id)}
+                            onClick={() => {
+                              setSignupPosition('');
+                              setSignupShiftId(shift.id);
+                            }}
                             className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
                             aria-label="Sign up for this shift"
                           >
@@ -254,15 +273,15 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           const targetShift = shifts.find((s) => s.id === signupShiftId);
           return (
             <div
-              className="modal-overlay flex items-center justify-center p-4"
+              className="modal-overlay z-50 flex items-center justify-center p-4"
               role="dialog"
               aria-modal="true"
               aria-label="Sign up for shift"
               onKeyDown={(e) => {
-                if (e.key === 'Escape') setSignupShiftId(null);
+                if (e.key === 'Escape') closeSignupModal();
               }}
             >
-              <DialogPanel onClose={() => setSignupShiftId(null)} className="w-full max-w-sm">
+              <DialogPanel onClose={closeSignupModal} className="modal-panel-scroll w-full max-w-sm">
                 <div className="border-theme-surface-border border-b p-5">
                   <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
                   {targetShift && (
@@ -314,7 +333,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 </div>
                 <div className="border-theme-surface-border flex justify-end gap-3 border-t p-5">
                   <button
-                    onClick={() => setSignupShiftId(null)}
+                    onClick={closeSignupModal}
                     className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm"
                   >
                     Cancel
@@ -324,7 +343,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       onClick={() => {
                         void handleSignup(signupShiftId);
                       }}
-                      disabled={signingUp}
+                      disabled={signingUp || eligibilityLoading || !eligiblePositions.includes(signupPosition)}
                       className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                     >
                       {signingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

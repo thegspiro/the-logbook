@@ -151,37 +151,47 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 
 ### Two TypeScript installs — do not "tidy" this away
 
-The frontend depends on TypeScript twice, on purpose:
+Two TypeScripts are resolved, on purpose. **The arrangement changed on
+2026-08-17** and is currently held together by npm's peer auto-install rather
+than by a declaration — read the drift note at the end of this section before
+touching any of it.
+
+**What `frontend/package.json` declares today:**
 
 | Declared as                                     | Version | Used by                                          |
 | ----------------------------------------------- | ------- | ------------------------------------------------ |
-| `typescript`                                    | 5.9.3   | typescript-eslint (type-aware lint rules)        |
+| `typescript`                                    | 7.0.2   | _(nothing intentionally — see below)_            |
 | `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
 
-**typescript-eslint cannot run on TypeScript 7.** It throws `typescript-eslint does
-not support TS 7.0` from a hard version guard, and every published version caps
-its peer range at `<6.1.0` (typescript-eslint#10940 tracks TS >=7.1 support). A
-workspace can only declare one package named `typescript`, and npm resolves a
-peer against the workspace's own copy — so the linter's TypeScript has to be the
-one named `typescript`, and the compiler gets the alias.
+**What actually resolves in `package-lock.json`:**
 
-This is not cosmetic. Before it was set up this way, `rm package-lock.json &&
-npm install` failed outright with ERESOLVE: the lockfile in the repo could not be
-regenerated, and any bump of typescript-eslint broke the install.
+| Lock path                          | Version | Why it is there                                                     |
+| ---------------------------------- | ------- | ------------------------------------------------------------------- |
+| `node_modules/typescript`          | 5.9.3   | `"peer": true` — npm auto-installed it to satisfy typescript-eslint |
+| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                                       |
+| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested                              |
+
+**typescript-eslint still cannot run on TypeScript 7.** It throws
+`typescript-eslint does not support TS 7.0` from a hard version guard, and
+every published version — including the `^8.67.0` this repo uses — caps its
+peer range at `>=4.8.4 <6.1.0` (typescript-eslint#10940 tracks TS >=7.1
+support). Type-aware lint therefore runs against a 5.9.3 that **no manifest in
+this repository asks for**.
+
+This is not cosmetic. Before the split existed, `rm package-lock.json && npm
+install` failed outright with ERESOLVE: the lockfile could not be regenerated,
+and any bump of typescript-eslint broke the install.
 
 Consequences worth knowing:
 
 - `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
-  which resolves the aliased compiler. Plain `tsc` on `PATH` is the **5.9.3** one —
-  both installs ship a `tsc` bin and npm links only one, so do not "simplify" the
-  scripts back to bare `tsc` or you will silently typecheck with 5.9.3 (~12x
-  slower: ~41s vs ~3.5s, measured).
-- **Point your editor at the aliased compiler**, or it will report 5.9.3's
-  errors while CI reports 7.0.2's. In VS Code, set this in your local
-  `.vscode/settings.json` (the directory is gitignored, so this cannot be
-  committed for you — and the tracked copy's stale
-  `frontend/node_modules/typescript/lib` no longer exists, since npm hoists
-  both installs to the repo root):
+  which resolves the aliased compiler explicitly. Keep it that way — the
+  wrapper is what makes "which compiler ran" a fact rather than a hoisting
+  outcome. (Bare `tsc` inside the frontend workspace now resolves to 7.0.2,
+  not 5.9.3 as this section previously warned; that changed with the bump.)
+- **Point your editor at the aliased compiler.** In VS Code, set this in your
+  local `.vscode/settings.json` (the directory is gitignored, so this cannot
+  be committed for you):
 
   ```json
   "typescript.tsdk": "node_modules/typescript-native/lib"
@@ -189,8 +199,24 @@ Consequences worth knowing:
 
 - Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
   forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
-  collapse this back to a single `typescript` dependency** and delete the alias,
-  the wrapper script, and this section.
+  collapse this to a single `typescript` dependency** and delete the alias, the
+  wrapper script, and this section.
+
+#### Drift note (2026-08-17) — the arrangement is currently incidental
+
+Dependabot bumped `typescript` from `5.9.3` to `7.0.2` in
+`frontend/package.json`. `typescript` and `typescript-native` now name the same
+version, so the alias is redundant, and **the 5.9.3 the linter runs against
+survives only because npm chose to auto-install it as a peer.** CI is green, so
+nothing is broken today — but the pin went from declared to incidental, and a
+different npm version, a `--strict-peer-deps` install, or a future lockfile
+regeneration is not guaranteed to reproduce it.
+
+Do not "fix" this by deleting the alias without deciding what the linter
+compiles with. The two honest options are: re-pin `typescript` at `5.9.3`
+(restoring the declared split), or keep 7.0.2 and pin the linter's compiler
+some other way. Tracked as **BUILD-1** in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
 
 ## Testing
 
@@ -933,6 +959,134 @@ ever offers what a reader consults:
 reader in the same change, or mark it in the UI as not yet in effect — and add a
 test asserting the wired set, so the next trigger cannot be added to the list
 without a sender that reads it.
+
+### 20. Untyped JSON Columns Get One Canonical Shape, Settled at the Write _(2026-08-19)_
+
+`shifts.positions`, `shift_templates.positions` and `basic_apparatus.positions`
+are untyped JSON, and three writers filled them three different ways: bare
+strings from onboarding and the pre-2026-08 UI, `{"position", "required"}`
+objects from the current template form, and — on templates only — an
+event-metadata dict that is not a seat list at all. Every reader then had to
+tell those apart, and the templates screen did not: it rendered an entry
+straight into a span and took the page down with React error #31.
+
+The frontend types said `string[]`. The column had held objects for months.
+
+**Rule:** a JSON column gets exactly one canonical stored shape, normalized on
+every write path, plus a migration that settles the rows already there. A
+reader-side conversion is a stopgap: it fixes the screen you are looking at and
+leaves the next reader to rediscover the problem.
+
+Seat lists are `[{"position": str, "required": bool}]`, one entry per seat.
+`app/utils/positions.normalize_stored_positions` is the write-side authority.
+
+**The four normalizers are deliberate, not duplication to tidy away:**
+
+| Where                                   | Why it exists                                                                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `app/utils/positions.py`                | write side — settles a flat list, passes a dict (event metadata) through untouched                                                  |
+| `SchedulingService.normalize_positions` | display side — _flattens_ event metadata into seats, which is right for rendering and destructive as a value to save                |
+| `frontend .../services/api.ts`          | read boundary — the API can still serve rows written before the migration                                                           |
+| the migration's inlined `_normalize`    | frozen — a migration must keep transforming rows the way it did the day it ran, so it cannot import a helper that is free to change |
+
+Collapsing the first two is the specific mistake to avoid: saving the display
+normalizer's output turns an event template's resources into a flat seat list
+and loses the structure the event screens read.
+
+**Also:** a backfill that cannot be reversed needs its irreversibility stated in
+the migration docstring and needs to preserve information the old shape carried
+implicitly. `20260819_2037_1eeb053d59b7` expands a legacy `count` into that many
+seats for exactly this reason — collapsing it would have cut a three-firefighter
+template to one, permanently, with no downgrade to undo it.
+
+### 21. A Fixed, Flex-Centred Dialog Needs the Height Cap on the PANEL _(2026-08-20)_
+
+A panel centred by `fixed inset-0 flex items-center` and given no height cap
+overflows that container in **both** directions once it is taller than the
+viewport. Neither end can be reached: the title sits above the top of the
+screen, the action row below the bottom, and no scrollbar appears anywhere
+because the fixed container itself never overflows. What the user reports is a
+box they cannot interact with — not a layout complaint, because nothing looks
+broken, it just refuses to take a tap.
+
+A sweep on 2026-08-20 found this at 38 sites. A phone in landscape is 390px
+tall, so it bites dialogs that are comfortable in portrait, and `items-end`
+sheets overflow upward the same way.
+
+```tsx
+// WRONG — the panel grows past the viewport and neither end is reachable
+<div className="modal-overlay z-50 flex items-center justify-center p-4">
+  <DialogPanel onClose={onClose} className="w-full max-w-md">
+
+// CORRECT
+<div className="modal-overlay z-50 flex items-center justify-center p-4">
+  <DialogPanel onClose={onClose} className="modal-panel-scroll w-full max-w-md">
+```
+
+**The cap has to be on the panel, not the container.** Adding `overflow-y-auto`
+to the container looks like the fix and is not: `align-items: center` still
+pushes the panel's top edge into the negative-scroll region, which no scrollbar
+reaches. (`components/Modal.tsx` and `Modal`'s own `modal-body` already do this
+correctly — the defect is confined to hand-rolled shells.)
+
+`src/dialogScrollIntegrity.test.ts` walks the source and fails on a new
+uncapped panel, in the manner of `routeIntegrity.test.ts`.
+
+**Related, same symptom, different cause:** a fixed element pinned near the
+bottom of the viewport must add `var(--bottom-nav-height, 0px)` to its offset.
+The mobile bottom bar is 56px tall at `z-50` and renders after the page, so it
+paints over anything at `bottom-0` or `bottom-6` and swallows its taps — that
+is what buried the FAB's lower half, the update banner's "Reload now" and the
+events bulk-action bar. `pb-safe` and `action-bar-safe` already fold the
+allowance in; a hand-written `bottom-*` does not. Dialogs get out of this by
+registering with `useOverlaySurface` (which `useDialog` does for you), which
+hides the bar outright.
+
+### 22. Never Hold One `patch()` Open in Two Coroutines at Once _(2026-08-23)_
+
+`unittest.mock.patch` saves whatever it finds as "the original" when it enters.
+Two patches of the **same** target open at the same time therefore record each
+other, and the second exit reinstalls the first one's mock permanently:
+
+```
+A enters -> saves the real function, installs mock A
+B enters -> saves *mock A*, installs mock B
+A exits  -> restores the real function
+B exits  -> restores *mock A*      <- the module keeps a mock for the session
+```
+
+This is not a hypothetical ordering. `TestConcurrentShiftTemplateSubmission`
+drove two `submit_check` calls through `asyncio.gather`, and each coroutine
+entered the same `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+The `AsyncMock` it stranded returned a `SimpleNamespace` with no `full`
+attribute, so every later test reaching `if ref.full is not None` raised — and
+with `pytest-randomly` reshuffling module order each run, the victims changed
+run to run. The same commit passed and failed on alternate CI runs for a day,
+always failing in a file unrelated to the one at fault.
+
+```python
+# WRONG — both coroutines patch the same module attribute
+async def run(service):
+    with patch("app.services.equipment_check_service.resolve_apparatus_ref", AsyncMock(...)):
+        return await service.submit_check(...)
+
+await asyncio.gather(run(a), run(b))
+
+# CORRECT — patch once, outside the concurrent section
+with patch("app.services.equipment_check_service.resolve_apparatus_ref", AsyncMock(...)):
+    await asyncio.gather(run(a), run(b))
+```
+
+`patch.object(instance, ...)` against a per-coroutine object is fine — each
+targets a different object, and an instance built inside a test cannot outlive
+it. Only shared targets (modules, classes) collide.
+
+**Rule:** never enter the same `patch()` from concurrently running coroutines.
+Hoist it above the `gather`, or patch each instance separately.
+`tests/conftest.py` enforces this: an autouse guard records every module- and
+class-level patch target and fails the test that leaves a mock behind, naming
+the attribute and restoring the original. If you see that failure, the fix is
+this rule, not a re-run.
 
 ## Environment Variables
 

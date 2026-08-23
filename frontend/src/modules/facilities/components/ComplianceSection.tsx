@@ -15,10 +15,11 @@ import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
-  canManage: boolean;
+  canCreate: boolean;
+  canDelete: boolean;
 }
 
-export default function ComplianceSection({ facilityId, canManage }: Props) {
+export default function ComplianceSection({ facilityId, canCreate, canDelete }: Props) {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [checklists, setChecklists] = useState<ComplianceChecklist[]>([]);
@@ -100,7 +101,7 @@ export default function ComplianceSection({ facilityId, canManage }: Props) {
         <h2 className="text-theme-text-primary text-sm font-semibold">
           Compliance Checklists {!isLoading && `(${checklists.length})`}
         </h2>
-        {canManage && (
+        {canCreate && (
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -111,7 +112,7 @@ export default function ComplianceSection({ facilityId, canManage }: Props) {
       </div>
 
       <div className="p-4">
-        {canManage && showForm && (
+        {canCreate && showForm && (
           <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
             <h3 className="text-theme-text-primary text-sm font-medium">New Compliance Checklist</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -222,7 +223,7 @@ export default function ComplianceSection({ facilityId, canManage }: Props) {
                     </div>
                   </div>
                 </div>
-                {canManage && (
+                {canDelete && (
                   <button
                     onClick={() => {
                       void handleDelete(checklist);

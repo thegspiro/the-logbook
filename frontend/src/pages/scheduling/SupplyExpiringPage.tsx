@@ -27,6 +27,7 @@ import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLotCreate } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatCalendarDate } from '../../utils/dateFormatting';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 
@@ -53,6 +54,9 @@ const SupplyExpiringPage: React.FC = () => {
 
   // Inline add-stock modal
   const [stockTarget, setStockTarget] = useState<SupplyExpiringItem | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(stockTarget));
   const [lotForm, setLotForm] = useState<InventoryLotCreate>(emptyLotForm);
   const [saving, setSaving] = useState(false);
 
@@ -350,8 +354,8 @@ const SupplyExpiringPage: React.FC = () => {
 
       {/* Inline add-stock modal */}
       {stockTarget && (
-        <div className="modal-overlay flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="bg-theme-surface border-theme-surface-border w-full rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+        <div className="modal-overlay z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div className="bg-theme-surface border-theme-surface-border modal-panel-scroll w-full rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
                 <h3 className="text-theme-text-primary text-sm font-semibold">Add ready stock</h3>

@@ -297,7 +297,7 @@ function LocationSetupWizard({
 
   /* ── Render ── */
   return (
-    <div className="modal-overlay flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div className="modal-overlay z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <DialogPanel
         onClose={() => onDismiss?.()}
         className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden"
@@ -1463,14 +1463,14 @@ export default function LocationsPage() {
       {/* Station Modal */}
       {showStationModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
-          <DialogPanel onClose={() => setShowStationModal(false)} className="w-full max-w-md">
+          <DialogPanel onClose={() => setShowStationModal(false)} className="modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
@@ -1571,14 +1571,14 @@ export default function LocationsPage() {
       {/* Room Modal */}
       {showRoomModal && (
         <div
-          className="modal-overlay flex items-center justify-center p-4"
+          className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
-          <DialogPanel onClose={() => setShowRoomModal(false)} className="w-full max-w-md">
+          <DialogPanel onClose={() => setShowRoomModal(false)} className="modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}

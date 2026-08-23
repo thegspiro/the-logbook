@@ -123,14 +123,14 @@ Administrative]**
 > about on your phone: it's your department ID with a scannable code, and it
 > works without signal once the app's installed."
 
-**[SCREEN: Scroll to My Training Progress, then My Equipment]**
+**[SCREEN: Scroll to My Training Progress, then My Issued Gear]**
 
 > "If you're enrolled in a training pipeline — a recruit school, an officer
 > track — **My Training Progress** shows where you are in it and what's next.
 > **This panel only appears if you're enrolled in something**, so don't worry if
 > you don't have it."
 
-> "And **My Equipment** is everything the department has issued you. We'll come
+> "And **My Issued Gear** is everything the department has issued you. We'll come
 > back to that one."
 
 **[CALLOUT: "Your dashboard = your personal fire department briefing"]**
@@ -192,6 +192,28 @@ this narration walks. The demo seeder produces both.]**
 
 > "If you don't have your phone, a Captain or officer with manage access can
 > manually check you in."
+
+**[SCREEN: An Android phone held against an NFC sticker on a wall, then the
+check-in page opening by itself. Real phone, real tag — this cannot be faked
+convincingly. — ADDED 2026-08-19]**
+
+> "Some stations have started putting up NFC tags instead. If yours has, you
+> don't scan anything — just hold your phone against the sticker and the
+> check-in page opens on its own. Handy in a dark bay, or with gloves on, where
+> a camera is exactly the thing that won't cooperate."
+
+**[SCREEN: The Events page with Tap Tag pressed, scan armed.]**
+
+> "One quirk worth knowing. If The Logbook is already open on your screen,
+> Android won't hand the tag over to it — so nothing happens. Use **Tap Tag** on
+> the Events page instead: press it, then hold the phone to the tag."
+
+**[CALLOUT: "NFC: Chrome on Android only. iPhone users, scan the QR code — it
+works everywhere."]**
+
+> "And to be straight with you about it: this is an Android thing. iPhones can't
+> do it in a browser, and neither can a laptop. If that's you, nothing's broken
+> — scan the QR code, same as always."
 
 ### PAST EVENTS & YOUR HISTORY (7:30 – 8:30)
 
@@ -388,9 +410,9 @@ Copy button, and Reset link]**
 
 ### MY EQUIPMENT (15:00 – 15:30)
 
-**[SCREEN: Navigate to My Equipment (MyEquipmentPage)]**
+**[SCREEN: Navigate to My Issued Gear (MyEquipmentPage)]**
 
-> "While we're talking about your assignments, the My Equipment page shows any
+> "While we're talking about your assignments, the My Issued Gear page shows any
 > gear assigned to you — radios, pagers, turnout gear, specialized equipment.
 > If your department tracks equipment assignments, you can see exactly what's
 > checked out to you."

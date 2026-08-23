@@ -447,6 +447,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Start Test</span>
+            <span className="sm:hidden">Start</span>
           </button>
         </div>
       </div>

@@ -96,6 +96,16 @@ class TestGenerateReport:
         with pytest.raises(ValueError, match="report_type"):
             await ComplianceReportService(db).generate_report("org-1", "weekly", 2026)
 
+    async def test_yearly_report_type_accepted(self, stub_annual):
+        stub_annual.result = {"executive_summary": {}}
+        db = _db([])
+        report = await ComplianceReportService(db).generate_report(
+            "org-1", "yearly", 2026
+        )
+        assert report.status == ReportStatus.COMPLETED.value
+        assert report.period_label == "2026"
+        assert report.report_type == "yearly"
+
     async def test_monthly_period_label(self, stub_annual):
         stub_annual.result = {"executive_summary": {}}
         db = _db([])

@@ -215,7 +215,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
   return (
     <div
-      className="modal-overlay flex items-center justify-center p-4"
+      className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-modal-title"
@@ -337,12 +337,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                         ...prev,
                         apparatus_id: val,
                         apparatus_type: selected?.apparatus_type ?? '',
-                        positions:
-                          selected?.positions?.map((p) =>
-                            typeof p === 'string'
-                              ? { position: p, required: true }
-                              : { position: p.position, required: (p as { required?: boolean }).required !== false }
-                          ) ?? prev.positions,
+                        positions: selected?.positions ?? prev.positions,
                         min_staffing: selected?.min_staffing ? String(selected.min_staffing) : prev.min_staffing,
                       }));
                     }

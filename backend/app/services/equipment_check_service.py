@@ -5,10 +5,14 @@ Business logic for equipment check template management, shift equipment
 check submissions, checklist resolution by position, and item history.
 """
 
+import hashlib
+import json
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,6 +23,7 @@ from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
+    EquipmentCheckBulkRequest,
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
@@ -29,6 +34,7 @@ from app.models.training import (
     ShiftAssignment,
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
+    ShiftEquipmentCheckSeal,
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
@@ -36,6 +42,10 @@ from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+
+
+class EquipmentCheckConflictError(ValueError):
+    """A completed shift/template check already owns this submission slot."""
 
 
 class EquipmentCheckService:
@@ -53,6 +63,16 @@ class EquipmentCheckService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def is_check_completed(check: Optional[ShiftEquipmentCheck]) -> bool:
+        """Return the canonical completion state for an equipment check.
+
+        A saved draft is still outstanding.  Keep this predicate in one place
+        so shift lists, shift detail, and close-out enforcement cannot disagree
+        merely because a ``ShiftEquipmentCheck`` row exists.
+        """
+        return check is not None and check.overall_status != "incomplete"
 
     @staticmethod
     def _trend_bucket_for_status(status: str) -> Optional[str]:
@@ -380,12 +400,11 @@ class EquipmentCheckService:
         if not template:
             return None
 
-        # EC2-3: a client-supplied parent_compartment_id must be in-org
-        # (integrity-only — not projected — but validate on both paths).
-        if data.get("parent_compartment_id") and not await self._get_compartment(
-            data["parent_compartment_id"], organization_id
-        ):
-            raise ValueError("Invalid parent compartment")
+        parent_id = data.get("parent_compartment_id")
+        if parent_id:
+            parent = await self._get_compartment(parent_id, organization_id)
+            if not parent or parent.template_id != template_id:
+                raise ValueError("Parent compartment must belong to the same template")
 
         items_data = data.pop("items", None) or []
         # EC2-4: nested items carry the same client-supplied inventory_item_id /
@@ -425,12 +444,11 @@ class EquipmentCheckService:
         if not compartment:
             return None
 
-        # EC2-3: validate a reassigned parent_compartment_id in-org before the
-        # setattr loop applies it.
-        if data.get("parent_compartment_id") and not await self._get_compartment(
-            data["parent_compartment_id"], organization_id
-        ):
-            raise ValueError("Invalid parent compartment")
+        parent_id = data.get("parent_compartment_id")
+        if parent_id:
+            await self._validate_compartment_parent(
+                compartment, parent_id, organization_id
+            )
 
         for key, value in data.items():
             if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
@@ -524,6 +542,144 @@ class EquipmentCheckService:
         await self.db.commit()
         await self.db.refresh(item)
         return item
+
+    async def add_items_bulk(
+        self,
+        compartment_id: str,
+        organization_id: str,
+        items_data: List[Dict[str, Any]],
+        idempotency_key: str,
+        user_id: str,
+        user_name: str,
+    ) -> Optional[tuple[List[CheckTemplateItem], bool]]:
+        """Validate and insert a batch atomically, returning it in input order.
+
+        A durable request fingerprint and stable item IDs make retries safe. A
+        repeated key must describe the identical request; it then returns the
+        original rows.
+        """
+        compartment = await self._get_compartment(compartment_id, organization_id)
+        if not compartment:
+            return None
+
+        try:
+            # Normalize and validate the complete batch before adding a pending row.
+            for data in items_data:
+                data["name"] = str(data.get("name", "")).strip()
+                if not data["name"]:
+                    raise ValueError("Item name cannot be blank")
+                await self._validate_item_fks(data, organization_id)
+
+            payload_hash = hashlib.sha256(
+                json.dumps(
+                    items_data, sort_keys=True, separators=(",", ":"), default=str
+                ).encode()
+            ).hexdigest()
+            ledger_result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = ledger_result.scalars().first()
+            if ledger:
+                return await self._replay_bulk_request(ledger, payload_hash)
+
+            # Serialize append-position allocation for distinct batches.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
+            ids = [
+                str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        f"equipment-check:{organization_id}:{compartment_id}:{idempotency_key}:{i}",
+                    )
+                )
+                for i in range(len(items_data))
+            ]
+            self.db.add(
+                EquipmentCheckBulkRequest(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    compartment_id=compartment_id,
+                    idempotency_key=idempotency_key,
+                    payload_hash=payload_hash,
+                    item_ids=ids,
+                )
+            )
+            await self.db.flush()
+
+            # This must also be a locking/current read. Under MySQL REPEATABLE
+            # READ, a plain aggregate would keep the snapshot established before
+            # we waited for the compartment lock and could miss a batch that just
+            # committed while we were waiting.
+            max_order = await self.db.scalar(
+                select(CheckTemplateItem.sort_order)
+                .where(CheckTemplateItem.compartment_id == compartment_id)
+                .order_by(CheckTemplateItem.sort_order.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            first_order = (max_order if max_order is not None else -1) + 1
+            created = []
+            for index, data in enumerate(items_data):
+                values = dict(data)
+                values["sort_order"] = first_order + index
+                item = CheckTemplateItem(
+                    id=ids[index], compartment_id=compartment_id, **values
+                )
+                self.db.add(item)
+                created.append(item)
+            await self.db.flush()
+            for item in created:
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=str(compartment.template_id),
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="add",
+                    entity_type="item",
+                    entity_id=str(item.id),
+                    entity_name=item.name,
+                    changes={"bulk_idempotency_key": idempotency_key},
+                )
+            await self.db.commit()
+            return created, False
+        except IntegrityError:
+            # A concurrent request with this key may have won the unique ledger
+            # insert. Reload it after rollback and return the winning batch.
+            await self.db.rollback()
+            result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = result.scalars().first()
+            if ledger:
+                return await self._replay_bulk_request(ledger, payload_hash)
+            raise
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def _replay_bulk_request(
+        self, ledger: EquipmentCheckBulkRequest, payload_hash: str
+    ) -> tuple[List[CheckTemplateItem], bool]:
+        if ledger.payload_hash != payload_hash:
+            raise ValueError("Idempotency key was already used with different items")
+        result = await self.db.execute(
+            select(CheckTemplateItem).where(CheckTemplateItem.id.in_(ledger.item_ids))
+        )
+        by_id = {str(item.id): item for item in result.scalars().all()}
+        if len(by_id) != len(ledger.item_ids):
+            raise ValueError("Idempotency record refers to an incomplete batch")
+        return [by_id[item_id] for item_id in ledger.item_ids], True
 
     async def update_item(
         self,
@@ -623,7 +779,7 @@ class EquipmentCheckService:
         checklists = []
         for tmpl in templates:
             check = existing_checks.get(tmpl.id)
-            is_completed = check is not None and check.overall_status != "incomplete"
+            is_completed = self.is_check_completed(check)
             checklists.append(
                 {
                     "template": tmpl,
@@ -687,7 +843,7 @@ class EquipmentCheckService:
                     "template_name": tmpl.name,
                     "check_timing": tmpl.check_timing,
                     "assigned_positions": tmpl.assigned_positions,
-                    "is_completed": check is not None,
+                    "is_completed": self.is_check_completed(check),
                     "overall_status": check.overall_status if check else None,
                     "checked_by_name": (
                         user_map.get(check.checked_by, "")
@@ -714,32 +870,15 @@ class EquipmentCheckService:
     ) -> Optional[date]:
         """Resolve the authoritative expiration for this item result.
 
-        The template is authoritative because changes to its expiration must
-        go through the validated inventory-lot swap flow. ``expiration_found``
-        remains part of the check result as an observation, but a check
-        submitter cannot use it to clear an expired equipment record.
+        Inventory-backed template data is authoritative. Shift checks only
+        report those values; lot numbers and expiration dates are changed by
+        inventory receiving, correction, and swap workflows.
         """
         if tmpl_item is not None:
             resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
         else:
             resolved = item_data.get("expiration_date")
 
-        # Trust the observation only in the conservative direction: a crew
-        # reading an already-past date off the unit means the thing on the
-        # truck is expired regardless of what the record promises, so the check
-        # must fail exactly as if the record itself were expired. The record is
-        # NOT updated here — the observed date lives on the check result and
-        # the swap flow remains the only writer of the template's date. A
-        # *later* observed date still never clears the record's verdict, and an
-        # item the record does not track (no resolved date) stays untracked.
-        observed = item_data.get("expiration_found")
-        if (
-            observed
-            and resolved is not None
-            and observed < resolved
-            and observed < date.today()
-        ):
-            return observed
         return resolved
 
     @classmethod
@@ -794,37 +933,6 @@ class EquipmentCheckService:
 
         return total, completed, failed, overall_status
 
-    @staticmethod
-    def _apply_found_values_to_template(
-        tmpl_item: Optional[CheckTemplateItem],
-        *,
-        serial_found: Optional[str] = None,
-        lot_found: Optional[str] = None,
-        expiration_found: Optional[date] = None,
-    ) -> bool:
-        """Write a swapped-in unit's identifiers back onto the template item.
-
-        Serial and lot observations remain synchronized for existing behavior.
-        Expiration observations are deliberately not applied here: only the
-        validated inventory-lot swap flow may change the authoritative date.
-
-        Returns True when the template actually changed.
-        """
-        if tmpl_item is None:
-            return False
-        serial_changed = serial_found and serial_found != (
-            tmpl_item.serial_number or ""
-        )
-        lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
-        if not (serial_changed or lot_changed):
-            return False
-
-        if serial_found:
-            tmpl_item.serial_number = serial_found
-        if lot_found:
-            tmpl_item.lot_number = lot_found
-        return True
-
     async def _create_check_items(
         self,
         check_id: str,
@@ -832,21 +940,11 @@ class EquipmentCheckService:
         template_items_map: Dict[str, CheckTemplateItem],
         organization_id: str,
     ) -> List[ShiftEquipmentCheckItem]:
-        """Create ORM check item records, updating template serials as needed."""
+        """Create check item snapshots from authoritative inventory data."""
         created: List[ShiftEquipmentCheckItem] = []
         for item_data in items_data:
             tmpl_item_id = item_data.get("template_item_id")
-            serial_found = item_data.get("serial_found")
-            lot_found = item_data.get("lot_found")
-            expiration_found = item_data.get("expiration_found")
-
             tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
-            updated_serial = self._apply_found_values_to_template(
-                tmpl_item,
-                serial_found=serial_found,
-                lot_found=lot_found,
-                expiration_found=expiration_found,
-            )
             # A check is a recount. quantity_found is a crew standing at the
             # compartment counting, so it outranks whatever the running total
             # had drifted to, and it settles a shortfall report if the truck is
@@ -883,10 +981,10 @@ class EquipmentCheckService:
                 level_unit=item_data.get("level_unit"),
                 serial_number=item_data.get("serial_number"),
                 lot_number=item_data.get("lot_number"),
-                serial_found=serial_found,
-                lot_found=lot_found,
-                expiration_found=expiration_found,
-                updated_serial=updated_serial,
+                serial_found=None,
+                lot_found=None,
+                expiration_found=None,
+                updated_serial=False,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
                 expiration_date=item_data.get("expiration_date"),
@@ -895,6 +993,80 @@ class EquipmentCheckService:
             self.db.add(check_item)
             created.append(check_item)
         return created
+
+    async def _create_check_seals(
+        self,
+        check_id: str,
+        seals_data: List[Dict[str, Any]],
+        sealed_compartment_ids: Set[str],
+    ) -> List[ShiftEquipmentCheckSeal]:
+        """Record the tamper seals a crew read during one check.
+
+        Only compartments the template actually marks as sealed are recorded.
+        A seal submitted for an ordinary compartment is a client that has
+        drifted from the template, and storing it would put a claim on the
+        record that nobody was ever asked to make.
+
+        Replacing rather than appending: completing an incomplete check
+        re-reads the same bags, and two rows for one compartment would leave
+        the record unable to say which seal the crew actually saw.
+        """
+        seen: Dict[str, ShiftEquipmentCheckSeal] = {}
+        for seal_data in seals_data:
+            compartment_id = str(seal_data.get("template_compartment_id") or "")
+            if compartment_id not in sealed_compartment_ids:
+                continue
+            seal = ShiftEquipmentCheckSeal(
+                id=generate_uuid(),
+                check_id=check_id,
+                template_compartment_id=compartment_id,
+                compartment_name=seal_data.get("compartment_name", ""),
+                seal_number=(seal_data.get("seal_number") or None),
+                intact=bool(seal_data.get("intact", True)),
+                cleared_item_count=int(seal_data.get("cleared_item_count") or 0),
+                notes=seal_data.get("notes") or None,
+            )
+            seen[compartment_id] = seal
+
+        if not seen:
+            return []
+
+        existing = (
+            (
+                await self.db.execute(
+                    select(ShiftEquipmentCheckSeal).where(
+                        ShiftEquipmentCheckSeal.check_id == check_id,
+                        ShiftEquipmentCheckSeal.template_compartment_id.in_(
+                            list(seen.keys())
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in existing:
+            await self.db.delete(row)
+
+        for seal in seen.values():
+            self.db.add(seal)
+        return list(seen.values())
+
+    async def _sealed_compartment_ids(self, template_id: str) -> Set[str]:
+        """Ids of the template's compartments that carry a tamper seal."""
+        rows = (
+            (
+                await self.db.execute(
+                    select(CheckTemplateCompartment.id).where(
+                        CheckTemplateCompartment.template_id == template_id,
+                        CheckTemplateCompartment.is_sealed.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {str(row) for row in rows}
 
     async def _update_apparatus_deficiency(
         self,
@@ -925,42 +1097,96 @@ class EquipmentCheckService:
             apparatus.has_deficiency = False
             apparatus.deficiency_since = None
 
-    async def _load_template_items_map(
-        self,
-        items_data: List[Dict[str, Any]],
-        organization_id: str,
-        template_id: str,
+    async def _load_checkable_template_items(
+        self, organization_id: str, template_id: str
     ) -> Dict[str, CheckTemplateItem]:
-        """Load CheckTemplateItem records referenced by the submitted items.
+        """Load every question row belonging to a template, with its location.
 
-        Scoped to the caller's org via the compartment→template join:
-        _create_check_items writes serial/lot numbers back onto these rows, so
-        a foreign template_item_id must never resolve to a loaded record.
+        Submission validation must be based on the template, rather than on the
+        ids the client happened to send.  ``header`` and ``text`` are display
+        rows and therefore deliberately never become check-result rows.
         """
-        template_item_ids = [
-            i.get("template_item_id") for i in items_data if i.get("template_item_id")
-        ]
-        template_items_map: Dict[str, CheckTemplateItem] = {}
-        if template_item_ids:
-            tmpl_result = await self.db.execute(
-                select(CheckTemplateItem)
-                .join(
-                    CheckTemplateCompartment,
-                    CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
-                )
-                .join(
-                    EquipmentCheckTemplate,
-                    CheckTemplateCompartment.template_id == EquipmentCheckTemplate.id,
-                )
-                .where(
-                    CheckTemplateItem.id.in_(template_item_ids),
-                    EquipmentCheckTemplate.organization_id == organization_id,
-                    EquipmentCheckTemplate.id == template_id,
-                )
+        result = await self.db.execute(
+            select(CheckTemplateItem, CheckTemplateCompartment.name)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
             )
-            for ti in tmpl_result.scalars().all():
-                template_items_map[str(ti.id)] = ti
-        return template_items_map
+            .join(
+                EquipmentCheckTemplate,
+                CheckTemplateCompartment.template_id == EquipmentCheckTemplate.id,
+            )
+            .where(
+                EquipmentCheckTemplate.id == template_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+                CheckTemplateItem.check_type.notin_(("header", "text")),
+            )
+        )
+        items: Dict[str, CheckTemplateItem] = {}
+        for template_item, compartment_name in result.all():
+            # A response item snapshots the compartment label as it existed at
+            # check time.  Keep the joined label transiently alongside the ORM
+            # row so canonicalisation cannot accidentally use a client label.
+            template_item._check_compartment_name = compartment_name
+            items[str(template_item.id)] = template_item
+        return items
+
+    @staticmethod
+    def _validate_and_snapshot_submission(
+        items_data: List[Dict[str, Any]],
+        template_items_map: Dict[str, CheckTemplateItem],
+    ) -> None:
+        """Require exactly one answer for every authoritative question row."""
+        submitted_ids: List[str] = []
+        for item in items_data:
+            template_item_id = item.get("template_item_id")
+            if not template_item_id:
+                raise ValueError("template_item_id is required for every item")
+            submitted_ids.append(str(template_item_id))
+
+        if len(submitted_ids) != len(set(submitted_ids)):
+            raise ValueError("Duplicate template_item_id values are not allowed")
+
+        expected_ids = set(template_items_map)
+        supplied_ids = set(submitted_ids)
+        unknown = supplied_ids - expected_ids
+        if unknown:
+            raise ValueError(
+                f"Items do not belong to template: {', '.join(sorted(unknown))}"
+            )
+        omitted = expected_ids - supplied_ids
+        if omitted:
+            raise ValueError(
+                f"Submission is missing template items: {', '.join(sorted(omitted))}"
+            )
+
+        for item, template_item_id in zip(items_data, submitted_ids):
+            item["template_item_id"] = template_item_id
+            EquipmentCheckService._snapshot_from_template(
+                item, template_items_map[template_item_id]
+            )
+
+    @staticmethod
+    def _snapshot_from_template(
+        item: Dict[str, Any],
+        template_item: CheckTemplateItem,
+    ) -> None:
+        """Overwrite an item's descriptive fields with the template's own.
+
+        None of these is an observation the crew makes — they identify *which*
+        unit was checked. Taking them from the request lets a client file a
+        result whose serial or lot disagrees with the authoritative row it
+        claims to answer, and every report downstream reads the snapshot.
+        """
+        item["item_name"] = template_item.name
+        item["compartment_name"] = template_item._check_compartment_name
+        item["check_type"] = template_item.check_type
+        item["required_quantity"] = template_item.required_quantity
+        item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
+        item["level_unit"] = template_item.level_unit
+        item["serial_number"] = template_item.serial_number
+        item["lot_number"] = template_item.lot_number
+        item["expiration_date"] = template_item.expiration_date
 
     # ------------------------------------------------------------------
     # Check Submission
@@ -974,7 +1200,13 @@ class EquipmentCheckService:
         data: Dict[str, Any],
         allow_manage: bool = False,
     ) -> ShiftEquipmentCheck:
-        """Submit an equipment check for a shift."""
+        """Submit an equipment check for a shift.
+
+        The database unique constraint is the concurrency authority.  The
+        early lookup provides a friendly fast path, while the flush below
+        claims the shift/template slot before item, inventory, deficiency, or
+        notification effects are produced.
+        """
         result = await self.db.execute(
             select(Shift).where(
                 Shift.id == shift_id,
@@ -1007,10 +1239,39 @@ class EquipmentCheckService:
                 raise PermissionError("Not authorized to submit a check for this shift")
 
         items_data = data.pop("items", [])
+        seals_data = data.pop("seals", []) or []
         template_id = data.get("template_id")
+        client_submission_id = data.get("client_submission_id")
+        selected_template = None
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
+
+        # Resolve an acknowledged retry before consulting mutable template
+        # state. The template may have been disabled, reassigned, deleted, or
+        # edited after this transaction committed but before its response was
+        # lost; none of those changes should turn a successful retry into 400.
+        if client_submission_id:
+            retry_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.organization_id == organization_id,
+                    ShiftEquipmentCheck.client_submission_id == client_submission_id,
+                )
+            )
+            retry = retry_result.scalars().first()
+            if retry is not None:
+                if retry.shift_id != shift_id or retry.template_id != template_id:
+                    raise EquipmentCheckConflictError(
+                        "This client submission ID was already used for another check"
+                    )
+                # Returned whatever its aggregate status. A key is minted fresh
+                # per submission attempt, so a repeat is always a replay of the
+                # same payload rather than new intent; an accepted-but-incomplete
+                # draft that fell through to revalidation here answered a
+                # successful retry with a 400 whenever the template had since
+                # been edited, reassigned or disabled — and the offline queue
+                # counts that 400 toward the ceiling that discards the entry.
+                return await self.get_check(retry.id, organization_id)
 
         if template_id:
             position = getattr(assignment, "position", None)
@@ -1021,8 +1282,20 @@ class EquipmentCheckService:
                 organization_id,
                 None if allow_manage or is_shift_officer else position,
             )
-            if str(template_id) not in {str(t.id) for t in applicable_templates}:
+            selected_template = next(
+                (t for t in applicable_templates if str(t.id) == str(template_id)),
+                None,
+            )
+            if selected_template is None:
                 raise ValueError("Template is not applicable to this shift")
+
+            template_items_map = await self._load_checkable_template_items(
+                organization_id, str(template_id)
+            )
+            self._validate_and_snapshot_submission(items_data, template_items_map)
+        else:
+            # Shift checks without a template have no authoritative item set.
+            template_items_map = {}
 
         # Prevent duplicate submission for same shift+template
         if template_id:
@@ -1046,12 +1319,24 @@ class EquipmentCheckService:
                         checked_by=checked_by,
                         data={
                             "items": items_data,
+                            # The form always resubmits through submit_check, so
+                            # resuming a saved check lands here rather than in
+                            # the post-flush branch below. Dropping the seals
+                            # would file the passes an intact seal cleared while
+                            # discarding the record that justified them.
+                            "seals": seals_data,
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
+                            "client_submission_id": client_submission_id,
                         },
                         allow_any=allow_manage,
                     )
-                raise ValueError(
+                if (
+                    client_submission_id
+                    and existing_check.client_submission_id == client_submission_id
+                ):
+                    return await self.get_check(existing_check.id, organization_id)
+                raise EquipmentCheckConflictError(
                     "A check for this template has already "
                     "been submitted for this shift"
                 )
@@ -1059,9 +1344,6 @@ class EquipmentCheckService:
         # Loaded before the status computation, not after: expiry is decided
         # from the template item (see _compute_check_status), so the map has to
         # exist before any item can be force-failed.
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id, template_id
-        )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )
@@ -1087,36 +1369,86 @@ class EquipmentCheckService:
             apparatus_id=apparatus_ref.full_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get("check_timing", "start_of_shift"),
+            check_timing=(
+                selected_template.check_timing
+                if selected_template is not None
+                else "start_of_shift"
+            ),
             overall_status=overall_status,
             total_items=total,
             completed_items=completed,
             failed_items=failed,
             notes=data.get("notes"),
             signature_data=data.get("signature_data"),
+            client_submission_id=client_submission_id,
         )
         self.db.add(check)
 
-        # Validate submitted items belong to the template
-        submitted_ids = {
-            i.get("template_item_id") for i in items_data if i.get("template_item_id")
-        }
-        if template_id and submitted_ids:
-            valid_result = await self.db.execute(
-                select(CheckTemplateItem.id)
-                .join(CheckTemplateCompartment)
-                .where(CheckTemplateCompartment.template_id == template_id)
-            )
-            valid_ids = {str(r) for r in valid_result.scalars().all()}
-            invalid = submitted_ids - valid_ids
-            if invalid:
-                raise ValueError(
-                    f"Items do not belong to template: " f"{', '.join(invalid)}"
+        # Claim the unique slot before any operational side effects. Concurrent
+        # transactions both can miss the advisory lookup above; precisely one
+        # flush succeeds and the loser deterministically resumes/returns the
+        # winner or receives a conflict.
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            await self.db.rollback()
+            ownership_predicates = [
+                and_(
+                    ShiftEquipmentCheck.shift_id == shift_id,
+                    ShiftEquipmentCheck.template_id == template_id,
                 )
+            ]
+            if client_submission_id:
+                ownership_predicates.append(
+                    and_(
+                        ShiftEquipmentCheck.organization_id == organization_id,
+                        ShiftEquipmentCheck.client_submission_id
+                        == client_submission_id,
+                    )
+                )
+            winner_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(or_(*ownership_predicates))
+            )
+            winner = winner_result.scalars().first()
+            if winner is None:
+                # The integrity failure was unrelated to idempotency.
+                raise
+            if winner.shift_id != shift_id or winner.template_id != template_id:
+                raise EquipmentCheckConflictError(
+                    "This client submission ID was already used for another check"
+                )
+            if winner.overall_status == "incomplete":
+                return await self.complete_incomplete_check(
+                    check_id=winner.id,
+                    organization_id=organization_id,
+                    checked_by=checked_by,
+                    data={
+                        "items": items_data,
+                        "seals": seals_data,
+                        "notes": data.get("notes"),
+                        "signature_data": data.get("signature_data"),
+                        "client_submission_id": client_submission_id,
+                    },
+                    allow_any=allow_manage,
+                )
+            if (
+                client_submission_id
+                and winner.client_submission_id == client_submission_id
+            ):
+                return await self.get_check(winner.id, organization_id)
+            raise EquipmentCheckConflictError(
+                "A check for this template has already been submitted for this shift"
+            )
 
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
         )
+        if seals_data and template_id:
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(template_id),
+            )
 
         await self._update_apparatus_deficiency(
             shift.apparatus_id, organization_id, overall_status
@@ -1206,19 +1538,35 @@ class EquipmentCheckService:
                 raise ValueError("Apparatus not found")
 
         items_data = data.pop("items", [])
+        seals_data = data.pop("seals", []) or []
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
 
         # See submit_check: the template map decides expiry, so it is loaded
         # before the status computation rather than just before the write.
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id, template_id
+        # Loaded with the compartment label (rather than by submitted id) so the
+        # snapshot below can take every identifying field from the template.
+        template_items_map = await self._load_checkable_template_items(
+            organization_id, str(template_id)
         )
-        submitted_ids = {item["template_item_id"] for item in items_data}
+        submitted_ids = {item.get("template_item_id") for item in items_data}
+        if None in submitted_ids:
+            raise ValueError("template_item_id is required for every item")
         invalid = submitted_ids - template_items_map.keys()
         if invalid:
-            raise ValueError(f"Items do not belong to template: {', '.join(invalid)}")
+            raise ValueError(
+                f"Items do not belong to template: {', '.join(sorted(invalid))}"
+            )
+        # A standalone check may deliberately cover part of a template, so
+        # completeness is not required here as it is for a shift check — but
+        # the rows it does carry are snapshotted from the authoritative record
+        # all the same. Without this, serial and lot numbers reached the stored
+        # result (and every report reading it) straight from the request.
+        for item in items_data:
+            self._snapshot_from_template(
+                item, template_items_map[item["template_item_id"]]
+            )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )
@@ -1231,7 +1579,7 @@ class EquipmentCheckService:
             apparatus_id=apparatus_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get("check_timing", "start_of_shift"),
+            check_timing=template.check_timing,
             check_context="standalone",
             overall_status=overall_status,
             total_items=total,
@@ -1246,6 +1594,12 @@ class EquipmentCheckService:
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id
         )
+        if seals_data:
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(template_id),
+            )
 
         await self._update_apparatus_deficiency(
             apparatus_id, organization_id, overall_status
@@ -1289,7 +1643,22 @@ class EquipmentCheckService:
         if check.overall_status != "incomplete":
             raise ValueError("Only incomplete checks can be updated")
 
+        # Repair the timing from the template while completing legacy checks
+        # that may have trusted a client-provided value. This is particularly
+        # important for end-of-shift close-out, which filters on this column.
+        if check.template_id:
+            template_result = await self.db.execute(
+                select(EquipmentCheckTemplate).where(
+                    EquipmentCheckTemplate.id == check.template_id,
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                )
+            )
+            template = template_result.scalars().first()
+            if template is not None:
+                check.check_timing = template.check_timing
+
         items_data = data.get("items", [])
+        seals_data = data.get("seals", []) or []
         if not items_data:
             raise ValueError("At least one item is required")
 
@@ -1300,15 +1669,28 @@ class EquipmentCheckService:
         # A replacement logged while finishing an incomplete check has to reach
         # the template too — otherwise which write path the crew happened to
         # take decides whether the truck's record gets updated.
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id, check.template_id
+        template_items_map = await self._load_checkable_template_items(
+            organization_id, str(check.template_id)
         )
+        self._validate_and_snapshot_submission(items_data, template_items_map)
         today = date.today()
 
         for item_data in items_data:
             tmpl_id = item_data.get("template_item_id")
             existing = existing_map.get(tmpl_id) if tmpl_id else None
             if existing:
+                # Refresh snapshot metadata from the current authoritative row;
+                # none of these fields is an observation supplied by the crew.
+                existing.item_name = item_data["item_name"]
+                existing.compartment_name = item_data["compartment_name"]
+                existing.check_type = item_data["check_type"]
+                existing.required_quantity = item_data["required_quantity"]
+                existing.critical_minimum_quantity = item_data[
+                    "critical_minimum_quantity"
+                ]
+                existing.level_unit = item_data["level_unit"]
+                existing.serial_number = item_data["serial_number"]
+                existing.lot_number = item_data["lot_number"]
                 new_status = item_data.get("status", "not_checked")
                 if existing.status == "not_checked" or new_status != "not_checked":
                     existing.status = new_status
@@ -1319,34 +1701,43 @@ class EquipmentCheckService:
                     "level_reading", existing.level_reading
                 )
                 existing.notes = item_data.get("notes", existing.notes)
-                existing.serial_found = item_data.get(
-                    "serial_found", existing.serial_found
-                )
-                existing.lot_found = item_data.get("lot_found", existing.lot_found)
-                existing.expiration_found = (
-                    item_data.get("expiration_found") or existing.expiration_found
-                )
-
                 tmpl_item = template_items_map.get(tmpl_id or "")
-                if self._apply_found_values_to_template(
-                    tmpl_item,
-                    serial_found=existing.serial_found,
-                    lot_found=existing.lot_found,
-                    expiration_found=existing.expiration_found,
-                ):
-                    existing.updated_serial = True
-
-                expiration = self._resolve_expiration(
-                    {
-                        "expiration_found": existing.expiration_found,
-                        "expiration_date": existing.expiration_date,
-                    },
-                    tmpl_item,
-                )
+                # Lot metadata is inventory-owned. Ignore legacy/client
+                # observations when a saved incomplete check is resumed.
+                existing.serial_found = None
+                existing.lot_found = None
+                existing.expiration_found = None
+                existing.updated_serial = False
+                expiration = self._resolve_expiration({}, tmpl_item)
                 existing.expiration_date = expiration
                 existing.is_expired = bool(expiration and expiration < today)
 
-        all_items = check.items
+        missing_rows = [
+            item for item in items_data if item["template_item_id"] not in existing_map
+        ]
+        if missing_rows:
+            created = await self._create_check_items(
+                check.id, missing_rows, template_items_map, organization_id
+            )
+            check.items.extend(created)
+
+        if seals_data and check.template_id:
+            # Replaces rather than appends: finishing an incomplete check
+            # re-reads the same bags, and the record has to say which seal the
+            # crew actually saw.
+            await self._create_check_seals(
+                check.id,
+                seals_data,
+                await self._sealed_compartment_ids(str(check.template_id)),
+            )
+
+        # Ignore any historic/client-created rows that are not questions on the
+        # selected template.  They must not inflate totals or satisfy completion.
+        all_items = [
+            item
+            for item in check.items
+            if str(item.template_item_id or "") in template_items_map
+        ]
         # Re-apply the same auto-fail rule the initial submit uses
         # (_compute_check_status): an expired item, or one found below its
         # required quantity, is forced to "fail" so completing an incomplete
@@ -1378,11 +1769,17 @@ class EquipmentCheckService:
 
         check.completed_items = completed
         check.failed_items = failed
+        check.total_items = total
 
         if data.get("notes"):
             check.notes = data["notes"]
         if data.get("signature_data"):
             check.signature_data = data["signature_data"]
+        if data.get("client_submission_id"):
+            # Completing a draft is a distinct client operation. Persist its
+            # key so a lost completion response can replay to this now-complete
+            # record instead of conflicting with the draft's original key.
+            check.client_submission_id = data["client_submission_id"]
 
         await self.db.commit()
         return await self.get_check(check.id, organization_id)
@@ -1592,6 +1989,62 @@ class EquipmentCheckService:
                 "notes": item.notes,
             }
 
+        return results
+
+    async def get_last_check_seals(
+        self,
+        template_id: str,
+        organization_id: str,
+        apparatus_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Return the seal each sealed container carried at the last count.
+
+        Keyed by ``template_compartment_id``, so the form can put the number
+        the previous crew read next to the one in front of this crew. Equal
+        numbers are the whole basis of the shortcut: the bag has not been
+        opened since it was counted.
+        """
+        filters = [
+            ShiftEquipmentCheck.template_id == template_id,
+            ShiftEquipmentCheck.organization_id == organization_id,
+            ShiftEquipmentCheck.overall_status.in_(["pass", "fail"]),
+        ]
+        if apparatus_id:
+            filters.append(ShiftEquipmentCheck.apparatus_id == apparatus_id)
+
+        latest_check = (
+            await self.db.execute(
+                select(ShiftEquipmentCheck)
+                .where(*filters)
+                .order_by(ShiftEquipmentCheck.checked_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if not latest_check:
+            return {}
+
+        rows = (
+            (
+                await self.db.execute(
+                    select(ShiftEquipmentCheckSeal).where(
+                        ShiftEquipmentCheckSeal.check_id == latest_check.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        results: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if not row.template_compartment_id:
+                continue
+            results[row.template_compartment_id] = {
+                "seal_number": row.seal_number,
+                "intact": bool(row.intact),
+                "checked_at": latest_check.checked_at,
+            }
         return results
 
     # ------------------------------------------------------------------
@@ -2202,6 +2655,31 @@ class EquipmentCheckService:
         await self.db.commit()
         return self._restock_state(item)
 
+    @staticmethod
+    def _retire_replaced_units(
+        item: CheckTemplateItem,
+        lots: List[CheckItemDeployedLot],
+        quantity: int,
+    ) -> None:
+        """Take ``quantity`` units off the truck, oldest row first.
+
+        Units, not rows. A bracket holding four boxes of one lot is one row
+        with a quantity of four, and a crew swapping a single box exchanges one
+        of them — dropping the row would delete the three still in the bag,
+        count them all as disposed of, and leave the position reading three
+        short of a par it actually meets. A row is removed only once it is
+        emptied, which is what the single-unit case does on its first pass.
+        """
+        remaining = quantity
+        for lot in lots:
+            if remaining < 1:
+                break
+            taken = min(lot.quantity, remaining)
+            lot.quantity -= taken
+            remaining -= taken
+            if lot.quantity < 1:
+                item.deployed_lots.remove(lot)
+
     def _deployed_lot_payload(self, item: CheckTemplateItem) -> List[Dict[str, Any]]:
         """Each lot aboard, in the order a crew should draw from it."""
         return [
@@ -2568,6 +3046,9 @@ class EquipmentCheckService:
         organization_id: str,
         user: Optional[User] = None,
         quantity: int = 1,
+        replaced_deployed_lot_id: Optional[str] = None,
+        disposition: Optional[str] = None,
+        allow_first_link: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Move units from a ready-stock lot onto the apparatus.
 
@@ -2578,9 +3059,31 @@ class EquipmentCheckService:
         expressible; ``quantity`` defaults to 1 for the single-unit case that
         covers everything else. Raises ValueError on a mismatched, empty or
         expired lot.
+
+        ``replaced_deployed_lot_id`` names a lot this swap takes *off* the
+        truck, which is what separates replacing expired stock from topping a
+        position up. Without it the incoming units were merely appended, so an
+        expired lot stayed aboard and kept setting the position's exposure —
+        the item read EXPIRED and stayed force-failed immediately after the
+        crew was told fresh stock had been swapped in. Omitted, the top-up
+        behaviour is unchanged: a swap never retires stock by inference.
+
+        ``disposition`` records what became of the removed unit, because
+        departments differ — destroyed here, handed back to the pharmacy there,
+        pulled for somebody to exchange later somewhere else — and only the
+        crew at the truck knows which happened.
+
+        ``allow_first_link=False`` (a submit-only caller) refuses a position
+        that is not yet tied to the catalog. Binding one is the first swap's
+        side effect below, and it is permanent: left open it would let a
+        submitter attach any catalog item to any checklist row and draw its
+        stock, going around the manage-only inventory-link screen where that
+        decision is supposed to be reviewed.
         """
         if quantity < 1:
             raise ValueError("Restock quantity must be at least 1")
+        if replaced_deployed_lot_id and not disposition:
+            raise ValueError("A replaced lot must record what became of it")
         item, template_id = await self._get_item_with_template(
             template_item_id, organization_id
         )
@@ -2634,6 +3137,11 @@ class EquipmentCheckService:
 
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
+            if not allow_first_link:
+                raise PermissionError(
+                    "This position is not linked to the supply catalog yet; "
+                    "an officer has to link it before stock can be swapped in"
+                )
             item.inventory_item_id = lot.inventory_item_id
         if lot.lot_number is not None:
             item.lot_number = lot.lot_number
@@ -2666,6 +3174,59 @@ class EquipmentCheckService:
                     deployed_by=str(user.id) if user is not None else None,
                 )
             )
+        # Retired after the incoming lot is recorded, never before: a position
+        # that momentarily holds neither would report itself empty to anything
+        # reading mid-transaction.
+        #
+        # The incoming row, excluded by identity below. A top-up of a lot
+        # already aboard increments that row rather than adding one, so the two
+        # cases do not share a shape. The exclusion is belt-and-braces against
+        # the expiry sweep — deploying expired stock is refused a few lines
+        # above, so the incoming units cannot be expired today — but it is what
+        # stops a lot being named as its own replacement.
+        incoming = existing if existing is not None else item.deployed_lots[-1]
+        today = date.today()
+        replaced_lot_number: Optional[str] = None
+        if replaced_deployed_lot_id:
+            replaced = next(
+                (
+                    deployed
+                    for deployed in (item.deployed_lots or [])
+                    if str(deployed.id) == str(replaced_deployed_lot_id)
+                ),
+                None,
+            )
+            if replaced is None:
+                raise ValueError("The lot being replaced is not aboard this item")
+            if str(replaced.id) == str(incoming.id):
+                raise ValueError("A lot cannot replace itself")
+            # Checked here rather than trusted from the caller. The form only
+            # offers a replacement on a position reading expired, but that is a
+            # property of the screen, not of the API — and the disposition this
+            # records is specifically an expired-stock one, so retiring an
+            # in-date box under it would file a false account of the unit.
+            if not (replaced.expiration_date and replaced.expiration_date < today):
+                raise ValueError("That lot has not expired, so it cannot be replaced")
+            replaced_lot_number = replaced.lot_number
+            self._retire_replaced_units(item, [replaced], quantity)
+        elif disposition:
+            # No id to name: the position's units were never lot-tracked, so
+            # _materialize_untracked_units has just given the blob aboard one
+            # row carrying the position's own date. Retiring what is expired is
+            # the only reading available, and the crew asked for a replacement
+            # by reporting a disposition at all.
+            expired = [
+                deployed
+                for deployed in list(item.deployed_lots or [])
+                if deployed.id != incoming.id
+                and deployed.expiration_date
+                and deployed.expiration_date < today
+            ]
+            if not expired:
+                raise ValueError("This position carries no expired stock to replace")
+            replaced_lot_number = expired[0].lot_number
+            self._retire_replaced_units(item, expired, quantity)
+
         if self._target_quantity(item) is not None:
             item.quantity_on_truck = self._on_truck(item)
         self._sync_restock_after_restocking(item)
@@ -2691,6 +3252,12 @@ class EquipmentCheckService:
                     "quantity": quantity,
                     "quantity_on_truck": item.quantity_on_truck,
                     "cleared_restock": was_restock and not item.restock_needed,
+                    # The audit trail for a unit that left the apparatus. A
+                    # department exchanging at a pharmacy has no other record
+                    # that a unit is off the truck and owed back.
+                    "replaced_deployed_lot_id": replaced_deployed_lot_id,
+                    "replaced_lot_number": replaced_lot_number,
+                    "disposition": disposition,
                     "from": previous,
                     "to": {
                         "lot_number": item.lot_number,
@@ -2712,6 +3279,15 @@ class EquipmentCheckService:
             "remaining_quantity": lot.quantity,
             "restock_needed": bool(item.restock_needed),
             "quantity_on_truck": self._on_truck(item),
+            # Returned so a caller can settle the position's expiry verdict
+            # from the lots themselves. The scalar lot_number/expiration_date
+            # above describe the incoming unit only, and a position holding
+            # several lots is exposed by the earliest of them — a reader that
+            # trusted the scalars would call an item in date while an older
+            # box was still aboard.
+            "lots_aboard": self._deployed_lot_payload(item),
+            "replaced_lot_number": replaced_lot_number,
+            "disposition": disposition,
         }
 
     # ------------------------------------------------------------------
@@ -3036,6 +3612,7 @@ class EquipmentCheckService:
             image_url=source.image_url,
             is_header=source.is_header,
             container_type=source.container_type,
+            is_sealed=source.is_sealed,
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)
@@ -3074,6 +3651,26 @@ class EquipmentCheckService:
             await self._clone_compartment(template_id, child, compartment.id)
 
         return compartment
+
+    async def _validate_compartment_parent(
+        self,
+        compartment: CheckTemplateCompartment,
+        parent_id: str,
+        organization_id: str,
+    ) -> None:
+        """Validate that a proposed parent is in-template and cannot form a cycle."""
+        current_id: Optional[str] = parent_id
+        visited: set[str] = set()
+        while current_id:
+            if current_id == compartment.id or current_id in visited:
+                raise ValueError(
+                    "A compartment cannot be stored inside itself or one of its children"
+                )
+            visited.add(current_id)
+            parent = await self._get_compartment(current_id, organization_id)
+            if not parent or parent.template_id != compartment.template_id:
+                raise ValueError("Parent compartment must belong to the same template")
+            current_id = parent.parent_compartment_id
 
     async def _get_compartment(
         self, compartment_id: str, organization_id: str

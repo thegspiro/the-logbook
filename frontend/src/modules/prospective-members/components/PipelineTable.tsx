@@ -358,10 +358,15 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                sortedApplicants.map((applicant) => {
+                sortedApplicants.map((applicant, rowIndex) => {
                   const statusColor = APPLICANT_STATUS_COLORS[applicant.status];
                   const statusLabel = APPLICANT_STATUS_LABELS[applicant.status];
                   const isSelected = selected.has(applicant.id);
+                  // Open upward only when at least five complete rows provide
+                  // enough room for the tallest action menu. Otherwise keep the
+                  // menu in the table's downward-scrollable overflow area.
+                  const rowsBelow = sortedApplicants.length - rowIndex - 1;
+                  const menuOpensUp = rowIndex >= 5 && rowsBelow < 5;
 
                   return (
                     <tr
@@ -446,7 +451,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="popover-panel absolute top-full right-0 z-10 mt-1 w-40 py-1">
+                          <div
+                            className={`popover-panel absolute right-0 z-10 w-40 py-1 ${
+                              menuOpensUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                            }`}
+                          >
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);

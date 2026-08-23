@@ -1,5 +1,254 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-19 → 08-23 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
+
+**One change invalidates captures in bulk rather than individually.** The
+mobile bottom navigation used to paint over open dialogs; it now hides while
+one is open. That means **every phone capture showing a dialog was taken
+against the defect** — the bar in those shots is not a UI element the reader
+should expect to see, it is the bug. This is a re-capture _class_, not a list,
+and it is called out first because a targeted list will miss shots nobody
+remembers taking at a narrow viewport.
+
+Beyond that: one genuinely new screen (Governance → Legal Documents), a new
+event type in a picker that appears in several captures, a paginated Requests
+tab, and new dashboard sections.
+
+### REPLACE — existing images now show a screen that no longer matches
+
+| Image                                                                                                                     | Guide          | Why                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Any phone capture containing a dialog, drawer or bottom sheet**                                                         | all            | The bottom navigation no longer renders while an overlay is open. Every such shot predates the fix and shows the bar sitting on top of the dialog — the exact defect that was repaired. Re-shoot at 390×844 |
+| `10-04-mobile-dashboard.png`                                                                                              | 10             | New dashboard widget sections; also subject to the dialog rule if any overlay is open in frame                                                                                                              |
+| `10-12-mobile-bottom-nav.png`                                                                                             | 10             | Still correct as a shot of the bar itself, but now **needs a companion** showing the bar _absent_ behind an open dialog. Alone it now teaches the wrong expectation                                         |
+| `03-11-swap-requests-tab.png`                                                                                             | 03             | The Requests tab is paginated, and the review controls now differ depending on whether the viewing member raised the request. The current shot shows neither                                                |
+| `04-05-create-event.png`                                                                                                  | 04             | The event type picker gained **Recruitment**. A reader comparing their screen to this one will conclude their build is older                                                                                |
+| `04-09-event-templates.png`                                                                                               | 04             | Same picker, same problem, in the template form                                                                                                                                                             |
+| `04-02-event-detail.png`                                                                                                  | 04             | The event page now shows the applicants an event brought in. The current shot has no such section                                                                                                           |
+| `04-01-events-list.png`                                                                                                   | 04             | Only if shot at a narrow viewport — the events page was cut down for phones. Desktop captures are unaffected                                                                                                |
+| `03-22-equipment-check-builder.png`                                                                                       | 03             | Responsive builder actions changed, and compartment paths can now be deeper than the old shot shows                                                                                                         |
+| `03-25-equipment-checks-tab.png`                                                                                          | 03             | Expired-equipment failures are now derived at read time, so the status column can differ from a shot taken at submission time                                                                               |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png`, `00-20-member-dashboard.png`, `02-17-officer-dashboard.png` | 00, 02, 10     | New permission-scoped widget sections. **Caption which permissions the capturing account held** — the sections a reader sees depend on their own grants, and an uncaptioned shot reads as a promise         |
+| `06-09-facilities-dashboard.png`, `05-02-inventory-dashboard.png`                                                         | 05, 06         | Asset widgets are new on the organization dashboard                                                                                                                                                         |
+| **Any capture showing browser tab chrome**                                                                                | all            | Tab titles were generic before this window and are page-specific now. Only affects shots that include the tab strip                                                                                         |
+| **Documents, training, audit and check-in tables at narrow viewports**                                                    | 07, 02, 08, 04 | These now reflow into stacked cards instead of scrolling sideways. Any phone capture of them shows the old behaviour                                                                                        |
+
+### SCREENSHOT NEEDED (new captures)
+
+Marked in the guides as `**[SCREENSHOT NEEDED — …]**` and counted by
+`status_report.py`. Repeated here with the demo-data state each needs, because
+that is what a capture run has to set up and the marker cannot carry.
+
+**Guide 08 / release lesson — Governance → Legal Documents (4 markers)**
+
+- **Landing view**, both document cards. _Demo data:_ one document with a
+  published revision, one with an unpublished draft, so the status difference
+  is visible in a single frame. Use a demo department name — this page shows
+  the department's own legal wording and a real one should not be published to
+  a guide.
+- **Revision editor** showing the body, the **required change note** filled in,
+  and the free-text "Last updated" field. _Demo data:_ capture under an account
+  holding **only `legal.propose`**, so the Publish control is absent. That
+  absence is the subject of the shot and must be captioned, or it reads as a
+  missing feature.
+- **Revision history** for one document. _Demo data:_ **three** revisions — one
+  published, two archived — each with a change note and a publishing member.
+  Two rows read as an accident; three read as a history.
+- **A published revision reflected on `/privacy`.** _Demo data:_ the same
+  department, showing that what was published is what the public page serves.
+
+**Guide 03 — scheduling (3 markers)**
+
+- **Requests tab under the member who raised the top request**, showing the
+  rejection "Requesters cannot review their own swap requests". _Demo data:_
+  one request raised by the capturing account **and** one raised by another
+  member, so the available actions differ visibly between two rows in the same
+  frame. A single-row shot cannot show a rule about who you are.
+- **Requests tab with pagination populated.** _Demo data:_ **at least 60**
+  requests, so the control is active rather than a disabled stub.
+- **Submitted shift equipment check at 390×844.** _Demo data:_ a completed
+  check. If the harness can simulate the offline/queued state, capture that
+  too; **if it cannot, say so in the caption rather than staging it** — a faked
+  offline badge is the kind of detail a reader who has actually been in a dead
+  spot will catch.
+
+**Guide 04 — events (2 markers)**
+
+- **Event form with Recruitment selected**, both guest switches on, and the
+  teal banner reading "Guests who sign in at this event will be added to the
+  prospective members pipeline."
+- **Event detail showing linked prospects.** _Demo data:_ a recruitment event
+  with **at least three** guest sign-ins converted to prospects.
+
+**Guide 10 — mobile (2 markers)**
+
+- **A tall dialog at 390×844 scrolled to its action row, with the bottom
+  navigation absent.** _Demo data:_ any dialog taller than the viewport. This
+  is the reference shot for the whole re-capture class above.
+- **A reflowed table at 390×844 beside the same table on desktop.** The
+  **pair** is the point — a single shot does not show a reflow.
+
+**Guide 08 — dashboards (1 marker)**
+
+- **The organization dashboard under two accounts side by side**: one holding
+  `finance.manage`, one without. _Demo data:_ seeded finance figures. The
+  finance section must be **present in one and absent — not empty — in the
+  other**. The comparison is the entire lesson; either shot alone teaches
+  nothing.
+
+### Do not capture
+
+- **The public `/privacy` page of a real department.** Use demo wording. This
+  screen now shows department-authored legal text, and publishing a real
+  department's notice into a training guide is a different act from publishing
+  a screenshot of a generic settings page.
+
+## Flagged by the 2026-08-17 → 08-19 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-17_TO_19.md`](../CHANGE_AUDIT_2026-08-17_TO_19.md#documentation-and-media-disposition).
+
+Two things landed that invalidate existing captures rather than merely adding
+new ones: **shift close-out is a different screen** for departments recording a
+call count, and **four QR pages gained an NFC control in their action row**.
+
+### REPLACE — existing images now show a screen that no longer matches
+
+Each of these is in a guide today and is wrong, incomplete, or newly ambiguous.
+Listed with the file so a re-capture run can target them.
+
+| Image                                                        | Guide  | Why                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03-45-finalize-checklist.png`                               | 03     | Still correct for a **detailed**-mode department, and now ambiguous without saying so. The guide has been given a note above the image; the image itself needs a caption change, and the count-only wizard needs shooting alongside it rather than replacing it |
+| `03-32-settings-general-closeout.png`                        | 03     | The _Shift close-out rules_ block gained **Record a call count at close-out**. The current shot predates it, so a reader looking for the toggle will conclude their build does not have it                                                                      |
+| `03-14-scheduling-reports.png`                               | 03     | If the demo department is switched to count-only for the new captures, the Call Volume card relabels. Verify which mode this was shot in and caption it                                                                                                         |
+| `04-04-event-qr-code.png`                                    | 04     | The page gained **Write to an NFC tag** below the QR code. The current shot is missing a control the guide now describes                                                                                                                                        |
+| `03-08-calls-runs-section.png`                               | 03     | Correct, and now conditional — Calls / Runs does not exist for a count-only department. Needs a caption saying which mode it shows                                                                                                                              |
+| Check-In QR Codes directory (guide 06, `#check-in-qr-codes`) | 06     | Apparatus cards gained **Write NFC tag** in the action row. There is **no captured image of this page at all**; the new marker below covers it                                                                                                                  |
+| Shift detail QR block (guide 03)                             | 03     | The NFC writer now sits beneath the QR code. No dedicated capture exists; covered by the marker below                                                                                                                                                           |
+| `17-01-privacy-choices.png`                                  | 17     | `/privacy` and `/terms` were rewritten on 2026-08-17 with a new print stylesheet. Any capture of either page predates the rewrite                                                                                                                               |
+| `00-04-dashboard-overview.png`, `00-20-member-dashboard.png` | 00, 10 | Only if shot at a narrow viewport — the week strip and alert list now collapse on a phone. Desktop captures are unaffected                                                                                                                                      |
+| Login page (guides 00, 03 of the YouTube set)                | 00     | Only for departments with `CAPTCHA_ENABLED`. The challenge widget is new on the two internet-exposed forms and appears in no capture                                                                                                                            |
+
+### SCREENSHOT NEEDED (new captures)
+
+These are marked in the guides as `**[SCREENSHOT NEEDED — …]**` and counted by
+`status_report.py`. Repeated here with the demo-data state each one needs,
+because that is what a capture run has to set up and the marker cannot carry.
+
+**Guide 03 — scheduling (6 markers)**
+
+- **Settings → General → _Shift close-out rules_** with **Record a call count at
+  close-out** switched on and its explanatory paragraph legible.
+  _Demo data:_ none beyond the toggle.
+- **Close-out wizard step 1 — attendance.** _Demo data:_ a **four-person crew on
+  a 24-hour tour**, so the combined-hours figure reads ~96 and visibly is not
+  the shift length; at least one member with a missing check-out; at least one
+  assigned member who never checked in, showing empty times.
+- **Close-out wizard step 2 — calls.** _Demo data:_ two or three type rows
+  filled (e.g. EMS 3, Fire 1) with the derived total showing 4 and rendered
+  read-only. This is the screen that teaches "the rows are the only source" and
+  the read-only styling has to be visible.
+- **Close-out wizard step 3 — confirmation.** _Demo data:_ the same crew, credit
+  seeded from the apparatus count, **one member adjusted downward** for a late
+  arrival, plus the pass-down notes field.
+- **Close-out with outstanding end-of-shift checks.** _Demo data:_
+  `require_end_of_shift_checks` on, one check outstanding, showing the warning,
+  the override checkbox, and the reason field it requires.
+- **Reports → Call Volume in count-only mode**, showing **Unit Responses / Avg
+  Responses/Day / Peak Responses** and the footnote. **Caption it against the
+  detailed-mode version** — the whole point is that the labels differ, and a
+  lone capture teaches neither. Two things not to imply in that caption
+  _(added 2026-08-19)_: detailed mode's "Total Calls" is **also** not an
+  incident count (it sums per-trainee shift completion reports), and there is
+  **no per-apparatus breakdown on this screen** to frame — the API returns
+  `by_apparatus_runs` and the renderer ignores it, so do not treat its absence
+  as a mis-seeded capture. See `KNOWN_LIMITATIONS.md` SCHED-15 / SCHED-16.
+
+**Guide 04 — events (3 markers)**
+
+- **`/events/:id/qr-code` mid-write**, showing the "hold a tag to your phone"
+  state rather than the idle button.
+- **Tap Tag on the Events page, scan armed**, waiting for a tag.
+- **Tap Tag after reading an unrecognized tag** — the explanatory message with
+  the scan still armed. This is the security behaviour, and a reader will not
+  believe "it just doesn't navigate" without seeing it.
+
+**Guide 06 — apparatus & facilities (1 marker)**
+
+- **`/locations/qr-codes` on a phone**, an apparatus card mid-write with its
+  action row showing Copy URL / Download PNG / Regenerate / **Write NFC tag**.
+  Shoot it on a phone, not desktop: that is where the button is usable, and the
+  card grid is the thing being described.
+
+**Guide 10 — mobile (1 marker)**
+
+- **A phone held against a mounted NFC tag on an apparatus**, and the resulting
+  shift check-in page naming the unit, date and hours. Two frames or one
+  composite. Note the camera-viewfinder caveat below does **not** apply — no
+  viewfinder is involved.
+
+**Guide 19 — release changes (3 markers)**
+
+- **Admin hours category QR page** with the NFC tag writer beside the QR code.
+- **`python -m app.preflight`**, two terminal captures side by side: exit 0 on a
+  good configuration, exit 1 on a broken one with the blocking items listed.
+- **The rewritten `/privacy` header**, showing the department-control statement
+  above the fold.
+
+### Capture constraints for this batch
+
+**Four of the six guide-03 captures are now automated** _(2026-08-19)_ —
+`03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,
+`03-76-closeout-step2-calls` and `03-77-closeout-step3-confirm`. They run
+against a dedicated fixture the seeder builds: a past **24-hour tour with four
+crew**, one member checked in but never out, and one assigned member with no
+attendance row at all. Both of those last two are states no other seeded shift
+carries, because `_seed_shift_attendance` checks every past crew fully in and
+out — right for every other shift, useless for this one.
+
+Three things about that group are worth knowing before editing it:
+
+- **Each shot forces the organization's call-tracking mode**, and
+  `03-45-finalize-checklist` forces it back. The mode decides which of two
+  entirely different close-out screens renders, either shot may run first, and a
+  shot that inherited the wrong mode would still **succeed** — it would just
+  write the wrong picture under the right filename. This is the same
+  self-healing rule `capture.mjs` applies to `navigationLayout`.
+- **Each shot walks the wizard from step 1.** The server remembers how far the
+  last run advanced (`shifts.closeout_step`) and reopens there, so without the
+  rewind a second capture run would open at step 3 and the "step 1" shot would
+  quietly contain step 3.
+- **Nothing clicks "Close out shift".** That finalizes, and a finalized shift
+  will not reopen the wizard — one capture run would spend the fixture for every
+  run after it. If the fixture is ever finalized by hand, the seeder says so and
+  refuses to reuse it rather than silently building a second one.
+
+**Two of the six are still manual, with the specific blocker for each:**
+
+- **Close-out with outstanding end-of-shift checks.** Needs
+  `require_end_of_shift_checks` on _and_ a shift with an outstanding check.
+  Equipment-check templates resolve by apparatus type and the demo department
+  writes its checklists for **engines**, while the close-out fixture is
+  deliberately a Medic — putting it on an engine would let it race
+  `03-45-finalize-checklist` for the same shift. Closing this needs either an
+  engine-typed second fixture or a medic checklist template in the seed.
+- **Reports → Call Volume in count-only mode.** Needs actual `org_calls` rows,
+  and the fixture has none: calls are written by the wizard, and the wizard
+  shots deliberately stop short of finalizing. Closing this needs the seeder to
+  POST `PATCH /scheduling/shifts/{id}/closeout/calls` against a _second_ past
+  shift — one the wizard captures do not use, so the two do not fight over
+  `closeout_step`.
+
+**The NFC captures cannot be automated at all.** Web NFC does not exist in the
+headless Chromium the harness drives, and it is not exposed over `http://`
+either. They are manual captures on a real Android phone, like the
+camera-viewfinder shots recorded under the 2026-08-12 entry below, and they must
+not be added to `manifest.mjs`.
+
 ## Tracker corrected 2026-08-17 — the count was never 421 of 423
 
 Two defects in the pipeline were found while capturing the nested-room shots,

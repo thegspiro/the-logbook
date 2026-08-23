@@ -633,11 +633,20 @@ class MembershipPipelineService:
         pipeline_id: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None,
+        event_id: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> tuple[List[ProspectiveMember], int]:
-        """List prospects with filters"""
+        """List prospects with filters.
+
+        ``event_id`` narrows to prospects whose creation metadata names that
+        event as their source or who have an explicit event link. Callers must
+        have already confirmed
+        the event belongs to *organization_id*; the prospect scope below stops
+        a foreign id leaking rows, but it would read as "no applicants" rather
+        than as the wrong-org id it is.
+        """
         query = (
             select(ProspectiveMember)
             .where(ProspectiveMember.organization_id == organization_id)
@@ -652,6 +661,19 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
         if status:
             query = query.where(ProspectiveMember.status == status)
+        if event_id:
+            query = query.where(
+                or_(
+                    ProspectiveMember.metadata_["source_event_id"].as_string()
+                    == str(event_id),
+                    select(ProspectEventLink.id)
+                    .where(
+                        ProspectEventLink.prospect_id == ProspectiveMember.id,
+                        ProspectEventLink.event_id == str(event_id),
+                    )
+                    .exists(),
+                )
+            )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:
             query = query.where(self._prospect_search_filter(search))
@@ -933,7 +955,9 @@ class MembershipPipelineService:
             # the unique index is the concurrency boundary. A simultaneous
             # public submission may win after our SELECT, in which case return
             # that durable application rather than surfacing a database 500.
-            existing = await self._find_active_prospect_by_email(organization_id, email)
+            existing = await self._find_active_prospect_by_email(
+                organization_id, email, current_read=True
+            )
             if existing:
                 await self._notify_duplicate_application(existing, organization_id)
                 return existing
@@ -1164,6 +1188,38 @@ class MembershipPipelineService:
                     raise ValueError(
                         f"This step requires at least {required_count} "
                         f"reference(s); only {len(references)} received."
+                    )
+
+        elif step_type == PipelineStepType.DOCUMENT_UPLOAD:
+            required_document_types = config.get("required_document_types", [])
+            if required_document_types:
+                # Document type labels are coordinator-defined free text. Grade
+                # both configured labels and uploaded values using the same
+                # Unicode/case/whitespace normalization, while retaining the
+                # configured spelling in the error shown to the coordinator.
+                def normalize_document_type(value: Any) -> str:
+                    return unicodedata.normalize("NFKC", str(value)).strip().casefold()
+
+                result = await self.db.execute(
+                    select(ProspectDocument).where(
+                        and_(
+                            ProspectDocument.prospect_id == prospect.id,
+                            ProspectDocument.step_id == step.id,
+                        )
+                    )
+                )
+                uploaded_types = {
+                    normalize_document_type(document.document_type)
+                    for document in result.scalars().all()
+                }
+                missing = [
+                    str(document_type)
+                    for document_type in required_document_types
+                    if normalize_document_type(document_type) not in uploaded_types
+                ]
+                if missing:
+                    raise ValueError(
+                        f"Missing required documents: {', '.join(missing)}."
                     )
 
         elif step_type == PipelineStepType.MEDICAL_SCREENING:
@@ -3402,7 +3458,7 @@ class MembershipPipelineService:
         return await self._find_active_prospect_by_email(organization_id, email)
 
     async def _find_active_prospect_by_email(
-        self, organization_id: str, email: str
+        self, organization_id: str, email: str, *, current_read: bool = False
     ) -> Optional[ProspectiveMember]:
         """Return an existing active/pending prospect with the given email.
 
@@ -3414,7 +3470,7 @@ class MembershipPipelineService:
         without this the duplicate path answered **500** instead of returning
         the existing applicant, which is the whole point of detecting one.
         """
-        result = await self.db.execute(
+        query = (
             select(ProspectiveMember)
             .where(
                 and_(
@@ -3439,6 +3495,11 @@ class MembershipPipelineService:
             .order_by(ProspectiveMember.created_at)
             .limit(1)
         )
+        if current_read:
+            # MySQL locking reads use the latest committed state rather than
+            # the REPEATABLE READ snapshot established by the preflight query.
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalars().first()
 
     async def _notify_duplicate_application(
@@ -4964,7 +5025,24 @@ class MembershipPipelineService:
             performed_by=interviewer_id,
         )
 
+        prospect_id = str(interview.prospect_id)
+        interview_step_id = str(interview.step_id) if interview.step_id else None
         await self.db.commit()
+
+        # An edit can turn an interview that was already counted for this
+        # stage into one that satisfies its recommendation gate.  Retry only
+        # after committing so complete_step grades the durable interview
+        # values (and retain its current-step and auto-advance protections).
+        if interview_step_id:
+            await self._try_auto_advance_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=interview_step_id,
+                completed_by=interviewer_id,
+                trigger="interview update",
+                action_result={"interview_id": interview_id},
+            )
+
         return await self.get_interview(interview_id, organization_id)
 
     async def delete_interview(
@@ -4996,6 +5074,64 @@ class MembershipPipelineService:
     # =========================================================================
     # Event Links
     # =========================================================================
+
+    # Enough to fill a filter dropdown without turning it into a scroll.
+    MAX_SOURCE_EVENTS = 100
+
+    async def list_source_events(
+        self,
+        organization_id: str,
+        limit: int = MAX_SOURCE_EVENTS,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Events that produced applicants, newest first, with their counts.
+
+        This backs the "came from" filter, so it lists only events explicitly
+        recorded in prospect creation metadata. General event links represent
+        invitations or future meetings, not provenance. Offering every event
+        on the calendar would bury
+        the two open houses that matter among a year of business meetings, and
+        most of the choices would return nothing.
+
+        Both sides of the join are organization-scoped. Prospect exclusions
+        suppress confidential records from both counts and returned events.
+        """
+        query = (
+            select(
+                Event.id,
+                Event.title,
+                Event.event_type,
+                Event.start_datetime,
+                func.count(func.distinct(ProspectiveMember.id)).label("prospect_count"),
+            )
+            .join(
+                ProspectiveMember,
+                ProspectiveMember.metadata_["source_event_id"].as_string() == Event.id,
+            )
+            .where(
+                Event.organization_id == organization_id,
+                ProspectiveMember.organization_id == organization_id,
+            )
+            .group_by(Event.id, Event.title, Event.event_type, Event.start_datetime)
+            .order_by(Event.start_datetime.desc())
+            .limit(limit)
+        )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
+        rows = (await self.db.execute(query)).all()
+        return [
+            {
+                "event_id": str(row.id),
+                "title": row.title,
+                "event_type": (
+                    row.event_type.value
+                    if hasattr(row.event_type, "value")
+                    else row.event_type
+                ),
+                "start_datetime": row.start_datetime,
+                "prospect_count": row.prospect_count or 0,
+            }
+            for row in rows
+        ]
 
     async def list_event_links(
         self,

@@ -43,6 +43,8 @@ os.environ.setdefault("DB_NAME", "intranet_test")
 # test collection order.
 import app.models  # noqa: E402,F401
 from app.core.database import database_manager
+from tests.patch_leak_guard import find_leaks
+from tests.patch_leak_guard import install as _install_patch_leak_guard
 
 configure_mappers()
 
@@ -94,6 +96,37 @@ def _ensure_test_database() -> None:
         Base.metadata.create_all(conn, checkfirst=True)
         conn.exec_driver_sql("SET FOREIGN_KEY_CHECKS = 1")
     engine.dispose()
+
+
+_install_patch_leak_guard()
+
+
+@pytest.fixture(autouse=True)
+def _fail_the_test_that_leaks_a_patch():
+    """Make a leaked patch fail its own test instead of a later, innocent one.
+
+    ``unittest.mock.patch`` records whatever it finds as "the original", so two
+    patches of one target that are open at the same time restore each other's
+    mock and the target keeps it for the rest of the session. Combined with
+    ``pytest-randomly``, the victim is whichever test happens to be scheduled
+    next, which is how one such leak masqueraded as a flaky suite for a day.
+
+    See tests/patch_leak_guard.py for the full mechanism.
+    """
+    yield
+    leaks = find_leaks()
+    if leaks:
+        pytest.fail(
+            "This test left a mock installed on "
+            + ", ".join(leaks)
+            + ". A patch of a module- or class-level target escaped — most often "
+            "because two coroutines entered the same patch() concurrently (e.g. "
+            "under asyncio.gather), so they restored each other's mock instead "
+            "of the real value. Patch per-instance with patch.object, or set up "
+            "the patch once outside the concurrent section. The original value "
+            "has been restored so the rest of the run stays meaningful.",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(scope="session")

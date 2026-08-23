@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 
 // =============================================================================
 // Status Badge
@@ -49,6 +50,9 @@ interface CreateFYModalProps {
 }
 
 const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
+  // Before the `if (!open) return null` below — hooks may not sit after it.
+  useOverlaySurface(open);
+
   const { createFiscalYear } = useFinanceStore();
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -79,8 +83,8 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
   if (!open) return null;
 
   return (
-    <div className="modal-overlay flex items-center justify-center">
-      <div className="card mx-4 w-full max-w-md p-6 shadow-xl">
+    <div className="modal-overlay z-50 flex items-center justify-center">
+      <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Fiscal Year</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
@@ -139,6 +143,9 @@ interface CreateCategoryModalProps {
 }
 
 const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose, onCreated }) => {
+  // Before the `if (!open) return null` below — hooks may not sit after it.
+  useOverlaySurface(open);
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -173,8 +180,8 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
   if (!open) return null;
 
   return (
-    <div className="modal-overlay flex items-center justify-center">
-      <div className="card mx-4 w-full max-w-md p-6 shadow-xl">
+    <div className="modal-overlay z-50 flex items-center justify-center">
+      <div className="card modal-panel-scroll mx-4 w-full max-w-md p-6 shadow-xl">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Budget Category</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>

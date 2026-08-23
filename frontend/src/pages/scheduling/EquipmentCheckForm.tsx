@@ -50,6 +50,8 @@ import {
   enqueueCheck,
   listPendingChecks,
   dequeueCheck,
+  markCheckSubmitted,
+  markPhotosUploaded,
   markRetry,
   pendingCount as getPendingCount,
   CHECK_QUEUE_MAX_RETRIES,
@@ -60,19 +62,24 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   CheckItemResultSubmit,
+  CheckSealSubmit,
   ShiftEquipmentCheckCreate,
   StandaloneEquipmentCheckCreate,
   CheckType,
   CheckItemStatus,
   LastCheckItemResult,
+  LastSealRecord,
   DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
+import SealPanel from '../../modules/scheduling/components/SealPanel';
+import type { SealState } from '../../modules/scheduling/components/SealPanel';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useAuthStore } from '../../stores/authStore';
+import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 // ============================================================================
 // Types
 // ============================================================================
@@ -103,11 +110,6 @@ interface ItemResult {
   status: CheckItemStatus;
   quantityFound?: number | undefined;
   levelReading?: number | undefined;
-  serialNumber?: string | undefined;
-  lotNumber?: string | undefined;
-  serialFound?: string | undefined;
-  lotFound?: string | undefined;
-  expirationFound?: string | undefined;
   photoUrls?: string[] | undefined;
   photoFiles?: File[] | undefined;
   notes?: string | undefined;
@@ -211,9 +213,21 @@ function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'ex
   return 'ok';
 }
 
+/**
+ * The verdict used everywhere in the form. Expiration is a property of the
+ * item currently aboard, not an answer the user has to make, so an expired
+ * item is effectively failed even when its persisted answer is absent (or
+ * stale). Keeping that derivation out of state also lets a corrected lot make
+ * the original answer visible again immediately.
+ */
+function getEffectiveStatus(item: CheckTemplateItem, result: ItemResult | undefined, today: string): CheckItemStatus {
+  return getExpirationStatus(item, today) === 'expired' ? 'fail' : (result?.status ?? 'not_checked');
+}
+
 function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
-  results: Record<string, ItemResult>
+  results: Record<string, ItemResult>,
+  today: string
 ): 'complete' | 'has_failures' | 'has_out_of_service' | 'in_progress' | 'not_started' {
   const checkable = compartment.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
   if (checkable.length === 0) return 'complete';
@@ -222,15 +236,15 @@ function getCompartmentStatus(
   let failed = 0;
   let outOfService = 0;
   for (const item of checkable) {
-    const result = results[item.id];
-    if (result && result.status !== 'not_checked') {
+    const status = getEffectiveStatus(item, results[item.id], today);
+    if (status !== 'not_checked') {
       checked++;
-      if (result.status === 'fail') failed++;
+      if (status === 'fail') failed++;
       // Counted apart from failures: the server tallies it as a failed item
       // (the check as a whole fails), but the form paints out-of-service amber
       // rather than red, and a compartment that reported one must not read as
       // a green "Complete".
-      if (result.status === 'out_of_service') outOfService++;
+      if (status === 'out_of_service') outOfService++;
     }
   }
 
@@ -287,10 +301,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 }) => {
   const { confirm } = useConfirm();
   const { checkPermission } = useAuthStore();
-  // Swapping stock onto the truck writes the template's lot/expiration record,
-  // so the endpoint keeps it a manage right; the button must not offer a
-  // submit-only member an action the server will deterministically 403.
-  const canSwapStock = checkPermission('equipment_check.manage') || checkPermission('inventory.manage');
+  // Mirrors the endpoint, which admits check submitters: replacing expired
+  // stock is the crew's job at the compartment, and every value the swap
+  // stores comes from the inventory lot rather than from here, so a submitter
+  // can move real stock without being able to invent a lot number or a date.
+  const canSwapStock =
+    checkPermission('equipment_check.submit') ||
+    checkPermission('equipment_check.manage') ||
+    checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in
   // this form compares against, so the badge, the auto-fail and the server all
@@ -299,23 +317,30 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
   // expiration so the badge reflects the fresher unit that was swapped in.
-  const [swapOverrides, setSwapOverrides] = useState<Record<string, { lotNumber?: string; expirationDate?: string }>>(
-    {}
-  );
+  const [swapOverrides, setSwapOverrides] = useState<
+    Record<string, { lotNumber?: string; expirationDate?: string; lotsAboard?: DeployedLot[] }>
+  >({});
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
-  // Lots corrected during this check, so the row reflects the box the crew is
-  // holding without waiting for a template re-fetch.
-  const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
-  const [lotBusyId, setLotBusyId] = useState<string | null>(null);
+  // What the crew reports became of the expired unit they are taking off.
+  // Required before a replacement can be sent, because the three outcomes —
+  // destroyed, handed back to the pharmacy, pulled for a later exchange —
+  // differ by department and only the crew at the truck knows which happened.
+  const [disposition, setDisposition] = useState<ExpiredStockDisposition | null>(null);
+
+  // Takes the fixed mobile bottom bar off this overlay while it is open.
+  useOverlaySurface(Boolean(swapTarget));
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
-  const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [overallNotes, setOverallNotes] = useState('');
   const [lastCheckData, setLastCheckData] = useState<Record<string, LastCheckItemResult> | null>(null);
+  // Tamper seals, keyed by compartment id. A sealed bag whose tag still matches
+  // the last count has not been opened, so its contents cannot have changed.
+  const [seals, setSeals] = useState<Record<string, SealState>>({});
+  const [lastSeals, setLastSeals] = useState<Record<string, LastSealRecord>>({});
   const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const isOnline = useOnlineStatus();
@@ -351,11 +376,24 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const pending = await listPendingChecks();
       let failed = 0;
       let discarded = 0;
-      let photosLost = 0;
 
       for (const entry of pending) {
         try {
-          const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+          let checkId = entry.submittedCheckId;
+          let submittedItemIds = entry.submittedItemIds;
+          if (!checkId) {
+            const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+            checkId = record.id;
+            submittedItemIds = Object.fromEntries(
+              (record.items ?? [])
+                .filter((item) => item.templateItemId)
+                .map((item) => [item.templateItemId as string, item.id])
+            );
+            // From this point onward this queue entry is a photo-upload retry,
+            // not a check-submission retry. Persist that distinction before an
+            // upload can fail so the accepted check is never created twice.
+            await markCheckSubmitted(entry.id, checkId, submittedItemIds);
+          }
 
           // Upload queued photos
           const photosByItem = new Map<string, Array<{ blob: Blob; fileName: string }>>();
@@ -364,18 +402,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             arr.push({ blob: photo.blob, fileName: photo.fileName });
             photosByItem.set(photo.itemId, arr);
           }
-          for (const [itemId, photos] of photosByItem) {
-            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
-            try {
-              await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
-            } catch {
-              // The check itself is recorded, so this is not fatal — but the
-              // entry (and with it the only copy of these blobs) is about to be
-              // dequeued. Count them so the loss is reported rather than
-              // discovered later by whoever went looking for the photo of the
-              // damaged item.
-              photosLost += files.length;
+          for (const [templateItemId, photos] of photosByItem) {
+            const checkItemId = submittedItemIds?.[templateItemId];
+            if (!checkItemId) {
+              throw new Error(`Submitted check item not found for template item ${templateItemId}`);
             }
+            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
+            await schedulingService.uploadCheckItemPhotos(checkId, checkItemId, files);
+            // Checkpoint before the next group can fail. The endpoint appends
+            // to the item's photo_urls and caps it at three, so a group left
+            // queued after a successful POST is re-uploaded on the next drain
+            // — filing duplicate evidence, or tripping the cap and returning a
+            // permanent 400 that eventually discards the photos still missing.
+            await markPhotosUploaded(entry.id, templateItemId);
           }
 
           await dequeueCheck(entry.id);
@@ -406,9 +445,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
       if (discarded > 0) {
         toast.error(`${discarded} queued check(s) were rejected repeatedly and have been discarded`);
-      }
-      if (photosLost > 0) {
-        toast.error(`${photosLost} photo(s) could not be uploaded and were not saved`);
       }
     } catch {
       setSyncStatus('error');
@@ -444,11 +480,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   const totalItems = checkableItems.length;
-  const checkedItems = checkableItems.filter((item) => {
-    const result = results[item.id];
-    return result && result.status !== 'not_checked';
-  }).length;
-  const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
 
   /**
    * "Brush 5 · Sat, Aug 16" beside a timing badge — whichever of the three we
@@ -472,13 +503,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         ? 'End of shift'
         : null;
 
-  const unansweredRequiredCount = checkableItems.filter((item) => {
-    if (!item.isRequired) return false;
-    const result = results[item.id];
-    return !result || result.status === 'not_checked';
-  }).length;
-  const allRequiredChecked = unansweredRequiredCount === 0;
-
   // --------------------------------------------------------------------------
   // Handlers
   // --------------------------------------------------------------------------
@@ -494,33 +518,44 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     }));
   }, []);
 
-  // Apply an in-check replacement to an item so the badge, the auto-fail and
-  // the submitted snapshot all reflect the unit now on the truck rather than
-  // the one it replaced. Two sources, in order: a lot swapped from inventory
-  // (which the server already wrote to the template), then an expiration the
-  // crew typed in by hand — the crew reading the box wins over both.
+  // Apply an inventory swap response immediately so the badge, auto-fail, and
+  // submitted snapshot reflect the authoritative lot now on the truck without
+  // waiting for a template re-fetch.
   const applyOverride = useCallback(
     (item: CheckTemplateItem): CheckTemplateItem => {
       const o = swapOverrides[item.id];
-      const typedExpiration = results[item.id]?.expirationFound;
-      const corrected = lotEdits[item.id];
-      if (!o && !typedExpiration && !corrected) return item;
+      if (!o) return item;
       return {
         ...item,
-        ...(corrected ? { lotsAboard: corrected } : {}),
         ...(o?.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
         ...(o?.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
-        ...(typedExpiration ? { hasExpiration: true, expirationDate: typedExpiration } : {}),
+        // The decisive one. A position's exposure is read from the lots
+        // aboard, so overriding only the scalar date left a replaced item
+        // reading EXPIRED off the box that had just been taken off the truck.
+        ...(o?.lotsAboard !== undefined ? { lotsAboard: o.lotsAboard } : {}),
       };
     },
-    [swapOverrides, results, lotEdits]
+    [swapOverrides]
   );
+
+  const effectiveCheckableItems = useMemo(() => checkableItems.map(applyOverride), [checkableItems, applyOverride]);
+  const checkedItems = effectiveCheckableItems.filter(
+    (item) => getEffectiveStatus(item, results[item.id], today) !== 'not_checked'
+  ).length;
+  const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+  const unansweredRequiredCount = effectiveCheckableItems.filter(
+    (item) => item.isRequired && getEffectiveStatus(item, results[item.id], today) === 'not_checked'
+  ).length;
+  const allRequiredChecked = unansweredRequiredCount === 0;
 
   const openSwap = useCallback(
     async (item: CheckTemplateItem) => {
       if (!item.inventoryItemId) return;
       setSwapTarget(item);
       setSwapLots([]);
+      // Never carried between items: a disposition chosen for one drug must
+      // not be filed against the next box the crew opens this dialog for.
+      setDisposition(null);
       setSwapLoading(true);
       try {
         const lots = await inventoryService.getItemLots(item.inventoryItemId);
@@ -541,51 +576,63 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   /**
-   * Correct one lot aboard from inside the check.
+   * The expired box this swap replaces, earliest date first.
    *
-   * This is the reconciliation a check is for: a crew reading a date off a box
-   * that disagrees with the record fixes the record then and there, rather
-   * than passing an item whose stored expiration belongs to a unit no longer
-   * in the bag.
+   * One per swap: a position carrying two expired lots needs two physical
+   * exchanges, and pretending one restock cleared both would put an item back
+   * in service off a box still in the bag.
    */
-  const correctLot = async (
-    item: CheckTemplateItem,
-    lotId: string,
-    changes: { quantity: number; lotNumber?: string; expirationDate?: string }
-  ) => {
-    setLotBusyId(item.id);
-    try {
-      const updated = await schedulingService.updateDeployedLot(item.id, lotId, changes);
-      setLotEdits((prev) => ({ ...prev, [item.id]: updated.lots }));
-      toast.success('Lot updated');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update the lot'));
-    } finally {
-      setLotBusyId(null);
-    }
-  };
+  const replacedLot = useMemo(
+    () =>
+      (swapTarget?.lotsAboard ?? [])
+        .filter((lot) => lot.isExpired)
+        .reduce<DeployedLot | undefined>(
+          (soonest, lot) => (!soonest || (lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest),
+          undefined
+        ),
+    [swapTarget]
+  );
+
+  /**
+   * Whether this swap is a replacement at all — which is what the disposition
+   * answers, not merely which row it names.
+   *
+   * A position whose units were never lot-tracked is expired by its own date
+   * with no lot rows to point at, and it is exactly the position a crew is
+   * most likely to be standing in front of. Asking only when there is a row to
+   * name would leave that case topping up instead of replacing, so the expired
+   * units stay aboard and the item reads EXPIRED straight after the swap.
+   */
+  const isReplacement = Boolean(swapTarget && getExpirationStatus(swapTarget, today) === 'expired');
 
   const doSwap = useCallback(
     async (lot: InventoryLot) => {
       if (!swapTarget) return;
+      if (isReplacement && !disposition) return;
       setSwapping(true);
       try {
-        const res = await schedulingService.swapItemLot(swapTarget.id, lot.id);
+        const res = await schedulingService.swapItemLot(
+          swapTarget.id,
+          lot.id,
+          1,
+          // The lot id is sent when there is one to send; the disposition on
+          // its own is what tells the server this is a replacement.
+          disposition ? { disposition, ...(replacedLot ? { deployedLotId: replacedLot.id } : {}) } : undefined
+        );
         setSwapOverrides((prev) => ({
           ...prev,
           [swapTarget.id]: {
             ...(res.lotNumber !== undefined ? { lotNumber: res.lotNumber } : {}),
             ...(res.expirationDate !== undefined ? { expirationDate: res.expirationDate } : {}),
+            ...(res.lotsAboard !== undefined ? { lotsAboard: res.lotsAboard } : {}),
           },
         }));
-        // Record the swapped-in lot as the found lot/expiration and clear the
-        // auto-fail — the item on the truck is no longer the expired one.
+        // The inventory swap is now authoritative. Clear the previous
+        // auto-fail so the crew verifies the newly recorded stock.
         updateResult(swapTarget.id, {
-          lotFound: res.lotNumber,
-          expirationFound: res.expirationDate,
           status: 'not_checked',
         });
-        toast.success('Swapped in fresh stock');
+        toast.success(isReplacement ? 'Replaced with fresh stock' : 'Swapped in fresh stock');
         setSwapTarget(null);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to swap lot'));
@@ -593,20 +640,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         setSwapping(false);
       }
     },
-    [swapTarget, updateResult]
+    [swapTarget, updateResult, replacedLot, disposition, isReplacement]
   );
 
   const toggleNotes = useCallback((itemId: string) => {
     setExpandedNotes((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  }, []);
-
-  const toggleSerialUpdate = useCallback((itemId: string) => {
-    setExpandedSerialUpdate((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
       else next.add(itemId);
@@ -680,9 +718,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     try {
       const saved = localStorage.getItem(draftKey);
       if (!saved) return;
-      const parsed = JSON.parse(saved) as { results: Record<string, ItemResult>; overallNotes: string };
+      const parsed = JSON.parse(saved) as {
+        results: Record<string, ItemResult>;
+        overallNotes: string;
+        seals?: Record<string, SealState>;
+      };
       if (parsed.results && Object.keys(parsed.results).length > 0) {
         setResults(parsed.results);
+      }
+      // Restored together with the results, because confirming a seal writes
+      // passing statuses into them. Without this a reload would bring back
+      // those passes with no seal behind them, and the crew could submit a
+      // completed check whose audit record says nobody ever vouched for the
+      // contents. No older draft can carry that state: the seal shortcut and
+      // this line ship together, so a draft without `seals` has no
+      // seal-derived passes in it either.
+      if (parsed.seals && Object.keys(parsed.seals).length > 0) {
+        setSeals(parsed.seals);
       }
       if (parsed.overallNotes) {
         setOverallNotes(parsed.overallNotes);
@@ -698,13 +750,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // IndexedDB purge. Do not let a late API response recreate a sensitive
     // draft while logout/session-expiry cleanup is still running.
     if (!localStorage.getItem('has_session')) return;
-    if (Object.keys(results).length === 0 && !overallNotes) return;
+    if (Object.keys(results).length === 0 && !overallNotes && Object.keys(seals).length === 0) return;
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes }));
+      localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes, seals }));
     } catch {
       // Storage full — ignore
     }
-  }, [results, overallNotes, draftKey, previewMode]);
+  }, [results, overallNotes, seals, draftKey, previewMode]);
 
   // --------------------------------------------------------------------------
   // Pre-populate from last check for this apparatus
@@ -753,6 +805,31 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }, [template.id, template.apparatusId, previewMode]);
 
   // --------------------------------------------------------------------------
+  // Previous seals — what each sealed bag's tag read at the last count
+  // --------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (previewMode) return;
+    // Nothing to ask for when the template has no sealed containers, and this
+    // is every apparatus check on a truck without a drug bag.
+    if (!compartments.some((comp) => comp.isSealed)) return;
+    let cancelled = false;
+    schedulingService
+      .getLastCheckSeals(template.id, template.apparatusId)
+      .then((data) => {
+        if (!cancelled) setLastSeals(data);
+      })
+      .catch(() => {
+        // Non-critical: without it the crew types the tag instead of
+        // confirming it, and nothing claims a match that was never checked.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template.id, template.apparatusId, previewMode]);
+
+  // --------------------------------------------------------------------------
   // Pre-populate from existing incomplete check (resume flow)
   // --------------------------------------------------------------------------
 
@@ -770,10 +847,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             status: item.status,
             quantityFound: item.quantityFound,
             levelReading: item.levelReading,
-            serialNumber: item.serialNumber,
-            lotNumber: item.lotNumber,
-            serialFound: item.serialFound,
-            lotFound: item.lotFound,
             notes: item.notes,
           };
         }
@@ -796,7 +869,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Unsaved changes warning
   // --------------------------------------------------------------------------
 
-  const hasProgress = checkedItems > 0;
+  // Work the crew actually recorded, not `checkedItems`: that counter treats an
+  // expired item as checked because expiry force-fails it on sight, so merely
+  // opening a form containing one armed the beforeunload prompt and warned
+  // about unsaved changes nobody had made. A carried quantity is excluded for
+  // the same reason — it is seeded without a status precisely because it is a
+  // starting point rather than an answer, and every quantity the crew does
+  // enter sets a status alongside it.
+  const hasProgress = useMemo(
+    () =>
+      Boolean(overallNotes) ||
+      Object.values(results).some((result) => result.status !== 'not_checked' || Boolean(result.notes)),
+    [results, overallNotes]
+  );
   // True while any quantity still shows a number nobody has confirmed this
   // pass; the banner explains those and retires itself once they are gone.
   const hasCarriedCounts = useMemo(
@@ -883,14 +968,25 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [updateResult, focusNextItem]
   );
 
-  /** Items in this compartment a crew still has to record something for. */
+  /**
+   * Items in this compartment a crew still has to record something for.
+   *
+   * Overrides are applied before the expiry filter, not after: a position
+   * whose stock was just swapped is no longer expired, and reading the raw
+   * template row here left it filtered out while the compartment header
+   * counted it as checkable. "Confirm Counts" and "Set all to Par" then
+   * iterated a list the corrected item was missing from and appeared to do
+   * nothing.
+   */
   const checkableIn = useCallback(
     (compartment: CheckTemplateCompartment) =>
-      compartment.items.filter(
-        (item) =>
-          item.checkType !== 'header' && item.checkType !== 'text' && getExpirationStatus(item, today) !== 'expired'
-      ),
-    [today]
+      compartment.items
+        .map(applyOverride)
+        .filter(
+          (item) =>
+            item.checkType !== 'header' && item.checkType !== 'text' && getExpirationStatus(item, today) !== 'expired'
+        ),
+    [today, applyOverride]
   );
 
   /**
@@ -902,26 +998,39 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
    * from the number, so confirming 18 of 24 files a failure rather than
    * quietly passing it.
    */
+  /**
+   * Accept the carried numbers for a set of positions, without changing any.
+   *
+   * Shared by the Confirm Counts button and by an intact seal, because both
+   * make the same claim — that what is recorded matches what is there — and a
+   * second copy of this rule is a second place for it to drift. Status still
+   * comes from the number, so a carried shortfall files as a failure rather
+   * than quietly passing.
+   */
+  const acceptShownCounts = useCallback((items: CheckTemplateItem[]) => {
+    setResults((prev) => {
+      const next = { ...prev };
+      for (const item of items) {
+        const existing = next[item.id];
+        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const shown = existing?.quantityFound;
+        const patch: Partial<ItemResult> = { status: 'pass' };
+        if (item.checkType === 'quantity' && required != null) {
+          // Nothing carried means nothing to confirm; leave it for the crew.
+          if (shown == null) continue;
+          patch.status = shown >= required ? 'pass' : 'fail';
+        }
+        next[item.id] = { status: 'not_checked', ...existing, ...patch };
+      }
+      return next;
+    });
+  }, []);
+
   const confirmCountsInCompartment = useCallback(
     (compartment: CheckTemplateCompartment) => {
-      setResults((prev) => {
-        const next = { ...prev };
-        for (const item of checkableIn(compartment)) {
-          const existing = next[item.id];
-          const required = item.requiredQuantity ?? item.expectedQuantity;
-          const shown = existing?.quantityFound;
-          const patch: Partial<ItemResult> = { status: 'pass' };
-          if (item.checkType === 'quantity' && required != null) {
-            // Nothing carried means nothing to confirm; leave it for the crew.
-            if (shown == null) continue;
-            patch.status = shown >= required ? 'pass' : 'fail';
-          }
-          next[item.id] = { status: 'not_checked', ...existing, ...patch };
-        }
-        return next;
-      });
+      acceptShownCounts(checkableIn(compartment));
     },
-    [checkableIn]
+    [acceptShownCounts, checkableIn]
   );
 
   /** Quantity positions this compartment would have to *raise* to reach par. */
@@ -983,8 +1092,192 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   // --------------------------------------------------------------------------
+  // Tamper seals
+  // --------------------------------------------------------------------------
+
+  /**
+   * Positions an intact seal can answer for.
+   *
+   * A closed bag's contents cannot change, so presence, function and count are
+   * all settled by the seal. A date on a box inside it is not: it passes while
+   * the bag sits shut, which is exactly why the crew still has to read it.
+   * Readings — a cylinder's pressure — move the same way.
+   */
+  const sealClearableIn = useCallback(
+    (compartment: CheckTemplateCompartment) =>
+      checkableIn(compartment).filter(
+        (item) =>
+          !item.hasExpiration &&
+          (item.checkType === 'pass_fail' ||
+            item.checkType === 'present' ||
+            item.checkType === 'functional' ||
+            item.checkType === 'quantity')
+      ),
+    [checkableIn]
+  );
+
+  /** True while the seal is standing in for this compartment's contents count. */
+  const sealIsClearing = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      const seal = seals[compartment.id];
+      return Boolean(compartment.isSealed && seal?.confirmed && seal.intact && seal.cleared);
+    },
+    [seals]
+  );
+
+  /**
+   * Confirm the seal, and — only when it can vouch for them — accept the
+   * contents as last counted.
+   *
+   * What an intact seal proves is that the bag is **unchanged since the last
+   * count**, not that it is full. Writing each quantity up to its required
+   * figure would put stock on the record that nobody has seen: the backend
+   * treats `quantity_found` as a recount and writes it straight into the
+   * truck's running total, so a bag that was three gauze short at the last
+   * count would come back full without anyone opening it. The carried numbers
+   * are what the seal actually attests to, so those are what stand — and a
+   * carried shortfall still files as a failure.
+   *
+   * `clearContents` is false when the tag does not match the last count. Then
+   * the seal is recorded and nothing is cleared, because there is no evidence
+   * the bag stayed shut.
+   */
+  const confirmSealIntact = useCallback(
+    (compartment: CheckTemplateCompartment, sealNumber: string, clearContents: boolean) => {
+      setSeals((prev) => ({
+        ...prev,
+        [compartment.id]: { sealNumber, intact: true, confirmed: true, cleared: clearContents },
+      }));
+      if (clearContents) acceptShownCounts(sealClearableIn(compartment));
+    },
+    [acceptShownCounts, sealClearableIn]
+  );
+
+  const reportSealBroken = useCallback((compartment: CheckTemplateCompartment, sealNumber: string) => {
+    setSeals((prev) => ({
+      ...prev,
+      [compartment.id]: { sealNumber, intact: false, confirmed: true, cleared: false },
+    }));
+  }, []);
+
+  /**
+   * Count a sealed bag anyway, and un-answer what the seal answered.
+   *
+   * Leaving the cleared rows marked pass would file a count nobody performed —
+   * the opposite of what a crew asking to count is telling us.
+   */
+  const countSealedAnyway = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      setSeals((prev) => {
+        const existing = prev[compartment.id];
+        if (!existing) return prev;
+        return { ...prev, [compartment.id]: { ...existing, cleared: false } };
+      });
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of sealClearableIn(compartment)) {
+          const existing = next[item.id];
+          if (!existing) continue;
+          next[item.id] = { ...existing, status: 'not_checked' };
+        }
+        return next;
+      });
+    },
+    [sealClearableIn]
+  );
+
+  /** Return the seal to unanswered, and with it every row it had cleared. */
+  const reopenSeal = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      setSeals((prev) => {
+        const next = { ...prev };
+        delete next[compartment.id];
+        return next;
+      });
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of sealClearableIn(compartment)) {
+          const existing = next[item.id];
+          if (!existing) continue;
+          next[item.id] = { ...existing, status: 'not_checked' };
+        }
+        return next;
+      });
+    },
+    [sealClearableIn]
+  );
+
+  // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
+
+  /** Build the item snapshots and their pending uploads from the same rows. */
+  const buildSubmissionItems = useCallback((): {
+    items: CheckItemResultSubmit[];
+    itemsWithPhotos: { itemId: string; files: File[] }[];
+  } => {
+    const items: CheckItemResultSubmit[] = [];
+    const itemsWithPhotos: { itemId: string; files: File[] }[] = [];
+
+    for (const compartment of compartments) {
+      for (const rawItem of compartment.items) {
+        if (rawItem.checkType === 'header' || rawItem.checkType === 'text') continue;
+
+        // Reflect any in-check lot swap so the recorded snapshot carries the
+        // fresh unit's lot/expiration rather than the pre-swap values.
+        const item = applyOverride(rawItem);
+        const result = results[item.id];
+        if (result?.photoFiles && result.photoFiles.length > 0) {
+          itemsWithPhotos.push({ itemId: item.id, files: result.photoFiles });
+        }
+
+        items.push({
+          template_item_id: item.id,
+          compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
+          item_name: item.name,
+          check_type: item.checkType,
+          status: getEffectiveStatus(item, result, today),
+          quantity_found: result?.quantityFound,
+          required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+          critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
+          level_reading: result?.levelReading,
+          level_unit: item.levelUnit || undefined,
+          serial_number: item.serialNumber || undefined,
+          lot_number: item.lotNumber || undefined,
+          is_expired: getExpirationStatus(item, today) === 'expired',
+          expiration_date: item.expirationDate || undefined,
+          notes: result?.notes || undefined,
+        });
+      }
+    }
+
+    return { items, itemsWithPhotos };
+  }, [applyOverride, compartments, results, storagePathByItemId, today]);
+
+  /**
+   * Snapshot every seal the crew answered.
+   *
+   * A broken seal is submitted too, and matters more: it is what says the
+   * contents below it were counted by hand rather than vouched for. Without
+   * the row, a hand-counted bag and a seal-cleared one look identical on the
+   * record.
+   */
+  const buildSubmissionSeals = useCallback((): CheckSealSubmit[] => {
+    const submitted: CheckSealSubmit[] = [];
+    for (const compartment of compartments) {
+      if (!compartment.isSealed) continue;
+      const seal = seals[compartment.id];
+      if (!seal?.confirmed) continue;
+      submitted.push({
+        template_compartment_id: compartment.id,
+        compartment_name: compartment.name,
+        seal_number: seal.sealNumber || undefined,
+        intact: seal.intact,
+        cleared_item_count: seal.cleared ? sealClearableIn(compartment).length : 0,
+      });
+    }
+    return submitted;
+  }, [compartments, sealClearableIn, seals]);
 
   const handleSubmit = async () => {
     if (checkedItems < totalItems) {
@@ -999,62 +1292,22 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (!confirmed) return;
     }
 
+    const clientSubmissionId = crypto.randomUUID();
     setSubmitting(true);
+    const { items, itemsWithPhotos } = buildSubmissionItems();
+    // Named apart from the `seals` state it is built from: shadowing it here
+    // would put the wire shape and the UI state under one name in one scope.
+    const submittedSeals = buildSubmissionSeals();
+    const basePayload = {
+      template_id: template.id,
+      check_timing: template.checkTiming,
+      client_submission_id: clientSubmissionId,
+      items,
+      seals: submittedSeals,
+      notes: overallNotes || undefined,
+    };
+
     try {
-      // Collect items with photo files for post-submit upload
-      const itemsWithPhotos: { itemId: string; files: File[] }[] = [];
-
-      const items: CheckItemResultSubmit[] = [];
-      for (const compartment of compartments) {
-        for (const rawItem of compartment.items) {
-          if (rawItem.checkType === 'header') continue;
-          // Reflect any in-check lot swap so the recorded snapshot carries the
-          // fresh unit's lot/expiration rather than the pre-swap values.
-          const item = applyOverride(rawItem);
-          const result = results[item.id];
-
-          // Detect serial/lot updates for date_lot items
-          const serialFound = result?.serialFound || undefined;
-          const lotFound = result?.lotFound || undefined;
-          const expirationFound = result?.expirationFound || undefined;
-
-          if (result?.photoFiles && result.photoFiles.length > 0) {
-            itemsWithPhotos.push({
-              itemId: item.id,
-              files: result.photoFiles,
-            });
-          }
-
-          items.push({
-            template_item_id: item.id,
-            compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
-            item_name: item.name,
-            check_type: item.checkType,
-            status: result?.status || 'not_checked',
-            quantity_found: result?.quantityFound,
-            required_quantity: item.requiredQuantity ?? item.expectedQuantity,
-            critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
-            level_reading: result?.levelReading,
-            level_unit: item.levelUnit || undefined,
-            serial_number: result?.serialNumber || undefined,
-            lot_number: result?.lotNumber || undefined,
-            serial_found: serialFound,
-            lot_found: lotFound,
-            expiration_found: expirationFound,
-            is_expired: getExpirationStatus(item, today) === 'expired',
-            expiration_date: item.expirationDate || undefined,
-            notes: result?.notes || undefined,
-          });
-        }
-      }
-
-      const basePayload = {
-        template_id: template.id,
-        check_timing: template.checkTiming,
-        items,
-        notes: overallNotes || undefined,
-      };
-
       // Offline: queue for later sync (shift-based only; standalone requires connectivity)
       if (!navigator.onLine && shiftId) {
         const payload: ShiftEquipmentCheckCreate = basePayload;
@@ -1121,46 +1374,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return;
       }
       try {
-        const fallbackItems: CheckItemResultSubmit[] = [];
-        const fallbackPhotos: { itemId: string; files: File[] }[] = [];
-        for (const compartment of compartments) {
-          for (const rawItem of compartment.items) {
-            if (rawItem.checkType === 'header') continue;
-            const item = applyOverride(rawItem);
-            const result = results[item.id];
-            if (result?.photoFiles && result.photoFiles.length > 0) {
-              fallbackPhotos.push({ itemId: item.id, files: result.photoFiles });
-            }
-            fallbackItems.push({
-              template_item_id: item.id,
-              compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
-              item_name: item.name,
-              check_type: item.checkType,
-              status: result?.status || 'not_checked',
-              quantity_found: result?.quantityFound,
-              required_quantity: item.requiredQuantity ?? item.expectedQuantity,
-              critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
-              level_reading: result?.levelReading,
-              level_unit: item.levelUnit || undefined,
-              serial_number: result?.serialNumber || undefined,
-              lot_number: result?.lotNumber || undefined,
-              serial_found: result?.serialFound || undefined,
-              lot_found: result?.lotFound || undefined,
-              expiration_found: result?.expirationFound || undefined,
-              is_expired: getExpirationStatus(item, today) === 'expired',
-              expiration_date: item.expirationDate || undefined,
-              notes: result?.notes || undefined,
-            });
-          }
-        }
-        const fallbackPayload: ShiftEquipmentCheckCreate = {
-          template_id: template.id,
-          check_timing: template.checkTiming,
-          items: fallbackItems,
-          notes: overallNotes || undefined,
-        };
         if (shiftId) {
-          await enqueueCheck(shiftId, fallbackPayload, fallbackPhotos);
+          await enqueueCheck(shiftId, basePayload, itemsWithPhotos);
         } else {
           toast.error('Failed to submit check. Please try again.');
           setSubmitting(false);
@@ -1218,16 +1433,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const renderCheckInput = (item: CheckTemplateItem) => {
     const result = results[item.id];
-    const currentStatus = result?.status ?? 'not_checked';
     const expirationStatus = getExpirationStatus(item, today);
     const isExpired = expirationStatus === 'expired';
 
-    // Auto-fail expired items
-    if (isExpired && currentStatus !== 'fail') {
-      queueMicrotask(() => updateResult(item.id, { status: 'fail' }));
-    }
-
-    const effectiveStatus = isExpired ? 'fail' : currentStatus;
+    const effectiveStatus = getEffectiveStatus(item, result, today);
 
     /**
      * Pass or Fail with nothing between forced a crew to file a legitimately
@@ -1359,7 +1568,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const hasBeenSet = result?.quantityFound != null;
         // Seeded from the running count but not yet affirmed by this crew. The
         // number is shown so they only correct what changed; it is not a check.
-        const isCarriedOver = hasBeenSet && currentStatus === 'not_checked';
+        const isCarriedOver = hasBeenSet && (result?.status ?? 'not_checked') === 'not_checked';
         const unit = item.unitOfMeasure;
         const prevQty = lastCheckData?.[item.id]?.quantity_found;
 
@@ -1523,12 +1732,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
 
       case 'date_lot': {
-        const showSerialUpdate = expandedSerialUpdate.has(item.id);
         return (
           <div className="space-y-2">
-            {/* Current serial/lot display */}
-            {(item.serialNumber || item.lotNumber) && (
-              <div className="text-theme-text-muted bg-theme-surface-secondary flex items-center gap-3 rounded-lg px-3 py-2 text-xs">
+            {/* Inventory owns identifiers and dates. A shift check verifies the
+                recorded stock; it must not provide a second place to edit it. */}
+            {(item.serialNumber || item.lotNumber || item.expirationDate) && (
+              <div className="text-theme-text-muted bg-theme-surface-secondary flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-xs">
                 {item.serialNumber && (
                   <span>
                     S/N: <span className="font-mono">{item.serialNumber}</span>
@@ -1539,117 +1748,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     Lot: <span className="font-mono">{item.lotNumber}</span>
                   </span>
                 )}
+                {item.expirationDate && (
+                  <span>
+                    Expires:{' '}
+                    <span className="font-medium">
+                      {formatCalendarDate(item.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                    </span>
+                  </span>
+                )}
               </div>
             )}
-
-            {/* Verify serial/lot inputs */}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div>
-                <label htmlFor={`serial-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
-                  Serial #
-                </label>
-                <input
-                  id={`serial-${item.id}`}
-                  type="text"
-                  className="form-input min-h-[48px] px-3 py-2.5 text-sm focus:ring-blue-500"
-                  placeholder={item.serialNumber ?? 'Serial number'}
-                  value={result?.serialNumber ?? ''}
-                  onChange={(e) => updateResult(item.id, { serialNumber: e.target.value })}
-                />
-              </div>
-              <div>
-                <label htmlFor={`lot-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
-                  Lot #
-                </label>
-                <input
-                  id={`lot-${item.id}`}
-                  type="text"
-                  className="form-input min-h-[48px] px-3 py-2.5 text-sm focus:ring-blue-500"
-                  placeholder={item.lotNumber ?? 'Lot number'}
-                  value={result?.lotNumber ?? ''}
-                  onChange={(e) => updateResult(item.id, { lotNumber: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {/* Update serial/lot toggle — for when item has been swapped */}
-            <button
-              type="button"
-              onClick={() => toggleSerialUpdate(item.id)}
-              className="min-h-[32px] text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
-            >
-              {showSerialUpdate ? 'Cancel update' : 'Item swapped? Update serial/lot on template'}
-            </button>
-
-            {showSerialUpdate && (
-              <div className="space-y-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
-                <p className="text-xs text-blue-700 dark:text-blue-400">
-                  Enter the new serial/lot numbers{item.hasExpiration ? ' and expiration' : ''}. The template will be
-                  automatically updated.
-                </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor={`new-serial-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
-                      New Serial #
-                    </label>
-                    <input
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      id={`new-serial-${item.id}`}
-                      type="text"
-                      className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500"
-                      placeholder="New serial number"
-                      value={result?.serialFound ?? ''}
-                      onChange={(e) =>
-                        updateResult(item.id, {
-                          serialFound: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`new-lot-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
-                      New Lot #
-                    </label>
-                    <input
-                      id={`new-lot-${item.id}`}
-                      type="text"
-                      className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500"
-                      placeholder="New lot number"
-                      value={result?.lotFound ?? ''}
-                      onChange={(e) =>
-                        updateResult(item.id, {
-                          lotFound: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  {item.hasExpiration && (
-                    <div>
-                      <label
-                        htmlFor={`new-expiration-${item.id}`}
-                        className="text-theme-text-secondary mb-1 block text-xs"
-                      >
-                        New expiration
-                      </label>
-                      <input
-                        id={`new-expiration-${item.id}`}
-                        type="date"
-                        className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500"
-                        value={result?.expirationFound ?? ''}
-                        onChange={(e) =>
-                          updateResult(item.id, {
-                            expirationFound: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {passFailButtons}
           </div>
         );
@@ -1723,7 +1831,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     }
 
     const result = results[item.id];
-    const effectiveStatus = result?.status ?? 'not_checked';
+    const effectiveStatus = getEffectiveStatus(item, result, today);
     const showNotesField = expandedNotes.has(item.id);
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
     const isQuantity = item.checkType === 'quantity';
@@ -1825,9 +1933,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               used, damaged, contaminated, missing and recalled are the others,
               and gating on the date left a crew holding an empty bracket with
               ready stock on the shelf and no way to reach it. Disabled (not
-              hidden) without a manage permission: the server refuses the swap,
-              and the tooltip tells the crew who to hand the unit to instead of
-              letting the tap end in a 403. */}
+              hidden) for a read-only member: the server refuses the swap, and
+              the tooltip tells them who to hand the unit to instead of letting
+              the tap end in a 403. */}
           {item.inventoryItemId && (
             <button
               type="button"
@@ -1835,7 +1943,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               onClick={() => {
                 void openSwap(item);
               }}
-              title={canSwapStock ? undefined : 'Swaps from stock are recorded by an officer or supply manager'}
+              title={canSwapStock ? undefined : 'Swaps from stock are recorded by a crew member on the check'}
               className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
                   ? 'text-blue-600 hover:text-blue-700'
@@ -1846,57 +1954,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               Swap
             </button>
           )}
-          {/* An expiration can be set on any check type, but only date_lot has
-              the serial/lot update panel. Without this, an expired item of any
-              other type could never record its replacement and would fail
-              every check until an admin edited the template. */}
-          {item.checkType !== 'date_lot' && item.hasExpiration && (item.lotsAboard?.length ?? 0) === 0 && (
-            <button
-              type="button"
-              onClick={() => toggleSerialUpdate(item.id)}
-              aria-expanded={expandedSerialUpdate.has(item.id)}
-              className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-[36px] items-center gap-1 text-xs transition-colors"
-            >
-              <Calendar className="h-3 w-3" aria-hidden="true" />
-              {expandedSerialUpdate.has(item.id) ? 'Cancel' : 'Replaced — new date'}
-            </button>
-          )}
         </div>
-        {item.checkType !== 'date_lot' &&
-          item.hasExpiration &&
-          (item.lotsAboard?.length ?? 0) === 0 &&
-          expandedSerialUpdate.has(item.id) && (
-            <div className="space-y-1 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
-              <label
-                htmlFor={`replaced-expiration-${item.id}`}
-                className="block text-xs text-blue-700 dark:text-blue-400"
-              >
-                {/* The date is recorded on this check only — the server
-                    deliberately refuses to let a check submission rewrite the
-                    template's expiration (only the inventory-lot swap flow
-                    does), so this copy must not promise that it will. */}
-                Expiration on the replacement — recorded with this check. An officer or admin updates the template date.
-              </label>
-              <input
-                id={`replaced-expiration-${item.id}`}
-                type="date"
-                className="form-input min-h-[48px] border-blue-500/30 px-3 py-2.5 text-sm focus:ring-blue-500 sm:w-56"
-                value={result?.expirationFound ?? ''}
-                onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
-              />
-            </div>
-          )}
         {(item.lotsAboard?.length ?? 0) > 0 && (
           <div className="border-theme-surface-border space-y-2 rounded-lg border p-3">
-            <p className="text-theme-text-secondary text-xs font-medium">
-              Lots aboard — check each date against the box
-            </p>
-            <LotsAboardPanel
-              lots={item.lotsAboard ?? []}
-              busy={lotBusyId === item.id}
-              onSave={(lotId, changes) => correctLot(item, lotId, changes)}
-              onRemove={(lotId) => correctLot(item, lotId, { quantity: 0 })}
-            />
+            <p className="text-theme-text-secondary text-xs font-medium">Inventory lots aboard</p>
+            <LotsAboardPanel lots={item.lotsAboard ?? []} />
           </div>
         )}
         {showNotesField && (
@@ -2008,12 +2070,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
             {section.comps.map(({ comp }) => {
               const isCollapsed = collapsedCompartments.has(comp.id);
-              const status = getCompartmentStatus(comp, results);
+              const effectiveComp = { ...comp, items: comp.items.map(applyOverride) };
+              const status = getCompartmentStatus(effectiveComp, results, today);
               const checkable = comp.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
-              const checked = checkable.filter((i) => {
-                const r = results[i.id];
-                return r && r.status !== 'not_checked';
-              }).length;
+              const checked = checkable.filter(
+                (item) => getEffectiveStatus(applyOverride(item), results[item.id], today) !== 'not_checked'
+              ).length;
+              // A cleared seal answers the contents count, so those rows come
+              // off the screen: what is left is the short list the design calls
+              // "still needs eyes on" — dates and readings.
+              const sealCleared = sealIsClearing(comp);
+              const sealClearable = comp.isSealed ? sealClearableIn(comp) : [];
+              const clearedIds = sealCleared ? new Set(sealClearable.map((item) => item.id)) : new Set<string>();
+              const visibleItems = sealCleared ? comp.items.filter((item) => !clearedIds.has(item.id)) : comp.items;
 
               return (
                 <div key={comp.id}>
@@ -2052,12 +2121,39 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {/* Items — visible when expanded */}
                   {!isCollapsed && (
                     <div className="mt-3 ml-1 space-y-3">
+                      {/* The seal comes first: on a sealed bag it is the
+                          question that decides whether the rest of the list is
+                          work at all. */}
+                      {comp.isSealed && !previewMode && (
+                        <SealPanel
+                          compartmentName={comp.name}
+                          clearableCount={sealClearable.length}
+                          clearableNames={sealClearable.map((item) => item.name)}
+                          lastSeal={lastSeals[comp.id]}
+                          state={seals[comp.id]}
+                          onConfirmIntact={(sealNumber, clearContents) =>
+                            confirmSealIntact(comp, sealNumber, clearContents)
+                          }
+                          onReportBroken={(sealNumber) => reportSealBroken(comp, sealNumber)}
+                          onCountAnyway={() => countSealedAnyway(comp)}
+                          onReopen={() => reopenSeal(comp)}
+                          disabled={submitting}
+                        />
+                      )}
+                      {sealCleared && visibleItems.some((item) => item.checkType !== 'header') && (
+                        <p className="text-theme-text-muted text-xs font-semibold tracking-wide uppercase">
+                          Still needs eyes on
+                        </p>
+                      )}
+
                       {/* Two bulk actions for a compartment that carries
                           quantities, because "the numbers are right" and "it is
                           all full" are different claims and only one of them
                           used to exist. Confirming leads: it is the common case
-                          and the one that cannot record stock nobody has. */}
-                      {!previewMode && checked < checkable.length && (
+                          and the one that cannot record stock nobody has.
+                          Hidden while a seal is standing in for the count —
+                          there is nothing left for them to confirm. */}
+                      {!previewMode && !sealCleared && checked < checkable.length && (
                         <div className="flex flex-wrap justify-end gap-2">
                           {hasQuantityItems(comp) && (
                             <button
@@ -2105,7 +2201,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                           No items in this compartment.
                         </p>
                       )}
-                      {comp.items.map((item) => renderCheckItem(item))}
+                      {visibleItems.map((item) => renderCheckItem(item))}
                     </div>
                   )}
                 </div>
@@ -2310,6 +2406,51 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               </button>
             </div>
             <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
+              {/*
+                A replacement takes the expired box off the truck, and where it
+                goes next differs by department: destroyed here, straight back
+                to the supplying pharmacy there, pulled for somebody to
+                exchange days later somewhere else. Only the crew standing at
+                the compartment knows which happened, and for the third the
+                changelog entry is the only record that a unit is off the
+                apparatus and owed back — so the swap will not go without it.
+              */}
+              {isReplacement && (
+                <div className="border-theme-surface-border mb-1 rounded-lg border p-3">
+                  <p className="text-theme-text-primary text-xs font-medium">
+                    Taking off {replacedLot?.lotNumber || swapTarget.lotNumber || 'the expired unit'}
+                    {(replacedLot?.expirationDate ?? swapTarget.expirationDate)
+                      ? ` · expired ${formatCalendarDate(replacedLot?.expirationDate ?? swapTarget.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                      : ''}
+                  </p>
+                  <fieldset className="mt-2">
+                    <legend className="text-theme-text-muted mb-2 text-xs">What happens to it?</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          [ExpiredStockDisposition.DISCARDED, 'Disposed of'],
+                          [ExpiredStockDisposition.RETURNED_FOR_EXCHANGE, 'Exchanged now'],
+                          [ExpiredStockDisposition.AWAITING_EXCHANGE, 'Exchange later'],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={disposition === value}
+                          onClick={() => setDisposition(value)}
+                          className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                            disposition === value
+                              ? 'border-red-500 bg-red-600 text-white'
+                              : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                </div>
+              )}
               {swapLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
@@ -2337,14 +2478,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     </div>
                     <button
                       type="button"
-                      disabled={swapping}
+                      disabled={swapping || (isReplacement && !disposition)}
+                      title={isReplacement && !disposition ? 'Say what happens to the expired unit first' : undefined}
                       onClick={() => {
                         void doSwap(lot);
                       }}
                       className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
                     >
                       {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-                      Swap in
+                      {isReplacement ? 'Replace' : 'Swap in'}
                     </button>
                   </div>
                 ))

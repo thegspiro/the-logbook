@@ -1,6 +1,6 @@
 # Welcome to The Logbook Wiki
 
-> **Release handoff:** [Changes from August 10–16, 2026](Recent-Changes-2026-08-10-to-16) — the six-day rollup, including the new pages and their permissions, the upgrade route, and the August 15–16 onboarding and dark-mode changes. Per-window detail: [August 15–16](Recent-Changes-2026-08-15-to-16) (nested facility rooms, the security/privacy hardening batch, the `20260816_0001` migration) and [August 12–14](Recent-Changes-2026-08-12-to-14). All three
+> **Release handoff:** [Changes from August 17–19, 2026](Recent-Changes-2026-08-17-to-19) — PII-free call volume tracking and the resumable shift close-out wizard (two migrations, `82bdcb3b1e64` and `2827079fd66c`), NFC tags across events / admin hours / shift check-in, the `python -m app.preflight` upgrade check, and the sign-in hardening batch. Earlier windows: [August 10–16 rollup](Recent-Changes-2026-08-10-to-16), with per-window detail for [August 15–16](Recent-Changes-2026-08-15-to-16) (nested facility rooms, the security/privacy hardening batch, the `20260816_0001` migration) and [August 12–14](Recent-Changes-2026-08-12-to-14). All of them
 > map new pages, APIs, data, migrations, sharing boundaries, edge cases, and
 > documentation/media follow-up.
 
@@ -76,7 +76,8 @@ docker compose up -d
 - **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
 - **[Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)** - Digital member identification with QR code, barcode, and print support
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
-- **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
+- **[Inventory (Gear & Uniforms)](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
+- **[Medical Supplies](Module-Medical-Supplies)** - EMS consumables as dated lots, domain-scoped permissions, EMS Supply Officer role
 - **[Compliance](Module-Compliance)** - Compliance tracking
 - **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_
 

@@ -91,7 +91,15 @@ const ComplianceMatrixTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="card-secondary overflow-x-auto">
+      <p className="text-theme-text-muted mb-2 text-sm md:hidden" aria-hidden="true">
+        Swipe horizontally to compare requirements.
+      </p>
+      <div
+        className="card-secondary responsive-matrix"
+        role="region"
+        aria-label="Member compliance comparison"
+        tabIndex={0}
+      >
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-theme-surface-border border-b">
