@@ -569,6 +569,28 @@ describe('EquipmentCheckForm quantity seeding', () => {
       );
     });
 
+    // The crew standing at the compartment is the one who replaces the unit.
+    // Requiring a manage right left them looking at an expired item with ready
+    // stock on the shelf and nothing to do but find an officer.
+    it('is reachable by a crew member who can only submit checks', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((p: unknown) => p === 'equipment_check.submit');
+      mockSwapItemLot.mockResolvedValue(freshResult);
+      await openSwapDialog(user);
+
+      await user.click(screen.getByRole('button', { name: 'Disposed of' }));
+      await user.click(screen.getByRole('button', { name: /^Replace$/ }));
+
+      await waitFor(() => expect(mockSwapItemLot).toHaveBeenCalledOnce());
+    });
+
+    it('stays out of reach for a member who can only read checks', async () => {
+      mockCheckPermission.mockImplementation((p: unknown) => p === 'equipment_check.view');
+      render(expiredItem);
+
+      expect(await screen.findByRole('button', { name: /^Swap$/ })).toBeDisabled();
+    });
+
     it('tops a position up without retiring anything when nothing aboard is expired', async () => {
       const user = userEvent.setup();
       mockSwapItemLot.mockResolvedValue({ ...freshResult, replacedLotNumber: undefined, disposition: undefined });

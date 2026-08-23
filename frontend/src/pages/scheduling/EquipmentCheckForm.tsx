@@ -297,10 +297,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 }) => {
   const { confirm } = useConfirm();
   const { checkPermission } = useAuthStore();
-  // Swapping stock onto the truck writes the template's lot/expiration record,
-  // so the endpoint keeps it a manage right; the button must not offer a
-  // submit-only member an action the server will deterministically 403.
-  const canSwapStock = checkPermission('equipment_check.manage') || checkPermission('inventory.manage');
+  // Mirrors the endpoint, which admits check submitters: replacing expired
+  // stock is the crew's job at the compartment, and every value the swap
+  // stores comes from the inventory lot rather than from here, so a submitter
+  // can move real stock without being able to invent a lot number or a date.
+  const canSwapStock =
+    checkPermission('equipment_check.submit') ||
+    checkPermission('equipment_check.manage') ||
+    checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in
   // this form compares against, so the badge, the auto-fail and the server all
@@ -1724,9 +1728,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               used, damaged, contaminated, missing and recalled are the others,
               and gating on the date left a crew holding an empty bracket with
               ready stock on the shelf and no way to reach it. Disabled (not
-              hidden) without a manage permission: the server refuses the swap,
-              and the tooltip tells the crew who to hand the unit to instead of
-              letting the tap end in a 403. */}
+              hidden) for a read-only member: the server refuses the swap, and
+              the tooltip tells them who to hand the unit to instead of letting
+              the tap end in a 403. */}
           {item.inventoryItemId && (
             <button
               type="button"
@@ -1734,7 +1738,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               onClick={() => {
                 void openSwap(item);
               }}
-              title={canSwapStock ? undefined : 'Swaps from stock are recorded by an officer or supply manager'}
+              title={canSwapStock ? undefined : 'Swaps from stock are recorded by a crew member on the check'}
               className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
                   ? 'text-blue-600 hover:text-blue-700'
