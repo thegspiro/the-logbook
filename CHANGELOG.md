@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Admin: cover the tab accessibility behaviour (2026-08-23)
+
+**Added**
+
+- **The roving focus, arrow/Home/End handling and `aria-controls` wiring had no
+  tests.** The merges behind #1717 and #1721 dropped `TrainingAdminPage`'s ref
+  maps and lazy tab panel while keeping the call sites that read them; the
+  repair restored the component but not the tests that had covered it, leaving
+  the keyboard navigation live and unguarded. Adds back coverage for both tab
+  levels being wired to their panels, for roving focus across the inner tabs,
+  and for activating a section from the keyboard and restoring URL state on
+  browser back.
+
 ### Security documentation: dynamic testing guide (2026-08-22)
 
 **Documentation**
