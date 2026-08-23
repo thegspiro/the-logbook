@@ -106,10 +106,12 @@ describe('NeedsYouBand', () => {
     expect(headings[2]).toContain('No check-in recorded for Standpipe Drill');
   });
 
-  it('gives a live row a check-in link and announces it politely', () => {
+  it('gives a live row a check-in link', () => {
+    // The announcement itself is not here: a live region that enters the DOM
+    // with its text is not reliably announced, so EventsPage owns a persistent
+    // one. See its "Live event announcement" tests.
     renderBand({ events: [liveEvent] });
     const row = screen.getByRole('listitem');
-    expect(row).toHaveAttribute('aria-live', 'polite');
     expect(within(row).getByRole('link', { name: /check in/i })).toHaveAttribute('href', '/events/live-1/check-in');
     expect(row).toHaveTextContent('Training Grounds');
     expect(row).toHaveTextContent('Credits 2.0 drill hours');

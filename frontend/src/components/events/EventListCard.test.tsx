@@ -102,7 +102,7 @@ describe('EventListCard', () => {
   describe('body rows', () => {
     it('renders the time range with its duration', () => {
       renderCard(makeEvent({ start_datetime: '2026-09-08T19:00:00Z', end_datetime: '2026-09-08T21:00:00Z' }));
-      expect(screen.getByText('Tue, Sep 8 · 7:00 PM – 9:00 PM · 2h')).toBeInTheDocument();
+      expect(screen.getByText('Tue, Sep 8 · 7:00 – 9:00 PM · 2h')).toBeInTheDocument();
     });
 
     it('renders the location', () => {

@@ -10,6 +10,7 @@ import type { EventListItem } from '../types/event';
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
+    getMissedMandatoryEvents: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi
       .fn()
       .mockResolvedValue([
@@ -129,14 +130,10 @@ describe('EventsPage', () => {
     });
 
     it('should retry loading when try again is clicked', async () => {
-      // Keyed on the params, not on call order: the page also fires a
-      // mandatory-only fetch for the "Needs You" band, and a call counter
-      // would let that one absorb the rejection meant for the grid.
-      let gridCalls = 0;
-      vi.mocked(eventService.getEvents).mockImplementation((params?: { mandatory_only?: boolean }) => {
-        if (params?.mandatory_only) return Promise.resolve([]);
-        gridCalls++;
-        if (gridCalls === 1) return Promise.reject(new Error('fail'));
+      let callCount = 0;
+      vi.mocked(eventService.getEvents).mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return Promise.reject(new Error('fail'));
         return Promise.resolve(mockEvents);
       });
 
@@ -152,6 +149,49 @@ describe('EventsPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Live event announcement', () => {
+    it('mounts the live region even when nothing is happening', async () => {
+      // The region has to exist *before* a check-in window opens, or the text
+      // that appears in it is never announced.
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+
+      const region = screen.getByRole('status');
+      expect(region).toHaveAttribute('aria-live', 'polite');
+      expect(region).toBeEmptyDOMElement();
+    });
+
+    it('announces an event whose check-in window is open', async () => {
+      const now = Date.now();
+      const live: EventListItem = {
+        id: 'evt-live',
+        title: 'Ladder Company Drill',
+        event_type: 'training',
+        start_datetime: new Date(now - 3_600_000).toISOString(),
+        end_datetime: new Date(now + 3_600_000).toISOString(),
+        check_in_opens_at: new Date(now - 7_200_000).toISOString(),
+        check_in_closes_at: new Date(now + 3_600_000).toISOString(),
+        requires_rsvp: true,
+        is_mandatory: false,
+        is_cancelled: false,
+      };
+      vi.mocked(eventService.getEvents).mockResolvedValue([live]);
+
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Ladder Company Drill is happening now. Check-in is open.'
+        );
       });
     });
   });

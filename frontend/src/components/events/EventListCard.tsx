@@ -63,7 +63,8 @@ export interface EventListCardProps {
 
 const DETAIL_ROW_CLASS = 'text-theme-text-secondary flex items-center gap-2 text-sm';
 const DETAIL_ICON_CLASS = 'text-theme-text-muted h-3.5 w-3.5 shrink-0';
-const FOOTER_BUTTON_CLASS = 'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 text-sm font-medium';
+const FOOTER_BUTTON_CLASS =
+  'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap';
 
 export const EventListCard: React.FC<EventListCardProps> = ({
   event,
@@ -131,9 +132,14 @@ export const EventListCard: React.FC<EventListCardProps> = ({
           ) : (
             StripIcon && <StripIcon className={`h-4 w-4 shrink-0 ${presentation.iconClass}`} aria-hidden="true" />
           )}
-          <span className={`min-w-0 flex-1 truncate ${presentation.labelClass}`}>{presentation.label}</span>
+          {/* The label never shrinks: "HAPPENIN…" is not a status. When the
+              two do not fit, the meta truncates — the same fact is spelled out
+              in the band, and below `sm` the meta is not rendered at all. */}
+          <span className={`shrink-0 ${presentation.labelClass}`}>{presentation.label}</span>
           {stripMeta && (
-            <span className="text-theme-text-secondary hidden shrink-0 text-xs sm:inline">{stripMeta}</span>
+            <span className="text-theme-text-secondary ml-auto hidden min-w-0 truncate text-xs sm:inline">
+              {stripMeta}
+            </span>
           )}
         </div>
       )}
@@ -189,10 +195,13 @@ export const EventListCard: React.FC<EventListCardProps> = ({
       <Link to={`/events/${event.id}`} className="block flex-1">
         <div
           className={`flex flex-col gap-3 p-5 ${selectionMode && canManage ? 'pl-10' : ''} ${
-            canManage ? 'md:pr-24' : ''
-          } ${urgency === 'declined' ? 'opacity-75' : ''}`}
+            urgency === 'declined' ? 'opacity-75' : ''
+          }`}
         >
-          <div className="flex items-start justify-between gap-2">
+          {/* The manager chips sit in this corner from md up, so the clearance
+              they need belongs on the title block alone — on the whole body it
+              also stole 96px from every detail row below. */}
+          <div className={`flex items-start justify-between gap-2 ${canManage ? 'md:pr-24' : ''}`}>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {event.event_type === EventTypeEnum.TRAINING && (
@@ -262,7 +271,6 @@ export const EventListCard: React.FC<EventListCardProps> = ({
             <div className={DETAIL_ROW_CLASS}>
               <Clock className={DETAIL_ICON_CLASS} aria-hidden="true" />
               <span
-                className="truncate"
                 title={`${formatAbsoluteDate(event.start_datetime, timezone)}${timezoneAbbr ? ` ${timezoneAbbr}` : ''}`}
               >
                 {formatEventTimeRange(event, timezone, now)}

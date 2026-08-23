@@ -263,3 +263,271 @@ class TestDerivedFieldsReachTheList:
 
         assert row["credited_hours"] is None
         assert row["hour_category_label"] is None
+
+
+class TestMissedMandatoryExclusions:
+    """A `missed` row the member cannot clear is an accusation, not a reminder.
+
+    The band is headed "clears itself as you respond". Three kinds of event
+    satisfy "mandatory, over, no check-in" while being nobody's fault, and each
+    is excluded server-side so a client cannot forget to.
+    """
+
+    async def _hire(self, db_session: AsyncSession, user_id: str, hire_date):
+        await db_session.execute(
+            text("UPDATE users SET hire_date = :hd WHERE id = :id"),
+            {"hd": hire_date, "id": user_id},
+        )
+        await db_session.flush()
+
+    async def test_includes_a_genuine_miss(self, db_session, org_and_user):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Standpipe Drill", is_mandatory=True
+        )
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id in {r["event"].id for r in rows}
+
+    async def test_excludes_an_event_the_member_attended(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Attended Drill", is_mandatory=True
+        )
+        await _insert_rsvp(db_session, org_id, event_id, user_id, checked_in=True)
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id not in {r["event"].id for r in rows}
+
+    async def test_excludes_an_event_held_before_the_member_was_hired(
+        self, db_session, org_and_user
+    ):
+        # Joining last week is not a reason to be told you skipped a drill held
+        # the week before that.
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Pre-hire Drill", is_mandatory=True, hours_ago=240
+        )
+        await self._hire(
+            db_session, user_id, (datetime.now(timezone.utc) - timedelta(days=2)).date()
+        )
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id not in {r["event"].id for r in rows}
+
+    async def test_includes_an_event_held_after_the_member_was_hired(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Post-hire Drill", is_mandatory=True, hours_ago=48
+        )
+        await self._hire(
+            db_session,
+            user_id,
+            (datetime.now(timezone.utc) - timedelta(days=30)).date(),
+        )
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id in {r["event"].id for r in rows}
+
+    async def test_excludes_an_event_during_an_approved_leave(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Leave Drill", is_mandatory=True, hours_ago=48
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO member_leaves_of_absence (id, organization_id, user_id, "
+                "leave_type, start_date, end_date, active) "
+                "VALUES (:id, :org, :usr, 'medical', :start, :end, 1)"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "usr": user_id,
+                "start": (datetime.now(timezone.utc) - timedelta(days=10)).date(),
+                "end": (datetime.now(timezone.utc) + timedelta(days=10)).date(),
+            },
+        )
+        await db_session.flush()
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id not in {r["event"].id for r in rows}
+
+    async def test_excludes_an_event_during_an_open_ended_leave(
+        self, db_session, org_and_user
+    ):
+        # A NULL end_date is a permanent leave, not a leave that ended.
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Indefinite Leave", is_mandatory=True
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO member_leaves_of_absence (id, organization_id, user_id, "
+                "leave_type, start_date, end_date, active) "
+                "VALUES (:id, :org, :usr, 'military', :start, NULL, 1)"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "usr": user_id,
+                "start": (datetime.now(timezone.utc) - timedelta(days=20)).date(),
+            },
+        )
+        await db_session.flush()
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id not in {r["event"].id for r in rows}
+
+    async def test_an_inactive_leave_does_not_excuse_anything(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Revoked Leave Drill", is_mandatory=True
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO member_leaves_of_absence (id, organization_id, user_id, "
+                "leave_type, start_date, end_date, active) "
+                "VALUES (:id, :org, :usr, 'personal', :start, :end, 0)"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "usr": user_id,
+                "start": (datetime.now(timezone.utc) - timedelta(days=10)).date(),
+                "end": (datetime.now(timezone.utc) + timedelta(days=10)).date(),
+            },
+        )
+        await db_session.flush()
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id in {r["event"].id for r in rows}
+
+    async def test_excludes_an_event_mandatory_for_another_membership_type(
+        self, db_session, org_and_user
+    ):
+        # "Mandatory for probationary members" is not mandatory for anyone else.
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Probie Drill", is_mandatory=True
+        )
+        await db_session.execute(
+            text("UPDATE events SET mandatory_membership_types = :t WHERE id = :id"),
+            {"t": '["probationary"]', "id": event_id},
+        )
+        await db_session.execute(
+            text("UPDATE users SET membership_type = 'active' WHERE id = :id"),
+            {"id": user_id},
+        )
+        await db_session.flush()
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id not in {r["event"].id for r in rows}
+
+    async def test_includes_an_event_mandatory_for_the_members_own_type(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Active Drill", is_mandatory=True
+        )
+        await db_session.execute(
+            text("UPDATE events SET mandatory_membership_types = :t WHERE id = :id"),
+            {"t": '["active", "probationary"]', "id": event_id},
+        )
+        await db_session.execute(
+            text("UPDATE users SET membership_type = 'active' WHERE id = :id"),
+            {"id": user_id},
+        )
+        await db_session.flush()
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id in {r["event"].id for r in rows}
+
+    async def test_an_empty_membership_type_list_means_everyone(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="All-hands Drill", is_mandatory=True
+        )
+        await db_session.execute(
+            text("UPDATE events SET mandatory_membership_types = :t WHERE id = :id"),
+            {"t": "[]", "id": event_id},
+        )
+        await db_session.flush()
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id in {r["event"].id for r in rows}
+
+    async def test_excludes_a_non_mandatory_event(self, db_session, org_and_user):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Optional Social", is_mandatory=False
+        )
+
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+
+        assert event_id not in {r["event"].id for r in rows}

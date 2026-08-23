@@ -8,7 +8,7 @@ import calendar
 import copy
 import csv
 import io
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -33,7 +33,7 @@ from app.models.event import (
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
-from app.models.user import Organization, User
+from app.models.user import MemberLeaveOfAbsence, Organization, User
 from app.schemas.event import (
     EventCreate,
     EventStats,
@@ -300,6 +300,108 @@ class EventService:
         await self._annotate_list_items(items, organization_id)
 
         return items
+
+    async def list_missed_mandatory_events(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        since: datetime,
+        until: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """Recent mandatory events this member was expected at and did not attend.
+
+        "Expected at" is the load-bearing part. A plain mandatory-and-no-check-in
+        query tells a member they missed drills held before they were hired,
+        drills held while they were on an approved leave, and drills that were
+        never mandatory for their membership type in the first place. The events
+        list puts each of these in a band headed "clears itself as you respond" —
+        and none of them can be cleared by responding, because the member did
+        nothing wrong. So they are excluded here rather than filtered in the UI:
+        a client that forgets the filter would accuse people.
+        """
+        until = until or datetime.now(dt_timezone.utc)
+
+        items = await self.list_events(
+            organization_id=organization_id,
+            user_id=user_id,
+            start_after=since,
+            end_before=until,
+            mandatory_only=True,
+            limit=500,
+        )
+        candidates = [item for item in items if not item["user_attended"]]
+        if not candidates:
+            return []
+
+        user = await self.db.get(User, str(user_id))
+        if user is None:
+            return []
+
+        leaves = await self._active_leave_periods(organization_id, user_id)
+
+        return [
+            item
+            for item in candidates
+            if self._was_expected_at(item["event"], user, leaves)
+        ]
+
+    async def _active_leave_periods(
+        self, organization_id: UUID, user_id: UUID
+    ) -> List[Tuple[date, Optional[date]]]:
+        """Approved, still-active leave periods for one member.
+
+        An open-ended leave (``end_date`` NULL) is permanent, so it is returned
+        with ``None`` and treated as covering everything from its start.
+        """
+        result = await self.db.execute(
+            select(
+                MemberLeaveOfAbsence.start_date, MemberLeaveOfAbsence.end_date
+            ).where(
+                MemberLeaveOfAbsence.organization_id == str(organization_id),
+                MemberLeaveOfAbsence.user_id == str(user_id),
+                MemberLeaveOfAbsence.active.is_(True),
+            )
+        )
+        return [(row[0], row[1]) for row in result.all() if row[0] is not None]
+
+    @staticmethod
+    def _was_expected_at(
+        event: Event,
+        user: User,
+        leaves: List[Tuple[date, Optional[date]]],
+    ) -> bool:
+        """Whether this member was actually required at this event.
+
+        Errs toward *not* accusing: anything unknown (no hire date recorded, no
+        membership type recorded) is treated as "cannot show they were required",
+        because the cost of a false accusation on someone's attendance record is
+        much higher than the cost of one missing reminder.
+        """
+        start = event.start_datetime
+        if start is None:
+            return False
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=dt_timezone.utc)
+        event_date = start.date()
+
+        # Hired after it happened — they could not have been there.
+        if user.hire_date and event_date < user.hire_date:
+            return False
+
+        for leave_start, leave_end in leaves:
+            if event_date >= leave_start and (
+                leave_end is None or event_date <= leave_end
+            ):
+                return False
+
+        # An event mandatory only for certain membership types is not mandatory
+        # for anybody else. An empty or absent list means "everyone".
+        required_types = event.mandatory_membership_types
+        if isinstance(required_types, list) and required_types:
+            if user.membership_type not in required_types:
+                return False
+
+        return True
 
     async def _annotate_list_items(
         self, items: List[Dict[str, Any]], organization_id: UUID

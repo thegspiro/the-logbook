@@ -41,7 +41,7 @@ interface BandRow {
 }
 
 const ROW_BUTTON_CLASS =
-  'inline-flex min-h-[44px] items-center justify-center gap-1.5 text-sm font-medium max-md:flex-1';
+  'inline-flex min-h-[44px] items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap max-md:flex-1';
 
 /** Numerals in the meta line are monospaced, matching how hours read elsewhere. */
 const Hours: React.FC<{ value: number }> = ({ value }) => (
@@ -107,8 +107,6 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
         {visibleRows.map(({ event, urgency }) => (
           <li
             key={event.id}
-            // Announced if a check-in window opens while the page is sitting open.
-            aria-live={urgency === 'live' ? 'polite' : undefined}
             className={`border-theme-surface-border flex flex-col gap-3 border-b border-l-4 px-5 py-3.5 last:border-b-0 md:flex-row md:items-center md:gap-4 ${
               BAND_ROW_CLASS[urgency] ?? ''
             }`}

@@ -310,6 +310,28 @@ export function getRelativeDayLabel(startIso: string, now: Date = new Date(), ti
 }
 
 /**
+ * Join two formatted times, dropping the meridiem from the first when both
+ * share it: "7:00 – 9:00 PM", not "7:00 PM – 9:00 PM".
+ *
+ * Not cosmetic. This row also carries the date and the duration, and on a
+ * phone-width card the four redundant characters were the difference between
+ * the row fitting and the end time being truncated away.
+ */
+const formatTimeSpan = (startTime: string, endTime: string): string => {
+  if (!endTime || endTime === 'N/A') return startTime;
+
+  const meridiem = /\s(AM|PM)$/i;
+  const startMeridiem = meridiem.exec(startTime)?.[1];
+  const endMeridiem = meridiem.exec(endTime)?.[1];
+  const start =
+    startMeridiem && endMeridiem && startMeridiem.toUpperCase() === endMeridiem.toUpperCase()
+      ? startTime.replace(meridiem, '')
+      : startTime;
+
+  return `${start} – ${endTime}`;
+};
+
+/**
  * The card's time row: "Tue, Sep 1 · 7:00 – 9:00 PM · 2h", with the date
  * replaced by "Tonight" / "Tomorrow" when the event is imminent.
  */
@@ -326,7 +348,7 @@ export function formatEventTimeRange(
   const endTime = formatTime(event.end_datetime, timezone);
   const duration = formatEventDuration(event.start_datetime, event.end_datetime);
 
-  const parts = [dayLabel, endTime && endTime !== 'N/A' ? `${startTime} – ${endTime}` : startTime];
+  const parts = [dayLabel, formatTimeSpan(startTime, endTime)];
   if (duration) parts.push(duration);
   return parts.join(' · ');
 }

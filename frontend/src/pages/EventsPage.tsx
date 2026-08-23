@@ -284,14 +284,8 @@ export const EventsPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const fetchPastMandatory = async () => {
-      const until = new Date();
-      const since = new Date(until.getTime() - EVENT_MISSED_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
       try {
-        const data = await eventService.getEvents({
-          end_before: until.toISOString(),
-          start_after: since.toISOString(),
-          mandatory_only: true,
-        });
+        const data = await eventService.getMissedMandatoryEvents(EVENT_MISSED_LOOKBACK_DAYS);
         if (!cancelled) setPastMandatoryEvents(data);
       } catch {
         // Silently fail — the "missed" rows are an enhancement.
@@ -477,6 +471,24 @@ export const EventsPage: React.FC = () => {
     }
     return sorted;
   }, [searchFilteredEvents, sortBy, showPastEvents]);
+
+  /**
+   * What a screen reader should hear when a check-in window opens while the
+   * page is already sitting open.
+   *
+   * This has to live here, not on the band's row. An `aria-live` attribute on
+   * an element that enters the DOM together with its text is not reliably
+   * announced — assistive tech watches for changes *inside* a region that
+   * already existed. The band itself renders nothing when it has no rows, so
+   * it cannot host the region either: the whole band appears at the same
+   * moment as the row. A region that is always mounted, and whose text changes,
+   * is the shape that actually announces.
+   */
+  const liveEventAnnouncement = useMemo(() => {
+    const live = events.filter((e) => getEventUrgency(e, now) === 'live');
+    if (live.length === 0) return '';
+    return live.map((e) => `${e.title} is happening now. Check-in is open.`).join(' ');
+  }, [events, now]);
 
   const paginatedEvents = useMemo(() => {
     const start = (currentPage - 1) * DEFAULT_PAGE_SIZE;
@@ -820,6 +832,13 @@ export const EventsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Always mounted, so a check-in window opening mid-session is a text
+            change inside an existing live region rather than a new region
+            nobody is listening to. */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {liveEventAnnouncement}
+        </div>
+
         {/* Only the events with something outstanding, each beside the control
             that clears it. Renders nothing when there is nothing to do. */}
         <NeedsYouBand
@@ -1101,7 +1120,11 @@ export const EventsPage: React.FC = () => {
           />
         ) : (
           <>
-            <div ref={gridRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              ref={gridRef}
+              data-testid="events-grid"
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
               {paginatedEvents.map((event) => (
                 <EventListCard
                   key={event.id}

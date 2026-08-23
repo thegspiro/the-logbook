@@ -246,7 +246,7 @@ describe('formatEventTimeRange', () => {
       start_datetime: '2026-09-08T19:00:00Z',
       end_datetime: '2026-09-08T21:00:00Z',
     });
-    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tue, Sep 8 · 7:00 PM – 9:00 PM · 2h');
+    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tue, Sep 8 · 7:00 – 9:00 PM · 2h');
   });
 
   it('substitutes the relative label for an imminent event', () => {
@@ -254,7 +254,17 @@ describe('formatEventTimeRange', () => {
       start_datetime: '2026-09-03T19:00:00Z',
       end_datetime: '2026-09-03T21:00:00Z',
     });
-    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tomorrow · 7:00 PM – 9:00 PM · 2h');
+    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tomorrow · 7:00 – 9:00 PM · 2h');
+  });
+
+  it('keeps both meridiems when the event crosses noon or midnight', () => {
+    // Dropping the first one here would read as "11:30 – 1:00 PM", which says
+    // the event started at half past eleven in the evening.
+    const event = makeEvent({
+      start_datetime: '2026-09-08T11:30:00Z',
+      end_datetime: '2026-09-08T13:00:00Z',
+    });
+    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tue, Sep 8 · 11:30 AM – 1:00 PM · 1h 30m');
   });
 
   it('omits the duration when the span is invalid', () => {
@@ -262,6 +272,6 @@ describe('formatEventTimeRange', () => {
       start_datetime: '2026-09-08T19:00:00Z',
       end_datetime: '2026-09-08T19:00:00Z',
     });
-    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tue, Sep 8 · 7:00 PM – 7:00 PM');
+    expect(formatEventTimeRange(event, UTC, NOW)).toBe('Tue, Sep 8 · 7:00 – 7:00 PM');
   });
 });

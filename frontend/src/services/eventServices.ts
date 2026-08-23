@@ -51,6 +51,22 @@ export const eventService = {
   },
 
   /**
+   * Recent mandatory events the member was expected at and never checked in to.
+   *
+   * Deliberately not `getEvents({ mandatory_only, end_before })`: the server
+   * additionally drops events held before the member was hired, events during
+   * an approved leave, and events mandatory only for a membership type they do
+   * not hold. The "Needs You" band says its rows clear as you respond, and none
+   * of those three can be.
+   */
+  async getMissedMandatoryEvents(sinceDays?: number): Promise<EventListItem[]> {
+    const response = await api.get<EventListItem[]>('/events/missed-mandatory', {
+      params: sinceDays ? { since_days: sinceDays } : undefined,
+    });
+    return asArray(response.data);
+  },
+
+  /**
    * Create a new event
    */
   async createEvent(eventData: EventCreate): Promise<Event> {
