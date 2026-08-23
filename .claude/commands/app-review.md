@@ -15,16 +15,10 @@ into one run and do not leave a feature half-reviewed.
    feature instead. If every feature is ✅, say the rotation is complete, reset
    Tier B to ⬜ for a fresh pass, and stop. Mark the chosen feature 🔄.
 
-2. **Load context.** Read `docs/app-review/CHECKLIST.md`. Then read
-   `.agents/skills/README.md` and use the imported Deep Eye playbooks as
-   source-review references: begin with `security-ops/SKILL.md`, select the
-   defensive `blue-team/SKILL.md` workflow, and load only the vulnerability,
-   protocol, framework, or technology pages relevant to the feature's attack
-   surfaces. The Deep Eye CLI is not vendored; do not run active scans or
-   payloads during the normal review. For a Tier B feature, also read
-   `docs/module-audit/<module>.md` and start from its open findings — do not
-   re-derive what it already fixed. Read `docs/module-audit/CROSS-CUTTING.md`
-   for the XC-1/XC-2/XC-3 patterns.
+2. **Load context.** Read `docs/app-review/CHECKLIST.md`. For a Tier B feature,
+   also read `docs/module-audit/<module>.md` and start from its open findings —
+   do not re-derive what it already fixed. Read
+   `docs/module-audit/CROSS-CUTTING.md` for the XC-1/XC-2/XC-3 patterns.
 
 3. **Review** the feature against all six checklist dimensions. Read the actual
    code — endpoints, service, models, schemas, frontend module. Enumerate the
@@ -85,5 +79,5 @@ into one run and do not leave a feature half-reviewed.
 - Findings must be verifiable: cite `file.py:line` and state the failure
   scenario concretely enough to reproduce.
 - Do not re-report a finding already recorded and fixed in `docs/module-audit/`.
-Do re-verify ones left open there.
+  Do re-verify ones left open there.
 </content>
