@@ -47,16 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has one. The bulk "All good" **refuses to confirm a level** — that would be a
   fabricated record on the one type whose whole purpose is the stored value —
   and its label follows what the stop holds ("All at par" for a bag of counts).
-- **Seals.** `check_template_compartments.is_sealed` marks a container sealed
-  in normal operation; `apparatus_compartment_seals` holds the state per
-  apparatus — current tag, intact or broken, when and on what run, and the tag
-  to apply when it is re-sealed. An intact tag is evidence nobody has been
-  inside since the last full count, so the check reads the tag and the pockets
-  are not counted at all; break it and every pocket counts again. The state is
-  deliberately not on the check or the template, because a seal is broken at
-  02:41 on a call and re-sealed hours later by a different crew.
-- The template builder names **what each type stores** beside its label, and
-  carries a seal toggle beside the container type.
+- The template builder names **what each type stores** beside its label, so
+  the choice reads as "what is being asked" rather than as a list of layouts.
+- The lap honours the **sealed-container rule that arrived separately on
+  main**: an intact seal clears the counting inside a bag, but never its expiry
+  dates or pressure readings, which move on their own while the bag sits shut.
+  A seal proves unchanged, not full — so an out-of-date vial cannot hide behind
+  an intact tag.
 
 **Migration notes**
 
