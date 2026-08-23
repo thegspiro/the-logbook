@@ -275,6 +275,8 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
 export const TrainingAdminPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const pageTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const innerTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Resolve initial state from URL params (supports both old and new format)
   const resolveInitial = (): { page: PageId; tab: string } => {
@@ -494,32 +496,6 @@ export const TrainingAdminPage: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* The live region gives section changes useful context without announcing tab content. */}
-        <div
-          className="border-theme-surface-border bg-theme-surface-secondary mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <p className="text-theme-text-muted text-sm">
-            <span className="text-theme-text-primary font-semibold">{currentPage.label}:</span>{' '}
-            {currentPage.description}
-          </p>
-          {currentPage.actions && (
-            <div className="flex shrink-0 flex-wrap gap-2" aria-label={`${currentPage.label} actions`}>
-              {currentPage.actions.map((action) => (
-                <button
-                  key={action.label}
-                  type="button"
-                  onClick={() => handleTabChange(action.tab)}
-                  className="focus:ring-theme-focus-ring text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover min-h-10 rounded-md border px-3 py-2 text-sm font-medium focus:ring-2 focus:outline-hidden"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       <div
@@ -590,25 +566,15 @@ export const TrainingAdminPage: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Inner tab bar */}
-        <div className="border-theme-surface-border border-b">
-          <nav className="hidden space-x-1 md:flex" aria-label={`${currentPage.label} tabs`}>
-            {currentPage.tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                  activeTab === tab.id
-                    ? 'text-theme-text-primary border-red-500'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                }`}
-                aria-current={activeTab === tab.id ? 'page' : undefined}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+        {/* Tab Content - each child handles its own layout */}
+        <div
+          id={`training-admin-tabpanel-${activePage}-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`training-admin-tab-${activePage}-${activeTab}`}
+        >
+          <Suspense fallback={<TabLoading />}>
+            <TabContent page={activePage} tab={activeTab} />
+          </Suspense>
         </div>
       </div>
     </div>

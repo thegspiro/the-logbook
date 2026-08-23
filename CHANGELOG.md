@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Admin: the page rendered no tab content and threw on every render (2026-08-23)
+
+**Fixed**
+
+- **`TrainingAdminPage` was left broken by a bad merge, taking CI on `main`
+  with it.** Combining the accessibility branch with the primary/More
+  navigation branch kept the `ref=` and `onKeyDown=` call sites but dropped the
+  `useRef` declarations behind them, so every render threw
+  `ReferenceError: pageTabRefs is not defined`. The same merge dropped the
+  `<Suspense>`/`<TabContent>` panel outright — the page drew both tab bars and
+  then nothing underneath — while duplicating the section live region and
+  leaving a stale copy of the pre-merge inner tab bar behind it. The ref maps
+  and the lazy tab panel are restored and the duplicated blocks removed.
+- **The page's tests had been merged into an unrunnable state.** Both branches'
+  `vi.mock` blocks survived, the second calling a `lazyPage` helper that was
+  never merged in and feeding helpers that nothing then referenced, and one
+  assertion still expected `aria-current` on an inner tab that is now
+  `role="tab"`/`aria-selected`. The suite is reconciled against the merged
+  component, and the tab-panel-wiring and keyboard-navigation tests lost in the
+  merge are restored, adapted to the navigation that landed alongside them.
+
 ### Security documentation: dynamic testing guide (2026-08-22)
 
 **Documentation**
