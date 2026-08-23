@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import select
 
+from app.api.v1.endpoints import storefront as storefront_endpoints
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.storefront import (
     StoreFulfillmentMethod,
@@ -27,9 +28,11 @@ from app.models.storefront import (
     StoreProduct,
     StoreProductStatus,
     StoreProductVariant,
+    StoreWindowProduct,
     StoreWindowStatus,
 )
 from app.models.user import Organization, User
+from app.schemas.storefront import StoreDashboardResponse
 from app.services.storefront_service import StorefrontService
 from app.utils.storefront_payments import build_payment_options
 
@@ -2068,3 +2071,79 @@ class TestAcceptedMethodsAtCheckout:
         options = build_payment_options(settings, Decimal("45.00"), "ORD-1")
         # Cash needs no handle, so the floor is a method that actually works.
         assert [o["label"] for o in options] == ["Cash"]
+
+
+# ======================================================================
+# The admin console's own request path
+# ======================================================================
+
+
+class TestAdminDashboardEndpoint:
+    """The store admin page's landing request, through the endpoint layer.
+
+    The service tests above stop at the service, and the response payload is
+    assembled in the endpoint — which is where the open window gets rendered
+    through the full window payload, offerings and all. Nothing covered that
+    seam, so a window query that did not eager-load its offerings 500'd the
+    admin console for every department that had a window open, and the suite
+    stayed green.
+    """
+
+    async def _store_with_an_open_window(self, db_session):
+        org = await _make_org(db_session)
+        admin = await _make_member(db_session, org, first="Ada", last="Admin")
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        window = await _make_open_window(db_session, org)
+        return org, admin, service, product, window
+
+    async def test_the_dashboard_renders_with_an_open_window(self, db_session):
+        org, admin, service, product, _ = await self._store_with_an_open_window(
+            db_session
+        )
+        await service.create_order(org.id, admin, _cart(product.id, 2))
+
+        payload = await storefront_endpoints.get_dashboard(
+            db=db_session, current_user=admin
+        )
+        dashboard = StoreDashboardResponse.model_validate(payload)
+
+        assert dashboard.active_window is not None
+        assert dashboard.active_window.name == "Fall apparel"
+        assert dashboard.new_order_count == 1
+
+    async def test_the_open_window_carries_its_offerings(self, db_session):
+        """The lazy load that raised MissingGreenlet, asserted directly."""
+        org, _, service, product, window = await self._store_with_an_open_window(
+            db_session
+        )
+        window.include_all_products = False
+        db_session.add(
+            StoreWindowProduct(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                window_id=window.id,
+                product_id=product.id,
+                sort_order=0,
+            )
+        )
+        await db_session.flush()
+
+        windows = await service.get_open_windows(org.id)
+
+        assert [o.product.name for o in windows[0].offerings] == ["Job Shirt"]
+
+    async def test_the_dashboard_renders_for_a_store_with_nothing_set_up(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        admin = await _make_member(db_session, org)
+
+        payload = await storefront_endpoints.get_dashboard(
+            db=db_session, current_user=admin
+        )
+        dashboard = StoreDashboardResponse.model_validate(payload)
+
+        assert dashboard.active_window is None
+        assert dashboard.open_order_count == 0
