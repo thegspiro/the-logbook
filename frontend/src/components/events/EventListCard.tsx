@@ -61,12 +61,16 @@ export interface EventListCardProps {
   onCancelChangeRsvp: (eventId: string) => void;
 }
 
+/** Why the hours row says "up to" rather than naming a figure. */
+const CREDITED_HOURS_BASIS =
+  "Based on the event's scheduled length. The hours credited to your record are your attended time, settled when you check out.";
+
 const DETAIL_ROW_CLASS = 'text-theme-text-secondary flex items-center gap-2 text-sm';
 const DETAIL_ICON_CLASS = 'text-theme-text-muted h-3.5 w-3.5 shrink-0';
 const FOOTER_BUTTON_CLASS =
   'inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap';
 
-export const EventListCard: React.FC<EventListCardProps> = ({
+const EventListCardBase: React.FC<EventListCardProps> = ({
   event,
   urgency,
   timezone,
@@ -287,8 +291,15 @@ export const EventListCard: React.FC<EventListCardProps> = ({
             {event.credited_hours != null && (
               <div className={DETAIL_ROW_CLASS}>
                 <ClipboardCheck className={DETAIL_ICON_CLASS} aria-hidden="true" />
-                <span className="truncate">
-                  Credits <span className="text-theme-text-primary font-mono">{event.credited_hours.toFixed(1)}</span>{' '}
+                {/* "up to", because this is the *scheduled* duration under the
+                    org's hour mappings. What actually lands on the member's
+                    record is their attended time, settled at check-out — leave
+                    a two-hour drill after one hour and you earn 1.0. Stating
+                    the ceiling as fact is how a member ends up short of a
+                    requirement they believed they had met. */}
+                <span className="truncate" title={CREDITED_HOURS_BASIS}>
+                  Credits up to{' '}
+                  <span className="text-theme-text-primary font-mono">{event.credited_hours.toFixed(1)}</span>{' '}
                   {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
                 </span>
               </div>
@@ -390,3 +401,14 @@ export const EventListCard: React.FC<EventListCardProps> = ({
     </div>
   );
 };
+
+/**
+ * Memoized because the page re-derives `paginatedEvents` on every keystroke in
+ * the search box, which handed all 25 cards a new array and re-rendered every
+ * one of them per character typed. Every prop above is a primitive, a stable
+ * `useCallback`, or an object whose identity only changes when that event
+ * changes — except `now`, which ticks once a minute on purpose so a check-in
+ * window opening actually shows up. So the minute tick still re-renders the
+ * grid, and nothing else does.
+ */
+export const EventListCard = React.memo(EventListCardBase);

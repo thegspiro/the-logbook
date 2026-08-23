@@ -110,9 +110,18 @@ describe('EventListCard', () => {
       expect(screen.getByText('Training Grounds')).toBeInTheDocument();
     });
 
-    it('renders credited hours with their category', () => {
+    it('renders credited hours with their category, as a ceiling', () => {
+      // "up to", not "2.0": the figure is the scheduled length, while the
+      // credit is the attended time settled at check-out. Stating the ceiling
+      // as fact is how a member ends up short of a requirement they thought
+      // they had met.
       renderCard(makeEvent({ credited_hours: 2, hour_category_label: 'drill' }));
-      expect(screen.getByText(/Credits/)).toHaveTextContent('Credits 2.0 drill hours');
+      expect(screen.getByText(/Credits/)).toHaveTextContent('Credits up to 2.0 drill hours');
+    });
+
+    it('explains what the hours figure is based on', () => {
+      renderCard(makeEvent({ credited_hours: 2, hour_category_label: 'drill' }));
+      expect(screen.getByText(/Credits/).getAttribute('title')).toContain('attended time');
     });
 
     it('omits the hours row when the org maps no hours to this event', () => {
@@ -231,6 +240,61 @@ describe('EventListCard', () => {
 
       await user.click(screen.getByRole('button', { name: 'Select Ladder Company Drill' }));
       expect(handlers.onToggleSelect).toHaveBeenCalledWith('evt-1');
+    });
+  });
+
+  describe('memoization', () => {
+    // The card is wrapped in React.memo so a keystroke in the search box stops
+    // re-rendering all 25 cards. The risk that buys is a card that goes stale,
+    // so these assert the props that must still get through.
+    it('re-renders when its event changes', () => {
+      const { rerender } = renderCard(makeEvent({ going_count: 4 }));
+      expect(screen.getByText('4 going')).toBeInTheDocument();
+
+      const updated = makeEvent({ going_count: 5 });
+      rerender(
+        <EventListCard
+          event={updated}
+          urgency={getEventUrgency(updated, NOW)}
+          timezone="UTC"
+          timezoneAbbr="UTC"
+          now={NOW}
+          canManage={false}
+          selectionMode={false}
+          isSelected={false}
+          rsvpLoading={false}
+          isChangingRsvp={false}
+          {...handlers}
+        />
+      );
+
+      expect(screen.getByText('5 going')).toBeInTheDocument();
+    });
+
+    it('re-renders when only its urgency changes', () => {
+      // Same event object, different derived state — the case a comparator
+      // keyed on the event alone would miss.
+      const event = makeEvent({ is_mandatory: true });
+      const { rerender } = renderCard(event, { urgency: 'routine' });
+      expect(screen.queryByText('Response needed')).not.toBeInTheDocument();
+
+      rerender(
+        <EventListCard
+          event={event}
+          urgency="action"
+          timezone="UTC"
+          timezoneAbbr="UTC"
+          now={NOW}
+          canManage={false}
+          selectionMode={false}
+          isSelected={false}
+          rsvpLoading={false}
+          isChangingRsvp={false}
+          {...handlers}
+        />
+      );
+
+      expect(screen.getByText('Response needed')).toBeInTheDocument();
     });
   });
 

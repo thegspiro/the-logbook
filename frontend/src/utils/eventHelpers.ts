@@ -278,6 +278,9 @@ export function formatEventDuration(startIso: string, endIso: string): string {
   return `${hours}h ${minutes}m`;
 }
 
+/** The hour at which "Today" becomes "Tonight". */
+const EVENING_STARTS_AT_HOUR = 17;
+
 /**
  * "Tonight" / "Tomorrow" for an event inside the next 48 hours, else null.
  *
@@ -299,8 +302,14 @@ export function getRelativeDayLabel(startIso: string, now: Date = new Date(), ti
 
   if (startDay === today) {
     // Only the evening reads as "Tonight"; a 9am event today is just its time.
-    const hour = Number(formatDateCustom(new Date(start), { hour: 'numeric', hour12: false }, timezone));
-    return Number.isNaN(hour) || hour < 17 ? 'Today' : 'Tonight';
+    //
+    // `hourCycle: 'h23'` rather than `hour12: false`: the latter leaves the
+    // cycle to the locale's default, and an ICU build that resolves it to h24
+    // renders midnight as "24" — which clears the 17 threshold and labels a
+    // 12am event "Tonight". Pinning the cycle makes the branch depend on the
+    // rule rather than on which ICU the browser shipped.
+    const hour = Number(formatDateCustom(new Date(start), { hour: 'numeric', hourCycle: 'h23' }, timezone));
+    return Number.isNaN(hour) || hour < EVENING_STARTS_AT_HOUR ? 'Today' : 'Tonight';
   }
 
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);

@@ -142,7 +142,7 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
                     {event.credited_hours != null && (
                       <>
                         {' '}
-                        · Credits <Hours value={event.credited_hours} />{' '}
+                        · Credits up to <Hours value={event.credited_hours} />{' '}
                         {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
                       </>
                     )}
