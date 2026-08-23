@@ -14,19 +14,30 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Superseded PR pushes are cancelled; a main run that has started is never
-  # cancelled, so two merges in quick succession both keep their record of
-  # whether that commit was green.
+  # PR pushes share a group per ref, so a superseded push is cancelled. Every
+  # commit on main gets a group of its own, so every main commit ends up with
+  # a CI record. Matches secret-scan and supply-chain.
   #
-  # Precisely: GitHub keeps at most one running and one *pending* run per
-  # group, so with three or more main runs overlapping, the middle one can
-  # still be evicted from the pending slot before it starts. secret-scan and
-  # supply-chain key main runs on the SHA to close that gap, because an audit
-  # record has to exist for every commit. It is left open here on purpose —
-  # per-commit groups would run the full 12-job matrix concurrently for every
-  # commit of a merge train, and on this repository CI throughput is the
-  # constraint being managed, not the audit trail.
+  # `cancel-in-progress: false` is NOT enough on its own, which is what this
+  # used to rely on. GitHub keeps at most one running and one *pending* run
+  # per group, so when three or more main runs overlap each new arrival evicts
+  # the pending one and that commit is never built. That is not theoretical:
+  # on 2026-08-23, 8c61c948 (#1709) merged to main and its run was evicted by
+  # the next merge 17 seconds later, leaving that commit with no CI record at
+  # all. Keying on the SHA gives each commit its own group, where there is
+  # nothing to evict it from.
+  #
+  # The cost is real and was accepted deliberately: a merge train of N commits
+  # now runs N full 13-job matrices concurrently instead of collapsing to two.
+  # That competes with PR runs for the same runner pool, so PR latency is the
+  # thing to watch. If it degrades, the fix is to make main's run cheaper (a
+  # reduced job set whose only purpose is the record) rather than to go back
+  # to a shared group — a gap in the record is not recoverable after the fact,
+  # and the 2026-08-23 incident is what it costs.
+  #
+  # `cancel-in-progress` still governs PR refs; for main it is now moot, since
+  # a per-commit group only ever holds one run.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which

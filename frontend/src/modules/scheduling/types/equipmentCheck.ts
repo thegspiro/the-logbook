@@ -318,7 +318,13 @@ export interface CheckTemplateCompartment {
   imageUrl?: string;
   isHeader?: boolean;
   containerType?: string;
-  /** Sealed in normal operation — checked by its tag rather than counted. */
+  /**
+   * This container is closed with a numbered tamper seal — a drug bag, a
+   * trauma kit. A seal matching the last count is proof nothing inside was
+   * touched, so on the check form it clears the contents count in one tap and
+   * leaves only what a seal cannot vouch for: expiry dates and readings, which
+   * move on their own while the bag sits shut.
+   */
   isSealed?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
@@ -344,8 +350,8 @@ export interface CheckTemplateCompartmentUpdate {
   sort_order?: number | undefined;
   image_url?: string | undefined;
   is_header?: boolean | undefined;
-  is_sealed?: boolean | undefined;
   container_type?: string | undefined;
+  is_sealed?: boolean | undefined;
   parent_compartment_id?: string | undefined;
 }
 
@@ -445,11 +451,28 @@ export interface CheckItemResultSubmit {
   notes?: string | undefined;
 }
 
+/**
+ * The tamper seal a crew read on one sealed container.
+ *
+ * Submitted whether or not the seal cleared anything: a broken seal is the
+ * more important of the two records, because it is what says the contents were
+ * counted by hand and why.
+ */
+export interface CheckSealSubmit {
+  template_compartment_id: string;
+  compartment_name: string;
+  seal_number?: string | undefined;
+  intact: boolean;
+  cleared_item_count: number;
+  notes?: string | undefined;
+}
+
 export interface ShiftEquipmentCheckCreate {
   template_id: string;
   check_timing: string;
   client_submission_id?: string | undefined;
   items: CheckItemResultSubmit[];
+  seals?: CheckSealSubmit[] | undefined;
   notes?: string | undefined;
   signature_data?: string | undefined;
 }
@@ -459,6 +482,7 @@ export interface StandaloneEquipmentCheckCreate {
   apparatus_id?: string | undefined;
   check_timing: string;
   items: CheckItemResultSubmit[];
+  seals?: CheckSealSubmit[] | undefined;
   notes?: string | undefined;
   signature_data?: string | undefined;
 }
@@ -556,6 +580,18 @@ export interface LastCheckItemResult {
   lot_number?: string;
   expiration_date?: string;
   notes?: string;
+}
+
+/**
+ * What the previous crew read on one sealed container.
+ *
+ * The form compares the number in front of the crew against this one: equal
+ * means nothing was opened since, which is what the shortcut rests on.
+ */
+export interface LastSealRecord {
+  sealNumber?: string | null;
+  intact: boolean;
+  checkedAt?: string | null;
 }
 
 // ─── Report Types ────────────────────────────────────────────────────────────
@@ -766,6 +802,20 @@ export interface ItemDeployment {
   isExpired: boolean;
 }
 
+/**
+ * What became of a unit taken off the apparatus for being expired.
+ *
+ * Departments differ — destroyed on the spot, handed straight back to the
+ * supplying pharmacy, or pulled off the truck for somebody to exchange days
+ * later — so the crew reports it rather than the application assuming it.
+ */
+export const ExpiredStockDisposition = {
+  DISCARDED: 'discarded',
+  RETURNED_FOR_EXCHANGE: 'returned_for_exchange',
+  AWAITING_EXCHANGE: 'awaiting_exchange',
+} as const;
+export type ExpiredStockDisposition = (typeof ExpiredStockDisposition)[keyof typeof ExpiredStockDisposition];
+
 export interface LotSwapResult {
   templateItemId: string;
   lotNumber?: string;
@@ -774,6 +824,14 @@ export interface LotSwapResult {
   /** A full restock settles the report; a partial one leaves it standing. */
   restockNeeded?: boolean;
   quantityOnTruck?: number;
+  /**
+   * The position's lots after the swap. A position holding several lots is
+   * exposed by the earliest of them, so this — not the scalar expirationDate,
+   * which describes only the incoming unit — is what settles its verdict.
+   */
+  lotsAboard?: DeployedLot[];
+  replacedLotNumber?: string;
+  disposition?: ExpiredStockDisposition;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────

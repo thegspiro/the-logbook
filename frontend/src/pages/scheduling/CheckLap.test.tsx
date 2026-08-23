@@ -13,6 +13,7 @@ import {
   bulkConfirmable,
   bulkLabel,
   isStopComplete,
+  sealCannotClear,
   stopFailures,
   stopItems,
   type AnswerMap,
@@ -82,6 +83,20 @@ describe('helpers', () => {
     // whole purpose is the stored value.
     const items = [fn('a', 'Siren'), level('b', 'O2'), count('c', 'Gauze')];
     expect(bulkConfirmable(items).map((i) => i.id)).toEqual(['a', 'c']);
+  });
+
+  it('names what a seal cannot vouch for', () => {
+    const items: CheckItemSpec[] = [
+      fn('a', 'Siren'),
+      count('b', 'Gauze', 4),
+      level('c', 'O2 cylinder'),
+      { id: 'd', name: 'Epinephrine', checkType: 'expiry', expirationDate: '2026-09-02' },
+      { id: 'e', name: 'Saline', checkType: 'count', expectedQuantity: 2, expirationDate: '2026-10-01' },
+    ];
+    // A seal proves nothing was touched. It cannot stop a drug expiring or a
+    // cylinder losing pressure, and an expiring item is excluded whatever its
+    // type — hence the count with a date on it.
+    expect(sealCannotClear(items).map((i) => i.id)).toEqual(['c', 'd', 'e']);
   });
 
   it('says what is being claimed', () => {
@@ -242,8 +257,38 @@ describe('seals', () => {
 
   it('a sealed bag is complete once its own line is answered', () => {
     const b = bag({ seal: { status: 'intact', tagNumber: 'M2-40871' } });
-    // The tag is the check. The three pocket counts are not asked about.
+    // The tag clears the three pocket COUNTS. Nothing in this bag expires or
+    // holds pressure, so the tag is the whole check.
     expect(isStopComplete(b, { tag: { status: 'pass' } })).toBe(true);
+  });
+
+  it('an intact seal does NOT clear an expiry inside — it proves unchanged, not full', () => {
+    const withDrug = bag({
+      seal: { status: 'intact', tagNumber: 'M2-40871' },
+      children: [
+        pocket('p1', 'Front pocket · airways', [count('a1', 'i-gel size 4', 2)]),
+        pocket('pd', 'Drug pocket', [
+          { id: 'epi', name: 'Epinephrine 1:1000', checkType: 'expiry', expirationDate: '2026-09-02' },
+        ]),
+      ],
+    });
+    // A drug expires whether or not anybody opened the bag. Hiding it behind
+    // an intact tag is the one thing this rule exists to prevent.
+    expect(isStopComplete(withDrug, { tag: { status: 'pass' } })).toBe(false);
+    expect(isStopComplete(withDrug, { tag: { status: 'pass' }, epi: { status: 'pass' } })).toBe(true);
+  });
+
+  it('an intact seal does NOT clear a pressure reading inside', () => {
+    const withCylinder = bag({
+      seal: { status: 'intact', tagNumber: 'M2-40871' },
+      children: [
+        pocket('pb', 'Back pocket · O2 D cylinder', [
+          { id: 'o2', name: 'O2 D cylinder', checkType: 'level', minLevel: 500 },
+        ]),
+      ],
+    });
+    // A cylinder loses pressure while the bag sits shut.
+    expect(isStopComplete(withCylinder, { tag: { status: 'pass' } })).toBe(false);
   });
 
   it('a broken seal makes every pocket count again', () => {

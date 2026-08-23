@@ -58,7 +58,7 @@ export const SealBanner: React.FC<{ stop: LapStop }> = ({ stop }) => {
           Sealed{seal.tagNumber ? ` · tag ${seal.tagNumber}` : ''}
         </p>
         <p className="text-theme-text-secondary mt-1 text-xs">
-          Check the tag matches. The pockets are not counted while the seal holds.
+          Check the tag matches. The counting inside is cleared — expiry dates and readings still are not.
         </p>
       </div>
     );
@@ -234,8 +234,10 @@ export const CheckStop: React.FC<StopProps> = ({
             );
           })}
 
-          {/* Pockets, front to back in the order you unzip them. Skipped
-              entirely while the seal holds — that is what the seal buys. */}
+          {/* Pockets, front to back in the order you unzip them. An intact
+              seal clears the counting inside, so they collapse — but see
+              sealCannotClear: expiry dates and readings are still asked for
+              above, because a seal proves unchanged, not full. */}
           {!sealed && stop.children?.length ? (
             <CheckPockets
               pockets={stop.children}

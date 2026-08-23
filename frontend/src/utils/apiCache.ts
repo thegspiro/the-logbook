@@ -88,6 +88,7 @@ const UNCACHEABLE_PREFIXES = [
   '/roles/admin-access', // admin-status probe (authz decision — must not go stale)
   '/facilities/occupants', // facility occupant PII
   '/facilities/access-keys', // physical building access-key inventory
+  '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
 ] as const;
 
 /**

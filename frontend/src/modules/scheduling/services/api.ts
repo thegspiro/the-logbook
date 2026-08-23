@@ -67,6 +67,7 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   LastCheckItemResult,
+  LastSealRecord,
   ComplianceReport,
   FailureLogResponse,
   ItemTrendResponse,
@@ -77,6 +78,7 @@ import type {
   ItemDeployment,
   ItemRestockState,
   LotSwapResult,
+  ExpiredStockDisposition,
   InventoryMatchesResult,
   InventoryLinkResult,
   FleetReadinessResponse,
@@ -964,10 +966,30 @@ export const schedulingService = {
     const response = await api.get<ItemDeployment[]>(`/equipment-checks/supply/item-deployments/${inventoryItemId}`);
     return response.data;
   },
-  async swapItemLot(templateItemId: string, inventoryLotId: string, quantity = 1): Promise<LotSwapResult> {
+  /**
+   * `replaced` marks the swap a replacement: the expired units come off the
+   * truck and the disposition records where they went. Omitting it tops the
+   * position up and retires nothing.
+   *
+   * `deployedLotId` narrows that to one lot, which is what a position carrying
+   * several boxes needs. A position whose units were never lot-tracked has no
+   * id to send — one blob, one date — so the disposition stands alone.
+   */
+  async swapItemLot(
+    templateItemId: string,
+    inventoryLotId: string,
+    quantity = 1,
+    replaced?: { disposition: ExpiredStockDisposition; deployedLotId?: string | undefined }
+  ): Promise<LotSwapResult> {
     const response = await api.post<LotSwapResult>(`/equipment-checks/items/${templateItemId}/swap`, {
       inventory_lot_id: inventoryLotId,
       quantity,
+      ...(replaced
+        ? {
+            disposition: replaced.disposition,
+            ...(replaced.deployedLotId ? { replaced_deployed_lot_id: replaced.deployedLotId } : {}),
+          }
+        : {}),
     });
     return response.data;
   },
@@ -1068,6 +1090,14 @@ export const schedulingService = {
   async getLastCheckResults(templateId: string, apparatusId?: string): Promise<Record<string, LastCheckItemResult>> {
     const response = await api.get<Record<string, LastCheckItemResult>>(
       `/equipment-checks/templates/${templateId}/last-results`,
+      { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
+    );
+    return response.data;
+  },
+  /** Keyed by compartment id — what each sealed container carried last count. */
+  async getLastCheckSeals(templateId: string, apparatusId?: string): Promise<Record<string, LastSealRecord>> {
+    const response = await api.get<Record<string, LastSealRecord>>(
+      `/equipment-checks/templates/${templateId}/last-seals`,
       { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
     );
     return response.data;

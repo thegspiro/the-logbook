@@ -375,7 +375,7 @@ class TestAuthoritativeCheckTiming:
         with (
             patch.object(
                 service,
-                "_load_template_items_map",
+                "_load_checkable_template_items",
                 AsyncMock(return_value={"item-1": MagicMock()}),
             ),
             patch.object(

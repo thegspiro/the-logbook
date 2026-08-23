@@ -7,6 +7,8 @@ import {
   listPendingChecks,
   dequeueCheck,
   markRetry,
+  markCheckSubmitted,
+  markPhotosUploaded,
   pendingCount,
   clearAllQueuedChecks,
   CHECK_QUEUE_MAX_RETRIES,
@@ -35,6 +37,10 @@ describe('offlineQueue', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    // Restored here rather than at the end of a test body: a spy left in place
+    // by a failing assertion keeps counting into the next case, turning one
+    // real failure into a cascade of misleading ones.
+    vi.restoreAllMocks();
   });
 
   describe('enqueue and read back', () => {
@@ -249,6 +255,84 @@ describe('offlineQueue', () => {
 
       expect(await clearAllQueuedChecks()).toBe(1);
       expect(await clearAllQueuedChecks()).toBe(0);
+    });
+
+    /**
+     * authStore.logout leaves the check form mounted while it awaits the device
+     * purge, so a submission completing during logout races it. A read in one
+     * transaction followed by a put in another lets the loser re-create the
+     * record it had already read — payload, photo blobs and all — after the
+     * purge emptied the store.
+     *
+     * The interleaving that does it cannot be provoked from a test: both calls
+     * await their own `openOfflineDb`, and which transaction gets created first
+     * is not something the caller controls. What *is* controllable, and what
+     * actually closes the window, is that each read-modify-write occupies a
+     * single transaction — IndexedDB then serializes it against the purge
+     * whichever order they arrive in. So that is what these assert.
+     */
+    it.each([
+      ['markCheckSubmitted', (id: string) => markCheckSubmitted(id, 'check-1', { i: 'check-item-1' })],
+      ['markRetry', (id: string) => markRetry(id)],
+      ['markPhotosUploaded', (id: string) => markPhotosUploaded(id, 'i')],
+    ])('reads and writes in one transaction, so %s cannot straddle the purge', async (_name, mutate) => {
+      const id = await enqueueCheck('shift-1', payload, [{ itemId: 'i', files: [photoFile()] }]);
+      const openTransaction = vi.spyOn(IDBDatabase.prototype, 'transaction');
+
+      await mutate(id);
+
+      expect(openTransaction).toHaveBeenCalledTimes(1);
+      expect(openTransaction.mock.calls[0]?.[1]).toBe('readwrite');
+    });
+  });
+
+  /**
+   * The upload endpoint appends to an item's photo_urls and caps it at three,
+   * so a group still queued after a successful POST is uploaded a second time
+   * on the next drain — filing duplicate evidence, or tripping the cap and
+   * returning a permanent 400 that counts toward CHECK_QUEUE_MAX_RETRIES and
+   * eventually discards the photos that never made it.
+   */
+  describe('photo upload checkpointing', () => {
+    it('drops only the photos for the item the server accepted', async () => {
+      const id = await enqueueCheck('shift-1', payload, [
+        { itemId: 'nozzle', files: [photoFile('nozzle.jpg')] },
+        { itemId: 'hose', files: [photoFile('hose.jpg')] },
+      ]);
+
+      await markPhotosUploaded(id, 'nozzle');
+
+      const [entry] = await listPendingChecks();
+      expect(entry?.photos.map((photo) => photo.itemId)).toEqual(['hose']);
+    });
+
+    it('drops every photo taken for the same item together', async () => {
+      const id = await enqueueCheck('shift-1', payload, [
+        { itemId: 'nozzle', files: [photoFile('a.jpg'), photoFile('b.jpg')] },
+      ]);
+
+      await markPhotosUploaded(id, 'nozzle');
+
+      const [entry] = await listPendingChecks();
+      expect(entry?.photos).toEqual([]);
+    });
+
+    it('keeps the entry and its submitted-check ID so the rest can still resume', async () => {
+      const id = await enqueueCheck('shift-1', payload, [
+        { itemId: 'nozzle', files: [photoFile()] },
+        { itemId: 'hose', files: [photoFile()] },
+      ]);
+      await markCheckSubmitted(id, 'check-1', { nozzle: 'ci-1', hose: 'ci-2' });
+
+      await markPhotosUploaded(id, 'nozzle');
+
+      const [entry] = await listPendingChecks();
+      expect(entry?.submittedCheckId).toBe('check-1');
+      expect(entry?.submittedItemIds).toEqual({ nozzle: 'ci-1', hose: 'ci-2' });
+    });
+
+    it('returns null for an entry the purge already removed', async () => {
+      await expect(markPhotosUploaded('never-existed', 'nozzle')).resolves.toBeNull();
     });
   });
 });

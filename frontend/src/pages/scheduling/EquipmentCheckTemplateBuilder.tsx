@@ -235,7 +235,7 @@ interface CompartmentFormState {
   imageUrl: string;
   isHeader: boolean;
   containerType: string;
-  /** Sealed in normal operation — the check reads its tag instead of counting. */
+  /** Closed with a numbered tamper seal — see CheckTemplateCompartment.isSealed. */
   isSealed: boolean;
   parentCompartmentId: string;
   items: ItemFormState[];
@@ -1363,6 +1363,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           image_url: c.imageUrl.trim() || undefined,
           is_header: c.isHeader || undefined,
           container_type: c.containerType || undefined,
+          is_sealed: c.isSealed,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
             name: item.name || 'Untitled Item',
@@ -1561,6 +1562,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       imageUrl: '',
       isHeader: false,
       containerType: 'compartment',
+      // A vehicle preset describes compartments, not sealed kits; a department
+      // that carries a sealed bag marks it after loading the preset.
       isSealed: false,
       parentCompartmentId: '',
       items: comp.items.map((item) => ({
@@ -1627,6 +1630,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         description: c.description,
         isHeader: c.isHeader || undefined,
         containerType: c.containerType || undefined,
+        isSealed: c.isSealed,
         items: c.items.map((item) => ({
           name: item.name,
           description: item.description,
@@ -1934,6 +1938,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
         ...(c.isHeader ? { isHeader: true } : {}),
         containerType: c.containerType || 'compartment',
+        isSealed: c.isSealed,
         ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
         items: c.items.map((item, iIdx): CheckTemplateItem => ({
           id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
@@ -3062,28 +3067,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </div>
                 );
               })()}
-              {/* A seal changes what the check asks for, so it belongs beside
-                  the container type rather than among the item fields: an
-                  intact tag means the crew reads the tag and the contents are
-                  not counted at all. */}
-              <div>
-                <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className={checkboxClass}
-                    data-testid={`is-sealed-${idx}`}
-                    checked={comp.isSealed}
-                    onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
-                  />
-                  <span>
-                    Sealed in normal operation
-                    <span className="text-theme-text-muted mt-0.5 block text-xs">
-                      Checked by reading its tag. While the seal holds the crew does not count what is inside — once it
-                      is broken, every pocket is counted again.
-                    </span>
-                  </span>
-                </label>
-              </div>
               <div>
                 <label className={labelClass}>Reparent: stored inside</label>
                 <select
@@ -3098,6 +3081,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* A sealed container's contents cannot change while it sits
+                  shut, so a crew that finds the seal intact and matching the
+                  last count does not need to open it. Only dates and pressures
+                  still need eyes on — those move on their own. */}
+              <div className="sm:col-span-2">
+                <label className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox mt-0.5"
+                    checked={comp.isSealed}
+                    onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
+                  />
+                  <span>
+                    <span className="text-theme-text-primary block text-sm font-medium">Closed with a tamper seal</span>
+                    <span className="text-theme-text-muted block text-xs">
+                      A crew that finds the seal intact and matching the last count clears every presence and quantity
+                      check inside in one tap. Expiry dates and readings still have to be checked.
+                    </span>
+                  </span>
+                </label>
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>
