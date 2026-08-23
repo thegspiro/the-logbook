@@ -6,10 +6,22 @@
 
 import api from './apiClient';
 
+/**
+ * What the label carries. Code 128 is the default and what the scan lookup has
+ * always read; QR fits a long identifier on small square stock, where a Code
+ * 128 wide enough to hold one physically does not.
+ */
+export const Symbology = {
+  CODE128: 'code128',
+  QR: 'qr',
+} as const;
+export type Symbology = (typeof Symbology)[keyof typeof Symbology];
+
 export interface LabelPresetResponse {
   preset: string | null;
   custom_width?: number | null;
   custom_height?: number | null;
+  symbology?: Symbology | null;
   position_id?: string | null;
   module?: string;
 }
@@ -20,6 +32,7 @@ export interface GenerateLabelsOptions {
   custom_height?: number;
   auto_rotate?: boolean;
   extra_lines?: string[];
+  symbology?: Symbology;
 }
 
 export interface LabelPreviewItem {
@@ -44,7 +57,7 @@ export const labelService = {
 
   async setPreset(
     module: string,
-    data: { preset: string; custom_width?: number; custom_height?: number }
+    data: { preset: string; custom_width?: number; custom_height?: number; symbology?: Symbology }
   ): Promise<LabelPresetResponse> {
     const res = await api.put<LabelPresetResponse>(`/label-preset/${module}`, data);
     return res.data;
@@ -120,6 +133,7 @@ export interface PrintLabelsOptions {
   custom_height?: number | undefined;
   copies?: number | undefined;
   extra_lines?: string[] | undefined;
+  symbology?: Symbology | undefined;
 }
 
 export interface PrintLabelsResult {
@@ -127,6 +141,40 @@ export interface PrintLabelsResult {
   printer_name: string;
   labels_sent: number;
   auto_populated: number;
+  /**
+   * What the printer said about itself after the job was sent. Bytes reaching
+   * a socket is not a printed label — a printer that is out of stock accepts
+   * the job and prints nothing, and this is how that becomes visible.
+   */
+  printer_errors: string[];
+  printer_warnings: string[];
+  status_known: boolean;
+}
+
+/** Identity and fault report from a printer, saved or not yet saved. */
+export interface PrinterStatus {
+  responded: boolean;
+  identified: boolean;
+  model: string | null;
+  firmware: string | null;
+  reported_dpi: number | null;
+  errors: string[];
+  warnings: string[];
+  status_available: boolean;
+}
+
+export interface SavedPrinterStatus extends PrinterStatus {
+  printer_id: string;
+  printer_name: string;
+  configured_dpi: number;
+}
+
+export interface TestLabelResult {
+  printer_id: string;
+  printer_name: string;
+  printer_errors: string[];
+  printer_warnings: string[];
+  status_known: boolean;
 }
 
 export const labelPrinterService = {
@@ -151,8 +199,23 @@ export const labelPrinterService = {
     await api.delete(`/label-printers/${id}`);
   },
 
-  async test(id: string): Promise<{ printer_id: string; printer_name: string }> {
-    const res = await api.post<{ printer_id: string; printer_name: string }>(`/label-printers/${id}/test`);
+  async test(id: string, symbology?: Symbology): Promise<TestLabelResult> {
+    const res = await api.post<TestLabelResult>(
+      `/label-printers/${id}/test`,
+      undefined,
+      symbology ? { params: { symbology } } : undefined
+    );
+    return res.data;
+  },
+
+  async status(id: string): Promise<SavedPrinterStatus> {
+    const res = await api.get<SavedPrinterStatus>(`/label-printers/${id}/status`);
+    return res.data;
+  },
+
+  /** Check an address before saving it, so setup is not save-discover-edit. */
+  async probe(host: string, port: number): Promise<PrinterStatus> {
+    const res = await api.post<PrinterStatus>('/label-printers/probe', { host, port });
     return res.data;
   },
 

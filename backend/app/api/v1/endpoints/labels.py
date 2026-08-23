@@ -32,6 +32,7 @@ from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.services.label_printer_service import LabelPrinterService
 from app.services.label_service import LabelService, required_permissions_for_module
+from app.utils.label_renderer import SYMBOLOGY_CODE128
 from app.utils.printer_transport import PrinterUnreachableError
 
 router = APIRouter()
@@ -54,6 +55,7 @@ class LabelPresetBody(BaseModel):
     preset: str = Field(min_length=1, max_length=50)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
+    symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
 class LabelGenerateBody(BaseModel):
@@ -64,6 +66,7 @@ class LabelGenerateBody(BaseModel):
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     auto_rotate: Optional[bool] = None
     extra_lines: Optional[List[str]] = None
+    symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
 class LabelPreviewBody(BaseModel):
@@ -127,6 +130,7 @@ async def set_label_preset(
             preset=data.preset,
             custom_width=data.custom_width,
             custom_height=data.custom_height,
+            symbology=data.symbology,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -160,6 +164,7 @@ async def generate_labels(
             auto_rotate=data.auto_rotate,
             extra_lines=data.extra_lines,
             exclude_ids=hidden_prospect_ids,
+            symbology=data.symbology,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -211,6 +216,11 @@ class LabelPrinterUpdateBody(BaseModel):
     is_active: Optional[bool] = None
 
 
+class PrinterProbeBody(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(9100, ge=1, le=65535)
+
+
 class LabelPrintBody(BaseModel):
     module: str = Field(min_length=1, max_length=50)
     ids: List[str] = Field(min_length=1, max_length=2000)
@@ -220,6 +230,7 @@ class LabelPrintBody(BaseModel):
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     copies: int = Field(1, ge=1, le=50)
     extra_lines: Optional[List[str]] = None
+    symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
 def _printer_response(printer) -> dict:
@@ -361,6 +372,7 @@ async def delete_label_printer(
 @router.post("/label-printers/{printer_id}/test")
 async def send_test_label(
     printer_id: str,
+    symbology: str = SYMBOLOGY_CODE128,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -369,13 +381,60 @@ async def send_test_label(
     """Send one test label, to confirm the printer is reachable and aligned."""
     try:
         result = await LabelPrinterService(db).print_test_label(
-            printer_id, current_user.organization_id
+            printer_id, current_user.organization_id, symbology=symbology
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PrinterUnreachableError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return result
+
+
+@router.get("/label-printers/{printer_id}/status")
+async def get_label_printer_status(
+    printer_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """Ask a saved printer to identify itself and report any faults.
+
+    A TCP connection to port 9100 succeeds against a printer that is out of
+    labels, against a laptop that inherited the printer's DHCP lease, and
+    against anything else listening — so "reachable" on its own is not worth
+    reporting. This asks the device to prove it is a ZPL printer and say
+    whether it can print right now.
+    """
+    try:
+        return await LabelPrinterService(db).get_status(
+            printer_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except PrinterUnreachableError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/label-printers/probe")
+async def probe_label_printer(
+    data: PrinterProbeBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """Check an address before it is saved as a printer.
+
+    Same guards as every other path (port allowlist, address classes); this
+    only removes the save-discover-edit loop from setting a printer up.
+    """
+    try:
+        return await LabelPrinterService(db).probe_target(data.host, data.port)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except PrinterUnreachableError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.post("/labels/print")
@@ -405,6 +464,7 @@ async def print_labels(
             copies=data.copies,
             extra_lines=data.extra_lines,
             exclude_ids=hidden_prospect_ids,
+            symbology=data.symbology,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

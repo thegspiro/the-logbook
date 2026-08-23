@@ -19,9 +19,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.label_printer import LabelPrinter
 from app.services.label_service import MODULE_LABELS, _filter_ids
-from app.utils.label_renderer import LabelSpec, is_known_label_format
+from app.utils.label_renderer import (
+    SYMBOLOGY_CODE128,
+    LabelSpec,
+    is_known_label_format,
+    validate_symbology,
+)
 from app.utils.model_updates import apply_updates
+from app.utils.printer_status import summarize
 from app.utils.printer_transport import (
+    PrinterUnreachableError,
+    query_printer,
     send_to_printer,
     validate_printer_port,
 )
@@ -280,8 +288,10 @@ class LabelPrinterService:
         copies: int = 1,
         extra_lines: Optional[List[str]] = None,
         exclude_ids: Optional[Set[str]] = None,
+        symbology: str = SYMBOLOGY_CODE128,
     ) -> Dict[str, Any]:
         """Build, render and send labels for *module* records to a printer."""
+        validate_symbology(symbology)
         entry = MODULE_LABELS.get(module)
         if entry is None:
             raise ValueError(f"Labels are not available for module: {module}")
@@ -303,7 +313,7 @@ class LabelPrinterService:
                 f"{MAX_LABELS_PER_JOB} at a time."
             )
 
-        zpl = self.render_job(specs, printer, fmt, width, height, copies)
+        zpl = self.render_job(specs, printer, fmt, width, height, copies, symbology)
         await send_to_printer(printer.host, printer.port, zpl)
 
         return {
@@ -311,6 +321,10 @@ class LabelPrinterService:
             "printer_name": printer.name,
             "labels_sent": len(specs) * copies,
             "auto_populated": auto_populated,
+            # Bytes on the wire is not a printed label. Asking afterwards is
+            # what turns "sent 40 labels" into "sent 40 labels, printer is out
+            # of stock" instead of a silent roll of nothing.
+            **await self._post_print_report(printer),
         }
 
     def render_job(
@@ -321,6 +335,7 @@ class LabelPrinterService:
         custom_width: Optional[float],
         custom_height: Optional[float],
         copies: int = 1,
+        symbology: str = SYMBOLOGY_CODE128,
     ) -> str:
         return render_zpl(
             specs,
@@ -330,10 +345,59 @@ class LabelPrinterService:
             dpi=printer.dpi,
             darkness=printer.darkness,
             copies=copies,
+            symbology=symbology,
         )
 
+    async def _post_print_report(self, printer) -> Dict[str, Any]:
+        """Ask the printer how it is, after a job has been sent.
+
+        Best-effort by design: a status query that fails must never turn a
+        successful print into a reported failure, so everything here degrades
+        to "we do not know" rather than raising.
+        """
+        try:
+            reply = await query_printer(printer.host, printer.port)
+        except (ValueError, PrinterUnreachableError):
+            return {
+                "printer_errors": [],
+                "printer_warnings": [],
+                "status_known": False,
+            }
+
+        status = summarize(reply)
+        return {
+            "printer_errors": status["errors"],
+            "printer_warnings": status["warnings"],
+            "status_known": bool(status["status_available"]),
+        }
+
+    async def get_status(self, printer_id: str, organization_id) -> Dict[str, Any]:
+        """Identity and fault status for a saved printer."""
+        printer = await self.get_printer(printer_id, organization_id)
+        reply = await query_printer(printer.host, printer.port)
+        return {
+            "printer_id": printer.id,
+            "printer_name": printer.name,
+            "configured_dpi": printer.dpi,
+            **summarize(reply),
+        }
+
+    async def probe_target(self, host: str, port: int) -> Dict[str, Any]:
+        """Identity and fault status for a host that is not saved yet.
+
+        Lets somebody confirm an address before committing it, instead of
+        having to save a printer, discover it is wrong, and edit it back. Same
+        address and port guards as every other path — this widens no target.
+        """
+        validate_printer_port(port)
+        reply = await query_printer(host, port)
+        return summarize(reply)
+
     async def print_test_label(
-        self, printer_id: str, organization_id
+        self,
+        printer_id: str,
+        organization_id,
+        symbology: str = SYMBOLOGY_CODE128,
     ) -> Dict[str, Any]:
         """Send one self-describing label, to prove the path end to end.
 
@@ -341,6 +405,7 @@ class LabelPrinterService:
         person can confirm three things at once: the job reached the printer,
         the stock size is right, and the barcode scans.
         """
+        validate_symbology(symbology)
         printer = await self.get_printer(printer_id, organization_id)
         if not printer.is_active:
             raise ValueError(f"Printer {printer.name!r} is disabled")
@@ -357,6 +422,11 @@ class LabelPrinterService:
             printer.custom_width,
             printer.custom_height,
             copies=1,
+            symbology=symbology,
         )
         await send_to_printer(printer.host, printer.port, zpl)
-        return {"printer_id": printer.id, "printer_name": printer.name}
+        return {
+            "printer_id": printer.id,
+            "printer_name": printer.name,
+            **await self._post_print_report(printer),
+        }

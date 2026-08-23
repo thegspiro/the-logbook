@@ -7,6 +7,8 @@ const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockRemove = vi.fn();
 const mockTest = vi.fn();
+const mockStatus = vi.fn();
+const mockProbe = vi.fn();
 const mockConfirm = vi.fn();
 
 vi.mock('../../services/labelService', () => ({
@@ -16,6 +18,8 @@ vi.mock('../../services/labelService', () => ({
     update: (...a: unknown[]) => mockUpdate(...a) as unknown,
     remove: (...a: unknown[]) => mockRemove(...a) as unknown,
     test: (...a: unknown[]) => mockTest(...a) as unknown,
+    status: (...a: unknown[]) => mockStatus(...a) as unknown,
+    probe: (...a: unknown[]) => mockProbe(...a) as unknown,
   },
 }));
 
@@ -49,7 +53,36 @@ describe('LabelPrintersSection', () => {
     mockCreate.mockResolvedValue(zebra);
     mockUpdate.mockResolvedValue(zebra);
     mockRemove.mockResolvedValue(undefined);
-    mockTest.mockResolvedValue({ printer_id: 'p1', printer_name: 'Quartermaster Zebra' });
+    mockTest.mockResolvedValue({
+      printer_id: 'p1',
+      printer_name: 'Quartermaster Zebra',
+      printer_errors: [],
+      printer_warnings: [],
+      status_known: true,
+    });
+    mockStatus.mockResolvedValue({
+      printer_id: 'p1',
+      printer_name: 'Quartermaster Zebra',
+      configured_dpi: 203,
+      responded: true,
+      identified: true,
+      model: 'ZTC ZD420-203dpi ZPL',
+      firmware: 'V93.20.15Z',
+      reported_dpi: 203,
+      errors: [],
+      warnings: [],
+      status_available: true,
+    });
+    mockProbe.mockResolvedValue({
+      responded: true,
+      identified: true,
+      model: 'ZTC ZD620-300dpi ZPL',
+      firmware: 'V93.20.15Z',
+      reported_dpi: 300,
+      errors: [],
+      warnings: [],
+      status_available: true,
+    });
     mockConfirm.mockResolvedValue(true);
   });
 
@@ -165,6 +198,106 @@ describe('LabelPrintersSection', () => {
 
     await waitFor(() => expect(mockConfirm).toHaveBeenCalled());
     expect(mockRemove).not.toHaveBeenCalled();
+  });
+
+  describe('knowing whether it can actually print', () => {
+    it('shows what the printer said about itself', async () => {
+      mockList.mockResolvedValue([zebra]);
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText('Quartermaster Zebra');
+
+      await user.click(screen.getByRole('button', { name: /Check status/ }));
+
+      await waitFor(() => expect(mockStatus).toHaveBeenCalledWith('p1'));
+      expect(await screen.findByText(/ZTC ZD420-203dpi ZPL/)).toBeInTheDocument();
+    });
+
+    it('surfaces a fault rather than reporting the printer as fine', async () => {
+      mockList.mockResolvedValue([zebra]);
+      mockStatus.mockResolvedValue({
+        printer_id: 'p1',
+        printer_name: 'Quartermaster Zebra',
+        configured_dpi: 203,
+        responded: true,
+        identified: true,
+        model: 'ZTC ZD420-203dpi ZPL',
+        firmware: null,
+        reported_dpi: 203,
+        errors: ['Out of labels'],
+        warnings: [],
+        status_available: true,
+      });
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText('Quartermaster Zebra');
+
+      await user.click(screen.getByRole('button', { name: /Check status/ }));
+      expect(await screen.findByText(/Out of labels/)).toBeInTheDocument();
+    });
+
+    it('calls out a device that connects but never answers', async () => {
+      // A TCP connection succeeds against whatever holds the address, so
+      // silence must not read as a healthy printer.
+      mockList.mockResolvedValue([zebra]);
+      mockStatus.mockResolvedValue({
+        printer_id: 'p1',
+        printer_name: 'Quartermaster Zebra',
+        configured_dpi: 203,
+        responded: false,
+        identified: false,
+        model: null,
+        firmware: null,
+        reported_dpi: null,
+        errors: [],
+        warnings: [],
+        status_available: false,
+      });
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText('Quartermaster Zebra');
+
+      await user.click(screen.getByRole('button', { name: /Check status/ }));
+      expect(await screen.findByText(/did not answer|nothing answered/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('setting a printer up', () => {
+    it('checks an address before it is saved', async () => {
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText(/No label printers yet/);
+
+      await user.click(screen.getByRole('button', { name: /Add a printer/ }));
+      await user.type(screen.getByLabelText(/Hostname or IP/), '10.0.0.42');
+      await user.click(screen.getByRole('button', { name: /Test connection/ }));
+
+      await waitFor(() => expect(mockProbe).toHaveBeenCalledWith('10.0.0.42', 9100));
+      expect(await screen.findByText(/ZTC ZD620-300dpi ZPL/)).toBeInTheDocument();
+    });
+
+    it('takes the resolution from the printer itself', async () => {
+      // Wrong dpi silently prints the label at the wrong physical size, and it
+      // is the field most likely to be set wrong by hand.
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText(/No label printers yet/);
+
+      await user.click(screen.getByRole('button', { name: /Add a printer/ }));
+      await user.type(screen.getByLabelText(/Hostname or IP/), '10.0.0.42');
+      expect(screen.getByLabelText(/Resolution/)).toHaveValue('203');
+
+      await user.click(screen.getByRole('button', { name: /Test connection/ }));
+      await waitFor(() => expect(screen.getByLabelText(/Resolution/)).toHaveValue('300'));
+    });
+
+    it('cannot test an address before one is typed', async () => {
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText(/No label printers yet/);
+      await user.click(screen.getByRole('button', { name: /Add a printer/ }));
+      expect(screen.getByRole('button', { name: /Test connection/ })).toBeDisabled();
+    });
   });
 
   it('does not offer paper sheet stock for a label printer', async () => {

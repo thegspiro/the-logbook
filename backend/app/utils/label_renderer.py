@@ -20,6 +20,53 @@ from typing import Any, Dict, Optional
 # labels are printable.
 MIN_BAR_WIDTH_INCH = 0.005
 
+# Symbologies a label can carry. Code 128 is the default and what the scan
+# lookup has always read; QR earns its place on small square stock, where a
+# Code 128 long enough to hold an asset id does not physically fit (a 10-char
+# value needs ~1.65" of width at a scannable module size).
+SYMBOLOGY_CODE128 = "code128"
+SYMBOLOGY_QR = "qr"
+SYMBOLOGIES = (SYMBOLOGY_CODE128, SYMBOLOGY_QR)
+
+# Error-correction level for QR. M recovers ~15% of the symbol, which is the
+# usual trade for a label that will live on equipment that gets scuffed —
+# without the size penalty H (~30%) costs on a small tag.
+QR_ERROR_CORRECTION = "M"
+
+# Below this the symbol stops being reliably readable by a phone camera.
+MIN_QR_SIZE_INCH = 0.3
+
+
+def validate_symbology(symbology: str) -> str:
+    """Return *symbology* if supported, else raise ValueError."""
+    if symbology not in SYMBOLOGIES:
+        raise ValueError(
+            f"Unknown barcode symbology: {symbology}. "
+            f"Supported: {', '.join(SYMBOLOGIES)}"
+        )
+    return symbology
+
+
+def _draw_qr(canvas_obj, value: str, x: float, y: float, size: float) -> None:
+    """Draw a QR symbol with its lower-left corner at (x, y), *size* square.
+
+    QrCodeWidget reports its own natural bounds, so the drawing is scaled to
+    the requested square rather than the module count being guessed at.
+    """
+    from reportlab.graphics import renderPDF
+    from reportlab.graphics.barcode import qr
+    from reportlab.graphics.shapes import Drawing
+
+    widget = qr.QrCodeWidget(value, barLevel=QR_ERROR_CORRECTION)
+    bounds = widget.getBounds()
+    natural_w = bounds[2] - bounds[0]
+    natural_h = bounds[3] - bounds[1]
+    drawing = Drawing(
+        size, size, transform=[size / natural_w, 0, 0, size / natural_h, 0, 0]
+    )
+    drawing.add(widget)
+    renderPDF.draw(drawing, canvas_obj, x, y)
+
 
 def sanitize_barcode_value(raw: str) -> str:
     """Normalize a Code128 value without changing its identity.
@@ -67,6 +114,25 @@ def _fit_code128(
             f"Barcode value {value!r} is too long for the selected label size"
         )
     return barcode
+
+
+def _fit_qr_size(available_height: float, available_width: float) -> float:
+    """Largest square that fits the space left for the symbol.
+
+    A QR version 2 symbol is 25 modules plus 4 modules of quiet zone per side;
+    at the 10 mil module a phone camera needs, that is a hair over 0.3", which
+    is the floor below which the symbol is refused rather than printed
+    unreadably small.
+    """
+    from reportlab.lib.units import inch
+
+    size = min(available_height, available_width)
+    if size < MIN_QR_SIZE_INCH * inch:
+        raise ValueError(
+            "Label is too small for a QR code. Use a larger label, remove the "
+            "extra info line, or switch to Code 128."
+        )
+    return size
 
 
 # Supported label formats. ``type`` is "sheet" (Avery grid) or "thermal"
@@ -190,6 +256,7 @@ def render_labels(
     custom_width: Optional[float] = None,
     custom_height: Optional[float] = None,
     auto_rotate: Optional[bool] = None,
+    symbology: str = SYMBOLOGY_CODE128,
 ) -> BytesIO:
     """Render label specs to a PDF for the given format.
 
@@ -197,6 +264,7 @@ def render_labels(
     """
     if not specs:
         raise ValueError("At least one label is required")
+    validate_symbology(symbology)
     for spec in specs:
         if not sanitize_barcode_value(str(spec.barcode_value).strip()):
             raise ValueError(
@@ -214,7 +282,7 @@ def render_labels(
                 "0.5-11 inches high"
             )
         rotate = auto_rotate if auto_rotate is not None else True
-        return _render_thermal(specs, custom_width, custom_height, rotate)
+        return _render_thermal(specs, custom_width, custom_height, rotate, symbology)
 
     fmt = LABEL_FORMATS.get(label_format)
     if not fmt:
@@ -224,12 +292,12 @@ def render_labels(
         )
 
     if fmt["type"] == "sheet":
-        return _render_sheet(specs)
+        return _render_sheet(specs, symbology)
     rotate = auto_rotate if auto_rotate is not None else fmt.get("auto_rotate", False)
-    return _render_thermal(specs, fmt["width"], fmt["height"], rotate)
+    return _render_thermal(specs, fmt["width"], fmt["height"], rotate, symbology)
 
 
-def _render_sheet(specs: list) -> BytesIO:
+def _render_sheet(specs: list, symbology: str = SYMBOLOGY_CODE128) -> BytesIO:
     """Avery 5160 layout: 3 columns x 10 rows, each label 2.625" x 1"."""
     from reportlab.graphics.barcode import code128
     from reportlab.lib.pagesizes import letter
@@ -288,14 +356,18 @@ def _render_sheet(specs: list) -> BytesIO:
             max_extra = int(usable_w / (5 * 0.5))
             c.drawString(x + padding, y_cursor, spec.extra[:max_extra])
 
-        bar_height = 0.35 * inch
-        bar_width_unit = 0.008 * inch
-        max_barcode_width = usable_w
-        barcode_obj = _fit_code128(
-            code128, barcode_value, bar_width_unit, max_barcode_width, bar_height
-        )
-        barcode_x = x + (label_w - barcode_obj.width) / 2
-        barcode_obj.drawOn(c, barcode_x, y + padding + 8)
+        symbol_bottom = y + padding + 8
+        if symbology == SYMBOLOGY_QR:
+            size = _fit_qr_size(y_cursor - symbol_bottom - 2, usable_w)
+            _draw_qr(c, barcode_value, x + (label_w - size) / 2, symbol_bottom, size)
+        else:
+            bar_height = 0.35 * inch
+            bar_width_unit = 0.008 * inch
+            barcode_obj = _fit_code128(
+                code128, barcode_value, bar_width_unit, usable_w, bar_height
+            )
+            barcode_x = x + (label_w - barcode_obj.width) / 2
+            barcode_obj.drawOn(c, barcode_x, symbol_bottom)
 
         c.setFont("Courier", 5.5)
         c.drawCentredString(x + label_w / 2, y + padding + 1, barcode_value)
@@ -310,6 +382,7 @@ def _render_thermal(
     width_in: float,
     height_in: float,
     auto_rotate: bool = False,
+    symbology: str = SYMBOLOGY_CODE128,
 ) -> BytesIO:
     """One label per page at the exact size. When ``auto_rotate`` and the label
     is landscape, the page is built portrait and content rotated 90° so it reads
@@ -358,10 +431,14 @@ def _render_thermal(
 
         # self_w already excludes the page padding, and the 10-module quiet
         # zones live inside barcode.width, so the bars may span it fully.
-        max_barcode_width = self_w
-
-        barcode_obj = _fit_code128(
-            code128, barcode_value, bar_width_unit, max_barcode_width, bar_height
+        # A QR is square and sized from the height left after the text, so it
+        # is built at draw time rather than here.
+        barcode_obj = (
+            None
+            if symbology == SYMBOLOGY_QR
+            else _fit_code128(
+                code128, barcode_value, bar_width_unit, self_w, bar_height
+            )
         )
 
         y_cursor = content_h - padding
@@ -400,9 +477,13 @@ def _render_thermal(
             else:
                 c.drawCentredString(content_w / 2, y_cursor, spec.extra[:max_extra])
 
-        barcode_x = padding + (self_w - barcode_obj.width) / 2
         barcode_y = padding + barcode_text_size + 4
-        barcode_obj.drawOn(c, barcode_x, barcode_y)
+        if barcode_obj is None:
+            size = _fit_qr_size(y_cursor - barcode_y - 2, self_w)
+            _draw_qr(c, barcode_value, padding + (self_w - size) / 2, barcode_y, size)
+        else:
+            barcode_x = padding + (self_w - barcode_obj.width) / 2
+            barcode_obj.drawOn(c, barcode_x, barcode_y)
 
         c.setFont("Courier", barcode_text_size)
         c.drawCentredString(content_w / 2, padding + 1, barcode_value)

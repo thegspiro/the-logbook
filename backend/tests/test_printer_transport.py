@@ -19,7 +19,9 @@ from app.utils import printer_transport as pt
 from app.utils.printer_transport import (
     ALLOWED_PRINTER_PORTS,
     MAX_PAYLOAD_BYTES,
+    MAX_STATUS_BYTES,
     PrinterUnreachableError,
+    query_printer,
     resolve_printer_host,
     send_to_printer,
     validate_printer_port,
@@ -211,3 +213,70 @@ class TestSending:
             ):
                 with pytest.raises(PrinterUnreachableError, match="Timed out"):
                     await send_to_printer("printer.local", 9100, "^XA^XZ")
+
+
+class TestStatusQuery:
+    """Reading back is the one place this module does not stay write-only, so
+    the bounds on it matter as much as the answer does."""
+
+    def _reader(self, *chunks):
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=list(chunks) + [b""])
+        return reader
+
+    async def test_sends_the_identity_and_status_queries(self):
+        writer = _writer()
+        reply = b"\x02ZTC ZD420-203dpi ZPL,V93.20.15Z\x03\x02 ERRORS: 0\x03"
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(return_value=(self._reader(reply), writer)),
+            ):
+                result = await query_printer("printer.local", 9100)
+        writer.write.assert_called_once_with(b"~HI~HQES")
+        assert "ZD420" in result
+
+    async def test_a_silent_printer_yields_an_empty_reply_not_an_error(self):
+        # Silence is meaningful — it is what a non-ZPL device on 9100 looks
+        # like — so it is reported, not raised.
+        writer = _writer()
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(return_value=(self._reader(b""), writer)),
+            ):
+                assert await query_printer("printer.local", 9100) == ""
+
+    async def test_the_reply_is_capped(self):
+        writer = _writer()
+        flood = b"A" * (MAX_STATUS_BYTES * 2)
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(return_value=(self._reader(flood), writer)),
+            ):
+                result = await query_printer("printer.local", 9100)
+        assert len(result) <= MAX_STATUS_BYTES
+
+    async def test_a_bad_port_is_rejected_before_connecting(self):
+        opener = AsyncMock()
+        with patch("asyncio.open_connection", opener):
+            with pytest.raises(ValueError, match="not a label-printer port"):
+                await query_printer("printer.local", 6379)
+        opener.assert_not_called()
+
+    async def test_a_blocked_address_is_rejected(self):
+        # The query path goes through the same address guards as the send
+        # path; it must not become a way around them.
+        with _resolver("169.254.169.254"):
+            with pytest.raises(ValueError, match="link-local"):
+                await query_printer("metadata.internal", 9100)
+
+    async def test_an_unreachable_printer_reports_unreachable(self):
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(side_effect=ConnectionRefusedError()),
+            ):
+                with pytest.raises(PrinterUnreachableError):
+                    await query_printer("printer.local", 9100)

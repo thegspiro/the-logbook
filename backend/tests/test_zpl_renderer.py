@@ -13,11 +13,17 @@ import re
 
 import pytest
 
-from app.utils.label_renderer import LABEL_FORMATS, MIN_BAR_WIDTH_INCH, LabelSpec
+from app.utils.label_renderer import (
+    LABEL_FORMATS,
+    MIN_BAR_WIDTH_INCH,
+    SYMBOLOGY_QR,
+    LabelSpec,
+)
 from app.utils.zpl_renderer import (
     MAX_DARKNESS,
     SUPPORTED_DPI,
     code128_width_dots,
+    qr_modules_for,
     render_zpl,
     resolve_label_size,
 )
@@ -265,3 +271,72 @@ class TestValidation:
 
     def test_field_data_is_never_empty_for_a_rendered_label(self):
         assert all(_field_data(render_zpl([_spec()])))
+
+
+class TestQrSymbology:
+    """QR earns its place on small square stock: a 10-character Code 128 needs
+    ~1.65" of width at a scannable module size, which a 1x1" asset tag has
+    nowhere to put."""
+
+    def test_emits_a_qr_field_instead_of_code128(self):
+        zpl = render_zpl([_spec()], "zebra_2x1", symbology=SYMBOLOGY_QR)
+        assert "^BQN,2," in zpl
+        assert "^BCN," not in zpl
+
+    def test_code128_remains_the_default(self):
+        # Every label printed before this existed is Code 128, and the scan
+        # lookup reads it; the default must not move.
+        zpl = render_zpl([_spec()], "zebra_2x1")
+        assert "^BCN," in zpl
+        assert "^BQN" not in zpl
+
+    def test_the_field_data_carries_the_error_correction_prefix(self):
+        # ^FD for ^BQ is "<error correction><input mode>,<data>"; without the
+        # prefix the printer reads the first two characters as the prefix and
+        # drops them from the encoded value.
+        zpl = render_zpl([_spec(barcode_value="INV-1")], symbology=SYMBOLOGY_QR)
+        assert "^FDMA,INV-1^FS" in zpl
+
+    def test_control_characters_are_escaped_in_a_qr_value(self):
+        zpl = render_zpl([_spec(barcode_value="A^B")], symbology=SYMBOLOGY_QR)
+        assert "MA,A_5EB" in zpl
+
+    def test_a_human_readable_line_is_printed_below(self):
+        # A QR carries no interpretation line of its own, and a label nobody
+        # can read without a scanner is no use at a shelf.
+        zpl = render_zpl([_spec(barcode_value="INV-000123")], symbology=SYMBOLOGY_QR)
+        assert zpl.count("INV-000123") == 2
+
+    def test_a_value_too_long_for_a_label_is_rejected(self):
+        with pytest.raises(ValueError, match="too long to encode as a QR"):
+            render_zpl([_spec(barcode_value="Y" * 400)], symbology=SYMBOLOGY_QR)
+
+    def test_magnification_keeps_modules_readable(self):
+        # One dot at 300 dpi is 3.3 mil; a phone camera needs ~10 mil, so the
+        # floor is expressed in inches and costs more dots on a finer printer.
+        zpl = render_zpl([_spec()], "zebra_2x1", dpi=300, symbology=SYMBOLOGY_QR)
+        magnification = int(re.search(r"\^BQN,2,(\d+),", zpl).group(1))
+        assert magnification / 300 >= 0.0099
+
+    def test_the_symbol_fits_within_the_label(self):
+        zpl = render_zpl([_spec()], "zebra_2x1", dpi=203, symbology=SYMBOLOGY_QR)
+        magnification = int(re.search(r"\^BQN,2,(\d+),", zpl).group(1))
+        modules = qr_modules_for("INV-000123")
+        assert modules * magnification <= 203 - 24
+
+    def test_a_ten_character_value_fits_a_1x1_tag(self):
+        # The case QR exists for. Code 128 at the same value needs the full
+        # width of the label and leaves nothing for the text.
+        assert render_zpl(
+            [_spec(barcode_value="INV-000123")], "thermal_1x1", symbology=SYMBOLOGY_QR
+        ).startswith("^XA")
+
+    @pytest.mark.parametrize("dpi", SUPPORTED_DPI)
+    def test_every_supported_dpi_renders_qr(self, dpi):
+        assert "^BQN" in render_zpl(
+            [_spec()], "zebra_4x2", dpi=dpi, symbology=SYMBOLOGY_QR
+        )
+
+    def test_an_unknown_symbology_is_rejected(self):
+        with pytest.raises(ValueError, match="Unknown barcode symbology"):
+            render_zpl([_spec()], symbology="datamatrix")

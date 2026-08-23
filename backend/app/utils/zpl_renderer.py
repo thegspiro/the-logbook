@@ -19,8 +19,12 @@ from typing import List, Optional
 from app.utils.label_renderer import (
     LABEL_FORMATS,
     MIN_BAR_WIDTH_INCH,
+    QR_ERROR_CORRECTION,
+    SYMBOLOGY_CODE128,
+    SYMBOLOGY_QR,
     LabelSpec,
     sanitize_barcode_value,
+    validate_symbology,
 )
 
 # Resolutions Zebra ships. 203 dpi ("standard") and 300 dpi ("high") cover
@@ -47,6 +51,33 @@ _QUIET_ZONE_MODULES = 10  # per side, the Code 128 spec minimum
 # Font 0 is proportional; 0.55x the character height is the average advance and
 # is what the truncation estimate below is built on.
 _AVG_CHAR_WIDTH_RATIO = 0.55
+
+# QR symbol sizes: (module count per side, byte-mode capacity at error
+# correction M). Sized against byte mode rather than alphanumeric because a
+# barcode value may carry lowercase or punctuation, which alphanumeric mode
+# cannot hold — so this never under-estimates the symbol.
+_QR_VERSIONS = (
+    (21, 14),
+    (25, 26),
+    (29, 42),
+    (33, 62),
+    (37, 84),
+    (41, 106),
+    (45, 122),
+    (49, 152),
+    (53, 180),
+    (57, 213),
+)
+
+# The QR spec's quiet zone is 4 modules per side, narrower than Code 128's 10.
+_QR_QUIET_MODULES = 4
+
+# A phone camera needs a bigger module than a laser scanner does; 10 mil is the
+# practical floor for a QR read off equipment in poor light.
+_MIN_QR_MODULE_INCH = 0.01
+
+# ^BQ magnification is capped at 10 by the ZPL spec.
+_MAX_QR_MAGNIFICATION = 10
 
 
 def _escape_zpl(text: str) -> str:
@@ -116,6 +147,33 @@ def _fit_module_width(value: str, available_dots: int, dpi: int) -> int:
     raise ValueError(f"Barcode value {value!r} is too long for the selected label size")
 
 
+def qr_modules_for(value: str) -> int:
+    """Module count per side for *value*, quiet zone included."""
+    length = len(value.encode("utf-8"))
+    for modules, capacity in _QR_VERSIONS:
+        if length <= capacity:
+            return modules + 2 * _QR_QUIET_MODULES
+    raise ValueError(f"Value {value!r} is too long to encode as a QR code on a label")
+
+
+def _fit_qr_magnification(value: str, available_dots: int, dpi: int) -> tuple:
+    """Largest magnification whose symbol fits, with its printed size.
+
+    Returns (magnification, size_in_dots). Raises when even the smallest
+    readable module does not fit.
+    """
+    modules = qr_modules_for(value)
+    min_magnification = max(1, round(_MIN_QR_MODULE_INCH * dpi))
+    for magnification in range(_MAX_QR_MAGNIFICATION, min_magnification - 1, -1):
+        size = modules * magnification
+        if size <= available_dots:
+            return magnification, size
+    raise ValueError(
+        "Label is too small for a QR code. Use a larger label, remove the "
+        "extra info line, or switch to Code 128."
+    )
+
+
 def resolve_label_size(
     label_format: str,
     custom_width: Optional[float] = None,
@@ -158,6 +216,7 @@ def render_zpl(
     dpi: int = 203,
     darkness: Optional[int] = None,
     copies: int = 1,
+    symbology: str = SYMBOLOGY_CODE128,
 ) -> str:
     """Render label specs to a ZPL II program.
 
@@ -167,6 +226,7 @@ def render_zpl(
     """
     if not specs:
         raise ValueError("At least one label is required")
+    validate_symbology(symbology)
     if dpi not in SUPPORTED_DPI:
         raise ValueError(
             f"Unsupported printer resolution: {dpi}. "
@@ -196,6 +256,7 @@ def render_zpl(
                 dpi=dpi,
                 darkness=darkness,
                 copies=copies,
+                symbology=symbology,
             )
         )
     return "".join(out)
@@ -210,6 +271,7 @@ def _render_one(
     dpi: int,
     darkness: Optional[int],
     copies: int,
+    symbology: str = SYMBOLOGY_CODE128,
 ) -> str:
     barcode_value = sanitize_barcode_value(str(spec.barcode_value).strip())
     if not barcode_value:
@@ -256,33 +318,57 @@ def _render_one(
         )
         y += info_height + gap
 
-    module_dots = _fit_module_width(barcode_value, content_width, dpi)
-    barcode_width = code128_width_dots(barcode_value, module_dots)
-
-    # The human-readable interpretation line prints below the bars and is part
-    # of the symbol's footprint, so it has to come out of the height budget or
-    # it prints past the bottom edge of the label.
+    # The human-readable line prints below the symbol and is part of its
+    # footprint, so it has to come out of the height budget or it prints past
+    # the bottom edge of the label. Code 128 draws its own; a QR carries no
+    # interpretation line, so one is drawn explicitly below it — a label nobody
+    # can read without a scanner is no use at a bin or a shelf.
     interpretation_height = max(12, int(round(18 * scale)))
     available_height = height_dots - padding - y - interpretation_height
-    min_bar_height = int(round(20 * scale))
-    if available_height < min_bar_height:
-        raise ValueError(
-            "Label is too small for the selected content. "
-            "Use a larger label or remove the extra info line."
-        )
-    # A 6" label would otherwise give the bars four inches of height, which
-    # scans no better and leaves the text stranded at the top.
-    bar_height = min(available_height, max(min_bar_height, int(height_dots * 0.4)))
 
-    barcode_x = padding + max(0, (content_width - barcode_width) // 2)
-    lines.append(f"^BY{module_dots},2.5,{bar_height}")
-    # ^FH here too: a caret or tilde inside an asset tag survives
-    # sanitize_barcode_value (it only strips non-ASCII) and would otherwise be
-    # parsed as the start of a command instead of encoded into the symbol.
-    lines.append(
-        f"^FO{barcode_x},{y}^BCN,{bar_height},Y,N,N"
-        f"^FH^FD{_escape_zpl(barcode_value)}^FS"
-    )
+    if symbology == SYMBOLOGY_QR:
+        magnification, size = _fit_qr_magnification(
+            barcode_value, min(available_height, content_width), dpi
+        )
+        symbol_x = padding + max(0, (content_width - size) // 2)
+        # ^FH applies to the barcode field too: a caret or tilde inside an
+        # asset tag survives sanitize_barcode_value (it only strips non-ASCII)
+        # and would otherwise be parsed as the start of a command instead of
+        # encoded into the symbol.
+        #
+        # The ^FD prefix is "<error correction><input mode>," — automatic input
+        # mode lets the printer pick the densest encoding for the data.
+        lines.append(
+            f"^FO{symbol_x},{y}^BQN,2,{magnification},{QR_ERROR_CORRECTION},7"
+            f"^FH^FD{QR_ERROR_CORRECTION}A,{_escape_zpl(barcode_value)}^FS"
+        )
+        text_y = y + size + max(2, int(round(2 * scale)))
+        value_text = _truncate(barcode_value, interpretation_height, content_width)
+        lines.append(
+            f"^FO{padding},{text_y}^A0N,{interpretation_height},"
+            f"{interpretation_height}^FB{content_width},1,0,C,0"
+            f"^FH^FD{_escape_zpl(value_text)}^FS"
+        )
+    else:
+        module_dots = _fit_module_width(barcode_value, content_width, dpi)
+        barcode_width = code128_width_dots(barcode_value, module_dots)
+
+        min_bar_height = int(round(20 * scale))
+        if available_height < min_bar_height:
+            raise ValueError(
+                "Label is too small for the selected content. "
+                "Use a larger label or remove the extra info line."
+            )
+        # A 6" label would otherwise give the bars four inches of height, which
+        # scans no better and leaves the text stranded at the top.
+        bar_height = min(available_height, max(min_bar_height, int(height_dots * 0.4)))
+
+        barcode_x = padding + max(0, (content_width - barcode_width) // 2)
+        lines.append(f"^BY{module_dots},2.5,{bar_height}")
+        lines.append(
+            f"^FO{barcode_x},{y}^BCN,{bar_height},Y,N,N"
+            f"^FH^FD{_escape_zpl(barcode_value)}^FS"
+        )
 
     header = ["^XA", "^CI28", f"^PW{width_dots}", f"^LL{height_dots}", "^LH0,0"]
     if darkness is not None:

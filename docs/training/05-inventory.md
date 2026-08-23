@@ -679,13 +679,19 @@ Generate barcode labels for inventory items to attach to equipment.
    - **Thermal 1×1** — square asset tags
    - **Letter Paper (Grid)** — Avery 5160, 30 labels per 8.5×11″ sheet
    - **Custom size** — enter the exact **width** and **height** (in inches, 0.5–8″ wide × 0.5–11″ tall) for any other sticker printer or label stock
-3. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
-4. Print one of three ways:
+3. Choose a **Barcode Style**:
+   - **Code 128** (default) — the linear barcode every existing label carries; scans with any handheld laser scanner.
+   - **QR code** — square, so it fits a long identifier on a small tag. On a 1″ square asset tag a Code 128 holding a full item id physically does not fit; a QR does. Scans with a phone camera as well as a 2D scanner.
+
+   Your choice is remembered per position and per module, exactly like the label size.
+
+4. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
+5. Print one of three ways:
    - **Send to Printer** (best, when a network label printer is configured) — sends the labels straight to the printer. No print dialog, no PDF, and nothing that can rescale the barcode. See [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer) below.
    - **PDF** (recommended for sticker/thermal printers without a network connection) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
 
-Labels include a Code128 barcode (with the required quiet-zone margins), the item name, and the asset tag or serial number.
+Labels include the barcode (Code 128 with the required quiet-zone margins, or a QR), the item name, and the asset tag or serial number. A QR has no built-in human-readable line, so the value is printed underneath it.
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
@@ -740,12 +746,30 @@ printing on port 9100, reachable from the server on the department network.
 4. Set **Label stock loaded** to the labels actually in the printer.
 5. Optionally set a **darkness adjustment** (−30 to 30). Leave it blank to keep
    whatever the printer is already tuned to; raise it if bars print faint.
-6. Save, then click **Send test label**. A label carrying the printer's own
+6. Before saving, click **Test connection**. The printer is asked to identify
+   itself, so you find out straight away whether that address really is a
+   label printer — and if it reports its own resolution, the **Resolution**
+   field is set from it rather than from a guess.
+7. Save, then click **Send test label**. A label carrying the printer's own
    name and a scannable test barcode confirms all three things at once: the
    server reached the printer, the stock size is right, and the code scans.
 
 The first printer you add becomes the default. With more than one, mark the one
 most people should get with **Make default**.
+
+**Check status** on a saved printer asks it what it is and whether it can
+print. This matters more than it sounds: a network connection succeeds against
+a printer that is powered on but out of labels, and against whatever else has
+picked up that address — so "connected" alone is not good news. The status line
+reports the model, and any fault the printer names (out of labels, printhead
+open, and so on). A printer that accepts the connection but answers nothing is
+called out as such rather than shown as fine.
+
+The same check runs automatically after every direct print, so a job sent to a
+printer that is out of stock reports **out of labels** instead of a success
+message and an empty roll. Older printer firmware does not answer the status
+query; those printers report their identity and say fault reporting is
+unavailable, rather than claiming to be healthy.
 
 **Printing to it:** any label page now shows **Send to Printer** beside the PDF
 and Print buttons. It sends the records currently listed, at the size selected

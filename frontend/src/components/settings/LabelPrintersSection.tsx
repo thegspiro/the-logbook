@@ -8,7 +8,20 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Loader2, Pencil, Plus, Printer, Star, TestTube2, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Loader2,
+  Pencil,
+  Plug,
+  Plus,
+  Printer,
+  Star,
+  Stethoscope,
+  TestTube2,
+  Trash2,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -17,6 +30,8 @@ import type {
   LabelPrinterConfig,
   LabelPrinterCreatePayload,
   LabelPrinterUpdatePayload,
+  PrinterStatus,
+  SavedPrinterStatus,
 } from '../../services/labelService';
 import { CUSTOM_PRESET_ID, LABEL_PRESETS } from '../labels/labelPresets';
 
@@ -58,6 +73,44 @@ const EMPTY_FORM: FormState = {
 
 const formatLabel = (id: string) => THERMAL_PRESETS.find((p) => p.id === id)?.name ?? id;
 
+/**
+ * What the printer said about itself.
+ *
+ * "Connected" is deliberately not treated as good news: a TCP connection
+ * succeeds against a printer that is out of labels and against whatever else
+ * happens to hold that address, so a device that answers nothing is called out
+ * rather than shown as fine.
+ */
+const PrinterStatusLine: React.FC<{ status: PrinterStatus }> = ({ status }) => {
+  if (!status.responded) {
+    return (
+      <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        Connected, but nothing answered — check that this address is the printer.
+      </p>
+    );
+  }
+  if (status.errors.length > 0) {
+    return (
+      <p className="mt-1.5 flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        {status.errors.join(', ')}
+      </p>
+    );
+  }
+  const details = [status.model, status.reported_dpi ? `${status.reported_dpi} dpi` : null, status.firmware].filter(
+    Boolean
+  );
+  return (
+    <p className="mt-1.5 flex items-start gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      {details.length > 0 ? details.join(' · ') : 'Printer responded'}
+      {status.warnings.length > 0 ? ` — ${status.warnings.join(', ')}` : ''}
+      {!status.status_available ? ' (no fault reporting on this firmware)' : ''}
+    </p>
+  );
+};
+
 const LabelPrintersSection: React.FC = () => {
   const { confirm } = useConfirm();
   const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
@@ -67,6 +120,10 @@ const LabelPrintersSection: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, SavedPrinterStatus>>({});
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<PrinterStatus | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -87,11 +144,13 @@ const LabelPrintersSection: React.FC = () => {
     setShowForm(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setProbeResult(null);
   };
 
   const startCreate = () => {
     setForm({ ...EMPTY_FORM, isDefault: printers.length === 0 });
     setEditingId(null);
+    setProbeResult(null);
     setShowForm(true);
   };
 
@@ -109,6 +168,7 @@ const LabelPrintersSection: React.FC = () => {
       isDefault: printer.is_default,
     });
     setEditingId(printer.id);
+    setProbeResult(null);
     setShowForm(true);
   };
 
@@ -193,12 +253,60 @@ const LabelPrintersSection: React.FC = () => {
   const sendTest = async (printer: LabelPrinterConfig) => {
     setTestingId(printer.id);
     try {
-      await labelPrinterService.test(printer.id);
+      const result = await labelPrinterService.test(printer.id);
       toast.success(`Test label sent to ${printer.name}`);
+      if (result.printer_errors.length > 0) {
+        toast.error(`${printer.name}: ${result.printer_errors.join(', ')}`, { duration: 8000 });
+      } else if (result.printer_warnings.length > 0) {
+        toast(`${printer.name}: ${result.printer_warnings.join(', ')}`, { duration: 6000 });
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not reach the printer'));
     } finally {
       setTestingId(null);
+    }
+  };
+
+  const checkStatus = async (printer: LabelPrinterConfig) => {
+    setCheckingId(printer.id);
+    try {
+      const status = await labelPrinterService.status(printer.id);
+      setStatuses((prev) => ({ ...prev, [printer.id]: status }));
+      if (!status.responded) {
+        toast.error(`${printer.name} accepted the connection but did not answer — it may not be a ZPL printer`);
+      } else if (status.errors.length > 0) {
+        toast.error(`${printer.name}: ${status.errors.join(', ')}`, { duration: 8000 });
+      } else {
+        toast.success(`${printer.name} is ready`);
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not reach the printer'));
+    } finally {
+      setCheckingId(null);
+    }
+  };
+
+  const probe = async () => {
+    const host = form.host.trim();
+    if (!host) return;
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const result = await labelPrinterService.probe(host, Number(form.port) || 9100);
+      setProbeResult(result);
+      // The printer knows its own resolution; taking its word for it removes
+      // the field most likely to be set wrong, and wrong dpi silently prints
+      // the label at the wrong physical size.
+      if (result.reported_dpi && String(result.reported_dpi) !== form.dpi) {
+        setForm((prev) => ({ ...prev, dpi: String(result.reported_dpi) }));
+        toast.success(`Found ${result.model ?? 'a printer'} — set resolution to ${result.reported_dpi} dpi`);
+      } else if (result.identified) {
+        toast.success(`Found ${result.model ?? 'a printer'}`);
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not reach that address'));
+    } finally {
+      setProbing(false);
     }
   };
 
@@ -260,6 +368,9 @@ const LabelPrintersSection: React.FC = () => {
                   {printer.host}:{printer.port} · {printer.dpi} dpi · {formatLabel(printer.label_format)}
                   {printer.location ? ` · ${printer.location}` : ''}
                 </p>
+                {statuses[printer.id] ? (
+                  <PrinterStatusLine status={statuses[printer.id] as SavedPrinterStatus} />
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {!printer.is_default && (
@@ -272,6 +383,20 @@ const LabelPrintersSection: React.FC = () => {
                     <Star className="h-3.5 w-3.5" /> Make default
                   </button>
                 )}
+                <button
+                  onClick={() => {
+                    void checkStatus(printer);
+                  }}
+                  disabled={checkingId === printer.id}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
+                >
+                  {checkingId === printer.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Stethoscope className="h-3.5 w-3.5" />
+                  )}
+                  Check status
+                </button>
                 <button
                   onClick={() => {
                     void sendTest(printer);
@@ -370,6 +495,17 @@ const LabelPrintersSection: React.FC = () => {
                 className="form-input w-full"
               />
               <p className="text-theme-text-muted mt-1 text-xs">9100 is the standard raw-print port.</p>
+              <button
+                onClick={() => {
+                  void probe();
+                }}
+                disabled={probing || form.host.trim() === ''}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary mt-2 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
+              >
+                {probing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plug className="h-3.5 w-3.5" />}
+                Test connection
+              </button>
+              {probeResult ? <PrinterStatusLine status={probeResult} /> : null}
             </div>
             <div>
               <label htmlFor="printer-dpi" className="form-label">

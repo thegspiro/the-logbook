@@ -25,8 +25,12 @@ The guards, and why each is drawn where it is:
   handing the *name* to the socket layer would re-resolve it, letting a DNS
   entry that answered with a LAN address during validation answer with
   something else microseconds later (DNS rebinding).
-* **Nothing is read back.** The caller learns only whether the write
-  succeeded, so this cannot be used to read an internal service's banner.
+* **Reading back is deliberately narrow.** :func:`send_to_printer` reads
+  nothing at all. :func:`query_printer` does read, because a print job that
+  merely reached a socket tells nobody whether a label came out — but it goes
+  through the same address and port checks, caps what it will read, and its
+  output is parsed into known fields by the caller rather than handed to a
+  client. A blind write to a printer port cannot be turned into a banner grab.
 """
 
 import asyncio
@@ -43,6 +47,22 @@ ALLOWED_PRINTER_PORTS = frozenset(list(range(9100, 9110)) + [6101])
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 SEND_TIMEOUT_SECONDS = 15.0
+
+# Status queries answer in milliseconds on a healthy LAN printer. The budget is
+# short on purpose: a status check is never worth making somebody wait.
+STATUS_TIMEOUT_SECONDS = 3.0
+
+# A ~HI + ~HQES reply is a few hundred bytes. The cap is what keeps a
+# misconfigured target from streaming into the response.
+MAX_STATUS_BYTES = 4096
+
+# ~HI asks the printer to identify itself (model, firmware, resolution); ~HQES
+# asks for its error and warning bitmasks. Together they answer the two
+# questions a socket connection cannot: is this actually a ZPL printer, and can
+# it print right now.
+HOST_QUERY = "~HI~HQES"
+
+_ETX = b"\x03"
 
 # A label job is a few hundred bytes each; a megabyte is already ~2000 labels
 # and well past anything a person queues from a print page.
@@ -165,3 +185,63 @@ async def send_to_printer(host: str, port: int, payload: str) -> int:
                 pass
 
     return len(data)
+
+
+async def query_printer(
+    host: str, port: int, timeout: float = STATUS_TIMEOUT_SECONDS
+) -> str:
+    """Ask the printer to identify itself and report its status.
+
+    Returns the raw reply, bounded by :data:`MAX_STATUS_BYTES`. An empty string
+    means the printer accepted the connection but never answered — which is
+    itself worth knowing, since it is what a non-ZPL device on port 9100 looks
+    like.
+
+    Raises ValueError for a rejected target and
+    :class:`PrinterUnreachableError` when the printer cannot be reached.
+    """
+    validate_printer_port(port)
+    address = await resolve_printer_host(host)
+
+    writer = None
+    buffer = b""
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(address, port), timeout=CONNECT_TIMEOUT_SECONDS
+        )
+        writer.write(HOST_QUERY.encode("ascii"))
+        await asyncio.wait_for(writer.drain(), timeout=timeout)
+
+        # Read until both replies have terminated, the cap is hit, or the
+        # printer goes quiet. A quiet printer is not an error here: whatever
+        # arrived is what gets parsed.
+        while len(buffer) < MAX_STATUS_BYTES:
+            try:
+                chunk = await asyncio.wait_for(reader.read(1024), timeout=timeout)
+            except asyncio.TimeoutError:
+                break
+            if not chunk:
+                break
+            buffer += chunk
+            if buffer.count(_ETX) >= 2:
+                break
+    except asyncio.TimeoutError:
+        raise PrinterUnreachableError(
+            f"Timed out querying the printer at {host}:{port}."
+        )
+    except OSError as exc:
+        logger.warning(f"Label printer query failed for {host}:{port}: {exc}")
+        raise PrinterUnreachableError(
+            f"Could not connect to the printer at {host}:{port}."
+        )
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await asyncio.wait_for(
+                    writer.wait_closed(), timeout=STATUS_TIMEOUT_SECONDS
+                )
+            except (asyncio.TimeoutError, OSError):
+                pass
+
+    return buffer[:MAX_STATUS_BYTES].decode("ascii", errors="replace")

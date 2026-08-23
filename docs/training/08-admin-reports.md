@@ -139,9 +139,15 @@ Printer** button that prints without going through a print dialog, so nothing
 can rescale a barcode and stop it scanning.
 
 Each printer records its network address, resolution, and the label stock
-loaded in it, and **Send test label** confirms the connection and alignment
-before anyone prints a batch. Printers are shared department-wide; the _label
-size_ each person prefers stays a per-position preference.
+loaded in it. **Test connection** checks an address before it is saved — the
+printer is asked to identify itself, and its reported resolution fills the
+field — and **Check status** asks a saved printer whether it can print right
+now, reporting faults such as out of labels or printhead open. That check also
+runs after every direct print, so a job sent to a printer that is out of stock
+says so instead of reporting success over an empty roll.
+
+Printers are shared department-wide; the _label size_ and _barcode style_ each
+person prefers stay per-position preferences.
 
 Full walkthrough: [Direct printing to a network label
 printer](./05-inventory.md#direct-printing-to-a-network-label-printer).

@@ -20,7 +20,8 @@ from app.services.label_printer_service import (
     LabelPrinterService,
     _validate_printer_config,
 )
-from app.utils.label_renderer import LabelSpec
+from app.utils.label_renderer import SYMBOLOGY_QR, LabelSpec
+from app.utils.printer_transport import PrinterUnreachableError
 
 ORG = "org-1"
 
@@ -254,7 +255,17 @@ class TestUpdate:
 
 class TestPrinting:
     def _patched_send(self):
-        return patch.object(lps, "send_to_printer", AsyncMock(return_value=42))
+        """Patch the send *and* the follow-up status query.
+
+        print_labels asks the printer how it is once the job is away. Leaving
+        that unpatched makes every test here open a real socket to a LAN
+        address that is not there and wait out the connect timeout.
+        """
+        return patch.multiple(
+            lps,
+            send_to_printer=AsyncMock(return_value=42),
+            query_printer=AsyncMock(return_value=""),
+        )
 
     async def test_renders_and_sends_to_the_printers_address(self):
         printer = _printer()
@@ -262,7 +273,8 @@ class TestPrinting:
         builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
 
         with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
-            with self._patched_send() as send:
+            with self._patched_send():
+                send = lps.send_to_printer
                 result = await svc.print_labels(ORG, "inventory", ["id-1"], "printer-1")
 
         host, port, payload = send.await_args.args
@@ -290,7 +302,8 @@ class TestPrinting:
         builder = AsyncMock(return_value=(specs, 0))
 
         with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
-            with self._patched_send() as send:
+            with self._patched_send():
+                send = lps.send_to_printer
                 with pytest.raises(ValueError, match="Print at most"):
                     await svc.print_labels(
                         ORG, "inventory", ["id"], "printer-1", copies=2
@@ -316,7 +329,8 @@ class TestPrinting:
         builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
 
         with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
-            with self._patched_send() as send:
+            with self._patched_send():
+                send = lps.send_to_printer
                 await svc.print_labels(
                     ORG, "inventory", ["id-1"], "printer-1", label_format="zebra_4x2"
                 )
@@ -329,7 +343,8 @@ class TestPrinting:
         builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
 
         with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
-            with self._patched_send() as send:
+            with self._patched_send():
+                send = lps.send_to_printer
                 await svc.print_labels(ORG, "inventory", ["id-1"], "printer-1")
         assert "^PW812" in send.await_args.args[2]
 
@@ -339,7 +354,8 @@ class TestPrinting:
         builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
 
         with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
-            with self._patched_send() as send:
+            with self._patched_send():
+                send = lps.send_to_printer
                 await svc.print_labels(ORG, "inventory", ["id-1"], "printer-1")
         # 2" at 300 dpi is 600 dots; at 203 it would be 406.
         assert "^PW600" in send.await_args.args[2]
@@ -348,8 +364,13 @@ class TestPrinting:
 class TestTestLabel:
     async def test_sends_a_self_describing_label(self):
         svc, _ = _service(scalar=_printer())
-        with patch.object(lps, "send_to_printer", AsyncMock()) as send:
+        with patch.multiple(
+            lps,
+            send_to_printer=AsyncMock(),
+            query_printer=AsyncMock(return_value=""),
+        ):
             result = await svc.print_test_label("printer-1", ORG)
+            send = lps.send_to_printer
         payload = send.await_args.args[2]
         assert "TEST-LABEL" in payload
         assert "Quartermaster Zebra" in payload
@@ -364,3 +385,129 @@ class TestTestLabel:
         svc, _ = _service(scalar=None)
         with pytest.raises(ValueError, match="Printer not found"):
             await svc.print_test_label("printer-1", "other-org")
+
+
+_HEALTHY = (
+    "\x02ZTC ZD420-203dpi ZPL,V93.20.15Z,8,4194304\x03\r\n"
+    "\x02\r\nPRINTER STATUS\r\n"
+    " ERRORS:         0 00000000 00000000\r\n"
+    " WARNINGS:       0 00000000 00000000\r\n\x03"
+)
+_MEDIA_OUT = _HEALTHY.replace(
+    "ERRORS:         0 00000000 00000000", "ERRORS:         1 00000000 00000001"
+)
+
+
+class TestStatusReporting:
+    """Bytes reaching a socket is not a printed label. A printer that is out of
+    stock accepts the job and prints nothing, so a bare success would be a lie."""
+
+    def _patched(self, send=None, query=None):
+        return patch.multiple(
+            lps,
+            send_to_printer=send or AsyncMock(),
+            query_printer=query or AsyncMock(return_value=_HEALTHY),
+        )
+
+    async def _print(self, svc, **kwargs):
+        builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
+        with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
+            return await svc.print_labels(
+                ORG, "inventory", ["id-1"], "printer-1", **kwargs
+            )
+
+    async def test_a_faulted_printer_is_reported_after_the_send(self):
+        svc, _ = _service(scalar=_printer())
+        with self._patched(query=AsyncMock(return_value=_MEDIA_OUT)):
+            result = await self._print(svc)
+        assert result["printer_errors"] == ["Out of labels"]
+        assert result["status_known"] is True
+
+    async def test_a_healthy_printer_reports_no_faults(self):
+        svc, _ = _service(scalar=_printer())
+        with self._patched():
+            result = await self._print(svc)
+        assert result["printer_errors"] == []
+        assert result["labels_sent"] == 1
+
+    async def test_a_failed_status_query_does_not_fail_the_print(self):
+        # The labels are already on the wire. Turning a successful print into
+        # a reported failure because the follow-up query timed out would be a
+        # worse answer than admitting the status is unknown.
+        svc, _ = _service(scalar=_printer())
+        with self._patched(query=AsyncMock(side_effect=PrinterUnreachableError("x"))):
+            result = await self._print(svc)
+        assert result["labels_sent"] == 1
+        assert result["status_known"] is False
+        assert result["printer_errors"] == []
+
+    async def test_the_test_label_reports_faults_too(self):
+        svc, _ = _service(scalar=_printer())
+        with self._patched(query=AsyncMock(return_value=_MEDIA_OUT)):
+            result = await svc.print_test_label("printer-1", ORG)
+        assert result["printer_errors"] == ["Out of labels"]
+
+    async def test_get_status_is_org_scoped(self):
+        svc, _ = _service(scalar=None)
+        with patch.object(lps, "query_printer", AsyncMock(return_value=_HEALTHY)):
+            with pytest.raises(ValueError, match="Printer not found"):
+                await svc.get_status("printer-1", "other-org")
+
+    async def test_get_status_reports_identity(self):
+        svc, _ = _service(scalar=_printer())
+        with patch.object(lps, "query_printer", AsyncMock(return_value=_HEALTHY)):
+            result = await svc.get_status("printer-1", ORG)
+        assert result["model"] == "ZTC ZD420-203dpi ZPL"
+        assert result["reported_dpi"] == 203
+        assert result["configured_dpi"] == 203
+
+    async def test_probe_rejects_a_non_printer_port_before_querying(self):
+        svc, _ = _service()
+        with patch.object(lps, "query_printer", AsyncMock()) as query:
+            with pytest.raises(ValueError, match="not a label-printer port"):
+                await svc.probe_target("10.0.0.1", 6379)
+        query.assert_not_called()
+
+    async def test_probe_returns_identity_for_an_unsaved_target(self):
+        svc, _ = _service()
+        with patch.object(lps, "query_printer", AsyncMock(return_value=_HEALTHY)):
+            result = await svc.probe_target("10.0.0.1", 9100)
+        assert result["identified"] is True
+        assert result["reported_dpi"] == 203
+
+
+class TestSymbology:
+    async def test_qr_is_sent_when_requested(self):
+        svc, _ = _service(scalar=_printer())
+        builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
+        with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
+            with patch.multiple(
+                lps,
+                send_to_printer=AsyncMock(),
+                query_printer=AsyncMock(return_value=_HEALTHY),
+            ):
+                await svc.print_labels(
+                    ORG, "inventory", ["id-1"], "printer-1", symbology=SYMBOLOGY_QR
+                )
+                payload = lps.send_to_printer.await_args.args[2]
+        assert "^BQN" in payload
+
+    async def test_code128_is_the_default(self):
+        svc, _ = _service(scalar=_printer())
+        builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
+        with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
+            with patch.multiple(
+                lps,
+                send_to_printer=AsyncMock(),
+                query_printer=AsyncMock(return_value=_HEALTHY),
+            ):
+                await svc.print_labels(ORG, "inventory", ["id-1"], "printer-1")
+                payload = lps.send_to_printer.await_args.args[2]
+        assert "^BCN," in payload
+
+    async def test_an_unknown_symbology_is_rejected(self):
+        svc, _ = _service(scalar=_printer())
+        with pytest.raises(ValueError, match="Unknown barcode symbology"):
+            await svc.print_labels(
+                ORG, "inventory", ["id-1"], "printer-1", symbology="datamatrix"
+            )
