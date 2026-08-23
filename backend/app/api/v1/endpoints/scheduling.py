@@ -5,6 +5,7 @@ Endpoints for shift scheduling including shift management,
 attendance tracking, and calendar views.
 """
 
+import copy
 from datetime import date, timedelta
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from app.core.utils import ensure_found, safe_error_detail
 from app.models.training import (
     AssignmentStatus,
     BasicApparatus,
+    Shift,
     ShiftAssignment,
     ShiftAttendance,
     ShiftCall,
@@ -51,6 +53,8 @@ from app.schemas.scheduling import (
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
     SchedulingSummary,
+    SchedulingWidgetPreferences,
+    SchedulingWidgetSummary,
     ShiftAssignmentCreate,
     ShiftAssignmentResponse,
     ShiftAssignmentUpdate,
@@ -92,6 +96,10 @@ from app.services.integration_services.notification_dispatch import (
     notify_summary,
 )
 from app.services.scheduling_service import SchedulingService
+from app.services.scheduling_widget_service import (
+    MAX_WIDGET_WINDOW_DAYS,
+    SchedulingWidgetService,
+)
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.positions import normalize_stored_positions
 
@@ -1148,6 +1156,134 @@ async def get_scheduling_summary(
     """Get scheduling module summary statistics"""
     service = SchedulingService(db)
     return await service.get_summary(current_user.organization_id)
+
+
+WIDGET_KEYS = {
+    "today_staffing",
+    "future_coverage_gaps",
+    "open_slots",
+    "pending_staffing_changes",
+    "incomplete_closeouts",
+    "workload_balance",
+    "special_operations",
+}
+
+
+async def _available_widget_filters(db: AsyncSession, organization_id):
+    stations = set(
+        (
+            await db.execute(
+                select(Shift.station_id)
+                .where(
+                    Shift.organization_id == organization_id,
+                    Shift.station_id.is_not(None),
+                )
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    platoons = set(
+        (
+            await db.execute(
+                select(Shift.platoon)
+                .where(
+                    Shift.organization_id == organization_id,
+                    Shift.platoon.is_not(None),
+                )
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return stations, platoons
+
+
+@router.get("/dashboard/widgets", response_model=SchedulingWidgetSummary)
+async def get_scheduling_widget_summary(
+    start_date: date,
+    end_date: date,
+    station_id: str | None = Query(None, max_length=100),
+    platoon: str | None = Query(None, max_length=20),
+    shift_type: str | None = Query(None, max_length=50),
+    position: str | None = Query(None, max_length=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Return purpose-built staffing totals for one bounded, scoped window."""
+    if end_date < start_date or (end_date - start_date).days >= MAX_WIDGET_WINDOW_DAYS:
+        raise HTTPException(status_code=422, detail="Date window must be 1 to 93 days")
+    stations, platoons = await _available_widget_filters(
+        db, current_user.organization_id
+    )
+    if station_id and station_id not in stations:
+        raise HTTPException(status_code=422, detail="Station is not available")
+    if platoon and platoon not in platoons:
+        raise HTTPException(status_code=422, detail="Platoon is not available")
+    return await SchedulingWidgetService(db).summarize(
+        str(current_user.organization_id),
+        start_date,
+        end_date,
+        station_id,
+        platoon,
+        shift_type,
+        position,
+    )
+
+
+@router.get("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)
+async def get_scheduling_widget_preferences(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Return saved defaults, dropping resources that are no longer accessible."""
+    stations, platoons = await _available_widget_filters(
+        db, current_user.organization_id
+    )
+    raw = (current_user.notification_preferences or {}).get(
+        "scheduling_dashboard_widgets", {}
+    )
+    clean = {}
+    for key, value in raw.items():
+        if key not in WIDGET_KEYS or not isinstance(value, dict):
+            continue
+        item = dict(value)
+        if item.get("station_id") not in stations:
+            item.pop("station_id", None)
+        if item.get("platoon") not in platoons:
+            item.pop("platoon", None)
+        clean[key] = item
+    return {"widgets": clean}
+
+
+@router.put("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)
+async def save_scheduling_widget_preferences(
+    payload: SchedulingWidgetPreferences,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Save only filters that still resolve inside the caller's organization."""
+    unknown = set(payload.widgets) - WIDGET_KEYS
+    if unknown:
+        raise HTTPException(status_code=422, detail="Unknown scheduling widget")
+    stations, platoons = await _available_widget_filters(
+        db, current_user.organization_id
+    )
+    for value in payload.widgets.values():
+        if value.station_id and value.station_id not in stations:
+            raise HTTPException(status_code=422, detail="Station is not available")
+        if value.platoon and value.platoon not in platoons:
+            raise HTTPException(status_code=422, detail="Platoon is not available")
+    preferences = copy.deepcopy(current_user.notification_preferences or {})
+    preferences["scheduling_dashboard_widgets"] = {
+        key: value.model_dump(exclude_none=True)
+        for key, value in payload.widgets.items()
+    }
+    current_user.notification_preferences = preferences
+    await db.commit()
+    return payload
 
 
 # ============================================

@@ -12,11 +12,11 @@ import { renderWithRouter } from '../../test/utils';
 const mockGetLastCheckResults = vi.fn();
 const mockSubmitCheck = vi.fn();
 const mockUpdateDeployedLot = vi.fn();
-const mockEnqueueCheck = vi.fn();
 const mockUploadCheckItemPhotos = vi.fn();
 const mockListPendingChecks = vi.fn();
 const mockDequeueCheck = vi.fn();
 const mockMarkCheckSubmitted = vi.fn();
+const mockEnqueueCheck = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
