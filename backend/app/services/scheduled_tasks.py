@@ -1628,8 +1628,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                                 for n in pending_checklists
                             )
                             extra_html += (
-                                "<p><strong>Outstanding end-of-shift "
-                                "checklists:</strong></p>"
+                                "<h2>Outstanding end-of-shift checklists</h2>"
                                 f"<ul>{cl_items}</ul>"
                             )
                             extra_text += (
@@ -2013,10 +2012,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             items = "".join(
                                 f"<li>{_html.escape(n)}</li>" for n in checklist_names
                             )
+                            # <h2>, not <p><strong>: the shell styles
+                            # .content h2 as the section heading, and an
+                            # injected chunk that opts out of it reads as a
+                            # different email from the paragraph above it.
                             checklist_html = (
-                                "<p><strong>Start-of-shift checklists "
-                                "to complete:</strong></p>"
-                                f"<ul>{items}</ul>"
+                                "<h2>Start-of-shift checklists</h2>" f"<ul>{items}</ul>"
                             )
                             checklist_text = "Start-of-shift checklists: " + ", ".join(
                                 checklist_names

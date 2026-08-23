@@ -36,6 +36,8 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     TFOOT_STYLE,
     TH_STYLE,
     build_email_document,
+    build_logo_cell,
+    build_shell,
 )
 
 # Organization columns that reach templates unchanged, as
@@ -181,7 +183,12 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
 # so anything checking "is every variable in this body supplied?" has to
 # discount these.
 RENDERER_INJECTED_VARIABLES: frozenset = frozenset(
-    {"organization_logo_img", "footer_html", "footer_text"}
+    {
+        "organization_logo_img",
+        "organization_logo_cell",
+        "footer_html",
+        "footer_text",
+    }
 )
 
 
@@ -720,49 +727,49 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "item_count": "5",
             "total_value": "2,450.00",
             "items_list_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                f'<table style="{TABLE_STYLE}">'
                 "<thead><tr>"
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">#</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Serial #</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Asset Tag</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Condition</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:right;">Value</th>'
+                f'<th style="{TH_STYLE}text-align:left;">#</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Item</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Serial #</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Asset Tag</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Condition</th>'
+                f'<th style="{TH_STYLE}text-align:right;">Value</th>'
                 "</tr></thead><tbody>"
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">1</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Turnout Coat (Size L)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TC-2024-0456</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TCOAT-012</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Good</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$850.00</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">2</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Turnout Pants (Size L)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TP-2024-0789</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TPANT-012</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Good</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$650.00</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">3</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Helmet (Black)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-2024-0089</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-089</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Excellent</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$450.00</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">4</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">SCBA Mask</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">SCBA-2023-0234</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">SCBA-234</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Fair</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$350.00</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">5</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Radio (Portable)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-2024-0567</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-567</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Good</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$150.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">1</td>'
+                f'<td style="{TD_STYLE}">Turnout Coat (Size L)</td>'
+                f'<td style="{TD_STYLE}">TC-2024-0456</td>'
+                f'<td style="{TD_STYLE}">TCOAT-012</td>'
+                f'<td style="{TD_STYLE}">Good</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$850.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">2</td>'
+                f'<td style="{TD_STYLE}">Turnout Pants (Size L)</td>'
+                f'<td style="{TD_STYLE}">TP-2024-0789</td>'
+                f'<td style="{TD_STYLE}">TPANT-012</td>'
+                f'<td style="{TD_STYLE}">Good</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$650.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">3</td>'
+                f'<td style="{TD_STYLE}">Helmet (Black)</td>'
+                f'<td style="{TD_STYLE}">HLM-2024-0089</td>'
+                f'<td style="{TD_STYLE}">HLM-089</td>'
+                f'<td style="{TD_STYLE}">Excellent</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$450.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">4</td>'
+                f'<td style="{TD_STYLE}">SCBA Mask</td>'
+                f'<td style="{TD_STYLE}">SCBA-2023-0234</td>'
+                f'<td style="{TD_STYLE}">SCBA-234</td>'
+                f'<td style="{TD_STYLE}">Fair</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$350.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">5</td>'
+                f'<td style="{TD_STYLE}">Radio (Portable)</td>'
+                f'<td style="{TD_STYLE}">RAD-2024-0567</td>'
+                f'<td style="{TD_STYLE}">RAD-567</td>'
+                f'<td style="{TD_STYLE}">Good</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$150.00</td></tr>'
                 "</tbody>"
                 "<tfoot><tr>"
-                '<td colspan="5" style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">Total Outstanding Value:</td>'
-                '<td style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">$2,450.00</td>'
+                f'<td colspan="5" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
+                f'<td style="{TFOOT_STYLE}text-align:right;">$2,450.00</td>'
                 "</tr></tfoot></table>"
             ),
             "items_list_text": (
@@ -845,33 +852,33 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "item_count": "3",
             "total_value": "1,200.00",
             "items_list_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                f'<table style="{TABLE_STYLE}">'
                 "<thead><tr>"
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">#</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Serial #</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Asset Tag</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:right;">Value</th>'
+                f'<th style="{TH_STYLE}text-align:left;">#</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Item</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Serial #</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Asset Tag</th>'
+                f'<th style="{TH_STYLE}text-align:right;">Value</th>'
                 "</tr></thead><tbody>"
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">1</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Turnout Coat (Size L)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TC-2024-0456</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TCOAT-012</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$500.00</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">2</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Helmet (Black)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-2024-0089</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-089</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$450.00</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">3</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Radio (Portable)</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-2024-0567</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-567</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$250.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">1</td>'
+                f'<td style="{TD_STYLE}">Turnout Coat (Size L)</td>'
+                f'<td style="{TD_STYLE}">TC-2024-0456</td>'
+                f'<td style="{TD_STYLE}">TCOAT-012</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$500.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">2</td>'
+                f'<td style="{TD_STYLE}">Helmet (Black)</td>'
+                f'<td style="{TD_STYLE}">HLM-2024-0089</td>'
+                f'<td style="{TD_STYLE}">HLM-089</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$450.00</td></tr>'
+                f'<tr><td style="{TD_STYLE}">3</td>'
+                f'<td style="{TD_STYLE}">Radio (Portable)</td>'
+                f'<td style="{TD_STYLE}">RAD-2024-0567</td>'
+                f'<td style="{TD_STYLE}">RAD-567</td>'
+                f'<td style="{TD_STYLE}text-align:right;">$250.00</td></tr>'
                 "</tbody>"
                 "<tfoot><tr>"
-                '<td colspan="4" style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">Total Outstanding Value:</td>'
-                '<td style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">$1,200.00</td>'
+                f'<td colspan="4" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
+                f'<td style="{TFOOT_STYLE}text-align:right;">$1,200.00</td>'
                 "</tr></tfoot></table>"
             ),
             "items_list_text": (
@@ -925,22 +932,22 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "quorum_status": "Quorum Met",
             "quorum_detail": "Quorum requires 50% turnout. Actual: 84.4% (38/45).",
             "results_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
-                '<tr><th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Position</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Candidate</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:center;">Votes</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:center;">%</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:center;">Result</th></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Captain</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">John Smith</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">22</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">57.9%</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">\u2705 Elected</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Captain</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Jane Doe</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">16</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">42.1%</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">&mdash;</td></tr>'
+                f'<table style="{TABLE_STYLE}">'
+                f'<tr><th style="{TH_STYLE}text-align:left;">Position</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Candidate</th>'
+                f'<th style="{TH_STYLE}text-align:center;">Votes</th>'
+                f'<th style="{TH_STYLE}text-align:center;">%</th>'
+                f'<th style="{TH_STYLE}text-align:center;">Result</th></tr>'
+                f'<tr><td style="{TD_STYLE}">Captain</td>'
+                f'<td style="{TD_STYLE}">John Smith</td>'
+                f'<td style="{TD_STYLE}text-align:center;">22</td>'
+                f'<td style="{TD_STYLE}text-align:center;">57.9%</td>'
+                f'<td style="{TD_STYLE}text-align:center;">\u2705 Elected</td></tr>'
+                f'<tr><td style="{TD_STYLE}">Captain</td>'
+                f'<td style="{TD_STYLE}">Jane Doe</td>'
+                f'<td style="{TD_STYLE}text-align:center;">16</td>'
+                f'<td style="{TD_STYLE}text-align:center;">42.1%</td>'
+                f'<td style="{TD_STYLE}text-align:center;">&mdash;</td></tr>'
                 "</table>"
             ),
             "results_text": (
@@ -963,13 +970,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
                 "  ... and 35 others"
             ),
             "skipped_voters_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
-                '<tr><th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Member</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Reason</th></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Tom Brown</td>'
-                "<td style=\"padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;\">Membership tier 'Social' is not eligible to vote</td></tr>"
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Sarah Lee</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Not checked in as present at the meeting</td></tr>'
+                f'<table style="{TABLE_STYLE}">'
+                f'<tr><th style="{TH_STYLE}text-align:left;">Member</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Reason</th></tr>'
+                f'<tr><td style="{TD_STYLE}">Tom Brown</td>'
+                "<td style=\"{TD_STYLE}\">Membership tier 'Social' is not eligible to vote</td></tr>"
+                f'<tr><td style="{TD_STYLE}">Sarah Lee</td>'
+                f'<td style="{TD_STYLE}">Not checked in as present at the meeting</td></tr>'
                 "</table>"
             ),
             "skipped_voters_text": (
@@ -1039,13 +1046,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
                 "  ... and 35 others"
             ),
             "skipped_voters_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
-                '<tr><th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Member</th>'
-                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Reason</th></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Tom Brown</td>'
-                "<td style=\"padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;\">Membership tier 'Social' is not eligible to vote</td></tr>"
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Sarah Lee</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Not checked in as present at the meeting</td></tr>'
+                f'<table style="{TABLE_STYLE}">'
+                f'<tr><th style="{TH_STYLE}text-align:left;">Member</th>'
+                f'<th style="{TH_STYLE}text-align:left;">Reason</th></tr>'
+                f'<tr><td style="{TD_STYLE}">Tom Brown</td>'
+                "<td style=\"{TD_STYLE}\">Membership tier 'Social' is not eligible to vote</td></tr>"
+                f'<tr><td style="{TD_STYLE}">Sarah Lee</td>'
+                f'<td style="{TD_STYLE}">Not checked in as present at the meeting</td></tr>'
                 "</table>"
             ),
             "skipped_voters_text": (
@@ -1091,11 +1098,11 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "apparatus_text": "Apparatus: Engine 1",
             "roster_html": (
                 "<p><strong>Crew roster:</strong></p>"
-                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">John Doe</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Driver</td></tr>'
-                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Jane Smith</td>'
-                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Officer</td></tr>'
+                f'<table style="{TABLE_STYLE}">'
+                f'<tr><td style="{TD_STYLE}">John Doe</td>'
+                f'<td style="{TD_STYLE}">Driver</td></tr>'
+                f'<tr><td style="{TD_STYLE}">Jane Smith</td>'
+                f'<td style="{TD_STYLE}">Officer</td></tr>'
                 "</table>"
             ),
             "roster_text": "Crew: John Doe (Driver), Jane Smith (Officer)",
@@ -1118,31 +1125,22 @@ SAMPLE_CONTEXT.update(
 )
 
 # Default welcome email HTML body
-DEFAULT_WELCOME_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Welcome to {{organization_name}}</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{first_name}},</p>
-
+DEFAULT_WELCOME_HTML = build_shell(
+    "Your account is ready",
+    """        <p>Hello {{first_name}},</p>
         <p>Your account has been created for <strong>{{organization_name}}</strong>. You can now log in and access the system.</p>
-
-        <div class="details" role="region" aria-label="Account credentials">
-            <p><strong>Username:</strong> {{username}}</p>
-            <p><strong>Temporary Password:</strong> {{temp_password}}</p>
+        <div class="details" style="border-left-color: {accent};" role="region" aria-label="Account credentials">
+            <table>
+                <tr><th>Username</th><td>{{username}}</td></tr>
+                <tr><th>Temporary password</th><td>{{temp_password}}</td></tr>
+            </table>
         </div>
-
         <p>For security, please change your password after your first login.</p>
-
-        <p style="text-align: center;">
-            <a href="{{login_url}}" class="button" role="link">Log In Now</a>
-        </p>
-
-        <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{{login_url}}</small></p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{login_url}}" class="button" style="background-color: {accent};" role="link">Log In Now</a></p>
+        <p class="fineprint">If the button doesn't work, copy and paste this URL into your browser:<br/>{{login_url}}</p>""",
+    accent=ACCENT_RED,
+    chip="Account ready",
+)
 
 DEFAULT_WELCOME_TEXT = """Welcome to {{organization_name}}
 
@@ -1162,28 +1160,16 @@ Log in at: {{login_url}}
 DEFAULT_WELCOME_SUBJECT = "Welcome to {{organization_name}} — Your Account is Ready"
 
 # Default password reset email
-DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Password Reset Request</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{first_name}},</p>
-
-        <p>We received a request to reset your password for <strong>{{organization_name}}</strong>.</p>
-
-        <p>Click the button below to set a new password. This link will expire in <strong>{{expiry_minutes}} minutes</strong>.</p>
-
-        <p style="text-align: center;">
-            <a href="{{reset_url}}" class="button" role="link">Reset Password</a>
-        </p>
-
-        <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{{reset_url}}</small></p>
-
-        <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+DEFAULT_PASSWORD_RESET_HTML = build_shell(
+    "Reset your password",
+    """        <p>Hello {{first_name}},</p>
+        <p>We received a request to reset your password for <strong>{{organization_name}}</strong>. This link expires in <strong>{{expiry_minutes}} minutes</strong>.</p>
+        <p><a href="{{reset_url}}" class="button" style="background-color: {accent};" role="link">Reset Password</a></p>
+        <p class="fineprint">If the button doesn't work, copy and paste this URL into your browser:<br/>{{reset_url}}</p>
+        <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>""",
+    accent=ACCENT_SLATE,
+    chip="Security",
+)
 
 DEFAULT_PASSWORD_RESET_TEXT = """Password Reset Request
 
@@ -1202,27 +1188,23 @@ If you did not request a password reset, you can safely ignore this email. Your 
 DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 
 # Default member dropped / property return email template
-DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Department Property Return Notice</h1>
-    </div>
-    <div class="content">
-        <p>Dear {{member_name}},</p>
+DEFAULT_MEMBER_DROPPED_HTML = build_shell(
+    "Department Property Return Notice",
+    """        <p>Dear {{member_name}},</p>
         <p>
             This message serves as formal notice that your membership status with
             <strong>{{organization_name}}</strong> has been changed to
             <strong>{{drop_type_display}}</strong> effective <strong>{{effective_date}}</strong>.
         </p>
         <p><strong>Reason:</strong> {{reason}}</p>
-        <div class="details">
-            <p><strong>Outstanding Items:</strong> {{item_count}} item(s)</p>
-            <p><strong>Total Assessed Value:</strong> ${{total_value}}</p>
-            <p><strong>Return Deadline:</strong> {{return_deadline}}</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Outstanding items</th><td>{{item_count}} item(s)</td></tr>
+                <tr><th>Total assessed value</th><td>${{total_value}}</td></tr>
+                <tr><th>Return deadline</th><td>{{return_deadline}}</td></tr>
+            </table>
         </div>
-
         {{items_list_html}}
-
         <p>
             In accordance with department policy, all department-issued property must be
             returned in its current condition by the deadline above. Please contact the
@@ -1234,10 +1216,10 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
             {{performed_by_title}}<br/>
             {{organization_name}}
         </p>
-        <p class="muted">A copy of this notice has been placed in your member file.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p class="fineprint">A copy of this notice has been placed in your member file.</p>""",
+    accent=ACCENT_RED,
+    chip="Property return",
+)
 
 DEFAULT_MEMBER_DROPPED_TEXT = """Department Property Return Notice
 
@@ -1267,39 +1249,29 @@ A copy of this notice has been placed in your member file.
 {{footer_text}}"""
 
 # Default inventory change notification email
-DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Inventory Change Confirmation</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{first_name}},</p>
+DEFAULT_INVENTORY_CHANGE_HTML = build_shell(
+    "Inventory Change Confirmation",
+    """        <p>Hello {{first_name}},</p>
         <p>
             This message is to confirm recent changes to the department property
             assigned to you as of <strong>{{change_date}}</strong>.
         </p>
-
         {{items_issued_html}}
-
         {{items_returned_html}}
-
         {{items_removed_html}}
-
-        <div class="details">
-            <p><strong>Important Reminder:</strong> All items listed above remain
-            the property of <strong>{{organization_name}}</strong>. Members are
-            responsible for the care, maintenance, and safekeeping of all
-            department-issued property. Any lost, stolen, or damaged items
-            must be reported to the Quartermaster immediately.</p>
+        <div class="alert">
+            <p>All items listed above remain the property of
+            <strong>{{organization_name}}</strong>. Members are responsible for the
+            care, maintenance, and safekeeping of all department-issued property.
+            Any lost, stolen, or damaged items must be reported to the Quartermaster
+            immediately.</p>
         </div>
-
         <p>If you believe there is an error in this notice, please contact the
         Quartermaster or department administration at your earliest convenience.</p>
-
-        <p>Thank you,<br/>{{organization_name}}</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p>Thank you,<br/>{{organization_name}}</p>""",
+    accent=ACCENT_RED,
+    chip="Property update",
+)
 
 DEFAULT_INVENTORY_CHANGE_TEXT = """Inventory Change Confirmation — {{organization_name}}
 
@@ -1330,30 +1302,23 @@ Thank you,
 DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 
 # Default certification expiration alert email
-DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Certification Expiration Notice</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>This is a reminder that your certification is approaching its expiration date:</p>
-
-        <div class="details">
-            <p><strong>Certification:</strong> {{cert_name}}</p>
-            <p><strong>Expiration Date:</strong> {{expiration_date}}</p>
-            <p><strong>Days Remaining:</strong> {{days_remaining}}</p>
+DEFAULT_CERT_EXPIRATION_HTML = build_shell(
+    "{{cert_name}} expires in {{days_remaining}} days",
+    """        <p>Hello {{recipient_name}}, this is a reminder that your certification is approaching its expiration date.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Certification</th><td>{{cert_name}}</td></tr>
+                <tr><th>Expiration date</th><td>{{expiration_date}}</td></tr>
+                <tr><th>Days remaining</th><td>{{days_remaining}}</td></tr>
+            </table>
         </div>
-
-        <p>Please take action to renew this certification before it expires to maintain your compliance status.</p>
-
-        <p style="text-align: center;">
-            <a href="{{renewal_url}}" class="button" role="link">View Certifications</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <div class="alert">
+            <p>Renew before it expires to stay compliant for calls and drills.</p>
+        </div>
+        <p><a href="{{renewal_url}}" class="button" style="background-color: {accent};" role="link">View Certifications</a></p>""",
+    accent=ACCENT_AMBER,
+    chip="Action required",
+)
 
 DEFAULT_CERT_EXPIRATION_TEXT = """Certification Expiration Notice
 
@@ -1376,30 +1341,21 @@ DEFAULT_CERT_EXPIRATION_SUBJECT = (
 )
 
 # Default post-event validation email
-DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Please Validate Attendance</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>The following event has ended and needs attendance validation:</p>
-
-        <div class="details">
-            <p><strong>Event:</strong> {{event_title}}</p>
-            <p><strong>Date:</strong> {{event_date}}</p>
-            <p><strong>Recorded Attendees:</strong> {{attendee_count}}</p>
+DEFAULT_POST_EVENT_VALIDATION_HTML = build_shell(
+    "Please Validate Attendance",
+    """        <p>Hello {{recipient_name}}, the following event has ended and needs attendance validation.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Event</th><td>{{event_title}}</td></tr>
+                <tr><th>Date</th><td>{{event_date}}</td></tr>
+                <tr><th>Recorded attendees</th><td>{{attendee_count}}</td></tr>
+            </table>
         </div>
-
         <p>Please review and validate the attendance records at your earliest convenience.</p>
-
-        <p style="text-align: center;">
-            <a href="{{validation_url}}" class="button" role="link">Validate Attendance</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{validation_url}}" class="button" style="background-color: {accent};" role="link">Validate Attendance</a></p>""",
+    accent=ACCENT_BLUE,
+    chip="Action required",
+)
 
 DEFAULT_POST_EVENT_VALIDATION_TEXT = """Please Validate Attendance
 
@@ -1420,30 +1376,21 @@ Validate attendance: {{validation_url}}
 DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_title}}"
 
 # Default post-shift validation email
-DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Shift Attendance Validation</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>The following shift has ended and needs attendance validation:</p>
-
-        <div class="details">
-            <p><strong>Shift:</strong> {{shift_name}}</p>
-            <p><strong>Date:</strong> {{shift_date}}</p>
-            <p><strong>Members on Shift:</strong> {{attendee_count}}</p>
+DEFAULT_POST_SHIFT_VALIDATION_HTML = build_shell(
+    "Shift Attendance Validation",
+    """        <p>Hello {{recipient_name}}, the following shift has ended and needs attendance validation.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Shift</th><td>{{shift_name}}</td></tr>
+                <tr><th>Date</th><td>{{shift_date}}</td></tr>
+                <tr><th>Members on shift</th><td>{{attendee_count}}</td></tr>
+            </table>
         </div>
-
         <p>Please review and confirm the shift attendance.</p>
-
-        <p style="text-align: center;">
-            <a href="{{validation_url}}" class="button" role="link">Validate Shift</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{validation_url}}" class="button" style="background-color: {accent};" role="link">Validate Shift</a></p>""",
+    accent=ACCENT_GREEN,
+    chip="Action required",
+)
 
 DEFAULT_POST_SHIFT_VALIDATION_TEXT = """Shift Attendance Validation
 
@@ -1466,29 +1413,23 @@ DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
 )
 
 # Default property return reminder email
-DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Property Return Reminder</h1>
-    </div>
-    <div class="content">
-        <p>Dear {{member_name}},</p>
-
+DEFAULT_PROPERTY_RETURN_REMINDER_HTML = build_shell(
+    "Property Return Reminder",
+    """        <p>Dear {{member_name}},</p>
         <p>This is a reminder that you still have outstanding department property that needs to be returned.</p>
-
-        <div class="details">
-            <p><strong>Outstanding Items:</strong> {{item_count}} item(s)</p>
-            <p><strong>Total Assessed Value:</strong> ${{total_value}}</p>
-            <p><strong>Days Since Separation:</strong> {{days_since_drop}}</p>
-            <p><strong>Return Deadline:</strong> {{return_deadline}}</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Outstanding items</th><td>{{item_count}} item(s)</td></tr>
+                <tr><th>Total assessed value</th><td>${{total_value}}</td></tr>
+                <tr><th>Days since separation</th><td>{{days_since_drop}}</td></tr>
+                <tr><th>Return deadline</th><td>{{return_deadline}}</td></tr>
+            </table>
         </div>
-
         {{items_list_html}}
-
-        <p>Please contact the department administration to arrange return of these items as soon as possible.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p>Please contact the department administration to arrange return of these items as soon as possible.</p>""",
+    accent=ACCENT_RED,
+    chip="Reminder",
+)
 
 DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Property Return Reminder
 
@@ -1512,31 +1453,22 @@ DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
 )
 
 # Default inactivity warning email
-DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Prospective Member Inactivity Alert</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{coordinator_name}},</p>
-
-        <p>A prospective member in your pipeline has been inactive and may need attention:</p>
-
-        <div class="details">
-            <p><strong>Prospect:</strong> {{prospect_name}}</p>
-            <p><strong>Current Stage:</strong> {{pipeline_stage}}</p>
-            <p><strong>Days Inactive:</strong> {{days_inactive}} days</p>
-            <p><strong>Timeout Threshold:</strong> {{timeout_days}} days</p>
+DEFAULT_INACTIVITY_WARNING_HTML = build_shell(
+    "Prospective Member Inactivity Alert",
+    """        <p>Hello {{coordinator_name}}, a prospective member in your pipeline has been inactive and may need attention.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Prospect</th><td>{{prospect_name}}</td></tr>
+                <tr><th>Current stage</th><td>{{pipeline_stage}}</td></tr>
+                <tr><th>Days inactive</th><td>{{days_inactive}} days</td></tr>
+                <tr><th>Timeout threshold</th><td>{{timeout_days}} days</td></tr>
+            </table>
         </div>
-
         <p>Please review their progress and take appropriate action.</p>
-
-        <p style="text-align: center;">
-            <a href="{{prospect_url}}" class="button" role="link">View Prospect</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{prospect_url}}" class="button" style="background-color: {accent};" role="link">View Prospect</a></p>""",
+    accent=ACCENT_AMBER,
+    chip="Needs attention",
+)
 
 DEFAULT_INACTIVITY_WARNING_TEXT = """Prospective Member Inactivity Alert
 
@@ -1560,26 +1492,23 @@ DEFAULT_INACTIVITY_WARNING_SUBJECT = (
 )
 
 # Default election rollback alert email
-DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Election Rolled Back</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>An election has been rolled back to a previous stage:</p>
-
-        <div class="details">
-            <p><strong>Election:</strong> {{election_title}}</p>
-            <p><strong>Rolled back by:</strong> {{performer_name}}</p>
-            <p><strong>Reason:</strong> {{reason}}</p>
+DEFAULT_ELECTION_ROLLBACK_HTML = build_shell(
+    "Election Rolled Back",
+    """        <p>Hello {{recipient_name}}, an election has been rolled back to a previous stage.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Election</th><td>{{election_title}}</td></tr>
+                <tr><th>Rolled back by</th><td>{{performer_name}}</td></tr>
+                <tr><th>Reason</th><td>{{reason}}</td></tr>
+            </table>
         </div>
-
-        <p>Please review the election details and coordinate with your team as needed.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <div class="alert">
+            <p>Votes recorded after the stage this election returned to are no longer counted.</p>
+        </div>
+        <p>Please review the election details and coordinate with your team as needed.</p>""",
+    accent=ACCENT_INDIGO,
+    chip="Rolled back",
+)
 
 DEFAULT_ELECTION_ROLLBACK_TEXT = """Election Rolled Back
 
@@ -1598,26 +1527,23 @@ Please review the election details and coordinate with your team as needed.
 DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_title}}"
 
 # Default election deleted alert email
-DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Election Deleted</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>An election has been permanently deleted:</p>
-
-        <div class="details">
-            <p><strong>Election:</strong> {{election_title}}</p>
-            <p><strong>Deleted by:</strong> {{performer_name}}</p>
-            <p><strong>Reason:</strong> {{reason}}</p>
+DEFAULT_ELECTION_DELETED_HTML = build_shell(
+    "Election Deleted",
+    """        <p>Hello {{recipient_name}}, an election has been permanently deleted.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Election</th><td>{{election_title}}</td></tr>
+                <tr><th>Deleted by</th><td>{{performer_name}}</td></tr>
+                <tr><th>Reason</th><td>{{reason}}</td></tr>
+            </table>
         </div>
-
-        <p>All associated ballots and results have been removed. If you have questions, please contact {{performer_name}}.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <div class="alert">
+            <p>All associated ballots and results have been removed. This cannot be undone.</p>
+        </div>
+        <p>If you have questions, please contact {{performer_name}}.</p>""",
+    accent=ACCENT_INDIGO,
+    chip="Deleted",
+)
 
 DEFAULT_ELECTION_DELETED_TEXT = """Election Deleted
 
@@ -1636,20 +1562,14 @@ All associated ballots and results have been removed.
 DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_title}}"
 
 # Default member archived notification email
-DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Member Archived</h1>
-    </div>
-    <div class="content">
-        <p><strong>{{member_name}}</strong> has been automatically archived.</p>
-
+DEFAULT_MEMBER_ARCHIVED_HTML = build_shell(
+    "Member Archived",
+    """        <p><strong>{{member_name}}</strong> has been automatically archived.</p>
         <p>All department property has been returned. Previous status: <strong>{{previous_status}}</strong>.</p>
-
-        <p>The member's profile remains accessible for legal requests or future reactivation.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p>The member's profile remains accessible for legal requests or future reactivation.</p>""",
+    accent=ACCENT_RED,
+    chip="Member archived",
+)
 
 DEFAULT_MEMBER_ARCHIVED_TEXT = """Member Archived: {{member_name}}
 
@@ -1671,24 +1591,16 @@ DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
 # therefore injected pre-built so an absent value leaves nothing behind; the
 # earlier body labelled all three unconditionally and mailed "Reason:" followed
 # by empty space to whoever asked the department to come to their block party.
-DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Event Request Update</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{contact_name}},</p>
-
+DEFAULT_EVENT_REQUEST_STATUS_HTML = build_shell(
+    "Event Request Update",
+    """        <p>Hello {{contact_name}},</p>
         <p>Your event request has been updated to: <strong>{{status_label}}</strong>.</p>
-
         {{details_html}}
-
         {{message_html}}
-
-        <p>Thank you for your request.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p>Thank you for your request.</p>""",
+    accent=ACCENT_BLUE,
+    chip="Request update",
+)
 
 DEFAULT_EVENT_REQUEST_STATUS_TEXT = """Event Request Update
 
@@ -1706,25 +1618,21 @@ Thank you for your request.
 DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}}"
 
 # Default IT password reset notification email
-DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>IT Notice: Password Reset Requested</h1>
-    </div>
-    <div class="content">
-        <p>A password reset has been requested for the following user:</p>
-
-        <div class="details">
-            <p><strong>User:</strong> {{user_name}}</p>
-            <p><strong>Email:</strong> {{user_email}}</p>
-            <p><strong>Requested at:</strong> {{request_time}}</p>
-            <p><strong>IP Address:</strong> {{ip_address}}</p>
+DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = build_shell(
+    "IT Notice: Password Reset Requested",
+    """        <p>A password reset has been requested for the following user.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>User</th><td>{{user_name}}</td></tr>
+                <tr><th>Email</th><td>{{user_email}}</td></tr>
+                <tr><th>Requested at</th><td>{{request_time}}</td></tr>
+                <tr><th>IP address</th><td>{{ip_address}}</td></tr>
+            </table>
         </div>
-
-        <p>This is an informational notice. No action is required unless the request appears suspicious.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p>This is an informational notice. No action is required unless the request appears suspicious.</p>""",
+    accent=ACCENT_SLATE,
+    chip="Security",
+)
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT = """IT Notice: Password Reset Requested
 
@@ -1744,25 +1652,18 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
 )
 
 # Default duplicate application notification email
-DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Application Already on File</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{applicant_name}},</p>
-
+DEFAULT_DUPLICATE_APPLICATION_HTML = build_shell(
+    "Application Already on File",
+    """        <p>Hello {{applicant_name}},</p>
         <p>Thank you for your interest in joining {{organization_name}}.</p>
-
         <p>Our records show that we already have an application on file for
         this email address, originally received on <strong>{{original_date}}</strong>.
         A duplicate application has not been created.</p>
-
         <p>If you believe this is an error, or if you have questions about the
-        status of your application, please contact us directly.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        status of your application, please contact us directly.</p>""",
+    accent=ACCENT_RED,
+    chip="Already on file",
+)
 
 DEFAULT_DUPLICATE_APPLICATION_TEXT = """Application Already on File
 
@@ -1784,38 +1685,27 @@ DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
 )
 
 # Default ballot notification email
-DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #4338ca;">
-        <h1>{{election_title}}</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>A ballot is now available for your review and vote.</p>
-
-        <div class="details">
-            <p><strong>Election:</strong> {{election_title}}</p>
-            <p><strong>Meeting Date:</strong> {{meeting_date}}</p>
-            <p><strong>Voting Opens:</strong> {{voting_opens}}</p>
-            <p><strong>Voting Closes:</strong> {{voting_closes}}</p>
+DEFAULT_BALLOT_NOTIFICATION_HTML = build_shell(
+    "{{election_title}}",
+    """        <p>Hello {{recipient_name}}, a ballot is now available for your review and vote.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Meeting date</th><td>{{meeting_date}}</td></tr>
+                <tr><th>Voting opens</th><td>{{voting_opens}}</td></tr>
+                <tr><th>Voting closes</th><td>{{voting_closes}}</td></tr>
+            </table>
         </div>
-
-        <p><strong>Your Ballot Items:</strong></p>
+        <h2>Your ballot items</h2>
         {{ballot_items_html}}
-
         {{custom_message_html}}
-
-        <p style="text-align: center;">
-            <a href="{{ballot_url}}" class="button" role="link">Vote Now</a>
-        </p>
-        <p style="text-align: center;"><small>(Clicking the above link will automatically log you in to vote)</small></p>
-
+        <p><a href="{{ballot_url}}" class="button" style="background-color: {accent};" role="link">Vote Now</a></p>
+        <p class="fineprint">Clicking the link above will automatically log you in to vote.</p>
         <p>If you have any questions, please contact your election administrator:<br/>
-        <strong>{{admin_contact_name}}</strong> ({{admin_contact_email}})</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <strong>{{admin_contact_name}}</strong> ({{admin_contact_email}})</p>""",
+    accent=ACCENT_INDIGO,
+    chip="Ballot open",
+    subtitle="Voting closes {{voting_closes}}",
+)
 
 DEFAULT_BALLOT_NOTIFICATION_TEXT = """Ballot Available: {{election_title}}
 
@@ -1844,44 +1734,38 @@ If you have any questions, please contact your election administrator:
 DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 
 # Default election report email
-DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #047857;">
-        <h1>Election Report</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>The following election has been closed. Below is the official report.</p>
-
-        <div class="details">
-            <p><strong>Election:</strong> {{election_title}}</p>
-            <p><strong>Type:</strong> {{election_type}}</p>
-            <p><strong>Voting Period:</strong> {{start_date}} &mdash; {{end_date}}</p>
+DEFAULT_ELECTION_REPORT_HTML = build_shell(
+    "Election Report",
+    """        <p>Hello {{recipient_name}}, the following election has been closed. Below is the official report.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Election</th><td>{{election_title}}</td></tr>
+                <tr><th>Type</th><td>{{election_type}}</td></tr>
+                <tr><th>Voting period</th><td>{{start_date}} &mdash; {{end_date}}</td></tr>
+            </table>
         </div>
-
-        <h2>Turnout &amp; Quorum</h2>
-        <div class="details">
-            <p><strong>Eligible Voters:</strong> {{total_eligible_voters}}</p>
-            <p><strong>Votes Cast:</strong> {{total_votes_cast}}</p>
-            <p><strong>Turnout:</strong> {{voter_turnout_percentage}}%</p>
-            <p><strong>Quorum:</strong> {{quorum_status}}</p>
+        <h2>Turnout &amp; quorum</h2>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Eligible voters</th><td>{{total_eligible_voters}}</td></tr>
+                <tr><th>Votes cast</th><td>{{total_votes_cast}}</td></tr>
+                <tr><th>Turnout</th><td>{{voter_turnout_percentage}}%</td></tr>
+                <tr><th>Quorum</th><td>{{quorum_status}}</td></tr>
+            </table>
             <p>{{quorum_detail}}</p>
         </div>
-
         <h2>Results</h2>
         {{results_html}}
-
-        <h2>Ballot Recipients ({{total_eligible_voters}})</h2>
+        <h2>Ballot recipients ({{total_eligible_voters}})</h2>
         <p>The following members received ballots:</p>
         {{ballot_recipients_html}}
-
-        <h2>Members Who Did Not Receive Ballots</h2>
+        <h2>Members who did not receive ballots</h2>
         <p>The following active members were not sent a ballot, with the reason why:</p>
-        {{skipped_voters_html}}
-    </div>
-    {{footer_html}}
-</div>"""
+        {{skipped_voters_html}}""",
+    accent=ACCENT_INDIGO,
+    chip="Official report",
+    subtitle="{{election_title}}",
+)
 
 DEFAULT_ELECTION_REPORT_TEXT = """Election Report — {{election_title}}
 
@@ -1916,38 +1800,34 @@ DEFAULT_ELECTION_REPORT_SUBJECT = (
 )
 
 # Default ballot eligibility summary email (sent to secretary after ballot dispatch)
-DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #b45309;">
-        <h1>Ballot Eligibility Summary</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>Ballot emails for <strong>{{election_title}}</strong> have been sent. Below is a summary of member eligibility.</p>
-
-        <div class="details">
-            <p><strong>Ballots Sent:</strong> {{sent_count}}</p>
-            <p><strong>Members Skipped:</strong> {{skipped_count}}</p>
-            <p><strong>Total Checked In:</strong> {{total_checked_in}}</p>
+DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = build_shell(
+    "Ballot Eligibility Summary",
+    """        <p>Hello {{recipient_name}}, ballot emails for <strong>{{election_title}}</strong> have been sent. Below is a summary of member eligibility.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Ballots sent</th><td>{{sent_count}}</td></tr>
+                <tr><th>Members skipped</th><td>{{skipped_count}}</td></tr>
+                <tr><th>Total checked in</th><td>{{total_checked_in}}</td></tr>
+            </table>
         </div>
-
-        <h2>Members Who Received Ballots ({{sent_count}})</h2>
+        <h2>Members who received ballots ({{sent_count}})</h2>
         {{recipients_html}}
-
-        <h2 style="color:#92400e;border-bottom-color:#b45309;">Members Who Did Not Receive Ballots ({{skipped_count}})</h2>
-        <p>The following members were skipped because they did not meet the eligibility requirements for any ballot item. The specific reason for each member is listed below.</p>
+        <h2>Members who did not receive ballots ({{skipped_count}})</h2>
+        <div class="alert">
+            <p>These members were skipped because they did not meet the eligibility
+            requirements for any ballot item. The specific reason for each is listed below.</p>
+        </div>
         {{skipped_voters_html}}
-
-        <h2>What You Can Do</h2>
+        <h2>What you can do</h2>
         <ul>
-            <li><strong>Voter Overrides:</strong> If a skipped member should be allowed to vote, use the Voter Override feature on the election page to grant them an exception.</li>
-            <li><strong>Check-In Members:</strong> If a member was skipped due to attendance, check them in on the Meeting Attendance panel and resend ballots.</li>
-            <li><strong>Review Tier Settings:</strong> If a membership tier is incorrectly marked as ineligible, update it in Organization Settings &gt; Membership Tiers.</li>
-        </ul>
-    </div>
-    {{footer_html}}
-</div>"""
+            <li><strong>Voter overrides:</strong> if a skipped member should be allowed to vote, use the Voter Override feature on the election page to grant them an exception.</li>
+            <li><strong>Check in members:</strong> if a member was skipped due to attendance, check them in on the Meeting Attendance panel and resend ballots.</li>
+            <li><strong>Review tier settings:</strong> if a membership tier is incorrectly marked as ineligible, update it in Organization Settings &gt; Membership Tiers.</li>
+        </ul>""",
+    accent=ACCENT_INDIGO,
+    chip="Eligibility summary",
+    subtitle="{{election_title}}",
+)
 
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT = """Ballot Eligibility Summary — {{election_title}}
 
@@ -1977,26 +1857,20 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
 )
 
 # Default event cancellation email
-DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Event Cancelled</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>The following event has been cancelled:</p>
-
-        <div class="details">
-            <p><strong>Event:</strong> {{event_title}}</p>
-            <p><strong>Original Date:</strong> {{event_date}}</p>
-            <p><strong>Reason:</strong> {{reason}}</p>
+DEFAULT_EVENT_CANCELLATION_HTML = build_shell(
+    "Event Cancelled",
+    """        <p>Hello {{recipient_name}}, the following event has been cancelled.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Event</th><td>{{event_title}}</td></tr>
+                <tr><th>Original date</th><td>{{event_date}}</td></tr>
+                <tr><th>Reason</th><td>{{reason}}</td></tr>
+            </table>
         </div>
-
-        <p>Please update your calendar accordingly. If you have questions, contact your department leadership.</p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p>Please update your calendar accordingly. If you have questions, contact your department leadership.</p>""",
+    accent=ACCENT_BLUE,
+    chip="Cancelled",
+)
 
 DEFAULT_EVENT_CANCELLATION_TEXT = """Event Cancelled
 
@@ -2017,31 +1891,22 @@ DEFAULT_EVENT_CANCELLATION_SUBJECT = (
 )
 
 # Default event reminder email
-DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header">
-        <h1>Event Reminder</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>This is a reminder about an upcoming event:</p>
-
-        <div class="details">
-            <p><strong>Event:</strong> {{event_title}}</p>
-            <p><strong>Type:</strong> {{event_type}}</p>
-            <p><strong>Start:</strong> {{event_start}}</p>
-            <p><strong>End:</strong> {{event_end}}</p>
-            <p><strong>Location:</strong> {{location_name}}</p>
-            <p>{{location_details}}</p>
+DEFAULT_EVENT_REMINDER_HTML = build_shell(
+    "{{event_title}}",
+    """        <p>Hello {{recipient_name}}, this is a reminder about an upcoming event.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Type</th><td>{{event_type}}</td></tr>
+                <tr><th>Start</th><td>{{event_start}}</td></tr>
+                <tr><th>End</th><td>{{event_end}}</td></tr>
+                <tr><th>Location</th><td>{{location_name}}<br/>{{location_details}}</td></tr>
+            </table>
         </div>
-
-        <p style="text-align: center;">
-            <a href="{{event_url}}" class="button" role="link">View Event</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{event_url}}" class="button" style="background-color: {accent};" role="link">View Event</a></p>""",
+    accent=ACCENT_BLUE,
+    chip="Reminder",
+    subtitle="{{event_start}}",
+)
 
 DEFAULT_EVENT_REMINDER_TEXT = """Event Reminder
 
@@ -2063,31 +1928,23 @@ View event: {{event_url}}
 DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 
 # Default series end reminder email
-DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #b45309;">
-        <h1>Recurring Series Ending Soon</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>This is a reminder that the following recurring event series is scheduled to end in approximately <strong>6 months</strong>:</p>
-
-        <div class="details">
-            <p><strong>Event:</strong> {{event_title}}</p>
-            <p><strong>Pattern:</strong> {{recurrence_pattern}}</p>
-            <p><strong>Series Ends:</strong> {{series_end_date}}</p>
-            <p><strong>Remaining Occurrences:</strong> {{remaining_occurrences}}</p>
+DEFAULT_SERIES_END_REMINDER_HTML = build_shell(
+    "Recurring Series Ending Soon",
+    """        <p>Hello {{recipient_name}}, this is a reminder that the following recurring event series is scheduled to end in approximately <strong>6 months</strong>.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Event</th><td>{{event_title}}</td></tr>
+                <tr><th>Pattern</th><td>{{recurrence_pattern}}</td></tr>
+                <tr><th>Series ends</th><td>{{series_end_date}}</td></tr>
+                <tr><th>Remaining occurrences</th><td>{{remaining_occurrences}}</td></tr>
+            </table>
         </div>
-
         <p>If you would like to extend or modify this series, please update the event before the series end date.</p>
-
-        <p style="text-align: center;">
-            <a href="{{event_url}}" class="button" role="link">View Event</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{event_url}}" class="button" style="background-color: {accent};" role="link">View Event</a></p>""",
+    accent=ACCENT_BLUE,
+    chip="Ending soon",
+    subtitle="{{series_end_date}}",
+)
 
 DEFAULT_SERIES_END_REMINDER_TEXT = """Recurring Series Ending Soon
 
@@ -2111,31 +1968,24 @@ DEFAULT_SERIES_END_REMINDER_SUBJECT = (
 )
 
 # Default training approval email
-DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #6d28d9;">
-        <h1>Training Approval Needed</h1>
-    </div>
-    <div class="content">
-        <p>Hello,</p>
-
-        <p>A training event has been submitted and requires your approval:</p>
-
-        <div class="details">
-            <p><strong>Course:</strong> {{course_name}}</p>
-            <p><strong>Event:</strong> {{event_title}}</p>
-            <p><strong>Date:</strong> {{event_date}}</p>
-            <p><strong>Attendees:</strong> {{attendee_count}}</p>
-            <p><strong>Submitted by:</strong> {{submitter_name}}</p>
-            <p><strong>Approval Deadline:</strong> {{approval_deadline}}</p>
+DEFAULT_TRAINING_APPROVAL_HTML = build_shell(
+    "Training Approval Needed",
+    """        <p>Hello, a training event has been submitted and requires your approval.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Course</th><td>{{course_name}}</td></tr>
+                <tr><th>Event</th><td>{{event_title}}</td></tr>
+                <tr><th>Date</th><td>{{event_date}}</td></tr>
+                <tr><th>Attendees</th><td>{{attendee_count}}</td></tr>
+                <tr><th>Submitted by</th><td>{{submitter_name}}</td></tr>
+                <tr><th>Approval deadline</th><td>{{approval_deadline}}</td></tr>
+            </table>
         </div>
-
-        <p style="text-align: center;">
-            <a href="{{approval_url}}" class="button" role="link">Review &amp; Approve</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{approval_url}}" class="button" style="background-color: {accent};" role="link">Review &amp; Approve</a></p>""",
+    accent=ACCENT_AMBER,
+    chip="Approval needed",
+    subtitle="Due {{approval_deadline}}",
+)
 
 DEFAULT_TRAINING_APPROVAL_TEXT = """Training Approval Needed
 
@@ -2166,33 +2016,24 @@ DEFAULT_TRAINING_APPROVAL_SUBJECT = (
 # checklist configured, no reminder offset), so both sit on their own line
 # rather than inside a labelled panel row where an empty value would leave a
 # dangling "Checklists:".
-DEFAULT_SHIFT_ASSIGNMENT_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #047857;">
-        <h1>New Shift Assignment</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>You have been assigned to an upcoming shift:</p>
-
-        <div class="details">
-            <p><strong>Position:</strong> {{position}}</p>
-            <p><strong>Date:</strong> {{shift_date}}</p>
-            <p><strong>Starts:</strong> {{shift_start}}</p>
+DEFAULT_SHIFT_ASSIGNMENT_HTML = build_shell(
+    "New shift assignment",
+    """        <p>Hello {{recipient_name}}, you have been assigned to an upcoming shift.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Position</th><td>{{position}}</td></tr>
+                <tr><th>Date</th><td>{{shift_date}}</td></tr>
+                <tr><th>Starts</th><td>{{shift_start}}</td></tr>
+            </table>
         </div>
-
         {{checklist_html}}
-
         <p>Please confirm or decline this assignment so the shift officer knows
         whether the position is covered.</p>
-
-        <p style="text-align: center;">
-            <a href="{{shift_url}}" class="button" role="link">View Shift</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{shift_url}}" class="button" style="background-color: {accent};" role="link">View Shift</a></p>""",
+    accent=ACCENT_GREEN,
+    chip="Assignment",
+    subtitle="{{shift_date}}",
+)
 
 DEFAULT_SHIFT_ASSIGNMENT_TEXT = """New Shift Assignment
 
@@ -2215,28 +2056,21 @@ View shift: {{shift_url}}
 
 DEFAULT_SHIFT_ASSIGNMENT_SUBJECT = "Shift Assignment: {{position}} on {{shift_date}}"
 
-DEFAULT_SHIFT_DECLINE_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #b45309;">
-        <h1>Shift Coverage Needed</h1>
-    </div>
-    <div class="content">
-        <p><strong>{{member_name}}</strong> {{action}} the following position.
-        It is now open:</p>
-
-        <div class="details">
-            <p><strong>Position:</strong> {{position}}</p>
-            <p><strong>Date:</strong> {{shift_date}}</p>
+DEFAULT_SHIFT_DECLINE_HTML = build_shell(
+    "Shift Coverage Needed",
+    """        <p><strong>{{member_name}}</strong> {{action}} the following position. It is now open.</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Position</th><td>{{position}}</td></tr>
+                <tr><th>Date</th><td>{{shift_date}}</td></tr>
+            </table>
         </div>
-
         <p>Please assign a replacement so the shift is not left short.</p>
-
-        <p style="text-align: center;">
-            <a href="{{shift_url}}" class="button" role="link">Open the Schedule</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{shift_url}}" class="button" style="background-color: {accent};" role="link">Open the Schedule</a></p>""",
+    accent=ACCENT_AMBER,
+    chip="Coverage needed",
+    subtitle="{{shift_date}}",
+)
 
 DEFAULT_SHIFT_DECLINE_TEXT = """Shift Coverage Needed
 
@@ -2253,35 +2087,25 @@ Open the schedule: {{shift_url}}
 
 DEFAULT_SHIFT_DECLINE_SUBJECT = "Shift Coverage Needed: {{position}} on {{shift_date}}"
 
-DEFAULT_SHIFT_REMINDER_HTML = """<div class="container">
-    <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #1d4ed8;">
-        <h1>Start-of-Shift Reminder</h1>
-    </div>
-    <div class="content">
-        <p>Hello {{recipient_name}},</p>
-
-        <p>Your upcoming shift briefing is below. Please arrive on time and mark
+DEFAULT_SHIFT_REMINDER_HTML = build_shell(
+    "Start-of-Shift Reminder",
+    """        <p>Hello {{recipient_name}}, your upcoming shift briefing is below. Please arrive on time and mark
         your arrival when you get to the station.</p>
-
-        <div class="details">
-            <p><strong>Date:</strong> {{shift_date}}</p>
-            <p><strong>Time:</strong> {{time_range}}</p>
-            <p><strong>Your position:</strong> {{position}}</p>
+        <div class="details" style="border-left-color: {accent};">
+            <table>
+                <tr><th>Date</th><td>{{shift_date}}</td></tr>
+                <tr><th>Time</th><td>{{time_range}}</td></tr>
+                <tr><th>Your position</th><td>{{position}}</td></tr>
+            </table>
         </div>
-
         {{apparatus_html}}
-
         {{roster_html}}
-
         {{checklist_html}}
-
-        <p style="text-align: center;">
-            <a href="{{arrival_url}}" class="button" role="link">Mark Arrival</a>
-        </p>
-    </div>
-    {{footer_html}}
-</div>"""
+        <p><a href="{{arrival_url}}" class="button" style="background-color: {accent};" role="link">Mark Arrival</a></p>""",
+    accent=ACCENT_GREEN,
+    chip="Shift briefing",
+    subtitle="{{shift_date}} at {{shift_start}}",
+)
 
 DEFAULT_SHIFT_REMINDER_TEXT = """Start-of-Shift Reminder
 
@@ -2784,6 +2608,17 @@ class EmailTemplateService:
         else:
             ctx.setdefault("organization_logo_img", "")
 
+        # The 1b header lockup takes the whole cell, not the bare <img>: with
+        # no logo the cell has to disappear, and a template cannot express
+        # that — {{name}} substitution has no conditionals, so a <td> written
+        # into the shell around an empty variable mails as an empty bordered
+        # box. Both variables stay populated: a department that customised its
+        # body before 1b is still using {{organization_logo_img}}.
+        ctx.setdefault(
+            "organization_logo_cell",
+            build_logo_cell(str(logo_val or ""), str(ctx.get("organization_name", ""))),
+        )
+
         # Last, because the footer's own text is resolved against everything
         # above it. Rendering is a single substitution pass, so a
         # {{organization_name}} left inside an already-substituted
@@ -2851,6 +2686,7 @@ class EmailTemplateService:
         "items_returned_html",
         "items_removed_html",
         "organization_logo_img",
+        "organization_logo_cell",
         "ballot_items_html",
         "results_html",
         "ballot_recipients_html",

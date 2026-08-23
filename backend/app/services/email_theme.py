@@ -1,10 +1,26 @@
 """
 Email Theme — the one place the outgoing mail's look is defined.
 
-Every email the platform sends renders into the same chrome: an optional
-logo, a coloured header band, a white content card and a muted footer.  The
-stylesheet below is what makes that chrome look the way it does, and the
-accent constants are the only colours a template should put on a header.
+Every email the platform sends renders into the same chrome: a header whose
+only colour is a 5px accent rule and a tinted status chip, a white content
+card, and a muted footer.  The stylesheet below is what makes that chrome
+look the way it does, and the accent constants are the only colours a
+template should put on a notice.
+
+The accent appears in exactly four places, all of them inline-overridable so
+one shell serves every category:
+
+===============  =================================
+Element          Inline override
+===============  =================================
+``.header``      ``border-top-color``
+``.chip``        ``background-color`` + ``color``
+``.details``     ``border-left-color``
+``.button``      ``background-color``
+===============  =================================
+
+:func:`build_shell` writes all four from one accent, so a notice names its
+category and gets the colourway; nothing downstream repeats a hex.
 
 **Why this is its own module.** ``email_template_service`` owns the copy and
 ``email_templates_storefront`` owns the store's copy; the storefront module
@@ -26,7 +42,25 @@ Two constraints on ``DEFAULT_CSS`` that are easy to violate by accident:
    *behind* what an element already carries, so for two rules that hit the same
    element the earlier one wins.  ``.details p`` is therefore written above
    ``.content p`` — reversing them makes every panel line take the body
-   paragraph's spacing.
+   paragraph's spacing.  The same ordering carries the header lockup:
+   ``.lockup img`` and ``.lockup td`` sit above ``.lockup``, and ``.logomark``
+   below them, because the logo cell needs the lockup's vertical alignment
+   *and* its own white background.
+
+   Writing a rule earlier is not on its own enough, because the merge is
+   per *declaration*: a property the earlier rule never mentions is not
+   overridden, it is simply inherited from the later one. ``.details`` sits
+   inside ``.content``, so ``.details th`` has to name
+   ``background-color``, ``text-transform``, ``letter-spacing`` and
+   ``border-bottom`` — and ``.details table`` its ``margin`` — purely to
+   cancel the data-table styling ``.content th`` / ``.content table`` would
+   otherwise leak into a label/value panel. Delete one of those and the
+   panel's labels come back grey, uppercase and underlined.
+
+``.chip``, ``.alert``, ``.lockup``, ``.logomark`` and ``.fineprint`` are the
+classes 1b added.  Nothing that existed before was renamed, so a department
+that has already customised a body keeps rendering — it simply does not get
+the accent rule or the chip until it resets that template.
 """
 
 # Header accents.  White text on each of these clears WCAG 2.1 AA (4.5:1):
@@ -42,45 +76,191 @@ ACCENT_SLATE = "#334155"
 
 # Body copy on white is 14.7:1, muted footer text on the page grey is 6.9:1.
 DEFAULT_CSS = """
-body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #1f2937; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
+body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #334155; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
 .container { width: 100%; max-width: 600px; margin: 0 auto; padding: 24px 12px; }
 .logo { text-align: center; padding: 0 0 20px 0; }
 .logo img { max-height: 72px; max-width: 200px; }
-.header { background-color: #b91c1c; color: #ffffff; padding: 28px 24px; text-align: center; border-radius: 12px 12px 0 0; }
-.header h1 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; color: #ffffff; }
-.details p { margin: 0 0 10px 0; font-size: 15px; line-height: 1.5; color: #374151; }
-.details { background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 20px; margin: 20px 0; }
-.content { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 32px 28px; }
-.content p { margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #1f2937; }
-.content h2 { margin: 28px 0 12px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
-.content h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #1f2937; }
-.content li { margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: #1f2937; }
-.content ul { margin: 0 0 16px 0; padding-left: 22px; }
-.content table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
-.button { display: inline-block; padding: 14px 28px; background-color: #1d4ed8; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; line-height: 1.2; margin: 8px 0; }
+.header h1 { margin: 20px 0 0 0; font-size: 27px; line-height: 1.22; font-weight: 700; letter-spacing: -0.02em; color: #0f172a; }
+.header p { margin: 8px 0 0 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: #475569; }
+.header { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: 5px solid #b91c1c; border-bottom: none; border-radius: 12px 12px 0 0; padding: 24px 28px 0 28px; }
+.lockup img { display: block; max-width: 36px; max-height: 36px; width: auto; height: auto; border: 0; }
+.lockup td { vertical-align: middle; font-size: 13px; font-weight: 600; color: #0f172a; }
+.lockup { width: 100%; border-collapse: collapse; }
+.logomark { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 3px; width: 36px; text-align: center; }
+.chip { display: inline-block; background-color: #f1f5f9; color: #334155; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 10px; border-radius: 20px; }
+.details p { margin: 0 0 12px 0; font-size: 15px; line-height: 1.5; color: #0f172a; }
+.details td { padding: 0 0 12px 0; font-size: 15px; line-height: 1.5; color: #0f172a; vertical-align: top; background-color: transparent; border-bottom: none; }
+.details th { padding: 0 0 12px 0; font-size: 13px; line-height: 1.5; font-weight: 400; color: #64748b; text-align: left; width: 38%; vertical-align: top; background-color: transparent; text-transform: none; letter-spacing: 0; border-bottom: none; }
+.details table { width: 100%; border-collapse: collapse; margin: 0; font-size: 15px; }
+.details { background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #b91c1c; border-radius: 8px; padding: 18px 20px; margin: 0 0 22px 0; }
+.alert p { margin: 0; font-size: 15px; line-height: 1.5; color: #92400e; }
+.alert { background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px 16px; margin: 0 0 22px 0; }
+.content h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
+.content h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
+.content p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
+.content li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
+.content ul { margin: 0 0 22px 0; padding-left: 22px; }
+.content th { padding: 10px 12px; background-color: #f8fafc; color: #475569; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.content td { padding: 12px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
+.content table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
+.content { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 28px 30px 28px; }
+.button { display: inline-block; padding: 15px 32px; background-color: #b91c1c; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 17px; font-weight: 700; line-height: 1.2; }
+.fineprint { margin: 14px 0 18px 0; font-size: 13px; line-height: 1.6; color: #64748b; }
 .footer p { margin: 0 0 6px 0; font-size: 12px; line-height: 1.6; color: #4b5563; }
-.footer { padding: 24px 16px 8px 16px; text-align: center; font-size: 12px; line-height: 1.6; color: #4b5563; }
-.muted { font-size: 11px; line-height: 1.6; color: #4b5563; }
+.footer { padding: 22px 16px 4px 16px; text-align: center; font-size: 12px; line-height: 1.6; color: #4b5563; }
+.muted { font-size: 11px; line-height: 1.6; color: #94a3b8; }
 """
 
+# The chip's tint, per accent. A notice names its category once and
+# :func:`build_shell` writes both halves of the pair; before this map the
+# seven bodies each carried the tint as a literal, which is how the header
+# and its chip drifted onto two different reds the first time an accent
+# was corrected.
+CHIP_TINTS = {
+    ACCENT_RED: "#fef2f2",
+    ACCENT_AMBER: "#fffbeb",
+    ACCENT_GREEN: "#f0fdf4",
+    ACCENT_BLUE: "#eff6ff",
+    ACCENT_INDIGO: "#eef2ff",
+    ACCENT_VIOLET: "#faf5ff",
+    ACCENT_SLATE: "#f1f5f9",
+}
 
 # Table styling for the tables services inject into templates as raw HTML
 # (outstanding property, election results, skipped voters, store orders).
 # These cannot use the stylesheet's classes: the inliner keys off a
 # single-token ``class`` attribute on markup that exists at render time,
 # and these fragments are built afterwards, so every cell carries its own
-# style. Constants keep the tables in four services looking like one table.
-TABLE_STYLE = "width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;"
+# style. Constants keep the tables in four services looking like one table,
+# and match ``.content table`` above so a service-built table and a
+# template-built one are indistinguishable in the same email.
+TABLE_STYLE = "width:100%;border-collapse:collapse;margin:0 0 22px 0;font-size:14px;"
 TH_STYLE = (
-    "padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;"
+    "padding:10px 12px;background-color:#f8fafc;color:#475569;font-size:12px;"
     "font-weight:600;letter-spacing:0.03em;text-transform:uppercase;"
-    "border-bottom:1px solid #e5e7eb;"
+    "border-bottom:1px solid #e2e8f0;text-align:left;"
 )
-TD_STYLE = "padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;"
+TD_STYLE = "padding:12px;border-bottom:1px solid #f1f5f9;color:#0f172a;"
 TFOOT_STYLE = (
-    "padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;"
-    "border-top:1px solid #e5e7eb;"
+    "padding:12px;background-color:#f8fafc;font-weight:600;color:#0f172a;"
+    "border-top:1px solid #e2e8f0;"
 )
+
+
+def build_logo_cell(logo_url: str, organization_name: str) -> str:
+    """Build the lockup's logo cell, or an empty string when there is no logo.
+
+    This returns the whole ``<td>`` rather than a bare ``<img>`` for one
+    reason: the template system substitutes ``{{name}}`` and has no
+    conditionals, so a cell written into the shell around an empty
+    ``{{organization_logo_img}}`` renders as a 36px white box with a border
+    and nothing in it. Returning the cell lets a department with no logo
+    drop it entirely and lead with its name, which is what the design asks
+    for.
+
+    The image is sized inline as well as by ``.lockup img`` because the
+    inliner merges a class rule *behind* whatever the element already
+    carries: the legacy ``{{organization_logo_img}}`` ships a hard-coded
+    ``max-height:72px``, and an element that arrives already sized cannot be
+    talked down to 36px by the stylesheet. Building the cell here is what
+    makes the lockup's size the one that applies.
+
+    Base64 data URIs are skipped for the same reason the legacy builder skips
+    them: they embed the full image payload and push the message past Gmail's
+    102 KB clipping threshold.
+    """
+    import html as _html
+
+    url = str(logo_url or "")
+    if not url or url.startswith("data:"):
+        return ""
+    safe_url = _html.escape(url)
+    safe_name = _html.escape(str(organization_name or "Organization"))
+    return (
+        '<td class="logomark"><img src="' + safe_url + '" alt="' + safe_name + '" '
+        'style="display:block;max-width:36px;max-height:36px;width:auto;'
+        'height:auto;border:0;" /></td>'
+    )
+
+
+def build_shell(
+    title: str,
+    content: str,
+    accent: str = ACCENT_RED,
+    chip: str = "",
+    subtitle: str = "",
+    brand: str = "{{organization_name}}",
+) -> str:
+    """Build the chrome every notice renders into.
+
+    One function, because there is no import path between the two modules
+    that need it: ``email_template_service`` owns the platform's copy and
+    ``email_templates_storefront`` owns the store's, and the storefront
+    cannot import the service because the service imports *it*. Before this
+    existed the two files each carried their own copy of the layout, and the
+    store's mail drifted a header at a time.
+
+    *accent* drives all four accented elements; the chip's tint is looked up
+    in :data:`CHIP_TINTS` rather than passed, so the two halves of a
+    colourway cannot disagree. An accent outside the map falls back to the
+    slate tint, which reads as deliberate rather than broken.
+
+    *chip* and *subtitle* are omitted from the markup entirely when empty —
+    an empty chip would otherwise render as a bare tinted pill, and an empty
+    subline as 8px of dead space under the title.
+
+    *brand* is the lockup's name cell. The store passes ``{{store_name}}``;
+    everything else takes the department.
+
+    ``{accent}`` inside *content* is substituted with the accent, so a body
+    writes ``border-left-color: {accent};`` on its panel and
+    ``background-color: {accent};`` on its button and cannot disagree with
+    its own header. A single brace is safe to use for this: template
+    variables are doubled (``{{name}}``), and the substitution is a plain
+    string replace rather than ``str.format``, so a stray brace in prose is
+    left alone instead of raising.
+    """
+    tint = CHIP_TINTS.get(accent, CHIP_TINTS[ACCENT_SLATE])
+    content = content.replace("{accent}", accent)
+
+    cells = [
+        "            {{organization_logo_cell}}",
+        '            <td style="padding-left: 10px;">' + brand + "</td>",
+    ]
+    if chip:
+        cells.append(
+            '            <td style="text-align: right;">'
+            '<span class="chip" style="background-color: '
+            + tint
+            + "; color: "
+            + accent
+            + ';">'
+            + chip
+            + "</span></td>"
+        )
+
+    head = [
+        '<div class="container">',
+        '    <div class="header" style="border-top-color: ' + accent + ';">',
+        '        <table class="lockup"><tr>',
+        *cells,
+        "        </tr></table>",
+        "        <h1>" + title + "</h1>",
+    ]
+    if subtitle:
+        head.append('        <p style="color: ' + accent + ';">' + subtitle + "</p>")
+
+    return "\n".join(
+        [
+            *head,
+            "    </div>",
+            '    <div class="content">',
+            content.rstrip("\n"),
+            "    </div>",
+            "    {{footer_html}}",
+            "</div>",
+        ]
+    )
 
 
 def build_email_document(subject: str, body_html: str, css: str = "") -> str:
