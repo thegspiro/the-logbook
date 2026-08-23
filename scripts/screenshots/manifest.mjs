@@ -513,6 +513,16 @@ export const hasLoggedCalls = (shift) =>
  * that really is staffed.
  *
  *   extraMatch  optional further condition on the list record (past, future, …)
+ *
+ * **The predicate is serialized and re-created inside the page, so it cannot
+ * close over anything in this file.** It is shipped across as source text and
+ * rebuilt with `new Function`, which keeps the syntax and drops the scope — a
+ * predicate referencing a module constant throws `ReferenceError: <name> is not
+ * defined` in the browser, not here, which is why the close-out shots failed
+ * with nothing in this file looking wrong. Either keep the predicate
+ * self-contained, or pass source text with the value already interpolated:
+ *
+ *   openStaffedShift(`(s) => s.notes === ${JSON.stringify(NOTE)}`)
  */
 export function openStaffedShift(extraMatch) {
   return async (page) => {
@@ -542,6 +552,8 @@ export function openStaffedShift(extraMatch) {
         }
         return null;
       },
+      // A string is already source; a function is converted to it. Both end up
+      // as text because that is all that survives the boundary.
       [extraMatch ? extraMatch.toString() : ""],
     );
     if (!id) throw new Error("openStaffedShift: no shift with a crew found");
@@ -627,11 +639,47 @@ const CLOSEOUT_SHIFT_NOTE =
  * will not reopen the wizard — one capture run would spend the fixture for
  * every run after it.
  */
+/**
+ * The close-out wizard card itself.
+ *
+ * These three shots are clipped to it rather than framed by the viewport, for
+ * two reasons the uncropped captures showed plainly:
+ *
+ * 1. **The subject sits below the fold.** The wizard renders inside a
+ *    right-hand drawer that scrolls independently, so a 900px viewport cut off
+ *    step 1's combined-hours figure — which its marker explicitly asks for —
+ *    and opened step 2 already scrolled past the EMS and Fire rows it exists to
+ *    show, leaving nine zeroes on screen.
+ * 2. **The drawer below the wizard carries the fixture's own note.** The card
+ *    reading "Close-out wizard fixture — 24-hour tour, four crew, count-only
+ *    captures" is seeding scaffolding, not something a department would ever
+ *    write, and it has no business in a published guide image.
+ *
+ * Matched on the progress nav's aria-label, which the wizard owns, rather than
+ * on a utility class string that a restyle would silently change.
+ */
+/**
+ * The close-out shots are framed at 1440x1300 rather than the 900px default.
+ *
+ * The wizard card sits in a right-hand drawer with its own scroll, and clipping
+ * to the card captures only what the drawer can show at once. At 900px the
+ * step indicator was cut off the top of every one of the three, so a reader
+ * could not tell which step they were looking at — on a sequence whose whole
+ * point is that it is three steps.
+ */
+const CLOSEOUT_VIEWPORT = { width: 1440, height: 1300 };
+
+const CLOSEOUT_WIZARD_CARD = "div:has(> nav[aria-label='Close-out progress'])";
+
 export function openCloseoutWizard({ step = 1, calls = null, credit = null }) {
   return async (page) => {
     await setCallTracking("count_only")(page);
+    // Passed as source text, not as a closure: the predicate is rebuilt inside
+    // the page, where CLOSEOUT_SHIFT_NOTE does not exist. See openStaffedShift.
     await openStaffedShift(
-      (shift) => (shift.notes || "").trim() === CLOSEOUT_SHIFT_NOTE,
+      `(shift) => (shift.notes || "").trim() === ${JSON.stringify(
+        CLOSEOUT_SHIFT_NOTE,
+      )}`,
     )(page);
     await clickByName(/^Close out shift$/i)(page);
 
@@ -644,19 +692,34 @@ export function openCloseoutWizard({ step = 1, calls = null, credit = null }) {
       return Number(label.match(/Step (\d)/)?.[1] ?? 1);
     };
 
+    // Wait for the step marker itself to move, not for the wizard to be
+    // "visible". The progress nav renders on every step, so waiting on the
+    // wizard is satisfied the instant Next is clicked, and reading the step
+    // straight afterwards races the re-render: it returned 1 while the body
+    // was still swapping to step 2, the `=== 2` guard below never fired, and
+    // the capture wrote a screen of empty call rows under a caption about
+    // three EMS and one fire. Nothing failed — the picture was just wrong.
+    const arriveAt = async (n) => {
+      await page
+        .locator(`[aria-current="step"][aria-label="Step ${n} of 3"]`)
+        .waitFor({ state: "visible", timeout: 15_000 });
+    };
+
     // Bounded: three steps, so two Backs is the most that can be needed. A
     // while(true) here would hang the whole run on an unexpected state.
     for (let guard = 0; guard < 3 && (await currentStep()) > 1; guard += 1) {
       await page.getByRole("button", { name: /^Back$/ }).click();
+      await page.waitForTimeout(250);
     }
+    await arriveAt(1);
 
     // Fill the call rows while step 1 is still on screen? No — they only exist
     // on step 2. Advance first, fill on arrival, and only then move on: step
     // 2's Next reads these rows, and the derived total is computed from them.
     for (let target = 2; target <= step; target += 1) {
       await page.getByRole("button", { name: /^Next$/ }).click();
-      await wizard.waitFor({ state: "visible" });
-      if ((await currentStep()) === 2 && calls) {
+      await arriveAt(target);
+      if (target === 2 && calls) {
         for (const [label, count] of Object.entries(calls)) {
           // `${label} calls` is the input's own aria-label, one per configured
           // call type. Matching the label text alone would also hit the row's
@@ -7295,6 +7358,13 @@ export const SHOTS = [
     alt: "Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times",
     route: "/scheduling",
     prepare: openCloseoutWizard({ step: 1 }),
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
+    // "no check-out recorded" is the flag this shot exists to photograph, so
+    // the empty-state guard reads the subject of the capture as its absence.
+    // The fixture deliberately carries one member who never checked out and
+    // one who never checked in at all.
+    allowEmptyState: "the missing-check-out flag is what the shot is of",
     fullPage: false,
   },
   {
@@ -7308,6 +7378,8 @@ export const SHOTS = [
     // show it is a sum rather than a single field echoed.
     prepare: openCloseoutWizard({ step: 2, calls: { EMS: 3, Fire: 1 } }),
     route: "/scheduling",
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
   },
   {
@@ -7325,6 +7397,8 @@ export const SHOTS = [
       calls: { EMS: 3, Fire: 1 },
       credit: 2,
     }),
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
   },
   {

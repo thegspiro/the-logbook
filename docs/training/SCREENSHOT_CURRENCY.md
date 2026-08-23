@@ -1,5 +1,74 @@
 # Screenshot currency
 
+## Captured 2026-08-23 — the close-out wizard, and why it had never shot
+
+`03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,
+`03-76-closeout-step2-calls` and `03-77-closeout-step3-confirm` are captured,
+opened, and checked against their captions. All four had manifest entries since
+2026-08-19 and had never produced an image; four separate faults stood between
+the entry and the picture, and only the first announced itself.
+
+**1. The scheduling seed died on its own feature working.** Seating crew
+tolerated a "conflicting shift" 400 and re-raised everything else, but
+`_require_evoc_on_apparatus` deliberately puts a minimum EVOC level on the
+heavier rigs so the driver-eligibility check fires, and operators are certified
+for only the first four. A driver seat landing on an uncertified member is the
+demonstration, not an error — it raised, and the step died on the first one.
+The demo had **2 shifts instead of 66**, which silently took out the close-out
+fixture, the batch report trainee, the shift reminder inbox and every scheduling
+request. Both refusals now go through `is_expected_seat_refusal`, matching
+`LB-SCHED-001` on the error code rather than on a sentence that names the level
+and the apparatus.
+
+**2. The fixture read the wrong endpoint.** `_closeout_apparatus` asked
+`/scheduling/apparatus` — the scheduling module's own `basic_apparatus` table,
+which this demo never populates — so it answered `[]` and reported "no
+non-engine apparatus to hang it on" against a seven-unit fleet that plainly
+included the Medic its own hint asks for. It now reads
+`/scheduling/apparatus-options` and unwraps the `{"options": [...]}` container
+the rest of the scheduling seed already names.
+
+**3. A predicate cannot close over this file.** `openStaffedShift` ships its
+match function across as source text and rebuilds it with `new Function`, which
+keeps the syntax and drops the scope. The close-out call site referenced
+`CLOSEOUT_SHIFT_NOTE`, so every one of the three wizard shots failed with
+`ReferenceError: CLOSEOUT_SHIFT_NOTE is not defined` — thrown in the browser,
+with nothing in the manifest looking wrong. The constant is now interpolated
+into the source string, and `openStaffedShift` says so.
+
+**4. The step read raced the re-render, and nothing failed.** The walk clicked
+Next and read `aria-current` immediately; the progress nav renders on every
+step, so waiting for the wizard to be "visible" was satisfied instantly and the
+read returned 1 while the body was still swapping to step 2. The `=== 2` guard
+never fired, the call rows were never filled, and the capture **succeeded** —
+writing a screen of ten empty rows under a caption about three EMS and one fire.
+This is the failure mode worth remembering: a shot that captures cleanly and
+pictures the wrong thing. The walk now waits for the step marker itself to move.
+
+**Framing.** All three wizard shots are clipped to the card and shot at
+1440x1300. At the 900px default the card is taller than its drawer, so step 1
+lost the combined-hours figure its marker explicitly asks for and step 2 opened
+already scrolled past the rows it exists to show. Clipping also keeps the
+drawer's Notes card — which carries the seeder's own "Close-out wizard fixture"
+text — out of a published image.
+
+**One prose correction.** The guide's callout asserted that combined hours on a
+four-person 24-hour tour "is 96". It cannot be, on the crew the same marker
+demands: the fixture carries one member who never checked out and one who was
+never checked in, and both contribute zero, so the screen reads **47.8**. The
+callout now states the ideal, then explains why the picture is short of it and
+what a short figure means. Verified arithmetic: 24.0 + 0.0 + 23.8 + 0.0 = 47.8,
+and step 3 reports the same 47.8 against 4 calls (3 EMS + 1 Fire) from step 2.
+
+`03-75` carries `allowEmptyState` with its reason: "no check-out recorded" is
+the flag the shot exists to photograph, so the guard was reading the subject of
+the capture as its absence.
+
+**Still open in this group, unchanged:** close-out with outstanding
+end-of-shift checks, and Reports → Call Volume in count-only mode. Their
+blockers are recorded under the 08-17 → 08-19 entry below and neither is fixed
+by the above.
+
 ## Flagged by the 2026-08-17 → 08-19 changes
 
 Full reason/data-path context in

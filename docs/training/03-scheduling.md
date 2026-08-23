@@ -269,9 +269,7 @@ reports a number when they close the shift out, and nothing else is collected.
 **Scheduling → Settings → General → Shift close-out rules → Record a call count
 at close-out.**
 
-> **[SCREENSHOT NEEDED — Scheduling → Settings → General, scrolled to the
-> _Shift close-out rules_ block, with the "Record a call count at close-out"
-> toggle switched on and its explanatory paragraph legible]**
+![Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on](./images/03-74-settings-call-count-toggle.png)
 
 It takes effect immediately **in your own browser** — no reload, no restart.
 **Tell your officers before you flip it**, because it changes what they see at
@@ -536,11 +534,11 @@ The platoon roster is **staffing information, not a member directory** — it is
 built from who is on approved leave, so it says something about individual
 members that the rest of the schedule does not.
 
-| Screen | Who sees it |
-| --- | --- |
-| **Platoon Management** (`/scheduling/platoons`) — the department-wide roster and bulk assignment | `scheduling.manage` only |
-| **Shift detail → hold-over / availability roster** | `scheduling.assign`, `scheduling.manage`, or **the officer named on that shift** |
-| Everything else on a shift — time, apparatus, who is assigned, check-in state | Any member |
+| Screen                                                                                           | Who sees it                                                                      |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| **Platoon Management** (`/scheduling/platoons`) — the department-wide roster and bulk assignment | `scheduling.manage` only                                                         |
+| **Shift detail → hold-over / availability roster**                                               | `scheduling.assign`, `scheduling.manage`, or **the officer named on that shift** |
+| Everything else on a shift — time, apparatus, who is assigned, check-in state                    | Any member                                                                       |
 
 **Edge cases:**
 
@@ -1452,23 +1450,25 @@ checked in is listed too, with empty times for you to fill in**. That is
 deliberate: they used to be invisible, which meant no hours, no credit, and
 nothing on screen to tell the officer somebody had been missed.
 
-> **[SCREENSHOT NEEDED — close-out wizard step 1: the crew list with editable
-> on/off times, the combined-hours figure, and at least one member carrying the
-> "missing check-out" flag. Use a four-person crew so the combined figure is
-> visibly several times the shift length]**
+![Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times](./images/03-75-closeout-step1-attendance.png)
 
-> **"Combined hours" is not the shift's length.** Summed across a four-person
-> crew on a 24-hour tour it is 96, which reads as a mistake without the word
-> "combined" in front of it.
+> **"Combined hours" is not the shift's length.** It adds up what every member
+> was on for, so a 24-hour tour with a full four-person crew all present
+> approaches 96 — a number that reads as a mistake without the word "combined"
+> in front of it.
+>
+> The figure above reads 47.8 rather than 96 for the reason the screen is
+> showing you: two of these four have incomplete times. A member who never
+> checked out and one who was never checked in at all contribute nothing to the
+> total until somebody fills their times in. A combined figure well short of
+> crew × hours is the flag that somebody still has to be accounted for.
 
 #### Step 2 — How many calls did the apparatus run?
 
 One row per call type. Enter a number against each type you ran; the **total is
 calculated from those rows and cannot be typed into**.
 
-> **[SCREENSHOT NEEDED — close-out wizard step 2: the per-type rows with a
-> couple filled in, and the derived read-only total beside them. This is the
-> screen that teaches "the rows are the only source" and it needs the picture]**
+![Close-out wizard step 2 — per-call-type rows with three EMS and one fire entered, and the total derived from them shown read-only above](./images/03-76-closeout-step2-calls.png)
 
 There is exactly one place the number comes from. An earlier design let you type
 a total _and_ a breakdown, and revising a count downward left the old total
@@ -1500,9 +1500,7 @@ report that reads it.
 Every member starts credited with the apparatus's full count. Adjust anyone who
 came on late or left early.
 
-> **[SCREENSHOT NEEDED — close-out wizard step 3: per-member credit seeded from
-> the apparatus count, with one member adjusted downward, plus the pass-down
-> notes field and the final "Close out shift" button]**
+![Close-out wizard step 3 — every member credited with the apparatus's four calls except the first, lowered to two for a late arrival, with the pass-down notes field below](./images/03-77-closeout-step3-confirm.png)
 
 **A member credited with fewer calls than the apparatus ran gets a count, but
 not call types.** Which of the night's calls they were on is not something the
