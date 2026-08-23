@@ -103,15 +103,6 @@ export default defineConfig({
         // blocker or a bad cache entry on that one file leaves the new worker
         // unable to precache or claim the page — see inlinePushWorkerPlugin,
         // which concatenates the handlers into dist/sw.js instead.
-        // /push-sw.js is deployed for service workers installed before the
-        // handlers were inlined, which still importScripts it. It must NOT be
-        // precached: workbox fetches every precache entry during `install` and
-        // rejects the install if any one of them fails, so leaving this file in
-        // the manifest would reintroduce exactly the failure inlining removes —
-        // one blocked request for a file the new worker does not even use,
-        // taking the whole worker down with it. Nothing in the new worker
-        // references it, so there is nothing to lose by excluding it.
-        globIgnores: ['push-sw.js'],
         // Precache every generated JavaScript chunk. The entry chunk has static
         // imports outside the index/vendor naming convention (shared API,
         // stores, dialogs, and route registries), so filtering by filename can
@@ -120,9 +111,14 @@ export default defineConfig({
         // chunks are safe to precache, and correctness on a cold offline start
         // takes priority over reducing the installation download.
         globPatterns: ['**/*.{css,html,js}'],
-        // Keep publishing this compatibility file for already-installed
-        // workers, but do not make installation of the new worker depend on
-        // fetching it. The push handlers are inlined into sw.js above.
+        // /push-sw.js is deployed for service workers installed before the
+        // handlers were inlined, which still importScripts it. It must NOT be
+        // precached: workbox fetches every precache entry during `install` and
+        // rejects the install if any one of them fails, so leaving this file in
+        // the manifest would reintroduce exactly the failure inlining removes —
+        // one blocked request for a file the new worker does not even use,
+        // taking the whole worker down with it. Nothing in the new worker
+        // references it, so there is nothing to lose by excluding it.
         globIgnores: ['push-sw.js'],
         // Prevent the service worker from caching API responses
         // containing sensitive/PII data (HIPAA §164.312).

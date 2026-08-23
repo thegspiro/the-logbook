@@ -61,7 +61,7 @@ await assertDistAsset('push-sw.js', 'push service worker');
 // exact failure inlining exists to remove.
 assert.doesNotMatch(
   serviceWorker,
-  /url:\s*["']push-sw\.js["']/,
+  /[{,]\s*(?:url:|["']url["']:)\s*["']\/?push-sw\.js["']/,
   'push-sw.js must be excluded from the precache manifest (workbox globIgnores)'
 );
 assert.match(serviceWorker, /NavigationRoute/, 'the service worker must provide an offline navigation fallback');
@@ -74,11 +74,6 @@ assert.doesNotMatch(
   serviceWorker,
   /importScripts\(["'][^"']*push-sw\.js/,
   'the push worker must be inlined into sw.js, not fetched with importScripts'
-);
-assert.doesNotMatch(
-  serviceWorker,
-  /[{,]\s*(?:url:|["']url["']:)\s*["']\/?push-sw\.js["']/,
-  'the compatibility push worker must not be included in the precache manifest'
 );
 assert.match(serviceWorker, /addEventListener\('push'/, 'the push handler must be inlined into sw.js');
 assert.match(
