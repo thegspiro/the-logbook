@@ -1,5 +1,192 @@
 # Script currency
 
+## Flagged by the 2026-08-19 → 08-23 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-19_TO_23.md`](../CHANGE_AUDIT_2026-08-19_TO_23.md#documentation-and-media-disposition).
+
+This window produced **two Wrong**, one **Dangerous-if-followed** (an upgrade
+instruction that can destroy data), and one new chapter's worth of material.
+
+### 03 — IT Manager / System Admin · **DANGEROUS IF FOLLOWED — rewrite before recording**
+
+The upgrade chapter walks `alembic upgrade head` and then, as reassurance,
+tells the viewer they can downgrade if something goes wrong. **That
+reassurance is now false in two specific ways, and both destroy data.**
+
+**1. The seat-list migration cannot be reversed.** `1eeb053d59b7` expands a
+legacy crew `count` into that many individual seats. Downgrading collapses
+them — a three-firefighter template comes back as one, permanently, with no
+migration that restores it.
+
+**2. Downgrading past both `compartment_path` migrations truncates storage
+paths.** The column was widened to hold deep nested paths; the downgrade
+narrows it back to 200 characters, cutting whatever no longer fits.
+
+A third item is not destructive but will confuse anyone who checks: the
+equipment-check de-duplication (`a17c4e9d2b61`) **detaches** historical
+duplicate checks rather than deleting them, and cannot re-attach them on
+downgrade. Item snapshots survive; the association does not.
+
+The line to record instead is not "you can roll back" but:
+
+> "Take the backup. On this release the backup **is** your rollback — two of
+> these migrations don't reverse cleanly, and one of them will quietly turn a
+> three-seat template into a one-seat template if you try."
+
+**Also in this chapter:** three migrations in this release exist to repair
+databases that Alembic believes are already up to date, because an earlier
+migration was released under one revision id and later renumbered. This is
+worth 20 seconds on camera — it is exactly the kind of thing an IT manager
+will otherwise interpret as a bug when they see repeated work in the log.
+
+**EDITOR:** the upgrade chapter grows by roughly **45–60 seconds**. Everything
+from that chapter onward re-times.
+
+### 04 — Fire Chief / Leadership · **WRONG — new chapter needed**
+
+Two items.
+
+**1. Governance → Legal Documents is a leadership feature and is absent from
+the script.** A chief can now have the department's own privacy notice and
+terms published rather than the platform's. The beat that matters is **not**
+"you can edit your privacy notice" — it is that **proposing and publishing are
+separate permissions**. A chief who hears the first half and not the second
+has learned the feature backwards and will hand `legal.publish` to everyone
+who needs to draft.
+
+Suggested framing:
+
+> "Your secretary can write it. Somebody else has to publish it. That's not
+> the product being awkward — that's the two-signature rule your bylaws
+> probably already have, enforced by the software instead of by memory."
+
+**2. The self-review rule needs saying out loud, with the failure mode.**
+Nobody can approve their own swap or time-off request any more, and on a swap
+that blocks **both** the requester and the target. This is correct and it will
+strand small departments: where exactly one person holds `scheduling.manage`
+and that person also swaps shifts, their requests cannot be approved by
+anybody.
+
+That is a chief-level action item, not a footnote:
+
+> "Before you upgrade — count how many people can approve a swap. If the
+> answer is one, and that person ever swaps a shift, make it two."
+
+### 06 — Member Guide · **WRONG — reshoot affected takes**
+
+Any take showing a **dialog on a phone** was filmed against the bottom-bar
+defect: the navigation bar sat on top of the dialog and swallowed taps. Those
+shots now show a bar that will not be there, and if the presenter reaches past
+it on camera the take teaches a workaround for a bug that no longer exists.
+
+**B-roll check:** every phone dialog sequence. The bar is absent while a dialog
+is open.
+
+Two additions for this script, both short:
+
+- **Browser tabs now name the page.** One line; members with several tabs open
+  have been complaining about this for months.
+- **Equipment checks are safe to finish with no signal.** A check completed in
+  a dead spot and submitted at the station no longer risks a duplicate. Worth
+  30 seconds because members have been taught to avoid exactly this.
+
+### 07 — Secretary / Administrative · **new chapter**
+
+Legal Documents is primarily a secretary workflow. New chapter covering:
+drafting a revision, the **required change note** (and why — somebody in two
+years needs to see the reason), the free-text "Last updated" field, and the
+fact that old versions are archived rather than replaced, because a records
+request asks what the notice said _on a date_.
+
+**Do not film against a real department's privacy notice.** Use demo wording.
+
+Also for this script: **re-export any attendance file kept from before this
+release.** The event attendance export mis-escaped commas, so a member named
+`Smith, John` shifted every column after them. That is a correction a
+secretary needs to hear, because the broken files are already sitting in
+folders.
+
+### 08 — Quick Tips & Shorts · **additions**
+
+- **New short: "Finish the check in the dead spot."** Equipment checks are now
+  safe to complete offline and submit on reconnect. Needs a real phone and a
+  real dead spot or a convincingly simulated one — this is a format where a
+  staged offline indicator will be spotted.
+- **New short: "Recruitment nights that actually feed the pipeline."** Picking
+  the Recruitment event type on a **new** event turns guest sign-in on.
+  **Shooting note:** it must be a new event — the switch does not fire when you
+  change an existing event's type, and filming it that way produces a take
+  where nothing happens.
+- **Candidate short: "Which tab am I in?"** Browser tab titles. 20 seconds.
+
+### 05 / 16 — Training Officer (parts 1 and 2) · **B-roll stale, one behaviour change**
+
+**The Training Admin screen looks different.** It now renders section
+descriptions and contextual actions, and its tabs were rebuilt for keyboard
+and screen-reader navigation (roving focus, arrow/Home/End, `aria-controls`).
+Any B-roll of that screen predates the change.
+
+**One behaviour change worth a line, not a chapter:** prerequisite-gated
+credit bookkeeping was corrected. A requirement locked behind a prerequisite
+no longer mis-tracks credit when the prerequisite is completed out of order.
+If either script narrates prerequisite behaviour, check the take against the
+current screen.
+
+Smaller items that affect what is on screen but need no new narration:
+action hints on **waived** requirements, the training detail visibility gate,
+category mappings that can now be cleared, and restored mobile export tap
+targets.
+
+### 12 — Elections Deep Dive · **one shooting note**
+
+**The ballot confirmation dialog can no longer be dismissed mid-submission**,
+and Escape no longer closes it while a vote is in flight. This is a
+deliberate guard against a half-submitted ballot.
+
+If the script demonstrates "you can back out here", that beat is now wrong —
+you can back out _before_ you submit, not during. Re-check the take.
+
+Two fixes with no narration consequence: automatic election reminders now
+carry a working ballot link, and concurrent public ballot submissions are
+serialized.
+
+### 14 — Multi-Class Courses and Cohorts · **verify one beat**
+
+Cohort **class schedule overrides are now validated**. A cohort override that
+conflicts with its parent class is rejected rather than accepted and failing
+later. If the script shows an override being entered, confirm the demo values
+still save — a take built on a previously-accepted invalid override will now
+show an error on camera.
+
+### 15 — Skills Testing & Evaluations · **one correction**
+
+**Duplicating a skill template now preserves its requirement link.** The old
+behaviour dropped it, so a duplicated template no longer counted toward the
+requirement it was copied from. If the script narrates duplication as a
+shortcut, it can now say the link comes with it — and if it previously warned
+viewers to re-link by hand, **that warning is now wrong and must be cut.**
+
+Also: practice skill-test seeding is idempotent, which matters only to
+whoever prepares the demo environment.
+
+### 09 / 10 / 11 — Training Pipelines · **check the prospect beats**
+
+The prospect pipeline gained event provenance: the board can be filtered by
+the event applicants came from, and the prospect API can answer "who came from
+this event". Interview stage progression retries after an update, and a
+duplicate-prospect race was fixed.
+
+If any of these scripts narrate "you can't tell where a prospect came from",
+that limitation is gone. The **Recruitment event type** (script 04, 08) is the
+front half of the same story and the two should not contradict each other on
+screen.
+
+### 13 — Department Store · not affected
+
+No storefront behaviour changed in this window. Verified against the commit
+range, not assumed.
+
 ## Flagged by the 2026-08-17 → 08-19 changes
 
 Full reason/data-path context in
@@ -42,7 +229,7 @@ consequence.** The caveat is one sentence and it must be in the take:
 > **Three additions to this beat _(2026-08-19, from the Codex review of
 > PR #1573)_.** They change what can safely be shown, not just what is said.
 > **(a)** Switching the demo department to per-incident mode does **not** make
-> "total calls" safe — that figure sums `calls_responded` across *per-trainee*
+> "total calls" safe — that figure sums `calls_responded` across _per-trainee_
 > shift completion reports, so a shift with two enrolled trainees counts twice.
 > Neither mode yields a quotable incident count. **(b) Do not show a CSV
 > export in this chapter.** The export still labels the column "Total Calls" in

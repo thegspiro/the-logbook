@@ -470,8 +470,8 @@ Tags exist for three things today: **event check-in**, **admin hours clock-in**,
 and **shift check-in** on an apparatus.
 
 > **[SCREENSHOT NEEDED — a phone holding against a mounted NFC tag on an
-> apparatus, and the resulting shift check-in page naming the unit, date and
-> hours. Two frames or one composite]**
+> > apparatus, and the resulting shift check-in page naming the unit, date and
+> > hours. Two frames or one composite]**
 
 **This is Chrome on Android, over HTTPS, and nothing else.** iPhone cannot do
 it; Safari does not implement Web NFC and no iOS browser does. A desktop cannot
@@ -779,3 +779,43 @@ A notification appears: "2 queued items synced successfully." Sarah taps it to v
 ---
 
 **Previous:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | **Next:** Return to [Training Guide Index](./README.md)
+
+## August 19–23, 2026 update — dialogs are tappable again
+
+If members have reported that a dialog's buttons "do nothing" on a phone, this
+release fixes it.
+
+The bottom navigation bar was painting **over** open dialogs. The buttons were
+not merely hidden — they were **untappable**, and the tap went to the
+navigation bar underneath, carrying the member out of the page they were
+working in. On a tall dialog the action row sat about 40px behind the bar; on a
+notched phone even a dialog sized to the viewport lost around 32px.
+
+The bar now hides while a dialog, drawer or bottom sheet is open, and returns
+when it closes.
+
+> **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport, scrolled to its
+> action row, with the bottom navigation absent. **Every existing phone dialog
+> capture across the guides is now wrong** and should be replaced with a shot
+> taken after this change — the old ones all show the bar covering the
+> dialog.]**
+
+### Also improved on phones this week
+
+- The **events page** was cut down to what actually fits on a phone.
+- **Equipment template actions** and the **checklist builder** are reachable
+  without sideways scrolling.
+- **Calendar month navigation** is responsive.
+- The **documents, training, audit and check-in tables** reflow into stacked
+  cards instead of scrolling sideways.
+- **Icon-only controls are named**, so a screen reader announces them.
+- Toast notifications are positioned and announced correctly on a phone.
+
+> **[SCREENSHOT NEEDED — one of the reflowed tables (documents or check-in) at
+> > 390x844 showing the stacked-card layout, beside the same table on desktop.
+> > The pair is the point; a single shot does not show the reflow.]**
+
+### Browser tabs
+
+Each tab now carries the page name rather than a generic app title, so several
+Logbook tabs open at once are finally distinguishable. Nothing to configure.
