@@ -108,31 +108,34 @@ describe('AdminHoursPage', () => {
     expect(params?.userId).toBe('member-1');
   });
 
-  it('requests the same period for the totals and the entry list', async () => {
+  it('opens on all time, with no period bounds on either request', async () => {
     renderWithRouter(<AdminHoursPage />);
-
-    await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
-    const summaryParams = fetchMySummary.mock.calls[0]?.[0];
-    const entryParams = fetchMyEntries.mock.calls[0]?.[0];
-    expect(summaryParams?.startDate).toBe(entryParams?.startDate);
-    expect(summaryParams?.endDate).toBe(entryParams?.endDate);
-    // The default period is the calendar year, so the bound is a real UTC
-    // instant derived from a department-local midnight, not a bare date.
-    expect(summaryParams?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
-  });
-
-  it('drops the period bounds entirely when all time is selected', async () => {
-    renderWithRouter(<AdminHoursPage />);
-    await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
-    fetchMySummary.mockClear();
-
-    fireEvent.change(screen.getByLabelText(/showing/i), { target: { value: 'all' } });
 
     await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
     for (const [params] of fetchMySummary.mock.calls) {
       expect(params.startDate).toBeUndefined();
       expect(params.endDate).toBeUndefined();
     }
+    expect(fetchMyEntries.mock.calls[0]?.[0]?.startDate).toBeUndefined();
+    expect(fetchMyEntries.mock.calls[0]?.[0]?.endDate).toBeUndefined();
+  });
+
+  it('requests the same period for the totals and the entry list', async () => {
+    renderWithRouter(<AdminHoursPage />);
+    await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
+    fetchMySummary.mockClear();
+    fetchMyEntries.mockClear();
+
+    fireEvent.change(screen.getByLabelText(/showing/i), { target: { value: 'year' } });
+
+    await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
+    const summaryParams = fetchMySummary.mock.calls[0]?.[0];
+    const entryParams = fetchMyEntries.mock.calls[0]?.[0];
+    expect(summaryParams?.startDate).toBe(entryParams?.startDate);
+    expect(summaryParams?.endDate).toBe(entryParams?.endDate);
+    // A named window bounds on a real UTC instant derived from a
+    // department-local midnight, not a bare calendar date.
+    expect(summaryParams?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
   });
 
   it('shows approved and pending hours separately', async () => {
@@ -147,7 +150,7 @@ describe('AdminHoursPage', () => {
   it('names the categories with no hours instead of tiling a zero for each', async () => {
     renderWithRouter(<AdminHoursPage />);
 
-    expect(await screen.findByText(/No hours in this year for: Community outreach/)).toBeInTheDocument();
+    expect(await screen.findByText(/No hours yet for: Community outreach/)).toBeInTheDocument();
   });
 
   it('renders requirement progress when the department has set requirements', async () => {
@@ -185,7 +188,7 @@ describe('AdminHoursPage', () => {
 
     renderWithRouter(<AdminHoursPage />);
 
-    expect(await screen.findByText(/No hours logged in this year/)).toBeInTheDocument();
+    expect(await screen.findByText(/No hours logged yet/)).toBeInTheDocument();
     expect(screen.queryByText('Where my hours went')).not.toBeInTheDocument();
   });
 });

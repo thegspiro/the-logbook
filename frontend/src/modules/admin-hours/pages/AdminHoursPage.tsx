@@ -34,11 +34,13 @@ import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reporting
 
 const PAGE_SIZE = 20;
 
+// `phrase` reads as a trailing clause ("No hours logged <phrase>"), which is
+// the only form that stays grammatical across a named window and all time.
 const PERIOD_OPTIONS = [
-  { value: 'month', label: 'This month' },
-  { value: '30-days', label: 'Last 30 days' },
-  { value: 'year', label: 'This year' },
-  { value: 'all', label: 'All time' },
+  { value: 'all', label: 'All time', phrase: 'yet' },
+  { value: 'month', label: 'This month', phrase: 'this month' },
+  { value: '30-days', label: 'Last 30 days', phrase: 'in the last 30 days' },
+  { value: 'year', label: 'This year', phrase: 'this year' },
 ] as const;
 
 type ReportingPeriod = (typeof PERIOD_OPTIONS)[number]['value'];
@@ -113,7 +115,7 @@ const AdminHoursPage: React.FC = () => {
   });
 
   // Filters
-  const [period, setPeriod] = useState<ReportingPeriod>('year');
+  const [period, setPeriod] = useState<ReportingPeriod>('all');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [page, setPage] = useState(0);
@@ -132,8 +134,8 @@ const AdminHoursPage: React.FC = () => {
     };
   }, [period, tz]);
 
-  const periodLabel = useMemo(
-    () => PERIOD_OPTIONS.find((option) => option.value === period)?.label ?? 'All time',
+  const periodOption = useMemo(
+    () => PERIOD_OPTIONS.find((option) => option.value === period) ?? PERIOD_OPTIONS[0],
     [period]
   );
 
@@ -504,7 +506,9 @@ const AdminHoursPage: React.FC = () => {
         </article>
         <article className="card p-4">
           <div className="flex items-center justify-between">
-            <p className="text-theme-text-secondary text-sm font-medium">Logged &mdash; {periodLabel.toLowerCase()}</p>
+            <p className="text-theme-text-secondary text-sm font-medium">
+              Logged &mdash; {periodOption.label.toLowerCase()}
+            </p>
             <Clock className="h-5 w-5 text-blue-500" aria-hidden="true" />
           </div>
           <p className="text-theme-text-primary mt-2 text-3xl font-bold">
@@ -567,7 +571,7 @@ const AdminHoursPage: React.FC = () => {
           </div>
           {untouchedCategoryNames.length > 0 && (
             <p className="text-theme-text-muted mt-5 text-xs">
-              No hours in {periodLabel.toLowerCase()} for: {untouchedCategoryNames.join(', ')}
+              No hours {periodOption.phrase} for: {untouchedCategoryNames.join(', ')}
             </p>
           )}
         </section>
@@ -576,7 +580,7 @@ const AdminHoursPage: React.FC = () => {
       {!hasAnyHours && !mySummaryLoading && (
         <div className="card mb-6 px-4 py-10 text-center">
           <Clock className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
-          <p className="text-theme-text-secondary">No hours logged in {periodLabel.toLowerCase()}</p>
+          <p className="text-theme-text-secondary">No hours logged {periodOption.phrase}</p>
           <p className="text-theme-text-muted mt-1 text-sm">
             Scan a category QR code to clock in, or log hours manually below.
           </p>
@@ -725,7 +729,7 @@ const AdminHoursPage: React.FC = () => {
       <div className="bg-theme-surface rounded-lg shadow-md">
         <div className="border-theme-surface-border flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3">
           <h2 className="text-theme-text-primary font-semibold">My Hours</h2>
-          <span className="text-theme-text-muted text-xs">{periodLabel}</span>
+          <span className="text-theme-text-muted text-xs">{periodOption.label}</span>
         </div>
         {entriesLoading ? (
           <div className="text-theme-text-secondary py-8 text-center">Loading...</div>
