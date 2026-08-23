@@ -66,7 +66,6 @@ import type {
   CheckType,
   CheckItemStatus,
   LastCheckItemResult,
-  DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
@@ -500,34 +499,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const applyOverride = useCallback(
     (item: CheckTemplateItem): CheckTemplateItem => {
       const o = swapOverrides[item.id];
-      const corrected = lotEdits[item.id];
-      if (!o && !corrected) return item;
+      if (!o) return item;
       return {
         ...item,
-        ...(corrected ? { lotsAboard: corrected } : {}),
         ...(o?.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
         ...(o?.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
       };
     },
-    [swapOverrides, lotEdits]
+    [swapOverrides]
   );
 
-  const correctLot = async (
-    item: CheckTemplateItem,
-    lotId: string,
-    changes: { quantity: number; lotNumber?: string; expirationDate?: string }
-  ) => {
-    setLotBusyId(item.id);
-    try {
-      const updated = await schedulingService.updateDeployedLot(item.id, lotId, changes);
-      setLotEdits((current) => ({ ...current, [item.id]: updated.lots }));
-      toast.success('Lot updated');
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to update the lot'));
-    } finally {
-      setLotBusyId(null);
-    }
-  };
   const effectiveCheckableItems = useMemo(() => checkableItems.map(applyOverride), [checkableItems, applyOverride]);
   const checkedItems = effectiveCheckableItems.filter(
     (item) => getEffectiveStatus(item, results[item.id], today) !== 'not_checked'
@@ -1717,17 +1698,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         {(item.lotsAboard?.length ?? 0) > 0 && (
           <div className="border-theme-surface-border space-y-2 rounded-lg border p-3">
             <p className="text-theme-text-secondary text-xs font-medium">Inventory lots aboard</p>
-            <LotsAboardPanel
-              lots={item.lotsAboard ?? []}
-              {...((item.lotsAboard ?? []).some((lot) => lot.isExpired)
-                ? {
-                    busy: lotBusyId === item.id,
-                    onSave: (lotId: string, changes: Parameters<typeof correctLot>[2]) =>
-                      correctLot(item, lotId, changes),
-                    onRemove: (lotId: string) => correctLot(item, lotId, { quantity: 0 }),
-                  }
-                : {})}
-            />
+            <LotsAboardPanel lots={item.lotsAboard ?? []} />
           </div>
         )}
         {showNotesField && (
