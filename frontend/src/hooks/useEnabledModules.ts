@@ -14,6 +14,14 @@ export interface EnabledModules {
   enabledModules: Set<string> | null;
   /** Should this module's navigation be shown? Permissive when unconfigured. */
   isModuleOn: (key: string) => boolean;
+  /**
+   * True until the request settles, either way. `enabledModules` conflates
+   * "still loading" with "nothing to gate on", which is right for navigation —
+   * a nav bar renders immediately and fills in — but wrong for a route gate,
+   * which would flash the page and then replace it with a refusal. Callers
+   * that must not render before the answer is known wait on this instead.
+   */
+  isLoading: boolean;
 }
 
 /**
@@ -30,6 +38,7 @@ export interface EnabledModules {
  */
 export function useEnabledModules(): EnabledModules {
   const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +51,12 @@ export function useEnabledModules(): EnabledModules {
       })
       .catch(() => {
         /* default to null = show all */
+      })
+      .finally(() => {
+        // Settles on failure too: a module flag is not an access control, so a
+        // failed lookup has to fall through to "show it" rather than strand a
+        // route gate on a spinner forever.
+        if (!cancelled) setIsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -50,5 +65,5 @@ export function useEnabledModules(): EnabledModules {
 
   const isModuleOn = (key: string) => enabledModules === null || enabledModules.has(key);
 
-  return { enabledModules, isModuleOn };
+  return { enabledModules, isModuleOn, isLoading };
 }
