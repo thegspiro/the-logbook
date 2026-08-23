@@ -17,6 +17,8 @@ const mockListPendingChecks = vi.fn();
 const mockDequeueCheck = vi.fn();
 const mockMarkCheckSubmitted = vi.fn();
 const mockMarkPhotosUploaded = vi.fn();
+const mockSwapItemLot = vi.fn();
+const mockGetItemLots = vi.fn();
 const mockEnqueueCheck = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
@@ -27,12 +29,12 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getEquipmentCheck: vi.fn(),
     updateDeployedLot: (...a: unknown[]) => mockUpdateDeployedLot(...a) as unknown,
     uploadCheckItemPhotos: (...a: unknown[]) => mockUploadCheckItemPhotos(...a) as unknown,
-    swapItemLot: vi.fn(),
+    swapItemLot: (...a: unknown[]) => mockSwapItemLot(...a) as unknown,
   },
 }));
 
 vi.mock('../../services/inventoryService', () => ({
-  inventoryService: { getItemLots: vi.fn().mockResolvedValue([]) },
+  inventoryService: { getItemLots: (...a: unknown[]) => mockGetItemLots(...a) as unknown },
 }));
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -45,6 +47,13 @@ vi.mock('../../utils/offlineQueue', () => ({
   markPhotosUploaded: (...a: unknown[]) => mockMarkPhotosUploaded(...a) as unknown,
   markRetry: vi.fn(),
   pendingCount: vi.fn().mockResolvedValue(0),
+}));
+
+const mockCheckPermission = vi.fn(() => true);
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: () => ({
+    checkPermission: (...a: unknown[]) => mockCheckPermission(...a) as unknown,
+  }),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -121,6 +130,8 @@ describe('EquipmentCheckForm quantity seeding', () => {
     mockUploadCheckItemPhotos.mockResolvedValue({ photoUrls: [], count: 1 });
     mockMarkCheckSubmitted.mockResolvedValue({});
     mockMarkPhotosUploaded.mockResolvedValue({});
+    mockGetItemLots.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
     mockSubmitCheck.mockResolvedValue({ id: 'check-1', items: [] });
     mockEnqueueCheck.mockResolvedValue('queued-check-1');
     mockUpdateDeployedLot.mockResolvedValue({
@@ -448,6 +459,135 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
     await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
     expect(mockSubmitCheck.mock.calls[0][1].items[0]).toMatchObject({ status: 'fail', is_expired: true });
+  });
+
+  /**
+   * The swap only ever appended the incoming lot, and a position's exposure is
+   * read from the lots aboard rather than from the scalar date the swap
+   * rewrote. So an item whose bracket held an expired box was still EXPIRED —
+   * force-failed, Pass disabled — the instant after the crew was told fresh
+   * stock had been swapped in.
+   */
+  describe('replacing expired stock', () => {
+    const expiredItem = {
+      hasExpiration: true,
+      expirationDate: '2020-01-01',
+      inventoryItemId: 'inv-1',
+      lotsAboard: [{ id: 'dl-old', lotNumber: 'OLD-1', expirationDate: '2020-01-01', quantity: 1, isExpired: true }],
+    };
+
+    const freshResult = {
+      templateItemId: 'ti-1',
+      lotNumber: 'NEW-9',
+      expirationDate: '2030-01-01',
+      remainingQuantity: 5,
+      lotsAboard: [{ id: 'dl-new', lotNumber: 'NEW-9', expirationDate: '2030-01-01', quantity: 1, isExpired: false }],
+      replacedLotNumber: 'OLD-1',
+      disposition: 'discarded',
+    };
+
+    const openSwapDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+      mockGetItemLots.mockResolvedValue([
+        { id: 'inv-lot-1', lot_number: 'NEW-9', expiration_date: '2030-01-01', quantity: 5 },
+      ]);
+      render(expiredItem);
+      expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /^Swap$/ }));
+      return screen.findByText('NEW-9');
+    };
+
+    it('will not send the replacement until the crew says where the old unit went', async () => {
+      const user = userEvent.setup();
+      await openSwapDialog(user);
+
+      await user.click(screen.getByRole('button', { name: /^Replace$/ }));
+
+      expect(mockSwapItemLot).not.toHaveBeenCalled();
+    });
+
+    // Destroyed, handed back to the pharmacy, or pulled for a later exchange:
+    // all three take it off the truck, and which one happened is the part only
+    // the crew knows.
+    it.each([
+      ['Disposed of', 'discarded'],
+      ['Exchanged now', 'returned_for_exchange'],
+      ['Exchange later', 'awaiting_exchange'],
+    ])('sends %s as the disposition of the lot it retires', async (label, expected) => {
+      const user = userEvent.setup();
+      mockSwapItemLot.mockResolvedValue(freshResult);
+      await openSwapDialog(user);
+
+      await user.click(screen.getByRole('button', { name: label }));
+      await user.click(screen.getByRole('button', { name: /^Replace$/ }));
+
+      await waitFor(() =>
+        expect(mockSwapItemLot).toHaveBeenCalledWith('ti-1', 'inv-lot-1', 1, {
+          disposition: expected,
+          deployedLotId: 'dl-old',
+        })
+      );
+    });
+
+    it('clears the expiry verdict once the old lot is off the truck', async () => {
+      const user = userEvent.setup();
+      mockSwapItemLot.mockResolvedValue(freshResult);
+      await openSwapDialog(user);
+
+      await user.click(screen.getByRole('button', { name: 'Disposed of' }));
+      await user.click(screen.getByRole('button', { name: /^Replace$/ }));
+
+      // The scalar date alone never did this: soonest-expiration reads the
+      // collection, so the item stayed EXPIRED and force-failed.
+      await waitFor(() => expect(screen.queryByText('EXPIRED')).not.toBeInTheDocument());
+      expect(screen.getByText('0/1')).toBeInTheDocument();
+    });
+
+    // The position a crew is most likely to be standing in front of: expired
+    // by its own date, with no lot rows to point at. Asking only when there is
+    // a row to name left this one topping up, so the expired units stayed
+    // aboard and the item read EXPIRED straight after the swap.
+    it('still asks, and still replaces, when the units were never lot-tracked', async () => {
+      const user = userEvent.setup();
+      mockSwapItemLot.mockResolvedValue({ ...freshResult, replacedLotNumber: 'OLD-1' });
+      mockGetItemLots.mockResolvedValue([
+        { id: 'inv-lot-1', lot_number: 'NEW-9', expiration_date: '2030-01-01', quantity: 5 },
+      ]);
+      render({ hasExpiration: true, expirationDate: '2020-01-01', inventoryItemId: 'inv-1' });
+      expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^Swap$/ }));
+      await screen.findByText('NEW-9');
+      await user.click(screen.getByRole('button', { name: 'Exchange later' }));
+      await user.click(screen.getByRole('button', { name: /^Replace$/ }));
+
+      // No deployedLotId: there is no row to name, and the disposition alone
+      // is what tells the server this is a replacement.
+      await waitFor(() =>
+        expect(mockSwapItemLot).toHaveBeenCalledWith('ti-1', 'inv-lot-1', 1, {
+          disposition: 'awaiting_exchange',
+        })
+      );
+    });
+
+    it('tops a position up without retiring anything when nothing aboard is expired', async () => {
+      const user = userEvent.setup();
+      mockSwapItemLot.mockResolvedValue({ ...freshResult, replacedLotNumber: undefined, disposition: undefined });
+      mockGetItemLots.mockResolvedValue([
+        { id: 'inv-lot-1', lot_number: 'NEW-9', expiration_date: '2030-01-01', quantity: 5 },
+      ]);
+      render({
+        hasExpiration: true,
+        expirationDate: '2030-01-01',
+        inventoryItemId: 'inv-1',
+        lotsAboard: [{ id: 'dl-ok', lotNumber: 'OK-1', expirationDate: '2030-06-01', quantity: 1, isExpired: false }],
+      });
+      await user.click(await screen.findByRole('button', { name: /^Swap$/ }));
+      await screen.findByText('NEW-9');
+
+      await user.click(screen.getByRole('button', { name: /^Swap in$/ }));
+
+      await waitFor(() => expect(mockSwapItemLot).toHaveBeenCalledWith('ti-1', 'inv-lot-1', 1, undefined));
+    });
   });
 
   it('renders an expired item safely under React Strict Mode', async () => {

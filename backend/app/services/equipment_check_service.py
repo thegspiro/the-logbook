@@ -2858,6 +2858,8 @@ class EquipmentCheckService:
         organization_id: str,
         user: Optional[User] = None,
         quantity: int = 1,
+        replaced_deployed_lot_id: Optional[str] = None,
+        disposition: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Move units from a ready-stock lot onto the apparatus.
 
@@ -2868,9 +2870,24 @@ class EquipmentCheckService:
         expressible; ``quantity`` defaults to 1 for the single-unit case that
         covers everything else. Raises ValueError on a mismatched, empty or
         expired lot.
+
+        ``replaced_deployed_lot_id`` names a lot this swap takes *off* the
+        truck, which is what separates replacing expired stock from topping a
+        position up. Without it the incoming units were merely appended, so an
+        expired lot stayed aboard and kept setting the position's exposure —
+        the item read EXPIRED and stayed force-failed immediately after the
+        crew was told fresh stock had been swapped in. Omitted, the top-up
+        behaviour is unchanged: a swap never retires stock by inference.
+
+        ``disposition`` records what became of the removed unit, because
+        departments differ — destroyed here, handed back to the pharmacy there,
+        pulled for somebody to exchange later somewhere else — and only the
+        crew at the truck knows which happened.
         """
         if quantity < 1:
             raise ValueError("Restock quantity must be at least 1")
+        if replaced_deployed_lot_id and not disposition:
+            raise ValueError("A replaced lot must record what became of it")
         item, template_id = await self._get_item_with_template(
             template_item_id, organization_id
         )
@@ -2956,6 +2973,53 @@ class EquipmentCheckService:
                     deployed_by=str(user.id) if user is not None else None,
                 )
             )
+        # Retired after the incoming lot is recorded, never before: a position
+        # that momentarily holds neither would report itself empty to anything
+        # reading mid-transaction.
+        #
+        # The incoming row, excluded by identity below. A top-up of a lot
+        # already aboard increments that row rather than adding one, so the two
+        # cases do not share a shape. The exclusion is belt-and-braces against
+        # the expiry sweep — deploying expired stock is refused a few lines
+        # above, so the incoming units cannot be expired today — but it is what
+        # stops a lot being named as its own replacement.
+        incoming = existing if existing is not None else item.deployed_lots[-1]
+        replaced_lot_number: Optional[str] = None
+        if replaced_deployed_lot_id:
+            replaced = next(
+                (
+                    deployed
+                    for deployed in (item.deployed_lots or [])
+                    if str(deployed.id) == str(replaced_deployed_lot_id)
+                ),
+                None,
+            )
+            if replaced is None:
+                raise ValueError("The lot being replaced is not aboard this item")
+            if str(replaced.id) == str(incoming.id):
+                raise ValueError("A lot cannot replace itself")
+            replaced_lot_number = replaced.lot_number
+            item.deployed_lots.remove(replaced)
+        elif disposition:
+            # No id to name: the position's units were never lot-tracked, so
+            # _materialize_untracked_units has just given the blob aboard one
+            # row carrying the position's own date. Retiring what is expired is
+            # the only reading available, and the crew asked for a replacement
+            # by reporting a disposition at all.
+            today = date.today()
+            expired = [
+                deployed
+                for deployed in list(item.deployed_lots or [])
+                if deployed.id != incoming.id
+                and deployed.expiration_date
+                and deployed.expiration_date < today
+            ]
+            if not expired:
+                raise ValueError("This position carries no expired stock to replace")
+            replaced_lot_number = expired[0].lot_number
+            for deployed in expired:
+                item.deployed_lots.remove(deployed)
+
         if self._target_quantity(item) is not None:
             item.quantity_on_truck = self._on_truck(item)
         self._sync_restock_after_restocking(item)
@@ -2981,6 +3045,12 @@ class EquipmentCheckService:
                     "quantity": quantity,
                     "quantity_on_truck": item.quantity_on_truck,
                     "cleared_restock": was_restock and not item.restock_needed,
+                    # The audit trail for a unit that left the apparatus. A
+                    # department exchanging at a pharmacy has no other record
+                    # that a unit is off the truck and owed back.
+                    "replaced_deployed_lot_id": replaced_deployed_lot_id,
+                    "replaced_lot_number": replaced_lot_number,
+                    "disposition": disposition,
                     "from": previous,
                     "to": {
                         "lot_number": item.lot_number,
@@ -3002,6 +3072,15 @@ class EquipmentCheckService:
             "remaining_quantity": lot.quantity,
             "restock_needed": bool(item.restock_needed),
             "quantity_on_truck": self._on_truck(item),
+            # Returned so a caller can settle the position's expiry verdict
+            # from the lots themselves. The scalar lot_number/expiration_date
+            # above describe the incoming unit only, and a position holding
+            # several lots is exposed by the earliest of them — a reader that
+            # trusted the scalars would call an item in date while an older
+            # box was still aboard.
+            "lots_aboard": self._deployed_lot_payload(item),
+            "replaced_lot_number": replaced_lot_number,
+            "disposition": disposition,
         }
 
     # ------------------------------------------------------------------

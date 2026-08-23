@@ -67,8 +67,9 @@ import type {
   CheckType,
   CheckItemStatus,
   LastCheckItemResult,
+  DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 
@@ -308,10 +309,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
   // expiration so the badge reflects the fresher unit that was swapped in.
-  const [swapOverrides, setSwapOverrides] = useState<Record<string, { lotNumber?: string; expirationDate?: string }>>(
-    {}
-  );
+  const [swapOverrides, setSwapOverrides] = useState<
+    Record<string, { lotNumber?: string; expirationDate?: string; lotsAboard?: DeployedLot[] }>
+  >({});
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+  // What the crew reports became of the expired unit they are taking off.
+  // Required before a replacement can be sent, because the three outcomes —
+  // destroyed, handed back to the pharmacy, pulled for a later exchange —
+  // differ by department and only the crew at the truck knows which happened.
+  const [disposition, setDisposition] = useState<ExpiredStockDisposition | null>(null);
 
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(Boolean(swapTarget));
@@ -511,6 +517,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         ...item,
         ...(o?.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
         ...(o?.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
+        // The decisive one. A position's exposure is read from the lots
+        // aboard, so overriding only the scalar date left a replaced item
+        // reading EXPIRED off the box that had just been taken off the truck.
+        ...(o?.lotsAboard !== undefined ? { lotsAboard: o.lotsAboard } : {}),
       };
     },
     [swapOverrides]
@@ -531,6 +541,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (!item.inventoryItemId) return;
       setSwapTarget(item);
       setSwapLots([]);
+      // Never carried between items: a disposition chosen for one drug must
+      // not be filed against the next box the crew opens this dialog for.
+      setDisposition(null);
       setSwapLoading(true);
       try {
         const lots = await inventoryService.getItemLots(item.inventoryItemId);
@@ -550,17 +563,56 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [today]
   );
 
+  /**
+   * The expired box this swap replaces, earliest date first.
+   *
+   * One per swap: a position carrying two expired lots needs two physical
+   * exchanges, and pretending one restock cleared both would put an item back
+   * in service off a box still in the bag.
+   */
+  const replacedLot = useMemo(
+    () =>
+      (swapTarget?.lotsAboard ?? [])
+        .filter((lot) => lot.isExpired)
+        .reduce<DeployedLot | undefined>(
+          (soonest, lot) => (!soonest || (lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest),
+          undefined
+        ),
+    [swapTarget]
+  );
+
+  /**
+   * Whether this swap is a replacement at all — which is what the disposition
+   * answers, not merely which row it names.
+   *
+   * A position whose units were never lot-tracked is expired by its own date
+   * with no lot rows to point at, and it is exactly the position a crew is
+   * most likely to be standing in front of. Asking only when there is a row to
+   * name would leave that case topping up instead of replacing, so the expired
+   * units stay aboard and the item reads EXPIRED straight after the swap.
+   */
+  const isReplacement = Boolean(swapTarget && getExpirationStatus(swapTarget, today) === 'expired');
+
   const doSwap = useCallback(
     async (lot: InventoryLot) => {
       if (!swapTarget) return;
+      if (isReplacement && !disposition) return;
       setSwapping(true);
       try {
-        const res = await schedulingService.swapItemLot(swapTarget.id, lot.id);
+        const res = await schedulingService.swapItemLot(
+          swapTarget.id,
+          lot.id,
+          1,
+          // The lot id is sent when there is one to send; the disposition on
+          // its own is what tells the server this is a replacement.
+          disposition ? { disposition, ...(replacedLot ? { deployedLotId: replacedLot.id } : {}) } : undefined
+        );
         setSwapOverrides((prev) => ({
           ...prev,
           [swapTarget.id]: {
             ...(res.lotNumber !== undefined ? { lotNumber: res.lotNumber } : {}),
             ...(res.expirationDate !== undefined ? { expirationDate: res.expirationDate } : {}),
+            ...(res.lotsAboard !== undefined ? { lotsAboard: res.lotsAboard } : {}),
           },
         }));
         // The inventory swap is now authoritative. Clear the previous
@@ -568,7 +620,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         updateResult(swapTarget.id, {
           status: 'not_checked',
         });
-        toast.success('Swapped in fresh stock');
+        toast.success(isReplacement ? 'Replaced with fresh stock' : 'Swapped in fresh stock');
         setSwapTarget(null);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to swap lot'));
@@ -576,7 +628,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         setSwapping(false);
       }
     },
-    [swapTarget, updateResult]
+    [swapTarget, updateResult, replacedLot, disposition, isReplacement]
   );
 
   const toggleNotes = useCallback((itemId: string) => {
@@ -2111,6 +2163,51 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               </button>
             </div>
             <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
+              {/*
+                A replacement takes the expired box off the truck, and where it
+                goes next differs by department: destroyed here, straight back
+                to the supplying pharmacy there, pulled for somebody to
+                exchange days later somewhere else. Only the crew standing at
+                the compartment knows which happened, and for the third the
+                changelog entry is the only record that a unit is off the
+                apparatus and owed back — so the swap will not go without it.
+              */}
+              {isReplacement && (
+                <div className="border-theme-surface-border mb-1 rounded-lg border p-3">
+                  <p className="text-theme-text-primary text-xs font-medium">
+                    Taking off {replacedLot?.lotNumber || swapTarget.lotNumber || 'the expired unit'}
+                    {(replacedLot?.expirationDate ?? swapTarget.expirationDate)
+                      ? ` · expired ${formatCalendarDate(replacedLot?.expirationDate ?? swapTarget.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                      : ''}
+                  </p>
+                  <fieldset className="mt-2">
+                    <legend className="text-theme-text-muted mb-2 text-xs">What happens to it?</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          [ExpiredStockDisposition.DISCARDED, 'Disposed of'],
+                          [ExpiredStockDisposition.RETURNED_FOR_EXCHANGE, 'Exchanged now'],
+                          [ExpiredStockDisposition.AWAITING_EXCHANGE, 'Exchange later'],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={disposition === value}
+                          onClick={() => setDisposition(value)}
+                          className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                            disposition === value
+                              ? 'border-red-500 bg-red-600 text-white'
+                              : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                </div>
+              )}
               {swapLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
@@ -2138,14 +2235,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     </div>
                     <button
                       type="button"
-                      disabled={swapping}
+                      disabled={swapping || (isReplacement && !disposition)}
+                      title={isReplacement && !disposition ? 'Say what happens to the expired unit first' : undefined}
                       onClick={() => {
                         void doSwap(lot);
                       }}
                       className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
                     >
                       {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-                      Swap in
+                      {isReplacement ? 'Replace' : 'Swap in'}
                     </button>
                   </div>
                 ))

@@ -1796,6 +1796,10 @@ async def swap_item_lot(
 
     Decrements the lot's on-hand quantity and updates the deployed item's
     lot number and expiration to the fresher unit that was swapped in.
+
+    Naming ``replaced_deployed_lot_id`` also takes that lot off the truck and
+    records the disposition the crew reports for it; omitting it tops the
+    position up without retiring anything.
     """
     service = EquipmentCheckService(db)
     try:
@@ -1805,6 +1809,8 @@ async def swap_item_lot(
             organization_id=str(current_user.organization_id),
             user=current_user,
             quantity=data.quantity,
+            replaced_deployed_lot_id=data.replaced_deployed_lot_id,
+            disposition=data.disposition.value if data.disposition else None,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
