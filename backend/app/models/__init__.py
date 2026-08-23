@@ -15,6 +15,7 @@ from app.models.analytics import AnalyticsEvent
 from app.models.apparatus import (
     Apparatus,
     ApparatusCategory,
+    ApparatusCompartmentSeal,
     ApparatusCustomField,
     ApparatusDocument,
     ApparatusEquipment,
@@ -449,6 +450,7 @@ __all__ = [
     "EquipmentCheckTemplate",
     "CheckTemplateCompartment",
     "CheckTemplateItem",
+    "ApparatusCompartmentSeal",
     # Apparatus enums
     "ApparatusCategory",
     "DefaultApparatusType",

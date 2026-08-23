@@ -22,6 +22,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -2219,6 +2220,14 @@ class CheckTemplateCompartment(Base):
     container_type = Column(
         String(50), nullable=False, default="compartment", server_default="compartment"
     )
+    # This container is sealed in normal operation — a drug bag, an airway bag,
+    # a sealed kit. The seal is what lets a crew skip counting the contents: an
+    # intact tag is evidence nobody has been inside since the last full count,
+    # so the check asks for the tag number instead of every pocket. Once the
+    # seal is broken the contents are unknown again and every pocket is
+    # counted, which is why the runtime state lives in its own table rather
+    # than being inferred per check.
+    is_sealed = Column(Boolean, default=False, nullable=False, server_default="0")
     parent_compartment_id = Column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
@@ -2253,6 +2262,91 @@ class CheckTemplateCompartment(Base):
 
     def __repr__(self):
         return f"<CheckTemplateCompartment(name={self.name})>"
+
+
+class ApparatusCompartmentSeal(Base):
+    """The current seal on one sealed container, on one apparatus.
+
+    A sealed bag is checked by reading its tag, not by counting its contents:
+    an intact tag is the evidence that nobody has been inside since the last
+    full count. Break the seal and that evidence is gone, so the next check
+    counts every pocket.
+
+    This is deliberately **not** a column on the check or on the template.
+    The template says a container *is* sealed; the check records what a crew
+    found on one morning. Neither can answer "what is the tag number right
+    now", because a seal is broken at 02:41 on a call and re-sealed hours
+    later by a different crew — the state has to outlive the shift that
+    changed it, and it belongs to the apparatus rather than to any one check.
+    """
+
+    __tablename__ = "apparatus_compartment_seals"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Polymorphic, no FK — the same convention as Shift.apparatus_id, which
+    # this is resolved against. A department on BasicApparatus has no
+    # apparatus.id to point at, and constraining to one table locks the other
+    # out. Resolve with utils/apparatus_ref.
+    apparatus_id = Column(String(36), nullable=False)
+    compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # The tag currently on the seal. NULL means sealed but untagged, which is
+    # a real state on departments that use plain tamper strips.
+    tag_number = Column(String(50), nullable=True)
+    # "intact" | "broken". Not a DB enum: a department that adds a third state
+    # (say "missing") should not need a migration to record it.
+    status = Column(
+        String(20), nullable=False, default="intact", server_default="intact"
+    )
+
+    broken_at = Column(DateTime(timezone=True), nullable=True)
+    # Where it was broken — "run 26-1188". Free text because it may be a run
+    # number, an incident id, or a sentence, and it is displayed, never parsed.
+    broken_note = Column(String(200), nullable=True)
+    broken_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # The tag to apply when the bag is re-sealed. Written when the seal is
+    # broken so the crew that re-seals has a number to reach for rather than
+    # inventing one, which is what makes the replacement traceable.
+    replacement_tag_number = Column(String(50), nullable=True)
+
+    last_sealed_at = Column(DateTime(timezone=True), nullable=True)
+    last_sealed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # One seal state per container per rig. Without it a second broken-seal
+        # report creates a rival row and the check has two answers to "is this
+        # bag sealed", which is exactly the question it exists to settle.
+        UniqueConstraint(
+            "apparatus_id", "compartment_id", name="uq_apparatus_compartment_seal"
+        ),
+        Index("idx_apparatus_seal_org", "organization_id"),
+        Index("idx_apparatus_seal_compartment", "compartment_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ApparatusCompartmentSeal(compartment={self.compartment_id}, "
+            f"status={self.status})>"
+        )
 
 
 class CheckTemplateItem(Base):
