@@ -15,7 +15,10 @@ from typing import Any, Dict, Optional
 
 # 5 mil is the minimum X-dimension commonly readable by handheld scanners and
 # one dot at 203 dpi thermal resolution — narrower cannot be printed at all.
-_MIN_BAR_WIDTH_INCH = 0.005
+# Public because the ZPL renderer sizes against the same physical floor; two
+# copies of this number would be free to drift into disagreeing about which
+# labels are printable.
+MIN_BAR_WIDTH_INCH = 0.005
 
 
 def sanitize_barcode_value(raw: str) -> str:
@@ -42,7 +45,7 @@ def _fit_code128(
     """
     from reportlab.lib.units import inch
 
-    minimum_width = _MIN_BAR_WIDTH_INCH * inch
+    minimum_width = MIN_BAR_WIDTH_INCH * inch
 
     def build(bar_width: float):
         return code128.Code128(
@@ -114,6 +117,38 @@ LABEL_FORMATS: Dict[str, Dict[str, Any]] = {
         "description": "Rollo / Thermal 2x1 Label (2 x 1 in)",
         "width": 2.0,
         "height": 1.0,
+        "type": "thermal",
+        "auto_rotate": True,
+    },
+    # Zebra stock. Sizes overlap the Rollo entries on purpose: a preset is
+    # picked by matching the box the labels came in, and a quartermaster
+    # holding Zebra 2x1 stock should not have to know it is the same size as
+    # a Rollo roll. These are also the sizes the ZPL path prints natively.
+    "zebra_2x1": {
+        "description": "Zebra 2x1 Asset Label (2 x 1 in)",
+        "width": 2.0,
+        "height": 1.0,
+        "type": "thermal",
+        "auto_rotate": True,
+    },
+    "zebra_3x1": {
+        "description": "Zebra 3x1 Label (3 x 1 in)",
+        "width": 3.0,
+        "height": 1.0,
+        "type": "thermal",
+        "auto_rotate": True,
+    },
+    "zebra_4x2": {
+        "description": "Zebra 4x2 Label (4 x 2 in)",
+        "width": 4.0,
+        "height": 2.0,
+        "type": "thermal",
+        "auto_rotate": True,
+    },
+    "zebra_4x6": {
+        "description": "Zebra 4x6 Shipping Label (4 x 6 in)",
+        "width": 4.0,
+        "height": 6.0,
         "type": "thermal",
         "auto_rotate": True,
     },

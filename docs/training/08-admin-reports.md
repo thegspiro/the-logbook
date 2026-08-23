@@ -130,6 +130,22 @@ Configure how membership IDs are assigned:
 - Set the ID format (prefix, numeric pattern)
 - View and manage the next available ID number
 
+### Label Printers
+
+Registers the department's network barcode label printers (Zebra and other
+ZPL-compatible models). Once one is registered, every label print page in the
+app — inventory, apparatus, facilities, members, applicants — gains a **Send to
+Printer** button that prints without going through a print dialog, so nothing
+can rescale a barcode and stop it scanning.
+
+Each printer records its network address, resolution, and the label stock
+loaded in it, and **Send test label** confirms the connection and alignment
+before anyone prints a batch. Printers are shared department-wide; the _label
+size_ each person prefers stays a per-position preference.
+
+Full walkthrough: [Direct printing to a network label
+printer](./05-inventory.md#direct-printing-to-a-network-label-printer).
+
 ---
 
 ## Module Management
@@ -2074,6 +2090,7 @@ Full walkthrough and edge cases:
 [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice).
 
 > **[SCREENSHOT NEEDED — Governance → Legal Documents landing view with both
+>
 > > document cards (Privacy Notice, Terms of Service), one showing a published
 > > revision and one showing a draft, so the status difference is visible.]**
 
@@ -2090,6 +2107,7 @@ without running it as an off-system procedure. A department that does not want
 the ceremony gives one person `settings.manage`.
 
 > **[SCREENSHOT NEEDED — the revision editor captured under an account holding
+>
 > > only `legal.propose`, so the Publish control is visibly absent. That absence
 > > is the subject of the shot; caption it explicitly.]**
 
@@ -2117,6 +2135,7 @@ the ceremony gives one person `settings.manage`.
   publishing is a process you run, not a workflow the module enforces.
 
 > **[SCREENSHOT NEEDED — the revision history for one document showing a
+>
 > > published revision plus at least one archived revision, each with its change
 > > note and the publishing member. Seed three revisions so it reads as a
 > > history.]**
@@ -2139,6 +2158,7 @@ financial access.** Money totals need `finance.manage`, fundraising needs
 and links only — never facility codes, accounts, budgets or leases.
 
 > **[SCREENSHOT NEEDED — the organization dashboard under two accounts side by
+>
 > > side: one holding `finance.manage` and one without it, showing the finance
 > > section present in the first and absent (not empty) in the second. The
 > > comparison is the point.]**

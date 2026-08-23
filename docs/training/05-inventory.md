@@ -46,7 +46,7 @@ Key pages in the inventory module:
 | Page                | URL                        | Description                                                              |
 | ------------------- | -------------------------- | ------------------------------------------------------------------------ |
 | **Items List**      | `/inventory`               | Browse all equipment and supplies with search, filters, and sorting      |
-| **My Issued Gear**    | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                 |
+| **My Issued Gear**  | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                 |
 | **Item Detail**     | `/inventory/items/:id`     | Full item record with barcode, history, maintenance, and NFPA compliance |
 | **Storage Areas**   | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area)        |
 | **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages  |
@@ -675,12 +675,14 @@ Generate barcode labels for inventory items to attach to equipment.
 2. Click **Settings** and choose a **Label Size**:
    - **Dymo 30252 / 30256 / 30334 / 30336** — the four common Dymo label stocks
    - **Rollo 4×6** and **Rollo / Thermal 2×1** — roll-fed thermal printers
+   - **Zebra 2×1 / 3×1 / 4×2 / 4×6** — Zebra label stock (2×1 is the usual asset tag)
    - **Thermal 1×1** — square asset tags
    - **Letter Paper (Grid)** — Avery 5160, 30 labels per 8.5×11″ sheet
    - **Custom size** — enter the exact **width** and **height** (in inches, 0.5–8″ wide × 0.5–11″ tall) for any other sticker printer or label stock
 3. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
-4. Print one of two ways:
-   - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
+4. Print one of three ways:
+   - **Send to Printer** (best, when a network label printer is configured) — sends the labels straight to the printer. No print dialog, no PDF, and nothing that can rescale the barcode. See [Direct printing to a network label printer](#direct-printing-to-a-network-label-printer) below.
+   - **PDF** (recommended for sticker/thermal printers without a network connection) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
    - **Print Labels** — prints directly through the browser print dialog.
 
 Labels include a Code128 barcode (with the required quiet-zone margins), the item name, and the asset tag or serial number.
@@ -701,16 +703,70 @@ Both paths produce **actual-size** barcodes — the key to making them scannable
 > **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
 
 **Settings** at the top right opens the panel these steps refer to. **Label
-Size** is a grid of nine clickable cards — four Dymo sizes, two Rollo, a 1"
-square thermal tag, Letter Paper (Grid) for Avery 5160 sheets, and **Custom
-size** — not a dropdown. Below them sit copies per item, the extra details to
-print under the barcode, and the orientation block.
+Size** is a grid of clickable cards — four Dymo sizes, two Rollo, four Zebra, a
+1" square thermal tag, Letter Paper (Grid) for Avery 5160 sheets, and **Custom
+size** — not a dropdown. Below them sit the label printer (when one is
+configured), copies per item, the extra details to print under the barcode, and
+the orientation block.
 
 > **Corrected 2026-08-10.** The button is **Download Test Label**, not "Print
 > Test Label"; it produces a single-label PDF rather than sending anything to
 > a printer.
 
 ![The label settings panel — size presets, auto-rotate, and the test-label download](./images/05-64-label-settings.png)
+
+### Direct printing to a network label printer
+
+Every path above ends in a print dialog, and a print dialog is where barcodes
+go wrong: a scale setting left at "Fit to page" shrinks the bars a few percent,
+the label still _looks_ right, and the scanner refuses it. Direct printing
+removes that step. The server sends the label to the printer in the printer's
+own language (ZPL), with the dimensions already fixed in printer dots.
+
+**Requires:** a Zebra or other ZPL-compatible label printer that accepts raw
+printing on port 9100, reachable from the server on the department network.
+
+**Setting one up** — _Organization Settings → Label Printers_, which needs the
+`settings.manage` permission:
+
+1. Click **Add a printer** and give it a name people will recognise
+   ("Quartermaster Zebra"). The optional **Location** shows next to the name
+   when someone picks a destination.
+2. Enter the printer's **hostname or IP address**. Leave the **port** at 9100
+   unless the printer's own network settings say otherwise.
+3. Set the **resolution** to match the printer — 203 dpi on most desktop units,
+   300 dpi on high-resolution models. This one matters: the wrong value prints
+   the label at the wrong physical size.
+4. Set **Label stock loaded** to the labels actually in the printer.
+5. Optionally set a **darkness adjustment** (−30 to 30). Leave it blank to keep
+   whatever the printer is already tuned to; raise it if bars print faint.
+6. Save, then click **Send test label**. A label carrying the printer's own
+   name and a scannable test barcode confirms all three things at once: the
+   server reached the printer, the stock size is right, and the code scans.
+
+The first printer you add becomes the default. With more than one, mark the one
+most people should get with **Make default**.
+
+**Printing to it:** any label page now shows **Send to Printer** beside the PDF
+and Print buttons. It sends the records currently listed, at the size selected
+on the page, honouring **Copies per record**. If the page's label size differs
+from the stock the printer is registered with, the settings panel says so and
+offers **Match printer** — worth taking, since the printer cannot tell that the
+labels loaded in it are not the size you asked for.
+
+> **Why the size presets still matter here.** Direct printing does not rescale,
+> so an oversized layout is not shrunk to fit — it is simply printed past the
+> edge of the label. Matching the preset to the stock is what makes the output
+> correct, not a fallback.
+
+> **Sheet layouts are not offered.** _Letter Paper (Grid)_ is an Avery sheet of
+> 30 labels and has no meaning on a roll — selecting it disables **Send to
+> Printer** rather than feeding thirty labels off the roll.
+
+> **If the label is rejected as too small:** a barcode has a minimum readable
+> width, and a long value on a small label can exceed it. The page reports this
+> rather than printing an unscannable code. Use a larger label, or drop the
+> extra info line.
 
 ---
 
@@ -864,17 +920,17 @@ trucks") is the supply worklist at **Scheduling → Supply**; see
 
 ### Stock Lot Edge Cases
 
-| Scenario                                                 | Behavior                                                                                                                          |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| A lot passes its expiration date                         | It stops counting toward on hand, is flagged in the list, and the equipment-check swap **refuses** it                             |
-| Every lot for an item has expired                        | On hand reads **zero**, not the item's stale Quantity value                                                                       |
-| An item has no lots at all                               | Untouched — it keeps reporting its issued/total pool figure                                                                       |
-| A lot is drawn to zero by a swap                         | The lot row is removed. What went onto the truck keeps its own copy of the lot number and expiration                              |
-| A lot is deleted while units from it are on an apparatus | The truck's record survives; the deployed record's link to the shelf lot is cleared but its lot number and expiration are its own |
-| One line of a Receive Stock batch fails validation       | **Nothing is written.** Fix the line and resubmit the whole delivery                                                              |
-| An Add Several line names an item that already exists    | Skipped and reported. The rest of the list is still created                                                                       |
-| A CSV field contains a comma                             | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                 |
-| A lot has no expiration date                             | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up            |
+| Scenario                                                 | Behavior                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A lot passes its expiration date                         | It stops counting toward on hand, is flagged in the list, and the equipment-check swap **refuses** it                                                                                                                                                                     |
+| Every lot for an item has expired                        | On hand reads **zero**, not the item's stale Quantity value                                                                                                                                                                                                               |
+| An item has no lots at all                               | Untouched — it keeps reporting its issued/total pool figure                                                                                                                                                                                                               |
+| A lot is drawn to zero by a swap                         | The lot row is removed. What went onto the truck keeps its own copy of the lot number and expiration                                                                                                                                                                      |
+| A lot is deleted while units from it are on an apparatus | The truck's record survives; the deployed record's link to the shelf lot is cleared but its lot number and expiration are its own                                                                                                                                         |
+| One line of a Receive Stock batch fails validation       | **Nothing is written.** Fix the line and resubmit the whole delivery                                                                                                                                                                                                      |
+| An Add Several line names an item that already exists    | Skipped and reported. The rest of the list is still created                                                                                                                                                                                                               |
+| A CSV field contains a comma                             | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                                                                                                                                                         |
+| A lot has no expiration date                             | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up                                                                                                                                                    |
 | Editing "On hand" on a **lot-stocked** item              | _(2026-08-17)_ The field is no longer editable. It shows the lot figure and points you to **Receive delivery**, because the count comes from the lots — typing into the old box wrote a number nothing displayed, returned a success toast, and left the figure unchanged |
 
 ### CSV Import: Supplier Names _(2026-08-17)_
@@ -884,11 +940,11 @@ imports and the name is kept as free text. The import result now reports those
 names so you can attach them afterwards from the Vendors screen — with three
 corrections that change what you see:
 
-| Scenario                                                    | Behavior                                                                                                                                              |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The CSV spells one supplier three ways (`Gals`, `gals`, `GALS`) | Reported **once**, showing the first spelling seen. Attach handles all three in one pass, so listing them separately implied three pieces of work       |
-| A row fails to import (duplicate serial, pool item with no quantity) | Its supplier name is **not** reported. The name used to be banked before the row was written, so a failed import sent you to Attach for rows that never existed |
-| The name matches a **deactivated** supplier                 | It **links to that supplier** rather than being reported as unmatched. Vendor creation rejects inactive duplicates, so the old advice was a dead end. Deactivating a supplier deliberately keeps every existing link — purchase history for equipment still in service is why the record exists |
+| Scenario                                                             | Behavior                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The CSV spells one supplier three ways (`Gals`, `gals`, `GALS`)      | Reported **once**, showing the first spelling seen. Attach handles all three in one pass, so listing them separately implied three pieces of work                                                                                                                                               |
+| A row fails to import (duplicate serial, pool item with no quantity) | Its supplier name is **not** reported. The name used to be banked before the row was written, so a failed import sent you to Attach for rows that never existed                                                                                                                                 |
+| The name matches a **deactivated** supplier                          | It **links to that supplier** rather than being reported as unmatched. Vendor creation rejects inactive duplicates, so the old advice was a dead end. Deactivating a supplier deliberately keeps every existing link — purchase history for equipment still in service is why the record exists |
 
 ---
 
@@ -1537,7 +1593,7 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 | WebSocket 403 on inventory page                      | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection.                                                                                                                                 |
 | Charges not appearing on returned items              | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes.                                                                                                    |
 | Pool item cost recovery amount wrong                 | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit.                                                                                                                                  |
-| Return request stuck in pending                      | Admin must approve return requests in Gear Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                 |
+| Return request stuck in pending                      | Admin must approve return requests in Gear Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                      |
 | Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                 |
 | Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                 |
 | Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`.                                                            |
@@ -1569,11 +1625,11 @@ The hub opens with a low-stock banner (when anything is under its threshold),
 three headline cards — **Items**, **Members** and **Checkouts**, each carrying
 its own figure — and then the rest of the pages in three groups:
 
-| Group                    | Pages                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Group                    | Pages                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | **Inventory Management** | Pool Items, Categories, Gear Kits, Variant Groups, Issuance Allowances, Impact Planner, Maintenance, Storage Areas |
 | **Requests & Workflows** | Gear Requests, Return Requests, Charges, Write-Offs, Reorder Requests, Expiring on Apparatus                       |
-| **Tools**                | Import / Export, Department Store                                                                                       |
+| **Tools**                | Import / Export, Department Store                                                                                  |
 
 Only the cards with something outstanding carry a count — Reorder Requests
 shows how many are pending, the rest are plain links.

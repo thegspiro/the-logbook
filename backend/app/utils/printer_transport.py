@@ -1,0 +1,167 @@
+"""
+Raw-TCP transport for network label printers.
+
+Nearly every network label printer accepts its command language as a plain TCP
+stream on port 9100 (HP's "JetDirect" convention, adopted by Zebra, Rollo,
+Brother and others): open a socket, write the ZPL, close. There is no protocol
+negotiation and no meaningful response to read.
+
+That simplicity is also the risk. An endpoint that takes a host and a port from
+an admin and writes attacker-chosen bytes to it is a server-side request
+forgery primitive, so this module is where the target is constrained, and every
+send goes through :func:`send_to_printer` rather than opening its own socket.
+
+The guards, and why each is drawn where it is:
+
+* **Port allowlist.** Restricting to the raw-print ports means a "printer" can
+  never be aimed at Redis, MySQL, an internal HTTP API, or the SMTP relay.
+  This is the guard doing most of the work.
+* **Blocked address classes.** Loopback keeps the target off the application
+  host itself; link-local blocks the cloud metadata service at 169.254.169.254;
+  multicast, reserved and unspecified addresses have no printer behind them.
+* **Private LAN addresses stay allowed** — that is where a station's printer
+  actually lives, so blocking RFC 1918 would block the entire feature.
+* **Resolve once, connect to the resolved IP.** Validating a hostname and then
+  handing the *name* to the socket layer would re-resolve it, letting a DNS
+  entry that answered with a LAN address during validation answer with
+  something else microseconds later (DNS rebinding).
+* **Nothing is read back.** The caller learns only whether the write
+  succeeded, so this cannot be used to read an internal service's banner.
+"""
+
+import asyncio
+import ipaddress
+import socket
+from typing import List
+
+from loguru import logger
+
+# Raw-print ports. 9100-9109 is the JetDirect range (multi-port print servers
+# expose 9101/9102 for their second and third ports); 6101 is used by some
+# older Zebra network cards.
+ALLOWED_PRINTER_PORTS = frozenset(list(range(9100, 9110)) + [6101])
+
+CONNECT_TIMEOUT_SECONDS = 5.0
+SEND_TIMEOUT_SECONDS = 15.0
+
+# A label job is a few hundred bytes each; a megabyte is already ~2000 labels
+# and well past anything a person queues from a print page.
+MAX_PAYLOAD_BYTES = 1_048_576
+
+
+class PrinterUnreachableError(Exception):
+    """The printer could not be reached, or rejected the connection."""
+
+
+def validate_printer_port(port: int) -> None:
+    """Raise ValueError unless *port* is a raw-print port."""
+    if port not in ALLOWED_PRINTER_PORTS:
+        raise ValueError(
+            f"Port {port} is not a label-printer port. Use 9100 (the standard "
+            "raw-print port), 9101-9109, or 6101."
+        )
+
+
+def _check_address(ip: ipaddress._BaseAddress, host: str) -> None:
+    if ip.is_loopback:
+        raise ValueError(
+            f"{host} resolves to a loopback address. A label printer must be a "
+            "separate device on the network."
+        )
+    if ip.is_link_local:
+        raise ValueError(
+            f"{host} resolves to a link-local address, which is not routable to a printer."
+        )
+    if ip.is_multicast or ip.is_unspecified or ip.is_reserved:
+        raise ValueError(
+            f"{host} resolves to a reserved address that cannot host a printer."
+        )
+
+
+async def resolve_printer_host(host: str) -> str:
+    """Resolve *host* and return one validated, connectable IP literal.
+
+    Every address the name resolves to is checked, not just the one that gets
+    used: a name answering with both a LAN address and a loopback address must
+    be rejected outright, since which one a connection lands on is not ours to
+    choose.
+    """
+    hostname = (host or "").strip()
+    if not hostname:
+        raise ValueError("Printer host is required")
+    if len(hostname) > 255:
+        raise ValueError("Printer host is too long")
+
+    loop = asyncio.get_running_loop()
+    try:
+        infos = await asyncio.wait_for(
+            loop.getaddrinfo(hostname, None, type=socket.SOCK_STREAM),
+            timeout=CONNECT_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise PrinterUnreachableError(f"Timed out looking up {hostname}")
+    except socket.gaierror:
+        raise PrinterUnreachableError(f"Could not resolve printer host {hostname}")
+
+    addresses: List[str] = []
+    for info in infos:
+        sockaddr = info[4]
+        candidate = sockaddr[0]
+        if candidate not in addresses:
+            addresses.append(candidate)
+    if not addresses:
+        raise PrinterUnreachableError(f"Could not resolve printer host {hostname}")
+
+    for candidate in addresses:
+        _check_address(ipaddress.ip_address(candidate), hostname)
+
+    return addresses[0]
+
+
+async def send_to_printer(host: str, port: int, payload: str) -> int:
+    """Send *payload* to the printer at *host*:*port*. Returns bytes written.
+
+    Raises ValueError for a rejected target and
+    :class:`PrinterUnreachableError` when the printer cannot be reached.
+    """
+    validate_printer_port(port)
+
+    data = payload.encode("utf-8")
+    if not data:
+        raise ValueError("Nothing to print")
+    if len(data) > MAX_PAYLOAD_BYTES:
+        raise ValueError("Print job is too large. Print fewer labels at a time.")
+
+    address = await resolve_printer_host(host)
+
+    writer = None
+    try:
+        reader_writer = await asyncio.wait_for(
+            asyncio.open_connection(address, port), timeout=CONNECT_TIMEOUT_SECONDS
+        )
+        _, writer = reader_writer
+        writer.write(data)
+        await asyncio.wait_for(writer.drain(), timeout=SEND_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        raise PrinterUnreachableError(
+            f"Timed out sending to the printer at {host}:{port}. Check that it "
+            "is powered on and on the network."
+        )
+    except OSError as exc:
+        logger.warning(f"Label printer send failed for {host}:{port}: {exc}")
+        raise PrinterUnreachableError(
+            f"Could not connect to the printer at {host}:{port}."
+        )
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await asyncio.wait_for(
+                    writer.wait_closed(), timeout=SEND_TIMEOUT_SECONDS
+                )
+            except (asyncio.TimeoutError, OSError):
+                # The job is already on the wire; a printer that drops the
+                # socket without a clean FIN has still printed it.
+                pass
+
+    return len(data)

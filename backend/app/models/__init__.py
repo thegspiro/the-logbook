@@ -229,6 +229,7 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.label_printer import LabelPrinter
 from app.models.legal import (
     LegalDocumentRevision,
     LegalDocumentType,
@@ -539,6 +540,8 @@ __all__ = [
     "StorePaymentMethod",
     "StoreFulfillmentMethod",
     "StoreOrderEventType",
+    # Label printing
+    "LabelPrinter",
     # Inventory models
     "InventoryCategory",
     "InventoryItem",

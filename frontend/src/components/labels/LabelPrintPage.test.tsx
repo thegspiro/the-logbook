@@ -7,6 +7,8 @@ const mockPreview = vi.fn();
 const mockGetPreset = vi.fn();
 const mockSetPreset = vi.fn();
 const mockGenerate = vi.fn();
+const mockListPrinters = vi.fn();
+const mockPrint = vi.fn();
 
 vi.mock('../../services/labelService', () => ({
   labelService: {
@@ -14,6 +16,10 @@ vi.mock('../../services/labelService', () => ({
     getPreset: (...a: unknown[]) => mockGetPreset(...a) as unknown,
     setPreset: (...a: unknown[]) => mockSetPreset(...a) as unknown,
     generate: (...a: unknown[]) => mockGenerate(...a) as unknown,
+  },
+  labelPrinterService: {
+    list: (...a: unknown[]) => mockListPrinters(...a) as unknown,
+    print: (...a: unknown[]) => mockPrint(...a) as unknown,
   },
 }));
 
@@ -40,6 +46,15 @@ describe('LabelPrintPage', () => {
     mockGetPreset.mockResolvedValue({ preset: null });
     mockSetPreset.mockResolvedValue({ preset: null });
     mockGenerate.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
+    // Most tests describe an organization with no network printer, which is
+    // the state every installation starts in.
+    mockListPrinters.mockResolvedValue([]);
+    mockPrint.mockResolvedValue({
+      printer_id: 'p1',
+      printer_name: 'Quartermaster Zebra',
+      labels_sent: 1,
+      auto_populated: 0,
+    });
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
     globalThis.URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -83,5 +98,71 @@ describe('LabelPrintPage', () => {
         label_format: 'rollo_4x6',
       })
     );
+  });
+
+  describe('direct printing', () => {
+    const zebra = {
+      id: 'p1',
+      name: 'Quartermaster Zebra',
+      location: 'Station 1',
+      host: '192.168.1.50',
+      port: 9100,
+      dpi: 203,
+      label_format: 'zebra_2x1',
+      custom_width: null,
+      custom_height: null,
+      darkness: null,
+      is_default: true,
+      is_active: true,
+    };
+
+    it('offers no printer button when the organization has none', async () => {
+      renderPage('?ids=a1');
+      await screen.findAllByText('Engine 5');
+      expect(screen.queryByRole('button', { name: /Printer$/ })).not.toBeInTheDocument();
+    });
+
+    it('sends the labels to the default printer', async () => {
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockGetPreset.mockResolvedValue({ preset: 'zebra_2x1' });
+      const user = userEvent.setup();
+      renderPage('?ids=a1');
+      await screen.findAllByText('Engine 5');
+
+      const button = await screen.findByRole('button', { name: /Printer$/ });
+      await user.click(button);
+
+      await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+      expect(mockPrint.mock.calls[0]?.[0]).toBe('apparatus');
+      expect(mockPrint.mock.calls[0]?.[1]).toEqual(['a1']);
+      expect(mockPrint.mock.calls[0]?.[2]).toMatchObject({
+        printer_id: 'p1',
+        label_format: 'zebra_2x1',
+        copies: 1,
+      });
+    });
+
+    it('disables the printer button for a paper sheet layout', async () => {
+      // An Avery grid has no meaning on a roll-fed printer, and the backend
+      // rejects it — so the button says so rather than offering a failure.
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockGetPreset.mockResolvedValue({ preset: 'letter' });
+      renderPage('?ids=a1');
+      await screen.findAllByText('Engine 5');
+
+      const button = await screen.findByRole('button', { name: /Printer$/ });
+      await waitFor(() => expect(button).toBeDisabled());
+    });
+
+    it('keeps working when the printer list cannot be loaded', async () => {
+      // Direct printing is optional; losing it must not take the PDF path down.
+      mockListPrinters.mockRejectedValue(new Error('boom'));
+      const user = userEvent.setup();
+      renderPage('?ids=a1');
+      await screen.findAllByText('Engine 5');
+
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+    });
   });
 });
