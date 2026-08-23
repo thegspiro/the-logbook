@@ -83,7 +83,8 @@ class TestResolveExpiration:
         resolved = service._resolve_expiration({"expiration_date": YESTERDAY}, None)
         assert resolved == YESTERDAY
 
-    def test_observed_past_date_cannot_override_inventory(self, service):
+    def test_observed_past_date_does_not_override_inventory(self, service):
+        """Legacy client observations cannot override inventory-backed data."""
         item = _template_item(expiration_date=NEXT_YEAR)
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": YESTERDAY}, item
@@ -142,7 +143,8 @@ class TestComputeCheckStatus:
         assert items[0]["expiration_date"] == YESTERDAY
         assert (failed, overall) == (1, "fail")
 
-    def test_observed_expiration_cannot_override_in_date_inventory(self, service):
+    def test_observed_expiration_is_ignored_for_in_date_template(self, service):
+        """Inventory-backed expiration remains authoritative."""
         items = [
             {
                 "template_item_id": "ti-1",
@@ -277,9 +279,7 @@ class TestCreateCheckItems:
 
         assert tmpl_item.quantity_on_truck is None
 
-    async def test_submitted_inventory_metadata_is_not_persisted(
-        self, service, mock_db
-    ):
+    async def test_submitted_lot_metadata_is_not_persisted(self, service, mock_db):
         tmpl_item = _template_item()
         items_data = [
             {
