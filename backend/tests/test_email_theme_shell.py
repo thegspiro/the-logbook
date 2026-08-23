@@ -363,3 +363,78 @@ class TestTheEditorsBlockPaletteMatchesTheShell:
         source = self._source()
         for needed in ("details", "button", "alert"):
             assert f"id: '{needed}'" in source, f"no {needed} block in the palette"
+
+
+class TestIsCustomizedTracksWhatResetRestores:
+    """ "Have we changed this?" is only meaningful against what Reset puts back.
+
+    The two have to agree, so they read the same definition. Measuring
+    against the body alone was the tempting shortcut and the wrong one: a
+    notice whose subject line was reworded is edited, and telling an admin
+    otherwise sends them looking for the change somewhere else.
+
+    No DB — ``is_customized`` is a pure comparison against module-level data.
+    """
+
+    @staticmethod
+    def _template(defn, **overrides):
+        from app.models.email_template import EmailTemplate
+
+        fields = {
+            "template_type": defn["type"],
+            "subject": defn["subject"],
+            "html_body": defn["html"],
+            "text_body": defn["text"],
+            "footer_key": defn.get("footer"),
+        }
+        fields.update(overrides)
+        return EmailTemplate(**fields)
+
+    @pytest.fixture
+    def service(self):
+        from app.services.email_template_service import EmailTemplateService
+
+        return EmailTemplateService(None)
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_a_shipped_template_reads_as_default(self, service, defn):
+        assert service.is_customized(self._template(defn)) is False
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("subject", "Something the department wrote"),
+            ("html_body", '<div class="container">edited</div>'),
+            ("text_body", "edited"),
+            ("footer_key", "official"),
+        ],
+    )
+    def test_a_change_to_any_reset_field_counts(self, service, field, value):
+        defn = _DEFS[0]
+        # Guard against the parametrised value happening to equal the default,
+        # which would make the assertion vacuous.
+        assert (
+            defn.get(field.replace("html_body", "html").replace("text_body", "text"))
+            != value
+        )
+        assert service.is_customized(self._template(defn, **{field: value})) is True
+
+    def test_a_type_with_no_default_is_customized_by_definition(self, service):
+        from app.models.email_template import EmailTemplate, EmailTemplateType
+
+        # CUSTOM is the blank slate an admin creates by hand. There is nothing
+        # it could be a copy of, and no Reset that would do anything to it.
+        template = EmailTemplate(
+            template_type=EmailTemplateType.CUSTOM,
+            subject="s",
+            html_body="h",
+            text_body="t",
+        )
+        assert service.is_customized(template) is True
+
+    def test_reset_and_is_customized_read_the_same_definition(self, service):
+        # If these ever diverge, Reset restores one thing and the badge
+        # measures against another, and a freshly reset template shows as
+        # Edited for reasons nobody can see.
+        for defn in _DEFS:
+            assert service.default_for(defn["type"]) is defn

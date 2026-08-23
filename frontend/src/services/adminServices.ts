@@ -418,6 +418,14 @@ export interface EmailTemplate {
   default_cc?: string[];
   default_bcc?: string[];
   available_variables: TemplateVariable[];
+  /**
+   * Whether the department has changed anything Reset would put back.
+   * Computed per request by the list endpoint only, so a template fetched
+   * on its own reports the schema default rather than a real answer.
+   */
+  is_customized?: boolean;
+  /** Messages sent with this template type. List endpoint only, as above. */
+  sent_count?: number;
   created_at: string;
   updated_at: string;
   attachments: EmailAttachment[];

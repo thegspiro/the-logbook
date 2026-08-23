@@ -9,7 +9,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,7 +19,11 @@ from app.core.constants import (
     OFFICE_VARIABLE_NAMES,
     ORG_SETTINGS_OFFICER_KEY,
 )
-from app.models.email_template import EmailTemplate, EmailTemplateType
+from app.models.email_template import (
+    EmailTemplate,
+    EmailTemplateType,
+    MessageHistory,
+)
 from app.services import email_footers as _footers
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -2271,6 +2275,61 @@ class EmailTemplateService:
                 await self.db.refresh(tmpl, ["updated_at"])
 
         return templates
+
+    def default_for(self, template_type: Any) -> Optional[Dict[str, Any]]:
+        """The registered default definition for a type, or ``None``.
+
+        One lookup, so ``reset_to_default`` and the customised check cannot
+        disagree about what "the default" is — which they would eventually,
+        because the answer to "has this been edited?" is only meaningful if
+        it is measured against the same constant Reset would restore.
+        """
+        return next(
+            (d for d in self._DEFAULT_TEMPLATE_DEFS if d["type"] == template_type),
+            None,
+        )
+
+    def is_customized(self, template: EmailTemplate) -> bool:
+        """Has a department changed anything Reset would put back?
+
+        Compares the fields ``reset_to_default`` restores, not just the body:
+        a notice whose subject line was reworded is edited, and telling an
+        admin otherwise sends them looking for the change somewhere else.
+
+        A type with no registered default — ``CUSTOM``, the blank slate an
+        admin creates by hand — is customised by definition: there is nothing
+        it could be a copy of.
+        """
+        defn = self.default_for(template.template_type)
+        if not defn:
+            return True
+        return (
+            template.subject != defn["subject"]
+            or template.html_body != defn["html"]
+            or (template.text_body or "") != (defn["text"] or "")
+            or (template.footer_key or None) != defn.get("footer")
+        )
+
+    async def sent_counts(self, organization_id: str) -> Dict[str, int]:
+        """How many messages this organization has sent per template type.
+
+        One grouped query for the whole list rather than a count per row:
+        the catalogue is past three dozen entries, so per-row would be three
+        dozen round trips to render one sidebar.
+
+        Keyed on ``template_type`` because that is what ``MessageHistory``
+        records — it stores a snapshot of the send, not a foreign key to a
+        template row that may since have been reset or deleted.
+        """
+        result = await self.db.execute(
+            select(MessageHistory.template_type, func.count(MessageHistory.id))
+            .where(
+                MessageHistory.organization_id == str(organization_id),
+                MessageHistory.template_type.is_not(None),
+            )
+            .group_by(MessageHistory.template_type)
+        )
+        return {row[0]: row[1] for row in result.all()}
 
     async def create_template(
         self,

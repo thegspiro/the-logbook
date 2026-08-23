@@ -50,6 +50,17 @@ class EmailTemplateResponse(UTCResponseBase):
     default_bcc: Optional[List[str]] = None
     available_variables: List[TemplateVariable] = []
     attachments: List[EmailAttachmentResponse] = []
+    # Both are computed per request rather than stored, and both answer a
+    # question the list view could not previously answer without opening
+    # every notice in turn: which of these have we actually changed, and
+    # which of them does the department actually send?
+    #
+    # Defaulted rather than required because they are only populated by the
+    # list endpoint. A single-template GET has no reason to run the count,
+    # and a caller reading `sent_count == 0` off one would be reading a
+    # figure nobody computed.
+    is_customized: bool = False
+    sent_count: int = 0
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None

@@ -9,6 +9,7 @@ import asyncio
 import copy
 import os
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from loguru import logger
@@ -149,6 +150,17 @@ async def update_email_footers(
     return await _footer_library_response(db, current_user.organization_id)
 
 
+def _type_value(template_type: Any) -> str:
+    """The wire value of a template type, whether it arrives as enum or str.
+
+    ``MessageHistory.template_type`` is a plain string column while
+    ``EmailTemplate.template_type`` is an enum, so the two only line up on
+    ``.value``. Accepting both is what stops the count silently reading zero
+    for every row.
+    """
+    return getattr(template_type, "value", template_type)
+
+
 @router.get("", response_model=list[EmailTemplateResponse])
 async def list_email_templates(
     db: AsyncSession = Depends(get_db),
@@ -175,7 +187,21 @@ async def list_email_templates(
         await db.rollback()
 
     templates = await service.list_templates(current_user.organization_id)
-    return templates
+
+    # Computed here rather than stored: both answers change without the
+    # template row being touched — a send bumps the count, and a change to
+    # the shipped default is what makes an untouched template "customised"
+    # relative to it. A stored flag would be stale from the deploy onwards.
+    counts = await service.sent_counts(current_user.organization_id)
+    return [
+        EmailTemplateResponse.model_validate(template).model_copy(
+            update={
+                "is_customized": service.is_customized(template),
+                "sent_count": counts.get(_type_value(template.template_type), 0),
+            }
+        )
+        for template in templates
+    ]
 
 
 @router.get("/scheduled", response_model=list[ScheduledEmailResponse])
