@@ -35,6 +35,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     ACCENT_SLATE,
     ACCENT_VIOLET,
     DEFAULT_CSS,
+    DEFAULT_LAYOUT,
     TABLE_STYLE,
     TD_STYLE,
     TFOOT_STYLE,
@@ -42,6 +43,8 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     build_email_document,
     build_logo_cell,
     build_shell,
+    colourway_context,
+    colourway_for,
 )
 
 # Organization columns that reach templates unchanged, as
@@ -190,6 +193,11 @@ RENDERER_INJECTED_VARIABLES: frozenset = frozenset(
     {
         "organization_logo_img",
         "organization_logo_cell",
+        # The colourway. Filled from the template's own columns rather than
+        # by a caller, which is the whole point of them being columns.
+        "header_accent",
+        "chip_tint",
+        "status_chip",
         "footer_html",
         "footer_text",
     }
@@ -1769,6 +1777,7 @@ DEFAULT_ELECTION_REPORT_HTML = build_shell(
     accent=ACCENT_INDIGO,
     chip="Official report",
     subtitle="{{election_title}}",
+    layout="digest",
 )
 
 DEFAULT_ELECTION_REPORT_TEXT = """Election Report — {{election_title}}
@@ -1831,6 +1840,7 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = build_shell(
     accent=ACCENT_INDIGO,
     chip="Eligibility summary",
     subtitle="{{election_title}}",
+    layout="digest",
 )
 
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT = """Ballot Eligibility Summary — {{election_title}}
@@ -2276,6 +2286,27 @@ class EmailTemplateService:
 
         return templates
 
+    @classmethod
+    def _colourway_defaults(cls, template_type: Any) -> Dict[str, Any]:
+        """The accent and chip a type ships with, or an empty mapping.
+
+        Empty for CUSTOM — the blank slate an admin creates by hand. Its body
+        is whatever they wrote, so there is no colourway to assume and
+        assuming one would paint a rule across markup that never asked for
+        it.
+        """
+        defn = next(
+            (d for d in cls._DEFAULT_TEMPLATE_DEFS if d["type"] == template_type),
+            None,
+        )
+        if not defn:
+            return {}
+        return {
+            "accent": defn.get("accent"),
+            "chip": defn.get("chip", ""),
+            "layout": defn.get("layout", DEFAULT_LAYOUT),
+        }
+
     def default_for(self, template_type: Any) -> Optional[Dict[str, Any]]:
         """The registered default definition for a type, or ``None``.
 
@@ -2299,6 +2330,12 @@ class EmailTemplateService:
         A type with no registered default — ``CUSTOM``, the blank slate an
         admin creates by hand — is customised by definition: there is nothing
         it could be a copy of.
+
+        The colourway columns are deliberately *not* part of this. Recolouring
+        a notice leaves every word of it as shipped, and calling that "Edited"
+        would send an admin looking through the body for a change that is not
+        in there. Reset still restores the colour, because Reset means "what
+        we ship" — the two questions are different.
         """
         defn = self.default_for(template.template_type)
         if not defn:
@@ -2344,6 +2381,9 @@ class EmailTemplateService:
         allow_attachments: bool = False,
         created_by: Optional[str] = None,
         footer_key: Optional[str] = None,
+        header_accent: Optional[str] = None,
+        status_chip: Optional[str] = None,
+        layout: Optional[str] = None,
     ) -> EmailTemplate:
         """Create a new email template"""
         template = EmailTemplate(
@@ -2361,6 +2401,13 @@ class EmailTemplateService:
             # at creation time froze every existing organization on the
             # stylesheet that shipped the day they signed up.
             css_styles=css_styles or None,
+            # The colourway the body was built with. Stored rather than left
+            # NULL so the accent swatches have something to show as selected,
+            # and so an admin recolouring one notice does not have to
+            # discover what the other thirty-four are set to.
+            header_accent=header_accent,
+            status_chip=status_chip,
+            layout=layout,
             description=description,
             allow_attachments=allow_attachments,
             available_variables=GLOBAL_VARIABLES
@@ -2480,6 +2527,13 @@ class EmailTemplateService:
         # The footer choice is part of the default, not a separate preference:
         # the shipped body for a public notice assumes the public footer.
         template.footer_key = defn.get("footer")
+        # Same for the colourway. Reset means "what we ship", and a body
+        # restored to the default with the admin's old accent still on the
+        # row would render the shipped markup in a colour the shipped design
+        # never used.
+        template.header_accent = defn.get("accent")
+        template.status_chip = defn.get("chip")
+        template.layout = defn.get("layout")
         template.updated_by = updated_by
         await self.db.flush()
         await self.db.refresh(template, attribute_names=["updated_at"])
@@ -2536,7 +2590,10 @@ class EmailTemplateService:
         caller).
         """
         ctx = self.build_context(
-            context, organization, footer_key=getattr(template, "footer_key", None)
+            context,
+            organization,
+            footer_key=getattr(template, "footer_key", None),
+            template=template,
         )
 
         # The subject becomes the SMTP Subject: header and the text body the
@@ -2562,6 +2619,7 @@ class EmailTemplateService:
         context: Dict[str, Any],
         organization: Optional[Any] = None,
         footer_key: Optional[str] = None,
+        template: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Add the variables every template may use to a caller's context.
 
@@ -2678,6 +2736,26 @@ class EmailTemplateService:
             build_logo_cell(str(logo_val or ""), str(ctx.get("organization_name", ""))),
         )
 
+        # The colourway, for the {{header_accent}} / {{chip_tint}} /
+        # {{status_chip}} tokens build_shell leaves in a body. Taken from the
+        # template's own columns, falling back to the colourway its type
+        # ships with, so a row written before those columns existed still
+        # renders — and one an admin has recoloured renders their choice.
+        #
+        # A body with literal hexes has no tokens to fill and is unaffected
+        # either way, which is what makes this safe to apply unconditionally.
+        colourway: Dict[str, Any] = {}
+        if template is not None:
+            defaults = cls._colourway_defaults(getattr(template, "template_type", None))
+            accent = getattr(template, "header_accent", None) or defaults.get("accent")
+            chip = getattr(template, "status_chip", None)
+            if chip is None:
+                chip = defaults.get("chip", "")
+            if accent:
+                colourway = colourway_context(accent, chip)
+        for key, value in colourway.items():
+            ctx.setdefault(key, value)
+
         # Last, because the footer's own text is resolved against everything
         # above it. Rendering is a single substitution pass, so a
         # {{organization_name}} left inside an already-substituted
@@ -2746,6 +2824,10 @@ class EmailTemplateService:
         "items_removed_html",
         "organization_logo_img",
         "organization_logo_cell",
+        # Hexes going into style attributes. Escaping a "#" is a no-op, but
+        # listing them keeps the set honest about what is markup-bearing.
+        "header_accent",
+        "chip_tint",
         "ballot_items_html",
         "results_html",
         "ballot_recipients_html",
@@ -3090,6 +3172,15 @@ class EmailTemplateService:
         *_storefront_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
+    # Stamp each definition with the colourway build_shell recorded for its
+    # body, rather than restating an accent beside markup that already
+    # carries one. A definition whose body this module did not build (there
+    # are none today, and CUSTOM has no body at all) simply has no colourway,
+    # and nothing is stamped on the row.
+    for _defn in _DEFAULT_TEMPLATE_DEFS:
+        _defn.update(colourway_for(_defn["html"]))
+    del _defn
+
     async def ensure_default_templates(
         self,
         organization_id: str,
@@ -3117,6 +3208,9 @@ class EmailTemplateService:
                     allow_attachments=defn.get("attachments", False),
                     created_by=created_by,
                     footer_key=defn.get("footer"),
+                    header_accent=defn.get("accent"),
+                    status_chip=defn.get("chip"),
+                    layout=defn.get("layout"),
                 )
                 created.append(template)
 

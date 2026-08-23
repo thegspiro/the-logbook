@@ -44,6 +44,9 @@ class EmailTemplateResponse(UTCResponseBase):
     text_body: Optional[str] = None
     css_styles: Optional[str] = None
     footer_key: Optional[str] = None
+    header_accent: Optional[str] = None
+    status_chip: Optional[str] = None
+    layout: Optional[str] = None
     is_active: bool
     allow_attachments: bool
     default_cc: Optional[List[str]] = None
@@ -85,11 +88,61 @@ class EmailTemplateUpdate(BaseModel):
             "the department's default footer."
         ),
     )
+    header_accent: Optional[str] = Field(
+        None,
+        description=(
+            "Accent hex. Must be one of the seven ACCENT_* constants — the "
+            "only colours whose chip tint and white button text have been "
+            "checked for contrast."
+        ),
+    )
+    status_chip: Optional[str] = Field(None, max_length=40)
+    layout: Optional[str] = Field(None, description="notice | receipt | digest")
     description: Optional[str] = None
     is_active: Optional[bool] = None
     allow_attachments: Optional[bool] = None
     default_cc: Optional[List[EmailStr]] = None
     default_bcc: Optional[List[EmailStr]] = None
+
+    @field_validator("header_accent")
+    @classmethod
+    def _accent_must_be_a_known_colourway(cls, value: Optional[str]) -> Optional[str]:
+        """Reject a hex nobody has checked the contrast of.
+
+        The accent carries white button text and tints the chip behind text of
+        its own colour. Both are the sort of thing that looks fine to whoever
+        picks it and fails WCAG for the member squinting at a phone in
+        daylight, so the choice is limited to the seven that are tested.
+        """
+        if value is None:
+            return None
+        from app.services.email_theme import CHIP_TINTS
+
+        normalised = value.strip().lower()
+        if normalised not in CHIP_TINTS:
+            raise ValueError(
+                f"{value!r} is not one of the available accents: "
+                + ", ".join(sorted(CHIP_TINTS))
+            )
+        return normalised
+
+    @field_validator("layout")
+    @classmethod
+    def _layout_must_be_one_we_render(cls, value: Optional[str]) -> Optional[str]:
+        """A layout with no matching content class renders unstyled.
+
+        The stylesheet carries one ``.content`` class per layout, so an
+        unrecognised value would put a class on the card that nothing
+        defines — and the inliner drops what it cannot match without a word.
+        """
+        if value is None:
+            return None
+        from app.services.email_theme import LAYOUTS
+
+        normalised = value.strip().lower()
+        if normalised not in LAYOUTS:
+            raise ValueError(f"{value!r} is not a layout: " + ", ".join(LAYOUTS))
+        return normalised
 
 
 class EmailTemplatePreviewRequest(BaseModel):
@@ -112,7 +165,19 @@ class EmailTemplatePreviewRequest(BaseModel):
         max_length=32,
         description="Preview with this footer instead of the template's saved one",
     )
+    # So the accent swatches and the chip field show their effect before the
+    # admin commits to it — the same reason the body is an override.
+    header_accent: Optional[str] = None
+    status_chip: Optional[str] = Field(None, max_length=40)
+    layout: Optional[str] = None
     context: Dict[str, Any] = Field(default_factory=dict)
+
+    _check_accent = field_validator("header_accent")(
+        EmailTemplateUpdate._accent_must_be_a_known_colourway.__func__
+    )
+    _check_layout = field_validator("layout")(
+        EmailTemplateUpdate._layout_must_be_one_we_render.__func__
+    )
     member_id: Optional[str] = Field(
         None, description="Optional member ID to populate preview with real member data"
     )

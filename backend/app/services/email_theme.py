@@ -96,13 +96,31 @@ body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-sys
 .alert p { margin: 0; font-size: 15px; line-height: 1.5; color: #92400e; }
 .alert { background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px 16px; margin: 0 0 22px 0; }
 .content h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
+.content-digest h2 { margin: 16px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
+.content-receipt h2 { margin: 24px 0 10px 0; padding: 0 0 8px 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e5e7eb; }
 .content h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
+.content-digest h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
+.content-receipt h3 { margin: 20px 0 8px 0; font-size: 16px; font-weight: 600; color: #0f172a; }
 .content p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
+.content-digest p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
+.content-receipt p { margin: 0 0 18px 0; font-size: 16px; line-height: 1.6; color: #334155; }
 .content li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
+.content-digest li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
+.content-receipt li { margin: 0 0 8px 0; font-size: 15px; line-height: 1.6; color: #334155; }
 .content ul { margin: 0 0 22px 0; padding-left: 22px; }
+.content-digest ul { margin: 0 0 22px 0; padding-left: 22px; }
+.content-receipt ul { margin: 0 0 22px 0; padding-left: 22px; }
 .content th { padding: 10px 12px; background-color: #f8fafc; color: #475569; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.content-digest th { padding: 10px 12px; background-color: #f8fafc; color: #475569; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.content-receipt th { padding: 10px 12px; background-color: #f8fafc; color: #475569; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; text-align: left; }
 .content td { padding: 12px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
+.content-digest td { padding: 12px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
+.content-receipt td { padding: 12px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
 .content table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
+.content-digest table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
+.content-receipt table { width: 100%; border-collapse: collapse; margin: 0 0 22px 0; font-size: 14px; }
+.content-digest { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 28px 30px 28px; }
+.content-receipt { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 14px 30px 14px; }
 .content { background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; padding: 18px 28px 30px 28px; }
 .button { display: inline-block; padding: 15px 32px; background-color: #b91c1c; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 17px; font-weight: 700; line-height: 1.2; }
 .fineprint { margin: 14px 0 18px 0; font-size: 13px; line-height: 1.6; color: #64748b; }
@@ -116,6 +134,18 @@ body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-sys
 # seven bodies each carried the tint as a literal, which is how the header
 # and its chip drifted onto two different reds the first time an accent
 # was corrected.
+# The three shapes a notice takes. The stylesheet carries a .content class
+# per layout, because ``inline_email_css`` keys off a single-token class
+# attribute — a variant has to be its own class name, not a second one.
+LAYOUTS = ("notice", "receipt", "digest")
+DEFAULT_LAYOUT = "notice"
+
+_LAYOUT_CONTENT_CLASS = {
+    "notice": "content",
+    "receipt": "content-receipt",
+    "digest": "content-digest",
+}
+
 CHIP_TINTS = {
     ACCENT_RED: "#fef2f2",
     ACCENT_AMBER: "#fffbeb",
@@ -145,6 +175,41 @@ TFOOT_STYLE = (
     "padding:12px;background-color:#f8fafc;font-weight:600;color:#0f172a;"
     "border-top:1px solid #e2e8f0;"
 )
+
+
+# What each shipped body was built with, keyed by the body itself.
+#
+# Recorded here rather than repeated in the two DEFAULT_TEMPLATE_DEFS lists
+# because those lists and build_shell would otherwise be two places naming a
+# notice's accent, and the pair only has to disagree once for a template to
+# be stamped with a colourway its own markup does not use. Keying on the html
+# is safe: every body differs, and this is the call that produced it.
+_SHELL_COLOURWAYS: dict = {}
+
+
+def colourway_for(html: str) -> dict:
+    """The accent, chip and layout :func:`build_shell` built *html* with.
+
+    Empty for a body this module did not produce — a department's own edit,
+    or a template written before the shell existed. Callers stamp nothing in
+    that case, which is the right answer: nobody knows what colourway that
+    body is using, and guessing one would overwrite it.
+    """
+    return dict(_SHELL_COLOURWAYS.get(html, {}))
+
+
+def colourway_context(accent: str, chip: str) -> dict:
+    """The three variables :func:`build_shell` leaves for the renderer.
+
+    One place, so a caller cannot fill two of the three and leave the chip
+    reading ``{{status_chip}}`` in somebody's inbox. An accent outside the
+    map takes the slate tint, which reads as deliberate rather than broken.
+    """
+    return {
+        "header_accent": accent,
+        "chip_tint": CHIP_TINTS.get(accent, CHIP_TINTS[ACCENT_SLATE]),
+        "status_chip": chip,
+    }
 
 
 def build_logo_cell(logo_url: str, organization_name: str) -> str:
@@ -190,6 +255,7 @@ def build_shell(
     chip: str = "",
     subtitle: str = "",
     brand: str = "{{organization_name}}",
+    layout: str = DEFAULT_LAYOUT,
 ) -> str:
     """Build the chrome every notice renders into.
 
@@ -212,16 +278,31 @@ def build_shell(
     *brand* is the lockup's name cell. The store passes ``{{store_name}}``;
     everything else takes the department.
 
-    ``{accent}`` inside *content* is substituted with the accent, so a body
-    writes ``border-left-color: {accent};`` on its panel and
+    ``{accent}`` inside *content* is substituted with the accent token, so a
+    body writes ``border-left-color: {accent};`` on its panel and
     ``background-color: {accent};`` on its button and cannot disagree with
     its own header. A single brace is safe to use for this: template
     variables are doubled (``{{name}}``), and the substitution is a plain
     string replace rather than ``str.format``, so a stray brace in prose is
     left alone instead of raising.
+
+    **The accent and the chip text are emitted as template variables, not
+    hexes.** Every place the colourway appears becomes
+    ``{{header_accent}}`` / ``{{chip_tint}}`` / ``{{status_chip}}``, which
+    the renderer fills from the template's own ``header_accent`` and
+    ``status_chip`` columns. That is what makes a colourway something an
+    officer can change from the screen rather than something only a deploy
+    can change — and it keeps one canonical stored shape, because a body
+    never carries a hex for the renderer and a column to disagree with it.
+
+    *accent* and *chip* are still taken: they are what a newly created or
+    reset template's columns are stamped with, and callers that do not go
+    through the template system at all (``wrap_email_body``) substitute the
+    tokens themselves.
     """
-    tint = CHIP_TINTS.get(accent, CHIP_TINTS[ACCENT_SLATE])
-    content = content.replace("{accent}", accent)
+    if layout not in _LAYOUT_CONTENT_CLASS:
+        raise ValueError(f"unknown layout {layout!r}; expected one of {LAYOUTS}")
+    content = content.replace("{accent}", "{{header_accent}}")
 
     cells = [
         "            {{organization_logo_cell}}",
@@ -230,37 +311,38 @@ def build_shell(
     if chip:
         cells.append(
             '            <td style="text-align: right;">'
-            '<span class="chip" style="background-color: '
-            + tint
-            + "; color: "
-            + accent
-            + ';">'
-            + chip
-            + "</span></td>"
+            '<span class="chip" style="background-color: {{chip_tint}}; '
+            'color: {{header_accent}};">{{status_chip}}</span></td>'
         )
 
     head = [
         '<div class="container">',
-        '    <div class="header" style="border-top-color: ' + accent + ';">',
+        '    <div class="header" style="border-top-color: {{header_accent}};">',
         '        <table class="lockup"><tr>',
         *cells,
         "        </tr></table>",
         "        <h1>" + title + "</h1>",
     ]
     if subtitle:
-        head.append('        <p style="color: ' + accent + ';">' + subtitle + "</p>")
+        head.append('        <p style="color: {{header_accent}};">' + subtitle + "</p>")
 
-    return "\n".join(
+    shell = "\n".join(
         [
             *head,
             "    </div>",
-            '    <div class="content">',
+            '    <div class="' + _LAYOUT_CONTENT_CLASS[layout] + '">',
             content.rstrip("\n"),
             "    </div>",
             "    {{footer_html}}",
             "</div>",
         ]
     )
+    _SHELL_COLOURWAYS[shell] = {
+        "accent": accent,
+        "chip": chip,
+        "layout": layout,
+    }
+    return shell
 
 
 def build_email_document(subject: str, body_html: str, css: str = "") -> str:

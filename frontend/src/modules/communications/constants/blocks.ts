@@ -82,3 +82,50 @@ export const EMAIL_BLOCKS: EmailBlock[] = [
     html: ['<p>', '    Respectfully,<br/>', '    {{organization_name}}', '</p>'].join('\n'),
   },
 ];
+
+/**
+ * The seven accents, and the tint each one's chip sits on.
+ *
+ * Mirrors `ACCENT_*` and `CHIP_TINTS` in `backend/app/services/
+ * email_theme.py`, which is the authority — the API rejects anything not in
+ * that map, so a value added here alone gets a 422 rather than a new colour.
+ * A test asserts the two lists match.
+ *
+ * These are literal hexes rather than theme tokens on purpose: they are what
+ * an email renders with, and an email has no cascade to read a token from.
+ */
+export interface Colourway {
+  accent: string;
+  tint: string;
+  label: string;
+}
+
+const COLOURWAY_LIST = [
+  { accent: '#b91c1c', tint: '#fef2f2', label: 'Members & accounts' },
+  { accent: '#b45309', tint: '#fffbeb', label: 'Training & warnings' },
+  { accent: '#047857', tint: '#f0fdf4', label: 'Shifts' },
+  { accent: '#1d4ed8', tint: '#eff6ff', label: 'Events & scheduling' },
+  { accent: '#4338ca', tint: '#eef2ff', label: 'Elections' },
+  { accent: '#6d28d9', tint: '#faf5ff', label: 'Department store' },
+  { accent: '#334155', tint: '#f1f5f9', label: 'Security' },
+] as const satisfies readonly Colourway[];
+
+export const COLOURWAYS: readonly Colourway[] = COLOURWAY_LIST;
+
+/**
+ * The colourway a template with no accent set falls back to.
+ *
+ * A tuple-typed first element, so the chip preview never has to reach for a
+ * non-null assertion on an array index — `noUncheckedIndexedAccess` is on,
+ * and the assertion would be the only thing standing between a reordered
+ * list and a crash.
+ */
+export const FALLBACK_COLOURWAY: Colourway = COLOURWAY_LIST[0];
+
+export const EMAIL_LAYOUTS = [
+  { id: 'notice', label: 'Notice', hint: 'Prose, a details panel and a button.' },
+  { id: 'receipt', label: 'Receipt', hint: 'A wide items table; narrower side padding.' },
+  { id: 'digest', label: 'Digest', hint: 'A run of section headings and lists.' },
+] as const;
+
+export type EmailLayout = (typeof EMAIL_LAYOUTS)[number]['id'];

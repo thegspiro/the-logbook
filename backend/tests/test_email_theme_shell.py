@@ -25,13 +25,17 @@ from app.services.email_service import inline_email_css
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
     ACCENT_BLUE,
+    ACCENT_INDIGO,
     ACCENT_RED,
     ACCENT_SLATE,
     CHIP_TINTS,
     DEFAULT_CSS,
+    LAYOUTS,
     build_email_document,
     build_logo_cell,
     build_shell,
+    colourway_context,
+    colourway_for,
 )
 
 _DEFS = EmailTemplateService._DEFAULT_TEMPLATE_DEFS
@@ -160,31 +164,49 @@ class TestPanelsBeatTheDataTable:
 
 
 class TestBuildShell:
-    def test_accent_reaches_all_four_elements(self):
+    def test_the_accent_reaches_all_four_elements_as_one_token(self):
+        # Four places, one variable. A body that named the colour four times
+        # is a body that can disagree with itself three ways.
         body = build_shell(
             "T",
-            '        <div class="details" style="border-left-color: %s;">d</div>\n'
-            '        <p><a href="#" class="button" style="background-color: %s;">Go</a></p>'
-            % (ACCENT_BLUE, ACCENT_BLUE),
+            '        <div class="details" style="border-left-color: {accent};">d</div>\n'
+            '        <p><a href="#" class="button" style="background-color: {accent};">Go</a></p>',
             accent=ACCENT_BLUE,
             chip="Reminder",
         )
-        assert f"border-top-color: {ACCENT_BLUE}" in body
-        assert f"color: {ACCENT_BLUE}" in body
-        assert f"background-color: {CHIP_TINTS[ACCENT_BLUE]}" in body
-        assert f"border-left-color: {ACCENT_BLUE}" in body
-        assert f"background-color: {ACCENT_BLUE}" in body
+        assert "border-top-color: {{header_accent}}" in body
+        assert 'color: {{header_accent}};">{{status_chip}}' in body
+        assert "border-left-color: {{header_accent}}" in body
+        assert "background-color: {{header_accent}}" in body
+        assert "background-color: {{chip_tint}}" in body
+        # And no hex anywhere, or the column could not be authoritative.
+        assert ACCENT_BLUE not in body
 
     def test_chip_tint_is_looked_up_never_passed(self):
         # The two halves of a colourway cannot disagree, because only one of
-        # them is an argument.
+        # them is ever supplied.
         for accent, tint in CHIP_TINTS.items():
-            body = build_shell("T", "        <p>x</p>", accent=accent, chip="Chip")
-            assert f"background-color: {tint}; color: {accent};" in body
+            assert colourway_context(accent, "Chip") == {
+                "header_accent": accent,
+                "chip_tint": tint,
+                "status_chip": "Chip",
+            }
 
     def test_unknown_accent_falls_back_to_the_slate_tint(self):
-        body = build_shell("T", "        <p>x</p>", accent="#123456", chip="Chip")
-        assert f"background-color: {CHIP_TINTS[ACCENT_SLATE]}" in body
+        # Reads as deliberate rather than broken. wrap_email_body callers
+        # pass hexes that are not ACCENT_* constants, so this path is live.
+        assert colourway_context("#123456", "")["chip_tint"] == CHIP_TINTS[ACCENT_SLATE]
+
+    def test_the_colourway_a_shell_was_built_with_is_recoverable(self):
+        # What stamps a new template's columns. Without it the accent would
+        # have to be restated beside markup that already implies one.
+        body = build_shell("T", "        <p>x</p>", accent=ACCENT_BLUE, chip="Reminder")
+        assert colourway_for(body) == {
+            "accent": ACCENT_BLUE,
+            "chip": "Reminder",
+            "layout": "notice",
+        }
+        assert colourway_for("a body this module never built") == {}
 
     def test_empty_chip_and_subtitle_emit_no_markup(self):
         body = build_shell("T", "        <p>x</p>")
@@ -307,7 +329,7 @@ class TestEveryTemplateRendersIntoTheShell:
         html = defn["html"]
         assert '<div class="logo">' not in html, "the pre-1b centred logo block"
         assert html.count('class="header"') == 1
-        assert html.count('class="content"') == 1
+        assert len(re.findall(r'<div class="content[\w-]*"', html)) == 1
         assert "border-top-color:" in html, "no accent rule on the header"
 
     @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
@@ -438,3 +460,236 @@ class TestIsCustomizedTracksWhatResetRestores:
         # Edited for reasons nobody can see.
         for defn in _DEFS:
             assert service.default_for(defn["type"]) is defn
+
+
+class TestTheColourwayIsData:
+    """The accent lives on the row, not baked into the markup.
+
+    ``build_shell`` leaves ``{{header_accent}}`` / ``{{chip_tint}}`` /
+    ``{{status_chip}}`` for the renderer, which is what lets an officer
+    change a colourway from the screen instead of it taking a deploy. The
+    invariant worth pinning is that there is exactly *one* place the colour
+    comes from: a body that also carried a literal hex would have a column
+    to disagree with, and the two would.
+    """
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_no_shipped_body_carries_a_literal_accent(self, defn):
+        stray = set(re.findall(r"#[0-9a-fA-F]{6}", defn["html"])) & set(CHIP_TINTS)
+        assert not stray, (
+            f"{defn['type'].value} has {sorted(stray)} written into its markup "
+            "as well as on its row; the column can no longer be authoritative"
+        )
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_every_definition_records_the_colourway_it_was_built_with(self, defn):
+        assert defn.get("accent") in CHIP_TINTS, defn["type"].value
+        assert defn.get("layout") in LAYOUTS, defn["type"].value
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_a_body_with_a_chip_has_a_chip_to_put_in_it(self, defn):
+        # An empty status_chip against markup that renders the pill would
+        # mail a bare tinted lozenge with nothing in it.
+        if "{{status_chip}}" in defn["html"]:
+            assert defn.get("chip"), f"{defn['type'].value} renders an empty chip"
+
+    def test_the_renderer_fills_every_token_it_leaves(self):
+        from types import SimpleNamespace
+
+        from app.models.email_template import EmailTemplate
+        from app.services.email_template_service import EmailTemplateService
+
+        defn = next(d for d in _DEFS if d["type"].value == "shift_assignment")
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+            header_accent=ACCENT_INDIGO,
+            status_chip="Recoloured",
+        )
+        org = SimpleNamespace(
+            name="Falls Church",
+            logo="",
+            phone="",
+            email="",
+            website="",
+            settings={},
+            physical_address_same=True,
+            mailing_address_line1="",
+            mailing_city="",
+            mailing_state="",
+            mailing_zip="",
+        )
+        _subject, html, _text = EmailTemplateService(None).render(template, {}, org)
+        assert "{{" not in html.split("<body")[1]
+        assert ACCENT_INDIGO in html
+        assert CHIP_TINTS[ACCENT_INDIGO] in html
+        assert "Recoloured" in html
+
+    def test_a_row_predating_the_columns_falls_back_to_its_type(self):
+        # NULL means "use what this type ships with", never "no colour". A
+        # resolver that defaulted to blank would mail a style attribute
+        # reading `border-top-color: ;` to every organization on upgrade.
+        from types import SimpleNamespace
+
+        from app.models.email_template import EmailTemplate
+        from app.services.email_template_service import EmailTemplateService
+
+        defn = next(d for d in _DEFS if d["type"].value == "shift_assignment")
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+            header_accent=None,
+            status_chip=None,
+        )
+        org = SimpleNamespace(
+            name="Falls Church",
+            logo="",
+            phone="",
+            email="",
+            website="",
+            settings={},
+            physical_address_same=True,
+            mailing_address_line1="",
+            mailing_city="",
+            mailing_state="",
+            mailing_zip="",
+        )
+        _subject, html, _text = EmailTemplateService(None).render(template, {}, org)
+        assert defn["accent"] in html
+        assert defn["chip"] in html
+
+    def test_recolouring_does_not_count_as_editing_the_wording(self):
+        # Reset restores the colour, because Reset means "what we ship". But
+        # calling a recoloured notice "Edited" would send an admin looking
+        # through the body for a change that is not in there.
+        from app.models.email_template import EmailTemplate
+        from app.services.email_template_service import EmailTemplateService
+
+        defn = _DEFS[0]
+        template = EmailTemplate(
+            template_type=defn["type"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+            footer_key=defn.get("footer"),
+            header_accent=ACCENT_INDIGO,
+            status_chip="Something else",
+        )
+        assert EmailTemplateService(None).is_customized(template) is False
+
+    def test_every_layout_has_a_content_class_the_stylesheet_defines(self):
+        defined = set(re.findall(r"^\.([\w-]+)", DEFAULT_CSS, re.M))
+        for layout in LAYOUTS:
+            shell = build_shell("T", "        <p>x</p>", layout=layout)
+            used = set(re.findall(r'<div class="(content[\w-]*)"', shell))
+            assert used, f"{layout} produced no content div"
+            assert used <= defined, f"{layout} uses undefined {sorted(used - defined)}"
+
+    def test_an_unknown_layout_is_refused_rather_than_rendered_unstyled(self):
+        with pytest.raises(ValueError, match="unknown layout"):
+            build_shell("T", "        <p>x</p>", layout="fancy")
+
+    def test_the_frontend_offers_exactly_the_accents_the_api_accepts(self):
+        blocks = TestTheEditorsBlockPaletteMatchesTheShell.BLOCKS
+        if not blocks.exists():
+            pytest.skip("frontend not present in this checkout")
+        source = blocks.read_text()
+        offered = dict(
+            re.findall(r"\{ accent: '(#[0-9a-f]{6})', tint: '(#[0-9a-f]{6})'", source)
+        )
+        assert offered, "found no colourways — has the file's shape changed?"
+        assert offered == CHIP_TINTS, (
+            "the swatch row and CHIP_TINTS disagree; a swatch the API rejects "
+            "is a 422 an admin has no way to interpret"
+        )
+
+    def test_the_frontend_offers_exactly_the_layouts_the_api_accepts(self):
+        blocks = TestTheEditorsBlockPaletteMatchesTheShell.BLOCKS
+        if not blocks.exists():
+            pytest.skip("frontend not present in this checkout")
+        offered = re.findall(r"\{ id: '(\w+)', label: '\w+', hint:", blocks.read_text())
+        assert tuple(offered) == LAYOUTS
+
+
+class TestTheColourwayMigrationConvertsWhatItClaimsTo:
+    """Every shipped body has a pre-upgrade form the migration recognises.
+
+    The migration only rewrites a body still byte-identical to a shipped
+    default, and reconstructs that form from the current constants. If the
+    reconstruction is wrong the query matches nothing — silently. Nothing
+    fails, nothing logs, and the result is a department whose untouched
+    notices are all newly badged "Edited" with no accent on their rows.
+
+    So this walks the same function the migration uses and asserts it can
+    account for every default. It cannot catch a body written before the
+    release that introduced the tokens — that one is genuinely edited
+    relative to what we ship, and saying so is correct.
+    """
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def migration(cls):
+        import importlib.util
+
+        path = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "20260823_1200_e7c4a913b8d2_email_template_colourway.py"
+        )
+        if not path.exists():
+            pytest.skip("migration not present in this checkout")
+        spec = importlib.util.spec_from_file_location("colourway_migration", path)
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_frozen_tint_map_still_matches_the_live_one(self, migration):
+        # A migration keeps transforming rows the way it did the day it ran,
+        # so it holds its own copy. Drift is allowed — this asserts the copy
+        # was correct *at the time*, which is what makes the reconstruction
+        # sound. If CHIP_TINTS legitimately changes, this test is the record
+        # of it and gets an explicit exception, not a quiet edit.
+        assert migration._CHIP_TINTS == CHIP_TINTS
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_a_reconstructed_form_is_the_token_form_with_hexes_in(
+        self, migration, defn
+    ):
+        accent = defn.get("accent")
+        if not accent:
+            pytest.skip("no shipped colourway")
+        first = migration._previous_forms(defn, accent, defn.get("chip", ""))[0]
+        assert "{{header_accent}}" not in first
+        assert "{{chip_tint}}" not in first
+        assert "{{status_chip}}" not in first
+        assert accent in first
+        # And converting it back is the identity, which is what makes the
+        # downgrade honest rather than approximate.
+        restored = first.replace(CHIP_TINTS[accent], "{{chip_tint}}").replace(
+            accent, "{{header_accent}}"
+        )
+        if defn.get("chip"):
+            restored = restored.replace(defn["chip"], "{{status_chip}}", 1)
+        assert restored == defn["html"]
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_a_relayout_notice_is_still_recognised(self, migration, defn):
+        # Four notices changed layout in the same release. Their stored
+        # bodies say class="content", so a reconstruction that only offered
+        # the new class would leave exactly those four behind.
+        accent = defn.get("accent")
+        if not accent:
+            pytest.skip("no shipped colourway")
+        forms = migration._previous_forms(defn, accent, defn.get("chip", ""))
+        if defn.get("layout", "notice") != "notice":
+            assert len(forms) == 2, "no class=content candidate for a relaid-out notice"
+            assert '<div class="content">' in forms[1]
+        else:
+            assert len(forms) == 1

@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Every notification the platform sends has a new shell (2026-08-23)
+
+**Changed**
+
+- **The solid red header band is gone.** Every notice now renders into a white
+  card with a 5px accent rule along its top edge, a tinted status chip in the
+  header lockup, a dark-on-white 27px title, and a details panel that keeps its
+  box but picks up the app's left-accent treatment with a real label column.
+  The accent is per category — members, security, events, shifts, training,
+  elections, store — so it is one design in seven colourways rather than seven
+  designs.
+- **The department logo moved into the header lockup at 36px**, on a white cell
+  of its own, rather than sitting centred above the card. A department with no
+  logo now leads with its name instead of an empty bordered box: the cell is
+  built as a unit by the renderer, which is something `{{name}}` substitution
+  cannot express.
+- **`build_shell` is the only place the layout is written.** It was written
+  three times — the service, the storefront and `wrap_email_body` — and the
+  "Send Test Email to Me" body built a fourth, which meant the test send
+  verified SMTP credentials against chrome no member would ever receive.
+- **A notice's colourway is data.** `header_accent`, `status_chip` and `layout`
+  are columns on `email_templates`, edited from the Email Templates screen. The
+  API accepts only the seven accents whose chip tint and white button text have
+  been checked for contrast.
+
+**Fixed**
+
+- **Details panels inherited the data table's heading styling.** `.details`
+  sits inside `.content` and the CSS inliner merges per declaration, so any
+  property `.details th` did not name came from `.content th` — panel labels
+  rendered grey, uppercase and underlined.
+- **Injected chunks opted out of the shell.** Start-of-shift checklists were
+  emitted as `<p><strong>…</strong></p>` where the shell styles `<h2>` as a
+  section heading, and the store's payment block as loose paragraphs where the
+  design puts a panel.
+- **Preview sample data had drifted from the real thing.** `SAMPLE_CONTEXT`
+  carried hand-copied snapshots of the table styles rather than the shared
+  constants, so a preview would have shown the old table beside the new one.
+
+**Added**
+
+- **The editor and the live preview are side by side** instead of behind tabs,
+  and the preview renders the body you are typing rather than the one on the
+  server. Save and Discard moved to a sticky page header.
+- **A block palette** — seven ready-made pieces of a notice inserted at the
+  cursor, so a secretary never has to guess which classes the email shell
+  styles. A backend test reads the palette and fails if a snippet names a class
+  the stylesheet dropped.
+- **A plain-text preview mode**, the half of every template nobody looks at and
+  the half that silently stops matching the HTML.
+- **The template list says which notices a department has changed** and how
+  many messages each has sent, with filter chips for All / Active / Edited /
+  Off.
+
+**Note for existing departments:** `ensure_default_templates` only creates
+missing rows, so a template you have customised keeps your wording. Press Reset
+on it to adopt the new design; your CC/BCC settings are preserved. Templates
+still on the shipped default are upgraded by the migration.
+
 ### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
 
 **Fixed**

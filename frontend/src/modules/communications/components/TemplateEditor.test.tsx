@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { TemplateEditor } from './TemplateEditor';
 import { useTemplateDraft } from '../hooks/useTemplateDraft';
-import { EMAIL_BLOCKS } from '../constants/blocks';
+import { COLOURWAYS, EMAIL_BLOCKS, EMAIL_LAYOUTS } from '../constants/blocks';
 import type { EmailTemplate, EmailTemplateUpdate } from '../types';
 
 const makeTemplate = (overrides: Partial<EmailTemplate> = {}): EmailTemplate => ({
@@ -142,6 +142,59 @@ describe('TemplateEditor', () => {
     expect(screen.getByPlaceholderText(/\.container/i)).toHaveValue('body { color: #333; }');
   });
 
+  describe('colourway controls', () => {
+    it('offers every accent the API accepts', () => {
+      render(<Harness template={makeTemplate()} />);
+
+      for (const colourway of COLOURWAYS) {
+        expect(screen.getByRole('button', { name: colourway.label })).toBeInTheDocument();
+      }
+    });
+
+    it("marks the template's current accent as selected", () => {
+      render(<Harness template={makeTemplate({ header_accent: '#4338ca' })} />);
+
+      const elections = screen.getByRole('button', { name: 'Elections' });
+      expect(elections).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Shifts' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('sends only the accent when nothing else changed', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn();
+      render(<Harness template={makeTemplate({ header_accent: '#b91c1c' })} onSave={onSave} />);
+
+      await user.click(screen.getByRole('button', { name: 'Elections' }));
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(onSave).toHaveBeenCalledWith({ header_accent: '#4338ca' });
+    });
+
+    it('offers every layout, defaulting to notice', () => {
+      render(<Harness template={makeTemplate()} />);
+
+      for (const layout of EMAIL_LAYOUTS) {
+        expect(screen.getByRole('button', { name: layout.label })).toBeInTheDocument();
+      }
+      // A row written before these columns existed has no layout; the shell
+      // renders it as a notice, so the control has to say so rather than
+      // showing nothing selected.
+      expect(screen.getByRole('button', { name: 'Notice' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('previews the chip as it will actually render', async () => {
+      const user = userEvent.setup();
+      render(<Harness template={makeTemplate({ header_accent: '#047857' })} />);
+
+      // Empty is a real state — the header then carries no chip at all.
+      expect(screen.getByText('No chip')).toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Status chip'), 'Assignment');
+
+      expect(screen.getByText('Assignment')).toBeInTheDocument();
+    });
+  });
+
   describe('block palette', () => {
     it('offers every block', () => {
       render(<Harness template={makeTemplate()} />);
@@ -207,6 +260,12 @@ function makeDraft() {
     setDefaultCc: noop,
     defaultBcc: '',
     setDefaultBcc: noop,
+    headerAccent: '',
+    setHeaderAccent: noop,
+    statusChip: '',
+    setStatusChip: noop,
+    layout: '',
+    setLayout: noop,
     ccError: null,
     bccError: null,
     hasValidationErrors: false,

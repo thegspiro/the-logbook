@@ -16,6 +16,7 @@ import type {
   EmailAttachment,
   EmailTemplateUpdate,
   EmailTemplatePreview,
+  TemplatePreviewOverrides,
   EmailFooter,
   EmailFooterLibrary,
 } from './adminServices';
@@ -263,7 +264,7 @@ export const emailTemplatesService = {
   async previewTemplate(
     templateId: string,
     context?: Record<string, unknown>,
-    overrides?: { subject?: string; html_body?: string; text_body?: string; css_styles?: string; footer_key?: string },
+    overrides?: TemplatePreviewOverrides,
     memberId?: string
   ): Promise<EmailTemplatePreview> {
     const response = await api.post<EmailTemplatePreview>(`/email-templates/${templateId}/preview`, {

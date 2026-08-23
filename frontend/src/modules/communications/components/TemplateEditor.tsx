@@ -17,6 +17,7 @@ import { Variable, ChevronDown, ChevronUp, Info, UserCheck } from 'lucide-react'
 import type { EmailFooter, EmailTemplate, TemplateVariable } from '../types';
 import type { TemplateDraft } from '../hooks/useTemplateDraft';
 import { BlockPalette } from './BlockPalette';
+import { COLOURWAYS, EMAIL_LAYOUTS, FALLBACK_COLOURWAY } from '../constants/blocks';
 
 interface TemplateEditorProps {
   template: EmailTemplate;
@@ -52,6 +53,12 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setCssStyles,
     footerKey,
     setFooterKey,
+    headerAccent,
+    setHeaderAccent,
+    statusChip,
+    setStatusChip,
+    layout,
+    setLayout,
     defaultCc,
     setDefaultCc,
     defaultBcc,
@@ -107,6 +114,10 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const labelClass = 'form-label';
   const inputClass = 'form-input font-mono';
   const plainInputClass = 'form-input';
+
+  // Falls back to the first colourway so the preview pill is never colourless
+  // for a template that predates these columns.
+  const chipPreview = COLOURWAYS.find((c) => c.accent === headerAccent.toLowerCase()) ?? FALLBACK_COLOURWAY;
 
   const defaultFooter = footers.find((footer) => footer.key === footerDefaultKey);
   // Falls back to the default footer, matching what the renderer does with a
@@ -169,6 +180,94 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           </p>
         </div>
       )}
+
+      {/* Layout and accent.
+          Both are columns on the template rather than hexes buried in the
+          body, which is what makes a colourway something an officer can
+          change from here instead of it taking a deploy. The seven accents
+          are the only ones the API accepts: each carries white button text
+          and tints a chip behind text of its own colour, and both are easy
+          to get wrong by eye and fail for the member squinting at a phone
+          in daylight. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <span className={labelClass}>Layout</span>
+          <div className="bg-theme-surface-secondary mt-1 flex rounded-lg p-0.5">
+            {EMAIL_LAYOUTS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setLayout(option.id)}
+                aria-pressed={(layout || 'notice') === option.id}
+                title={option.hint}
+                className={`mobile-touch-target flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                  (layout || 'notice') === option.id
+                    ? 'bg-red-600 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className={labelClass}>Header accent</span>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {COLOURWAYS.map((option) => {
+              const isSelected = headerAccent.toLowerCase() === option.accent;
+              return (
+                <button
+                  key={option.accent}
+                  type="button"
+                  onClick={() => setHeaderAccent(option.accent)}
+                  aria-pressed={isSelected}
+                  aria-label={option.label}
+                  title={option.label}
+                  style={{ backgroundColor: option.accent }}
+                  className={`h-[22px] w-[22px] rounded-md transition-shadow ${
+                    isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-current' : ''
+                  }`}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Status chip */}
+      <div>
+        <label htmlFor="template-chip" className={labelClass}>
+          Status chip
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            id="template-chip"
+            type="text"
+            value={statusChip}
+            onChange={(e) => setStatusChip(e.target.value)}
+            className={`${plainInputClass} flex-1`}
+            placeholder="Action required"
+            maxLength={40}
+            aria-describedby="chip-hint"
+          />
+          {/* Shown as it will render, because the chip is uppercased and
+              letter-spaced by the email stylesheet — what is typed here and
+              what a member sees are not the same string. */}
+          <span
+            className="inline-block shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-[0.08em] uppercase"
+            style={{
+              backgroundColor: chipPreview.tint,
+              color: chipPreview.accent,
+            }}
+          >
+            {statusChip || 'No chip'}
+          </span>
+        </div>
+        <p id="chip-hint" className="text-theme-text-muted mt-1 text-xs">
+          Leave it empty and the header carries no chip at all.
+        </p>
+      </div>
 
       {/* Default CC / BCC (collapsible) */}
       <div>

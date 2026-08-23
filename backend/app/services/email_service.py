@@ -33,6 +33,7 @@ from app.services.email_theme import (
     build_email_document,
     build_logo_cell,
     build_shell,
+    colourway_context,
 )
 
 # Header injection control characters that must never appear in
@@ -436,6 +437,19 @@ class EmailService:
             ),
             {},
         )
+        # The colourway too. This path has no template row to read the
+        # header_accent / status_chip columns off, and a body whose accent
+        # never got filled mails a style attribute reading
+        # "border-top-color: {{header_accent}};" — a header with no rule at
+        # all, to the departments least likely to notice, because this is
+        # exactly the path a department that has never opened the Email
+        # Templates screen is on.
+        for _key, _value in colourway_context(
+            default_definition.get("accent", ACCENT_RED),
+            default_definition.get("chip", ""),
+        ).items():
+            context.setdefault(_key, _value)
+
         context = EmailTemplateService.build_context(
             context,
             self.organization,

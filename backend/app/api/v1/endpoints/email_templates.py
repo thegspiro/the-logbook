@@ -441,6 +441,18 @@ async def preview_email_template(
             if preview_data.footer_key is not None
             else template.footer_key
         ),
+        # The colourway too, so the accent swatches and the chip field show
+        # their effect before the admin commits to it.
+        header_accent=preview_data.header_accent or template.header_accent,
+        status_chip=(
+            preview_data.status_chip
+            if preview_data.status_chip is not None
+            else template.status_chip
+        ),
+        layout=preview_data.layout or template.layout,
+        # Carried so build_context can fall back to the type's shipped
+        # colourway for a row that predates those columns.
+        template_type=template.template_type,
     )
 
     subject, html_body, text_body = service.render(

@@ -413,6 +413,12 @@ export interface EmailTemplate {
   css_styles?: string;
   /** Which named footer this template closes with; null/absent means the department's default. */
   footer_key?: string | null;
+  /** Accent hex driving the header rule, chip, panel edge and button. */
+  header_accent?: string | null;
+  /** The uppercase pill in the header lockup. */
+  status_chip?: string | null;
+  /** notice | receipt | digest */
+  layout?: string | null;
   allow_attachments: boolean;
   is_active: boolean;
   default_cc?: string[];
@@ -448,11 +454,28 @@ export interface EmailTemplateUpdate {
   css_styles?: string;
   /** Empty string selects the department's default footer. */
   footer_key?: string;
+  /** One of the seven accents; the API rejects anything else. */
+  header_accent?: string;
+  status_chip?: string;
+  /** notice | receipt | digest */
+  layout?: string;
   description?: string;
   is_active?: boolean;
   allow_attachments?: boolean;
   default_cc?: string[] | null;
   default_bcc?: string[] | null;
+}
+
+/** What the preview endpoint will render instead of the stored template. */
+export interface TemplatePreviewOverrides {
+  subject?: string;
+  html_body?: string;
+  text_body?: string;
+  css_styles?: string;
+  footer_key?: string;
+  header_accent?: string;
+  status_chip?: string;
+  layout?: string;
 }
 
 export interface EmailTemplatePreview {

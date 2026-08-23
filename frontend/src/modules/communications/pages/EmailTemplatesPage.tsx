@@ -214,8 +214,20 @@ const EmailTemplatesPage: React.FC = () => {
       text_body: draft.textBody,
       css_styles: draft.cssStyles,
       footer_key: draft.footerKey,
+      header_accent: draft.headerAccent,
+      status_chip: draft.statusChip,
+      layout: draft.layout,
     }),
-    [draft.subject, draft.htmlBody, draft.textBody, draft.cssStyles, draft.footerKey]
+    [
+      draft.subject,
+      draft.htmlBody,
+      draft.textBody,
+      draft.cssStyles,
+      draft.footerKey,
+      draft.headerAccent,
+      draft.statusChip,
+      draft.layout,
+    ]
   );
 
   const handlePreview = useCallback(

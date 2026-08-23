@@ -52,6 +52,7 @@ def _shell(
     accent: str = ACCENT_VIOLET,
     chip: str = "",
     subtitle: str = "",
+    layout: str = "notice",
 ) -> str:
     """The house shell, with the store's name in the lockup.
 
@@ -68,6 +69,7 @@ def _shell(
         chip=chip,
         subtitle=subtitle,
         brand="{{store_name}}",
+        layout=layout,
     )
 
 
@@ -90,6 +92,7 @@ ORDER_CONFIRMATION_HTML = _shell(
         {{receipt_footer_html}}""",
     chip="Receipt",
     subtitle="Total {{order_total}}",
+    layout="receipt",
 )
 ORDER_CONFIRMATION_TEXT = """Hi {{first_name}},
 
@@ -147,6 +150,7 @@ PAYMENT_REMINDER_HTML = _shell(
     accent=ACCENT_AMBER,
     chip="Payment reminder",
     subtitle="{{balance_due}} outstanding",
+    layout="receipt",
 )
 PAYMENT_REMINDER_TEXT = """Order {{order_number}} has a balance of {{balance_due}}.
 """ + _FOOTER_TEXT

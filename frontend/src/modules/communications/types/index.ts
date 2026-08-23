@@ -9,6 +9,7 @@ export type {
   EmailAttachment,
   EmailTemplateUpdate,
   EmailTemplatePreview,
+  TemplatePreviewOverrides,
   EmailFooter,
   EmailFooterLibrary,
   TemplateVariable,

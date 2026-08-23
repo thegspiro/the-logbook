@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { emailTemplatesService } from '../../../services/api';
 import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
-import type { EmailTemplate, EmailTemplateUpdate, EmailTemplatePreview } from '../types';
+import type { EmailTemplate, EmailTemplateUpdate, EmailTemplatePreview, TemplatePreviewOverrides } from '../types';
 
 interface EmailTemplatesState {
   // Data
@@ -28,7 +28,7 @@ interface EmailTemplatesState {
   previewTemplate: (
     templateId: string,
     context?: Record<string, unknown>,
-    overrides?: { subject?: string; html_body?: string; text_body?: string; css_styles?: string; footer_key?: string },
+    overrides?: TemplatePreviewOverrides,
     memberId?: string
   ) => Promise<void>;
   clearPreview: () => void;
