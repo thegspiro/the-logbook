@@ -2,7 +2,8 @@
 
 **[🏠 Home](Home)**
 
-**[Recent changes (Aug 17–19, 2026)](Recent-Changes-2026-08-17-to-19)**
+**[Recent changes (Aug 19–23, 2026)](Recent-Changes-2026-08-19-to-23)**
+[· Aug 17–19 detail](Recent-Changes-2026-08-17-to-19)
 [· Aug 10–16 rollup](Recent-Changes-2026-08-10-to-16)
 [· Aug 15–16 detail](Recent-Changes-2026-08-15-to-16)
 [· Aug 12–14 detail](Recent-Changes-2026-08-12-to-14)
@@ -55,6 +56,7 @@
 - [Medical Screening](../docs/MEDICAL_SCREENING_MODULE.md)
 - [Compliance](Module-Compliance)
 - [Compliance Config](../docs/COMPLIANCE_CONFIG.md)
+- [Governance — Legal Documents](Module-Governance-Legal)
 - [Salesforce Integration](Integration-Salesforce)
 - [Documenso Integration](Integration-Documenso)
 - [Cal.com Integration](Integration-Calcom)
