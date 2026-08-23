@@ -655,9 +655,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     try {
       const saved = localStorage.getItem(draftKey);
       if (!saved) return;
-      const parsed = JSON.parse(saved) as { results: Record<string, ItemResult>; overallNotes: string };
+      const parsed = JSON.parse(saved) as {
+        results: Record<string, ItemResult>;
+        overallNotes: string;
+        seals?: Record<string, SealState>;
+      };
       if (parsed.results && Object.keys(parsed.results).length > 0) {
         setResults(parsed.results);
+      }
+      // Restored together with the results, because confirming a seal writes
+      // passing statuses into them. Without this a reload would bring back
+      // those passes with no seal behind them, and the crew could submit a
+      // completed check whose audit record says nobody ever vouched for the
+      // contents. No older draft can carry that state: the seal shortcut and
+      // this line ship together, so a draft without `seals` has no
+      // seal-derived passes in it either.
+      if (parsed.seals && Object.keys(parsed.seals).length > 0) {
+        setSeals(parsed.seals);
       }
       if (parsed.overallNotes) {
         setOverallNotes(parsed.overallNotes);
@@ -673,13 +687,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // IndexedDB purge. Do not let a late API response recreate a sensitive
     // draft while logout/session-expiry cleanup is still running.
     if (!localStorage.getItem('has_session')) return;
-    if (Object.keys(results).length === 0 && !overallNotes) return;
+    if (Object.keys(results).length === 0 && !overallNotes && Object.keys(seals).length === 0) return;
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes }));
+      localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes, seals }));
     } catch {
       // Storage full — ignore
     }
-  }, [results, overallNotes, draftKey, previewMode]);
+  }, [results, overallNotes, seals, draftKey, previewMode]);
 
   // --------------------------------------------------------------------------
   // Pre-populate from last check for this apparatus
@@ -898,26 +912,39 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
    * from the number, so confirming 18 of 24 files a failure rather than
    * quietly passing it.
    */
+  /**
+   * Accept the carried numbers for a set of positions, without changing any.
+   *
+   * Shared by the Confirm Counts button and by an intact seal, because both
+   * make the same claim — that what is recorded matches what is there — and a
+   * second copy of this rule is a second place for it to drift. Status still
+   * comes from the number, so a carried shortfall files as a failure rather
+   * than quietly passing.
+   */
+  const acceptShownCounts = useCallback((items: CheckTemplateItem[]) => {
+    setResults((prev) => {
+      const next = { ...prev };
+      for (const item of items) {
+        const existing = next[item.id];
+        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const shown = existing?.quantityFound;
+        const patch: Partial<ItemResult> = { status: 'pass' };
+        if (item.checkType === 'quantity' && required != null) {
+          // Nothing carried means nothing to confirm; leave it for the crew.
+          if (shown == null) continue;
+          patch.status = shown >= required ? 'pass' : 'fail';
+        }
+        next[item.id] = { status: 'not_checked', ...existing, ...patch };
+      }
+      return next;
+    });
+  }, []);
+
   const confirmCountsInCompartment = useCallback(
     (compartment: CheckTemplateCompartment) => {
-      setResults((prev) => {
-        const next = { ...prev };
-        for (const item of checkableIn(compartment)) {
-          const existing = next[item.id];
-          const required = item.requiredQuantity ?? item.expectedQuantity;
-          const shown = existing?.quantityFound;
-          const patch: Partial<ItemResult> = { status: 'pass' };
-          if (item.checkType === 'quantity' && required != null) {
-            // Nothing carried means nothing to confirm; leave it for the crew.
-            if (shown == null) continue;
-            patch.status = shown >= required ? 'pass' : 'fail';
-          }
-          next[item.id] = { status: 'not_checked', ...existing, ...patch };
-        }
-        return next;
-      });
+      acceptShownCounts(checkableIn(compartment));
     },
-    [checkableIn]
+    [acceptShownCounts, checkableIn]
   );
 
   /** Quantity positions this compartment would have to *raise* to reach par. */
@@ -1007,46 +1034,43 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const sealIsClearing = useCallback(
     (compartment: CheckTemplateCompartment) => {
       const seal = seals[compartment.id];
-      return Boolean(compartment.isSealed && seal?.confirmed && seal.intact && !seal.countAnyway);
+      return Boolean(compartment.isSealed && seal?.confirmed && seal.intact && seal.cleared);
     },
     [seals]
   );
 
   /**
-   * Confirm the seal and pass everything it can answer for.
+   * Confirm the seal, and — only when it can vouch for them — accept the
+   * contents as last counted.
    *
-   * A quantity is passed at its required figure: the seal's claim is that the
-   * bag is as it was left, and it was left stocked. A crew that does not
-   * believe that has "Count anyway" and "Broken", which is the whole point of
-   * offering both.
+   * What an intact seal proves is that the bag is **unchanged since the last
+   * count**, not that it is full. Writing each quantity up to its required
+   * figure would put stock on the record that nobody has seen: the backend
+   * treats `quantity_found` as a recount and writes it straight into the
+   * truck's running total, so a bag that was three gauze short at the last
+   * count would come back full without anyone opening it. The carried numbers
+   * are what the seal actually attests to, so those are what stand — and a
+   * carried shortfall still files as a failure.
+   *
+   * `clearContents` is false when the tag does not match the last count. Then
+   * the seal is recorded and nothing is cleared, because there is no evidence
+   * the bag stayed shut.
    */
   const confirmSealIntact = useCallback(
-    (compartment: CheckTemplateCompartment, sealNumber: string) => {
+    (compartment: CheckTemplateCompartment, sealNumber: string, clearContents: boolean) => {
       setSeals((prev) => ({
         ...prev,
-        [compartment.id]: { sealNumber, intact: true, confirmed: true, countAnyway: false },
+        [compartment.id]: { sealNumber, intact: true, confirmed: true, cleared: clearContents },
       }));
-      setResults((prev) => {
-        const next = { ...prev };
-        for (const item of sealClearableIn(compartment)) {
-          const existing = next[item.id];
-          const patch: Partial<ItemResult> = { status: 'pass' };
-          if (item.checkType === 'quantity') {
-            const required = item.requiredQuantity ?? item.expectedQuantity;
-            if (required != null) patch.quantityFound = required;
-          }
-          next[item.id] = { status: 'not_checked', ...existing, ...patch };
-        }
-        return next;
-      });
+      if (clearContents) acceptShownCounts(sealClearableIn(compartment));
     },
-    [sealClearableIn]
+    [acceptShownCounts, sealClearableIn]
   );
 
   const reportSealBroken = useCallback((compartment: CheckTemplateCompartment, sealNumber: string) => {
     setSeals((prev) => ({
       ...prev,
-      [compartment.id]: { sealNumber, intact: false, confirmed: true, countAnyway: false },
+      [compartment.id]: { sealNumber, intact: false, confirmed: true, cleared: false },
     }));
   }, []);
 
@@ -1061,7 +1085,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       setSeals((prev) => {
         const existing = prev[compartment.id];
         if (!existing) return prev;
-        return { ...prev, [compartment.id]: { ...existing, countAnyway: true } };
+        return { ...prev, [compartment.id]: { ...existing, cleared: false } };
       });
       setResults((prev) => {
         const next = { ...prev };
@@ -1163,7 +1187,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         compartment_name: compartment.name,
         seal_number: seal.sealNumber || undefined,
         intact: seal.intact,
-        cleared_item_count: seal.intact && !seal.countAnyway ? sealClearableIn(compartment).length : 0,
+        cleared_item_count: seal.cleared ? sealClearableIn(compartment).length : 0,
       });
     }
     return submitted;
@@ -2021,7 +2045,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                           clearableNames={sealClearable.map((item) => item.name)}
                           lastSeal={lastSeals[comp.id]}
                           state={seals[comp.id]}
-                          onConfirmIntact={(sealNumber) => confirmSealIntact(comp, sealNumber)}
+                          onConfirmIntact={(sealNumber, clearContents) =>
+                            confirmSealIntact(comp, sealNumber, clearContents)
+                          }
                           onReportBroken={(sealNumber) => reportSealBroken(comp, sealNumber)}
                           onCountAnyway={() => countSealedAnyway(comp)}
                           onReopen={() => reopenSeal(comp)}

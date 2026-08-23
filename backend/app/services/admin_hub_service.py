@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from loguru import logger
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.api.dependencies import user_has_permission
 from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
@@ -209,6 +210,11 @@ def _attention_context(attention: list[AdminAttentionItem]) -> str:
 # ── Members ─────────────────────────────────────────────────────────────────
 
 
+#: Outer-query alias for the expired-screening lookup, so its correlated
+#: "is there still cover?" subquery can name the same table twice.
+_EXPIRED_ALIAS = aliased(ScreeningRecord)
+
+
 def _active_member_criteria():
     return (User.status == UserStatus.ACTIVE, User.deleted_at.is_(None))
 
@@ -308,16 +314,62 @@ async def _members_screening_current(ctx: MetricContext) -> tuple[str, str]:
 async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     items: list[AdminAttentionItem] = []
 
-    expired_count, oldest_expiry = await _count_and_oldest(
-        ctx.db,
-        ScreeningRecord,
-        ScreeningRecord.organization_id == ctx.organization_id,
-        ScreeningRecord.user_id.isnot(None),
-        ScreeningRecord.expiration_date.isnot(None),
-        ScreeningRecord.expiration_date < ctx.today,
-        ScreeningRecord.status != ScreeningStatus.WAIVED,
-        date_column=ScreeningRecord.expiration_date,
+    # One row per member and screening type, not per historical record.
+    # A screening is renewed by adding a record, never by editing the old one,
+    # so counting expired rows outright reports a member who renewed last week
+    # as lapsed — while the Screenings-current metric, which asks whether any
+    # valid record exists, calls the same member covered. Two numbers on one
+    # page disagreeing about one person is worse than either being absent.
+    #
+    # "Expired" therefore means: this member has no unexpired record of this
+    # type. A record with no expiry never lapses, and a waiver excuses the
+    # requirement, so both count as cover.
+    current_cover = (
+        select(ScreeningRecord.id)
+        .where(
+            ScreeningRecord.organization_id == ctx.organization_id,
+            ScreeningRecord.user_id == _EXPIRED_ALIAS.user_id,
+            ScreeningRecord.screening_type == _EXPIRED_ALIAS.screening_type,
+            ScreeningRecord.status.in_(
+                [
+                    ScreeningStatus.PASSED,
+                    ScreeningStatus.COMPLETED,
+                    ScreeningStatus.WAIVED,
+                ]
+            ),
+            or_(
+                ScreeningRecord.expiration_date.is_(None),
+                ScreeningRecord.expiration_date >= ctx.today,
+            ),
+        )
+        .exists()
     )
+    lapsed = (
+        select(
+            _EXPIRED_ALIAS.user_id,
+            _EXPIRED_ALIAS.screening_type,
+            func.min(_EXPIRED_ALIAS.expiration_date).label("lapsed_on"),
+        )
+        .join(User, _EXPIRED_ALIAS.user_id == User.id)
+        .where(
+            _EXPIRED_ALIAS.organization_id == ctx.organization_id,
+            _EXPIRED_ALIAS.expiration_date.isnot(None),
+            _EXPIRED_ALIAS.expiration_date < ctx.today,
+            _EXPIRED_ALIAS.status != ScreeningStatus.WAIVED,
+            # A lapsed screening for someone off the roster is history, not work.
+            User.organization_id == ctx.organization_id,
+            *_active_member_criteria(),
+            ~current_cover,
+        )
+        .group_by(_EXPIRED_ALIAS.user_id, _EXPIRED_ALIAS.screening_type)
+        .subquery()
+    )
+    expired_row = (
+        await ctx.db.execute(
+            select(func.count(), func.min(lapsed.c.lapsed_on)).select_from(lapsed)
+        )
+    ).one()
+    expired_count, oldest_expiry = int(expired_row[0] or 0), expired_row[1]
     if expired_count:
         age = _age_days(oldest_expiry, ctx.today)
         items.append(

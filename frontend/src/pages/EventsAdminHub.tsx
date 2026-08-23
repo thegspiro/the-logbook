@@ -47,6 +47,9 @@ export const EventsAdminHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>(
     tabParam && tabs.some((t) => t.id === tabParam) ? tabParam : 'create'
   );
+  // Bumped when the settings tab saves, so the metrics row above it reflects
+  // the new selection without a page reload.
+  const [frameToken, setFrameToken] = useState(0);
 
   useEffect(() => {
     if (tabParam && tabs.some((t) => t.id === tabParam)) {
@@ -82,6 +85,7 @@ export const EventsAdminHub: React.FC = () => {
       tabs={tabs}
       activeTab={activeTab}
       onTabChange={handleTabChange}
+      refreshToken={frameToken}
     >
       {/* Tab Content - each child handles its own layout */}
       <Suspense fallback={<TabLoading />}>
@@ -90,7 +94,7 @@ export const EventsAdminHub: React.FC = () => {
         {activeTab === 'requests' && <EventRequestsTab />}
         {activeTab === 'analytics' && <AnalyticsDashboardPage />}
         {activeTab === 'community' && <CommunityEngagementTab />}
-        {activeTab === 'settings' && <EventsSettingsTab />}
+        {activeTab === 'settings' && <EventsSettingsTab onMetricsSaved={() => setFrameToken((token) => token + 1)} />}
       </Suspense>
     </AdminHubFrame>
   );

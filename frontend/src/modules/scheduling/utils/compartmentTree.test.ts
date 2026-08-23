@@ -140,6 +140,33 @@ describe('flattenCompartmentTree', () => {
     expect(compartments[0]?.items.map((i) => i.id)).toEqual(['subheader-tray', 'i3']);
   });
 
+  // An outer seal found broken says nothing about an inner one still intact.
+  // Merged into its parent, that inner seal would have no card to be recorded
+  // on and the crew would lose the shortcut it is entitled to.
+  it('gives a sealed pouch inside a sealed bag its own card too', () => {
+    const { compartments } = flattenCompartmentTree([
+      comp({ id: 'a', name: 'Cabinet', items: [] }),
+      comp({ id: 'bag', name: 'Bag', parentCompartmentId: 'a', isSealed: true, items: [item('i1', 'Gauze')] }),
+      comp({
+        id: 'pouch',
+        name: 'Pouch',
+        parentCompartmentId: 'bag',
+        isSealed: true,
+        items: [item('i2', 'Morphine')],
+      }),
+    ]);
+
+    const names = compartments.map((c) => c.name);
+    expect(names).toContain('Cabinet \u203a Bag');
+    expect(names).toContain('Cabinet \u203a Bag \u203a Pouch');
+    const bag = compartments.find((c) => c.name === 'Cabinet \u203a Bag');
+    const pouch = compartments.find((c) => c.name === 'Cabinet \u203a Bag \u203a Pouch');
+    // The pouch's contents belong to the pouch, not to the bag around it.
+    expect(pouch?.items.map((i) => i.id)).toEqual(['i2']);
+    expect(bag?.items.map((i) => i.id)).toEqual(['i1']);
+    expect(pouch?.isSealed).toBe(true);
+  });
+
   it('does not infinite-loop on a parent cycle', () => {
     const { compartments } = flattenCompartmentTree([
       comp({ id: 'a', name: 'A', parentCompartmentId: 'b', items: [] }),

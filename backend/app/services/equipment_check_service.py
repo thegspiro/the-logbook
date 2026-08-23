@@ -1335,6 +1335,12 @@ class EquipmentCheckService:
                         checked_by=checked_by,
                         data={
                             "items": items_data,
+                            # The form always resubmits through submit_check, so
+                            # resuming a saved check lands here rather than in
+                            # the post-flush branch below. Dropping the seals
+                            # would file the passes an intact seal cleared while
+                            # discarding the record that justified them.
+                            "seals": seals_data,
                             "notes": data.get("notes"),
                             "signature_data": data.get("signature_data"),
                             "client_submission_id": client_submission_id,

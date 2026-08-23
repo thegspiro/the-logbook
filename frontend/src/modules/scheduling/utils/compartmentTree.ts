@@ -98,6 +98,11 @@ export function flattenCompartmentTree(raw: CheckTemplateCompartment[]): Flatten
       const childPath = `${parentPath} › ${child.name}`;
       if (child.isSealed && !seen.has(child.id)) {
         seen.add(child.id);
+        // Its own sealed descendants come out first, for the same reason it
+        // did: a pouch sealed inside this bag is a separate claim. An outer
+        // seal found broken says nothing about an inner one still intact, and
+        // merged in here that inner seal would have no card to be recorded on.
+        collectSealed(child, childPath, rootId);
         const ownItems: CheckTemplateItem[] = [...child.items];
         for (const item of child.items) pathById.set(item.id, childPath);
         collectDescendants(child, childPath, 1, ownItems);

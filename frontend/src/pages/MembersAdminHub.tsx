@@ -46,19 +46,21 @@ export const MembersAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canCreate = checkPermission('members.create');
   const tabs = ALL_TABS.filter((tab) => !tab.permission || canCreate);
-  const tabParam = searchParams.get('tab') as AdminTab | null;
-  const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && ALL_TABS.some((t) => t.id === tabParam) ? tabParam : 'manage'
-  );
+  // Validated against the tabs this member can actually open, not the full
+  // list. A bookmarked ?tab=add for someone without members.create would
+  // otherwise select a tab that is neither in the bar nor allowed to render
+  // its body, leaving the hub showing a header and nothing under it.
+  const isOpenable = (tab: string | null): tab is AdminTab => tabs.some((t) => t.id === tab);
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<AdminTab>(isOpenable(tabParam) ? tabParam : 'manage');
   // Bumped when the settings tab saves, so the metrics row above it reflects
   // the new selection without a page reload.
   const [frameToken, setFrameToken] = useState(0);
 
   useEffect(() => {
-    if (tabParam && ALL_TABS.some((t) => t.id === tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+    setActiveTab(isOpenable(tabParam) ? tabParam : 'manage');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam, canCreate]);
 
   const handleTabChange = useCallback(
     (tab: AdminTab) => {
@@ -104,8 +106,8 @@ export const MembersAdminHub: React.FC = () => {
       {/* Tab Content - each child handles its own layout */}
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'manage' && <MembersAdminPage />}
-        {activeTab === 'add' && canCreate && <AddMember />}
-        {activeTab === 'import' && canCreate && <ImportMembers />}
+        {activeTab === 'add' && <AddMember />}
+        {activeTab === 'import' && <ImportMembers />}
         {activeTab === 'settings' && (
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             <AdminMetricsSettings

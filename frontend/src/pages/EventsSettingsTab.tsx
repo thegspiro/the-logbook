@@ -62,7 +62,12 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-const EventsSettingsTab: React.FC = () => {
+interface EventsSettingsTabProps {
+  /** Called after the headline metrics save, so the frame above can refetch. */
+  onMetricsSaved?: (() => void) | undefined;
+}
+
+const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved }) => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
@@ -572,7 +577,14 @@ const EventsSettingsTab: React.FC = () => {
           />
         );
       case 'metrics':
-        return <AdminMetricsSettings moduleKey="events" moduleLabel="Events" permission="events.manage" />;
+        return (
+          <AdminMetricsSettings
+            moduleKey="events"
+            moduleLabel="Events"
+            permission="events.manage"
+            onSaved={onMetricsSaved}
+          />
+        );
       case 'form':
         return (
           <FormSection
