@@ -160,16 +160,16 @@ touching any of it.
 
 | Declared as                                     | Version | Used by                                          |
 | ----------------------------------------------- | ------- | ------------------------------------------------ |
-| `typescript`                                    | 7.0.2   | *(nothing intentionally — see below)*            |
+| `typescript`                                    | 7.0.2   | _(nothing intentionally — see below)_            |
 | `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
 
 **What actually resolves in `package-lock.json`:**
 
-| Lock path                          | Version | Why it is there                                   |
-| ---------------------------------- | ------- | ------------------------------------------------- |
+| Lock path                          | Version | Why it is there                                                     |
+| ---------------------------------- | ------- | ------------------------------------------------------------------- |
 | `node_modules/typescript`          | 5.9.3   | `"peer": true` — npm auto-installed it to satisfy typescript-eslint |
-| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                     |
-| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested            |
+| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                                       |
+| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested                              |
 
 **typescript-eslint still cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
@@ -1041,6 +1041,52 @@ events bulk-action bar. `pb-safe` and `action-bar-safe` already fold the
 allowance in; a hand-written `bottom-*` does not. Dialogs get out of this by
 registering with `useOverlaySurface` (which `useDialog` does for you), which
 hides the bar outright.
+
+### 22. Never Hold One `patch()` Open in Two Coroutines at Once _(2026-08-23)_
+
+`unittest.mock.patch` saves whatever it finds as "the original" when it enters.
+Two patches of the **same** target open at the same time therefore record each
+other, and the second exit reinstalls the first one's mock permanently:
+
+```
+A enters -> saves the real function, installs mock A
+B enters -> saves *mock A*, installs mock B
+A exits  -> restores the real function
+B exits  -> restores *mock A*      <- the module keeps a mock for the session
+```
+
+This is not a hypothetical ordering. `TestConcurrentShiftTemplateSubmission`
+drove two `submit_check` calls through `asyncio.gather`, and each coroutine
+entered the same `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+The `AsyncMock` it stranded returned a `SimpleNamespace` with no `full`
+attribute, so every later test reaching `if ref.full is not None` raised — and
+with `pytest-randomly` reshuffling module order each run, the victims changed
+run to run. The same commit passed and failed on alternate CI runs for a day,
+always failing in a file unrelated to the one at fault.
+
+```python
+# WRONG — both coroutines patch the same module attribute
+async def run(service):
+    with patch("app.services.equipment_check_service.resolve_apparatus_ref", AsyncMock(...)):
+        return await service.submit_check(...)
+
+await asyncio.gather(run(a), run(b))
+
+# CORRECT — patch once, outside the concurrent section
+with patch("app.services.equipment_check_service.resolve_apparatus_ref", AsyncMock(...)):
+    await asyncio.gather(run(a), run(b))
+```
+
+`patch.object(instance, ...)` against a per-coroutine object is fine — each
+targets a different object, and an instance built inside a test cannot outlive
+it. Only shared targets (modules, classes) collide.
+
+**Rule:** never enter the same `patch()` from concurrently running coroutines.
+Hoist it above the `gather`, or patch each instance separately.
+`tests/conftest.py` enforces this: an autouse guard records every module- and
+class-level patch target and fails the test that leaves a mock behind, naming
+the attribute and restoring the original. If you see that failure, the fix is
+this rule, not a re-run.
 
 ## Environment Variables
 

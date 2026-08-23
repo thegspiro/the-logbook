@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
+
+**Fixed**
+
+- **One escaped mock made the backend suite look flaky for a day.**
+  `TestConcurrentShiftTemplateSubmission` ran two `submit_check` coroutines
+  through `asyncio.gather`, and each entered the same
+  `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+  `unittest.mock.patch` records whatever it finds as "the original", so the
+  second enter saved the first one's mock and its exit reinstalled it — leaving
+  an `AsyncMock` on the module for the rest of the session. Every later test
+  reaching `if ref.full is not None` died on it, and because `pytest-randomly`
+  reshuffles module order per run, _which_ tests those were changed run to run.
+  The same commit passed and failed on alternate CI runs, and the failure always
+  surfaced in a file unrelated to the one that caused it.
+- An autouse guard now records every module- and class-level target a patch
+  touches and checks after each test that it still holds a real value. A leak
+  fails the test that caused it, names the attribute, explains the concurrency
+  trap, and restores the original so the rest of the run stays meaningful.
+  Instance targets are ignored: they cannot outlive their test.
+
 ### CI: a green PR took 28 minutes to do 39 minutes of work, almost all of it queueing (2026-08-23)
 
 **Changed**
