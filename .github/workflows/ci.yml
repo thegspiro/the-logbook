@@ -15,9 +15,18 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Superseded PR pushes are cancelled, but a run for main is always allowed
-  # to finish: two merges in quick succession would otherwise cancel the
-  # first, leaving no record of whether that commit was ever green.
+  # Superseded PR pushes are cancelled; a main run that has started is never
+  # cancelled, so two merges in quick succession both keep their record of
+  # whether that commit was green.
+  #
+  # Precisely: GitHub keeps at most one running and one *pending* run per
+  # group, so with three or more main runs overlapping, the middle one can
+  # still be evicted from the pending slot before it starts. secret-scan and
+  # supply-chain key main runs on the SHA to close that gap, because an audit
+  # record has to exist for every commit. It is left open here on purpose —
+  # per-commit groups would run the full 12-job matrix concurrently for every
+  # commit of a merge train, and on this repository CI throughput is the
+  # constraint being managed, not the audit trail.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
@@ -150,10 +159,11 @@ jobs:
       # before 2026-08-18, each in the direction that made an unchecked route
       # look fine. Stdlib unittest, with the single exception below.
       #
-      # test_ci_gate_completeness.py additionally guards the `ci-success` gate
-      # against silently dropping a job — the failure mode that gate's own
-      # comment warns about. It parses ci.yml as YAML rather than pattern-
-      # matching it, which is the one dependency this suite needs.
+      # test_check_ci_gate.py covers the logic of scripts/check_ci_gate.py,
+      # which guards the `ci-success` gate against silently dropping a job.
+      # The checker itself runs as a step of `ci-success` (it has to — see the
+      # comment on that job); this is the regression suite for its logic, and
+      # it imports the checker, which is the one dependency this suite needs.
       - name: Install script-test dependency
         if: "!cancelled()"
         run: pip install 'PyYAML==6.0.2'
@@ -493,31 +503,36 @@ jobs:
     # `needs: [backend-lint, backend-test]` for the same fail-fast reason and
     # paid the same re-queue penalty.
     strategy:
-      # Contract coverage is deliberately MySQL-only, and the matrix is kept
-      # (rather than inlined) so a second engine is one entry away again.
+      # Both engines, and the MariaDB leg is NOT redundant with the integration
+      # matrix — it was briefly dropped on 2026-08-23 on the argument that
+      # response shapes come from Pydantic serializers and cannot vary by
+      # engine. That argument is true about the *assertions* and beside the
+      # point about the *execution*.
       #
-      # This suite asserts that responses match what the OpenAPI schema
-      # declares. Those shapes come from Pydantic serializers and are
-      # engine-agnostic — the database cannot change them — so the MariaDB leg
-      # re-ran an identical assertion set for 3m4s and a queue slot per PR.
+      # `case.call_and_validate()` issues a real request and the test then
+      # asserts `status_code < 500`, so this suite is also broad smoke coverage
+      # of the SQL behind every `/api/public/` route — exactly the
+      # engine-specific class of bug MariaDB is in CI to catch (the DATETIME
+      # "+00:00" literal that MariaDB rejects with error 1292 was one).
       #
-      # It was originally justified as also covering "startup, the migration
-      # chain, and schema repair on each engine". Backend Integration Tests
-      # (MariaDB 10.11) already covers all three: it runs the same
-      # backend-db-setup composite (alembic upgrade head + repair_schema.py)
-      # and then exercises real endpoints against MariaDB through the ASGI app
-      # (tests/test_prospect_self_access.py and
-      # tests/test_equipment_check_endpoint_permissions.py among others).
-      # Engine-specific SQL is what MariaDB is in CI to catch, and the
-      # integration matrix is where that lives.
+      # Nothing else covers those paths on MariaDB. The integration matrix runs
+      # `-m "integration and not docker and not slow"` and this module is marked
+      # `slow`, so it is excluded there by construction; the only other test
+      # touching `get_form_by_slug` (tests/test_forms_service.py) carries no
+      # `integration` marker and therefore runs in the unit job, which has no
+      # database at all. Dropping this leg left `/api/public/v1/forms/{slug}`
+      # executing SQL that no MariaDB job ever ran.
       #
-      # If a *response shape* ever becomes engine-dependent, that is a bug
-      # worth a targeted integration test, not a duplicated contract matrix.
+      # It is also close to free now that the job graph is flat: it starts in
+      # the first wave and finishes in ~3m, well inside the ~4m40s the
+      # integration legs take, so it is not on the critical path.
       fail-fast: false
       matrix:
         db:
           - name: MySQL 8.0
             image: mysql:8.0
+          - name: MariaDB 10.11
+            image: mariadb:10.11
     services:
       mysql:
         image: ${{ matrix.db.image }}
@@ -864,10 +879,17 @@ jobs:
   # route here — but the handling stays. It costs nothing, and it is what
   # catches a job that skips itself for any other reason.
   #
-  # `scripts/test_ci_gate_completeness.py` (run by Backend Lint) asserts that
-  # the `needs:` list below names every other job in this file. A job added
-  # here but not there would run, report its own status, and be required by
-  # nothing — invisible in review, since neither half looks wrong on its own.
+  # `scripts/check_ci_gate.py` asserts that the `needs:` list below names every
+  # other job in this file, and that this job is still unconditional. A job
+  # added here but not there would run, report its own status, and be required
+  # by nothing — invisible in review, since neither half looks wrong on its own.
+  #
+  # It runs as a step of THIS job, deliberately. Anywhere else it can be
+  # detached from the gate it validates: drop `backend-lint` from the `needs:`
+  # list and a checker living in `backend-lint` goes red while this job, no
+  # longer waiting on it, goes green on its remaining dependencies — the exact
+  # omission it exists to block, merging with the checker red. Run from here,
+  # the gate cannot be green unless the check passed.
   #
   # Consequence worth knowing before adding `paths`/`paths-ignore` filters to
   # any job above: a filtered-out job reports `skipped` and would fail this
@@ -893,6 +915,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
       - name: Verify every job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
@@ -925,3 +953,14 @@ jobs:
               print(f"  - {job}: {result}{hint}")
           sys.exit(1)
           PYEOF
+
+      # `!cancelled()` so an incomplete gate is reported even when the run is
+      # already failing for another reason — the two problems are independent
+      # and a reviewer needs to see both.
+      - name: Install gate-check dependency
+        if: "!cancelled()"
+        run: pip install 'PyYAML==6.0.2'
+
+      - name: Verify this gate requires every job
+        if: "!cancelled()"
+        run: python3 scripts/check_ci_gate.py
