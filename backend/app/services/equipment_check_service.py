@@ -3090,6 +3090,24 @@ class EquipmentCheckService:
         if item is None:
             return None
 
+        # Lock this position's rows aboard before the shelf lot, and always in
+        # that order. Both this swap's increment of the incoming row and the
+        # decrement that retires a replaced one are read-modify-writes on
+        # check_item_deployed_lots, which the shelf lock below does not cover:
+        # two crews replacing from a four-unit row would both read four and
+        # both write three, so one unit is retired while two ready-stock draws
+        # and two deployments commit. Taking the position first also keeps the
+        # lock order the same for every caller, so two swaps drawing on each
+        # other's lots cannot deadlock.
+        await self.db.execute(
+            select(CheckItemDeployedLot.id)
+            .where(
+                CheckItemDeployedLot.template_item_id == item.id,
+                CheckItemDeployedLot.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+
         # Lock the lot row for the read-check-decrement so two concurrent
         # swaps of the same unit can't both pass the stock guard and
         # over-consume (matches the with_for_update pattern used across the
@@ -3215,13 +3233,21 @@ class EquipmentCheckService:
             # row carrying the position's own date. Retiring what is expired is
             # the only reading available, and the crew asked for a replacement
             # by reporting a disposition at all.
-            expired = [
-                deployed
-                for deployed in list(item.deployed_lots or [])
-                if deployed.id != incoming.id
-                and deployed.expiration_date
-                and deployed.expiration_date < today
-            ]
+            # Sorted, not left in relationship order: the database returns
+            # these rows in no defined order, so a one-unit replacement could
+            # retire a box expiring next year and leave last month's aboard —
+            # the reverse of the first-expiring-first-out rule the rest of this
+            # service reads the position by.
+            expired = sorted(
+                (
+                    deployed
+                    for deployed in list(item.deployed_lots or [])
+                    if deployed.id != incoming.id
+                    and deployed.expiration_date
+                    and deployed.expiration_date < today
+                ),
+                key=lambda deployed: deployed.expiration_date,
+            )
             if not expired:
                 raise ValueError("This position carries no expired stock to replace")
             replaced_lot_number = expired[0].lot_number

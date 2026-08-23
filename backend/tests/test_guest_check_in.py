@@ -448,7 +448,7 @@ class TestGuestProspectCreation:
         prospect = _make_prospect()
         mock_db = _mock_db()
 
-        await GuestCheckInService(mock_db).link_prospect_to_event(prospect, event)
+        await GuestCheckInService(mock_db).link_prospect_to_event(prospect.id, event)
 
         links = [
             obj
@@ -459,12 +459,46 @@ class TestGuestProspectCreation:
         assert links[0].prospect_id == prospect.id
         assert links[0].event_id == str(event.id)
 
+    # The note is kept in the prospect's event history. Left to the kiosk
+    # default, a coordinator reading it would be told a guest scanned the room
+    # code when a staff member in fact entered them by hand.
+    async def test_the_caller_decides_how_the_attendance_is_described(self):
+        event = _make_event()
+        prospect = _make_prospect()
+        mock_db = _mock_db()
+
+        await GuestCheckInService(mock_db).link_prospect_to_event(
+            prospect.id, event, note="Checked in at Open House by staff"
+        )
+
+        link = next(
+            obj
+            for obj in mock_db.added
+            if obj.__class__.__name__ == "ProspectEventLink"
+        )
+        assert link.notes == "Checked in at Open House by staff"
+        assert "QR" not in link.notes
+
+    async def test_the_kiosk_wording_remains_the_default(self):
+        event = _make_event()
+        prospect = _make_prospect()
+        mock_db = _mock_db()
+
+        await GuestCheckInService(mock_db).link_prospect_to_event(prospect.id, event)
+
+        link = next(
+            obj
+            for obj in mock_db.added
+            if obj.__class__.__name__ == "ProspectEventLink"
+        )
+        assert "via room QR code" in link.notes
+
     async def test_the_shared_linker_still_refuses_to_double_insert(self):
         event = _make_event()
         prospect = _make_prospect()
         mock_db = _mock_db(existing_link=MagicMock())
 
-        await GuestCheckInService(mock_db).link_prospect_to_event(prospect, event)
+        await GuestCheckInService(mock_db).link_prospect_to_event(prospect.id, event)
 
         assert [
             obj
