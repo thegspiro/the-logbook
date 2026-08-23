@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### NFC ID cards: tap a member's card to check them in (2026-08-23)
+
+**Added**
+
+- **NFC tags can now be bound to members, not just to places.** Until now a tag
+  was a _destination_ — a sticker on a bay door carrying a URL, which sent the
+  member's own phone to a check-in page. A card is the inverse: the tag inside
+  a member's ID card identifies the person holding it, and a station reads it
+  to check them in. Both now exist side by side; neither replaces the other.
+- **An officer issues the card and hands it over.** From the new **ID Cards**
+  section of a member's profile, either write a freshly minted code to a blank
+  NFC tag (a sticker inside an ID card, a fob) or record the chip serial of a
+  card that is already printed and cannot be written to. The written-code route
+  is the one to prefer: the code is 128 random bits from the platform CSPRNG,
+  it is not printed on the card, and a tag can be wiped and reissued to
+  somebody else.
+- **A check-in station at `/members/check-in-station`.** Pick a shift, an event
+  or meeting, or an admin hours category, arm the reader, and members tap and
+  walk in — nobody touches the screen between taps. One tap serves arrival and
+  departure by default; a station covering only one direction can be fixed to
+  it.
+- **Two readers, because departments have both.** Web NFC (Chrome on Android,
+  over HTTPS) reads the card on a tablet at the door. A USB reader — the desk
+  kind that types the serial like a keyboard — works everywhere else, including
+  the iPhones and desktops Web NFC has never shipped on. Keystrokes are
+  captured page-wide rather than into a focused box: a kiosk loses focus to the
+  first stray tap on the screen, and a station that silently stops reading is
+  worse than one that was never armed.
+- Two new permissions, both deliberately narrow. `members.manage_id_cards`
+  issues and revokes cards: handing out a credential is a different act from
+  editing a profile, and the officer who does one is rarely the one who does
+  the other. `members.check_in` operates a station: recording attendance for
+  other members confers no ability to edit the shift or event it writes to.
+  Positions and ranks that already carry `members.manage` receive both.
+- Everything lives in the **membership module** (`modules/membership/`) — the
+  panel, the station page, the service, the types and the card helpers —
+  alongside the member records the cards belong to.
+
+**Security**
+
+- **There is no self-service path, by design.** A member cannot register,
+  relabel or revoke a card, not even their own, and no route here is addressed
+  to the calling member. The surface that lets somebody see their own card is
+  the surface a later change turns into one that lets them register one; a
+  credential that records attendance is issued by somebody accountable for
+  handing it over.
+- **A card credential is stored hashed, never in clear text.** The serial (or
+  the written code) is the whole of the credential — anything holding one can
+  clone it onto a writable tag — so a plaintext column would make a database
+  dump a stack of working ID cards. Lookups go by SHA-256 of the normalized
+  value, peppered with the installation's `ENCRYPTION_SALT` so the hashes are
+  not portable between deployments and the small, structured space of card UIDs
+  cannot simply be enumerated. Only the last four characters are kept, for
+  telling two of a member's cards apart on screen.
+- The unique constraint is per organization, not global: two departments on one
+  platform are separate tenants, and a card issued in one must not be
+  discoverable by registering it in the other.
+- A duplicate-registration refusal does not name the member currently holding
+  the card — otherwise card issuing would turn a pile of found cards into a
+  staff directory.
+- `/nfc-tags` is excluded from the client API cache alongside the other
+  PII-bearing endpoints.
+- Card issue, status change, deletion and every recorded tap are written to the
+  audit log.
+
+**Configuration**
+
+- **The whole feature is an integration a department turns on.** A new **NFC ID
+  Cards** entry under Settings → Integrations; while it is off, no card can be
+  issued and no card can be read. The check is enforced on the server, on every
+  `/nfc-tags` route — hiding a screen leaves its endpoints reachable, and these
+  endpoints issue and consume credentials. It fails closed: an organization
+  whose catalog row has never been seeded has not turned anything on, and both
+  halves (`enabled` **and** `status == "connected"`) have to agree, so
+  disconnecting really does stop the cards working.
+- With it off, the profile section, the station page and both navigation
+  entries are absent rather than empty — an empty "ID Cards" panel reads as
+  "none issued", which is a different statement from "this department does not
+  use cards".
+
+**Notes**
+
+- A tap that lands within a minute of the check-in it would otherwise close is
+  read as a bounce and reports the current state instead: a card held against
+  the reader a beat too long fires twice, and inverting on the second read
+  would file a zero-minute shift.
+- A station forwards both the written code and the chip serial, and the server
+  tries the code first. A blank tag can be wiped and reissued, so the serial
+  underneath may still be registered to whoever held it before.
+- The station reports a training-pipeline phase warning rather than overriding
+  it. A member can read and override that warning on their own screen; a
+  station has nobody to ask, and answering for the officer who set the gate is
+  the wrong default.
+- Reporting a card lost is terminal — whoever picked it up can still tap it —
+  so it is never reactivated and a replacement is a fresh registration.
+  Suspension is the reversible state.
+- Retired and on-leave members can still tap in. They attend meetings and
+  banquets, which is exactly what a station records. Suspended, dropped,
+  archived and deleted members cannot.
+
 ### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
 
 **Fixed**

@@ -113,13 +113,18 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ### Members Admin Pages
 
-| URL                              | Page                 | Permission       |
-| -------------------------------- | -------------------- | ---------------- |
-| `/members/admin/edit/:userId`    | Admin Member Edit    | `members.manage` |
-| `/members/admin/history/:userId` | Member Audit History | `members.manage` |
-| `/members/admin/waivers`         | Waiver Management    | `members.manage` |
+| URL                              | Page                 | Permission         |
+| -------------------------------- | -------------------- | ------------------ |
+| `/members/admin/edit/:userId`    | Admin Member Edit    | `members.manage`   |
+| `/members/admin/history/:userId` | Member Audit History | `members.manage`   |
+| `/members/admin/waivers`         | Waiver Management    | `members.manage`   |
+| `/members/check-in-station`      | Check-In Station     | `members.check_in` |
 
 > **Admin Edit** provides full member editing (all fields, rank/station dropdowns, status, roles). **Audit History** shows timestamped change log. **Waiver Management** is a unified page covering training, meeting, and shift waivers with Active/Create/History tabs.
+
+> _(2026-08-23)_ **Check-In Station** turns a phone, tablet or front-desk PC into an attendance reader: pick a shift, an event or meeting, or an admin hours category, arm the reader, and members tap the NFC tag inside their ID card to be checked in. Reads either through Web NFC (Chrome on Android, over HTTPS) or a USB reader that types the serial like a keyboard, so a department is not obliged to buy either. `members.check_in` is deliberately narrower than `events.manage` / `scheduling.manage`: running the station records attendance for other members but confers no ability to edit the shift or event it writes to.
+
+> **ID cards are issued by officers only.** The **ID Cards** section on a member's profile (`members.manage_id_cards`) is where a card is bound — either by writing a generated code to a blank NFC tag, or by recording the serial of an already-printed card — and where it is suspended, reported lost or removed. There is no self-service view and no member-facing route: a card records attendance on the member's behalf, so it is issued the way a key is. The whole feature is gated by the **NFC ID Cards** integration (Settings → Integrations); while it is off, the page, the profile section and the navigation entries are all absent and every `/nfc-tags` endpoint refuses.
 
 **Legacy redirects:**
 

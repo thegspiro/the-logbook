@@ -47,6 +47,7 @@ from app.api.v1.endpoints import (
     message_history,
     messages,
     minutes,
+    nfc_tags,
     notifications,
     officers,
     operational_ranks,
@@ -82,6 +83,7 @@ api_router.include_router(event_requests.router, tags=["event-requests"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(nfc_tags.router, prefix="/nfc-tags", tags=["nfc-tags"])
 api_router.include_router(
     organizations.router, prefix="/organization", tags=["organization"]
 )
