@@ -65,6 +65,7 @@ import RanksSettingsSection from '../components/settings/RanksSettingsSection';
 import EvocLevelsSettingsSection from '../components/settings/EvocLevelsSettingsSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
+import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 
 // ── Section definitions ──
@@ -306,33 +307,6 @@ const COMMON_TIMEZONES = [
   'America/Detroit',
   'America/Kentucky/Louisville',
 ];
-
-// ── Toggle component ──
-
-const Toggle: React.FC<{
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-  label?: string;
-  color?: 'red' | 'blue';
-}> = ({ checked, onChange, disabled, label, color = 'blue' }) => {
-  const bg = checked ? (color === 'red' ? 'bg-theme-accent-red' : 'bg-theme-accent-blue') : 'bg-theme-surface-hover';
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      disabled={disabled}
-      className={`${bg} toggle-track-md ${
-        color === 'red' ? 'focus:ring-theme-focus-ring' : 'focus:ring-theme-focus-ring'
-      } disabled:cursor-not-allowed disabled:opacity-50`}
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-    >
-      <span className={`${checked ? 'translate-x-5' : 'translate-x-0'} toggle-knob-md`} />
-    </button>
-  );
-};
 
 // ── Main component ──
 
