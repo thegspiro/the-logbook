@@ -1843,17 +1843,42 @@ async def save_session_organization(
         )
 
 
-_CARRYOVER_SUBPERMISSIONS = frozenset(
-    {
-        "facilities.view_sensitive",
-        "scheduling.swap",
-        # Browsing the store without being able to check out is not a state any
-        # department wants a member in, and the two-checkbox editor cannot
-        # express it. This rode along as an un-submitted module's default until
-        # the Department Store joined the frontend registry.
-        "storefront.order",
-    }
-)
+_CARRYOVER_SUBPERMISSIONS = frozenset({"facilities.view_sensitive", "scheduling.swap"})
+
+# Permissions the editor's View checkbox grants on top of ``module.view``.
+#
+# Carrying a sub-permission over from DEFAULT_POSITIONS only helps a position
+# that was seeded with it. A position built from scratch in the editor has no
+# defaults to carry, so an advertised capability that lives in a separate
+# permission is simply never granted — the member browses the catalogue and
+# takes a 403 at checkout.
+#
+# ``storefront.order`` qualifies on the evidence: all fourteen seeded positions
+# holding ``storefront.view`` hold ``storefront.order`` too, with no exception.
+# The permissions are separate so a department can revoke ordering
+# deliberately, not because view without ordering is a state setup should be
+# able to produce by accident.
+#
+# Only applied when Manage is unticked — Manage already emits the ``module.*``
+# wildcard, which covers every sub-permission without padding the list.
+_VIEW_IMPLIED_PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "storefront": ("storefront.order",),
+}
+
+
+def expand_module_checkboxes(submitted: dict[str, RolePermission]) -> list[str]:
+    """Turn the editor's per-module view/manage checkboxes into permissions."""
+    permission_list: list[str] = []
+    for module_id, perms in submitted.items():
+        if perms.view:
+            permission_list.append(f"{module_id}.view")
+            if not perms.manage:
+                permission_list.extend(_VIEW_IMPLIED_PERMISSIONS.get(module_id, ()))
+        if perms.manage:
+            permission_list.append(f"{module_id}.manage")
+            # Full access if manage
+            permission_list.append(f"{module_id}.*")
+    return permission_list
 
 
 def _merge_default_permissions(
@@ -1983,16 +2008,7 @@ async def save_session_roles(
     updated_roles = []
 
     for role_data in data.roles:
-        # Convert permissions dict to list format
-        permission_list = []
-        for module_id, perms in role_data.permissions.items():
-            if perms.view:
-                permission_list.append(f"{module_id}.view")
-            if perms.manage:
-                permission_list.append(f"{module_id}.manage")
-                permission_list.append(
-                    f"{module_id}.*"
-                )  # Also grant full access if manage
+        permission_list = expand_module_checkboxes(role_data.permissions)
 
         # Check if this is an existing system role
         if role_data.id in existing_system_roles:

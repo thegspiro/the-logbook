@@ -284,6 +284,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Store,
     priority: 'optional',
     category: 'Operations',
+    configRoute: '/onboarding/modules/storefront/config',
     permissions: {
       viewDescription: 'Browse the store and track your own orders',
       manageDescription: 'Manage the catalog, order windows, orders, and payments',
