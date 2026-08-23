@@ -132,11 +132,18 @@ Configure how membership IDs are assigned:
 
 ### Label Printers
 
-Registers the department's network barcode label printers (Zebra and other
-ZPL-compatible models). Once one is registered, every label print page in the
-app — inventory, apparatus, facilities, members, applicants — gains a **Send to
-Printer** button that prints without going through a print dialog, so nothing
-can rescale a barcode and stop it scanning.
+Registers the department's network barcode label printers. Once one is
+registered, every label print page in the app — inventory, apparatus,
+facilities, members, applicants — gains a **Send to Printer** button that prints
+without going through a print dialog, so nothing can rescale a barcode and stop
+it scanning.
+
+Two printer languages are supported. **ZPL** covers Zebra — and, worth knowing,
+the many non-Zebra printers with a ZPL emulation mode (TSC, Godex, Honeywell,
+Citizen, SATO), which work here with no further change once emulation is turned
+on at the printer. **ESC/POS** covers receipt-class printers such as the Epson
+TM and Star units already sitting at watch desks; loaded with linerless label
+roll, one of those prints asset tags perfectly well.
 
 Each printer records its network address, resolution, and the label stock
 loaded in it. **Test connection** checks an address before it is saved — the

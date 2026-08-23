@@ -48,6 +48,11 @@ class LabelPrinter(Base):
     name = Column(String(100), nullable=False)
     location = Column(String(200), nullable=True)
 
+    # Which command language this printer speaks. Not cosmetic: the renderer,
+    # the stock sizes on offer, and the status query all branch on it, and
+    # sending one language's bytes to the other prints pages of garbage.
+    language = Column(String(20), nullable=False, default="zpl")
+
     # Hostname or IP. The port is constrained to the raw-print range by
     # app.utils.printer_transport, not by the column.
     host = Column(String(255), nullable=False)
@@ -55,7 +60,8 @@ class LabelPrinter(Base):
 
     # 203 or 300 on desktop units, 600 on some industrial models. Wrong dpi
     # prints a label at the wrong physical size, so it is configured per
-    # printer rather than guessed.
+    # printer rather than guessed. ESC/POS printers in this class are all
+    # 203 dpi and size their output from the paper width instead.
     dpi = Column(Integer, nullable=False, default=203)
 
     # The stock actually loaded in this printer, used as the default when

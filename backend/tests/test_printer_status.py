@@ -10,9 +10,11 @@ that is not a printer at all.
 """
 
 from app.utils.printer_status import (
+    is_escpos_status_byte,
     parse_error_status,
     parse_host_identification,
     summarize,
+    summarize_escpos,
 )
 
 IDENTITY = "\x02ZTC ZD420-203dpi ZPL,V93.20.15Z,8,4194304\x03\r\n"
@@ -134,3 +136,71 @@ class TestSummarize:
         result = summarize("\x02SECRET-INTERNAL-BANNER dpi\x03")
         assert "SECRET-INTERNAL-BANNER" not in str(result.get("errors"))
         assert "raw" not in result
+
+
+# DLE EOT replies. Bits 1 and 4 are always set, bits 0 and 7 always clear —
+# that fixed pattern is what makes a real status byte recognisable.
+_OK = bytes([0b00010010])
+_PAPER_END = bytes([0b01110010])
+_PAPER_NEAR_END = bytes([0b00011110])
+_COVER_OPEN = bytes([0b00010110])
+
+
+class TestEscposStatusByte:
+    def test_a_valid_status_byte_is_recognised(self):
+        assert is_escpos_status_byte(_OK)
+
+    def test_a_byte_with_the_wrong_fixed_bits_is_rejected(self):
+        # 0xFF is what a device that is not an ESC/POS printer might send;
+        # decoding it would report several faults that do not exist.
+        assert not is_escpos_status_byte(b"\xff")
+
+    def test_an_empty_reply_is_rejected(self):
+        assert not is_escpos_status_byte(b"")
+
+    def test_a_multi_byte_reply_is_rejected(self):
+        assert not is_escpos_status_byte(b"\x12\x12")
+
+
+class TestSummarizeEscpos:
+    def test_a_healthy_printer(self):
+        result = summarize_escpos([_OK, _OK])
+        assert result["errors"] == []
+        assert result["warnings"] == []
+        assert result["identified"] is True
+        assert result["status_available"] is True
+
+    def test_out_of_paper_is_an_error(self):
+        assert summarize_escpos([_OK, _PAPER_END])["errors"] == ["Out of paper"]
+
+    def test_nearly_out_of_paper_is_a_warning(self):
+        result = summarize_escpos([_OK, _PAPER_NEAR_END])
+        assert result["errors"] == []
+        assert result["warnings"] == ["Paper is nearly out"]
+
+    def test_a_cover_open_is_an_error(self):
+        assert summarize_escpos([_COVER_OPEN, _OK])["errors"] == ["Cover is open"]
+
+    def test_a_device_that_never_answers(self):
+        result = summarize_escpos([b"", b""])
+        assert result["responded"] is False
+        assert result["identified"] is False
+        assert result["status_available"] is False
+
+    def test_a_reply_that_is_not_a_status_byte_is_not_decoded(self):
+        # Reported as "did not identify itself", never as a list of faults
+        # invented from bits that mean nothing in this protocol.
+        result = summarize_escpos([b"\xff", b"\xff"])
+        assert result["responded"] is True
+        assert result["identified"] is False
+        assert result["errors"] == []
+
+    def test_no_model_is_claimed(self):
+        # ESC/POS has no equivalent of ZPL's ~HI, so a model name would have
+        # to be invented.
+        assert summarize_escpos([_OK, _OK])["model"] is None
+
+    def test_a_missing_second_reply_does_not_shift_the_first(self):
+        # The paper answer must not be read out of the offline slot.
+        result = summarize_escpos([_PAPER_END])
+        assert result["errors"] != ["Out of paper"]

@@ -12,13 +12,19 @@ label can print directly with no additional per-module code — the two output
 paths differ only in the renderer they hand the specs to.
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.label_printer import LabelPrinter
 from app.services.label_service import MODULE_LABELS, _filter_ids
+from app.utils.escpos_renderer import (
+    DEFAULT_PAPER,
+    ESCPOS_PAPER,
+    is_escpos_paper,
+    render_escpos,
+)
 from app.utils.label_renderer import (
     SYMBOLOGY_CODE128,
     LabelSpec,
@@ -26,10 +32,13 @@ from app.utils.label_renderer import (
     validate_symbology,
 )
 from app.utils.model_updates import apply_updates
-from app.utils.printer_status import summarize
+from app.utils.printer_status import summarize, summarize_escpos
 from app.utils.printer_transport import (
+    ESCPOS_OFFLINE_QUERY,
+    ESCPOS_PAPER_QUERY,
     PrinterUnreachableError,
     query_printer,
+    query_printer_raw,
     send_to_printer,
     validate_printer_port,
 )
@@ -45,6 +54,31 @@ from app.utils.zpl_renderer import (
 # user hits is "that is too many labels", not a truncated roll.
 MAX_LABELS_PER_JOB = 500
 
+# The command languages a registered printer can speak. Each one here has a
+# renderer and a status reader wired below — a language in this tuple with
+# neither would be a setting whose only effect is being stored.
+LANGUAGE_ZPL = "zpl"
+LANGUAGE_ESCPOS = "escpos"
+PRINTER_LANGUAGES = (LANGUAGE_ZPL, LANGUAGE_ESCPOS)
+
+
+def validate_language(language: str) -> str:
+    if language not in PRINTER_LANGUAGES:
+        raise ValueError(
+            f"Unknown printer language: {language}. "
+            f"Supported: {', '.join(PRINTER_LANGUAGES)}"
+        )
+    return language
+
+
+def _printer_language(printer) -> str:
+    """The language a printer speaks, defaulting to ZPL.
+
+    Rows written before the language column existed are ZPL by fact, not by
+    assumption — it was the only language the feature had.
+    """
+    return getattr(printer, "language", None) or LANGUAGE_ZPL
+
 
 def _validate_printer_config(
     host: Optional[str],
@@ -54,6 +88,7 @@ def _validate_printer_config(
     custom_width: Optional[float],
     custom_height: Optional[float],
     darkness: Optional[int],
+    language: str = LANGUAGE_ZPL,
 ) -> None:
     """Validate the fields present in a create/update payload.
 
@@ -73,11 +108,22 @@ def _validate_printer_config(
         )
     if darkness is not None and not MIN_DARKNESS <= darkness <= MAX_DARKNESS:
         raise ValueError(f"darkness must be between {MIN_DARKNESS} and {MAX_DARKNESS}")
+    validate_language(language)
     if label_format is not None:
-        if not is_known_label_format(label_format):
-            raise ValueError(f"Unknown label format: {label_format}")
-        # Rejects sheet layouts (Avery) and missing custom dimensions.
-        resolve_label_size(label_format, custom_width, custom_height)
+        if language == LANGUAGE_ESCPOS:
+            # Receipt stock is sold by paper width and feeds continuously, so
+            # a die-cut label size means nothing here and would be silently
+            # ignored at print time.
+            if not is_escpos_paper(label_format):
+                raise ValueError(
+                    f"{label_format!r} is not a receipt paper size. "
+                    f"Supported: {', '.join(ESCPOS_PAPER)}"
+                )
+        else:
+            if not is_known_label_format(label_format):
+                raise ValueError(f"Unknown label format: {label_format}")
+            # Rejects sheet layouts (Avery) and missing custom dimensions.
+            resolve_label_size(label_format, custom_width, custom_height)
 
 
 class LabelPrinterService:
@@ -146,6 +192,7 @@ class LabelPrinterService:
             custom_width=data.get("custom_width"),
             custom_height=data.get("custom_height"),
             darkness=data.get("darkness"),
+            language=data.get("language") or LANGUAGE_ZPL,
         )
 
         existing = await self.db.scalar(
@@ -157,6 +204,8 @@ class LabelPrinterService:
         if existing is not None:
             raise ValueError(f"A printer named {name!r} already exists")
 
+        language = data.get("language") or LANGUAGE_ZPL
+        default_format = DEFAULT_PAPER if language == LANGUAGE_ESCPOS else "zebra_2x1"
         printer = LabelPrinter(
             organization_id=str(organization_id),
             name=name,
@@ -164,7 +213,8 @@ class LabelPrinterService:
             host=str(data["host"]).strip(),
             port=data.get("port") or 9100,
             dpi=data.get("dpi") or 203,
-            label_format=data.get("label_format") or "zebra_2x1",
+            language=language,
+            label_format=data.get("label_format") or default_format,
             custom_width=data.get("custom_width"),
             custom_height=data.get("custom_height"),
             darkness=data.get("darkness"),
@@ -215,6 +265,7 @@ class LabelPrinterService:
             "custom_width": updates.get("custom_width", printer.custom_width),
             "custom_height": updates.get("custom_height", printer.custom_height),
             "darkness": updates.get("darkness", printer.darkness),
+            "language": updates.get("language", _printer_language(printer)),
         }
         _validate_printer_config(**merged)
 
@@ -271,7 +322,17 @@ class LabelPrinterService:
 
         A caller that overrides the format supplies its own custom dimensions;
         inheriting the printer's would silently print at the wrong size.
+
+        A die-cut label size means nothing to a receipt printer: its stock is
+        whatever roll is loaded, and there is no label length to lay out
+        against. The print page offers one size control for both kinds of
+        printer, so a ZPL size arriving for an ESC/POS printer is not a
+        mistake to reject — it simply does not apply, and the roll wins.
         """
+        if _printer_language(printer) == LANGUAGE_ESCPOS:
+            if label_format and is_escpos_paper(label_format):
+                return label_format, None, None
+            return printer.label_format, None, None
         if label_format:
             return label_format, custom_width, custom_height
         return printer.label_format, printer.custom_width, printer.custom_height
@@ -336,7 +397,19 @@ class LabelPrinterService:
         custom_height: Optional[float],
         copies: int = 1,
         symbology: str = SYMBOLOGY_CODE128,
-    ) -> str:
+    ) -> Union[str, bytes]:
+        """Render specs in the language this printer speaks.
+
+        Returns text for ZPL and bytes for ESC/POS; the transport takes either,
+        because encoding ESC/POS as text would corrupt every byte above 0x7F.
+        """
+        if _printer_language(printer) == LANGUAGE_ESCPOS:
+            return render_escpos(
+                specs,
+                label_format=label_format,
+                symbology=symbology,
+                copies=copies,
+            )
         return render_zpl(
             specs,
             label_format=label_format,
@@ -356,7 +429,7 @@ class LabelPrinterService:
         to "we do not know" rather than raising.
         """
         try:
-            reply = await query_printer(printer.host, printer.port)
+            status = await self._query_status(printer)
         except (ValueError, PrinterUnreachableError):
             return {
                 "printer_errors": [],
@@ -364,25 +437,50 @@ class LabelPrinterService:
                 "status_known": False,
             }
 
-        status = summarize(reply)
         return {
             "printer_errors": status["errors"],
             "printer_warnings": status["warnings"],
             "status_known": bool(status["status_available"]),
         }
 
+    async def _query_status(self, printer) -> Dict[str, Any]:
+        """Ask a printer for its status in the language it speaks."""
+        return await self.query_target(
+            printer.host, printer.port, _printer_language(printer)
+        )
+
+    async def query_target(
+        self, host: str, port: int, language: str = LANGUAGE_ZPL
+    ) -> Dict[str, Any]:
+        """Status for a host, in the given language.
+
+        ZPL answers a text query with its model and fault bitmasks; ESC/POS
+        answers two single-byte real-time queries and carries no model name.
+        Asking in the wrong language returns nothing useful, which is why the
+        language is configured per printer rather than sniffed.
+        """
+        validate_language(language)
+        if language == LANGUAGE_ESCPOS:
+            replies = await query_printer_raw(
+                host, port, [ESCPOS_OFFLINE_QUERY, ESCPOS_PAPER_QUERY]
+            )
+            return summarize_escpos(replies)
+        return summarize(await query_printer(host, port))
+
     async def get_status(self, printer_id: str, organization_id) -> Dict[str, Any]:
         """Identity and fault status for a saved printer."""
         printer = await self.get_printer(printer_id, organization_id)
-        reply = await query_printer(printer.host, printer.port)
         return {
             "printer_id": printer.id,
             "printer_name": printer.name,
             "configured_dpi": printer.dpi,
-            **summarize(reply),
+            "language": _printer_language(printer),
+            **await self._query_status(printer),
         }
 
-    async def probe_target(self, host: str, port: int) -> Dict[str, Any]:
+    async def probe_target(
+        self, host: str, port: int, language: str = LANGUAGE_ZPL
+    ) -> Dict[str, Any]:
         """Identity and fault status for a host that is not saved yet.
 
         Lets somebody confirm an address before committing it, instead of
@@ -390,8 +488,7 @@ class LabelPrinterService:
         address and port guards as every other path — this widens no target.
         """
         validate_printer_port(port)
-        reply = await query_printer(host, port)
-        return summarize(reply)
+        return await self.query_target(host, port, language)
 
     async def print_test_label(
         self,

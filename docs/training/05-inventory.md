@@ -729,8 +729,22 @@ the label still _looks_ right, and the scanner refuses it. Direct printing
 removes that step. The server sends the label to the printer in the printer's
 own language (ZPL), with the dimensions already fixed in printer dots.
 
-**Requires:** a Zebra or other ZPL-compatible label printer that accepts raw
-printing on port 9100, reachable from the server on the department network.
+**Requires:** a label printer that accepts raw printing on port 9100, reachable
+from the server on the department network. Two printer languages are supported:
+
+- **ZPL** — Zebra's language, and the one to pick for a Zebra. It is worth
+  knowing that **many non-Zebra printers speak it too**: TSC, Godex, Honeywell
+  (PC42/PC43), Citizen and SATO all ship a ZPL emulation mode. If your printer
+  has one, turn it on in the printer's own settings and register it here as
+  ZPL — no other change is needed, and you get the same exact-size output a
+  Zebra does.
+- **ESC/POS** — the language receipt printers speak: Epson TM series, Star, and
+  the generic 58mm/80mm units many stations already have at the watch desk.
+  Several models take **linerless label roll**, which turns one of those into a
+  perfectly good asset-tag printer.
+
+Pick the language when registering the printer; everything after that works the
+same way.
 
 **Setting one up** — _Organization Settings → Label Printers_, which needs the
 `settings.manage` permission:
@@ -742,8 +756,11 @@ printing on port 9100, reachable from the server on the department network.
    unless the printer's own network settings say otherwise.
 3. Set the **resolution** to match the printer — 203 dpi on most desktop units,
    300 dpi on high-resolution models. This one matters: the wrong value prints
-   the label at the wrong physical size.
-4. Set **Label stock loaded** to the labels actually in the printer.
+   the label at the wrong physical size. (Receipt printers do not ask: they
+   size their output from the paper width instead.)
+4. Set **Label stock loaded** to the labels actually in the printer. For a
+   receipt printer this is **Paper width** instead — 58mm or 80mm — because
+   receipt stock feeds continuously and has no label length.
 5. Optionally set a **darkness adjustment** (−30 to 30). Leave it blank to keep
    whatever the printer is already tuned to; raise it if bars print faint.
 6. Before saving, click **Test connection**. The printer is asked to identify
@@ -773,7 +790,9 @@ unavailable, rather than claiming to be healthy.
 
 **Printing to it:** any label page now shows **Send to Printer** beside the PDF
 and Print buttons. It sends the records currently listed, at the size selected
-on the page, honouring **Copies per record**. If the page's label size differs
+on the page, honouring **Copies per record**. Sending to a _receipt_ printer
+ignores the size chosen on the page — its stock is whatever roll is loaded —
+and the settings panel says so when one is selected. If the page's label size differs
 from the stock the printer is registered with, the settings panel says so and
 offers **Match printer** — worth taking, since the printer cannot tell that the
 labels loaded in it are not the size you asked for.
@@ -786,6 +805,12 @@ labels loaded in it are not the size you asked for.
 > **Sheet layouts are not offered.** _Letter Paper (Grid)_ is an Avery sheet of
 > 30 labels and has no meaning on a roll — selecting it disables **Send to
 > Printer** rather than feeding thirty labels off the roll.
+
+> **Receipt printers and long barcodes.** 58mm paper holds about 12 characters
+> of Code 128 at a width a scanner can read, and 80mm about 21. That is genuinely
+> tight for a full item id, so on receipt stock — especially 58mm — choose **QR
+> code** as the barcode style. The page reports the problem rather than printing
+> an unreadable barcode, but QR is the answer to it.
 
 > **If the label is rejected as too small:** a barcode has a minimum readable
 > width, and a long value on a small label can exceed it. The page reports this

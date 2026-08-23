@@ -23,6 +23,7 @@ from app.utils.label_renderer import (
     SYMBOLOGY_CODE128,
     SYMBOLOGY_QR,
     LabelSpec,
+    code128_width_dots,
     sanitize_barcode_value,
     validate_symbology,
 )
@@ -38,15 +39,6 @@ MAX_DARKNESS = 30
 
 # ^BY module width is capped at 10 dots by the ZPL spec.
 _MAX_MODULE_DOTS = 10
-
-# Code 128 symbol widths, in modules, using subset B (11 modules per
-# character). ^BC auto-switches to subset C for digit pairs, which is
-# *narrower* — so sizing against subset B never overflows the label, it only
-# leaves a numeric barcode fractionally left of centre.
-_MODULES_PER_CHAR = 11
-_MODULES_START_STOP = 11 + 13  # start (11) + stop pattern with terminator (13)
-_MODULES_CHECKSUM = 11
-_QUIET_ZONE_MODULES = 10  # per side, the Code 128 spec minimum
 
 # Font 0 is proportional; 0.55x the character height is the average advance and
 # is what the truncation estimate below is built on.
@@ -118,17 +110,6 @@ def _truncate(text: str, font_height: int, max_width_dots: int) -> str:
     if max_chars <= 3:
         return text[:max_chars]
     return text[: max_chars - 3] + "..."
-
-
-def code128_width_dots(value: str, module_dots: int) -> int:
-    """Printed width of a Code 128 symbol, quiet zones included."""
-    modules = (
-        _MODULES_START_STOP
-        + _MODULES_CHECKSUM
-        + _MODULES_PER_CHAR * len(value)
-        + 2 * _QUIET_ZONE_MODULES
-    )
-    return modules * module_dots
 
 
 def _fit_module_width(value: str, available_dots: int, dpi: int) -> int:

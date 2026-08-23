@@ -16,6 +16,8 @@ import pytest
 
 from app.services import label_printer_service as lps
 from app.services.label_printer_service import (
+    LANGUAGE_ESCPOS,
+    LANGUAGE_ZPL,
     MAX_LABELS_PER_JOB,
     LabelPrinterService,
     _validate_printer_config,
@@ -41,6 +43,7 @@ def _printer(**kwargs):
         "darkness": None,
         "is_default": True,
         "is_active": True,
+        "language": LANGUAGE_ZPL,
     }
     base.update(kwargs)
     return SimpleNamespace(**base)
@@ -510,4 +513,140 @@ class TestSymbology:
         with pytest.raises(ValueError, match="Unknown barcode symbology"):
             await svc.print_labels(
                 ORG, "inventory", ["id-1"], "printer-1", symbology="datamatrix"
+            )
+
+
+def _receipt_printer(**kwargs):
+    base = {"language": LANGUAGE_ESCPOS, "label_format": "escpos_80mm"}
+    base.update(kwargs)
+    return _printer(**base)
+
+
+class TestPrinterLanguages:
+    """A registered printer declares its language, and the renderer, the stock
+    it accepts and the status query all branch on it. Sending one language's
+    bytes to the other prints pages of garbage."""
+
+    def _patched(self, zpl_reply="", escpos_replies=None):
+        return patch.multiple(
+            lps,
+            send_to_printer=AsyncMock(),
+            query_printer=AsyncMock(return_value=zpl_reply),
+            query_printer_raw=AsyncMock(return_value=escpos_replies or [b"", b""]),
+        )
+
+    async def _print(self, svc, **kwargs):
+        builder = AsyncMock(return_value=([LabelSpec("Helmet", "INV-1")], 0))
+        with patch.dict(lps.MODULE_LABELS, {"inventory": ((), builder)}):
+            return await svc.print_labels(
+                ORG, "inventory", ["id-1"], "printer-1", **kwargs
+            )
+
+    async def test_a_zpl_printer_is_sent_text(self):
+        svc, _ = _service(scalar=_printer())
+        with self._patched():
+            await self._print(svc)
+            payload = lps.send_to_printer.await_args.args[2]
+        assert isinstance(payload, str)
+        assert payload.startswith("^XA")
+
+    async def test_an_escpos_printer_is_sent_bytes(self):
+        # Text-encoding ESC/POS would mangle every byte above 0x7F.
+        svc, _ = _service(scalar=_receipt_printer())
+        with self._patched():
+            await self._print(svc)
+            payload = lps.send_to_printer.await_args.args[2]
+        assert isinstance(payload, bytes)
+        assert payload.startswith(b"\x1b@")
+
+    async def test_a_row_with_no_language_is_treated_as_zpl(self):
+        # Rows written before the column existed are ZPL by fact: it was the
+        # only language the feature had.
+        legacy = SimpleNamespace(
+            **{k: v for k, v in vars(_printer()).items() if k != "language"}
+        )
+        svc, _ = _service(scalar=legacy)
+        with self._patched():
+            await self._print(svc)
+            payload = lps.send_to_printer.await_args.args[2]
+        assert isinstance(payload, str)
+
+    async def test_a_die_cut_size_does_not_reach_a_receipt_printer(self):
+        # The print page offers one size control for both kinds of printer.
+        # A Zebra size arriving for a receipt printer is not a mistake to
+        # reject — it does not apply, and the loaded roll wins.
+        svc, _ = _service(scalar=_receipt_printer())
+        with self._patched():
+            await self._print(svc, label_format="zebra_2x1")
+            payload = lps.send_to_printer.await_args.args[2]
+        assert payload.startswith(b"\x1b@")
+
+    async def test_status_is_queried_in_the_printers_own_language(self):
+        svc, _ = _service(scalar=_receipt_printer())
+        ok = bytes([0b00010010])
+        paper_end = bytes([0b01110010])
+        with self._patched(escpos_replies=[ok, paper_end]):
+            result = await svc.get_status("printer-1", ORG)
+            # Captured inside the block: outside it the patch is undone and
+            # the name is the real function again.
+            zpl_query = lps.query_printer
+        assert result["errors"] == ["Out of paper"]
+        assert result["language"] == LANGUAGE_ESCPOS
+        zpl_query.assert_not_called()
+
+    async def test_a_zpl_printer_uses_the_text_query(self):
+        svc, _ = _service(scalar=_printer())
+        identity = "\x02ZTC ZD420-203dpi ZPL,V93.20.15Z\x03"
+        with self._patched(zpl_reply=identity):
+            result = await svc.get_status("printer-1", ORG)
+            escpos_query = lps.query_printer_raw
+        assert result["model"] == "ZTC ZD420-203dpi ZPL"
+        escpos_query.assert_not_called()
+
+    async def test_probing_uses_the_requested_language(self):
+        svc, _ = _service()
+        ok = bytes([0b00010010])
+        with self._patched(escpos_replies=[ok, ok]):
+            result = await svc.probe_target("10.0.0.1", 9100, LANGUAGE_ESCPOS)
+            zpl_query = lps.query_printer
+        assert result["identified"] is True
+        zpl_query.assert_not_called()
+
+    def test_a_receipt_printer_rejects_a_die_cut_stock(self):
+        with pytest.raises(ValueError, match="not a receipt paper size"):
+            _validate_printer_config(
+                host="h",
+                port=9100,
+                dpi=203,
+                label_format="zebra_2x1",
+                custom_width=None,
+                custom_height=None,
+                darkness=None,
+                language=LANGUAGE_ESCPOS,
+            )
+
+    def test_a_zpl_printer_rejects_receipt_paper(self):
+        with pytest.raises(ValueError, match="Unknown label format"):
+            _validate_printer_config(
+                host="h",
+                port=9100,
+                dpi=203,
+                label_format="escpos_80mm",
+                custom_width=None,
+                custom_height=None,
+                darkness=None,
+                language=LANGUAGE_ZPL,
+            )
+
+    def test_an_unknown_language_is_rejected(self):
+        with pytest.raises(ValueError, match="Unknown printer language"):
+            _validate_printer_config(
+                host="h",
+                port=9100,
+                dpi=203,
+                label_format=None,
+                custom_width=None,
+                custom_height=None,
+                darkness=None,
+                language="epl2",
             )

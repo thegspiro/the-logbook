@@ -21,6 +21,12 @@ vi.mock('../../services/labelService', () => ({
     status: (...a: unknown[]) => mockStatus(...a) as unknown,
     probe: (...a: unknown[]) => mockProbe(...a) as unknown,
   },
+  // Imported as values, not just types.
+  PrinterLanguage: { ZPL: 'zpl', ESCPOS: 'escpos' },
+  ESCPOS_PAPER_SIZES: [
+    { id: 'escpos_80mm', name: '80mm roll (3.1")' },
+    { id: 'escpos_58mm', name: '58mm roll (2.3")' },
+  ],
 }));
 
 vi.mock('../../contexts/ConfirmContext', () => ({
@@ -37,6 +43,7 @@ const zebra = {
   location: 'Station 1',
   host: '192.168.1.50',
   port: 9100,
+  language: 'zpl',
   dpi: 203,
   label_format: 'zebra_2x1',
   custom_width: null,
@@ -72,6 +79,7 @@ describe('LabelPrintersSection', () => {
       errors: [],
       warnings: [],
       status_available: true,
+      language: 'zpl',
     });
     mockProbe.mockResolvedValue({
       responded: true,
@@ -272,7 +280,7 @@ describe('LabelPrintersSection', () => {
       await user.type(screen.getByLabelText(/Hostname or IP/), '10.0.0.42');
       await user.click(screen.getByRole('button', { name: /Test connection/ }));
 
-      await waitFor(() => expect(mockProbe).toHaveBeenCalledWith('10.0.0.42', 9100));
+      await waitFor(() => expect(mockProbe).toHaveBeenCalledWith('10.0.0.42', 9100, 'zpl'));
       expect(await screen.findByText(/ZTC ZD620-300dpi ZPL/)).toBeInTheDocument();
     });
 
@@ -297,6 +305,64 @@ describe('LabelPrintersSection', () => {
       await screen.findByText(/No label printers yet/);
       await user.click(screen.getByRole('button', { name: /Add a printer/ }));
       expect(screen.getByRole('button', { name: /Test connection/ })).toBeDisabled();
+    });
+  });
+
+  describe('printer languages', () => {
+    it('shows the language on each printer', async () => {
+      mockList.mockResolvedValue([zebra]);
+      render(<LabelPrintersSection />);
+      await screen.findByText('Quartermaster Zebra');
+      // Scoped to the printer's own detail line: the intro banner names ZPL too.
+      expect(screen.getByText(/192\.168\.1\.50:9100/).textContent).toContain('ZPL');
+    });
+
+    it('offers receipt paper widths once ESC/POS is chosen', async () => {
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText(/No label printers yet/);
+      await user.click(screen.getByRole('button', { name: /Add a printer/ }));
+
+      expect(screen.queryByRole('option', { name: /80mm roll/ })).not.toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText(/Printer language/), 'escpos');
+
+      expect(await screen.findByRole('option', { name: /80mm roll/ })).toBeInTheDocument();
+      // Die-cut label sizes are not offered: receipt stock is continuous.
+      expect(screen.queryByRole('option', { name: /Zebra 2/ })).not.toBeInTheDocument();
+    });
+
+    it('does not ask a receipt printer for a resolution', async () => {
+      // ESC/POS printers size their output from the paper width, so a dpi
+      // field here would imply a setting that does nothing.
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText(/No label printers yet/);
+      await user.click(screen.getByRole('button', { name: /Add a printer/ }));
+      expect(screen.getByLabelText(/Resolution/)).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText(/Printer language/), 'escpos');
+      await waitFor(() => expect(screen.queryByLabelText(/Resolution/)).not.toBeInTheDocument());
+    });
+
+    it('sends the chosen language when creating and when probing', async () => {
+      const user = userEvent.setup();
+      render(<LabelPrintersSection />);
+      await screen.findByText(/No label printers yet/);
+
+      await user.click(screen.getByRole('button', { name: /Add a printer/ }));
+      await user.selectOptions(screen.getByLabelText(/Printer language/), 'escpos');
+      await user.type(screen.getByLabelText(/^Name$/), 'Watch Desk Epson');
+      await user.type(screen.getByLabelText(/Hostname or IP/), '10.0.0.7');
+
+      await user.click(screen.getByRole('button', { name: /Test connection/ }));
+      await waitFor(() => expect(mockProbe).toHaveBeenCalledWith('10.0.0.7', 9100, 'escpos'));
+
+      await user.click(screen.getByRole('button', { name: /Add printer/ }));
+      await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+      expect(mockCreate.mock.calls[0]?.[0]).toMatchObject({
+        language: 'escpos',
+        label_format: 'escpos_80mm',
+      });
     });
   });
 

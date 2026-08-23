@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
-import { labelPrinterService, labelService, Symbology } from '../../services/labelService';
+import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
 import type { LabelPrinterConfig } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
@@ -288,10 +288,15 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   for (let c = 0; c < copies; c++) for (const it of items) labelItems.push(it);
 
   const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
-  // Avery sheet layouts have no meaning on a roll-fed printer; the backend
-  // rejects them, so the button says so instead of offering a failure.
-  const canSendToPrinter = selectedPrinter !== null && isThermal;
-  const printerStockMismatch = selectedPrinter !== null && !isCustom && selectedPrinter.label_format !== preset.id;
+  // A receipt printer's stock is the roll loaded in it, so the size chosen on
+  // this page does not apply and is not sent — which also means an Avery sheet
+  // selection cannot block it.
+  const isReceiptPrinter = selectedPrinter?.language === PrinterLanguage.ESCPOS;
+  // Avery sheet layouts have no meaning on a roll-fed label printer; the
+  // backend rejects them, so the button says so instead of offering a failure.
+  const canSendToPrinter = selectedPrinter !== null && (isReceiptPrinter || isThermal);
+  const printerStockMismatch =
+    selectedPrinter !== null && !isReceiptPrinter && !isCustom && selectedPrinter.label_format !== preset.id;
 
   const sendToPrinter = async () => {
     if (!selectedPrinter || items.length === 0) return;
@@ -302,8 +307,14 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         items.map((i) => i.id),
         {
           printer_id: selectedPrinter.id,
-          label_format: isCustom ? CUSTOM_PRESET_ID : preset.id,
-          ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
+          // Omitted for a receipt printer: its paper roll decides the size,
+          // and sending this page's die-cut label size would mean nothing.
+          ...(isReceiptPrinter
+            ? {}
+            : {
+                label_format: isCustom ? CUSTOM_PRESET_ID : preset.id,
+                ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
+              }),
           copies,
           symbology,
         }
@@ -666,7 +677,9 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                     </div>
                   ) : (
                     <p className="text-theme-text-muted mt-1.5 text-xs">
-                      Sends the label to the printer directly — no print dialog, and nothing can rescale the barcode.
+                      {isReceiptPrinter
+                        ? 'Receipt printer — prints on whatever roll is loaded, so the label size above does not apply.'
+                        : 'Sends the label to the printer directly — no print dialog, and nothing can rescale the barcode.'}
                     </p>
                   )}
                 </div>

@@ -36,7 +36,7 @@ The guards, and why each is drawn where it is:
 import asyncio
 import ipaddress
 import socket
-from typing import List
+from typing import List, Sequence, Union
 
 from loguru import logger
 
@@ -61,6 +61,12 @@ MAX_STATUS_BYTES = 4096
 # questions a socket connection cannot: is this actually a ZPL printer, and can
 # it print right now.
 HOST_QUERY = "~HI~HQES"
+
+# ESC/POS real-time status requests (DLE EOT n). Unlike ZPL's text queries
+# these are answered one byte at a time, so they are sent as separate
+# exchanges rather than back to back.
+ESCPOS_OFFLINE_QUERY = b"\x10\x04\x02"
+ESCPOS_PAPER_QUERY = b"\x10\x04\x04"
 
 _ETX = b"\x03"
 
@@ -138,15 +144,20 @@ async def resolve_printer_host(host: str) -> str:
     return addresses[0]
 
 
-async def send_to_printer(host: str, port: int, payload: str) -> int:
+async def send_to_printer(host: str, port: int, payload: Union[str, bytes]) -> int:
     """Send *payload* to the printer at *host*:*port*. Returns bytes written.
+
+    Accepts ``bytes`` as well as ``str`` because ESC/POS is a binary language:
+    a length prefix or a QR module size can be any byte value, and encoding
+    those as UTF-8 would turn every byte above 0x7F into two and corrupt the
+    job. ZPL is printable ASCII and keeps passing through as text.
 
     Raises ValueError for a rejected target and
     :class:`PrinterUnreachableError` when the printer cannot be reached.
     """
     validate_printer_port(port)
 
-    data = payload.encode("utf-8")
+    data = payload if isinstance(payload, bytes) else payload.encode("utf-8")
     if not data:
         raise ValueError("Nothing to print")
     if len(data) > MAX_PAYLOAD_BYTES:
@@ -245,3 +256,62 @@ async def query_printer(
                 pass
 
     return buffer[:MAX_STATUS_BYTES].decode("ascii", errors="replace")
+
+
+async def query_printer_raw(
+    host: str,
+    port: int,
+    exchanges: Sequence[bytes],
+    read_bytes: int = 1,
+    timeout: float = STATUS_TIMEOUT_SECONDS,
+) -> List[bytes]:
+    """Send each payload in turn and read a reply after each one.
+
+    ESC/POS real-time status is a request/response protocol answered one byte
+    at a time, with nothing in the reply saying which question it answers — so
+    the exchanges have to be sequential for the answers to be attributable.
+    A question that goes unanswered yields an empty ``bytes`` in its slot
+    rather than shifting every later answer up by one.
+
+    Same guards as every other path: a rejected port or address never opens a
+    socket, and replies are bounded.
+    """
+    validate_printer_port(port)
+    address = await resolve_printer_host(host)
+
+    replies: List[bytes] = []
+    writer = None
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(address, port), timeout=CONNECT_TIMEOUT_SECONDS
+        )
+        for payload in exchanges:
+            writer.write(payload)
+            await asyncio.wait_for(writer.drain(), timeout=timeout)
+            try:
+                chunk = await asyncio.wait_for(
+                    reader.read(min(read_bytes, MAX_STATUS_BYTES)), timeout=timeout
+                )
+            except asyncio.TimeoutError:
+                chunk = b""
+            replies.append(chunk)
+    except asyncio.TimeoutError:
+        raise PrinterUnreachableError(
+            f"Timed out querying the printer at {host}:{port}."
+        )
+    except OSError as exc:
+        logger.warning(f"Label printer query failed for {host}:{port}: {exc}")
+        raise PrinterUnreachableError(
+            f"Could not connect to the printer at {host}:{port}."
+        )
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await asyncio.wait_for(
+                    writer.wait_closed(), timeout=STATUS_TIMEOUT_SECONDS
+                )
+            except (asyncio.TimeoutError, OSError):
+                pass
+
+    return replies

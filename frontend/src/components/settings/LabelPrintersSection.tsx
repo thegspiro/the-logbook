@@ -25,7 +25,7 @@ import {
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { labelPrinterService } from '../../services/labelService';
+import { ESCPOS_PAPER_SIZES, PrinterLanguage, labelPrinterService } from '../../services/labelService';
 import type {
   LabelPrinterConfig,
   LabelPrinterCreatePayload,
@@ -39,6 +39,19 @@ import { CUSTOM_PRESET_ID, LABEL_PRESETS } from '../labels/labelPresets';
 // is not offered here at all.
 const THERMAL_PRESETS = LABEL_PRESETS.filter((p) => p.columns === 1);
 
+const LANGUAGE_OPTIONS = [
+  {
+    id: PrinterLanguage.ZPL,
+    name: 'ZPL (Zebra and compatible)',
+    hint: 'Zebra, and any printer in ZPL emulation mode — TSC, Godex, Honeywell, Citizen, SATO',
+  },
+  {
+    id: PrinterLanguage.ESCPOS,
+    name: 'ESC/POS (receipt printer)',
+    hint: 'Epson TM, Star, and generic 58mm/80mm units, including those loaded with linerless label roll',
+  },
+];
+
 const DPI_OPTIONS = [
   { value: 203, label: '203 dpi (standard)' },
   { value: 300, label: '300 dpi (high)' },
@@ -50,6 +63,7 @@ interface FormState {
   location: string;
   host: string;
   port: string;
+  language: PrinterLanguage;
   dpi: string;
   labelFormat: string;
   customWidth: string;
@@ -63,6 +77,7 @@ const EMPTY_FORM: FormState = {
   location: '',
   host: '',
   port: '9100',
+  language: PrinterLanguage.ZPL,
   dpi: '203',
   labelFormat: 'zebra_2x1',
   customWidth: '2',
@@ -71,7 +86,10 @@ const EMPTY_FORM: FormState = {
   isDefault: false,
 };
 
-const formatLabel = (id: string) => THERMAL_PRESETS.find((p) => p.id === id)?.name ?? id;
+const formatLabel = (id: string) =>
+  THERMAL_PRESETS.find((p) => p.id === id)?.name ?? ESCPOS_PAPER_SIZES.find((p) => p.id === id)?.name ?? id;
+
+const languageLabel = (id: string) => (id === PrinterLanguage.ESCPOS ? 'ESC/POS' : 'ZPL');
 
 /**
  * What the printer said about itself.
@@ -160,6 +178,7 @@ const LabelPrintersSection: React.FC = () => {
       location: printer.location ?? '',
       host: printer.host,
       port: String(printer.port),
+      language: printer.language ?? PrinterLanguage.ZPL,
       dpi: String(printer.dpi),
       labelFormat: printer.label_format,
       customWidth: printer.custom_width != null ? String(printer.custom_width) : '2',
@@ -172,7 +191,10 @@ const LabelPrintersSection: React.FC = () => {
     setShowForm(true);
   };
 
-  const isCustom = form.labelFormat === CUSTOM_PRESET_ID;
+  // A receipt printer's stock is the roll loaded in it: sold by paper width,
+  // continuous, with no label length and no die-cut size to choose.
+  const isReceipt = form.language === PrinterLanguage.ESCPOS;
+  const isCustom = !isReceipt && form.labelFormat === CUSTOM_PRESET_ID;
   const customWidth = parseFloat(form.customWidth);
   const customHeight = parseFloat(form.customHeight);
   const customValid =
@@ -184,6 +206,18 @@ const LabelPrintersSection: React.FC = () => {
       customHeight >= 0.5 &&
       customHeight <= 11);
   const canSave = form.name.trim() !== '' && form.host.trim() !== '' && customValid;
+
+  const changeLanguage = (language: PrinterLanguage) => {
+    // The two languages accept disjoint stock lists, so carrying the old
+    // selection across would leave the form holding a size the backend will
+    // reject at save.
+    setForm((prev) => ({
+      ...prev,
+      language,
+      labelFormat: language === PrinterLanguage.ESCPOS ? 'escpos_80mm' : 'zebra_2x1',
+    }));
+    setProbeResult(null);
+  };
 
   const save = async () => {
     if (!canSave) return;
@@ -197,6 +231,7 @@ const LabelPrintersSection: React.FC = () => {
           name: form.name.trim(),
           host: form.host.trim(),
           port: Number(form.port) || 9100,
+          language: form.language,
           dpi: Number(form.dpi) || 203,
           label_format: form.labelFormat,
           location: form.location.trim() || null,
@@ -214,6 +249,7 @@ const LabelPrintersSection: React.FC = () => {
           name: form.name.trim(),
           host: form.host.trim(),
           port: Number(form.port) || 9100,
+          language: form.language,
           dpi: Number(form.dpi) || 203,
           label_format: form.labelFormat,
           location: form.location.trim() || undefined,
@@ -292,7 +328,7 @@ const LabelPrintersSection: React.FC = () => {
     setProbing(true);
     setProbeResult(null);
     try {
-      const result = await labelPrinterService.probe(host, Number(form.port) || 9100);
+      const result = await labelPrinterService.probe(host, Number(form.port) || 9100, form.language);
       setProbeResult(result);
       // The printer knows its own resolution; taking its word for it removes
       // the field most likely to be set wrong, and wrong dpi silently prints
@@ -333,9 +369,10 @@ const LabelPrintersSection: React.FC = () => {
       <div className="border-theme-accent-blue/20 bg-theme-accent-blue-muted flex items-start gap-3 rounded-lg border p-4">
         <Printer className="text-theme-accent-blue mt-0.5 h-5 w-5 shrink-0" />
         <p className="text-theme-text-secondary text-sm">
-          Works with Zebra and other ZPL-compatible printers that accept raw printing on port 9100. The printer must be
-          reachable from the server on the department network. Use <strong>Send test label</strong> after adding one to
-          confirm the connection and label alignment.
+          Works with any printer that accepts raw printing on port 9100 — Zebra and the many printers with a ZPL
+          emulation mode (TSC, Godex, Honeywell, Citizen, SATO), and ESC/POS receipt printers, which print asset tags
+          well when loaded with linerless label roll. The printer must be reachable from the server on the department
+          network. Use <strong>Test connection</strong> before saving and <strong>Send test label</strong> afterwards.
         </p>
       </div>
 
@@ -365,7 +402,9 @@ const LabelPrintersSection: React.FC = () => {
                   )}
                 </div>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  {printer.host}:{printer.port} · {printer.dpi} dpi · {formatLabel(printer.label_format)}
+                  {printer.host}:{printer.port} · {languageLabel(printer.language)}
+                  {printer.language === PrinterLanguage.ESCPOS ? '' : ` · ${printer.dpi} dpi`} ·{' '}
+                  {formatLabel(printer.label_format)}
                   {printer.location ? ` · ${printer.location}` : ''}
                 </p>
                 {statuses[printer.id] ? (
@@ -446,6 +485,27 @@ const LabelPrintersSection: React.FC = () => {
             </button>
           </div>
 
+          <div>
+            <label htmlFor="printer-language" className="form-label">
+              Printer language
+            </label>
+            <select
+              id="printer-language"
+              value={form.language}
+              onChange={(e) => changeLanguage(e.target.value as PrinterLanguage)}
+              className="form-input w-full sm:w-96"
+            >
+              {LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              {LANGUAGE_OPTIONS.find((o) => o.id === form.language)?.hint}
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="printer-name" className="form-label">
@@ -507,29 +567,31 @@ const LabelPrintersSection: React.FC = () => {
               </button>
               {probeResult ? <PrinterStatusLine status={probeResult} /> : null}
             </div>
-            <div>
-              <label htmlFor="printer-dpi" className="form-label">
-                Resolution
-              </label>
-              <select
-                id="printer-dpi"
-                value={form.dpi}
-                onChange={(e) => setForm({ ...form, dpi: e.target.value })}
-                className="form-input w-full"
-              >
-                {DPI_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Printing at the wrong resolution prints the label at the wrong physical size.
-              </p>
-            </div>
+            {!isReceipt && (
+              <div>
+                <label htmlFor="printer-dpi" className="form-label">
+                  Resolution
+                </label>
+                <select
+                  id="printer-dpi"
+                  value={form.dpi}
+                  onChange={(e) => setForm({ ...form, dpi: e.target.value })}
+                  className="form-input w-full"
+                >
+                  {DPI_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Printing at the wrong resolution prints the label at the wrong physical size.
+                </p>
+              </div>
+            )}
             <div>
               <label htmlFor="printer-format" className="form-label">
-                Label stock loaded
+                {isReceipt ? 'Paper width' : 'Label stock loaded'}
               </label>
               <select
                 id="printer-format"
@@ -537,13 +599,28 @@ const LabelPrintersSection: React.FC = () => {
                 onChange={(e) => setForm({ ...form, labelFormat: e.target.value })}
                 className="form-input w-full"
               >
-                {THERMAL_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-                <option value={CUSTOM_PRESET_ID}>Custom size</option>
+                {isReceipt ? (
+                  ESCPOS_PAPER_SIZES.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    {THERMAL_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_PRESET_ID}>Custom size</option>
+                  </>
+                )}
               </select>
+              {isReceipt && (
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Receipt stock feeds continuously, so only the paper width is set here.
+                </p>
+              )}
             </div>
           </div>
 
@@ -584,24 +661,26 @@ const LabelPrintersSection: React.FC = () => {
           )}
 
           <div className="flex flex-wrap items-end gap-6">
-            <div>
-              <label htmlFor="printer-darkness" className="form-label">
-                Darkness adjustment <span className="text-theme-text-muted">(optional)</span>
-              </label>
-              <input
-                id="printer-darkness"
-                type="number"
-                min={-30}
-                max={30}
-                value={form.darkness}
-                onChange={(e) => setForm({ ...form, darkness: e.target.value })}
-                placeholder="0"
-                className="form-input w-24"
-              />
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Leave blank to keep the printer&apos;s own setting. Raise it if bars print faint.
-              </p>
-            </div>
+            {!isReceipt && (
+              <div>
+                <label htmlFor="printer-darkness" className="form-label">
+                  Darkness adjustment <span className="text-theme-text-muted">(optional)</span>
+                </label>
+                <input
+                  id="printer-darkness"
+                  type="number"
+                  min={-30}
+                  max={30}
+                  value={form.darkness}
+                  onChange={(e) => setForm({ ...form, darkness: e.target.value })}
+                  placeholder="0"
+                  className="form-input w-24"
+                />
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Leave blank to keep the printer&apos;s own setting. Raise it if bars print faint.
+                </p>
+              </div>
+            )}
             <label className="mb-2 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

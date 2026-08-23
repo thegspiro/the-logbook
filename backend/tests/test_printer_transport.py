@@ -22,6 +22,7 @@ from app.utils.printer_transport import (
     MAX_STATUS_BYTES,
     PrinterUnreachableError,
     query_printer,
+    query_printer_raw,
     resolve_printer_host,
     send_to_printer,
     validate_printer_port,
@@ -280,3 +281,76 @@ class TestStatusQuery:
             ):
                 with pytest.raises(PrinterUnreachableError):
                     await query_printer("printer.local", 9100)
+
+
+class TestRawExchange:
+    """ESC/POS status is request/response, one byte at a time, with nothing in
+    a reply saying which question it answers — so the exchanges have to stay
+    sequential and attributable."""
+
+    def _reader(self, *chunks):
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=list(chunks) + [b""])
+        return reader
+
+    async def test_sends_each_payload_and_collects_a_reply_each(self):
+        writer = _writer()
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(return_value=(self._reader(b"\x12", b"\x16"), writer)),
+            ):
+                replies = await query_printer_raw(
+                    "printer.local", 9100, [b"\x10\x04\x02", b"\x10\x04\x04"]
+                )
+        assert replies == [b"\x12", b"\x16"]
+        assert writer.write.call_count == 2
+
+    async def test_an_unanswered_question_keeps_its_own_slot(self):
+        # Shifting a later answer up into an earlier slot would report the
+        # paper status as the offline status and invent faults.
+        writer = _writer()
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=[b"", b"\x16"])
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection", AsyncMock(return_value=(reader, writer))
+            ):
+                replies = await query_printer_raw(
+                    "printer.local", 9100, [b"\x10\x04\x02", b"\x10\x04\x04"]
+                )
+        assert replies == [b"", b"\x16"]
+
+    async def test_a_bad_port_is_rejected_before_connecting(self):
+        opener = AsyncMock()
+        with patch("asyncio.open_connection", opener):
+            with pytest.raises(ValueError, match="not a label-printer port"):
+                await query_printer_raw("printer.local", 6379, [b"\x10\x04\x04"])
+        opener.assert_not_called()
+
+    async def test_a_blocked_address_is_rejected(self):
+        # The raw path must not become a way around the address guards.
+        with _resolver("127.0.0.1"):
+            with pytest.raises(ValueError, match="loopback"):
+                await query_printer_raw("localhost", 9100, [b"\x10\x04\x04"])
+
+    async def test_binary_payloads_reach_the_wire_unchanged(self):
+        # ESC/POS is binary; a str-encoding step anywhere would corrupt it.
+        writer = _writer()
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(return_value=(self._reader(b"\x12"), writer)),
+            ):
+                await send_to_printer("printer.local", 9100, b"\x1b@\x1dVB\x00")
+        writer.write.assert_called_once_with(b"\x1b@\x1dVB\x00")
+
+    async def test_text_payloads_still_work(self):
+        writer = _writer()
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection",
+                AsyncMock(return_value=(AsyncMock(), writer)),
+            ):
+                await send_to_printer("printer.local", 9100, "^XA^XZ")
+        writer.write.assert_called_once_with(b"^XA^XZ")

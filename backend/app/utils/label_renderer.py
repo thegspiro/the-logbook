@@ -36,6 +36,30 @@ QR_ERROR_CORRECTION = "M"
 # Below this the symbol stops being reliably readable by a phone camera.
 MIN_QR_SIZE_INCH = 0.3
 
+# Code 128 symbol geometry, in modules, using subset B (11 modules per
+# character). Encoders auto-switch to subset C for digit pairs, which is
+# *narrower* — so sizing against subset B never overflows a label, it only
+# leaves a numeric barcode fractionally left of centre.
+#
+# This lives here rather than in a language renderer because it is a property
+# of the symbology, not of ZPL or ESC/POS: both size their barcodes from it,
+# and two copies would be free to disagree about which values fit.
+_MODULES_PER_CHAR = 11
+_MODULES_START_STOP = 11 + 13  # start (11) + stop pattern with terminator (13)
+_MODULES_CHECKSUM = 11
+_QUIET_ZONE_MODULES = 10  # per side, the Code 128 spec minimum
+
+
+def code128_width_dots(value: str, module_dots: int) -> int:
+    """Printed width of a Code 128 symbol, quiet zones included."""
+    modules = (
+        _MODULES_START_STOP
+        + _MODULES_CHECKSUM
+        + _MODULES_PER_CHAR * len(value)
+        + 2 * _QUIET_ZONE_MODULES
+    )
+    return modules * module_dots
+
 
 def validate_symbology(symbology: str) -> str:
     """Return *symbology* if supported, else raise ValueError."""

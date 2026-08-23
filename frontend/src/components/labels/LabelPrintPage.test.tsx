@@ -21,9 +21,11 @@ vi.mock('../../services/labelService', () => ({
     list: (...a: unknown[]) => mockListPrinters(...a) as unknown,
     print: (...a: unknown[]) => mockPrint(...a) as unknown,
   },
-  // Symbology is imported as a value, not just a type — the mock has to carry
-  // it or the component reads undefined off it at first render.
+  // Symbology and PrinterLanguage are imported as values, not just types —
+  // the mock has to carry them or the component reads undefined off them at
+  // first render.
   Symbology: { CODE128: 'code128', QR: 'qr' },
+  PrinterLanguage: { ZPL: 'zpl', ESCPOS: 'escpos' },
 }));
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));

@@ -1,5 +1,6 @@
 """
-Parsers for a Zebra printer's replies to ``~HI`` and ``~HQES``.
+Parsers for what a printer says about itself — ZPL (``~HI`` / ``~HQES``) and
+ESC/POS (``DLE EOT``).
 
 Why this exists: opening a TCP socket to port 9100 proves almost nothing. The
 connection succeeds against a printer that is switched on but out of labels,
@@ -18,7 +19,7 @@ below are the common ones and are the only ones claimed by name.
 """
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 # ~HQES error bitmask (the low-order group), Zebra's documented flags. Only the
 # faults a station can actually act on are named; anything else falls through
@@ -148,4 +149,80 @@ def summarize(raw: str) -> Dict[str, object]:
         "errors": status["errors"] if status else [],
         "warnings": status["warnings"] if status else [],
         "status_available": status is not None,
+    }
+
+
+# --- ESC/POS -------------------------------------------------------------
+#
+# A DLE EOT reply is a single byte whose fixed bits are defined by the spec:
+# bit 0 and bit 7 are always 0, bits 1 and 4 are always 1. Checking that shape
+# is what distinguishes a real status byte from whatever an unrelated service
+# happened to send back, so a byte that fails it is treated as no answer
+# rather than decoded into a confident wrong diagnosis.
+_ESCPOS_FIXED_MASK = 0b10010011
+_ESCPOS_FIXED_VALUE = 0b00010010
+
+# Offline status (DLE EOT 2).
+_ESCPOS_COVER_OPEN = 0x04
+_ESCPOS_PAPER_FEED_STOP = 0x20
+_ESCPOS_ERROR = 0x40
+
+# Paper roll status (DLE EOT 4). Both bits of each pair are set together; the
+# spec defines the pair, so both are required rather than either.
+_ESCPOS_PAPER_NEAR_END = 0x0C
+_ESCPOS_PAPER_END = 0x60
+
+
+def is_escpos_status_byte(reply: bytes) -> bool:
+    """Whether *reply* has the fixed bit pattern of a DLE EOT answer."""
+    if len(reply) != 1:
+        return False
+    return (reply[0] & _ESCPOS_FIXED_MASK) == _ESCPOS_FIXED_VALUE
+
+
+def summarize_escpos(replies: Sequence[bytes]) -> Dict[str, object]:
+    """Fold DLE EOT replies (offline, then paper roll) into the API shape.
+
+    A printer that answers with a valid status byte has proved it speaks
+    ESC/POS, which is the identification this language offers — there is no
+    equivalent of ZPL's ~HI carrying a model name, so ``model`` stays null
+    rather than being invented.
+    """
+    offline = replies[0] if len(replies) > 0 else b""
+    paper = replies[1] if len(replies) > 1 else b""
+
+    errors: List[str] = []
+    warnings: List[str] = []
+    known = False
+
+    if is_escpos_status_byte(paper):
+        known = True
+        value = paper[0]
+        if value & _ESCPOS_PAPER_END == _ESCPOS_PAPER_END:
+            errors.append("Out of paper")
+        elif value & _ESCPOS_PAPER_NEAR_END == _ESCPOS_PAPER_NEAR_END:
+            warnings.append("Paper is nearly out")
+
+    if is_escpos_status_byte(offline):
+        known = True
+        value = offline[0]
+        if value & _ESCPOS_COVER_OPEN:
+            errors.append("Cover is open")
+        if value & _ESCPOS_PAPER_FEED_STOP:
+            errors.append("Paper feed stopped")
+        # A generic error bit with no more specific cause identified above is
+        # still reported: a faulted printer must never read as healthy.
+        if value & _ESCPOS_ERROR and not errors:
+            errors.append("Printer reports an error")
+
+    responded = bool(offline or paper)
+    return {
+        "responded": responded,
+        "identified": known,
+        "model": None,
+        "firmware": None,
+        "reported_dpi": None,
+        "errors": errors,
+        "warnings": warnings,
+        "status_available": known,
     }

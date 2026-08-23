@@ -10,6 +10,11 @@ dynamically (see ``MODULE_LABELS`` in the label service).
 Printer *configuration* is organization-wide and sits behind
 ``settings.manage``; printing to an already-configured printer is gated on the
 module's own permission, since a label exposes nothing the PDF does not.
+
+A registered printer declares the language it speaks — ZPL (Zebra, and the
+many printers with a ZPL emulation mode) or ESC/POS (receipt-class thermal
+printers). The renderer, the stock sizes on offer, and the status query all
+branch on it.
 """
 
 from typing import List, Optional
@@ -30,7 +35,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
-from app.services.label_printer_service import LabelPrinterService
+from app.services.label_printer_service import LANGUAGE_ZPL, LabelPrinterService
 from app.services.label_service import LabelService, required_permissions_for_module
 from app.utils.label_renderer import SYMBOLOGY_CODE128
 from app.utils.printer_transport import PrinterUnreachableError
@@ -190,8 +195,9 @@ class LabelPrinterBody(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     host: str = Field(min_length=1, max_length=255)
     port: int = Field(9100, ge=1, le=65535)
+    language: str = Field(LANGUAGE_ZPL, max_length=20)
     dpi: int = Field(203)
-    label_format: str = Field("zebra_2x1", max_length=50)
+    label_format: Optional[str] = Field(None, max_length=50)
     location: Optional[str] = Field(None, max_length=200)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
@@ -206,6 +212,7 @@ class LabelPrinterUpdateBody(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     host: Optional[str] = Field(None, min_length=1, max_length=255)
     port: Optional[int] = Field(None, ge=1, le=65535)
+    language: Optional[str] = Field(None, max_length=20)
     dpi: Optional[int] = None
     label_format: Optional[str] = Field(None, max_length=50)
     location: Optional[str] = Field(None, max_length=200)
@@ -219,6 +226,7 @@ class LabelPrinterUpdateBody(BaseModel):
 class PrinterProbeBody(BaseModel):
     host: str = Field(min_length=1, max_length=255)
     port: int = Field(9100, ge=1, le=65535)
+    language: str = Field(LANGUAGE_ZPL, max_length=20)
 
 
 class LabelPrintBody(BaseModel):
@@ -246,6 +254,7 @@ def _printer_response(printer) -> dict:
         "location": printer.location,
         "host": printer.host,
         "port": printer.port,
+        "language": getattr(printer, "language", None) or LANGUAGE_ZPL,
         "dpi": printer.dpi,
         "label_format": printer.label_format,
         "custom_width": printer.custom_width,
@@ -430,7 +439,9 @@ async def probe_label_printer(
     only removes the save-discover-edit loop from setting a printer up.
     """
     try:
-        return await LabelPrinterService(db).probe_target(data.host, data.port)
+        return await LabelPrinterService(db).probe_target(
+            data.host, data.port, data.language
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PrinterUnreachableError as e:

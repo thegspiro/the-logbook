@@ -75,6 +75,25 @@ export const labelService = {
 };
 
 /**
+ * The command language a printer speaks.
+ *
+ * ZPL covers Zebra and the many printers that ship a ZPL emulation mode
+ * (TSC, Godex, Honeywell, Citizen, SATO). ESC/POS covers receipt-class
+ * thermal printers, several of which take linerless label media.
+ */
+export const PrinterLanguage = {
+  ZPL: 'zpl',
+  ESCPOS: 'escpos',
+} as const;
+export type PrinterLanguage = (typeof PrinterLanguage)[keyof typeof PrinterLanguage];
+
+/** Receipt stock is sold by paper width; there is no label length. */
+export const ESCPOS_PAPER_SIZES = [
+  { id: 'escpos_80mm', name: '80mm roll (3.1")' },
+  { id: 'escpos_58mm', name: '58mm roll (2.3")' },
+] as const;
+
+/**
  * A network label printer registered for the organization. Printing to one
  * sends the printer's own command language (ZPL) rather than a PDF, so no
  * print dialog is involved and nothing can rescale the barcode.
@@ -85,6 +104,7 @@ export interface LabelPrinterConfig {
   location: string | null;
   host: string;
   port: number;
+  language: PrinterLanguage;
   dpi: number;
   label_format: string;
   custom_width: number | null;
@@ -98,6 +118,7 @@ export interface LabelPrinterCreatePayload {
   name: string;
   host: string;
   port: number;
+  language: PrinterLanguage;
   dpi: number;
   label_format: string;
   location?: string | undefined;
@@ -116,6 +137,7 @@ export interface LabelPrinterUpdatePayload {
   name?: string;
   host?: string;
   port?: number;
+  language?: PrinterLanguage;
   dpi?: number;
   label_format?: string;
   location?: string | null;
@@ -167,6 +189,7 @@ export interface SavedPrinterStatus extends PrinterStatus {
   printer_id: string;
   printer_name: string;
   configured_dpi: number;
+  language: PrinterLanguage;
 }
 
 export interface TestLabelResult {
@@ -213,9 +236,13 @@ export const labelPrinterService = {
     return res.data;
   },
 
-  /** Check an address before saving it, so setup is not save-discover-edit. */
-  async probe(host: string, port: number): Promise<PrinterStatus> {
-    const res = await api.post<PrinterStatus>('/label-printers/probe', { host, port });
+  /**
+   * Check an address before saving it, so setup is not save-discover-edit.
+   * The language matters: the two speak different status protocols, and
+   * asking in the wrong one gets no useful answer.
+   */
+  async probe(host: string, port: number, language: PrinterLanguage): Promise<PrinterStatus> {
+    const res = await api.post<PrinterStatus>('/label-printers/probe', { host, port, language });
     return res.data;
   },
 
