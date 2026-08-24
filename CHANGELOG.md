@@ -55,6 +55,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   submission delete may unlink them, and what is still open: no retention
   policy and no malware scanning.
 
+### A contract-test server that will not boot now says so (2026-08-24)
+
+**Fixed**
+
+- **`collected 0 items` was all CI reported when the contract suite could not
+  start.** Every generated test in `test_api_contract.py` is defined inside
+  `if SCHEMA_AVAILABLE`, so a server that fails to come up leaves the module
+  with no tests at all — not even skipped ones. pytest exits 5 and the job
+  goes red with nothing else in the log, while `SKIP_REASON`, which names the
+  actual cause, was computed and then discarded. A `skipif` on the class read
+  as though it handled the case; it could not, because there were no tests for
+  it to skip. One test now always exists to carry the reason, and it **fails**
+  rather than skips once `RUN_API_CONTRACT_TESTS=1` has asked for the suite —
+  skipping would let "the application does not start" pass for green.
+- **A dead server thread reported no cause.** uvicorn raises inside the
+  thread, where the exception was lost, so the only symptom was a thread that
+  was no longer alive. The exception is now recorded and named in the failure,
+  which is what separates a runner hiccup from the app genuinely failing to
+  start.
+
 ### The events list now shows what it wants from you (2026-08-24)
 
 **Added**
