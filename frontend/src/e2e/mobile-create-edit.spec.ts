@@ -46,13 +46,14 @@ async function expectMobileDialogUsable(page: Page) {
       panelReceivesPointer: !!point?.closest('[data-testid="modal-panel"]'),
       undersized: controls
         .filter((control) => {
-          const target =
-            control instanceof HTMLInputElement &&
-            (control.type === 'checkbox' || control.type === 'radio') &&
-            control.closest('label')
-              ? control.closest('label')!
-              : control;
-          const box = target.getBoundingClientRect();
+          // A checkbox/radio's tap target is its wrapping label, when it has
+          // one. Hoisted so the narrowing is real rather than asserted, and so
+          // closest() runs once instead of twice.
+          const label =
+            control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')
+              ? control.closest('label')
+              : null;
+          const box = (label ?? control).getBoundingClientRect();
           return box.width < minTap || box.height < minTap;
         })
         .map((control) => control.getAttribute('aria-label') || control.textContent?.trim() || control.tagName),

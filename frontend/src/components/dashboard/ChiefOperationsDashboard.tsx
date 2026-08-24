@@ -21,7 +21,7 @@ export default function ChiefOperationsDashboard({ data }: { data: OperationsDas
                   <button
                     type="button"
                     className="bg-theme-surface-secondary flex min-h-11 w-full items-center justify-between rounded-lg px-3 py-2 text-left"
-                    onClick={() => navigate(item.href)}
+                    onClick={() => void navigate(item.href)}
                   >
                     <span>
                       <span className="text-theme-text-primary block text-sm font-medium">{item.label}</span>
