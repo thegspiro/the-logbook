@@ -8,10 +8,22 @@
  * record does not have — and, when it sums two of them, float noise besides:
  * `66.7 + 2.9` renders as `69.60000000000001`.
  *
- * This module is for time a member *worked or was credited with*. It is not for
- * configuration thresholds (auto-approve ceilings, reminder lead times, shift
- * template lengths) or for meter readings (apparatus engine hours) — those are
- * entered as exact figures and must be shown back exactly as entered.
+ * `formatHours` is for time a member *worked or was credited with*. Two other
+ * kinds of hours figure must not go through it, because quarter-rounding them
+ * is not a tidier reading of the same fact — it states a different one:
+ *
+ *   - **derived averages** (hours per shift, hours per member). An average is
+ *     not recorded time and is not constrained to the increment: 2.5 hours
+ *     over three shifts is 0.83, and 0.75 misreports the metric by a tenth.
+ *   - **percentage-derived credit ceilings.** An org that maps an event at 40%
+ *     credits 0.4 hours for an hour of attendance. Rounding that *up* to 0.5
+ *     promises more than check-out will award, which is the failure the
+ *     "Credits up to" wording exists to prevent.
+ *
+ * Those use `formatHoursExact`. Configuration thresholds (auto-approve
+ * ceilings, reminder lead times, shift template lengths) and meter readings
+ * (apparatus engine hours) use neither — they are entered as exact figures and
+ * must be shown back exactly as entered.
  */
 
 /**
@@ -22,7 +34,7 @@
 const hoursFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 /** The reporting increment for logged time. */
-const QUARTER_HOUR = 0.25;
+export const QUARTER_HOUR = 0.25;
 
 /**
  * Round hours to the nearest quarter, with halfway values going up.
@@ -55,4 +67,14 @@ export function sumHoursToQuarter(values: Array<number | null | undefined>): num
  */
 export function formatHours(hours: number | null | undefined): string {
   return hoursFormatter.format(roundHoursToQuarter(hours));
+}
+
+/**
+ * An hours figure that is *not* recorded time — a derived average, or a credit
+ * ceiling a percentage mapping produced. Shown to two decimals so the value
+ * survives, with none of the float drift a raw division carries.
+ */
+export function formatHoursExact(hours: number | null | undefined): string {
+  if (hours == null || !Number.isFinite(hours)) return '0';
+  return hoursFormatter.format(hours);
 }

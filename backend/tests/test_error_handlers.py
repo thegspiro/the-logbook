@@ -10,9 +10,18 @@ import json
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
+from pydantic import field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import main
+from app.schemas.email_template import (
+    EmailTemplatePreviewRequest,
+    EmailTemplateUpdate,
+)
+from app.services.email_theme import ACCENT_INDIGO, LAYOUTS
 
 
 @pytest.fixture
@@ -106,3 +115,108 @@ class TestUnhandledExceptionHandler:
             "detail": "Internal server error",
             "code": "LB-SYS-001",
         }
+
+
+class TestValidationErrorHandler:
+    """A 422 has to say what the field would have accepted.
+
+    The handler rewrites Pydantic's verbose errors into one short line per
+    field. For the built-in constraints that is a clear improvement — nobody
+    needs the schema path — but it also flattened every ``value_error``, and a
+    ``value_error`` is one of *our own* validators, whose message was written
+    for the person on the screen and names the legal values.
+
+    The email template editor is what surfaced it: a template with no stored
+    colourway posted a blank accent and layout, and the reply was
+    "header_accent: Invalid value. layout: Invalid value." — two fields
+    rejected, nothing anywhere saying which values were legal, and a preview
+    pane that rendered nothing.
+    """
+
+    @staticmethod
+    async def _messages(request_stub, model, payload):
+        """Run a real model failure through the handler, as a field -> message map."""
+        try:
+            model(**payload)
+        except PydanticValidationError as exc:
+            wrapped = RequestValidationError(exc.errors())
+        else:  # pragma: no cover - the payload is meant to fail
+            raise AssertionError("payload was expected to fail validation")
+        response = await main._validation_error_handler(request_stub, wrapped)
+        body = json.loads(response.body)
+        assert body["code"] == "LB-VAL-001"
+        return {entry["field"]: entry["message"] for entry in body["detail"]}
+
+    async def test_a_rejected_accent_names_the_accents_it_would_have_taken(
+        self, request_stub
+    ):
+        messages = await self._messages(
+            request_stub, EmailTemplatePreviewRequest, {"header_accent": "#123456"}
+        )
+
+        assert "Invalid value." not in messages["header_accent"]
+        assert "available accents" in messages["header_accent"]
+        # The seven are the whole point of the message; one is enough to prove
+        # the list survived.
+        assert ACCENT_INDIGO in messages["header_accent"]
+
+    async def test_a_rejected_layout_names_the_layouts_it_would_have_taken(
+        self, request_stub
+    ):
+        messages = await self._messages(
+            request_stub, EmailTemplatePreviewRequest, {"layout": "newsletter"}
+        )
+
+        for layout in LAYOUTS:
+            assert layout in messages["layout"]
+
+    async def test_the_field_name_still_comes_through(self, request_stub):
+        messages = await self._messages(
+            request_stub, EmailTemplateUpdate, {"header_accent": "#123456"}
+        )
+
+        assert set(messages) == {"header_accent"}
+
+    async def test_pydantics_own_prefix_is_not_shown_to_the_reader(self, request_stub):
+        # Pydantic reports a validator's text as "Value error, <text>". That
+        # prefix is an implementation detail of the library and reads as noise
+        # in a toast.
+        messages = await self._messages(
+            request_stub, EmailTemplatePreviewRequest, {"layout": "newsletter"}
+        )
+
+        assert not messages["layout"].startswith("Value error")
+
+    async def test_an_unsafe_validator_message_degrades_to_the_old_wording(
+        self, request_stub
+    ):
+        """A validator is free to raise a ValueError carrying library internals.
+
+        Those must not reach the client — but they must not read as a server
+        fault either, which is what the generic system message would imply for
+        what is really a bad field.
+        """
+
+        class Leaky(BaseModel):
+            token: str
+
+            @field_validator("token")
+            @classmethod
+            def _reject(cls, value: str) -> str:
+                raise ValueError("SELECT secret FROM users WHERE id = 1")
+
+        messages = await self._messages(request_stub, Leaky, {"token": "x"})
+
+        assert messages["token"] == "Invalid value."
+
+    async def test_the_built_in_constraints_keep_their_short_rewrites(
+        self, request_stub
+    ):
+        # Only value_error changed. The schema-path noise the handler exists to
+        # strip is still stripped.
+        class Required(BaseModel):
+            required_thing: str
+
+        messages = await self._messages(request_stub, Required, {})
+
+        assert messages["required_thing"] == "This field is required."

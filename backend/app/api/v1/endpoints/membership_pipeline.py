@@ -1364,17 +1364,35 @@ async def regress_prospect(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.regress_prospect(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        regressed_by=current_user.id,
-        notes=data.notes if data else None,
-    )
+    try:
+        prospect = await service.regress_prospect(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            regressed_by=current_user.id,
+            notes=data.notes if data else None,
+        )
+    except ValueError as e:
+        # 409, not 400, and mirroring /advance: the request is well-formed,
+        # the prospect just has nowhere to go back to (or a status that stops
+        # the move). Answering 200 here previously let the UI report a
+        # movement that never happened.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Prospect not found",
         )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_regressed",
+        event_category="membership",
+        severity="info",
+        event_data={"prospect_id": str(prospect_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return prospect
 
 

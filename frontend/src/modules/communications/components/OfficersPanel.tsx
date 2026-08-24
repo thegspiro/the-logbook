@@ -341,7 +341,7 @@ const OfficersPanel: React.FC<OfficersPanelProps> = ({ members, isLoadingMembers
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-red-600 p-2">
+        <div className="rounded-lg bg-red-800 p-2">
           <UserCheck className="h-5 w-5 text-white" aria-hidden="true" />
         </div>
         <div>

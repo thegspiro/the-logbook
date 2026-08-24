@@ -172,6 +172,26 @@ class EmailTemplatePreviewRequest(BaseModel):
     layout: Optional[str] = None
     context: Dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("header_accent", "layout", mode="before")
+    @classmethod
+    def _blank_means_not_supplied(cls, value: Any) -> Any:
+        """A blank accent or layout is an absent one, not an invalid one.
+
+        Both columns are nullable, and a template that has neither renders
+        with the colourway and layout shipped for its type — so "unset" is a
+        supported state, and the editor holds it as an empty string like any
+        other unfilled field. The endpoint below already falls back to the
+        saved value for a falsy override; without this the request never got
+        that far, and a template with no stored accent 422'd every preview.
+
+        Only on the preview request: an update carrying a blank accent is a
+        different thing entirely, a write that would clear a column the UI
+        offers no way to clear, and it stays rejected.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     _check_accent = field_validator("header_accent")(
         EmailTemplateUpdate._accent_must_be_a_known_colourway.__func__
     )
