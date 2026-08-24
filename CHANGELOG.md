@@ -60,6 +60,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payment policy — the three things the countdown, the checkout tiles and the
   post-submit wording need.
 
+### The events list now shows what it wants from you (2026-08-24)
+
+**Added**
+
+- **A "Needs You" band above `/events`**, holding only events with an
+  outstanding action — check-in open now, mandatory with no RSVP, mandatory and
+  ended with no check-in recorded — each beside the single control that clears
+  it. Capped at five rows, and rendered not at all when there is nothing to do.
+- **Event cards ranked by state.** A coloured left accent and a status strip
+  naming what the event wants; routine events get neither, which is what makes
+  the urgent ones findable. The card gained a footer carrying RSVP / Check In /
+  add-to-calendar, so the common actions no longer need the detail page.
+- **`GET /events/missed-mandatory`** and new `EventListItem` fields
+  (`rsvp_deadline`, `max_attendees`, the derived check-in window,
+  `user_attended`, `credited_hours`, `hour_category_label`) — the list response
+  could not previously support any of the above.
+
+**Fixed**
+
+- **Members are no longer told they missed drills they could not have
+  attended.** A mandatory-and-no-check-in query also catches events held before
+  the member was hired, events during an approved leave of absence, and events
+  mandatory only for a membership type they do not hold. None can be cleared by
+  responding, which is what the band promises. All three are excluded
+  server-side so a client cannot skip the check. This is the first code to read
+  `mandatory_membership_types`, which had been stored and projected and never
+  consulted.
+- **Credited hours are stated as a ceiling, not a fact.** The figure is the
+  event's scheduled length under the org's hour mappings; what reaches a
+  member's record is their attended time, settled at check-out. The row now
+  reads "Credits up to 2.0 drill hours".
+
 ### Submit External Training asked one question with three controls (2026-08-23)
 
 **Changed**
@@ -107,6 +139,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings then in force. Drafts stay out of the officer queue. The `draft`
   status existed on the model and in the edit/delete guards but had no way to
   be reached.
+
+### NFC ID cards: review-round fixes (2026-08-23)
+
+**Fixed**
+
+- **A lost card could be reactivated through the API.** The model documented
+  the state as terminal — whoever picked the card up can still tap it — but
+  only the screen enforced it, by hiding the button. `PATCH /nfc-tags/{id}`
+  accepted `lost → active` and cleared the revocation stamp with it. The
+  transition is now refused server-side for `lost` and `revoked`; `suspended`
+  remains the reversible state, and a lost card can still be relabelled.
+- **An `inactive` member's card went on recording attendance.** The refusal set
+  covered suspended, dropped and archived members but not `inactive`, even
+  though `User.is_active` treats it as not active and the station's own refusal
+  text says "not currently active". Retired and on-leave members keep working
+  cards, which is deliberate — they still attend meetings and banquets.
+- **Admin hours started at a station were recorded as QR scans.** `clock_in`
+  hardcoded `entry_method=qr_scan`, so an export or an audit could not tell a
+  member scanning a category's QR code with their own phone from an officer
+  tapping their card at a station. Added `nfc_station` to the enum and threaded
+  the method through. Historical rows are left alone: a past `qr_scan` really
+  was written by the QR path.
+- **A 24-hour shift disappeared from the station at midnight.** A shift is
+  filed under the date it _started_, and the station asked only for the
+  operator's current local date — so the crew actually on duty vanished from
+  the selector at the turn of the day. It now queries yesterday as well, and
+  drops a yesterday-dated shift that has already ended.
+- **A finished event could still be armed against.** The event window filtered
+  on start time alone, so a drill that ended hours ago stayed in the list — and
+  because the list is ordered by start time it could be the _default_, leaving
+  an operator armed against an event whose check-in window had shut, with every
+  tap refused. Now bounded by `end_after` as well.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
