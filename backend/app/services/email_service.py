@@ -312,15 +312,22 @@ def wrap_email_body(
         context = EmailTemplateService.build_context({}, organization)
         footer_block = str(context.get("footer_html", ""))
 
+    accent = header_color or ACCENT_RED
     body = build_shell(
         _html.escape(title),
         body_html,
-        accent=header_color or ACCENT_RED,
+        accent=accent,
         chip=chip,
         subtitle=subtitle,
     )
-    # build_shell writes the shell as a template; this path does not go
-    # through variable substitution, so the two it emits are filled in here.
+    # build_shell writes the shell as a template and this path never goes
+    # through variable substitution, so every token it emits is filled in
+    # here. Missing the colourway ones mailed a literal
+    # "border-top-color: {{header_accent}};" and, on the test email, a chip
+    # reading "{{status_chip}}" — to every scheduled task and alert, which
+    # are exactly the sends nobody is looking at when they go out.
+    for _key, _value in colourway_context(accent, chip).items():
+        body = body.replace("{{" + _key + "}}", str(_value))
     body = body.replace(
         "{{organization_logo_cell}}", build_email_logo_cell(organization)
     )

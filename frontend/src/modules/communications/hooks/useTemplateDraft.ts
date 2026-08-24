@@ -83,11 +83,37 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     setDefaultBcc((source.default_bcc ?? []).join(', '));
   }, [source]);
 
-  // Re-seed when a different template is selected, or when a save comes back
-  // and the server's copy is now the baseline.
+  /**
+   * Re-seed when a different template is selected, or when a save comes back
+   * and the server's copy is the new baseline.
+   *
+   * Keyed on the baseline *values*, not on the template object's identity.
+   * Toggling Active, or uploading an attachment, refetches the list and hands
+   * back a new object with every editable field unchanged — and an effect
+   * depending on identity re-ran on that and silently restored the form,
+   * throwing away whatever was typed. There is no warning for that, and no
+   * undo: the draft is simply gone.
+   */
+  const baseline = [
+    source.id,
+    source.subject,
+    source.html_body,
+    source.text_body ?? '',
+    source.css_styles ?? '',
+    source.footer_key ?? '',
+    source.header_accent ?? '',
+    source.status_chip ?? '',
+    source.layout ?? '',
+    origCc,
+    origBcc,
+  ].join('\u0000');
+
   useEffect(() => {
     discard();
-  }, [discard]);
+    // `discard` is intentionally omitted: it changes identity with `source`,
+    // which is the very thing this must not react to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseline]);
 
   const ccError = validateEmailList(defaultCc);
   const bccError = validateEmailList(defaultBcc);

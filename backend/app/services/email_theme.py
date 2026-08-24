@@ -63,6 +63,8 @@ that has already customised a body keeps rendering — it simply does not get
 the accent rule or the chip until it resets that template.
 """
 
+import html as _html
+
 # Header accents.  White text on each of these clears WCAG 2.1 AA (4.5:1):
 # red 6.5:1, amber 5.0:1, green 5.5:1, blue 6.7:1, indigo 7.9:1,
 # violet 7.1:1, slate 10.3:1.
@@ -75,6 +77,12 @@ ACCENT_VIOLET = "#6d28d9"
 ACCENT_SLATE = "#334155"
 
 # Body copy on white is 14.7:1, muted footer text on the page grey is 6.9:1.
+#
+# .muted keeps #4b5563 rather than the #94a3b8 the 1b spec names. At 11px it
+# carries the department's phone number and mailing address — email_footers
+# applies it to the contact line — and #94a3b8 is 2.6:1 on the white card,
+# well under the 4.5:1 AA floor for small text. The spec picked it to sit
+# quietly under the footer; it sits too quietly to read.
 DEFAULT_CSS = """
 body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #334155; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
 .container { width: 100%; max-width: 600px; margin: 0 auto; padding: 24px 12px; }
@@ -126,7 +134,7 @@ body { margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-sys
 .fineprint { margin: 14px 0 18px 0; font-size: 13px; line-height: 1.6; color: #64748b; }
 .footer p { margin: 0 0 6px 0; font-size: 12px; line-height: 1.6; color: #4b5563; }
 .footer { padding: 22px 16px 4px 16px; text-align: center; font-size: 12px; line-height: 1.6; color: #4b5563; }
-.muted { font-size: 11px; line-height: 1.6; color: #94a3b8; }
+.muted { font-size: 11px; line-height: 1.6; color: #4b5563; }
 """
 
 # The chip's tint, per accent. A notice names its category once and
@@ -198,17 +206,43 @@ def colourway_for(html: str) -> dict:
     return dict(_SHELL_COLOURWAYS.get(html, {}))
 
 
-def colourway_context(accent: str, chip: str) -> dict:
-    """The three variables :func:`build_shell` leaves for the renderer.
+def colourway_context(accent: str, chip: str, layout: str = DEFAULT_LAYOUT) -> dict:
+    """Every variable :func:`build_shell` leaves for the renderer.
 
-    One place, so a caller cannot fill two of the three and leave the chip
-    reading ``{{status_chip}}`` in somebody's inbox. An accent outside the
-    map takes the slate tint, which reads as deliberate rather than broken.
+    One place, so a caller cannot fill three of them and leave a fourth
+    reading ``{{status_chip_cell}}`` in somebody's inbox. An accent outside
+    the map takes the slate tint, and an unrecognised layout the default
+    content class — both read as deliberate rather than broken, which
+    matters because ``wrap_email_body`` callers pass hexes that are not
+    ``ACCENT_*`` constants.
+
+    ``status_chip_cell`` is the whole ``<td>``, not just its text. The chip
+    is optional and the template system has no conditionals, so a cell
+    written into the shell around an empty ``{{status_chip}}`` renders as a
+    tinted pill with nothing in it — the same reason the logo cell is built
+    as a unit.
+
+    ``content_class`` is what makes ``layout`` a setting rather than a
+    stored value nobody reads: the class has to be chosen when the mail is
+    rendered, from the column, not frozen into the body the day it was
+    written.
     """
+    tint = CHIP_TINTS.get(accent, CHIP_TINTS[ACCENT_SLATE])
+    cell = ""
+    if chip:
+        cell = (
+            '<td style="text-align: right;">'
+            f'<span class="chip" style="background-color: {tint}; '
+            f'color: {accent};">{_html.escape(str(chip))}</span></td>'
+        )
     return {
         "header_accent": accent,
-        "chip_tint": CHIP_TINTS.get(accent, CHIP_TINTS[ACCENT_SLATE]),
+        "chip_tint": tint,
         "status_chip": chip,
+        "status_chip_cell": cell,
+        "content_class": _LAYOUT_CONTENT_CLASS.get(
+            layout or DEFAULT_LAYOUT, _LAYOUT_CONTENT_CLASS[DEFAULT_LAYOUT]
+        ),
     }
 
 
@@ -304,16 +338,14 @@ def build_shell(
         raise ValueError(f"unknown layout {layout!r}; expected one of {LAYOUTS}")
     content = content.replace("{accent}", "{{header_accent}}")
 
+    # Both cells are render-time tokens rather than markup decided here: the
+    # logo and the chip are each optional, and which of them a given send
+    # actually has is not knowable when the body is written.
     cells = [
         "            {{organization_logo_cell}}",
         '            <td style="padding-left: 10px;">' + brand + "</td>",
+        "            {{status_chip_cell}}",
     ]
-    if chip:
-        cells.append(
-            '            <td style="text-align: right;">'
-            '<span class="chip" style="background-color: {{chip_tint}}; '
-            'color: {{header_accent}};">{{status_chip}}</span></td>'
-        )
 
     head = [
         '<div class="container">',
@@ -330,7 +362,7 @@ def build_shell(
         [
             *head,
             "    </div>",
-            '    <div class="' + _LAYOUT_CONTENT_CLASS[layout] + '">',
+            '    <div class="{{content_class}}">',
             content.rstrip("\n"),
             "    </div>",
             "    {{footer_html}}",

@@ -390,9 +390,18 @@ const EmailTemplatesPage: React.FC = () => {
                   onClick={() => {
                     void handleSendTest();
                   }}
-                  disabled={isSendingTest}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50"
-                  title="Send this template to your own address"
+                  disabled={isSendingTest || draft.isDirty}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  // The endpoint renders the stored row, so with unsaved edits
+                  // on screen this would mail the previous version while the
+                  // preview beside it shows the new one — and the whole point
+                  // of the button is checking what a real inbox does with the
+                  // thing you are looking at.
+                  title={
+                    draft.isDirty
+                      ? 'Save first — a test email sends the saved template, not your unsaved edits'
+                      : 'Send this template to your own address'
+                  }
                 >
                   {isSendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   <span>Send Test to Me</span>

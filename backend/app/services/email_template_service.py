@@ -199,6 +199,8 @@ RENDERER_INJECTED_VARIABLES: frozenset = frozenset(
         "header_accent",
         "chip_tint",
         "status_chip",
+        "status_chip_cell",
+        "content_class",
         "footer_html",
         "footer_text",
     }
@@ -2346,6 +2348,11 @@ class EmailTemplateService:
             or template.html_body != defn["html"]
             or (template.text_body or "") != (defn["text"] or "")
             or (template.footer_key or None) != defn.get("footer")
+            # A department that changed only the stylesheet has changed how
+            # its mail looks, and Reset would put that back — so leaving it
+            # out labelled the template Default and hid it from the Edited
+            # filter while Reset stood ready to undo their work.
+            or (template.css_styles or None) is not None
         )
 
     async def sent_counts(self, organization_id: str) -> Dict[str, int]:
@@ -2765,8 +2772,11 @@ class EmailTemplateService:
             chip = getattr(template, "status_chip", None)
             if chip is None:
                 chip = defaults.get("chip", "")
+            layout = getattr(template, "layout", None) or defaults.get(
+                "layout", DEFAULT_LAYOUT
+            )
             if accent:
-                colourway = colourway_context(accent, chip)
+                colourway = colourway_context(accent, chip, layout)
         for key, value in colourway.items():
             ctx.setdefault(key, value)
 
@@ -2842,6 +2852,10 @@ class EmailTemplateService:
         # listing them keeps the set honest about what is markup-bearing.
         "header_accent",
         "chip_tint",
+        # The chip cell is markup, not text — it is built by
+        # colourway_context, which escapes the chip's own wording.
+        "status_chip_cell",
+        "content_class",
         "ballot_items_html",
         "results_html",
         "ballot_recipients_html",
