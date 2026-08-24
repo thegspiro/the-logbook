@@ -116,17 +116,19 @@ async def pipeline_widget_summary(
 
     View-only users receive counts and aging buckets.  Names are deliberately
     opt-in for managers, matching the detailed-record permission boundary.
+    All results omit the caller's own prospective-membership record.
     """
     from app.models.membership_pipeline import ProspectiveMember
 
     now = datetime.now(timezone.utc)
-    query = select(ProspectiveMember).where(
+    prospect_query = select(ProspectiveMember).where(
         ProspectiveMember.organization_id == current_user.organization_id
     )
     if hidden_prospect_ids:
-        query = query.where(ProspectiveMember.id.notin_(hidden_prospect_ids))
-
-    rows = (await db.execute(query)).scalars().all()
+        prospect_query = prospect_query.where(
+            ProspectiveMember.id.notin_(hidden_prospect_ids)
+        )
+    rows = (await db.execute(prospect_query)).scalars().all()
     by_status: dict[str, int] = {}
     aging = {"0_7_days": 0, "8_30_days": 0, "31_plus_days": 0}
     for prospect in rows:

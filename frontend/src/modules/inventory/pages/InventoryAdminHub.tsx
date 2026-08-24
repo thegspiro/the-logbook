@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Package,
   Tag,
@@ -23,7 +23,6 @@ import {
   MapPin,
   FileX,
   Truck,
-  AlertTriangle,
   Clock,
   BoxSelect,
   Ruler,
@@ -36,7 +35,10 @@ import {
   Building2,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
+import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
+import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import type {
@@ -125,8 +127,30 @@ const Section: React.FC<SectionProps> = ({ title, children }) => (
   </div>
 );
 
+type AdminTab = 'overview' | 'settings';
+
+/** Settings is always last — the frame's rule, on every module. */
+const TABS: AdminHubTab<AdminTab>[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'settings', label: 'Settings' },
+];
+
 export const InventoryAdminHub: React.FC = () => {
-  const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('inventory.manage');
+  const { isModuleOn } = useEnabledModules();
+  // The store is a separate module with its own grant. Gating this card the
+  // same way every navigation surface does keeps it from being the one door
+  // into a console the department has not enabled — which is how a store got
+  // set up that members could never see, since their side nav reads the same
+  // module flag this card was ignoring.
+  const canOpenStore = isModuleOn('storefront') && checkPermission('storefront.manage');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as AdminTab | null;
+  const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
+  // Bumped when the settings tab saves, so the metrics row above it reflects
+  // the new selection without a page reload.
+  const [frameToken, setFrameToken] = useState(0);
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [pendingReturns, setPendingReturns] = useState(0);
@@ -166,348 +190,265 @@ export const InventoryAdminHub: React.FC = () => {
     void loadSummary();
   }, [loadSummary]);
 
+  const actions: AdminHubAction[] = [
+    {
+      key: 'refresh',
+      label: 'Refresh inventory counts',
+      icon: RefreshCw,
+      busy: loading,
+      onClick: () => {
+        void loadSummary();
+        setFrameToken((token) => token + 1);
+      },
+    },
+  ];
+
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-              <Package className="h-6 w-6 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-theme-text-primary truncate text-xl font-bold sm:text-2xl">
-                Gear & Uniforms Administration
-              </h1>
-              <p className="text-theme-text-muted text-sm">Manage equipment, assignments, and compliance</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
-            {canManage && (
-              <button
-                onClick={() => setMemberPickerOpen(true)}
-                className="btn-info btn-md flex items-center gap-2"
-                title="Assign items to an individual member"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span className="hidden sm:inline">Assign to Member</span>
-                <span className="sm:hidden">Assign</span>
-              </button>
-            )}
-            <button
-              onClick={() => {
-                void loadSummary();
-              }}
-              className="btn-secondary btn-md"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="sr-only sm:not-sr-only">Refresh</span>
-            </button>
-          </div>
+    <AdminHubFrame<AdminTab>
+      moduleKey="inventory"
+      title="Gear & Uniforms Administration"
+      description="Manage equipment, assignments, and compliance"
+      actions={actions}
+      primaryAction={
+        canManage
+          ? {
+              key: 'assign',
+              label: 'Assign to Member',
+              icon: UserPlus,
+              onClick: () => setMemberPickerOpen(true),
+            }
+          : undefined
+      }
+      tabs={TABS}
+      activeTab={activeTab}
+      onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab })}
+      refreshToken={frameToken}
+    >
+      {activeTab === 'settings' ? (
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <AdminMetricsSettings
+            moduleKey="inventory"
+            moduleLabel="Gear & Uniforms"
+            permission="inventory.manage"
+            onSaved={() => setFrameToken((token) => token + 1)}
+          />
         </div>
-
-        {/* Quick stats bar */}
-        {summary && (
-          <div className="text-theme-text-muted mb-8 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-            <span>
-              <span className="font-semibold text-green-600 dark:text-green-400">
-                {summary.items_by_status['available'] ?? 0}
-              </span>{' '}
-              available
-            </span>
-            <span>
-              <span className="font-semibold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</span> checked
-              out
-            </span>
-            {summary.maintenance_due_count > 0 && (
-              <span>
-                <span className="font-semibold text-orange-600 dark:text-orange-400">
-                  {summary.maintenance_due_count}
-                </span>{' '}
-                maintenance due
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
+      ) : (
+        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+          {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
             three dropdowns that have nothing in them. */}
-        {setupStatus && !setupStatus.is_complete && (
-          <Link
-            to="/inventory/admin/setup"
-            className="mb-8 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 transition-colors hover:bg-blue-500/15 sm:p-4"
-          >
-            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">Finish inventory setup</h3>
-              <p className="text-xs text-blue-600 dark:text-blue-400">
-                Still to set up:{' '}
-                {[
-                  setupStatus.rooms === 0 ? 'rooms' : null,
-                  setupStatus.storage_areas === 0 ? 'storage areas' : null,
-                  setupStatus.categories === 0 ? 'categories' : null,
-                  setupStatus.items === 0 ? 'items' : null,
-                ]
-                  .filter(Boolean)
-                  .join(', ')}
-                . The guide walks through them in order.
-              </p>
-            </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-          </Link>
-        )}
-
-        {/* Low stock alerts */}
-        {lowStockAlerts.length > 0 && (
-          <div className="mb-8 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 sm:p-4">
-            <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-                <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">
-                  Low Stock Alerts ({lowStockAlerts.length})
-                </h3>
+          {setupStatus && !setupStatus.is_complete && (
+            <Link
+              to="/inventory/admin/setup"
+              className="mb-8 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 transition-colors hover:bg-blue-500/15 sm:p-4"
+            >
+              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
+                <Sparkles className="h-5 w-5 text-white" />
               </div>
-              <Link
-                to="/inventory/admin/reorder"
-                className="text-xs font-medium text-yellow-700 hover:underline dark:text-yellow-300"
-              >
-                Create Reorder Request &rarr;
-              </Link>
-            </div>
-            <div className="space-y-2">
-              {lowStockAlerts.slice(0, 5).map((alert) => (
-                <div
-                  key={alert.category_id}
-                  className="flex flex-col justify-between gap-1 rounded bg-yellow-500/5 px-3 py-2 sm:flex-row sm:items-center sm:gap-2"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                        {alert.category_name}
-                      </p>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:hidden ${
-                          alert.current_stock === 0
-                            ? 'bg-red-500/20 text-red-700 dark:text-red-400'
-                            : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                        }`}
-                      >
-                        {alert.current_stock === 0 ? 'Out' : 'Low'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                      {alert.current_stock} in stock &middot; threshold: {alert.threshold}
-                      {alert.items && alert.items.length > 0 && (
-                        <span className="ml-1 hidden sm:inline">
-                          ({alert.items.map((i) => `${i.name}: ${i.quantity}`).join(', ')})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <span
-                    className={`hidden shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:inline ${
-                      alert.current_stock === 0
-                        ? 'bg-red-500/20 text-red-700 dark:text-red-400'
-                        : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                    }`}
-                  >
-                    {alert.current_stock === 0 ? 'Out of stock' : 'Low'}
-                  </span>
-                </div>
-              ))}
-              {lowStockAlerts.length > 5 && (
-                <p className="text-xs text-yellow-500">
-                  ...and {lowStockAlerts.length - 5} more categories below threshold
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">Finish inventory setup</h3>
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  Still to set up:{' '}
+                  {[
+                    setupStatus.rooms === 0 ? 'rooms' : null,
+                    setupStatus.storage_areas === 0 ? 'storage areas' : null,
+                    setupStatus.categories === 0 ? 'categories' : null,
+                    setupStatus.items === 0 ? 'items' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
+                  . The guide walks through them in order.
                 </p>
-              )}
-            </div>
+              </div>
+              <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+            </Link>
+          )}
+
+          {/* Prominent top cards */}
+          <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ProminentCard
+              to="/inventory/admin/items"
+              icon={<Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+              title="Items"
+              description="Browse, add, edit, and manage individual equipment"
+              stat={summary?.total_items}
+              statLabel="total"
+              iconBg="bg-blue-500/10"
+            />
+            <ProminentCard
+              to="/inventory/admin/members"
+              icon={<Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+              title="Members"
+              description="View and manage per-member equipment assignments"
+              iconBg="bg-emerald-500/10"
+            />
+            <ProminentCard
+              to="/inventory/checkouts"
+              icon={<ArrowDownToLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+              title="Checkouts"
+              description="Manage active and overdue equipment checkouts"
+              stat={summary?.overdue_checkouts}
+              statLabel="overdue"
+              iconBg="bg-amber-500/10"
+            />
           </div>
-        )}
 
-        {/* Prominent top cards */}
-        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <ProminentCard
-            to="/inventory/admin/items"
-            icon={<Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-            title="Items"
-            description="Browse, add, edit, and manage individual equipment"
-            stat={summary?.total_items}
-            statLabel="total"
-            iconBg="bg-blue-500/10"
-          />
-          <ProminentCard
-            to="/inventory/admin/members"
-            icon={<Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
-            title="Members"
-            description="View and manage per-member equipment assignments"
-            iconBg="bg-emerald-500/10"
-          />
-          <ProminentCard
-            to="/inventory/checkouts"
-            icon={<ArrowDownToLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-            title="Checkouts"
-            description="Manage active and overdue equipment checkouts"
-            stat={summary?.overdue_checkouts}
-            statLabel="overdue"
-            iconBg="bg-amber-500/10"
-          />
+          {/* Inventory Management */}
+          <div className="space-y-8">
+            <Section title="Inventory Management">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <NavCard
+                  to="/inventory/admin/pool"
+                  icon={<Layers className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+                  title="Pool Items"
+                  description="Manage quantity-tracked items, issue to members"
+                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                />
+                <NavCard
+                  to="/inventory/admin/categories"
+                  icon={<Tag className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+                  title="Categories"
+                  description="Organize items by type with tracking settings"
+                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                />
+                <NavCard
+                  to="/inventory/admin/kits"
+                  icon={<BoxSelect className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
+                  title="Gear Kits"
+                  description="Create and manage kit templates for multi-item issuance"
+                  iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                />
+                <NavCard
+                  to="/inventory/admin/variant-groups"
+                  icon={<Ruler className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
+                  title="Variant Groups"
+                  description="Group pool item variants by size, style, and color"
+                  iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                />
+                <NavCard
+                  to="/inventory/admin/allowances"
+                  icon={<SlidersHorizontal className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+                  title="Issuance Allowances"
+                  description="Cap how many units per category a member can be issued"
+                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                />
+                <NavCard
+                  to="/inventory/admin/impact-planner"
+                  icon={<Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
+                  title="Impact Planner"
+                  description="Plan a new issue: who's impacted, sizes needed, who to contact"
+                  iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                />
+                <NavCard
+                  to="/inventory/admin/maintenance"
+                  icon={<Wrench className="h-5 w-5 text-orange-600 dark:text-orange-400" />}
+                  title="Maintenance"
+                  description="Track inspections, repairs, and compliance"
+                  badge={summary?.maintenance_due_count}
+                  badgeColor="bg-orange-500/10 text-orange-700 dark:text-orange-400"
+                  iconBg="bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                />
+                <NavCard
+                  to="/inventory/storage-areas"
+                  icon={<MapPin className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
+                  title="Storage Areas"
+                  description="Manage storage locations within facilities"
+                  iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+                />
+                <NavCard
+                  to="/inventory/admin/vendors"
+                  icon={<Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
+                  title="Vendors"
+                  description="Suppliers, their contacts, and what we buy from them"
+                  iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+                />
+              </div>
+            </Section>
+
+            {/* Requests & Workflows */}
+            <Section title="Requests & Workflows">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <NavCard
+                  to="/inventory/admin/requests"
+                  icon={<ClipboardList className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
+                  title="Gear Requests"
+                  description="Review member requests for equipment"
+                  badge={pendingRequests > 0 ? pendingRequests : undefined}
+                  badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                  iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                />
+                <NavCard
+                  to="/inventory/admin/returns"
+                  icon={<CornerDownLeft className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
+                  title="Return Requests"
+                  description="Review and process member return requests"
+                  badge={pendingReturns > 0 ? pendingReturns : undefined}
+                  badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                  iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                />
+                <NavCard
+                  to="/inventory/admin/charges"
+                  icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
+                  title="Charges"
+                  description="Cost recovery for lost or damaged items"
+                  iconBg="bg-green-500/10 text-green-600 dark:text-green-400"
+                />
+                <NavCard
+                  to="/inventory/admin/write-offs"
+                  icon={<FileX className="h-5 w-5 text-red-600 dark:text-red-400" />}
+                  title="Write-Offs"
+                  description="Process loss and damage write-off requests"
+                  iconBg="bg-red-500/10 text-red-600 dark:text-red-400"
+                />
+                <NavCard
+                  to="/inventory/admin/reorder"
+                  icon={<Truck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+                  title="Reorder Requests"
+                  description="Track and manage supply reorder requests"
+                  badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
+                  badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                  iconBg="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                />
+                <NavCard
+                  to="/scheduling/supply/expiring"
+                  icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+                  title="Expiring on Apparatus"
+                  description="Items expiring on the trucks and ready replacement stock"
+                  iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                />
+              </div>
+            </Section>
+
+            {/* Tools */}
+            <Section title="Tools">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <NavCard
+                  to="/inventory/admin/setup"
+                  icon={<Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+                  title="Setup Guide"
+                  description="Rooms, storage, categories, and first items in order"
+                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                />
+                <NavCard
+                  to="/inventory/import"
+                  icon={<Upload className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
+                  title="Import / Export"
+                  description="Bulk import from CSV or export inventory data"
+                />
+                {canOpenStore && (
+                  <NavCard
+                    to="/store/admin"
+                    icon={<Store className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
+                    title="Department Store"
+                    description="Order windows, catalog, and member order payments"
+                  />
+                )}
+              </div>
+            </Section>
+          </div>
         </div>
-
-        {/* Inventory Management */}
-        <div className="space-y-8">
-          <Section title="Inventory Management">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <NavCard
-                to="/inventory/admin/pool"
-                icon={<Layers className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                title="Pool Items"
-                description="Manage quantity-tracked items, issue to members"
-                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              />
-              <NavCard
-                to="/inventory/admin/categories"
-                icon={<Tag className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                title="Categories"
-                description="Organize items by type with tracking settings"
-                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              />
-              <NavCard
-                to="/inventory/admin/kits"
-                icon={<BoxSelect className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                title="Gear Kits"
-                description="Create and manage kit templates for multi-item issuance"
-                iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
-              />
-              <NavCard
-                to="/inventory/admin/variant-groups"
-                icon={<Ruler className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                title="Variant Groups"
-                description="Group pool item variants by size, style, and color"
-                iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
-              />
-              <NavCard
-                to="/inventory/admin/allowances"
-                icon={<SlidersHorizontal className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                title="Issuance Allowances"
-                description="Cap how many units per category a member can be issued"
-                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              />
-              <NavCard
-                to="/inventory/admin/impact-planner"
-                icon={<Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                title="Impact Planner"
-                description="Plan a new issue: who's impacted, sizes needed, who to contact"
-                iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
-              />
-              <NavCard
-                to="/inventory/admin/maintenance"
-                icon={<Wrench className="h-5 w-5 text-orange-600 dark:text-orange-400" />}
-                title="Maintenance"
-                description="Track inspections, repairs, and compliance"
-                badge={summary?.maintenance_due_count}
-                badgeColor="bg-orange-500/10 text-orange-700 dark:text-orange-400"
-                iconBg="bg-orange-500/10 text-orange-600 dark:text-orange-400"
-              />
-              <NavCard
-                to="/inventory/storage-areas"
-                icon={<MapPin className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
-                title="Storage Areas"
-                description="Manage storage locations within facilities"
-                iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-              />
-              <NavCard
-                to="/inventory/admin/vendors"
-                icon={<Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
-                title="Vendors"
-                description="Suppliers, their contacts, and what we buy from them"
-                iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-              />
-            </div>
-          </Section>
-
-          {/* Requests & Workflows */}
-          <Section title="Requests & Workflows">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <NavCard
-                to="/inventory/admin/requests"
-                icon={<ClipboardList className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
-                title="Gear Requests"
-                description="Review member requests for equipment"
-                badge={pendingRequests > 0 ? pendingRequests : undefined}
-                badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-              />
-              <NavCard
-                to="/inventory/admin/returns"
-                icon={<CornerDownLeft className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
-                title="Return Requests"
-                description="Review and process member return requests"
-                badge={pendingReturns > 0 ? pendingReturns : undefined}
-                badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-              />
-              <NavCard
-                to="/inventory/admin/charges"
-                icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
-                title="Charges"
-                description="Cost recovery for lost or damaged items"
-                iconBg="bg-green-500/10 text-green-600 dark:text-green-400"
-              />
-              <NavCard
-                to="/inventory/admin/write-offs"
-                icon={<FileX className="h-5 w-5 text-red-600 dark:text-red-400" />}
-                title="Write-Offs"
-                description="Process loss and damage write-off requests"
-                iconBg="bg-red-500/10 text-red-600 dark:text-red-400"
-              />
-              <NavCard
-                to="/inventory/admin/reorder"
-                icon={<Truck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-                title="Reorder Requests"
-                description="Track and manage supply reorder requests"
-                badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
-                badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                iconBg="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-              />
-              <NavCard
-                to="/scheduling/supply/expiring"
-                icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-                title="Expiring on Apparatus"
-                description="Items expiring on the trucks and ready replacement stock"
-                iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
-              />
-            </div>
-          </Section>
-
-          {/* Tools */}
-          <Section title="Tools">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <NavCard
-                to="/inventory/admin/setup"
-                icon={<Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                title="Setup Guide"
-                description="Rooms, storage, categories, and first items in order"
-                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              />
-              <NavCard
-                to="/inventory/import"
-                icon={<Upload className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
-                title="Import / Export"
-                description="Bulk import from CSV or export inventory data"
-              />
-              <NavCard
-                to="/store/admin"
-                icon={<Store className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
-                title="Department Store"
-                description="Order windows, catalog, and member order payments"
-              />
-            </div>
-          </Section>
-        </div>
-      </div>
+      )}
 
       {/* Quick-assign: pick a member, then assign items to them */}
       <MemberPickerModal
@@ -527,9 +468,10 @@ export const InventoryAdminHub: React.FC = () => {
         memberName={assignTarget?.memberName ?? ''}
         onComplete={() => {
           void loadSummary();
+          setFrameToken((token) => token + 1);
         }}
       />
-    </div>
+    </AdminHubFrame>
   );
 };
 

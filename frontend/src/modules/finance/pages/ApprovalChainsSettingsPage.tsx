@@ -301,7 +301,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
         >
           <Plus className="h-4 w-4" />
           New Chain
@@ -418,7 +418,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               type="button"
               disabled={busy}
               onClick={() => void handleCreate()}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Create Chain
             </button>

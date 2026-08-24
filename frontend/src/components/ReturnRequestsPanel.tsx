@@ -164,7 +164,7 @@ const ReturnRequestsPanel: React.FC = () => {
                           setOverrideCondition('');
                           setReviewNotes('');
                         }}
-                        className="rounded-lg bg-red-600 p-1.5 text-white transition-colors hover:bg-red-700"
+                        className="rounded-lg bg-red-800 p-1.5 text-white transition-colors hover:bg-red-900"
                         title="Deny return"
                       >
                         <XCircle className="h-4 w-4" />
@@ -274,7 +274,7 @@ const ReturnRequestsPanel: React.FC = () => {
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
                     reviewAction === RequestStatus.APPROVED
                       ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-red-600 hover:bg-red-700'
+                      : 'bg-red-800 hover:bg-red-900'
                   }`}
                 >
                   {submitting ? 'Processing...' : reviewAction === RequestStatus.APPROVED ? 'Approve & Return' : 'Deny'}

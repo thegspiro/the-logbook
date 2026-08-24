@@ -720,6 +720,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/members/check-in-station',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/members/admin',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'ratchet',
@@ -1096,6 +1102,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/storefront/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/store/checkout',
+    source: 'src/modules/storefront/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'reachable only with a cart, which is deliberately unpersisted — an empty cart redirects to /store, so a ratchet entry would silently re-measure the catalog and read as coverage it is not. Its mobile layout (sticky total + submit bar, stacked payment and fulfilment tiles) is covered by CheckoutPage.test.tsx.',
   },
   {
     path: '/store/orders',

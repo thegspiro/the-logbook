@@ -254,7 +254,7 @@ const TrainingProgramsPage: React.FC = () => {
             aria-controls="tab-panel-programs"
             className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
               activeTab === 'programs'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
@@ -268,7 +268,7 @@ const TrainingProgramsPage: React.FC = () => {
             aria-controls="tab-panel-requirements"
             className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
               activeTab === 'requirements'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
@@ -282,7 +282,7 @@ const TrainingProgramsPage: React.FC = () => {
             aria-controls="tab-panel-templates"
             className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
               activeTab === 'templates'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >

@@ -12,7 +12,10 @@ from decimal import Decimal
 import pytest
 
 from app.models.storefront import StorePaymentMethod, StoreSettings
-from app.utils.storefront_payments import build_payment_options
+from app.utils.storefront_payments import (
+    build_payment_method_summaries,
+    build_payment_options,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -245,3 +248,38 @@ class TestOnlyAcceptedMethodsAreOffered:
                 for o in build_payment_options(settings, Decimal("45.00"), "ORD-1")
             ]
             assert "Cash App" not in labels
+
+
+class TestPreOrderMethodSummaries:
+    """What checkout shows before an order — and so before a reference exists."""
+
+    def test_names_the_handle_for_every_configured_method(self):
+        summaries = build_payment_method_summaries(_settings())
+        by_method = {s["method"]: s for s in summaries}
+
+        assert by_method["venmo"]["handle"] == "@FallsChurchFire"
+        assert by_method["zelle"]["handle"] == "treasurer@example.org"
+        assert by_method["venmo"]["label"] == "Venmo"
+
+    def test_carries_no_payment_url(self):
+        # A link built before the order exists would pay $0 with no reference —
+        # money the treasurer cannot match to anything.
+        for summary in build_payment_method_summaries(_settings()):
+            assert "payment_url" not in summary
+
+    def test_drops_a_method_the_department_never_configured(self):
+        summaries = build_payment_method_summaries(_settings(venmo_handle=None))
+
+        assert "venmo" not in {s["method"] for s in summaries}
+
+    def test_matches_the_methods_a_placed_order_would_offer(self):
+        # The two lists have to agree, or a member picks a method at checkout
+        # that the confirmation screen then cannot show them how to pay.
+        settings = _settings()
+        summaries = [s["method"] for s in build_payment_method_summaries(settings)]
+        placed = [
+            o["method"]
+            for o in build_payment_options(settings, Decimal("45.00"), "ORD-1")
+        ]
+
+        assert summaries == placed

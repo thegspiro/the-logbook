@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Link } from 'react-router';
 import { renderWithRouter } from '../test/utils';
 import { UserSettingsPage } from './UserSettingsPage';
 import * as apiModule from '../services/api';
@@ -92,6 +93,11 @@ describe('UserSettingsPage', () => {
   const { userService } = apiModule;
 
   beforeEach(() => {
+    // The page mirrors the selected section into `?tab=`, and renderWithRouter
+    // uses a BrowserRouter over the one shared jsdom window — so without this
+    // reset a test that clicks a tab decides which section the NEXT test opens
+    // on.
+    window.history.pushState({}, '', '/account');
     vi.clearAllMocks();
     vi.mocked(userService.getUserWithRoles).mockResolvedValue(defaultProfile as never);
     vi.mocked(userService.getNotificationPreferences).mockResolvedValue({
@@ -417,6 +423,55 @@ describe('UserSettingsPage', () => {
       await waitFor(() => {
         expect(screen.getByText(/Add emergency contacts so your department can reach someone/)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('section selection via ?tab=', () => {
+    // renderWithRouter uses BrowserRouter, so the query string comes from
+    // window.location — set it before rendering.
+    function startAt(url: string): void {
+      window.history.pushState({}, '', url);
+    }
+
+    it('opens the section named by ?tab= on first render', async () => {
+      startAt('/account?tab=app');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText('App Version')).toBeInTheDocument();
+    });
+
+    it('follows ?tab= on an in-place navigation, not just on mount', async () => {
+      // The update banner links to /account?tab=app from anywhere in the app,
+      // including from this page with another section already open. That is a
+      // client-side navigation that leaves this component mounted, so reading
+      // the parameter once at useState time showed the member the section they
+      // were already on and none of the Force refresh controls it promised.
+      startAt('/account?tab=security');
+      renderWithRouter(
+        <>
+          <Link to="/account?tab=app">Go to app settings</Link>
+          <UserSettingsPage />
+        </>
+      );
+
+      await waitFor(() => expect(screen.queryByText('App Version')).not.toBeInTheDocument());
+
+      await userEvent.setup().click(screen.getByRole('link', { name: 'Go to app settings' }));
+
+      expect(await screen.findByText('App Version')).toBeInTheDocument();
+    });
+
+    it('mirrors a clicked section into ?tab= so returning to it navigates', async () => {
+      startAt('/account?tab=app');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText('App Version')).toBeInTheDocument();
+      await userEvent.setup().click(screen.getByText('Emergency Contacts'));
+
+      // Without the mirroring the URL would still read ?tab=app here, and the
+      // banner's link back to it would be a no-op navigation that re-selects
+      // nothing.
+      await waitFor(() => expect(new URLSearchParams(window.location.search).get('tab')).toBe('emergency'));
     });
   });
 });

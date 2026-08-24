@@ -43,6 +43,7 @@ import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 
 // Types for inventory data
 interface InventoryItem {
@@ -166,24 +167,15 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
-  const fetchModuleStatus = React.useCallback(
-    async (uid: string) => {
-      try {
-        const response = await organizationService.getEnabledModules();
-        const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
-        setInventoryModuleEnabled(inventoryEnabled);
-
-        // Fetch inventory if module is enabled
-        if (inventoryEnabled) {
-          void fetchInventoryItems(uid);
-        }
-      } catch (_err) {
-        // If we can't fetch module status, default to not showing inventory
-        setInventoryModuleEnabled(false);
-      }
-    },
-    [fetchInventoryItems]
-  );
+  const fetchModuleStatus = React.useCallback(async () => {
+    try {
+      const response = await organizationService.getEnabledModules();
+      setInventoryModuleEnabled((response?.enabled_modules ?? []).includes('inventory'));
+    } catch (_err) {
+      // If we can't fetch module status, default to not showing inventory
+      setInventoryModuleEnabled(false);
+    }
+  }, []);
 
   const fetchUserData = React.useCallback(async (uid: string) => {
     try {
@@ -252,11 +244,16 @@ export const MemberProfilePage: React.FC = () => {
   const isSelf = currentUser?.id === userId;
   const canViewTargetTraining = isSelf || checkPermission('training.manage');
   const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+  // Which gear a colleague signed for is quartermaster business, not part of
+  // the contact card every member may look up. inventory.view is baseline for
+  // every member (it opens the catalog and their own kit), so it cannot be the
+  // gate here — inventory.manage is.
+  const canViewTargetInventory = isSelf || checkPermission('inventory.manage');
 
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
-      void fetchModuleStatus(userId);
+      void fetchModuleStatus();
       void fetchLeaves(userId);
       if (canViewTargetAdminHours) {
         void fetchAdminHours(userId);
@@ -278,6 +275,16 @@ export const MemberProfilePage: React.FC = () => {
     fetchTrainingRecords,
     fetchComplianceSummary,
   ]);
+
+  useEffect(() => {
+    if (userId && inventoryModuleEnabled && canViewTargetInventory) {
+      void fetchInventoryItems(userId);
+    } else {
+      // Navigating from a profile we could see gear on to one we cannot must
+      // not leave the previous member's items in state.
+      setInventoryItems([]);
+    }
+  }, [userId, inventoryModuleEnabled, canViewTargetInventory, fetchInventoryItems]);
 
   const canManageMembers = checkPermission('members.manage');
 
@@ -533,6 +540,7 @@ export const MemberProfilePage: React.FC = () => {
 
   // Check if current user can edit this profile (self or admin)
   const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
+  const canManageIdCards = checkPermission('members.manage_id_cards');
   const canEdit = currentUser?.id === userId || isAdmin;
   // Emergency contacts are leadership-only server-side (members.manage or the
   // member themselves). Mirror that gate here so everyone else sees no section
@@ -635,7 +643,7 @@ export const MemberProfilePage: React.FC = () => {
                       onClick={() => {
                         void handlePhotoRemove();
                       }}
-                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white transition-opacity hover:bg-red-600 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white transition-opacity hover:bg-red-800 sm:opacity-0 sm:group-hover:opacity-100"
                       aria-label="Remove photo"
                       title="Remove photo"
                     >
@@ -733,8 +741,20 @@ export const MemberProfilePage: React.FC = () => {
               </div>
             )}
 
-            {/* Assigned Inventory - Only shown if inventory module is enabled */}
-            {inventoryModuleEnabled && (
+            {/* ID cards (NFC). Officers only — a member cannot register,
+                relabel or revoke a card, not even their own, and the panel
+                hides itself when the organization has cards turned off. */}
+            {canManageIdCards && userId && (
+              <MemberIdCardsPanel
+                userId={userId}
+                memberName={user ? `${user.first_name} ${user.last_name}`.trim() : undefined}
+              />
+            )}
+
+            {/* Assigned Inventory - the member's own kit, or a quartermaster's
+                view of it. Hidden from everyone else rather than rendered
+                empty, which would read as "nothing issued". */}
+            {inventoryModuleEnabled && canViewTargetInventory && (
               <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Assigned Inventory</h2>
                 {inventoryLoading ? (
@@ -1059,7 +1079,7 @@ export const MemberProfilePage: React.FC = () => {
                     </div>
                   </>
                 )}
-                {inventoryModuleEnabled && (
+                {inventoryModuleEnabled && canViewTargetInventory && (
                   <div className="flex items-center justify-between">
                     <span className="text-theme-text-secondary text-sm">Assigned Equipment</span>
                     <span className="text-theme-text-primary text-sm font-semibold">{inventoryItems.length}</span>

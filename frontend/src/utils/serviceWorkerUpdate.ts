@@ -26,12 +26,14 @@ const ACTIVATE_TIMEOUT_MS = 4_000;
 /**
  * Register the service worker. Owned here — vite-plugin-pwa's injected
  * register script is disabled in vite.config.ts — because registration must
- * pass `updateViaCache: 'none'`: with the default ('imports'), scripts pulled
- * in via importScripts (push-sw.js) are fetched THROUGH the HTTP cache during
- * update checks, so devices that cached push-sw.js under an earlier
- * long-lived Cache-Control header would keep importing the stale copy until
- * that cache entry expired. Server-side header fixes cannot reach a cache
- * entry the browser never revalidates; bypassing the cache here can.
+ * pass `updateViaCache: 'none'`, which takes the worker script and anything it
+ * imports off the HTTP cache entirely for update checks. Server-side header
+ * fixes cannot reach a cache entry the browser never revalidates; this can.
+ *
+ * The push handlers are now inlined into the generated worker rather than
+ * imported (see `inlinePushWorkerPlugin` in vite.config.ts), so no imported
+ * script remains to go stale. `'none'` stays because it also covers /sw.js
+ * itself and costs nothing — the file is served no-store either way.
  */
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;

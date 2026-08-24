@@ -28,6 +28,96 @@ from app.models.user import IdentifierType, Organization, OrganizationType, Role
 from app.services.auth_service import AuthService
 from app.utils.positions import normalize_stored_positions
 
+# ── Modules the setup wizard offers ───────────────────────────────────────
+#
+# The wizard's module step is driven by the frontend registry
+# (frontend/src/modules/onboarding/config/moduleRegistry.ts), and a module the
+# registry does not list can never be enabled during setup — it stays off in
+# Organization.settings.modules, marked as an explicit choice, and the whole
+# feature is invisible to members until somebody finds the Settings → Modules
+# toggle. That is what happened to the Department Store, so the two lists are
+# now named here and compared by tests/test_onboarding_module_parity.py.
+
+ONBOARDING_CORE_MODULES = ["members", "events", "documents", "forms"]
+
+ONBOARDING_OFFERED_MODULES = [
+    # Operations
+    "training",
+    "inventory",
+    "medical_supplies",
+    "scheduling",
+    "apparatus",
+    "facilities",
+    "storefront",
+    # Governance
+    "elections",
+    "minutes",
+    "reports",
+    # Communication
+    "notifications",
+    "mobile",
+    # Advanced
+    "integrations",
+    # Membership
+    "prospective_members",
+]
+
+# Real modules that setup deliberately does not ask about — they are configured
+# later, from Settings → Modules, and a department is not expected to decide on
+# them during first-run setup. Every remaining ModuleSettings field has to be
+# either core, offered, or listed here; the partition is asserted by
+# tests/test_onboarding_module_parity.py, so adding a module without deciding
+# where it belongs fails rather than quietly landing off-by-default.
+ONBOARDING_SETTINGS_ONLY_MODULES = [
+    "communications",
+    "grants",
+    "hr_payroll",
+    "incidents",
+    "public_info",
+]
+
+# Accepted from older saved sessions but not presented by the wizard. These are
+# not ModuleSettings fields, so they are stored in OnboardingStatus and go no
+# further; do not add to this list.
+ONBOARDING_LEGACY_MODULES = [
+    "compliance",
+    "meetings",
+    "fundraising",
+    "incidents",
+    "equipment",
+    "vehicles",
+    "budget",
+]
+
+
+def _with_hyphenated(ids: set[str]) -> set[str]:
+    """Accept "hr-payroll" wherever "hr_payroll" is accepted.
+
+    Saved onboarding sessions carry both spellings, and the wizard's own
+    config routes are hyphenated.
+    """
+    return ids | {module_id.replace("_", "-") for module_id in ids}
+
+
+# Every module ID the onboarding endpoints will accept, from any step.
+#
+# There were three of these lists — the wizard's, the session endpoint's, and
+# the Settings screen's — and they disagreed. Storefront was added to one of
+# them, which is how enabling the Department Store could get as far as the
+# final Continue and then fail validation with "Invalid modules". A single set
+# is the only thing that keeps a newly offered module working end to end;
+# tests/test_onboarding_module_parity.py holds it to the offered list.
+ONBOARDING_ACCEPTED_MODULE_IDS: frozenset[str] = frozenset(
+    _with_hyphenated(
+        {
+            *ONBOARDING_CORE_MODULES,
+            *ONBOARDING_OFFERED_MODULES,
+            *ONBOARDING_SETTINGS_ONLY_MODULES,
+            *ONBOARDING_LEGACY_MODULES,
+        }
+    )
+)
+
 
 class OnboardingService:
     """
@@ -1120,40 +1210,8 @@ class OnboardingService:
             Dictionary of module name to enabled status
         """
         # Core modules are always enabled — they power cross-module features
-        core_modules = ["members", "events", "documents", "forms"]
-
-        # Define available modules - must match API endpoint and frontend module registry
-        available_modules = [
-            # Core modules (always enabled)
-            *core_modules,
-            # Operations modules
-            "training",
-            "inventory",
-            "medical_supplies",
-            "scheduling",
-            "apparatus",
-            "facilities",
-            "storefront",
-            # Governance modules
-            "elections",
-            "minutes",
-            "reports",
-            # Communication modules
-            "notifications",
-            "mobile",
-            # Advanced modules
-            "integrations",
-            # Membership
-            "prospective_members",
-            # Legacy/additional modules (for backwards compatibility)
-            "compliance",
-            "meetings",
-            "fundraising",
-            "incidents",
-            "equipment",
-            "vehicles",
-            "budget",
-        ]
+        core_modules = list(ONBOARDING_CORE_MODULES)
+        available_modules = sorted(ONBOARDING_ACCEPTED_MODULE_IDS)
 
         # Validate modules
         invalid_modules = [m for m in enabled_modules if m not in available_modules]

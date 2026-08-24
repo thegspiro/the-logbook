@@ -59,6 +59,12 @@ import type {
   ShiftCallRecord,
   ShiftCallCreate,
   ShiftCallUpdate,
+  TradeCandidate,
+  StandingShiftClaim,
+  StandingShiftCreate,
+  StandingShiftCreateResult,
+  StandingShiftPreview,
+  StandingShiftPreviewParams,
 } from '../types';
 import type {
   EquipmentCheckTemplate,
@@ -67,6 +73,7 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   LastCheckItemResult,
+  LastSealRecord,
   ComplianceReport,
   FailureLogResponse,
   ItemTrendResponse,
@@ -77,6 +84,7 @@ import type {
   ItemDeployment,
   ItemRestockState,
   LotSwapResult,
+  ExpiredStockDisposition,
   InventoryMatchesResult,
   InventoryLinkResult,
   FleetReadinessResponse,
@@ -98,6 +106,22 @@ declare module 'axios' {
 export interface PositionSlot {
   position: string;
   required: boolean;
+}
+
+/**
+ * One occupied seat on a shift, carried on every shift the calendar fetches.
+ *
+ * The month fetch returns these so the day panel can render "who is on this
+ * shift" without a request per day, and so a calendar cell can be coloured by
+ * "you are on it" at all.
+ */
+export interface ShiftRosterSeat {
+  assignment_id: string;
+  user_id: string;
+  user_name?: string | null;
+  position?: string | null;
+  status?: string | null;
+  is_training?: boolean;
 }
 
 export interface ShiftRecord {
@@ -122,6 +146,8 @@ export interface ShiftRecord {
   activities?: unknown;
   open_to_all_members?: boolean;
   attendee_count: number;
+  /** Occupied seats. Empty on responses served before the roster existed. */
+  roster?: ShiftRosterSeat[];
   call_count: number;
   total_hours?: number | null;
   is_finalized: boolean;
@@ -655,6 +681,13 @@ export const schedulingService = {
   },
 
   // Swap Requests
+  /** Swaps the caller is a participant in — what is waiting on them. */
+  async getMySwapRequests(status?: 'pending' | 'approved' | 'denied' | 'cancelled'): Promise<SchedulingSwapRequest[]> {
+    const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', {
+      params: { mine: true, ...(status ? { status } : {}) },
+    });
+    return asArray(response.data?.items);
+  },
   async getSwapRequests(params?: SwapRequestFilters): Promise<PaginatedResponse<SchedulingSwapRequest>> {
     const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', { params });
     return response.data;
@@ -665,6 +698,18 @@ export const schedulingService = {
   },
   async reviewSwapRequest(requestId: string, data: SwapRequestReview): Promise<SchedulingSwapRequest> {
     const response = await api.post<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}/review`, data);
+    return response.data;
+  },
+  /**
+   * Answer an offer of someone else's seat. Member self-service — distinct
+   * from `reviewSwapRequest`, which is the officer's verdict and refuses
+   * participants.
+   */
+  async respondToSwapOffer(requestId: string, accept: boolean, note?: string): Promise<SchedulingSwapRequest> {
+    const response = await api.post<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}/respond`, {
+      accept,
+      ...(note ? { note } : {}),
+    });
     return response.data;
   },
   async cancelSwapRequest(requestId: string): Promise<void> {
@@ -787,6 +832,45 @@ export const schedulingService = {
     await api.delete(`/scheduling/shifts/${shiftId}/signup`);
   },
 
+  /** Members who could take over the caller's seat on a shift. */
+  async getTradeCandidates(shiftId: string): Promise<TradeCandidate[]> {
+    const response = await api.get<TradeCandidate[]>(`/scheduling/shifts/${shiftId}/trade-candidates`);
+    return asArray(response.data);
+  },
+
+  /** The caller's standing series this shift belongs to, or null. */
+  async getStandingClaimForShift(shiftId: string): Promise<StandingShiftClaim | null> {
+    const response = await api.get<StandingShiftClaim | null>(`/scheduling/shifts/${shiftId}/standing-claim`);
+    return response.data ?? null;
+  },
+
+  // --- Standing Shifts (recurring self-signup) ---
+  async getStandingShifts(activeOnly = true): Promise<StandingShiftClaim[]> {
+    const response = await api.get<StandingShiftClaim[]>('/scheduling/standing-shifts', {
+      params: { active_only: activeOnly },
+    });
+    return asArray(response.data);
+  },
+  async previewStandingShift(params: StandingShiftPreviewParams): Promise<StandingShiftPreview> {
+    const response = await api.get<StandingShiftPreview>('/scheduling/standing-shifts/preview', { params });
+    return { ...response.data, dates: asArray(response.data?.dates) };
+  },
+  async createStandingShift(data: StandingShiftCreate): Promise<StandingShiftCreateResult> {
+    const response = await api.post<StandingShiftCreateResult>('/scheduling/standing-shifts', data);
+    return response.data;
+  },
+  /**
+   * End a series. `releaseFuture` also gives up the dates not yet worked —
+   * off by default, because ending a series and emptying seats a duty officer
+   * has already counted on are separate decisions.
+   */
+  async endStandingShift(claimId: string, releaseFuture = false): Promise<{ released: number }> {
+    const response = await api.delete<{ released: number }>(`/scheduling/standing-shifts/${claimId}`, {
+      params: { release_future: releaseFuture },
+    });
+    return response.data;
+  },
+
   // --- Open Shifts ---
   async getOpenShifts(params?: {
     start_date?: string | undefined;
@@ -819,6 +903,14 @@ export const schedulingService = {
     const params = shiftId ? { shift_id: shiftId } : undefined;
     const response = await api.get<EligiblePositionsResponse>('/scheduling/eligibility/positions', { params });
     return response.data;
+  },
+  /** Eligible positions for several shifts at once, keyed by shift id. */
+  async getEligiblePositionsBulk(shiftIds: string[]): Promise<Record<string, string[]>> {
+    if (shiftIds.length === 0) return {};
+    const response = await api.get<Record<string, string[]>>('/scheduling/eligibility/positions/bulk', {
+      params: { shift_ids: shiftIds.join(',') },
+    });
+    return response.data ?? {};
   },
   async getPositionRoster(position: string): Promise<PositionRosterResponse> {
     const response = await api.get<PositionRosterResponse>('/scheduling/eligibility/roster', {
@@ -964,10 +1056,30 @@ export const schedulingService = {
     const response = await api.get<ItemDeployment[]>(`/equipment-checks/supply/item-deployments/${inventoryItemId}`);
     return response.data;
   },
-  async swapItemLot(templateItemId: string, inventoryLotId: string, quantity = 1): Promise<LotSwapResult> {
+  /**
+   * `replaced` marks the swap a replacement: the expired units come off the
+   * truck and the disposition records where they went. Omitting it tops the
+   * position up and retires nothing.
+   *
+   * `deployedLotId` narrows that to one lot, which is what a position carrying
+   * several boxes needs. A position whose units were never lot-tracked has no
+   * id to send — one blob, one date — so the disposition stands alone.
+   */
+  async swapItemLot(
+    templateItemId: string,
+    inventoryLotId: string,
+    quantity = 1,
+    replaced?: { disposition: ExpiredStockDisposition; deployedLotId?: string | undefined }
+  ): Promise<LotSwapResult> {
     const response = await api.post<LotSwapResult>(`/equipment-checks/items/${templateItemId}/swap`, {
       inventory_lot_id: inventoryLotId,
       quantity,
+      ...(replaced
+        ? {
+            disposition: replaced.disposition,
+            ...(replaced.deployedLotId ? { replaced_deployed_lot_id: replaced.deployedLotId } : {}),
+          }
+        : {}),
     });
     return response.data;
   },
@@ -1068,6 +1180,14 @@ export const schedulingService = {
   async getLastCheckResults(templateId: string, apparatusId?: string): Promise<Record<string, LastCheckItemResult>> {
     const response = await api.get<Record<string, LastCheckItemResult>>(
       `/equipment-checks/templates/${templateId}/last-results`,
+      { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
+    );
+    return response.data;
+  },
+  /** Keyed by compartment id — what each sealed container carried last count. */
+  async getLastCheckSeals(templateId: string, apparatusId?: string): Promise<Record<string, LastSealRecord>> {
+    const response = await api.get<Record<string, LastSealRecord>>(
+      `/equipment-checks/templates/${templateId}/last-seals`,
       { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
     );
     return response.data;

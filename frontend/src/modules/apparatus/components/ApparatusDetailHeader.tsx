@@ -41,7 +41,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600 text-lg font-bold text-white">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-800 text-lg font-bold text-white">
               {currentApparatus.unitNumber.substring(0, 2)}
             </div>
             <div>

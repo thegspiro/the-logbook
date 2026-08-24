@@ -27,7 +27,12 @@ from app.schemas.email_template import (
     MessageHistoryResponse,
     SendTestEmailRequest,
 )
-from app.services.email_service import EmailService, _redact_email
+from app.services.email_service import (
+    EmailService,
+    _redact_email,
+    wrap_email_body,
+)
+from app.services.email_theme import ACCENT_GREEN
 from app.services.officer_service import OfficerService
 
 router = APIRouter()
@@ -220,30 +225,31 @@ async def send_test_email(
 
 
 def _build_test_html(organization: Organization | None) -> str:
-    """Build a simple HTML test email body."""
+    """Build the "Send Test Email to Me" body.
+
+    Through ``wrap_email_body``, so it renders into the same shell as every
+    real notice. A test send that builds its own chrome tests the SMTP
+    credentials and nothing else — it will happily report success while the
+    mail an actual member receives is broken, which is the opposite of what
+    the button is for.
+    """
     # Escape the org name — it is interpolated into HTML below. Mirrors the
     # escaping the department-message email path already applies.
     org_name = html.escape(organization.name if organization else "The Logbook")
-    return f"""\
-<html>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: #dc2626; padding: 20px; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 22px;">{org_name}</h1>
-  </div>
-  <div style="background: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-    <h2 style="color: #111827; margin-top: 0;">Test Email</h2>
-    <p style="color: #374151; line-height: 1.6;">
-      This is a test email sent from <strong>{org_name}</strong>.
-      If you are reading this message, your email configuration is working correctly.
-    </p>
-    <div style="margin-top: 20px; padding: 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px;">
-      <p style="color: #065f46; margin: 0; font-weight: 600;">
-        Email delivery is working!
-      </p>
-    </div>
-    <p style="color: #6b7280; font-size: 13px; margin-top: 24px;">
-      This email was sent as a configuration test and requires no action.
-    </p>
-  </div>
-</body>
-</html>"""
+    body = (
+        "<p>This is a test email sent from <strong>"
+        f"{org_name}</strong>. If you are reading this message, your email "
+        "configuration is working correctly.</p>"
+        '<div class="alert" style="background-color: #f0fdf4; '
+        'border-color: #bbf7d0; border-left-color: #047857;">'
+        '<p style="color: #065f46;">Email delivery is working.</p></div>'
+        '<p class="fineprint">This email was sent as a configuration test '
+        "and requires no action.</p>"
+    )
+    return wrap_email_body(
+        organization,
+        "Test Email",
+        body,
+        header_color=ACCENT_GREEN,
+        chip="Test",
+    )

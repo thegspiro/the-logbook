@@ -37,7 +37,7 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
             <img src={logoPreview} alt={`${departmentName} logo`} className="max-h-full max-w-full object-contain" />
           </div>
         ) : (
-          <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-red-600">{icon}</div>
+          <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-red-800">{icon}</div>
         )}
         <div className="min-w-0 flex-1">
           <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>

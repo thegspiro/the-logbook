@@ -65,7 +65,10 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
       className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left text-sm shadow-sm"
       style={{ maxWidth: 480 }}
     >
-      <div className="bg-red-600 px-5 py-4 text-center">
+      {/* red-700 to match `.header` in backend/app/services/email_theme.py.
+          This block is a picture of the email that actually goes out, so it
+          tracks that stylesheet rather than the app's own primary fill. */}
+      <div className="bg-red-700 px-5 py-4 text-center">
         <span className="text-lg font-bold text-white">Organization Name</span>
       </div>
       <div className="space-y-4 bg-gray-50 p-5 text-gray-700" style={{ lineHeight: 1.6 }}>

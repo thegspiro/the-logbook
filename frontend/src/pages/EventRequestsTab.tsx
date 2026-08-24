@@ -461,7 +461,7 @@ const EventRequestsTab: React.FC = () => {
             onClick={() => setStatusFilter('')}
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
               statusFilter === ''
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
@@ -474,7 +474,7 @@ const EventRequestsTab: React.FC = () => {
                 key={s}
                 onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  statusFilter === s ? 'bg-red-600 text-white' : `${cfg.color}`
+                  statusFilter === s ? 'bg-red-800 text-white' : `${cfg.color}`
                 }`}
               >
                 {cfg.label} ({counts[s] || 0})

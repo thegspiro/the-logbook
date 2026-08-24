@@ -1393,7 +1393,7 @@ export const EventDetailPage: React.FC = () => {
                         <div
                           className={`h-2 rounded-full transition-all ${
                             stats.capacity_percentage >= 90
-                              ? 'bg-red-600'
+                              ? 'bg-red-800'
                               : stats.capacity_percentage >= 75
                                 ? 'bg-amber-500'
                                 : 'bg-green-500'
@@ -1440,7 +1440,7 @@ export const EventDetailPage: React.FC = () => {
                         const goingCount = event.going_count ?? 0;
                         const pct = Math.min(Math.round((goingCount / event.max_attendees) * 100), 100);
                         const isFull = goingCount >= event.max_attendees;
-                        const barColor = pct >= 90 ? 'bg-red-600' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500';
+                        const barColor = pct >= 90 ? 'bg-red-800' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500';
                         return (
                           <div>
                             <div className="mb-1 flex justify-between">
