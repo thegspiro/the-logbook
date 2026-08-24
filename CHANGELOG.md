@@ -60,6 +60,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payment policy — the three things the countdown, the checkout tiles and the
   post-submit wording need.
 
+### Printer support has a reference doc (2026-08-24)
+
+**Added**
+
+- **[`docs/LABEL_PRINTING_MODULE.md`](docs/LABEL_PRINTING_MODULE.md).** Label
+  and station printing had thorough training coverage — how a quartermaster
+  registers a printer and prints a sheet — and no reference doc at all. There
+  was nowhere documenting the API surface, the permission model, the ZPL and
+  ESC/POS status flag tables, or the SSRF boundary the printer transport is,
+  which is the material the next person changing it needs.
+- **The status flag tables are written down**, with their sources named: the
+  ZPL II Programming Guide for `~HQES`, Epson's ESC/POS reference for
+  `DLE EOT`. The point is that the next person extending them checks the table
+  rather than a symptom — which is exactly how three wrong flags got shipped
+  and then corrected.
+
+**Changed**
+
+- **The training guide now separates printer errors from warnings.** "Labels
+  nearly out" does not stop a print and the old wording did not say so; a
+  table now gives each fault, its kind, and what to do about it.
+
 ### Submit External Training: the certificate travels with the submission (2026-08-23)
 
 **Fixed**
