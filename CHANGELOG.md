@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two screens that hid what the server would have allowed (2026-08-24)
+
+**Fixed**
+
+- **A pinned or standing message stays on the station board.** The dashboard
+  merges department messages with the member's own notifications into one feed
+  and sorted the result by recency alone, throwing away the pinned → persistent
+  → newest order the inbox arrives in. Only five rows render, so a pinned
+  "Station 2 bay doors out of service" sat below four routine notifications and
+  a persistent standing order dropped off the board as soon as five
+  notifications arrived — with the pin icon rendering beside it either way, so
+  an officer who pinned an urgent notice had no way to tell it had done nothing.
+- **An early arrival can reach the check-in button again.** Flexible and Window
+  events accept a check-in for up to an hour before the official window and
+  answer with a notice naming when it opens, but the self check-in page gated
+  its button on a window it computed itself — the strict one. A member inside
+  that grace read **"Check-in Not Available"** on an event the server would have
+  checked them into, and the early-arrival notice could not be reached from the
+  page written for it. The page now asks the same rule the check-in enforces,
+  and `is_valid` keeps its strict meaning for the "not available" time range.
+  The public kiosk endpoint had the opposite mismatch — the permissive value
+  under the strict name — and now reports both explicitly.
+
+**Documentation**
+
+- Every `[SCREENSHOT NEEDED]` placeholder that existed in the training guides at
+  the start of this pass is now filled: **504 captures**, plus the markers that
+  were answered in prose because they described screens the product does not
+  have. Ten new markers arrived with this release's own guide additions and are
+  still outstanding.
+
 ### The stock room was in everyone's nav; the page members actually need was in nobody's (2026-08-24)
 
 **Changed**
