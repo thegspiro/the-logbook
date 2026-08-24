@@ -10303,6 +10303,11 @@ export const SHOTS = [
     alt: "Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft",
     route: "/governance/legal",
     fullPage: true,
+    allowEmptyState:
+      'Matches "No proposals yet" -- the Proposed revisions panel on the ' +
+      "Privacy tab, empty on purpose. The seeded draft sits on Terms of " +
+      "Service so the published and draft states can be told apart. The " +
+      "published text and both history entries are on screen.",
   },
   {
     // Recruitment is create-only for the automatic switches, so this has to be
@@ -10315,6 +10320,10 @@ export const SHOTS = [
     anchor: "the event form with Recruitment selected, showing",
     alt: "A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline",
     route: "/events/new",
+    allowEmptyState:
+      'Matches "No reminders", one of the three options inside the ' +
+      "reminder-audience select rather than an empty state. The form is fully " +
+      "rendered with Recruitment chosen and both guest switches on.",
     prepare: async (page) => {
       const type = page
         .locator("select")
@@ -10336,8 +10345,13 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 2141,
     anchor: "the organization dashboard under two accounts side by",
-    alt: "The Organization dashboard as an administrator holding finance.manage: the money sections are present alongside the operational ones",
-    route: "/dashboard?tab=organization",
+    alt: "The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones",
+    // The default tab, not ?tab=organization. Department pulse is where the
+    // money cards live -- the Organization tab carries readiness, exceptions
+    // and asset counts and has no finance section on it for either account, so
+    // a pair shot there compares two screens that are identical in the one
+    // respect the marker is about.
+    route: "/dashboard",
     fullPage: true,
   },
   {
@@ -10350,8 +10364,8 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 2141,
     anchor: "__paired-with-08-75__",
-    alt: "The same dashboard as a member without finance.manage: the money sections are not rendered at all, rather than shown empty",
-    route: "/dashboard?tab=organization",
+    alt: "The same dashboard as a member without finance.manage: Department pulse is not rendered at all, rather than shown with empty money cards",
+    route: "/dashboard",
     auth: "member",
     fullPage: true,
     allowEmptyState:
@@ -10361,15 +10375,21 @@ export const SHOTS = [
       "than a sign the demo data is missing.",
   },
   {
-    // The gutter is the subject, so this one is deliberately NOT fullPage: a
-    // full-page capture stitches the whole document and has no scrollbar in it
-    // at all, which is the one thing this shot exists to show. Viewport-sized,
-    // on a page long enough to scroll.
+    // Viewport-sized rather than fullPage, because a stitched full-page capture
+    // contains no scrollbar at all.
+    //
+    // It still cannot show the gutter, and that is not fixable here: the
+    // headless Chromium the harness drives uses overlay scrollbars, so
+    // `window.innerWidth - documentElement.clientWidth` measures 0 even on a
+    // page forced to 4000px. There is no gutter rendered to photograph. What
+    // this does show is the themed gradient carried to the window edge in dark
+    // mode, which is the change; the strip the release removed cannot be
+    // pictured by this harness, and the guide says so rather than staging it.
     id: "19-11-dark-scrollbar-gutter",
     doc: "19-august-2026-release-changes.md",
     line: 222,
     anchor: "a public page (`/f/{slug}` or an application-status link) in dark",
-    alt: "A public form in dark mode at full window width, the themed background now carried all the way through the scrollbar gutter at the right edge",
+    alt: "A public form in dark mode at full window width, the themed gradient reaching the window edges",
     route: "/login",
     auth: "anonymous",
     theme: "dark",
@@ -10383,13 +10403,17 @@ export const SHOTS = [
     // in a screenshot. The guide already tables all three above the image; what
     // the capture can honestly show is which one a new optional event starts
     // on, which is the other half of that marker.
-    id: "04-42-reminder-audience",
+    id: "04-44-reminder-audience",
     doc: "04-events-meetings.md",
     line: 1539,
     anchor: "Create Event → Notifications with all three",
     alt: "The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up",
     route: "/events/new",
     selector: "section:has(> h2:has-text('Notifications'))",
+    allowEmptyState:
+      'Same "No reminders" select option as 19-10. The panel is populated: the ' +
+      "audience reads Members who sign up and the schedule carries a " +
+      "1 day before reminder.",
     prepare: async (page) => {
       await page
         .locator("#reminder-target")
@@ -10401,7 +10425,7 @@ export const SHOTS = [
     // what a new event starts on, so no interaction is needed -- and shooting
     // the default is the point, since the guide's caution is that 60 does not
     // apply to every mode.
-    id: "04-43-checkin-flexible-default",
+    id: "04-45-checkin-flexible-default",
     doc: "04-events-meetings.md",
     line: 1573,
     anchor: "Check-In Settings showing Flexible and 60 minutes before",

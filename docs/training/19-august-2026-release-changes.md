@@ -219,7 +219,9 @@ dark-mode screenshot, printed handout or recorded video captured before August
 department training material, check the right edge of the image before handing it
 out.
 
-> **[SCREENSHOT NEEDED — a public page (`/f/{slug}` or an application-status link) in dark mode at full window width with the page long enough to scroll, so the gutter is visible and painted. This is the standing proof that pages outside the app shell are covered.]**
+![A public form in dark mode at full window width, the themed gradient reaching the window edges](./images/19-11-dark-scrollbar-gutter.png)
+
+_The gutter itself is not in this picture, and cannot be._ The headless browser these captures are taken with draws overlay scrollbars, so it reserves no gutter at all — measured at 0px even on a page forced long enough to scroll. What the image shows is the themed gradient reaching the window edges; to see the strip this release removed, open a public page in dark mode in your own browser on a desktop, where the scrollbar takes up width.
 
 **Two problems this caused, both already fixed** _(2026-08-16)_. Recorded here
 only so nobody re-reports them from an older build:
@@ -542,11 +544,7 @@ rules, volunteer/career status and state law all differ, and boilerplate
 written for the platform does not describe what your department actually does
 with member data.
 
-> **[SCREENSHOT NEEDED — Governance → Legal Documents landing view, showing
->
-> > both document cards (Privacy Notice and Terms of Service) with their current
-> > published status and "Last updated" line. Seed one published revision and one
-> > draft so the status difference is visible. Use a demo department name.]**
+![Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft](./images/19-09-legal-documents.png)
 
 ### Drafting and publishing are two different jobs
 
@@ -700,11 +698,7 @@ Open houses and recruitment nights have their own event type. Pick
 "create a prospect from each guest" — because a recruitment event whose
 attendees never reach the pipeline has not recruited anybody.
 
-> **[SCREENSHOT NEEDED — the event form with Recruitment selected, showing
->
-> > both guest switches on and the teal banner explaining that guests will be
-> > added to the prospective members pipeline. This replaces any existing event
-> > type-picker capture, which predates the new type.]**
+![A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline](./images/19-10-event-recruitment-type.png)
 
 ### Edge cases
 

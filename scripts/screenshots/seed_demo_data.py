@@ -12079,7 +12079,13 @@ class Seeder:
         if not line_products:
             return
 
-        for member in members[:3]:
+        # The administrator is excluded, not just skipped by luck of ordering:
+        # member_session clears a forced password change with an admin reset,
+        # and POST /users/{id}/reset-password refuses your own account -- "Use
+        # the change-password endpoint to change your own password". The roster
+        # is returned admin-first, so members[:3] reached it every time.
+        orderers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][:3]
+        for member in orderers:
             user_id = pick(member, "id")
             username = member.get("username")
             if not user_id or not username:

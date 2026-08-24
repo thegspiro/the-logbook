@@ -9,7 +9,7 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**447 of 505 placeholders filled** (58 remaining).
+**455 of 505 placeholders filled** (50 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -17,11 +17,11 @@ regenerated wholesale, so that audit cannot live here.
 | [01-membership.md](./01-membership.md) | 27 | 0 |
 | [02-training.md](./02-training.md) | 70 | 0 |
 | [03-scheduling.md](./03-scheduling.md) | 70 | 6 |
-| [04-events-meetings.md](./04-events-meetings.md) | 31 | 9 |
+| [04-events-meetings.md](./04-events-meetings.md) | 34 | 6 |
 | [05-inventory.md](./05-inventory.md) | 57 | 2 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 19 | 2 |
 | [07-documents-forms.md](./07-documents-forms.md) | 13 | 0 |
-| [08-admin-reports.md](./08-admin-reports.md) | 38 | 5 |
+| [08-admin-reports.md](./08-admin-reports.md) | 40 | 3 |
 | [09-skills-testing.md](./09-skills-testing.md) | 23 | 1 |
 | [10-mobile-pwa.md](./10-mobile-pwa.md) | 10 | 4 |
 | [11-finance.md](./11-finance.md) | 11 | 0 |
@@ -32,6 +32,6 @@ regenerated wholesale, so that audit cannot live here.
 | [16-integrations.md](./16-integrations.md) | 5 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 2 |
 | [18-storefront.md](./18-storefront.md) | 4 | 0 |
-| [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 7 | 25 |
-| **Total** | **447** | **58** |
+| [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 10 | 22 |
+| **Total** | **455** | **50** |
 

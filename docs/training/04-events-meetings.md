@@ -1558,8 +1558,8 @@ value resolve the same way: mandatory → all, optional → going. Copying an ev
 creating recurring children, or extending a series preserves the chosen
 audience without sharing the source record's mutable JSON.
 
-> **[SCREENSHOT NEEDED — Create Event → Notifications with all three “Who should receive reminders?” choices visible; seed an optional event and caption that “Members who sign up” is its default.]**
->
+![The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up](./images/04-44-reminder-audience.png)
+
 > **[SCREENSHOT NEEDED — mandatory-event form after the Mandatory switch is enabled, showing “All active members”; then show a template with its independently saved audience.]**
 
 ### Check-in lead time
@@ -1592,8 +1592,8 @@ window because an unidentified early entry cannot be corrected reliably.
   check-in mode calls for them; all displayed opening times use the organization
   timezone.
 
-> **[SCREENSHOT NEEDED — Check-In Settings showing Flexible and 60 minutes before; caption Strict and Window differences rather than implying 60 applies to every mode.]**
->
+![Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start](./images/04-45-checkin-flexible-default.png)
+
 > **[SCREENSHOT NEEDED — early Flexible member notice with the localized official opening time; do not use a guest account for this capture.]**
 
 ## August 19–23, 2026 update — the Recruitment event type
@@ -1610,10 +1610,7 @@ without also matching every fire-safety demo on the calendar.
 "create a prospect from each guest" — because a recruitment event whose
 attendees never reach the pipeline has not recruited anybody.
 
-> **[SCREENSHOT NEEDED — the event form with Recruitment selected, both guest
-> switches on, and the teal banner reading "Guests who sign in at this event
-> will be added to the prospective members pipeline." This **replaces** any
-> existing event type-picker capture, all of which predate the new type.]**
+![A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline](./images/19-10-event-recruitment-type.png)
 
 The event page now also shows the applicants an event brought in, and the
 pipeline board can be filtered by the event applicants came from.

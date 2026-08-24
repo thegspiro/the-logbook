@@ -1,5 +1,59 @@
 # Screenshot currency
 
+## Captured 2026-08-24 — legal documents, the recruitment type, and a dashboard pair
+
+Seven captures against a database rebuilt from zero, each opened and checked.
+**455 of 505 filled.** Two of them fill a marker in two guides at once, so the
+same screen is not photographed twice: `19-09` also fills guide 08's Legal
+Documents marker, and `19-10` also fills guide 04's Recruitment marker.
+
+**The database was rebuilt rather than patched.** The scorecard fixture rebuild
+had left three voided records behind — a validated result cannot be deleted —
+and they were showing up on the test-records capture as demo noise rather than
+product behaviour. The rebuild also served as the real test of the fixture guard
+rewritten the day before, and it caught one more defect in it: the seeder was
+resetting the _administrator's_ password because the roster is returned
+admin-first and `members[:3]` reached it, which the API rightly refuses.
+
+**Three markers could not be taken as written, and the prose now says so.**
+
+- **The dark-mode scrollbar gutter cannot be photographed by this harness at
+  all.** The headless browser draws overlay scrollbars and reserves no gutter:
+  `innerWidth - clientWidth` measures 0 even on a page forced to 4000px. The
+  capture shows what it can — the themed gradient reaching the window edges —
+  and the guide now tells the reader to look in their own desktop browser for
+  the strip itself, rather than implying the picture contains it.
+- **"All three reminder choices visible" is not possible** on a native
+  `<select>`: the popup is drawn by the OS, not the page. The guide already
+  tables all three above the image, so the capture shows which one a new
+  optional event defaults to.
+- **Legal Documents is tabs, not cards.** The marker asked for "both document
+  cards"; the screen shows one document at a time behind a tab strip. Captioned
+  for what it is.
+
+**One pair was aimed at the wrong screen first.** The dashboard finance
+comparison was written against `?tab=organization`, and both accounts render
+that tab without any money section — a pair that compares two screens which are
+identical in the one respect the marker is about. The money cards live in
+_Department pulse_ on the default tab. Re-shot there and verified by measuring
+both accounts: the administrator has Department pulse with dues, cash flow and
+budget; the member has none of it, absent rather than empty.
+
+**Empty-state flags on four shots were false positives**, each now carrying its
+reason rather than a bare suppression: "No proposals yet" is the Privacy tab's
+proposals panel (the seeded draft is deliberately on Terms), and "No reminders"
+is an _option inside_ the reminder-audience select.
+
+**New seeding:** the Legal Documents screen had nothing behind it and rendered
+both cards on the platform default, picturing the feature unused. Privacy now
+carries two published revisions — two, so the revision-history markers have a
+superseded entry to show — and Terms an unpublished draft.
+
+**A numbering trap worth knowing:** `--only 04-42` matches `04-42-cast-ballot`
+as well as anything else starting `04-42`. Two new shots were numbered into
+occupied slots and silently re-shot two unrelated ballot captures. They are
+`04-44` and `04-45` now; check the number is free before claiming it.
+
 ## Re-captured 2026-08-23 — the phone sweep at 390x844, and what it exposed
 
 **Corrected 2026-08-23 (later).** The amendment that stood here was wrong, and

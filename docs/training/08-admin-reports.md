@@ -2102,10 +2102,9 @@ department actually does with member data.
 Full walkthrough and edge cases:
 [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice).
 
-> **[SCREENSHOT NEEDED — Governance → Legal Documents landing view with both
->
-> > document cards (Privacy Notice, Terms of Service), one showing a published
-> > revision and one showing a draft, so the status difference is visible.]**
+![Governance → Legal Documents: the Privacy Notice published with its last-updated line and published history, beside a Terms of Service tab still carrying an unpublished draft](./images/19-09-legal-documents.png)
+
+_Shared with the [release lesson](./19-august-2026-release-changes.md#departments-can-publish-their-own-privacy-notice-and-terms); the two documents are tabs on one screen rather than side-by-side cards._
 
 ### Drafting and publishing are separate permissions
 
@@ -2170,8 +2169,4 @@ financial access.** Money totals need `finance.manage`, fundraising needs
 `fundraising.view`, outreach needs `events.manage`. Asset widgets show counts
 and links only — never facility codes, accounts, budgets or leases.
 
-> **[SCREENSHOT NEEDED — the organization dashboard under two accounts side by
->
-> > side: one holding `finance.manage` and one without it, showing the finance
-> > section present in the first and absent (not empty) in the second. The
-> > comparison is the point.]**
+![The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones](./images/08-75-org-dashboard-with-finance.png)
