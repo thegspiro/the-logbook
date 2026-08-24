@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/inventory/members-summary` moves to `inventory.manage` outright.** It
   names who holds which gear for every member at once, and its only callers are
   pages already behind `inventory.manage` routes.
+- **Gating the per-member routes alone would not have closed it.** Every route
+  that answers "who has this item" was reachable the same way:
+  `/items?assigned_to={id}` rebuilt a colleague's kit item by item, and the
+  item history, per-item issuances and outstanding-checkout lists all name
+  members. The catalog stays open — members browse it for gear and search it
+  for a replacement — so `/items` and `/items/{id}` strip the holder's id and
+  name for callers without `inventory.manage`, a member still seeing their own
+  name on their own gear, and the filter naming another member is refused. The
+  history, issuance and checkout lists move to `inventory.manage`.
 - The profile fetches nothing it may not show: a viewer without the permission
   issues no request, rather than being turned away at the server, and items are
   cleared when navigating to a profile whose gear is not visible. A test
