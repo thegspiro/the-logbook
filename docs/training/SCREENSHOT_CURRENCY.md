@@ -1,5 +1,33 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (tenth) — the dashboard's data boundary, under the wrong tab names
+
+`00-24`/`00-25`, opened and checked. **483 of 507 filled.**
+
+**The tabs are not called what the guide calls them.** The prose describes
+"Personal" and "Organization"; the strip reads **My Department** and
+**Organization**. Corrected in the guide, keeping "personal" as the idea rather
+than as a label.
+
+**A single frame cannot hold this marker, and that is the lesson it teaches.**
+It asks for the tabs, the personal equipment panel and an organization
+aggregate card together — but the whole point of the split is that a department
+total and your own gear are never on screen at once. It is a pair.
+
+**The first framing made its own caption false.** Scrolling to My Issued Gear
+put the tab strip off the top, under a caption that said "under a tab strip
+offering Organization beside it". Full-page for both halves instead, which also
+matches them to each other.
+
+**Two numbers in these frames are thin, and are recorded rather than dressed
+up.** The Department pulse money cards read $0 (the finance seed gap already
+logged in an earlier pass), and the Organization tab's **Training Compliance
+reads 0%**. The second is real arithmetic, not a bug: the demo department has
+**26 active requirements** and each member carries three training records, so
+nobody is fully compliant and the honest figure is zero. Making it non-zero
+means seeding a member through all 26 — worth doing, and noted as a seed gap
+rather than fixed inside this batch.
+
 ## Captured 2026-08-24 (ninth) — a year of admin hours, and a breakdown that named nothing
 
 `19-22`, opened and checked. **481 of 507 filled.**

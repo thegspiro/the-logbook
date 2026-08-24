@@ -11183,6 +11183,51 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Half of a pair. The dashboard's two tabs are the data boundary the guide
+    // is about, and no single frame holds both -- the whole point is that a
+    // department total and your own gear are never on screen together.
+    //
+    // Full page rather than framed on the gear panel. The marker asks for the
+    // tab strip *and* the personal panel, and they are a screen apart -- a
+    // viewport shot scrolled to one loses the other, and the caption then
+    // claims a tab strip that is not in the frame.
+    id: "00-24-dashboard-my-department",
+    doc: "00-getting-started.md",
+    line: 437,
+    anchor: "leader dashboard with Personal and Organization tabs",
+    alt: "The dashboard's My Department tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is Organization",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await page
+        .getByRole("heading", { name: /My Issued Gear/i })
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "00-25-dashboard-organization",
+    doc: "00-getting-started.md",
+    line: 437,
+    anchor: "__paired-with-00-24__",
+    alt: "The same dashboard on its Organization tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen",
+    route: "/dashboard?tab=organization",
+    prepare: async (page) => {
+      await page
+        .getByRole("heading", { name: /Scheduling Operations/i })
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+    allowEmptyState:
+      '"No critical exceptions" is the answer, not the absence of one: it sits ' +
+      "under the rows reading 0 on a card whose Failed equipment checks row " +
+      "reads 2, so the card is populated and reporting a department with " +
+      "nothing wrong in four of its five checks.",
+  },
+  {
     id: "03-43-time-off-request-form",
     doc: "03-scheduling.md",
     line: 199,
