@@ -362,11 +362,21 @@ const EmailTemplatesPage: React.FC = () => {
     setIsSendingTest(true);
     try {
       const { messageHistoryService } = await import('../../../services/api');
-      await messageHistoryService.sendTestEmail({
+      // The endpoint answers 200 with the history row it just wrote, and that
+      // row says `failed` when the provider rejected the message — a bad
+      // mailbox, a refused relay, SMTP switched off. Reporting success off the
+      // absence of a thrown error told an admin their configuration worked
+      // whenever it did not, which is the one question this button exists to
+      // answer. Same check the History tab's own test-send makes.
+      const result = await messageHistoryService.sendTestEmail({
         to_email: '',
         template_id: selectedTemplate.id,
       });
-      toast.success('Test email sent to your inbox');
+      if (result.status === 'sent') {
+        toast.success('Test email sent to your inbox');
+      } else {
+        toast.error(`Test email failed: ${result.error_message ?? 'Unknown error'}`);
+      }
     } catch {
       toast.error('Failed to send test email');
     } finally {

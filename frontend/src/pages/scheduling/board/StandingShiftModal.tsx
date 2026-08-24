@@ -220,7 +220,7 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
                 aria-label={WEEKDAY_NAMES[index]}
                 className={`h-11 w-11 rounded-lg border text-sm font-bold transition-colors ${
                   weekday === index
-                    ? 'border-red-600 bg-red-600 text-white'
+                    ? 'border-red-800 bg-red-800 text-white'
                     : 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
