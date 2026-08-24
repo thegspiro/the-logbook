@@ -16,6 +16,11 @@ So a reply that does not match the expected shape yields ``None`` rather than a
 guess, and a printer that reports a fault whose bit is not recognised is
 reported as a generic fault rather than being silently dropped. The bits named
 below are the common ones and are the only ones claimed by name.
+
+Bit tables: ZPL from the ~HQES error/warning nibble tables in the ZPL II
+Programming Guide; ESC/POS from the DLE EOT n=2/3/4 tables in Epson's ESC/POS
+command reference. Neither is guessed, and neither should be extended from a
+symptom without checking the table it came from.
 """
 
 import re
@@ -36,6 +41,7 @@ _WARNING_FLAGS = (
     (0x00000001, "Media needs calibrating"),
     (0x00000002, "Printhead needs cleaning"),
     (0x00000004, "Printhead needs replacing"),
+    (0x00000008, "Labels nearly out"),
 )
 
 # "ERRORS:  1 00000000 00000005" — flag, high group, low group.
@@ -89,6 +95,19 @@ def _decode_flags(mask: int, table) -> List[str]:
     return [label for bit, label in table if mask & bit]
 
 
+def _unrecognized(mask: int, table) -> bool:
+    """Whether *mask* sets any bit the table does not name.
+
+    Recognising one bit must not make a partly understood mask look fully
+    decoded: a roll that is nearly out *and* some condition this table has no
+    name for would otherwise be reported as only the first.
+    """
+    known = 0
+    for bit, _label in table:
+        known |= bit
+    return bool(mask & ~known)
+
+
 def parse_error_status(raw: str) -> Optional[Dict[str, List[str]]]:
     """Errors and warnings from a ``~HQES`` reply, or None if absent.
 
@@ -109,16 +128,16 @@ def parse_error_status(raw: str) -> Optional[Dict[str, List[str]]]:
         table = _ERROR_FLAGS if kind == "ERRORS" else _WARNING_FLAGS
         decoded = _decode_flags(mask, table)
 
-        # The flag says something is wrong even when no bit we recognise is
-        # set — report it generically rather than dropping it on the floor.
-        if flag == "1" and not decoded:
-            decoded = [
-                (
-                    "Printer reports an error"
-                    if kind == "ERRORS"
-                    else "Printer reports a warning"
-                )
-            ]
+        # Something is wrong that this table cannot name — either the flag is
+        # set with no recognised bit at all, or recognised bits are mixed with
+        # unrecognised ones. Either way it is reported generically rather than
+        # dropped on the floor.
+        if (flag == "1" and not decoded) or _unrecognized(mask, table):
+            decoded.append(
+                "Printer reports an error"
+                if kind == "ERRORS"
+                else "Printer reports a warning"
+            )
 
         if kind == "ERRORS":
             errors.extend(decoded)
@@ -162,15 +181,50 @@ def summarize(raw: str) -> Dict[str, object]:
 _ESCPOS_FIXED_MASK = 0b10010011
 _ESCPOS_FIXED_VALUE = 0b00010010
 
-# Offline status (DLE EOT 2).
+# Offline status (DLE EOT 2). Bit 5 is "printing stops due to paper end" — the
+# same condition the paper-roll query reports, not a separate jam, so it is
+# labelled to match rather than sending someone to look for one.
+# Bit 3 (0x08) is "paper being fed by the FEED button" — a normal transient
+# state, not a fault, so it is deliberately not decoded here.
 _ESCPOS_COVER_OPEN = 0x04
-_ESCPOS_PAPER_FEED_STOP = 0x20
+_ESCPOS_PAPER_STOP = 0x20
 _ESCPOS_ERROR = 0x40
+
+# Error cause status (DLE EOT 3). Without this a cutter jam arrives only as the
+# generic error bit above, which tells a watch desk nothing it can act on.
+_ESCPOS_CUTTER_ERROR = 0x08
+_ESCPOS_UNRECOVERABLE = 0x20
+_ESCPOS_AUTO_RECOVERABLE = 0x40
+
+# Bits 1 and 4 are the fixed pattern and bits 0 and 7 are already rejected by
+# is_escpos_status_byte, so bit 2 is the only one this table cannot name.
+# Epson's n=3 table defines bits 3, 5 and 6 and nothing else; some third-party
+# firmware puts a fault of its own in bit 2. Naming it would be a guess, and a
+# wrong specific diagnosis is worse than a vague true one — but a set bit still
+# means something is wrong, so it is reported generically rather than letting a
+# faulted printer read as healthy.
+_ESCPOS_ERROR_CAUSE_KNOWN = (
+    _ESCPOS_FIXED_VALUE
+    | _ESCPOS_CUTTER_ERROR
+    | _ESCPOS_UNRECOVERABLE
+    | _ESCPOS_AUTO_RECOVERABLE
+)
 
 # Paper roll status (DLE EOT 4). Both bits of each pair are set together; the
 # spec defines the pair, so both are required rather than either.
 _ESCPOS_PAPER_NEAR_END = 0x0C
 _ESCPOS_PAPER_END = 0x60
+
+
+def _dedupe(items: List[str]) -> List[str]:
+    """Drop repeats, keeping first-seen order."""
+    seen = set()
+    out = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 def is_escpos_status_byte(reply: bytes) -> bool:
@@ -181,15 +235,21 @@ def is_escpos_status_byte(reply: bytes) -> bool:
 
 
 def summarize_escpos(replies: Sequence[bytes]) -> Dict[str, object]:
-    """Fold DLE EOT replies (offline, then paper roll) into the API shape.
+    """Fold DLE EOT replies (offline, error cause, paper roll) into the API shape.
 
     A printer that answers with a valid status byte has proved it speaks
     ESC/POS, which is the identification this language offers — there is no
     equivalent of ZPL's ~HI carrying a model name, so ``model`` stays null
     rather than being invented.
+
+    The three queries overlap on purpose: an out-of-paper printer sets a bit in
+    two of them and a cutter jam sets the generic error bit in a third. Each
+    byte is decoded on its own and the findings are then deduplicated, so an
+    overlap reads as one fault rather than two.
     """
     offline = replies[0] if len(replies) > 0 else b""
-    paper = replies[1] if len(replies) > 1 else b""
+    error_cause = replies[1] if len(replies) > 1 else b""
+    paper = replies[2] if len(replies) > 2 else b""
 
     errors: List[str] = []
     warnings: List[str] = []
@@ -203,26 +263,42 @@ def summarize_escpos(replies: Sequence[bytes]) -> Dict[str, object]:
         elif value & _ESCPOS_PAPER_NEAR_END == _ESCPOS_PAPER_NEAR_END:
             warnings.append("Paper is nearly out")
 
+    if is_escpos_status_byte(error_cause):
+        known = True
+        value = error_cause[0]
+        if value & _ESCPOS_CUTTER_ERROR:
+            errors.append("Cutter fault")
+        if value & _ESCPOS_UNRECOVERABLE:
+            errors.append("Unrecoverable fault — the printer needs power cycling")
+        if value & _ESCPOS_AUTO_RECOVERABLE:
+            errors.append("Recoverable fault — clear it and the printer resumes")
+        if value & ~_ESCPOS_ERROR_CAUSE_KNOWN:
+            errors.append("Printer reports an error")
+
     if is_escpos_status_byte(offline):
         known = True
         value = offline[0]
+        specific: List[str] = []
         if value & _ESCPOS_COVER_OPEN:
-            errors.append("Cover is open")
-        if value & _ESCPOS_PAPER_FEED_STOP:
-            errors.append("Paper feed stopped")
-        # A generic error bit with no more specific cause identified above is
-        # still reported: a faulted printer must never read as healthy.
-        if value & _ESCPOS_ERROR and not errors:
-            errors.append("Printer reports an error")
+            specific.append("Cover is open")
+        if value & _ESCPOS_PAPER_STOP:
+            specific.append("Out of paper")
+        # The generic error bit is only worth reporting when nothing named it.
+        # "Nothing" means this byte *and* the error-cause byte: a cutter jam
+        # sets both, and reporting it twice — once by name, once as "an error"
+        # — reads as two faults.
+        if value & _ESCPOS_ERROR and not specific and not errors:
+            specific.append("Printer reports an error")
+        errors.extend(specific)
 
-    responded = bool(offline or paper)
+    responded = bool(offline or error_cause or paper)
     return {
         "responded": responded,
         "identified": known,
         "model": None,
         "firmware": None,
         "reported_dpi": None,
-        "errors": errors,
-        "warnings": warnings,
+        "errors": _dedupe(errors),
+        "warnings": _dedupe(warnings),
         "status_available": known,
     }

@@ -129,6 +129,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   member's record is their attended time, settled at check-out. The row now
   reads "Credits up to 2.0 drill hours".
 
+### Printer status flags checked against the published command tables (2026-08-24)
+
+**Fixed**
+
+- **"Paper feed stopped" was the wrong name for a real ESC/POS bit.** Bit 5 of
+  `DLE EOT 2` is _printing stops due to paper end_ — the same condition the
+  paper-roll query reports, not a feed jam — so the status panel sent someone
+  looking for a jam that was not there. It now reads "Out of paper", and the
+  two queries' overlapping findings are deduplicated so one empty roll is one
+  fault rather than two.
+- **A cutter jam arrived as "Printer reports an error".** `DLE EOT 2` carries a
+  single undifferentiated error bit and the cause lives in `DLE EOT 3`, which
+  was not being asked, so the most common receipt-printer fault after paper
+  reached the watch desk as text nobody could act on. The query is now sent and
+  its three flags — autocutter, unrecoverable, automatically recoverable — are
+  named. The generic bit only speaks when nothing else identified the cause,
+  which also fixes a printer that was out of paper _and_ jammed dropping the
+  jam.
+- **A Zebra printer whose roll was nearly out said nothing.** `~HQES` warning
+  bit 8 is the paper-near-end sensor and was not decoded. Reported as "Labels
+  nearly out" — a warning, not an error, because the printer will finish the
+  label in front of it and the point is to load a roll before the next shift
+  rather than during it.
+
+The ZPL command syntax and the rest of both flag tables verified as written
+against the ZPL II Programming Guide and Epson's ESC/POS reference; the bit
+tables now carry a note in `printer_status.py` naming where they came from.
+
 ### Submit External Training asked one question with three controls (2026-08-23)
 
 **Changed**
