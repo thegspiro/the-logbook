@@ -10817,6 +10817,31 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // The same record as 09-23, printed by the candidate it belongs to. The
+    // weighted template's result_disclosure is seeded as `scores` -- an
+    // override that changes nothing about the officer's own view above, only
+    // what the candidate is shown: marks and the arithmetic, no examiner
+    // notes. Officers always see the full sheet regardless of this setting.
+    id: "09-24-scorecard-print-candidate",
+    doc: "09-skills-testing.md",
+    line: 1246,
+    anchor:
+      "the same scorecard as seen by a candidate under `scores` disclosure",
+    alt: "The same validated scorecard printed by the candidate under scores disclosure: per-step marks and the section arithmetic, with the examiner's note absent",
+    route: "/training/skills-testing",
+    auth: "member",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=200",
+      (id) => `/training/skills-testing/print/scorecard?id=${id}`,
+      "tests",
+      (test) =>
+        Boolean(test.validated_at ?? test.validatedAt) &&
+        !(test.voided_at ?? test.voidedAt) &&
+        test.result === "pass",
+    ),
+    fullPage: true,
+  },
+  {
     // New screen in this release. Seeded with one published notice and one
     // draft so the two states sit side by side -- with nothing adopted both
     // cards show the platform default, which pictures the feature unused.
@@ -10965,6 +10990,56 @@ export const SHOTS = [
         .locator("#checkin-window")
         .waitFor({ state: "visible", timeout: 20_000 });
     },
+  },
+  {
+    // The mandatory counterpart to 04-44: checking Mandatory attendance with
+    // the audience never touched flips the default to All active members, per
+    // the edge case above the marker. Nothing is submitted, so this writes
+    // nothing and needs no `mutatesSeedData` flag.
+    id: "04-46-mandatory-reminder-audience",
+    doc: "04-events-meetings.md",
+    line: 1572,
+    anchor:
+      "mandatory-event form after the Mandatory switch is enabled, showing",
+    alt: "The Notifications panel after checking Mandatory attendance on a new event: the reminder audience switching to All active members",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Notifications'))",
+    prepare: async (page) => {
+      await page.locator("#is-mandatory").check();
+      await page
+        .locator("#reminder-target")
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    // The other half of the marker: a template's own audience, saved
+    // independently of any event's mandatory flag. "Weekly Company Drill" is
+    // seeded non-mandatory but with reminder_target overridden to `all` --
+    // the value a mandatory event defaults to, on a template that is not one
+    // -- which is what "independently saved" means in a single frame.
+    //
+    // Applied by hand alongside 04-46, not by apply_placeholders: the marker
+    // is one blockquote for both images, and once 04-46 fills it there is no
+    // placeholder left for a second anchor to find -- the same reason 17-04
+    // is a manual pair with 17-03. This entry exists so a future UI change
+    // still gets the image re-captured.
+    id: "04-47-template-reminder-audience",
+    doc: "04-events-meetings.md",
+    line: 1572,
+    anchor: "__paired-with-04-46__",
+    alt: "The Weekly Company Drill event template, not mandatory, with its own reminder audience saved as All active members",
+    route: "/events/templates",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Weekly Company Drill" })
+        .click({ timeout: 15_000 });
+      await page
+        .locator("#reminder-target")
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
   },
   {
     // Half of a permission pair, both opening the SAME colleague's profile.

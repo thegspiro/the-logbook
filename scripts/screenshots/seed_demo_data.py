@@ -8994,6 +8994,28 @@ class Seeder:
             )
         return tests
 
+    def seed_scored_template_disclosure(self, templates: list[dict]) -> None:
+        """Override the weighted sheet's result disclosure to `scores`.
+
+        Officers always see the full scorecard regardless of this setting, so
+        it changes nothing about 09-23 or any other officer-facing capture of
+        this template — only what the *candidate* sees when they print or view
+        their own result. Left at the organization default (`full`), the
+        candidate scorecard is identical to the officer one and there is
+        nothing to show a redaction against.
+        """
+        scored_template = next(
+            (t for t in templates if pick(t, "name") == SCORED_TEMPLATE_NAME), None
+        )
+        if not scored_template:
+            return
+        if pick(scored_template, "result_disclosure", "resultDisclosure") == "scores":
+            return
+        self.api.put(
+            f"/training/skills-testing/templates/{pick(scored_template, 'id')}",
+            {"result_disclosure": "scores"},
+        )
+
     def seed_scored_test(
         self, templates: list[dict], members: list[dict]
     ) -> dict | None:
@@ -13150,6 +13172,13 @@ class Seeder:
         self.step(
             "skills test with points",
             lambda: self.seed_scored_test(templates, members),
+        )
+        # After the scored test exists: this overrides the disclosure the
+        # candidate sees on that same record, so it belongs right after the
+        # test it applies to rather than up with template creation.
+        self.step(
+            "scored template disclosure",
+            lambda: self.seed_scored_template_disclosure(templates),
         )
         self.step(
             "skills test that failed",

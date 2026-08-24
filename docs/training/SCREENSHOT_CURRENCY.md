@@ -1,5 +1,23 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (nineteenth) — the candidate's own scorecard, redacted where the officer's is not
+
+`09-24`, opened and checked against `09-23`. **7 markers remaining.**
+
+**Same record, two prints.** The weighted-sheet test 09-23 already pictures
+had no candidate-side counterpart, so this reuses it rather than minting a
+new one: a template-level `result_disclosure` override of `scores` on
+`Handline Advance — Weighted Evaluation`, seeded right after the test that
+scores it. Officers are unaffected by the override — `resolve_disclosure_policy`
+only governs the candidate's own view — so 09-23 needed no re-capture.
+
+**Verified by diffing the two images, not by reading the code.** Same
+per-step marks (`9/10`, `5/10`, …), same section arithmetic, same 78%/PASS —
+and the officer's copy carries "Kinked at the stairwell turn and had to be
+reset." under **Examiner Notes** plus an **Overall Notes** section that the
+candidate's copy has neither of. That is the whole redaction the marker
+asked for, in one side-by-side.
+
 ## Captured 2026-08-24 (eighteenth) — where a training session is wired to what it counts toward
 
 `19-29`, opened and checked. **8 markers remaining.**
