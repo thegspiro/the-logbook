@@ -11082,6 +11082,40 @@ export const SHOTS = [
       "Members card lower on the page carries the three named applicants.",
   },
   {
+    // Signed-in member, not the guest kiosk -- the marker is explicit that a
+    // guest account must not be used for this capture, since an anonymous
+    // early arrival is blocked outright rather than admitted with a notice.
+    // The event is seeded 90 minutes out on every run, the midpoint of the
+    // one-to-two-hour early-arrival band `_validate_check_in_window` allows,
+    // so a capture some minutes after seeding still lands inside it.
+    //
+    // Real mutation (self_check_in auto-creates the RSVP and marks it
+    // checked in), and this is the last 04-* shot in the manifest, so it is
+    // flagged rather than relying on nothing later existing by accident.
+    id: "04-49-early-checkin-notice",
+    doc: "04-events-meetings.md",
+    line: 1606,
+    anchor: "early Flexible member notice with the localized official",
+    alt: "A member checking in about 30 minutes before a Flexible event's official window opens: a success screen with an informational notice naming the localized time the window actually starts",
+    route: "/events",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=100",
+        (id) => `/events/${id}/check-in`,
+        "events",
+        (event) => event.title === "Thursday Skills Review",
+      )(page);
+      await page
+        .getByRole("button", { name: /^Check In to This Event$/ })
+        .click({ timeout: 15_000 });
+      await page.getByRole("status").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
+    mutatesSeedData: true,
+  },
+  {
     // Half of a permission pair, both opening the SAME colleague's profile.
     // The member chosen is the one enrolled in TOTP, per the marker, though
     // see the caption: no account-security block renders on a colleague's

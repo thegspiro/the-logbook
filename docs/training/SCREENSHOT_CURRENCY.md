@@ -1,5 +1,52 @@
 # Screenshot currency
 
+## Captured 2026-08-24 — an early check-in the app could not reach, and a product bug fixed to get there
+
+`04-49`, opened and checked. **1 marker remaining.**
+
+**The button was never there to click.** The guide already documents that a
+Flexible event admits a tap up to an hour before its official window with an
+informational notice — `_validate_check_in_window` genuinely does this. What
+had never been exercised through the UI: `EventSelfCheckInPage` gates the
+whole "Check In to This Event" button on `qrData.is_valid`, and
+`get_qr_check_in_data` computes `is_valid` as the **strict** on-time window
+(`check_in_start <= now <= check_in_end`) — no early grace at all. A member
+arriving during the exact window the backend was built to admit saw
+"Check-in Not Available" and no way past it. The marker could not be captured
+as written because the feature it describes was unreachable, not because the
+seed data was missing.
+
+**Root cause, not a workaround.** Added `can_check_in` to `QRCheckInData` —
+computed with `_validate_check_in_window`, the same permissive check
+`self_check_in` itself enforces — and pointed the frontend's button gate at
+it instead of `is_valid`, which stays for the "Check-in Not Available" time-
+range display it already drove. Found in passing that the public kiosk
+endpoint (`app/api/public/display.py`) had _already_ been computing its own
+`is_valid` this permissive way, under the strict field name — the two call
+sites disagreed on what the same field name meant, which is exactly the
+class of bug `can_check_in`'s docstring now heads off by naming both
+concepts explicitly.
+
+**Two backend regression tests, two frontend.** `test_qr_data_can_check_in_true_during_flexible_early_grace`
+and its false-outside-the-band counterpart in `test_qr_check_in.py`; a
+`can_check_in: true` / `is_valid: false` case and updates to the four
+existing "outside the window" tests (which needed `can_check_in: false`
+added alongside `is_valid: false` — they were about the hard-block case, and
+without both flags they'd now exercise the wrong branch) in
+`EventSelfCheckInPage.test.tsx`. Also fixed the same tests' silent
+dependence on `is_valid` alone, which the fix would otherwise have left
+green for the wrong reason.
+
+**Seeded 90 minutes out, the midpoint of the admissible band.** `_validate_check_in_window`
+allows 60–120 minutes before a Flexible event's start (60 minutes before the
+official window opens, plus one more hour of grace); 90 minutes centers the
+capture in that hour so a few minutes' delay between seeding and capture
+doesn't fall outside it. Not `requires_rsvp`: `self_check_in` auto-creates
+the RSVP on first tap, and requiring one would also require an
+`rsvp_deadline` — a validator this fixture found the hard way, with a first
+`POST /events` returning a generic 422 until the actual constraint was read
+from `EventCreate.validate_dates`.
+
 ## Captured 2026-08-24 — a validation prompt, before and after the action that clears it
 
 `19-31`, `19-32`, opened and checked. **2 markers remaining.**

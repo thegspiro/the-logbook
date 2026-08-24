@@ -497,6 +497,58 @@ class TestCheckInWindowConsistency:
         assert data is not None
         assert data["is_valid"] is True
 
+    @pytest.mark.asyncio
+    async def test_qr_data_can_check_in_true_during_flexible_early_grace(self):
+        """Regression: the Check In button was gated on `is_valid`, the
+        strict on-time window -- so a Flexible event's one-hour early-grace
+        admission (`self_check_in` accepts it with a notice) had no button to
+        reach it through. `can_check_in` must be True here even though
+        `is_valid` (still the strict window, used for the time-range display)
+        is False.
+        """
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        # Starts in 90 minutes: outside the 60-minute FLEXIBLE window
+        # (is_valid False) but inside the additional one-hour early-grace
+        # band self_check_in admits (can_check_in True).
+        event = _make_event(
+            org_id=org_id,
+            start_datetime=now + timedelta(minutes=90),
+            end_datetime=now + timedelta(hours=3),
+        )
+        org = _make_org(org_id=org_id)
+
+        mock_db = _mock_db_returning(event, org)
+        service = _make_service(mock_db)
+        data, error = await service.get_qr_check_in_data(event.id, org_id)
+
+        assert error is None
+        assert data is not None
+        assert data["is_valid"] is False
+        assert data["can_check_in"] is True
+
+    @pytest.mark.asyncio
+    async def test_qr_data_can_check_in_false_far_before_flexible_window(self):
+        """A Flexible event more than two hours out is outside even the
+        early-grace band -- can_check_in must agree with is_valid there."""
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        event = _make_event(
+            org_id=org_id,
+            start_datetime=now + timedelta(days=30),
+            end_datetime=now + timedelta(days=30, hours=1),
+        )
+        org = _make_org(org_id=org_id)
+
+        mock_db = _mock_db_returning(event, org)
+        service = _make_service(mock_db)
+        data, error = await service.get_qr_check_in_data(event.id, org_id)
+
+        assert error is None
+        assert data is not None
+        assert data["is_valid"] is False
+        assert data["can_check_in"] is False
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

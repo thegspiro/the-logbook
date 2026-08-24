@@ -253,6 +253,7 @@ export interface QRCheckInData {
   check_in_start: string;
   check_in_end: string;
   is_valid: boolean;
+  can_check_in: boolean;
   location?: string | undefined;
   location_id?: string | undefined;
   location_name?: string | undefined;

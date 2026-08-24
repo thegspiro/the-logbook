@@ -1607,7 +1607,7 @@ window because an unidentified early entry cannot be corrected reliably.
 
 ![Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start](./images/04-45-checkin-flexible-default.png)
 
-> **[SCREENSHOT NEEDED — early Flexible member notice with the localized official opening time; do not use a guest account for this capture.]**
+![A member checking in about 30 minutes before a Flexible event's official window opens: a success screen with an informational notice naming the localized time the window actually starts](./images/04-49-early-checkin-notice.png)
 
 ## August 19–23, 2026 update — the Recruitment event type
 

@@ -2349,6 +2349,52 @@ class Seeder:
         self.api.post("/scheduled/run-task?task=post_event_validation", {})
         return event
 
+    EARLY_CHECKIN_EVENT_TITLE = "Thursday Skills Review"
+
+    def seed_early_checkin_event(self) -> dict | None:
+        """A Flexible event whose official check-in window opens shortly.
+
+        `_validate_check_in_window` admits an early Flexible check-in only
+        inside a narrow band: the scheduled start must be between one and two
+        hours out (60-120 minutes before the official window, which itself
+        opens 60 minutes before start). Slid forward to 90 minutes out on
+        every seed run, the midpoint of that band, so a capture some minutes
+        after seeding still lands inside it. `check_in_window_type` is left
+        unset -- FLEXIBLE is the default, and setting it explicitly would
+        read as though the marker depended on a non-default configuration.
+        """
+        start = (NOW + timedelta(minutes=90)).replace(second=0, microsecond=0)
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=2)),
+        }
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.EARLY_CHECKIN_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            return self.api.patch(f"/events/{pick(existing, 'id')}", window)
+        return self.api.post(
+            "/events",
+            {
+                "title": self.EARLY_CHECKIN_EVENT_TITLE,
+                "description": "Monthly skills review and equipment refresher.",
+                "event_type": "training",
+                # Not requires_rsvp: self_check_in auto-creates the RSVP on
+                # first tap, and requiring one here would also require an
+                # rsvp_deadline the fixture has no use for.
+                "requires_rsvp": False,
+                "is_mandatory": False,
+                "send_reminders": False,
+                "is_draft": False,
+                **window,
+            },
+        )
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -13758,6 +13804,7 @@ class Seeder:
             "event validation notification",
             self.seed_event_validation_notification,
         )
+        self.step("early check-in event", self.seed_early_checkin_event)
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(

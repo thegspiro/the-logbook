@@ -408,7 +408,11 @@ const EventSelfCheckInPage: React.FC = () => {
         </div>
 
         {/* Check-In Status */}
-        {qrData?.is_valid ? (
+        {/* can_check_in, not is_valid: a Flexible/Window event admits a tap
+            up to an hour before its official window with a notice, and
+            is_valid (the strict on-time window, still used below for the
+            "Check-in Not Available" time range) does not reflect that. */}
+        {qrData?.can_check_in ? (
           <div>
             {error && (
               <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
