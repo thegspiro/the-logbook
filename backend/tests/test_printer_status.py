@@ -82,6 +82,20 @@ class TestErrorStatus:
         assert result["errors"] == []
         assert result["warnings"] == ["Printhead needs cleaning"]
 
+    def test_a_near_end_roll_is_a_warning_not_an_error(self):
+        # The printer will finish the label in front of it. Reported so a
+        # quartermaster can load a roll before the next shift, not so the
+        # print is refused.
+        result = parse_error_status(_status(warnings="1 00000000 00000008"))
+        assert result is not None
+        assert result["errors"] == []
+        assert result["warnings"] == ["Labels nearly out"]
+
+    def test_a_head_open_is_an_error(self):
+        result = parse_error_status(_status(errors="1 00000000 00000004"))
+        assert result is not None
+        assert result["errors"] == ["Printhead open"]
+
     def test_an_unrecognised_fault_bit_is_reported_generically(self):
         # The flag says something is wrong. Dropping it because the bit is not
         # in the table would report a faulted printer as healthy — the exact
@@ -140,10 +154,16 @@ class TestSummarize:
 
 # DLE EOT replies. Bits 1 and 4 are always set, bits 0 and 7 always clear —
 # that fixed pattern is what makes a real status byte recognisable.
+#
+# The three queries are sent in the order offline (n=2), error cause (n=3),
+# paper roll (n=4), and each byte only means something in its own slot.
 _OK = bytes([0b00010010])
 _PAPER_END = bytes([0b01110010])
 _PAPER_NEAR_END = bytes([0b00011110])
 _COVER_OPEN = bytes([0b00010110])
+_OFFLINE_PAPER_STOP = bytes([0b00110010])
+_CUTTER_FAULT = bytes([0b00011010])
+_GENERIC_ERROR = bytes([0b01010010])
 
 
 class TestEscposStatusByte:
@@ -164,25 +184,50 @@ class TestEscposStatusByte:
 
 class TestSummarizeEscpos:
     def test_a_healthy_printer(self):
-        result = summarize_escpos([_OK, _OK])
+        result = summarize_escpos([_OK, _OK, _OK])
         assert result["errors"] == []
         assert result["warnings"] == []
         assert result["identified"] is True
         assert result["status_available"] is True
 
     def test_out_of_paper_is_an_error(self):
-        assert summarize_escpos([_OK, _PAPER_END])["errors"] == ["Out of paper"]
+        assert summarize_escpos([_OK, _OK, _PAPER_END])["errors"] == ["Out of paper"]
 
     def test_nearly_out_of_paper_is_a_warning(self):
-        result = summarize_escpos([_OK, _PAPER_NEAR_END])
+        result = summarize_escpos([_OK, _OK, _PAPER_NEAR_END])
         assert result["errors"] == []
         assert result["warnings"] == ["Paper is nearly out"]
 
     def test_a_cover_open_is_an_error(self):
-        assert summarize_escpos([_COVER_OPEN, _OK])["errors"] == ["Cover is open"]
+        assert summarize_escpos([_COVER_OPEN, _OK, _OK])["errors"] == ["Cover is open"]
+
+    def test_a_cutter_fault_is_named_rather_than_left_generic(self):
+        # DLE EOT 2 can only say "an error occurred". Without the error-cause
+        # query a jammed cutter reaches the watch desk as something nobody can
+        # act on.
+        assert summarize_escpos([_OK, _CUTTER_FAULT, _OK])["errors"] == ["Cutter fault"]
+
+    def test_a_paper_end_reported_by_both_queries_is_one_fault(self):
+        # Bit 5 of the offline byte is "printing stops due to paper end", the
+        # same condition the paper-roll byte reports. Listing it twice would
+        # read as two separate problems.
+        result = summarize_escpos([_OFFLINE_PAPER_STOP, _OK, _PAPER_END])
+        assert result["errors"] == ["Out of paper"]
+
+    def test_the_generic_error_bit_does_not_shadow_a_named_cause(self):
+        # A cutter fault sets its own bit *and* the offline byte's error bit.
+        # Reporting both would describe one jam as two faults.
+        result = summarize_escpos([_GENERIC_ERROR, _CUTTER_FAULT, _OK])
+        assert result["errors"] == ["Cutter fault"]
+
+    def test_an_unexplained_error_bit_is_still_reported(self):
+        # A faulted printer must never read as healthy, even when no query
+        # names the cause.
+        result = summarize_escpos([_GENERIC_ERROR, _OK, _OK])
+        assert result["errors"] == ["Printer reports an error"]
 
     def test_a_device_that_never_answers(self):
-        result = summarize_escpos([b"", b""])
+        result = summarize_escpos([b"", b"", b""])
         assert result["responded"] is False
         assert result["identified"] is False
         assert result["status_available"] is False
@@ -190,7 +235,7 @@ class TestSummarizeEscpos:
     def test_a_reply_that_is_not_a_status_byte_is_not_decoded(self):
         # Reported as "did not identify itself", never as a list of faults
         # invented from bits that mean nothing in this protocol.
-        result = summarize_escpos([b"\xff", b"\xff"])
+        result = summarize_escpos([b"\xff", b"\xff", b"\xff"])
         assert result["responded"] is True
         assert result["identified"] is False
         assert result["errors"] == []
@@ -198,9 +243,18 @@ class TestSummarizeEscpos:
     def test_no_model_is_claimed(self):
         # ESC/POS has no equivalent of ZPL's ~HI, so a model name would have
         # to be invented.
-        assert summarize_escpos([_OK, _OK])["model"] is None
+        assert summarize_escpos([_OK, _OK, _OK])["model"] is None
 
-    def test_a_missing_second_reply_does_not_shift_the_first(self):
-        # The paper answer must not be read out of the offline slot.
-        result = summarize_escpos([_PAPER_END])
-        assert result["errors"] != ["Out of paper"]
+    def test_each_reply_is_read_only_in_its_own_slot(self):
+        # The same byte means different things per query; decoding one in
+        # another's position invents faults. A cutter-fault byte carries no
+        # meaning as an offline or paper-roll answer.
+        assert summarize_escpos([_CUTTER_FAULT, _OK, _OK])["errors"] == []
+        assert summarize_escpos([_OK, _OK, _CUTTER_FAULT])["errors"] == []
+
+    def test_a_short_reply_list_does_not_shift_the_remaining_slots(self):
+        # A printer that answered only the first query must not have that
+        # answer read as the paper-roll one.
+        result = summarize_escpos([_OK])
+        assert result["errors"] == []
+        assert result["warnings"] == []

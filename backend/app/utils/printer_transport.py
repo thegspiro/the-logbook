@@ -66,7 +66,12 @@ HOST_QUERY = "~HI~HQES"
 # ESC/POS real-time status requests (DLE EOT n). Unlike ZPL's text queries
 # these are answered one byte at a time, so they are sent as separate
 # exchanges rather than back to back.
+#
+# n=2 (offline) reports why printing is halted, n=4 (paper roll sensor) reports
+# the roll, and n=3 (error cause) is what separates a cutter jam from the
+# unhelpful "something is wrong" that n=2's error bit would otherwise be.
 ESCPOS_OFFLINE_QUERY = b"\x10\x04\x02"
+ESCPOS_ERROR_QUERY = b"\x10\x04\x03"
 ESCPOS_PAPER_QUERY = b"\x10\x04\x04"
 
 _ETX = b"\x03"
