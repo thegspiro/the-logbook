@@ -33,6 +33,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never be fixed.
 - `DELETE /events/{id}` returned a generic 500 when linked records blocked the
   cascade — the service raised `ValueError` and the endpoint had no handler.
+- **Attendees who checked out were never credited admin hours at all.**
+  Finalization credited only the rows it derived a duration for — those with no
+  check-out — so a member who tapped out, or whom End Event bulk-checked-out,
+  was filtered out of the very query that feeds the ledger. End Event also left
+  those rows with no duration to credit. Both predate the lock; the lock is
+  what made them unrecoverable without a chief.
+- **The series endpoints were an open door through the lock.**
+  `delete_event_series`, `cancel_series` and `update_future_events` reached the
+  same rows in bulk without checking it, so `events.manage` alone could delete
+  or retime finalized attendance. A batch containing a closed occurrence is now
+  refused whole rather than partially applied.
+- Event-registration **forms** wrote `EventRSVP` rows directly, bypassing the
+  409 the ordinary RSVP path returns for a closed event.
+- A `custom_fields` update replaced the whole column, so a payload without the
+  lifecycle keys stripped `attendance_finalized` while the column kept the
+  event locked — leaving the post-event reminder nagging about an event nobody
+  could edit. Those keys now survive any replacement.
+- Reopening then **deleting or cancelling** an event left its credited hours
+  standing, since the resync that would have reconciled them only happens on a
+  re-finalize that never came.
+- Re-finalizing now refreshes the linked training record and drops admin-hours
+  entries under categories the event no longer maps to, instead of leaving the
+  first finalize's figures behind.
 
 **Added**
 
@@ -42,7 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finalized event would come back unlocked on upgrade. The marker keeps being
   written alongside the columns, because the reminder task keys off it.
 - `events.reopen_attendance`, a new permission granted by default to the chief
-  ranks and the president only. `events.manage` reaches nine default roles
+  ranks and the president only. Migration `b7d1e04f92a3` backfills it onto
+  those positions in existing organizations — `DEFAULT_POSITIONS` is
+  materialized at onboarding only, so without it an established department
+  would upgrade into a lock no position could open. `events.manage` reaches nine default roles
   including public outreach and communications, and the point of the lock is
   that whoever closed the event cannot quietly reopen it and move the numbers.
 - `POST /events/{id}/reopen-attendance` and

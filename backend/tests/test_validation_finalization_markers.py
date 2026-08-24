@@ -53,7 +53,7 @@ class TestEventFinalizeMarker:
     async def test_finalize_with_no_open_rsvps_still_records_completion(self):
         event = _ended_event()
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(event), _all([])])
+        db.execute = AsyncMock(side_effect=[_one(event), _all([]), _all([])])
         db.commit = AsyncMock()
         svc = EventService(db)
 
@@ -95,7 +95,7 @@ class TestEventFinalizeMarker:
         committed = {"registration": {"limit": 5}}
         event = _ended_event(custom_fields=committed)
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(event), _all([])])
+        db.execute = AsyncMock(side_effect=[_one(event), _all([]), _all([])])
         db.commit = AsyncMock()
         svc = EventService(db)
 

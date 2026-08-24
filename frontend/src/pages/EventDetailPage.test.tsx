@@ -485,7 +485,10 @@ describe('EventDetailPage', () => {
         // that always fails is worse than an absent one.
         expect(screen.queryByRole('button', { name: 'Finalize Attendance' })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /^check in$/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+        // Edit stays: the API still accepts descriptive edits on a closed
+        // event and refuses only the attendance-sensitive fields, so removing
+        // the entry point would force a reopen just to fix a typo.
+        expect(screen.getByRole('button', { name: /^edit$/i })).toBeVisible();
         expect(screen.queryByRole('button', { name: /send reminders/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /edit times/i })).not.toBeInTheDocument();
       });
@@ -526,6 +529,16 @@ describe('EventDetailPage', () => {
         mockCheckPermission.mockImplementation(
           (perm: string) => perm === 'events.manage' || perm === 'events.reopen_attendance'
         );
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        expect(screen.getByRole('button', { name: /reopen attendance/i })).toBeVisible();
+      });
+
+      it('offers it to a role holding only the reopen grant', async () => {
+        // The permission is deliberately independent of events.manage, so the
+        // control must not be nested inside the manager-only action group.
+        mockCheckPermission.mockImplementation((perm: string) => perm === 'events.reopen_attendance');
         renderFinalized();
         await screen.findByText('Attendance finalized');
 

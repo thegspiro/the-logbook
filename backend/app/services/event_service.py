@@ -577,6 +577,23 @@ class EventService:
                     attendance_locked_error("changing " + ", ".join(sorted(locked)))
                 )
 
+        # custom_fields is a whole-column replacement, and it carries the
+        # lifecycle markers as well as whatever the organizer typed. A client
+        # that PATCHes it without them would strip attendance_finalized while
+        # the column keeps the event locked — and the post-event validation
+        # task, which reads only the marker, would then nag about an event
+        # nobody can edit. Carry the lifecycle keys across any replacement.
+        if "custom_fields" in update_data:
+            preserved = {
+                key: value
+                for key, value in (event.custom_fields or {}).items()
+                if key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS
+            }
+            if preserved:
+                incoming = dict(update_data["custom_fields"] or {})
+                incoming.update(preserved)
+                update_data["custom_fields"] = incoming
+
         # Validate dates if being updated
         start_dt = update_data.get("start_datetime", event.start_datetime)
         end_dt = update_data.get("end_datetime", event.end_datetime)
@@ -690,6 +707,23 @@ class EventService:
 
         update_data = event_data.model_dump(exclude_unset=True)
 
+        # A series-wide edit reaches finalized occurrences too. Descriptive
+        # fields stay allowed here exactly as they do on the single-event path;
+        # only the ones the credited durations were derived from are refused.
+        sensitive = ATTENDANCE_SENSITIVE_UPDATE_FIELDS & set(update_data)
+        if sensitive:
+            locked = [e for e in future_events if attendance_is_finalized(e)]
+            if locked:
+                raise ValueError(
+                    attendance_locked_error(
+                        "changing "
+                        + ", ".join(sorted(sensitive))
+                        + f" across this series ({len(locked)} of "
+                        f"{len(future_events)} occurrences have finalized "
+                        "attendance)"
+                    )
+                )
+
         # XC-1 (BXC-1): update_event and create_event validate a newly-set
         # location_id in-org, but this series-wide bulk update did not — and the
         # location is eager-loaded and name-projected as location_name in the
@@ -742,6 +776,10 @@ class EventService:
         # credited hours; marking it cancelled would contradict its own record.
         if attendance_is_finalized(event):
             raise ValueError(attendance_locked_error("cancelling the event"))
+
+        # Same reasoning as delete_event: a reopened event that is cancelled
+        # rather than re-finalized would leave its credited hours standing.
+        await self._revoke_event_attendance_credit(event_id)
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -800,6 +838,17 @@ class EventService:
 
         result = await self.db.execute(select(Event).where(*conditions))
         events = result.scalars().all()
+
+        # Same door as delete_event_series: cancelling a closed occurrence
+        # would contradict the attendance it already credited.
+        locked = [e for e in events if attendance_is_finalized(e)]
+        if locked:
+            raise ValueError(
+                attendance_locked_error(
+                    f"cancelling this series ({len(locked)} of {len(events)} "
+                    "occurrences have finalized attendance)"
+                )
+            )
 
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
@@ -911,6 +960,11 @@ class EventService:
         if attendance_is_finalized(event):
             raise ValueError(attendance_locked_error("deleting the event"))
 
+        # Reachable on a reopened event, where entries from the earlier
+        # finalize are still on the ledger waiting to be resynced by a
+        # re-finalize that is now never going to happen.
+        await self._revoke_event_attendance_credit(event_id)
+
         await self.db.delete(event)
         try:
             await self.db.commit()
@@ -949,6 +1003,21 @@ class EventService:
 
         if not events:
             return 0
+
+        # The single-event guards are not enough on their own: the series
+        # endpoints reach the same rows in bulk, so an events.manage caller
+        # could delete finalized attendance through the series door without
+        # ever holding events.reopen_attendance. Refuse the whole batch rather
+        # than silently deleting the open siblings and keeping the closed ones
+        # — a partial series delete is not what the caller asked for.
+        locked = [e for e in events if attendance_is_finalized(e)]
+        if locked:
+            raise ValueError(
+                attendance_locked_error(
+                    f"deleting this series ({len(locked)} of {len(events)} "
+                    "occurrences have finalized attendance)"
+                )
+            )
 
         for event in events:
             await self.db.delete(event)
@@ -1956,8 +2025,22 @@ class EventService:
         if effective_end.tzinfo is None:
             effective_end = effective_end.replace(tzinfo=dt_timezone.utc)
 
-        # Get all RSVPs that are checked in but have no checkout and no duration set
-        rsvp_result = await self.db.execute(
+        # Two different sets, and conflating them is what left whole
+        # categories of attendee uncredited:
+        #
+        #   `derivable` — checked in, never checked out, no duration yet. These
+        #   are the rows finalize has to *compute* a duration for.
+        #
+        #   `attended`  — every checked-in row. These are the rows that have to
+        #   reach the hours ledger, whether their duration was derived here,
+        #   measured from a real check-out, or set by hand.
+        #
+        # Crediting only `derivable` meant a member who tapped out — or whom
+        # End Event bulk-checked-out, which stamps checked_out_at on everyone
+        # before this runs — was skipped by the query and never credited at
+        # all. Reported by review on PR #1791; the miss predates the lock, but
+        # the lock is what made it unrecoverable without a chief.
+        derivable_result = await self.db.execute(
             select(EventRSVP).where(
                 EventRSVP.event_id == str(event_id),
                 EventRSVP.checked_in.is_(True),
@@ -1966,9 +2049,17 @@ class EventService:
                 EventRSVP.attendance_duration_minutes.is_(None),
             )
         )
-        rsvps = list(rsvp_result.scalars().all())
+        rsvps = list(derivable_result.scalars().all())
 
-        if not rsvps:
+        attended_result = await self.db.execute(
+            select(EventRSVP).where(
+                EventRSVP.event_id == str(event_id),
+                EventRSVP.checked_in.is_(True),
+            )
+        )
+        attended = list(attended_result.scalars().all())
+
+        if not attended:
             await self._record_attendance_finalized(
                 event, organization_id, finalized_by
             )
@@ -2005,10 +2096,13 @@ class EventService:
                     )
                 )
                 training_record = record_result.scalar_one_or_none()
-                if training_record and (
-                    training_record.hours_completed is None
-                    or training_record.hours_completed == 0
-                ):
+                # Write the derived hours whenever this event is the thing the
+                # record came from. The old "only if null or zero" guard was
+                # there to avoid trampling a number someone else set, but it
+                # also meant a reopen-and-correct left the training record on
+                # the first finalize's figure while the RSVP and the hours
+                # ledger both moved — three records, two answers.
+                if training_record is not None:
                     training_record.hours_completed = round(duration_minutes / 60.0, 2)
 
         await self.db.commit()
@@ -2016,7 +2110,7 @@ class EventService:
         # Auto-credit event hours to admin hours categories via mappings
         admin_hours_service = AdminHoursService(self.db)
         event_type_val = event.event_type.value if event.event_type else None
-        for rsvp in rsvps:
+        for rsvp in attended:
             # Same clamp as above: the window handed to admin hours has to
             # match the duration credited, or the two disagree on the record.
             check_in_time = self._credited_check_in_time(event, rsvp)
@@ -2047,6 +2141,23 @@ class EventService:
         await self._record_attendance_finalized(event, organization_id, finalized_by)
 
         return updated_count, None
+
+    async def _revoke_event_attendance_credit(self, event_id: UUID) -> None:
+        """Drop the admin-hours entries derived from this event's attendance.
+
+        Reopening leaves the entries in place on the assumption that
+        re-finalizing will resync them. A reopened event can instead be deleted
+        or cancelled, and then that re-finalize never happens: deletion nulls
+        both source ids (they are ``ondelete="SET NULL"``) and cancellation
+        leaves them pointing at an event that did not happen, so every attendee
+        keeps hours with no attendance behind them. Called from both paths.
+        """
+        rsvp_result = await self.db.execute(
+            select(EventRSVP.id).where(EventRSVP.event_id == str(event_id))
+        )
+        admin_hours = AdminHoursService(self.db)
+        for rsvp_id in rsvp_result.scalars().all():
+            await admin_hours.delete_event_attendance_entries(str(rsvp_id))
 
     async def _record_attendance_finalized(
         self,
@@ -2215,6 +2326,16 @@ class EventService:
 
         for rsvp in rsvps:
             rsvp.checked_out_at = now
+            # Stamp the duration here too. Finalize derives one only for rows
+            # that have no check-out, and this loop has just given every one of
+            # them a check-out — so without this the bulk-checked-out crew ends
+            # the event with no duration and no hours credited, which is
+            # exactly what ending an event is supposed to record.
+            if rsvp.attendance_duration_minutes is None:
+                check_in_time = self._credited_check_in_time(event, rsvp)
+                if check_in_time:
+                    minutes = (now - check_in_time).total_seconds() / 60
+                    rsvp.attendance_duration_minutes = max(0, int(minutes))
 
         await self.db.commit()
         await self.db.refresh(event)

@@ -706,9 +706,24 @@ class TrainingSessionService:
             check_out = (
                 rsvp.override_check_out_at or rsvp.checked_out_at or effective_end
             )
-            duration = rsvp.override_duration_minutes or (
-                rsvp.attendance_duration_minutes
-            )
+            # Derive from the corrected clock when the officer moved the
+            # times but gave no explicit duration. Falling back to the stored
+            # attendance_duration_minutes would write the new check-in/out
+            # bounds against the old number of minutes, so the ledger entry
+            # would disagree with itself as well as with the training record,
+            # which _finalize_training_records computes from the same interval.
+            duration = rsvp.override_duration_minutes
+            if (
+                not duration
+                and rsvp.override_check_in_at
+                and rsvp.override_check_out_at
+            ):
+                span = (
+                    rsvp.override_check_out_at - rsvp.override_check_in_at
+                ).total_seconds() / 60
+                duration = max(0, int(span))
+            if not duration:
+                duration = rsvp.attendance_duration_minutes
             if not check_in or not check_out or not duration or duration <= 0:
                 continue
             try:

@@ -1511,6 +1511,25 @@ class AdminHoursService:
         if not mappings:
             return 0
 
+        # On a resync the event's type or custom category may have been
+        # corrected while it was reopened, which points it at a different set
+        # of categories. Entries under the categories it no longer maps to are
+        # stale derivatives of this RSVP, so they go — otherwise a correction
+        # from category A to B leaves the member credited under both and their
+        # total silently doubles.
+        if resync:
+            keep = {category_id for category_id, _pct, _cat in mappings}
+            stale_result = await self.db.execute(
+                select(AdminHoursEntry).where(
+                    AdminHoursEntry.source_rsvp_id == rsvp_id,
+                    AdminHoursEntry.entry_method
+                    == AdminHoursEntryMethod.EVENT_ATTENDANCE,
+                    AdminHoursEntry.category_id.notin_(keep),
+                )
+            )
+            for stale in stale_result.scalars().all():
+                await self.db.delete(stale)
+
         created_count = 0
         for category_id, percentage, category in mappings:
             # Skip if entry already exists for this RSVP + category (idempotent)

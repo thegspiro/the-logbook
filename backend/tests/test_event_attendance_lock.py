@@ -300,7 +300,9 @@ class TestAdminHoursResync:
     ledger because credit is idempotent per (RSVP, category)."""
 
     def _service_with_entry(self, entry):
-        db = _mock_db(_one(entry))
+        # A resync first sweeps entries under categories the event no longer
+        # maps to, then looks up the entry for each current mapping.
+        db = _mock_db(_all([]), _one(entry))
         svc = AdminHoursService(db)
         svc.get_mappings_for_event = AsyncMock(
             return_value=[("cat-1", 100, SimpleNamespace())]
@@ -425,6 +427,119 @@ class TestBackfillMigration:
         assert downgrade.index("drop_constraint") < downgrade.index(
             'op.drop_column("events", "attendance_finalized_by")'
         )
+
+
+class TestEveryAttendeeReachesTheLedger:
+    """PR #1791 review, P1: the credit loop iterated only the rows finalize
+    itself derived a duration for, so anyone who had checked out — normally, or
+    via End Event's bulk checkout, which stamps checked_out_at on the whole
+    crew before finalize runs — was skipped and never credited at all."""
+
+    async def test_a_checked_out_attendee_is_still_credited(self):
+        event = _event(finalized=False, event_type=None)
+        checked_out = SimpleNamespace(
+            id="rsvp-1",
+            user_id="user-1",
+            checked_in=True,
+            checked_in_at=event.start_datetime,
+            checked_out_at=event.end_datetime,
+            override_duration_minutes=None,
+            override_check_in_at=None,
+            attendance_duration_minutes=90,
+            early_check_in_minutes=None,
+        )
+        # derivable is empty (it has a check-out); attended still holds it.
+        db = _mock_db(_one(event), _all([]), _all([checked_out]))
+        svc = EventService(db)
+
+        with patch("app.services.event_service.AdminHoursService") as ahs_cls, patch(
+            "app.services.event_service.NotificationsService"
+        ) as notif_cls:
+            credit = AsyncMock(return_value=1)
+            ahs_cls.return_value.credit_event_attendance = credit
+            notif_cls.return_value.archive_related_notifications = AsyncMock()
+            await svc.finalize_event_attendance("event-1", "org-1")
+
+        credit.assert_awaited_once()
+        assert credit.await_args.kwargs["rsvp_id"] == "rsvp-1"
+        assert credit.await_args.kwargs["duration_minutes"] == 90
+
+    async def test_end_event_records_a_duration_on_bulk_checkout(self):
+        """Otherwise the rows it just checked out have no duration for the
+        finalize that immediately follows to credit."""
+        event = _event(finalized=False, actual_end_time=None)
+        rsvp = SimpleNamespace(
+            id="rsvp-1",
+            user_id="user-1",
+            checked_in=True,
+            checked_in_at=event.start_datetime,
+            checked_out_at=None,
+            attendance_duration_minutes=None,
+            override_duration_minutes=None,
+            override_check_in_at=None,
+            early_check_in_minutes=None,
+            status=None,
+        )
+        db = _mock_db(_one(event), _all([rsvp]))
+        svc = EventService(db)
+        svc.finalize_event_attendance = AsyncMock(return_value=(1, None))
+
+        result, count, err = await svc.end_event("event-1", "org-1")
+
+        assert err is None
+        assert count == 1
+        assert rsvp.checked_out_at is not None
+        assert rsvp.attendance_duration_minutes is not None
+        assert rsvp.attendance_duration_minutes > 0
+
+
+class TestSeriesPathsHonourTheLock:
+    """PR #1791 review, P1: the single-event guards left the series endpoints
+    as an open door to the same rows."""
+
+    async def test_series_delete_is_refused_when_any_occurrence_is_closed(self):
+        db = _mock_db(_all([_event(finalized=False), _event()]))
+        svc = EventService(db)
+
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PREFIX):
+            await svc.delete_event_series("parent-1", "org-1")
+
+        db.delete.assert_not_called()
+
+    async def test_series_delete_proceeds_when_all_are_open(self):
+        events = [_event(finalized=False), _event(finalized=False)]
+        db = _mock_db(_all(events))
+        svc = EventService(db)
+
+        deleted = await svc.delete_event_series("parent-1", "org-1")
+
+        assert deleted == 2
+
+
+class TestCustomFieldsCannotDropTheMarker:
+    """PR #1791 review, P2: custom_fields is a whole-column replacement, so a
+    payload without the lifecycle keys would strip the marker the post-event
+    reminder reads while the column kept the event locked."""
+
+    async def test_lifecycle_keys_survive_a_replacement(self):
+        event = _event(
+            custom_fields={"attendance_finalized": True, "room": "hall"},
+            description=None,
+            location_id=None,
+            location=None,
+            location_obj=None,
+            is_draft=False,
+            updated_by=None,
+        )
+        db = _mock_db(_one(event))
+        payload = SimpleNamespace(
+            model_dump=lambda **_: {"custom_fields": {"room": "bay"}}
+        )
+
+        await EventService(db).update_event("event-1", "org-1", payload)
+
+        assert event.custom_fields["attendance_finalized"] is True
+        assert event.custom_fields["room"] == "bay"
 
 
 class TestNewQueriesAreOrgScoped:

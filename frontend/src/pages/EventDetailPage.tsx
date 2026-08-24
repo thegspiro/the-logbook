@@ -838,30 +838,48 @@ export const EventDetailPage: React.FC = () => {
                   <CalendarPlus className="h-4 w-4" />
                   Add to Calendar
                 </button>
+                {/* Outside the canManage group on purpose: events.reopen_attendance
+                    is deliberately independent of events.manage, so a role that
+                    holds only the recovery grant still gets the control the
+                    backend already authorizes it for. */}
+                {isAttendanceFinalized && canReopenAttendance && (
+                  <button
+                    onClick={() => setShowReopenPrompt(true)}
+                    disabled={reopeningAttendance}
+                    className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs disabled:opacity-50"
+                  >
+                    <Unlock className="mr-2 h-4 w-4" />
+                    {reopeningAttendance ? 'Reopening...' : 'Reopen Attendance'}
+                  </button>
+                )}
+
                 {canManage && (
                   <>
-                    {!isAttendanceFinalized && (
-                      <button
-                        onClick={() => void navigate(`/events/${eventId}/edit`)}
-                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+                    {/* Kept when finalized: the API still accepts descriptive
+                        edits (title, description, location) and refuses only
+                        the fields the credited durations came from. Hiding this
+                        made a leader reopen attendance just to fix a typo,
+                        which unlocks far more than the typo needed. */}
+                    <button
+                      onClick={() => void navigate(`/events/${eventId}/edit`)}
+                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
+                    >
+                      <svg
+                        className="mr-2 h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
                       >
-                        <svg
-                          className="mr-2 h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                          />
-                        </svg>
-                        Edit
-                      </button>
-                    )}
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                      </svg>
+                      Edit
+                    </button>
                     {!isAttendanceFinalized && (
                       <button
                         onClick={openCheckInModal}
@@ -938,17 +956,6 @@ export const EventDetailPage: React.FC = () => {
                       >
                         <CheckCircle className="mr-2 h-4 w-4" />
                         {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
-                      </button>
-                    )}
-
-                    {isAttendanceFinalized && canReopenAttendance && (
-                      <button
-                        onClick={() => setShowReopenPrompt(true)}
-                        disabled={reopeningAttendance}
-                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs disabled:opacity-50"
-                      >
-                        <Unlock className="mr-2 h-4 w-4" />
-                        {reopeningAttendance ? 'Reopening...' : 'Reopen Attendance'}
                       </button>
                     )}
 
