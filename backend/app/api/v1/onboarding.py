@@ -45,7 +45,10 @@ from app.models.onboarding import (
 from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.services.auth_service import AuthService
-from app.services.onboarding import OnboardingService
+from app.services.onboarding import (
+    ONBOARDING_ACCEPTED_MODULE_IDS,
+    OnboardingService,
+)
 from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
@@ -1665,51 +1668,13 @@ async def save_session_modules(
     # Validate session
     session = await validate_session(request, db)
 
-    # Validate modules - must match module IDs from frontend AVAILABLE_MODULES
-    # (types/modules.ts) or their snake_case equivalents.
-    available_modules = [
-        # Core modules (always enabled)
-        "members",
-        "events",
-        "documents",
-        "forms",
-        # Operations modules
-        "training",
-        "inventory",
-        "scheduling",
-        "apparatus",
-        "facilities",
-        "communications",
-        # Governance modules
-        "elections",
-        "minutes",
-        "reports",
-        # Communication modules
-        "notifications",
-        "mobile",
-        # Advanced modules
-        "integrations",
-        # Membership
-        "prospective_members",
-        "prospective-members",
-        # HR & Finance
-        "hr_payroll",
-        "hr-payroll",
-        "grants",
-        # Public
-        "public_info",
-        "public-info",
-        # Incidents
-        "incidents",
-        # Legacy/additional modules (for backwards compatibility)
-        "compliance",
-        "meetings",
-        "fundraising",
-        "equipment",
-        "vehicles",
-        "budget",
+    # One accepted set, shared with the wizard's own module step. This used
+    # to be a second hardcoded list, and it did not list the Department
+    # Store — so enabling the store got all the way to the final Continue
+    # and then failed here with "Invalid modules".
+    invalid_modules = [
+        m for m in data.modules if m not in ONBOARDING_ACCEPTED_MODULE_IDS
     ]
-    invalid_modules = [m for m in data.modules if m not in available_modules]
     if invalid_modules:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

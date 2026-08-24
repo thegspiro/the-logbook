@@ -284,7 +284,9 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     icon: Store,
     priority: 'optional',
     category: 'Operations',
-    configRoute: '/onboarding/modules/storefront/config',
+    // Deliberately no configRoute. That step's Save writes only to a local
+    // store nothing submits, so it reports "permissions configured!" and
+    // changes nothing — the store enables directly instead.
     permissions: {
       viewDescription: 'Browse the store and track your own orders',
       manageDescription: 'Manage the catalog, order windows, orders, and payments',

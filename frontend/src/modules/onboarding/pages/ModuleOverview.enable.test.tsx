@@ -72,7 +72,7 @@ describe('ModuleOverview enabling', () => {
     expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('/config'));
   });
 
-  it('enables the Department Store and opens its config step', async () => {
+  it('enables the Department Store without leaving the page', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -80,7 +80,17 @@ describe('ModuleOverview enabling', () => {
 
     expect(useOnboardingStore.getState().moduleStatuses.storefront).toBe('enabled');
     expect(useOnboardingStore.getState().selectedModules).toContain('storefront');
-    expect(mockNavigate).toHaveBeenCalledWith('/onboarding/modules/storefront/config');
+    expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('/config'));
+  });
+
+  it('still enables and navigates for a module that has a config route', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Configure Now Shift Scheduling' }));
+
+    expect(useOnboardingStore.getState().moduleStatuses.scheduling).toBe('enabled');
+    expect(mockNavigate).toHaveBeenCalledWith('/onboarding/modules/scheduling/config');
   });
 
   it('leaves the negative action meaning not-enabled', async () => {
