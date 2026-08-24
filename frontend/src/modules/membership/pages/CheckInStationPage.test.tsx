@@ -346,8 +346,8 @@ describe('CheckInStationPage', () => {
         {
           id: 'shift-finished',
           apparatus_unit_number: 'L1',
-          start_time: hoursFromNow(-20),
-          end_time: hoursFromNow(-8),
+          start_time: hoursFromNow(-30),
+          end_time: hoursFromNow(-20),
           is_finalized: false,
         },
       ],
@@ -374,5 +374,54 @@ describe('CheckInStationPage', () => {
     await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
     const eventParams = mockGetEvents.mock.calls[0]?.[0] as { end_after?: string } | undefined;
     expect(typeof eventParams?.end_after).toBe('string');
+  });
+
+  it('keeps a shift that has just ended so its crew can still tap out', async () => {
+    // member_check_out has no window at all — it accepts a checkout until an
+    // officer finalizes the shift — so dropping a shift the moment its
+    // scheduled end passed took the station away from the crew at exactly the
+    // moment they go off duty.
+    mockGetShifts.mockResolvedValue({
+      shifts: [
+        {
+          id: 'shift-just-ended',
+          apparatus_unit_number: 'E4',
+          start_time: hoursFromNow(-14),
+          end_time: hoursFromNow(-1),
+          is_finalized: false,
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 500,
+    });
+    renderWithRouter(<CheckInStationPage />);
+
+    expect(await screen.findByRole('option', { name: /E4/ })).toBeInTheDocument();
+  });
+
+  it('asks for more than one page of shifts across the two-day window', async () => {
+    // The endpoint pages at 100 and orders by shift_date ascending, so a busy
+    // yesterday would otherwise fill the page and hide today entirely.
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+
+    const params = mockGetShifts.mock.calls[0]?.[0] as { limit?: number } | undefined;
+    expect(params?.limit).toBeGreaterThan(100);
+  });
+
+  it('leaves room for an event whose check-in window outlives its end', async () => {
+    // A `window` event stays open for check_in_minutes_after, and a flexible
+    // or strict one runs to actual_end_time — none of which reach this list,
+    // so the cutoff has to sit behind now rather than exactly on it.
+    const user = userEvent.setup();
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+
+    await user.click(screen.getByRole('button', { name: /event or meeting/i }));
+
+    await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
+    const eventParams = mockGetEvents.mock.calls[0]?.[0] as { end_after?: string } | undefined;
+    expect(new Date(eventParams?.end_after ?? '').getTime()).toBeLessThan(Date.now());
   });
 });
