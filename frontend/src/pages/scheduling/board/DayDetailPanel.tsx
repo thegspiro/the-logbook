@@ -7,10 +7,10 @@
  */
 
 import React from 'react';
-import { ArrowLeftRight, CalendarDays, Repeat } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Info, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import type { SwapRequest } from '../../../types/scheduling';
-import { shiftCrewName, shiftPeriodLetter, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
+import { isShiftOpen, shiftCrewName, shiftPeriodLetter, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import ShiftSeatList from './ShiftSeatList';
 
@@ -32,6 +32,14 @@ export interface DayDetailPanelProps {
   offersFromMe: Record<string, SwapRequest>;
   onAnswerOffer: (offer: SwapRequest, accept: boolean) => void;
   onCancelOffer: (offer: SwapRequest) => void;
+  /**
+   * Open the full shift detail panel. The board's own actions cover claiming
+   * and giving up a seat; everything else an officer does to a shift — editing
+   * it, managing attendance, finalizing it — lives in that panel, and without
+   * a way in from the calendar a fully staffed shift the officer is not on
+   * becomes unreachable.
+   */
+  onViewShift?: ((shift: ShiftRecord) => void) | undefined;
 }
 
 const shiftLocation = (shift: ShiftRecord | null | undefined): string => {
@@ -55,6 +63,7 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
   offersFromMe,
   onAnswerOffer,
   onCancelOffer,
+  onViewShift,
 }) => {
   // A calendar day belongs to no timezone: pushing one through a
   // timezone-aware formatter renders "Aug 26" as "Aug 25" for any viewer west
@@ -83,23 +92,33 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
           <p className="text-theme-text-secondary mt-0.5 text-[13px]">
             {[shiftLocation(nextShift), shiftCrewName(nextShift, timezone)].filter(Boolean).join(' · ')}
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => onRelease(nextShift)}
-              className="btn-secondary min-h-[36px] justify-center rounded-lg px-2 text-sm"
-            >
-              Give up shift
-            </button>
-            <button
-              type="button"
-              onClick={() => onRelease(nextShift, 'trade')}
-              className="btn-secondary inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-2 text-sm"
-            >
-              <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
-              Offer trade
-            </button>
-          </div>
+          {/* Both actions disappear while an offer of this seat stands: a
+              second release or a second offer would strand the first
+              recipient with an offer that can no longer be honoured. The
+              day panel below carries the Withdraw button. */}
+          {offersFromMe[nextShift.id] ? (
+            <p className="text-theme-text-secondary mt-3 text-[13px]">
+              Offered to {offersFromMe[nextShift.id]?.target_user_name ?? 'a member'} — still yours until they accept.
+            </p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onRelease(nextShift)}
+                className="btn-secondary min-h-[36px] justify-center rounded-lg px-2 text-sm"
+              >
+                Give up shift
+              </button>
+              <button
+                type="button"
+                onClick={() => onRelease(nextShift, 'trade')}
+                className="btn-secondary inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-2 text-sm"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
+                Offer trade
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -139,18 +158,34 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
                   onAnswerOffer={onAnswerOffer}
                   onCancelOffer={onCancelOffer}
                 />
-                {/* The shortcut into a standing series. It opens the editor
-                    rather than committing on a checkbox: the number of dates
-                    a member is signing up for is the one fact they need to
-                    see before agreeing to it. */}
-                <button
-                  type="button"
-                  onClick={() => onOpenStanding(shift)}
-                  className="text-theme-text-secondary mobile-touch-target mt-2.5 inline-flex items-center gap-1.5 text-xs hover:text-red-600 hover:underline dark:hover:text-red-400"
-                >
-                  <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
-                  Make this every {weekdayName} {isNight ? 'night' : 'day'}…
-                </button>
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {/* The shortcut into a standing series. It opens the editor
+                      rather than committing on a checkbox: the number of dates
+                      a member is signing up for is the one fact they need to
+                      see before agreeing to it. Hidden on a shift nobody can
+                      sign up for, where it would only lead to an empty
+                      preview. */}
+                  {isShiftOpen(shift) && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenStanding(shift)}
+                      className="text-theme-text-secondary mobile-touch-target inline-flex items-center gap-1.5 text-xs hover:text-red-600 hover:underline dark:hover:text-red-400"
+                    >
+                      <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+                      Make this every {weekdayName} {isNight ? 'night' : 'day'}…
+                    </button>
+                  )}
+                  {onViewShift && (
+                    <button
+                      type="button"
+                      onClick={() => onViewShift(shift)}
+                      className="text-theme-text-secondary mobile-touch-target inline-flex items-center gap-1.5 text-xs hover:text-red-600 hover:underline dark:hover:text-red-400"
+                    >
+                      <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                      Shift details
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })

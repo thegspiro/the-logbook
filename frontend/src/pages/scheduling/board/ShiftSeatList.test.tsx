@@ -125,6 +125,40 @@ describe('ShiftSeatList', () => {
   });
 });
 
+describe('a shift nobody can sign up for', () => {
+  it('offers no claim on a cancelled shift', () => {
+    // The server refuses self-signup outright, so a claim button here can
+    // only ever produce an error toast.
+    renderList({ shift: shift({ status: 'cancelled' }) });
+    expect(screen.getByText(/this shift was cancelled/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /take a seat on this shift/i })).not.toBeInTheDocument();
+  });
+
+  it('offers no claim on a finalized shift', () => {
+    renderList({ shift: shift({ is_finalized: true }) });
+    expect(screen.getByText(/has been finalized/i)).toBeInTheDocument();
+  });
+
+  it('offers no claim on a shift that has already run', () => {
+    renderList({ shift: shift({ shift_date: '2000-01-01' }) });
+    expect(screen.getByText(/has already run/i)).toBeInTheDocument();
+  });
+
+  it('does not offer to give up a shift that has already run', () => {
+    const past = shift({ shift_date: '2000-01-01', roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    renderList({ shift: past });
+    expect(screen.queryByRole('button', { name: /give up this shift/i })).not.toBeInTheDocument();
+  });
+
+  it('counts a cancelled shift as no shortage', () => {
+    // Four empty seats nobody can fill is not a staffing gap; counting it is
+    // how a quiet day reads as urgent.
+    renderList({ shift: shift({ status: 'cancelled' }) });
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    expect(screen.queryByText(/seats open/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('a pending offer of this seat', () => {
   const onAnswerOffer = vi.fn();
   const onCancelOffer = vi.fn();
@@ -172,6 +206,26 @@ describe('a pending offer of this seat', () => {
     });
     expect(screen.getByText(/Offered to T\. Nguyen/i)).toBeInTheDocument();
     expect(screen.getByText(/still yours until they accept/i)).toBeInTheDocument();
+  });
+
+  it("hides give-up while the member's own offer is still standing", async () => {
+    // Releasing the seat, or offering it to somebody else, would leave the
+    // first recipient holding an offer that can no longer be honoured — and
+    // two members each told the seat is theirs to accept.
+    const mine = shift({ roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    renderList({
+      shift: mine,
+      offerFromMe: offer({ requesting_user_id: ME, target_user_id: 'u9' }),
+      onCancelOffer,
+    });
+    expect(screen.queryByRole('button', { name: /give up this shift/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /withdraw the offer/i })).toBeInTheDocument();
+  });
+
+  it('offers give-up again once no offer stands', () => {
+    const mine = shift({ roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    renderList({ shift: mine });
+    expect(screen.getByRole('button', { name: /give up this shift/i })).toBeInTheDocument();
   });
 
   it('lets the offerer withdraw it', async () => {

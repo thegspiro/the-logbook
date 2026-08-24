@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { Calendar, Check, ChevronLeft, Repeat } from 'lucide-react';
+import { Calendar, Check, ChevronLeft, Info, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import type { SwapRequest } from '../../../types/scheduling';
 import { buildSeats, memberInitials, shiftCrewName, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
@@ -34,6 +34,8 @@ export interface PhoneDaySheetProps {
   onCancelOffer: (offer: SwapRequest) => void;
   onAddToCalendar: () => void;
   onDismissConfirmation: () => void;
+  /** Open the full shift detail panel — editing, attendance, finalizing. */
+  onViewShift?: ((shift: ShiftRecord) => void) | undefined;
 }
 
 export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
@@ -54,6 +56,7 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
   onCancelOffer,
   onAddToCalendar,
   onDismissConfirmation,
+  onViewShift,
 }) => {
   if (confirmedShift) {
     const crew = buildSeats(confirmedShift, currentUserId);
@@ -193,6 +196,16 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
                 onCancelOffer={onCancelOffer}
                 variant="sheet"
               />
+              {onViewShift && (
+                <button
+                  type="button"
+                  onClick={() => onViewShift(shift)}
+                  className="text-theme-text-secondary mobile-touch-target mt-2 inline-flex items-center gap-1.5 text-xs hover:text-red-600 hover:underline dark:hover:text-red-400"
+                >
+                  <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                  Shift details
+                </button>
+              )}
             </section>
           ))}
         </div>

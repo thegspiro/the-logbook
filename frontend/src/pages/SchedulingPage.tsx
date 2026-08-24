@@ -594,6 +594,7 @@ const SchedulingPage: React.FC = () => {
               onVisibleDateChange={setCurrentDate}
               onViewChange={setViewMode}
               refreshKey={boardRefreshKey}
+              onViewShift={handleShiftClick}
               emptyAction={
                 canManage ? (
                   <button

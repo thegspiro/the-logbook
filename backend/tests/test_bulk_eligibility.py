@@ -104,3 +104,47 @@ class TestBulkEligibility:
         service = _service([])
         service._get_org = AsyncMock(side_effect=AssertionError("should not load org"))
         assert await service.get_eligible_positions_bulk(USER, ORG, []) == {}
+
+
+class TestTheRouteExists:
+    """The service method is only reachable if a route serves it.
+
+    This is the gap that shipped: `get_eligible_positions_bulk` was written
+    and unit-tested, the board's client called
+    `/scheduling/eligibility/positions/bulk`, and no route was registered.
+    The board caught the 404, cached an empty list for every shift on the
+    selected day, and told every member they were not cleared for any seat —
+    a total loss of the page's one function, with nothing in the logs but a
+    404 and nothing failing in the suite.
+    """
+
+    def test_the_bulk_route_is_registered(self):
+        from app.api.v1.endpoints.scheduling import router
+
+        paths = {route.path for route in router.routes}
+        assert "/eligibility/positions/bulk" in paths, (
+            "The board's bulk eligibility lookup has no route; every claim "
+            "button will read 'you are not cleared for any seat'."
+        )
+
+    def test_the_frontend_calls_the_path_that_is_registered(self):
+        from pathlib import Path
+
+        from app.api.v1.endpoints.scheduling import router
+
+        client = (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "modules"
+            / "scheduling"
+            / "services"
+            / "api.ts"
+        )
+        source = client.read_text()
+        for route in router.routes:
+            if route.path == "/eligibility/positions/bulk":
+                assert f"/scheduling{route.path}" in source
+                break
+        else:  # pragma: no cover - the assertion above already failed
+            raise AssertionError("bulk eligibility route missing")

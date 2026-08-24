@@ -113,7 +113,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
             );
           }
 
-          const takeable = !pending && canTakeSeat(seat.position, eligiblePositions);
+          const takeable = !pending && info.isOpen && canTakeSeat(seat.position, eligiblePositions);
           return (
             <li key={key}>
               <button
@@ -126,7 +126,9 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
                 aria-label={
                   takeable
                     ? `Take the ${seat.position ? label : 'open'} seat on this shift`
-                    : `${seat.position ? label : 'Open'} seat — you are not cleared for it`
+                    : info.isOpen
+                      ? `${seat.position ? label : 'Open'} seat — you are not cleared for it`
+                      : `${seat.position ? label : 'Open'} seat — this shift is closed to signups`
                 }
               >
                 <span
@@ -198,17 +200,32 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
         </div>
       )}
 
-      {info.isMine ? (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => onRelease(shift)}
-          className={`btn-secondary w-full justify-center rounded-lg text-sm font-bold ${
-            isSheet ? 'min-h-[52px]' : 'min-h-[44px]'
-          }`}
-        >
-          Give up this shift
-        </button>
+      {!info.isOpen ? (
+        <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
+          {info.isCancelled
+            ? 'This shift was cancelled.'
+            : shift.is_finalized
+              ? 'This shift has been finalized.'
+              : 'This shift has already run.'}
+        </p>
+      ) : info.isMine ? (
+        // While an offer of this seat stands, the only move is the banner's
+        // Withdraw. Releasing it to the open list — or offering it to somebody
+        // else — would leave the first recipient holding an offer that can no
+        // longer be honoured, and two members each told the seat is theirs to
+        // accept.
+        offerFromMe ? null : (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onRelease(shift)}
+            className={`btn-secondary w-full justify-center rounded-lg text-sm font-bold ${
+              isSheet ? 'min-h-[52px]' : 'min-h-[44px]'
+            }`}
+          >
+            Give up this shift
+          </button>
+        )
       ) : info.capacity !== null && info.openSeats === 0 ? (
         <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
           This crew is full. Nothing to claim here.

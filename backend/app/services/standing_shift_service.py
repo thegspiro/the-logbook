@@ -343,7 +343,16 @@ class StandingShiftService:
             end_date=end_date,
         )
         self.db.add(claim)
-        await self.db.flush()
+        # Committed before the seating loop, not after it. ``assign`` is
+        # ``seat_member_self_service``, which rolls back on a refused date (a
+        # driver-qualification block, an assignment race) — and a rollback
+        # here would take the not-yet-committed claim with it. The member
+        # would be told the series was saved, the first refused date would
+        # silently discard it, and the trailing refresh would raise on an
+        # instance the session no longer holds. The claim is what the member
+        # asked for; the seatings are best-effort on top of it.
+        await self.db.commit()
+        await self.db.refresh(claim)
 
         summary = {"claimed": 0, "skipped": 0, "no_shift": 0}
         if assign is not None:
@@ -454,7 +463,13 @@ class StandingShiftService:
 
         released = 0
         if release_future and withdraw is not None:
-            cutoff = today or date.today()
+            # The department's today, not the server's. A UTC server past
+            # local midnight would classify the org's current day as future
+            # and release a seat the member is about to work; west of UTC the
+            # first genuinely future date would instead be kept.
+            cutoff = (
+                today or datetime.now(await self._org_tz(claim.organization_id)).date()
+            )
             dates = [
                 d
                 for d in series_dates(

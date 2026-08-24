@@ -24,6 +24,11 @@ import type { PositionSlot, ShiftRecord, ShiftRosterSeat } from '../services/api
  * takes, and guessing a number turns "we don't know" into "this is an
  * emergency": a department that sets neither would open the page to a wall of
  * red that means nothing. It reads as unset, and stays out of every count.
+ *
+ * `closed` is a shift nobody can sign up for any more — cancelled, finalized,
+ * or already run. Its empty chairs are not a shortage: nothing can be done
+ * about them, and counting a cancelled shift's four empty seats towards the
+ * day's total is how a quiet Tuesday reads as URGENT.
  */
 export const ShiftStatus = {
   MINE: 'mine',
@@ -31,6 +36,7 @@ export const ShiftStatus = {
   SHORT: 'short',
   FULL: 'full',
   UNKNOWN: 'unknown',
+  CLOSED: 'closed',
 } as const;
 export type ShiftStatus = (typeof ShiftStatus)[keyof typeof ShiftStatus];
 
@@ -51,10 +57,17 @@ export interface ShiftStatusInfo {
   /** null when the shift has never stated how many people it takes. */
   capacity: number | null;
   filled: number;
-  /** Always 0 when capacity is unknown — an unknown is not a shortage. */
+  /**
+   * Always 0 when capacity is unknown — an unknown is not a shortage — and
+   * always 0 on a closed shift, whose empty seats can no longer be filled.
+   */
   openSeats: number;
   /** True when the current member holds a seat, whatever the staffing. */
   isMine: boolean;
+  /** False once the shift is cancelled, finalized, or in the past. */
+  isOpen: boolean;
+  /** True only when the shift was cancelled, as opposed to merely closed. */
+  isCancelled: boolean;
 }
 
 const activeSeats = (shift: ShiftRecord): ShiftRosterSeat[] =>
@@ -75,6 +88,20 @@ export const shiftCapacity = (shift: ShiftRecord): number | null => {
   if (positions.length > 0) return positions.length;
   if (shift.min_staffing && shift.min_staffing > 0) return shift.min_staffing;
   return null;
+};
+
+/**
+ * Whether a member can still sign up for this shift.
+ *
+ * The server refuses self-signup on a cancelled, finalized or past shift, so
+ * a board that offered one would hand the member a button whose only outcome
+ * is an error toast. It is the same predicate the empty-seat counts use: a
+ * seat nobody can take is not a shortage anyone can fix.
+ */
+export const isShiftOpen = (shift: ShiftRecord, today: Date = new Date()): boolean => {
+  if (shift.status === 'cancelled') return false;
+  if (shift.is_finalized) return false;
+  return shift.shift_date >= toDateKey(today);
 };
 
 /**
@@ -129,31 +156,46 @@ export const buildSeats = (shift: ShiftRecord, currentUserId?: string | null): S
   return seats;
 };
 
-export const shiftStatusInfo = (shift: ShiftRecord, currentUserId?: string | null): ShiftStatusInfo => {
+export const shiftStatusInfo = (
+  shift: ShiftRecord,
+  currentUserId?: string | null,
+  today: Date = new Date()
+): ShiftStatusInfo => {
   const capacity = shiftCapacity(shift);
   const seated = activeSeats(shift);
   // attendee_count is the server's own tally and is present even on responses
   // served before the roster field existed, so it is the more reliable count
   // whenever the two disagree.
   const filled = Math.max(seated.length, shift.attendee_count ?? 0);
-  const openSeats = capacity === null ? 0 : Math.max(capacity - filled, 0);
+  const isOpen = isShiftOpen(shift, today);
+  const isCancelled = shift.status === 'cancelled';
+  const openSeats = capacity === null || !isOpen ? 0 : Math.max(capacity - filled, 0);
   const isMine = !!currentUserId && seated.some((seat) => String(seat.user_id) === String(currentUserId));
 
   let status: ShiftStatus;
+  // `mine` still wins on a closed shift: a member scanning the month for what
+  // they worked last week is asking the same question as one scanning for what
+  // they are committed to next week.
   if (isMine) status = ShiftStatus.MINE;
+  else if (!isOpen) status = ShiftStatus.CLOSED;
   else if (capacity === null) status = ShiftStatus.UNKNOWN;
   else if (openSeats >= 2) status = ShiftStatus.CRITICAL;
   else if (openSeats === 1) status = ShiftStatus.SHORT;
   else status = ShiftStatus.FULL;
 
-  return { status, capacity, filled, openSeats, isMine };
+  return { status, capacity, filled, openSeats, isMine, isOpen, isCancelled };
 };
 
 /** "2 open" / "Full 4/4" / "You + 2/4" / "3 on" — the calendar chip's text. */
 export const chipLabel = (info: ShiftStatusInfo): string => {
+  // A cancelled shift's headcount is beside the point — what the member needs
+  // to know is that it is not happening.
+  if (info.isCancelled) return 'Cancelled';
   // With no stated crew size there is no denominator to show, so the chip
   // reports the headcount it does know rather than a ratio it does not.
-  if (info.capacity === null) return info.isMine ? `You + ${Math.max(info.filled - 1, 0)}` : `${info.filled} on`;
+  if (info.capacity === null || !info.isOpen) {
+    return info.isMine ? `You + ${Math.max(info.filled - 1, 0)}` : `${info.filled} on`;
+  }
   if (info.isMine) return `You + ${Math.max(info.filled - 1, 0)}/${info.capacity}`;
   if (info.openSeats === 0) return `Full ${info.filled}/${info.capacity}`;
   return `${info.openSeats} open`;
@@ -161,7 +203,9 @@ export const chipLabel = (info: ShiftStatusInfo): string => {
 
 /** "2 of 4 seats open" / "Fully staffed" / "You're on it" — the panel badge. */
 export const statusBadgeLabel = (info: ShiftStatusInfo): string => {
+  if (info.isCancelled) return 'Cancelled';
   if (info.isMine) return "You're on it";
+  if (!info.isOpen) return 'Closed to signups';
   if (info.capacity === null) {
     return `${info.filled} on the crew · size not set`;
   }
@@ -188,7 +232,9 @@ export const daySummary = (shifts: ShiftRecord[], currentUserId?: string | null)
     const info = shiftStatusInfo(shift, currentUserId);
     openSeats += info.openSeats;
     if (info.isMine) hasMine = true;
-    if (info.capacity === null) hasUnsizedShift = true;
+    // Only an *open* shift's missing crew size is worth explaining in the
+    // legend; a cancelled one's is not a gap anybody needs to close.
+    if (info.capacity === null && info.isOpen) hasUnsizedShift = true;
   }
   return {
     openSeats,
@@ -304,8 +350,12 @@ export const canTakeSeat = (position: string | null, eligible: string[]): boolea
 export const firstClaimableSeat = (
   shift: ShiftRecord,
   eligiblePositions: string[],
-  currentUserId?: string | null
+  currentUserId?: string | null,
+  today: Date = new Date()
 ): ShiftSeat | null => {
+  // Nothing is claimable on a shift the server will not seat anyone on.
+  if (!isShiftOpen(shift, today)) return null;
+
   const open = buildSeats(shift, currentUserId).find(
     (seat) => seat.member === null && canTakeSeat(seat.position, eligiblePositions)
   );

@@ -41,6 +41,17 @@ export interface StandingShiftModalProps {
   initialPeriod: StandingShiftPeriod;
   initialPosition: string;
   apparatusId?: string | undefined;
+  /**
+   * The date of the shift this was opened from — the series' anchor.
+   *
+   * It is not the same as today, and the difference is the whole point: both
+   * the biweekly parity and the monthly ordinal are read off the first
+   * matching weekday on or after the start date. Anchoring on today builds a
+   * fortnight that skips the shift the member opened this from, and turns
+   * "the first Sunday of the month" into whichever ordinal the current week
+   * happens to be.
+   */
+  anchorDate?: string | undefined;
   timezone: string;
   onClose: () => void;
   onCreated: () => void;
@@ -51,28 +62,36 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
   initialPeriod,
   initialPosition,
   apparatusId,
+  anchorDate,
   timezone,
   onClose,
   onCreated,
 }) => {
   const today = useMemo(() => getTodayLocalDate(timezone), [timezone]);
-  const bounds = useMemo(() => seriesEndBounds(today), [today]);
+  // A past anchor cannot start a series — nothing before today can be
+  // claimed — so it falls back to today rather than generating a run of dates
+  // that are all already gone.
+  const seriesStart = useMemo(() => (anchorDate && anchorDate > today ? anchorDate : today), [anchorDate, today]);
+  // Bounds key off the start, not today: a series starting three weeks out
+  // whose minimum end is a week from *today* could be given an end date
+  // before its own first date.
+  const bounds = useMemo(() => seriesEndBounds(seriesStart), [seriesStart]);
 
   const [pattern, setPattern] = useState<StandingShiftPattern>(StandingShiftPattern.WEEKLY);
   const [weekday, setWeekday] = useState(initialWeekday);
   const [period, setPeriod] = useState<StandingShiftPeriod>(initialPeriod);
-  const [endDate, setEndDate] = useState(() => defaultSeriesEnd(today));
+  const [endDate, setEndDate] = useState(() => defaultSeriesEnd(seriesStart));
   const [preview, setPreview] = useState<StandingShiftPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const endDateError = seriesEndError(today, endDate);
+  const endDateError = seriesEndError(seriesStart, endDate);
 
   const loadPreview = useCallback(() => {
     // An out-of-range date is refused by the picker's own message; asking the
     // server about it would replace that with a less specific 400.
-    if (seriesEndError(today, endDate)) {
+    if (seriesEndError(seriesStart, endDate)) {
       setLoading(false);
       setPreview(null);
       return;
@@ -84,7 +103,7 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
         pattern,
         weekday,
         period,
-        start_date: today,
+        start_date: seriesStart,
         end_date: endDate,
         apparatus_id: apparatusId || undefined,
       })
@@ -94,13 +113,21 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
         setPreview(null);
       })
       .finally(() => setLoading(false));
-  }, [apparatusId, endDate, pattern, period, today, weekday]);
+  }, [apparatusId, endDate, pattern, period, seriesStart, weekday]);
 
   useEffect(() => loadPreview(), [loadPreview]);
 
   const claimable = preview?.claimable_count ?? 0;
   const conflicts = preview?.conflict_count ?? 0;
+  const missing = preview?.missing_count ?? 0;
   const dates = preview?.dates ?? [];
+  // A series with nothing to claim *today* is still worth storing: shift
+  // creation reads active claims and seats the member on matching shifts as
+  // they are generated, which is exactly the case for a member setting up
+  // "every Tuesday night" past the end of the schedule the department has
+  // published. Only a range that covers no matching date at all has nothing
+  // to store.
+  const canSave = dates.length > 0 && endDateError === null;
 
   const handleSave = async () => {
     setSaving(true);
@@ -110,7 +137,7 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
         weekday,
         period,
         position: initialPosition,
-        start_date: today,
+        start_date: seriesStart,
         end_date: endDate,
         apparatus_id: apparatusId || undefined,
       });
@@ -139,12 +166,18 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
         <>
           <button
             type="button"
-            disabled={saving || loading || claimable === 0 || endDateError !== null}
+            disabled={saving || loading || !canSave}
             onClick={() => void handleSave()}
             className="btn-primary min-h-[42px] rounded-lg"
           >
             {saving && <Loader2 className="mr-2 inline h-4 w-4 animate-spin" aria-hidden="true" />}
-            {claimable === 0 ? 'No dates to add' : `Add ${claimable} shift${claimable === 1 ? '' : 's'}`}
+            {dates.length === 0
+              ? 'No dates in this range'
+              : claimable > 0
+                ? `Add ${claimable} shift${claimable === 1 ? '' : 's'}`
+                : missing > 0
+                  ? `Save for ${missing} upcoming date${missing === 1 ? '' : 's'}`
+                  : 'Save this standing shift'}
           </button>
           <button type="button" onClick={onClose} className="btn-secondary min-h-[42px] rounded-lg">
             Cancel
@@ -290,12 +323,12 @@ export const StandingShiftModal: React.FC<StandingShiftModalProps> = ({
               {dates.length > 0 && (
                 <p
                   className={`mt-2.5 text-xs font-semibold ${
-                    conflicts > 0 || (preview?.missing_count ?? 0) > 0
+                    conflicts > 0 || missing > 0
                       ? 'text-amber-700 dark:text-amber-300'
                       : 'text-green-700 dark:text-green-400'
                   }`}
                 >
-                  {describeCoverage(claimable, conflicts, preview?.missing_count ?? 0)}
+                  {describeCoverage(claimable, conflicts, missing)}
                 </p>
               )}
             </>

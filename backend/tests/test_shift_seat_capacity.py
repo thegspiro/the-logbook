@@ -27,9 +27,9 @@ class _ValidationSession:
     """Replays the query sequence `_validate_assignment_candidate` issues.
 
     In order: the member is active, they are not already on the shift, they
-    have no overlapping shift, and then the seat counts. Only the counts vary
-    between these tests, so the first three are fixed and every later query
-    answers with `filled`.
+    have no overlapping shift, they have no approved time off, and then the
+    seat counts. Only the counts vary between these tests, so the first four
+    are fixed and every later query answers with `filled`.
     """
 
     def __init__(self, filled):
@@ -44,6 +44,8 @@ class _ValidationSession:
             return SimpleNamespace(scalar_one_or_none=lambda: None)
         if self.calls == 3:  # no overlapping shift
             return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+        if self.calls == 4:  # no approved time off
+            return SimpleNamespace(scalar=lambda: None)
         return SimpleNamespace(scalar=lambda: self._filled)
 
 
@@ -128,3 +130,28 @@ class TestSignupPassesTheGate:
 
         source = inspect.getsource(SchedulingService.create_assignment)
         assert "enforce_capacity=self_signup" in source
+
+
+class TestApprovedTimeOffBlocksTheSeat:
+    """Availability moves under a pending offer.
+
+    Candidate selection excludes members with approved time off, but a trade
+    offer can sit pending for days. Time off approved in the meantime is only
+    caught if the seating validation checks it too.
+    """
+
+    class _TimeOffSession(_ValidationSession):
+        async def execute(self, statement):
+            result = await super().execute(statement)
+            if self.calls == 4:  # the approved-time-off lookup
+                return SimpleNamespace(scalar=lambda: "timeoff-1")
+            return result
+
+    async def test_a_member_on_approved_time_off_is_refused(self):
+        service = SchedulingService(self._TimeOffSession(0))
+        service._check_driver_qualification = AsyncMock(return_value=None)
+
+        error = await _validate(service, _shift(4))
+
+        assert error is not None
+        assert "time off" in error.lower()

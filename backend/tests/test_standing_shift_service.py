@@ -8,6 +8,7 @@ claimable, which are skipped, which claims a new shift matches — rather than
 the query that fetches the rows.
 """
 
+import inspect
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -457,6 +458,87 @@ class TestApplyToShift:
         )
 
 
+class TestTheClaimSurvivesARefusedDate:
+    """The claim is committed before the seating loop, not after it.
+
+    ``seat_member_self_service`` rolls back on a refused date — a driver
+    qualification block, an assignment race. A claim still sitting unflushed
+    in that transaction goes with it: the member is told the series was
+    saved, the first refused date discards it, and the trailing refresh
+    raises on an instance the session no longer holds.
+    """
+
+    async def test_the_claim_is_committed_before_any_seating_runs(self):
+        order = []
+
+        service = _service({}, frozenset())
+        service.db = SimpleNamespace(
+            add=lambda _obj: None,
+            flush=AsyncMock(),
+            commit=AsyncMock(side_effect=lambda: order.append("commit")),
+            refresh=AsyncMock(),
+        )
+
+        async def assign(*_args, **_kwargs):
+            order.append("assign")
+            return SimpleNamespace(id="a1"), None
+
+        shifts = {date(2026, 8, 4): [_shift("n4", date(2026, 8, 4), 18)]}
+        service._shifts_on_dates = AsyncMock(return_value=shifts)
+        service._held_shift_ids = AsyncMock(return_value=set())
+
+        await service.create(
+            ORG,
+            USER,
+            pattern=StandingShiftPattern.WEEKLY,
+            weekday=TUESDAY,
+            period=StandingShiftPeriod.NIGHT,
+            position="firefighter",
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 10),
+            assign=assign,
+        )
+
+        assert "assign" in order, f"the seating loop never ran: {order}"
+        assert order[0] == "commit", (
+            "The claim must be committed before the first seating attempt: a "
+            f"rollback inside one would discard it. Order was {order}."
+        )
+
+    async def test_a_refused_first_date_still_returns_the_saved_claim(self):
+        service = _service({}, frozenset())
+        service.db = SimpleNamespace(
+            add=lambda _obj: None,
+            flush=AsyncMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        shifts = {
+            d: [_shift(f"n{d.day}", d, 18)]
+            for d in (date(2026, 8, 4), date(2026, 8, 11))
+        }
+        service._shifts_on_dates = AsyncMock(return_value=shifts)
+        service._held_shift_ids = AsyncMock(return_value=set())
+        assign = AsyncMock(return_value=(None, "Not cleared to drive"))
+
+        claim, summary, error = await service.create(
+            ORG,
+            USER,
+            pattern=StandingShiftPattern.WEEKLY,
+            weekday=TUESDAY,
+            period=StandingShiftPeriod.NIGHT,
+            position="driver",
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 14),
+            assign=assign,
+        )
+
+        assert error is None
+        assert claim is not None
+        assert summary["claimed"] == 0
+        assert summary["skipped"] == 2
+
+
 class TestEndClaim:
     async def test_ending_a_series_leaves_booked_dates_alone_by_default(self):
         # Silently emptying seats a duty officer has already counted on is how
@@ -515,6 +597,61 @@ class TestEndClaim:
         assert result["released"] == 1
         assert withdraw.await_count == 1
         assert str(night_past.id) not in str(withdraw.await_args)
+
+
+class TestReleaseCutoffUsesTheOrgTimezone:
+    """ "Future" means future to the department, not to the server.
+
+    A UTC server past the org's local midnight would classify the org's
+    current day as future and release a seat the member is about to work;
+    west of UTC the first genuinely future date would instead be kept.
+    """
+
+    def _claim(self):
+        return SimpleNamespace(
+            is_active=True,
+            ended_at=None,
+            organization_id=str(ORG),
+            user_id=str(USER),
+            pattern=StandingShiftPattern.WEEKLY,
+            weekday=TUESDAY,
+            start_date=AUG_START,
+            end_date=AUG_END,
+            period=StandingShiftPeriod.NIGHT,
+            apparatus_id=None,
+        )
+
+    def test_the_cutoff_is_not_the_servers_own_date(self):
+        # Structural, because the failure being guarded against is a server
+        # clock reading — reproducing it behaviourally means running the suite
+        # in a timezone whose date differs from UTC's at that moment.
+        source = inspect.getsource(StandingShiftService.end_claim)
+        assert "date.today()" not in source, (
+            "The release cutoff is back on the server's date; a department "
+            "east or west of UTC will release the wrong dates around local "
+            "midnight."
+        )
+        assert "_org_tz" in source
+
+    async def test_an_explicit_today_still_wins(self):
+        # The caller-supplied date is what the tests above pin behaviour on.
+        night_future = _shift("n-future", date(2026, 8, 25), 18)
+        service = StandingShiftService(db=SimpleNamespace(commit=AsyncMock()))
+        service._org_tz = AsyncMock(return_value=ZoneInfo("UTC"))
+        service._shifts_on_dates = AsyncMock(
+            return_value={date(2026, 8, 25): [night_future]}
+        )
+        service._held_shift_ids = AsyncMock(return_value={"n-future"})
+        withdraw = AsyncMock(return_value=(True, None))
+
+        result = await service.end_claim(
+            self._claim(),
+            release_future=True,
+            withdraw=withdraw,
+            today=date(2026, 8, 26),
+        )
+
+        assert result["released"] == 0
 
 
 @pytest.mark.parametrize(

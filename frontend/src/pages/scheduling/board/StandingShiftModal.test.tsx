@@ -39,7 +39,7 @@ const preview = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const renderModal = () =>
+const renderModal = (props: Partial<React.ComponentProps<typeof StandingShiftModal>> = {}) =>
   render(
     <StandingShiftModal
       initialWeekday={2}
@@ -48,6 +48,7 @@ const renderModal = () =>
       timezone="America/New_York"
       onClose={onClose}
       onCreated={onCreated}
+      {...props}
     />
   );
 
@@ -95,7 +96,49 @@ describe('StandingShiftModal', () => {
   it('will not save a pattern that covers nothing', async () => {
     mockPreview.mockResolvedValue(preview({ dates: [], claimable_count: 0, conflict_count: 0 }));
     renderModal();
-    expect(await screen.findByRole('button', { name: /no dates to add/i })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /no dates in this range/i })).toBeDisabled();
+  });
+
+  it('saves a series whose dates are not on the schedule yet', async () => {
+    // The whole point of storing the claim: shift creation reads active
+    // claims and seats the member as the department publishes each month.
+    // Refusing to save past the current horizon is refusing the one case a
+    // standing shift exists for.
+    const user = userEvent.setup();
+    mockPreview.mockResolvedValue(
+      preview({
+        dates: [
+          { date: '2027-01-05', shift_id: null, status: 'no_shift' },
+          { date: '2027-01-12', shift_id: null, status: 'no_shift' },
+        ],
+        claimable_count: 0,
+        conflict_count: 0,
+        missing_count: 2,
+      })
+    );
+    renderModal();
+    const save = await screen.findByRole('button', { name: /save for 2 upcoming dates/i });
+    expect(save).toBeEnabled();
+    await user.click(save);
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+  });
+
+  it('anchors the series on the shift it was opened from, not on today', async () => {
+    // Biweekly parity and the monthly ordinal are both read off the first
+    // matching weekday from the start date. Anchoring on today builds a
+    // fortnight that skips the very shift the member opened this from.
+    renderModal({ anchorDate: '2099-09-06' });
+    await waitFor(() => expect(mockPreview).toHaveBeenCalled());
+    expect(mockPreview).toHaveBeenCalledWith(expect.objectContaining({ start_date: '2099-09-06' }));
+  });
+
+  it('ignores an anchor that has already passed', async () => {
+    // Nothing before today can be claimed, so a past anchor would produce a
+    // run of dates that are all already gone.
+    renderModal({ anchorDate: '2000-01-01' });
+    await waitFor(() => expect(mockPreview).toHaveBeenCalled());
+    const call = mockPreview.mock.calls[0]?.[0] as { start_date: string };
+    expect(call.start_date).not.toBe('2000-01-01');
   });
 
   it('saves the pattern the member chose', async () => {

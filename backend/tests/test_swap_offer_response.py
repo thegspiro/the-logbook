@@ -92,7 +92,10 @@ class TestAcceptance:
     async def test_the_seat_moves_to_the_member_who_accepted(self):
         offer, shift = _offer(), _shift()
         assignment = SimpleNamespace(
-            id="a1", user_id=str(OFFERER), position="firefighter"
+            id="a1",
+            user_id=str(OFFERER),
+            position="firefighter",
+            is_training=False,
         )
         service = _service(offer, shift, assignment)
 
@@ -108,7 +111,10 @@ class TestAcceptance:
     async def test_the_offerer_is_told_their_roster_changed(self):
         offer, shift = _offer(), _shift()
         assignment = SimpleNamespace(
-            id="a1", user_id=str(OFFERER), position="firefighter"
+            id="a1",
+            user_id=str(OFFERER),
+            position="firefighter",
+            is_training=False,
         )
         service = _service(offer, shift, assignment)
         await service.respond_to_swap_offer("sw1", ORG, TARGET, accept=True)
@@ -120,7 +126,10 @@ class TestAcceptance:
         # every crew a member is likely to be offered a seat on.
         offer, shift = _offer(), _shift()
         assignment = SimpleNamespace(
-            id="a1", user_id=str(OFFERER), position="firefighter"
+            id="a1",
+            user_id=str(OFFERER),
+            position="firefighter",
+            is_training=False,
         )
         service = _service(offer, shift, assignment)
         await service.respond_to_swap_offer("sw1", ORG, TARGET, accept=True)
@@ -131,7 +140,9 @@ class TestAcceptance:
 
     async def test_an_ineligible_accepter_is_refused_and_the_seat_stays_put(self):
         offer, shift = _offer(), _shift()
-        assignment = SimpleNamespace(id="a1", user_id=str(OFFERER), position="driver")
+        assignment = SimpleNamespace(
+            id="a1", user_id=str(OFFERER), position="driver", is_training=False
+        )
         service = _service(
             offer, shift, assignment, validation_error="Member is no longer eligible"
         )
@@ -143,6 +154,32 @@ class TestAcceptance:
         assert result is None
         assert error == "Member is no longer eligible"
         assert assignment.user_id == str(OFFERER)
+        assert offer.status == SwapRequestStatus.PENDING
+
+    async def test_a_training_seat_is_not_handed_over_directly(self):
+        # The seat carries the trainee's program and the evaluating officer,
+        # and shift finalization drafts a completion report from them. Moving
+        # only user_id would file one member's training against another, in a
+        # program they may never have enrolled in.
+        offer, shift = _offer(), _shift()
+        assignment = SimpleNamespace(
+            id="a1",
+            user_id=str(OFFERER),
+            position="firefighter",
+            is_training=True,
+            training_program_id="prog-1",
+            training_evaluator_id=str(STRANGER),
+        )
+        service = _service(offer, shift, assignment)
+
+        result, error = await service.respond_to_swap_offer(
+            "sw1", ORG, TARGET, accept=True
+        )
+
+        assert result is None
+        assert "training seat" in (error or "").lower()
+        assert assignment.user_id == str(OFFERER)
+        assert assignment.training_program_id == "prog-1"
         assert offer.status == SwapRequestStatus.PENDING
 
     async def test_an_offerer_who_already_left_the_shift_is_reported(self):
@@ -158,7 +195,10 @@ class TestDecline:
     async def test_declining_leaves_the_shift_with_the_offerer(self):
         offer = _offer()
         assignment = SimpleNamespace(
-            id="a1", user_id=str(OFFERER), position="firefighter"
+            id="a1",
+            user_id=str(OFFERER),
+            position="firefighter",
+            is_training=False,
         )
         service = _service(offer, _shift(), assignment)
 
@@ -240,3 +280,22 @@ class TestSeparationOfDuties:
                 assert any(p and "scheduling.manage" in p for p in deps)
                 return
         raise AssertionError("review route not registered")
+
+
+class TestTheValidationIsRecheckedAtAcceptance:
+    """An offer can sit pending for days; availability moves under it."""
+
+    def test_approved_time_off_is_rechecked_not_only_at_candidate_selection(self):
+        # Candidate selection excludes approved time off via
+        # get_unavailable_user_ids. Time off approved *after* the offer went
+        # out is only caught if the acceptance path checks it too.
+        source = inspect.getsource(SchedulingService._validate_assignment_candidate)
+        assert "ShiftTimeOff" in source, (
+            "The acceptance path no longer rechecks approved time off; a "
+            "seat can move onto a member the scheduler marked unavailable."
+        )
+        assert "TimeOffStatus.APPROVED" in source
+
+    def test_the_acceptance_path_runs_that_validation(self):
+        source = inspect.getsource(SchedulingService.respond_to_swap_offer)
+        assert "_validate_assignment_candidate" in source

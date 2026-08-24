@@ -2979,6 +2979,53 @@ async def get_eligible_positions(
 
 
 @router.get(
+    "/eligibility/positions/bulk",
+    response_model=dict[str, list[str]],
+)
+async def get_eligible_positions_bulk(
+    shift_ids: str = Query(
+        ...,
+        description="Comma-separated shift IDs to check against",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Eligible positions for several shifts at once, keyed by shift ID.
+
+    The day panel renders a claim button per shift, and each button needs the
+    answer for its own shift. Asking one shift at a time re-ran the whole
+    member-side computation — membership type, rank, completed training, the
+    org's open positions — once per shift; a station running six apparatus
+    paid six times for one answer.
+
+    A shift ID the caller cannot see (another org's, or one since deleted)
+    comes back with an empty list rather than being absent: the caller asked
+    about it, and a missing key reads as "not answered yet".
+
+    **Authentication required**
+    """
+    requested = [value.strip() for value in shift_ids.split(",") if value.strip()]
+    if not requested:
+        return {}
+    if len(requested) > MAX_BULK_ELIGIBILITY_SHIFTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "At most "
+                f"{MAX_BULK_ELIGIBILITY_SHIFTS} shifts can be checked at once."
+            ),
+        )
+
+    service = ShiftEligibilityService(db)
+    return await service.get_eligible_positions_bulk(
+        user=current_user,
+        organization_id=current_user.organization_id,
+        shift_ids=requested,
+    )
+
+
+@router.get(
     "/eligibility/roster",
     response_model=PositionRosterResponse,
 )

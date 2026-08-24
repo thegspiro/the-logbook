@@ -2810,6 +2810,23 @@ class SchedulingService:
             if leaves:
                 return "Member is on leave of absence for this date"
 
+            # Approved scheduling time off, checked here and not only where
+            # candidates are picked. A trade offer can sit pending for days,
+            # and time off approved in the meantime has to block the
+            # acceptance too — otherwise the seat moves onto a member the
+            # scheduling system already marked unavailable for that date.
+            time_off = await self.db.execute(
+                select(ShiftTimeOff.id).where(
+                    ShiftTimeOff.organization_id == str(organization_id),
+                    ShiftTimeOff.user_id == str(user_id),
+                    ShiftTimeOff.status == TimeOffStatus.APPROVED,
+                    ShiftTimeOff.start_date <= shift.shift_date,
+                    ShiftTimeOff.end_date >= shift.shift_date,
+                )
+            )
+            if time_off.scalar():
+                return "Member has approved time off for this date"
+
         position_value = getattr(position, "value", position)
         slots = self.normalize_positions(shift.positions)
 
@@ -4226,6 +4243,20 @@ class SchedulingService:
             )
             if error:
                 return await reject(error)
+
+            # A training seat carries the trainee's program and the
+            # evaluating officer, and shift finalization drafts a completion
+            # report from them. Moving only ``user_id`` would file another
+            # member's training — against a program they may not be enrolled
+            # in, reviewed by an evaluator who never agreed to it. Neither the
+            # candidate list nor this path can establish that the recipient
+            # belongs in that program, so the offer is refused rather than
+            # guessed at.
+            if offered_assignment.is_training:
+                return await reject(
+                    "A training seat cannot be handed over directly. "
+                    "Ask a duty officer to reassign it."
+                )
 
             offered_assignment.user_id = swap_request.target_user_id
             swap_request.status = SwapRequestStatus.APPROVED

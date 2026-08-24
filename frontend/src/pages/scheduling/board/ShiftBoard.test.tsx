@@ -82,9 +82,15 @@ const MINE = shift({
  *  it — so every cell query has to say which calendar it means. */
 const grid = () => within(screen.getByRole('grid', { name: 'Month calendar' }));
 
-const renderBoard = () =>
+const renderBoard = (props: Partial<React.ComponentProps<typeof ShiftBoard>> = {}) =>
   render(
-    <ShiftBoard view="month" visibleDate={new Date(2026, 7, 15)} onVisibleDateChange={vi.fn()} onViewChange={vi.fn()} />
+    <ShiftBoard
+      view="month"
+      visibleDate={new Date(2026, 7, 15)}
+      onVisibleDateChange={vi.fn()}
+      onViewChange={vi.fn()}
+      {...props}
+    />
   );
 
 beforeEach(() => {
@@ -339,5 +345,37 @@ describe('the quiet refresh', () => {
     await waitFor(() => expect(mockGetMonth).toHaveBeenCalled());
     expect(screen.queryByText('offline')).not.toBeInTheDocument();
     expect(screen.getByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
+  });
+});
+
+describe("the way into a shift's full detail", () => {
+  it('opens the detail panel for a shift the member is not on', async () => {
+    // Claiming and giving up a seat are the board's own actions. Everything
+    // else an officer does to a shift — editing it, managing attendance,
+    // finalizing it — lives in the detail panel, and a fully staffed shift
+    // they are not assigned to appears in no other list on the page.
+    const user = userEvent.setup();
+    const onViewShift = vi.fn();
+    renderBoard({ onViewShift });
+    await screen.findByText(/open seats this month/i);
+
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+    // The desktop panel and the phone sheet both render — only CSS hides one
+    // — so the link exists twice and either copy is the same action.
+    const [firstLink] = await screen.findAllByRole('button', { name: /shift details/i });
+    expect(firstLink).toBeDefined();
+    await user.click(firstLink as HTMLElement);
+
+    expect(onViewShift).toHaveBeenCalledWith(expect.objectContaining({ id: 'day-25' }));
+  });
+
+  it('shows no details link when the page wires no handler', async () => {
+    // A visible control that does nothing reads as a broken page.
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect(screen.queryAllByRole('button', { name: /shift details/i })).toHaveLength(0);
   });
 });

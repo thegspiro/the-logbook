@@ -50,6 +50,14 @@ export const STATUS_STYLES: Record<ShiftStatus, StatusStyle> = {
     swatch: 'bg-theme-surface-secondary border-theme-surface-border',
     label: 'Crew size not set',
   },
+  [ShiftStatus.CLOSED]: {
+    // Cancelled, finalized, or already run. Quieter than "crew size not set",
+    // because there is nothing here for anyone to act on.
+    chip: 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted line-through',
+    bar: 'bg-slate-200 dark:bg-slate-700',
+    swatch: 'bg-theme-surface-secondary border-theme-surface-border',
+    label: 'Closed to signups',
+  },
   [ShiftStatus.MINE]: {
     chip: 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-500/15 dark:border-blue-500/40 dark:text-blue-300',
     bar: 'bg-blue-400 dark:bg-blue-500/70',

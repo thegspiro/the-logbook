@@ -75,6 +75,13 @@ export interface ShiftBoardProps {
    * The board owns its data, so this is how it is told to re-read it.
    */
   refreshKey?: number;
+  /**
+   * Open the full shift detail panel. The board handles claiming and giving
+   * up a seat; editing a shift, managing its attendance and finalizing it
+   * live in that panel, and an officer looking at a fully staffed shift they
+   * are not on needs a way into it from the calendar.
+   */
+  onViewShift?: ((shift: ShiftRecord) => void) | undefined;
 }
 
 export const ShiftBoard: React.FC<ShiftBoardProps> = ({
@@ -84,6 +91,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   onViewChange,
   emptyAction,
   refreshKey = 0,
+  onViewShift,
 }) => {
   const { user } = useAuthStore();
   const timezone = useTimezone();
@@ -253,8 +261,9 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     void schedulingService
       .getEligiblePositionsBulk(missing.map((shift) => shift.id))
       // A failed lookup must not present as "you may take any seat": an empty
-      // list disables the claim and says why.
-      .catch(() => ({}))
+      // list disables the claim and says why. Annotated because a bare `{}`
+      // widens the union and loses the index signature the lines below need.
+      .catch((): Record<string, string[]> => ({}))
       .then((answers) => {
         if (cancelled) return;
         const next = { ...eligibilityRef.current };
@@ -545,6 +554,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                   onCancelOffer={(offer) => void handleCancelOffer(offer)}
                   onAddToCalendar={() => void handleAddToCalendar()}
                   onDismissConfirmation={() => setConfirmedShift(null)}
+                  onViewShift={onViewShift}
                 />
               </div>
             )}
@@ -586,6 +596,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               offersFromMe={offersFromMe}
               onAnswerOffer={(offer, accept) => void handleAnswerOffer(offer, accept)}
               onCancelOffer={(offer) => void handleCancelOffer(offer)}
+              onViewShift={onViewShift}
             />
           </div>
         </>
@@ -614,6 +625,13 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
             'firefighter'
           }
           apparatusId={standingSeed.apparatus_id}
+          // The series is anchored on the shift the member tapped, not on
+          // today. Biweekly parity and the monthly ordinal are both read off
+          // the first matching weekday from the start date, so anchoring on
+          // today builds a fortnight that skips the very shift they opened
+          // this from, and turns "the first Sunday" into whichever ordinal
+          // this week happens to be.
+          anchorDate={standingSeed.shift_date}
           timezone={timezone}
           onClose={() => setStandingSeed(null)}
           onCreated={() => void refresh()}

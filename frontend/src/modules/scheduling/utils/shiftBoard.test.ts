@@ -8,6 +8,7 @@ import {
   daySummary,
   firstClaimableSeat,
   isPastDay,
+  isShiftOpen,
   memberInitials,
   monthMatrix,
   shiftCapacity,
@@ -391,5 +392,63 @@ describe('a shift that never stated its crew size', () => {
     // It may well need people; dimming it would hide the unconfigured shifts
     // from the one filter an officer uses to find gaps.
     expect(dayMatchesFilter(daySummary([unsized()], ME), 'needs')).toBe(true);
+  });
+});
+
+describe('a shift nobody can sign up for any more', () => {
+  // The server refuses self-signup on a cancelled, finalized or past shift.
+  // A board that counted their empty chairs would report a shortage nobody
+  // can act on, and would offer a button whose only outcome is an error.
+  const TODAY = new Date('2026-08-25T12:00:00Z');
+
+  it('is closed once cancelled', () => {
+    expect(isShiftOpen(shift({ status: 'cancelled' }), TODAY)).toBe(false);
+  });
+
+  it('is closed once finalized', () => {
+    expect(isShiftOpen(shift({ is_finalized: true }), TODAY)).toBe(false);
+  });
+
+  it('is closed once the day has passed', () => {
+    expect(isShiftOpen(shift({ shift_date: '2026-08-24' }), TODAY)).toBe(false);
+  });
+
+  it('is still open on its own day', () => {
+    expect(isShiftOpen(shift({ shift_date: '2026-08-25' }), TODAY)).toBe(true);
+  });
+
+  it('reports no open seats, whatever its crew size says', () => {
+    const info = shiftStatusInfo(shift({ status: 'cancelled' }), ME, TODAY);
+    expect(info.openSeats).toBe(0);
+    expect(info.status).toBe(ShiftStatus.CLOSED);
+  });
+
+  it('keeps a day off the urgent list', () => {
+    // Four empty seats on a cancelled shift is not three-or-more open seats.
+    const summary = daySummary([shift({ status: 'cancelled' })], ME);
+    expect(summary.openSeats).toBe(0);
+    expect(summary.urgent).toBe(false);
+  });
+
+  it('offers no seat to claim', () => {
+    expect(firstClaimableSeat(shift({ status: 'cancelled' }), ['firefighter'], ME, TODAY)).toBeNull();
+    expect(firstClaimableSeat(shift({ shift_date: '2026-08-24' }), ['firefighter'], ME, TODAY)).toBeNull();
+  });
+
+  it('still shows a member the shift they were on', () => {
+    // Precedence: a member scanning the month for what they worked last week
+    // is asking the same question as one scanning for next week.
+    const worked = shift({
+      shift_date: '2026-08-24',
+      roster: [seat(ME, 'driver')],
+      attendee_count: 1,
+    });
+    expect(shiftStatusInfo(worked, ME, TODAY).status).toBe(ShiftStatus.MINE);
+  });
+
+  it('says cancelled on the chip rather than a headcount', () => {
+    const info = shiftStatusInfo(shift({ status: 'cancelled' }), null, TODAY);
+    expect(chipLabel(info)).toBe('Cancelled');
+    expect(statusBadgeLabel(info)).toBe('Cancelled');
   });
 });
