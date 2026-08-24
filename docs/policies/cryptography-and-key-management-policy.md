@@ -12,13 +12,13 @@
 
 ## Key inventory and custody
 
-| Key | Purpose | Custodian | Storage |
-|---|---|---|---|
-| `ENCRYPTION_KEY` + `ENCRYPTION_SALT` | Field encryption at rest | [DEPARTMENT: role] | `.env` on host + offline copies per backup policy |
-| `SECRET_KEY` | Session/JWT signing | [DEPARTMENT: role] | same |
-| `AUDIT_LOG_SIGNING_KEY` | Audit chain integrity | [DEPARTMENT: role] | same — never rotate casually; historical rows verify under it |
-| DB/Redis passwords | Service auth | [DEPARTMENT: role] | same |
-| TLS certificates | Transport | [DEPARTMENT: role] | Let's Encrypt auto-renewal |
+| Key                                  | Purpose                  | Custodian          | Storage                                                       |
+| ------------------------------------ | ------------------------ | ------------------ | ------------------------------------------------------------- |
+| `ENCRYPTION_KEY` + `ENCRYPTION_SALT` | Field encryption at rest | [DEPARTMENT: role] | `.env` on host + offline copies per backup policy             |
+| `SECRET_KEY`                         | Session/JWT signing      | [DEPARTMENT: role] | same                                                          |
+| `AUDIT_LOG_SIGNING_KEY`              | Audit chain integrity    | [DEPARTMENT: role] | same — never rotate casually; historical rows verify under it |
+| DB/Redis passwords                   | Service auth             | [DEPARTMENT: role] | same                                                          |
+| TLS certificates                     | Transport                | [DEPARTMENT: role] | Let's Encrypt auto-renewal                                    |
 
 Offline copies: at least two, sealed and access-controlled
 [DEPARTMENT: locations]. **A database backup without its era's

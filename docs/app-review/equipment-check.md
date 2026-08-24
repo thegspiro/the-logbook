@@ -48,10 +48,11 @@ item's `inventory_item_id` to another org's inventory item causes that org's ite
 which pass 2 had ruled out for this FK.
 
 **Fix (two layers, mirroring EC2-1):**
-1. *The leak:* the `item_names` lookup now filters
+
+1. _The leak:_ the `item_names` lookup now filters
    `InventoryItem.organization_id == organization_id` — a foreign id resolves to no
    name. This is the definitive guard regardless of how a bad id was stored.
-2. *Write side (EC2-3, now closed):* a new `_validate_item_fks` validates
+2. _Write side (EC2-3, now closed):_ a new `_validate_item_fks` validates
    `inventory_item_id` **and** `equipment_id` in-org (via `is_in_org`) on `add_item`,
    `update_item`, and `add_compartment`'s nested-item path; `parent_compartment_id`
    is validated via the org-scoped `_get_compartment` on `add_compartment` /
@@ -122,7 +123,7 @@ through the same unguarded `setattr` loop. A check item has **no
 `compartment → template`. So setting `compartment_id` to a **foreign** org's
 compartment doesn't dangle: it **transfers the item out of the caller's org and
 into the target org's checklist**, carrying the caller's `name`/`description`/
-`serial_number`. That is a cross-tenant *write* (checklist tampering), a step
+`serial_number`. That is a cross-tenant _write_ (checklist tampering), a step
 beyond EC2-1's read leak. **Fixed:** `update_item` validates a reassigned
 `compartment_id` via the org-scoped `_get_compartment` before re-parenting.
 
@@ -175,14 +176,14 @@ The prior audit listed four endpoints (`delete_compartment`, `delete_item`,
 changelog text. Working through them, they split into two kinds:
 
 - **Read-before-validate** (`delete_compartment`, `delete_item`): the raw
-  `select(...).where(id == x)` ran *before* the org-scoped mutation. I verified
+  `select(...).where(id == x)` ran _before_ the org-scoped mutation. I verified
   this was already harmless — the changelog is written only after
   `if not deleted: raise 404`, so a foreign id's transient read is always
   discarded — but org-scoped the reads anyway, reusing the service's own
   `_get_compartment` / `_get_item` getters (template-join, org-filtered). Now a
   foreign id never loads at all.
 - **Read-after-validate** (`add_item`, `update_item`): these read the
-  compartment's `template_id` *after* an org-scoped `service.add_item` /
+  compartment's `template_id` _after_ an org-scoped `service.add_item` /
   `update_item` succeeded, so the id is already proven in-org. Not an EC-8
   exposure — left as-is, noted here so the distinction is on record rather than
   re-investigated.
@@ -213,7 +214,7 @@ scheduler comparison), not a review-time fix.
 ## Duplication
 
 None introduced. Reusing `_get_compartment`/`_get_item` in the endpoints
-*removed* two inline raw-select duplications of logic the service already owned.
+_removed_ two inline raw-select duplications of logic the service already owned.
 
 ## Dead code
 
@@ -238,11 +239,12 @@ EC-11 stands as a flagged feature.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed**. 648 errors, all `db_session` fixture (no MySQL). |
+| Check                | Result                                                                         |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                               |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                |
+| `black --check`      | ✅ 503 files unchanged                                                         |
+| `eslint`             | ✅ clean                                                                       |
+| backend tests        | ✅ **2517 passed, 0 failed**. 648 errors, all `db_session` fixture (no MySQL). |
+
 </content>

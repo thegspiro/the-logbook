@@ -46,19 +46,19 @@ version of this section listed only the first and called it complete.
 
 **`sessionStorage`, written directly (tab-scoped, gone when the tab closes):**
 
-| Key | Contents |
-| --- | -------- |
-| `departmentName`, `logoData`, `hasLogo` | Display data for the wizard's own header |
-| `emailConfigMethod` | The **method** — `oauth` or `apppassword`. Never the credential |
-| `emailConfigured`, `fileStorageConfigured`, `authConfigured`, `itTeamConfigured`, `adminCreated` | Step-completion booleans |
-| `onboarding_session_id`, `onboarding_csrf_token` | Session handles |
+| Key                                                                                              | Contents                                                        |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `departmentName`, `logoData`, `hasLogo`                                                          | Display data for the wizard's own header                        |
+| `emailConfigMethod`                                                                              | The **method** — `oauth` or `apppassword`. Never the credential |
+| `emailConfigured`, `fileStorageConfigured`, `authConfigured`, `itTeamConfigured`, `adminCreated` | Step-completion booleans                                        |
+| `onboarding_session_id`, `onboarding_csrf_token`                                                 | Session handles                                                 |
 
 **`localStorage`, written by the Zustand `persist` middleware — this one
 outlives the tab:**
 
-| Key | Contents |
-| --- | -------- |
-| `navigationLayout` | A UI preference |
+| Key                      | Contents                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `navigationLayout`       | A UI preference                                                                                                                                                                                                                                                                                                                                                                                        |
 | **`onboarding-storage`** | The store's `partialize` set: department name, logo, navigation layout, email/file-storage/auth **platform names**, the "configured" booleans, **`systemOwnerFirstName` / `systemOwnerLastName` / `systemOwnerEmail`**, `stations`, `apparatus`, `positionsConfig`, `selectedModules`, `moduleStatuses`, `modulePermissionConfigs`, and wizard progress (`currentStep`, `completedSteps`, `lastSaved`) |
 
 No passwords. No API keys. No OAuth secrets. Provider credentials —
@@ -83,11 +83,11 @@ list, purely so a returning browser gets them purged:
 
 ```typescript
 const DEPRECATED_SENSITIVE_KEYS = [
-  'emailConfig',          // Contains SMTP passwords
-  'fileStorageConfig',    // Contains API keys
+  'emailConfig', // Contains SMTP passwords
+  'fileStorageConfig', // Contains API keys
   'authenticationConfig', // Contains OAuth secrets
-  'adminUser',            // Contains password
-  'itTeamInfo',           // Contains contact PII
+  'adminUser', // Contains password
+  'itTeamInfo', // Contains contact PII
 ] as const;
 ```
 

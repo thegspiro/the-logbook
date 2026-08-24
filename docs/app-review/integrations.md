@@ -151,7 +151,7 @@ bug (INT-4) and re-assessed the two flagged items.
 `sync_direction` — silently overwrote every omitted field (`match_strategy`,
 `graceful_fields`, `auto_sync_enabled`, …) with its schema default. A Salesforce
 integration set to `match_strategy="email_lastname"` would quietly revert to
-`"email"` (which *adopts* pre-existing Contacts) the next time any other field was
+`"email"` (which _adopts_ pre-existing Contacts) the next time any other field was
 edited — a real data-integrity / behavior regression, config-shaped, not a leak.
 A secondary effect: empty secret-named defaults (`client_secret=""`) were emitted
 and, being falsy, fell through `_extract_secrets` into **public** config.
@@ -173,7 +173,7 @@ a Salesforce partial config returns exactly its supplied keys, with
 authenticated member read every integration's **non-secret** config (instance_url,
 field_mappings, api_base_url). The complication was that the integration list is
 consumed cross-module (`useConnectedIntegrations` in the membership-pipeline
-meeting-config) gated on *those* permissions — so a blanket `integrations.manage`
+meeting-config) gated on _those_ permissions — so a blanket `integrations.manage`
 gate on the read would silently break those flows. **Fix (the "minimal projection"
 option):** the full config `list`/`get` now require `integrations.manage`, and a new
 `GET /integrations/connected` returns only `integration_type`/`status`/`enabled`
@@ -215,9 +215,9 @@ Covered by `frontend/src/hooks/useConnectedIntegrations.test.ts`.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (endpoint + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_integrations_security` **50 passed** (+1 new); `test_integration_services` + `test_salesforce_sync` **88 passed**. No DB needed for these files. |
+| Check                      | Result                                                                                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (endpoint + test) | ✅ 0 violations                                                                                                                                           |
+| `black --check`            | ✅ unchanged                                                                                                                                              |
+| `tsc --noEmit`             | ✅ n/a — no frontend change                                                                                                                               |
+| backend tests              | ✅ `test_integrations_security` **50 passed** (+1 new); `test_integration_services` + `test_salesforce_sync` **88 passed**. No DB needed for these files. |

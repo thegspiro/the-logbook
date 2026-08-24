@@ -140,7 +140,7 @@ VITE_API_URL=/api/v1
 
 ## Backup Strategy
 
-### Backup Sidecar (Recommended) *(2026-07-31)*
+### Backup Sidecar (Recommended) _(2026-07-31)_
 
 `docker-compose.prod.yml` includes a `backup` service that removes the need
 for host cron entirely. It runs nightly at `BACKUP_TIME` (default 02:00 UTC),
@@ -226,6 +226,7 @@ curl -s https://your-domain.com/api/v1/security/audit-log/integrity | jq
 ### Multiple Backend Workers
 
 In `docker-compose.override.yml`:
+
 ```yaml
 services:
   backend:
@@ -247,6 +248,7 @@ SET GLOBAL query_cache_size = 67108864;  -- 64MB
 ## Cloud Deployment
 
 For cloud-specific guides, see:
+
 - **[AWS Deployment](../docs/deployment/aws.md)** — ECS, EC2, RDS
 - **[Synology NAS](../docs/deployment/synology.md)**
 - **[Proxmox](../docs/deployment/proxmox.md)**

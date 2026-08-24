@@ -28,7 +28,7 @@
 > "A pipeline is an ordered path — usually broken into **phases**. You finish the
 > requirements in one phase, you move to the next. Along the way you're earning
 > hours, passing skills, completing courses. The best part? You mostly don't have
-> to *do* anything to update it — it fills in from the training you're already
+> to _do_ anything to update it — it fills in from the training you're already
 > doing. But knowing how to check it keeps you ahead."
 
 **[TRANSITION: Finding your pipeline]**
@@ -189,7 +189,7 @@ phase.]**
 > before you advance. If you're done but haven't moved, that's why — your officer
 > gives the final nod."
 
-> "One more thing: if you RSVP or check into a session for a phase you *haven't*
+> "One more thing: if you RSVP or check into a session for a phase you _haven't_
 > reached yet, you'll see a friendly warning that it's for a later phase. You can
 > still attend — just know it's ahead of where you are."
 
@@ -214,10 +214,10 @@ phase.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Finding Your Progress | 1:30–3:30 | "How to Check Your Training Progress" |
-| What Updates Automatically | 3:30–5:00 | "What Moves Your Training Progress" |
-| Submitting Your Own Training | 5:00–6:45 | "Logging Training You Took on Your Own" |
-| Staying on Pace | 6:45–8:30 | "Never Fall Behind on Your Training" |
+| Clip                          | Timecode  | Standalone Title                         |
+| ----------------------------- | --------- | ---------------------------------------- |
+| Finding Your Progress         | 1:30–3:30 | "How to Check Your Training Progress"    |
+| What Updates Automatically    | 3:30–5:00 | "What Moves Your Training Progress"      |
+| Submitting Your Own Training  | 5:00–6:45 | "Logging Training You Took on Your Own"  |
+| Staying on Pace               | 6:45–8:30 | "Never Fall Behind on Your Training"     |
 | Advancing & Leaving a Program | 8:30–9:45 | "Advancing Phases and Leaving a Program" |

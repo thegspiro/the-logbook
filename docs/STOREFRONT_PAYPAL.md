@@ -17,7 +17,7 @@ from the PayPal cases only.
 > peer-to-peer transfers — there is nothing to connect to. PayPal exposes
 > capture webhooks on Business accounts, which is what makes this possible.
 
-Members can still *pay* by Venmo, Cash App, or Zelle — the store shows a
+Members can still _pay_ by Venmo, Cash App, or Zelle — the store shows a
 prefilled button (or, for Zelle, the handle to type) for every method the
 department has configured. See "Payment buttons" below. PayPal is simply the
 only one that can report back, so it is the only one that settles an order
@@ -54,12 +54,12 @@ Copy the **Webhook ID** PayPal assigns.
 
 **Settings → Integrations → PayPal → Connect**, then fill in:
 
-| Field | Notes |
-|-------|-------|
-| Environment | Must match which credentials you copied. Defaults to sandbox. |
-| Client ID / Secret | Stored encrypted; never echoed back. Leave blank on a later edit to keep what is stored. |
-| Webhook ID | **Required.** Without it, deliveries cannot be verified and are rejected. |
-| Settle orders automatically | On by default. See the matching rules below. |
+| Field                       | Notes                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| Environment                 | Must match which credentials you copied. Defaults to sandbox.                            |
+| Client ID / Secret          | Stored encrypted; never echoed back. Leave blank on a later edit to keep what is stored. |
+| Webhook ID                  | **Required.** Without it, deliveries cannot be verified and are rejected.                |
+| Settle orders automatically | On by default. See the matching rules below.                                             |
 
 **Test Connection** confirms the credentials work. It deliberately reports a
 warning rather than a plain success when the webhook ID is missing, because
@@ -76,13 +76,13 @@ A payment is applied automatically only when **both** hold:
 Anything else is recorded and left for a person, under
 **Store → Admin → Payments**:
 
-| Outcome | Meaning |
-|---------|---------|
-| Applied | Matched and settled. |
-| Matched — not applied | Would have settled, but automatic settlement is off. |
-| No order found | The reference carried no order number. |
-| Needs a decision | The order is cancelled, already has no balance, or the amount does not equal the balance. |
-| Dismissed | An administrator decided it was not a store payment. |
+| Outcome               | Meaning                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| Applied               | Matched and settled.                                                                      |
+| Matched — not applied | Would have settled, but automatic settlement is off.                                      |
+| No order found        | The reference carried no order number.                                                    |
+| Needs a decision      | The order is cancelled, already has no balance, or the amount does not equal the balance. |
+| Dismissed             | An administrator decided it was not a store payment.                                      |
 
 Fuzzy matching on payer name or amount alone was considered and rejected. Two
 members can easily owe the same amount in the same order window, and crediting
@@ -143,13 +143,13 @@ Separately from reconciliation, a member with a balance due sees a button for
 every payment method the department both **accepts** and **has configured**.
 Configure these under **Store → Admin → Settings → Payments**.
 
-| Method | What the member gets | Carries the order number? |
-|--------|---------------------|---------------------------|
-| Venmo | Button, prefilled with amount and the order number in the note | Yes |
-| PayPal | Button to your PayPal.Me link, prefilled with the amount | No — shown to type |
-| Cash App | Button to your `$cashtag`, prefilled with the amount | No — Cash App has no note field |
-| Zelle | The registered email or phone, tap to copy | No — shown to type |
-| Check / cash / payroll | Payee and your written instructions | No |
+| Method                 | What the member gets                                           | Carries the order number?       |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------- |
+| Venmo                  | Button, prefilled with amount and the order number in the note | Yes                             |
+| PayPal                 | Button to your PayPal.Me link, prefilled with the amount       | No — shown to type              |
+| Cash App               | Button to your `$cashtag`, prefilled with the amount           | No — Cash App has no note field |
+| Zelle                  | The registered email or phone, tap to copy                     | No — shown to type              |
+| Check / cash / payroll | Payee and your written instructions                            | No                              |
 
 A method with nothing configured is **hidden**, not shown as a dead button —
 a link that goes nowhere tells a member the money moved when it did not.

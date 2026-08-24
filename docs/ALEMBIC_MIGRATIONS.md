@@ -72,7 +72,7 @@ does. It is not the source of truth for the current head.
 > The repair, and the constraints on it:
 >
 > - `20260816_0008_merge_finalization_and_email_prefs.py` was **deleted**. The
->   duplicate id has to go for Alembic to load *either* revision, and this file
+>   duplicate id has to go for Alembic to load _either_ revision, and this file
 >   was a no-op merge — the only member of the set whose removal has no schema
 >   consequence. `20260816_0008_add_driver_exceptions.py` keeps the id.
 > - The two redundant no-op merges (`71d86eba9a9e`, `bb34f8937c89`) were
@@ -85,7 +85,7 @@ does. It is not the source of truth for the current head.
 >   `bb34f8937c89`) as its parents.
 >
 > **The lesson is the one this document already teaches, at a larger scale:**
-> run `alembic heads` *before* writing a migration, and — new here — before
+> run `alembic heads` _before_ writing a migration, and — new here — before
 > writing a **merge**. Four of the five authors were each fixing a real
 > problem; the cost came from none of them knowing the others were.
 >
@@ -453,13 +453,13 @@ fails before `20260814_0003` can reconcile anything.
 Three revisions, linear, revising `20260814_0004`. `20260816_0003` is the
 **current single head**.
 
-| Revision        | Revises         | What it does                                                                                                                                                                                                                                                                                                              |
-| --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms                                                                                                                |
-| `20260816_0002` | `20260816_0001` | Backfills barcodes for storage areas that predate auto-assignment                                                                                                                                                                                                                                                         |
-| `20260816_0003` | `20260816_0002` | Creates `inventory_vendors` + `inventory_vendor_contacts`, adds `vendor_id` to items and reorder requests, and backfills a vendor per distinct free-text supplier name (case-folded per org), linking the rows that named it. **Renumbered from `20260816_0002`** after a same-day id collision with the barcode backfill |
+| Revision        | Revises         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260816_0001` | `20260814_0004` | Adds `facility_rooms.parent_room_id` (VARCHAR(36), nullable), index `idx_facility_rooms_parent`, and self-referential FK `fk_facility_rooms_parent_room` with `ON DELETE SET NULL` — nested facility rooms                                                                                                                                                                                                                                   |
+| `20260816_0002` | `20260816_0001` | Backfills barcodes for storage areas that predate auto-assignment                                                                                                                                                                                                                                                                                                                                                                            |
+| `20260816_0003` | `20260816_0002` | Creates `inventory_vendors` + `inventory_vendor_contacts`, adds `vendor_id` to items and reorder requests, and backfills a vendor per distinct free-text supplier name (case-folded per org), linking the rows that named it. **Renumbered from `20260816_0002`** after a same-day id collision with the barcode backfill                                                                                                                    |
 | `20260816_0007` | `20260816_0005` | Folds the duplicate `users.notification_preferences.email` key into `email_notifications` — the key every sender actually reads — carrying an explicit `email: false` opt-out across before dropping the dead key. Written in Python rather than `JSON_SET`/`JSON_REMOVE`: MariaDB 10.11 is a supported target and has no `CAST(... AS JSON)`. **Renumbered from `20260816_0002`** after the same-day id collision with the barcode backfill |
-Notes:
+| Notes:          |
 
 - **`ON DELETE SET NULL`, deliberately never CASCADE.** Removing a room must
   not silently delete the sub-rooms hanging off it (with their kiosk codes and

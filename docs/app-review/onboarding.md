@@ -176,9 +176,9 @@ residual stand.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (endpoint + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change (the login guard already reads only `needs_onboarding`) |
-| backend tests | ✅ `test_onboarding_steps` **6 passed**; `test_onboarding_status_disclosure` **2 passed** (new). DB-backed onboarding integration tests need MySQL. |
+| Check                      | Result                                                                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (endpoint + test) | ✅ 0 violations                                                                                                                                     |
+| `black --check`            | ✅ unchanged                                                                                                                                        |
+| `tsc --noEmit`             | ✅ n/a — no frontend change (the login guard already reads only `needs_onboarding`)                                                                 |
+| backend tests              | ✅ `test_onboarding_steps` **6 passed**; `test_onboarding_status_disclosure` **2 passed** (new). DB-backed onboarding integration tests need MySQL. |

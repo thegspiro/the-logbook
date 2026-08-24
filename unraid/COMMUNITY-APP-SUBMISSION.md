@@ -22,6 +22,7 @@ Before submitting, ensure you have:
 **Location:** `/unraid/the-logbook.xml`
 
 **Requirements:**
+
 - ✅ Valid XML format
 - ✅ All required fields populated
 - ✅ Port mappings conflict-free
@@ -31,6 +32,7 @@ Before submitting, ensure you have:
 - ✅ Icon URL publicly accessible
 
 **Validation:**
+
 ```bash
 # Test XML syntax
 xmllint --noout the-logbook.xml
@@ -43,17 +45,20 @@ cp the-logbook.xml /boot/config/plugins/dockerMan/templates-user/
 ### 2. Icon/Logo
 
 **Requirements:**
+
 - Format: PNG
 - Size: 256x256 pixels
 - Background: Transparent preferred
 - Public URL: GitHub raw or CDN
 
 **Recommended hosting:**
+
 ```
 https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png
 ```
 
 **Tips:**
+
 - Keep file size under 100KB
 - Use simple, recognizable design
 - Should look good on dark background (Unraid default)
@@ -62,6 +67,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png
 ### 3. Screenshots
 
 **Recommended screenshots (in order):**
+
 1. Dashboard/Home page
 2. Main feature interface
 3. Mobile responsive view
@@ -69,6 +75,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png
 5. Reports/analytics (if applicable)
 
 **Requirements:**
+
 - Format: PNG or JPG
 - Size: 1920x1080 or 1280x720
 - Clear, high quality
@@ -76,6 +83,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png
 - Hosted publicly (GitHub, Imgur, etc.)
 
 **Example hosting:**
+
 ```
 https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 ├── screenshot-1-dashboard.png
@@ -87,6 +95,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 ### 4. Documentation
 
 **Required docs in `/unraid/` directory:**
+
 - [x] `UNRAID-INSTALLATION.md` - Installation guide
 - [x] `the-logbook.xml` - Docker template
 - [x] `docker-compose-unraid.yml` - Alternative installation
@@ -99,6 +108,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 ### Step 1: Prepare Repository
 
 1. **Create `/unraid/` directory structure:**
+
    ```
    unraid/
    ├── the-logbook.xml              # Docker template
@@ -143,6 +153,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 ### Step 3: Add Your Template
 
 1. **Find appropriate directory:**
+
    ```
    AppFeed/
    └── templates/
@@ -151,6 +162,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
    ```
 
 2. **Copy your XML template:**
+
    ```bash
    mkdir -p templates/thegspiro
    cp /path/to/your/the-logbook.xml templates/thegspiro/
@@ -169,12 +181,14 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 ### Step 4: Create Pull Request
 
 1. **Commit your template:**
+
    ```bash
    git add templates/thegspiro/the-logbook.xml
    git commit -m "Add The Logbook - Intranet platform for emergency services"
    ```
 
 2. **Push to your fork:**
+
    ```bash
    git push origin main
    ```
@@ -197,6 +211,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
      **Support Thread:** [Link to Unraid forums if available]
 
      **Testing:**
+
      - [x] Template tested on Unraid 6.12.4
      - [x] All environment variables documented
      - [x] Ports conflict-free (7880, 7881)
@@ -205,6 +220,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
      - [x] Documentation complete
 
      **Links:**
+
      - Repository: https://github.com/thegspiro/the-logbook
      - Documentation: https://github.com/thegspiro/the-logbook/tree/main/unraid
      - Docker Image: ghcr.io/thegspiro/the-logbook:latest
@@ -225,14 +241,17 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
    - Category: Docker Containers
 
 3. **Post template:**
+
    ```markdown
    # The Logbook - Support Thread
 
    ## Overview
+
    The Logbook is a comprehensive, modular intranet platform designed for
    fire departments, EMS, and emergency services organizations.
 
    ## Features
+
    - Member management
    - Training tracking
    - Equipment inventory
@@ -242,23 +261,28 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
    - And more...
 
    ## Installation
+
    Available in Community Applications - search for "The Logbook"
 
    ## Documentation
+
    - [Installation Guide](https://github.com/thegspiro/the-logbook/blob/main/unraid/UNRAID-INSTALLATION.md)
    - [Troubleshooting](link)
    - [GitHub Repository](https://github.com/thegspiro/the-logbook)
 
    ## System Requirements
+
    - Unraid 6.9.0+
    - 8GB RAM minimum
    - MySQL 8.0 database
 
    ## Support
+
    Post questions and issues in this thread. For bugs, please use
    [GitHub Issues](https://github.com/thegspiro/the-logbook/issues)
 
    ## Screenshots
+
    [Post 3-5 screenshots showing main features]
    ```
 
@@ -352,6 +376,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 When you need to update the template:
 
 1. **Update your repository:**
+
    ```bash
    # Update the-logbook.xml in your repo
    git add unraid/the-logbook.xml
@@ -360,6 +385,7 @@ When you need to update the template:
    ```
 
 2. **Submit PR to AppFeed:**
+
    ```bash
    cd AppFeed
    git checkout main
@@ -388,6 +414,7 @@ When you need to update the template:
 ### Port Selection
 
 **Avoid these common ports:**
+
 - 80, 443 (HTTP/HTTPS - Unraid WebUI)
 - 3000 (Common app port)
 - 3306 (MySQL)
@@ -397,6 +424,7 @@ When you need to update the template:
 - 9000 (Portainer)
 
 **Recommended ranges:**
+
 - 7000-7999 (Less common)
 - 10000-11000 (High ports)
 - 32768-60999 (Ephemeral port range)
@@ -404,6 +432,7 @@ When you need to update the template:
 ### Volume Mappings
 
 **Standard Unraid paths:**
+
 ```
 /mnt/user/appdata/APP-NAME/        # Application data
 /mnt/user/appdata/APP-NAME/config  # Configuration
@@ -412,6 +441,7 @@ When you need to update the template:
 ```
 
 **Cache drive considerations:**
+
 - AppData typically on cache
 - Uploads may be on cache or array
 - Backups typically on array
@@ -419,6 +449,7 @@ When you need to update the template:
 ### User/Group IDs
 
 **Unraid defaults:**
+
 ```
 PUID=99    # nobody user
 PGID=100   # users group
@@ -445,6 +476,7 @@ Always include these for proper file permissions.
 ### Template Examples
 
 Good examples to reference:
+
 - **LinuxServer.io containers** - Well-documented, follow best practices
 - **Hotio containers** - Clean templates
 - **binhex containers** - Comprehensive documentation
@@ -480,16 +512,20 @@ Keep a changelog for your template updates:
 
 ```markdown
 ## [1.0.0] - 2026-01-20
+
 ### Added
+
 - Initial Community Applications release
 - Docker template with all core features
 - Comprehensive documentation
 - Automated backup support
 
 ### Changed
+
 - N/A (initial release)
 
 ### Fixed
+
 - N/A (initial release)
 ```
 

@@ -969,15 +969,15 @@ All shift completion report operations now log audit events: `shift_report_creat
 
 ### Bug Fixes (2026-04-07)
 
-| Issue                                                  | Fix                                                                   |
+| Issue | Fix |
 | ------------------------------------------------------ | --------------------------------------------------------------------- | -------------------------- | --------------------------------------------------------- |
-| Decimal TypeError in weekly/monthly calendar           | MySQL `SUM()` returns `Decimal`; wrapped in `float()` before division |
-| `??` → `                                               |                                                                       | ` for optional form fields | 35 instances in prospective-members and apparatus modules |
-| `ShiftCompletionReportCreate.shift_date` type mismatch | Changed from optional to required in TypeScript to match backend      |
-| Unused `LogOut` import in `MyShiftsTab`                | Removed (F401)                                                        |
-| `tsconfig.json` TS5101 deprecation error               | Added `ignoreDeprecations: "5.0"` for `baseUrl`                       |
-| `form.shift_date` fallback missing                     | Added `?? ''` fallback for `noUncheckedIndexedAccess`                 |
-| Trainee summary table numeric alignment                | Center-aligned headers and data columns                               |
+| Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` before division |
+| `??` → `                                              |                                                                       |` for optional form fields | 35 instances in prospective-members and apparatus modules |
+| `ShiftCompletionReportCreate.shift_date` type mismatch | Changed from optional to required in TypeScript to match backend |
+| Unused `LogOut` import in `MyShiftsTab` | Removed (F401) |
+| `tsconfig.json` TS5101 deprecation error | Added `ignoreDeprecations: "5.0"` for `baseUrl` |
+| `form.shift_date` fallback missing | Added `?? ''` fallback for `noUncheckedIndexedAccess` |
+| Trainee summary table numeric alignment | Center-aligned headers and data columns |
 
 ### Edge Cases (2026-04-07)
 
