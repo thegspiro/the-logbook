@@ -280,8 +280,15 @@ the training room — instead of every space sitting in one flat list.
 Training, and Scheduling lists sub-rooms indented under their container and
 prints the containment path beneath the selected room.
 
-> **[SCREENSHOT NEEDED — an event form's room picker with indented sub-rooms
-> and the containment path shown for a selected nested room.]**
+![The event form's location picker with a nested room chosen, the control showing the full containment path from the room up to its station](./images/06-27-event-room-picker-path.png)
+
+**The list is not indented, and that is deliberate.** Each option carries its
+whole containment path as text — `Locker Cage — Quartermaster's Storage —
+Volunteer Office — Station 1 - Headquarters` — rather than sitting indented
+under a parent. It is a native picker, so the phone and screen-reader versions
+render the same words your browser does, and a path in the text survives a list
+that indentation cannot express. Selecting one confirms the choice underneath
+with the building, the address and the room's own number and floor.
 
 **Edge cases worth teaching:**
 

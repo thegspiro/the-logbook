@@ -1,5 +1,52 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (later) — the room picker, an overdue loan, and a history tab that leaked its own column names
+
+`06-27` and `05-82`, opened and checked. **461 of 505 filled.**
+
+**The item History tab was rendering its raw payload at members.** Every event
+dumped `Object.entries(details)` straight to the page, so an item on loan read
+
+> `user_name: Nadia Belhaj | reason: … | expected_return: 2026-08-20T23:40:15+00:00 | is_returned: false | is_overdue: true`
+
+Three things wrong at once: column names shown as labels, a **raw UTC instant**
+put in front of a member who will read it as their own clock — the one thing
+the date rules forbid outright — and empty values rendering as a bare `notes:`
+with nothing after. Keys are sentence case now, instants go through
+`formatDateTime` with the organization's timezone, booleans read Yes/No, and
+empty values are dropped.
+
+**Writing the test for that found a second bug in the fix.** A plain
+`YYYY-MM-DD` is a calendar date, not an instant, so putting it through
+`formatDate` with a timezone _moves_ it: `2026-08-20` came out as `8/19/2026`
+in New York. `formatCalendarDate` exists for exactly this and is what it uses.
+The test asserts the day does not shift.
+
+**The extracted helper had to leave the component file.** Exporting a function
+beside a component costs fast refresh, which eslint flags — and that eleventh
+warning put the repo over its `--max-warnings 10` gate. It lives in
+`itemHistoryDetails.ts` now, the same split `dateFormatting.ts` documents for
+`daysUntil`.
+
+**Two more markers described screens the product does not have:**
+
+- **Guide 06 wanted indented sub-rooms in the room picker.** The picker is a
+  native `<select>` — its popup is drawn by the OS, so no list can be
+  photographed — and its options are not indented: each carries its whole
+  containment path as text instead. That is the better design for a native
+  control and for a screen reader, and the guide now says so. What the capture
+  shows is the half that is real and useful: a nested room selected, with the
+  full path, building, address, room number and floor confirmed underneath.
+- **Guide 05 wanted a stock ledger with on-hand, issued and available side by
+  side.** No such panel exists, and the three are not three numbers: `quantity`
+  _is_ the on-hand count — issuing decrements it, a return adds it back — so
+  on-hand and available are the same figure, and the total is on-hand **plus**
+  what is out. The items list shows `on-hand / total`; the per-member issued
+  counts are on Gear & Uniforms → Members; deployed lots are the Stock Lots tab
+  already pictured in that lesson. The marker is replaced with a table saying
+  where each number lives and a warning against subtracting the issued count,
+  which counts every issued unit twice.
+
 ## Captured 2026-08-24 — two permission pairs, and two markers that described the wrong thing
 
 `17-03`/`17-04` and `14-25`/`14-26`, opened and checked. **459 of 505 filled.**

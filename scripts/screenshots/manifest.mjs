@@ -1119,6 +1119,31 @@ export async function openMemberProfile(page) {
 export const isPostNominationElection = (election) =>
   /Lieutenant Election/.test(election.title ?? "");
 
+/**
+ * Open the item that is out on loan past its return date.
+ *
+ * Found through the overdue endpoint rather than by name: which item is late
+ * depends on the seeder's checkout plan, and a shot that hard-codes one goes
+ * quietly wrong the day that plan changes.
+ */
+export async function openOverdueItem(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/inventory/checkout/overdue", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const rows = Array.isArray(body)
+      ? body
+      : body.checkouts || body.items || [];
+    return rows.length ? rows[0].item_id : null;
+  });
+  if (!id) throw new Error("no overdue loan in the demo data");
+  await page.goto(`${new URL(page.url()).origin}/inventory/items/${id}`, {
+    waitUntil: "domcontentloaded",
+  });
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -10540,6 +10565,50 @@ export const SHOTS = [
       "A member is meant to see fewer panels on a colleague's profile -- the " +
       "missing ones are the subject of the shot, so a thinner page is the " +
       "result rather than a sign of missing demo data.",
+  },
+  {
+    // The deepest seeded room, chosen so the whole containment chain is in the
+    // closed control: Locker Cage inside Quartermaster's Storage inside the
+    // Volunteer Office inside Station 1.
+    //
+    // The marker also asked for indented sub-rooms in the open list. That half
+    // is not capturable and is not what the product does: the picker is a
+    // native <select>, whose popup is drawn by the OS rather than the page, and
+    // its options are flat -- each carries its full path as text instead of
+    // being indented under a parent. The guide says so beside the image.
+    id: "06-27-event-room-picker-path",
+    doc: "06-apparatus-facilities.md",
+    line: 283,
+    anchor: "an event form's room picker with indented sub-rooms",
+    alt: "The event form's location picker with a nested room chosen, the control showing the full containment path from the room up to its station",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Location'))",
+    prepare: async (page) => {
+      const picker = page.locator("#location-select");
+      await picker.waitFor({ state: "visible", timeout: 20_000 });
+      const value = await page
+        .locator("#location-select option")
+        .filter({ hasText: "Locker Cage" })
+        .first()
+        .getAttribute("value");
+      if (!value) throw new Error("no nested room in the location picker");
+      await picker.selectOption(value);
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // The overdue loan, on the item that carries it. The Gas Meter is out to a
+    // member past its return date while the Thermal Imaging Camera is out and
+    // not yet due, which is the pair the marker asks to be seeded -- the
+    // caption points at both, and this is the one whose deadline has passed.
+    id: "05-82-item-overdue-loan",
+    doc: "05-inventory.md",
+    line: 2258,
+    anchor: "item issue/detail view with a temporary return deadline",
+    alt: "An item on temporary issue past its return date: the history entry naming the borrower, the reason, the return deadline in the department's timezone, and that it is overdue and not yet returned",
+    route: "/inventory/items",
+    prepare: openOverdueItem,
+    fullPage: true,
   },
   {
     id: "03-43-time-off-request-form",
