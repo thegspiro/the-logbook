@@ -9,6 +9,7 @@ endpoint tests.
 """
 
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,12 +29,26 @@ from app.services.admin_hub_service import (
 )
 
 
-def make_context(enabled: set[str] | None = None) -> MetricContext:
+def make_context(
+    enabled: set[str] | None = None,
+    permissions: set[str] | None = None,
+) -> MetricContext:
     """A context with no database — enough for every pure code path here."""
     return MetricContext(
         db=None,  # type: ignore[arg-type]
         organization_id="org-1",
-        user=None,  # type: ignore[arg-type]
+        user=SimpleNamespace(
+            positions=[
+                SimpleNamespace(
+                    permissions=list(
+                        permissions
+                        if permissions is not None
+                        else {"members.manage", "medical_screening.view"}
+                    )
+                )
+            ],
+            rank=None,
+        ),  # type: ignore[arg-type]
         today=date(2026, 8, 23),
         timezone_name="UTC",
         local_midnight=datetime(2026, 8, 23, tzinfo=timezone.utc),
@@ -122,6 +137,18 @@ class TestSlotResolution:
         )
         assert "prospective_members" not in resolved
         assert len(resolved) == OPEN_SLOTS
+
+    def test_a_metric_whose_permission_is_missing_is_dropped_not_rendered(self):
+        resolved = self.service._sanitize(
+            self.spec,
+            ["screening_current", "active_members", "inactive_members"],
+            make_context(permissions={"members.manage"}),
+        )
+        assert "screening_current" not in resolved
+        assert len(resolved) == OPEN_SLOTS
+
+    def test_members_attention_requires_medical_screening_access(self):
+        assert self.spec.attention_permission == "medical_screening.view"
 
     def test_the_same_metric_cannot_occupy_two_slots(self):
         resolved = self.service._sanitize(

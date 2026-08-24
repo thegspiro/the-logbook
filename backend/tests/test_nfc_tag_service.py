@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.admin_hours import AdminHoursEntryMethod
 from app.models.nfc_tag import NfcCredentialType, NfcTagStatus
 from app.models.user import UserStatus
 from app.schemas.nfc_tag import (
@@ -141,6 +142,18 @@ class TestResolveTag:
         _tag_out, _user_out, refusal = await service.resolve_tag(
             ORG, [None, "04A2245B"]
         )
+        assert refusal == NfcCheckInStatus.MEMBER_INACTIVE
+
+    async def test_inactive_member_is_refused(self):
+        """INACTIVE is the plain "not an active member" state.
+
+        Unlike retired or on-leave it carries no sense in which the member is
+        still turning up, so a card must not go on recording attendance.
+        """
+        service = NfcTagService(
+            _db([_one(_tag()), _one(_user(status=UserStatus.INACTIVE))])
+        )
+        _t, _u, refusal = await service.resolve_tag(ORG, [None, "04A2245B"])
         assert refusal == NfcCheckInStatus.MEMBER_INACTIVE
 
     async def test_retired_member_may_still_tap_in(self):
@@ -275,6 +288,52 @@ class TestRegisterTag:
             getattr(stored, name, None) == "04A2245B"
             for name in ("label", "uid_preview", "uid_hash")
         )
+
+
+class TestCardLifecycleTransitions:
+    async def test_a_lost_card_cannot_be_reactivated(self):
+        """The invariant is about the physical world, so the API has to hold it.
+
+        Whoever picked the card up can still tap it. Leaving the rule to the
+        screen that hides the button means an API client silently breaks it.
+        """
+        tag = _tag(status=NfcTagStatus.LOST)
+        service = NfcTagService(_db([_one(tag)]))
+
+        with pytest.raises(ValueError, match="cannot be reactivated"):
+            await service.update_tag("tag-1", ORG, {"status": NfcTagStatus.ACTIVE})
+
+    async def test_a_revoked_card_cannot_be_reactivated(self):
+        tag = _tag(status=NfcTagStatus.REVOKED)
+        service = NfcTagService(_db([_one(tag)]))
+
+        with pytest.raises(ValueError, match="cannot be reactivated"):
+            await service.update_tag("tag-1", ORG, {"status": NfcTagStatus.ACTIVE})
+
+    async def test_a_suspended_card_can_be_reactivated(self):
+        """Suspension is the reversible state — that is what it is for."""
+        tag = _tag(status=NfcTagStatus.SUSPENDED)
+        tag.revoked_at = datetime.now(timezone.utc)
+        tag.revoked_reason = "Suspended by an officer"
+        db = _db([_one(tag), MagicMock(__iter__=lambda self: iter([]))])
+        service = NfcTagService(db)
+
+        await service.update_tag("tag-1", ORG, {"status": NfcTagStatus.ACTIVE})
+
+        assert tag.status == NfcTagStatus.ACTIVE
+        assert tag.revoked_at is None
+        assert tag.revoked_reason is None
+
+    async def test_a_lost_card_can_still_be_relabelled(self):
+        """The guard is about reactivation, not about freezing the record."""
+        tag = _tag(status=NfcTagStatus.LOST)
+        db = _db([_one(tag), MagicMock(__iter__=lambda self: iter([]))])
+        service = NfcTagService(db)
+
+        await service.update_tag("tag-1", ORG, {"label": "Old blue card"})
+
+        assert tag.label == "Old blue card"
+        assert tag.status == NfcTagStatus.LOST
 
 
 # =============================================================================
@@ -527,6 +586,13 @@ class TestCheckIn:
 
         assert result["status"] == NfcCheckInStatus.CHECKED_IN
         assert result["target_name"] == "Station Duty"
+        # Recorded as a station tap, not as the member scanning a QR code with
+        # their own phone — an export that cannot tell those apart is claiming
+        # something untrue about who was standing there.
+        assert (
+            admin_hours.clock_in.call_args.kwargs["entry_method"]
+            == AdminHoursEntryMethod.NFC_STATION
+        )
 
     async def test_event_phase_gate_is_reported_not_overridden(self):
         """A station has nobody to ask, so it must not answer for the officer."""

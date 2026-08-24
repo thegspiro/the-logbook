@@ -689,33 +689,46 @@ class TestTheColourwayMigrationConvertsWhatItClaimsTo:
     def test_a_reconstructed_form_is_the_shipped_body_materialised(
         self, migration, defn
     ):
-        # The candidate the upgrade matches on is exactly what the renderer
+        # The candidates the upgrade matches on are exactly what the renderer
         # would have produced for this default — no more, no less. If the two
         # ever diverge the query matches nothing, silently, and every
         # untouched notice stays on the old design.
         accent = defn.get("accent")
         if not accent:
             pytest.skip("no shipped colourway")
-        forms = migration._previous_forms(defn, accent, defn.get("chip", ""))
-        assert forms == [
-            migration._materialise(defn["html"], accent, defn.get("chip", ""))
-        ]
-        assert accent in forms[0]
-        for token in ("{{header_accent}}", "{{chip_tint}}"):
-            assert token not in forms[0]
+        chip = defn.get("chip", "")
+        layout = defn.get("layout", "notice")
+        forms = migration._previous_forms(defn, accent, chip, layout)
+        assert forms[0] == migration._materialise(defn["html"], accent, chip)
+        for form in forms:
+            assert accent in form
+            for token in ("{{header_accent}}", "{{chip_tint}}", "{{content_class}}"):
+                assert token not in form
 
     @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
-    def test_the_stored_body_does_not_depend_on_the_layout(self, migration, defn):
-        # The content class is resolved at render time from the column, so a
-        # notice that changed layout is byte-identical to one that did not and
-        # needs no second candidate to be recognised.
+    def test_a_non_notice_default_is_recognised_at_its_own_layout(
+        self, migration, defn
+    ):
+        # build_shell deferred the content class one commit later than it
+        # deferred the colours, so a body written in between carries
+        # class="content-receipt" literally rather than the token. Matching
+        # only at the default layout recognised the 31 notices and missed all
+        # four non-notice defaults, which would then have been left with NULL
+        # columns — indistinguishable from a body somebody had edited, and so
+        # never converted by anything later either.
         accent = defn.get("accent")
         if not accent:
             pytest.skip("no shipped colourway")
-        forms = migration._previous_forms(defn, accent, defn.get("chip", ""))
-        assert len(forms) == 1
-        assert "content-receipt" not in forms[0]
-        assert "content-digest" not in forms[0]
+        chip = defn.get("chip", "")
+        layout = defn.get("layout", "notice")
+        forms = migration._previous_forms(defn, accent, chip, layout)
+        expected_class = migration._LAYOUT_CLASSES[layout]
+
+        assert f'<div class="{expected_class}">' in forms[-1]
+        # A notice's two candidates are the same string; deduplicating keeps a
+        # pointless repeat out of the IN () the upgrade builds.
+        assert len(forms) == (1 if layout == "notice" else 2)
+        assert len(forms) == len(set(forms))
         assert '<div class="{{content_class}}">' in defn["html"]
 
 

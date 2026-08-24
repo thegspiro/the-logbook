@@ -2835,7 +2835,7 @@ class SchedulingService:
                 position=assignment_data.get("position"),
                 require_mutable=self_signup,
                 reject_past=self_signup,
-                enforce_position_eligibility=self_signup,
+                enforce_position_eligibility=True,
             )
             if validation_error:
                 return None, validation_error

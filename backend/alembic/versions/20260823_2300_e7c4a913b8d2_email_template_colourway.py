@@ -1,7 +1,7 @@
 """Add the email template colourway columns.
 
 Revision ID: e7c4a913b8d2
-Revises: e4b91c7d2a58
+Revises: e7a41b9c3d85
 
 ``header_accent``, ``status_chip`` and ``layout`` record what a notice looks
 like as data, so an officer can change it from the Email Templates screen.
@@ -41,7 +41,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "e7c4a913b8d2"
-down_revision = "e4b91c7d2a58"
+down_revision = "e7a41b9c3d85"
 branch_labels = None
 depends_on = None
 
@@ -98,20 +98,26 @@ def _materialise(body: str, accent: str, chip: str, layout: str = "notice") -> s
     )
 
 
-def _previous_forms(defn: dict, accent: str, chip: str) -> list:
+def _previous_forms(defn: dict, accent: str, chip: str, layout: str) -> list:
     """Every shape this default's body could be stored in before the upgrade.
 
-    One candidate: ``defn["html"]`` with the colour tokens written back in as
-    hexes. The layout is not part of it — the content class is chosen when the
-    mail is rendered, from the ``layout`` column, so the stored body is the
-    same whichever layout a notice uses and a notice that changed layout needs
-    no separate form to match.
+    Two candidates, because ``build_shell`` deferred the content class later
+    than it deferred the colours. Between the two commits, a body written for
+    a receipt or a digest carried ``class="content-receipt"`` literally, while
+    one written after carries ``{{content_class}}`` and takes its class from
+    the ``layout`` column at render time. Materialising only at the default
+    layout therefore matched the notices and missed every non-notice default —
+    the four storefront and digest bodies would have been left unconverted,
+    with NULL columns, looking exactly like a body somebody had edited.
 
-    A list rather than a single value because the ``in_()`` in ``upgrade``
-    takes one, and because the shape this has to recognise is the sort of
-    thing that grows a second entry later.
+    Deduplicated, since for a notice the two candidates are the same string
+    and a repeated value in the ``in_()`` is noise.
     """
-    return [_materialise(defn["html"], accent, chip)]
+    forms = [
+        _materialise(defn["html"], accent, chip),
+        _materialise(defn["html"], accent, chip, layout),
+    ]
+    return list(dict.fromkeys(forms))
 
 
 def _templates_table() -> sa.Table:
@@ -163,7 +169,7 @@ def upgrade() -> None:
         layout = defn.get("layout", "notice")
         connection.execute(
             table.update()
-            .where(table.c.html_body.in_(_previous_forms(defn, accent, chip)))
+            .where(table.c.html_body.in_(_previous_forms(defn, accent, chip, layout)))
             .values(
                 html_body=defn["html"],
                 header_accent=accent,
