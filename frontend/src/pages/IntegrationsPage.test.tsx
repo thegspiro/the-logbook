@@ -159,6 +159,17 @@ describe('IntegrationsPage', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('labels the totals with wording that covers activations as well as connections', async () => {
+    renderPage();
+    await screen.findByText('Slack');
+    // An activated feature is stored as `connected` like any other entry and
+    // counted here, so this tile must not call the total a connection.
+    const stats = screen.getByRole('region', { name: 'Integration statistics' });
+    expect(within(stats).getByText('Active')).toBeInTheDocument();
+    expect(within(stats).queryByText('Connected')).not.toBeInTheDocument();
+    expect(within(stats).queryByText('Ready to Connect')).not.toBeInTheDocument();
+  });
+
   it('shows category filter buttons including new categories', async () => {
     renderPage();
     await screen.findByText('Slack');
@@ -461,6 +472,66 @@ describe('IntegrationsPage', () => {
       await user.click(screen.getByText('Bookings'));
 
       expect(await screen.findByText('No upcoming bookings')).toBeInTheDocument();
+    });
+  });
+
+  describe('NFC ID Cards (activation, not connection)', () => {
+    const nfcAvailable = {
+      id: 'nfc-1',
+      organization_id: 'org-1',
+      integration_type: 'nfc-id-cards',
+      name: 'NFC ID Cards',
+      description: 'Issue member ID cards carrying an NFC tag',
+      category: 'Access Control',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const nfcActive = { ...nfcAvailable, status: 'connected' as const, enabled: true };
+
+    it('offers Activate rather than Connect on an inactive card', async () => {
+      mockGetIntegrations.mockResolvedValue([nfcAvailable]);
+
+      renderPage();
+      await screen.findByText('NFC ID Cards');
+      const card = screen.getByTestId('integration-card-nfc-id-cards');
+
+      expect(within(card).getByText('Activate')).toBeInTheDocument();
+      expect(within(card).queryByText('Connect')).not.toBeInTheDocument();
+    });
+
+    it('titles the dialog Activate and labels its submit button to match', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([nfcAvailable]);
+      mockConnectIntegration.mockResolvedValue(nfcActive);
+
+      renderPage();
+      await screen.findByText('NFC ID Cards');
+      await user.click(within(screen.getByTestId('integration-card-nfc-id-cards')).getByText('Activate'));
+
+      expect(screen.getByText('Activate NFC ID Cards')).toBeInTheDocument();
+      expect(screen.getByTestId('connect-submit')).toHaveTextContent('Activate');
+
+      await user.click(screen.getByTestId('connect-submit'));
+      expect(mockConnectIntegration).toHaveBeenCalledWith('nfc-1', {});
+    });
+
+    it('reads Active and Deactivate once it is on, with no Test button', async () => {
+      mockGetIntegrations.mockResolvedValue([nfcActive]);
+
+      renderPage();
+      await screen.findByText('NFC ID Cards');
+      const card = screen.getByTestId('integration-card-nfc-id-cards');
+
+      expect(within(card).getByText('Active')).toBeInTheDocument();
+      expect(within(card).getByText('Deactivate')).toBeInTheDocument();
+      // The backend has no connection test for a feature switch — offering one
+      // only ever produced an error toast.
+      expect(within(card).queryByText('Test')).not.toBeInTheDocument();
+      expect(within(card).queryByText('Connected')).not.toBeInTheDocument();
     });
   });
 });
