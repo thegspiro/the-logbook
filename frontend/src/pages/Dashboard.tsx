@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
 import DashboardNeedsYou from '../components/dashboard/DashboardNeedsYou';
+import DashboardOrientation from '../components/dashboard/DashboardOrientation';
 import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
@@ -57,6 +58,7 @@ import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { requirementTarget } from '../utils/pipelineProgress';
+import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import {
   addCalendarDays,
@@ -253,24 +255,25 @@ const Dashboard: React.FC = () => {
     total: number;
   } | null>(null);
 
-  // Organization reporting is a separate view rather than a taller page, and the
-  // selection is mirrored into ?tab= so a chief can bookmark it.
-  // Continue accepting the former `overview` URL so existing bookmarks land on
-  // the renamed view, while all new navigation writes the clearer URL.
-  const organizationTabRequested = ['organization', 'overview'].includes(searchParams.get('tab') ?? '');
-  const activeTab = canViewOrganization && organizationTabRequested ? 'organization' : 'department';
-  const selectTab = (tab: 'department' | 'organization') => {
+  // Department-wide reporting is a separate view rather than a taller page, and
+  // the selection is mirrored into ?tab= so a chief can bookmark it.
+  // Continue accepting the former `organization` and `overview` URLs so existing
+  // bookmarks land on the renamed view, while all new navigation writes the
+  // clearer URL.
+  const departmentTabRequested = ['department', 'organization', 'overview'].includes(searchParams.get('tab') ?? '');
+  const activeTab = canViewOrganization && departmentTabRequested ? 'department' : 'personal';
+  const selectTab = (tab: 'personal' | 'department') => {
     const next = new URLSearchParams(searchParams);
-    if (tab === 'organization') next.set('tab', 'organization');
+    if (tab === 'department') next.set('tab', 'department');
     else next.delete('tab');
     setSearchParams(next, { replace: true });
   };
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    let nextTab: 'department' | 'organization' | null = null;
-    if (event.key === 'Home') nextTab = 'department';
-    else if (event.key === 'End') nextTab = 'organization';
+    let nextTab: 'personal' | 'department' | null = null;
+    if (event.key === 'Home') nextTab = 'personal';
+    else if (event.key === 'End') nextTab = 'department';
     else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      nextTab = activeTab === 'department' ? 'organization' : 'department';
+      nextTab = activeTab === 'personal' ? 'department' : 'personal';
     }
 
     if (!nextTab) return;
@@ -311,10 +314,10 @@ const Dashboard: React.FC = () => {
   }, []);
 
   // Do not fetch department-wide reporting merely because a leader opened the
-  // dashboard. The personal view is the default; organization data is loaded
-  // only after that leader intentionally opens the Organization tab.
+  // dashboard. The personal view is the default; department-wide data is loaded
+  // only after that leader intentionally opens the My Department tab.
   useEffect(() => {
-    if (activeTab === 'organization') {
+    if (activeTab === 'department') {
       if (canViewChiefOperations) void loadOperations();
       if (canViewAssets) void loadAssetWidgets();
       if (canViewLegacyAdmin) {
@@ -654,7 +657,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const totalHours = hours.training + hours.standby + hours.administrative;
+  const totalHours = sumHoursToQuarter([hours.training, hours.standby, hours.administrative]);
   const monthLabel = formatDateCustom(new Date(), { month: 'long' }, tz);
 
   // ── The seven-day list ────────────────────────────────────────────────────
@@ -882,9 +885,9 @@ const Dashboard: React.FC = () => {
       loadTrainingProgress(),
       loadMyEquipment(),
       loadUpcomingEvents(),
-      ...(activeTab === 'organization' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
-      ...(activeTab === 'organization' && canViewChiefOperations ? [loadOperations()] : []),
-      ...(activeTab === 'organization' && canViewAssets ? [loadAssetWidgets()] : []),
+      ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
+      ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
+      ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, canViewAssets, canViewChiefOperations, canViewLegacyAdmin]);
@@ -1055,8 +1058,8 @@ const Dashboard: React.FC = () => {
               >
                 {(
                   [
+                    { id: 'personal', label: 'Personal' },
                     { id: 'department', label: 'My Department' },
-                    { id: 'organization', label: 'Organization' },
                   ] as const
                 ).map((tab) => (
                   <button
@@ -1082,21 +1085,25 @@ const Dashboard: React.FC = () => {
             <span className="border-theme-surface-border bg-theme-surface text-theme-text-secondary inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-4 text-[13px]">
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
-                <span className="text-theme-text-primary font-bold tabular-nums">{totalHours}</span> hrs in {monthLabel}
+                <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span> hrs in{' '}
+                {monthLabel}
               </span>
             </span>
           </div>
         </div>
 
-        {activeTab === 'department' ? (
+        {activeTab === 'personal' ? (
           <div
-            id="dashboard-panel-department"
+            id="dashboard-panel-personal"
             role={canViewOrganization ? 'tabpanel' : undefined}
-            aria-labelledby={canViewOrganization ? 'dashboard-tab-department' : undefined}
+            aria-labelledby={canViewOrganization ? 'dashboard-tab-personal' : undefined}
             className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-6"
           >
             {/* ── Main column ── */}
             <div className="flex min-w-0 flex-col gap-5">
+              {/* First thing a new member sees, because the dashboard is where
+                  they land and nothing here pointed at the lessons before. */}
+              <DashboardOrientation />
               <DashboardOrganizationWidgets />
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where
@@ -1547,16 +1554,19 @@ const Dashboard: React.FC = () => {
         ) : (
           /* ── Organization: department-wide reporting, admins only ── */
           <div
-            id="dashboard-panel-organization"
+            id="dashboard-panel-department"
             role="tabpanel"
-            aria-labelledby="dashboard-tab-organization"
+            aria-labelledby="dashboard-tab-department"
             className="flex flex-col gap-6"
           >
-            <div>
-              <div className="mb-4">
+            {/* A plain div here left the stat row butted against the operations
+                cards with no gap at all; the heading's own mb-4 was the only
+                spacing in the block. */}
+            <div className="flex flex-col gap-4">
+              <div>
                 <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
                   <Shield className="h-5 w-5 text-red-500" aria-hidden="true" />
-                  Organization
+                  My Department
                 </h3>
                 <p className="text-theme-text-muted mt-1 text-sm">
                   Department-wide staffing, compliance, events, action items, and operations.
@@ -1568,7 +1578,7 @@ const Dashboard: React.FC = () => {
                   <div className="card border-red-500/30 p-5" role="alert">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-theme-text-primary font-semibold">Organization summary is unavailable</p>
+                        <p className="text-theme-text-primary font-semibold">Department summary is unavailable</p>
                         <p className="text-theme-text-muted mt-1 text-sm">
                           We could not load the department-wide metrics. Your personal dashboard is unaffected.
                         </p>
@@ -1602,7 +1612,7 @@ const Dashboard: React.FC = () => {
                       value={`${adminSummary?.training_completion_pct ?? 0}%`}
                       icon={GraduationCap}
                       iconColor="text-green-700 dark:text-green-400"
-                      description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
+                      description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
                       loading={loadingAdmin}
                     />
 
@@ -1636,7 +1646,7 @@ const Dashboard: React.FC = () => {
 
                     <DashboardStatCard
                       label="Admin Hours"
-                      value={adminSummary?.recent_admin_hours ?? 0}
+                      value={formatHours(adminSummary?.recent_admin_hours)}
                       icon={ClipboardCheck}
                       iconColor="text-indigo-700 dark:text-indigo-400"
                       description={
@@ -1646,7 +1656,7 @@ const Dashboard: React.FC = () => {
                       }
                       loading={loadingAdmin}
                       {...(canManageAdminHours ? { onClick: () => void navigate('/admin-hours/manage') } : {})}
-                      ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
+                      ariaLabel={`Admin Hours: ${formatHours(adminSummary?.recent_admin_hours)}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
                     />
                   </div>
                 ))}

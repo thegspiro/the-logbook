@@ -22,6 +22,7 @@ from fastapi import (
 )
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -143,10 +144,10 @@ async def create_submission_with_attachment(
                 attachments=[stored],
                 **data.model_dump(exclude_unset=True, exclude={"attachments"}),
             )
-        except (ValueError, PermissionError):
-            # The service raises these before it writes anything — hours out of
-            # range, a training type the department disallows — so the row
-            # never landed and the bytes on disk belong to nothing.
+        except (ValueError, PermissionError, IntegrityError):
+            # Validation failures happen before the write, while an integrity
+            # failure means the database rejected the transaction. In either
+            # case no row can own the bytes on disk.
             #
             # Deliberately narrow. Anything else may have failed *after* the
             # commit (a refresh that trips on a dropped connection), where the

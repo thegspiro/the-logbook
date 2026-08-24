@@ -7,6 +7,7 @@ import type { AdminHoursReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { formatHours, roundHoursToQuarter } from '@/utils/hoursFormatting';
 
 interface Props {
   data: AdminHoursReport;
@@ -23,7 +24,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
       key: 'hours',
       header: 'Hours',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : toStr(v, '0')),
+      render: (v: unknown) => (typeof v === 'number' ? formatHours(v) : toStr(v, '0')),
     },
     {
       key: 'entry_method',
@@ -40,7 +41,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-        <StatCard label="Total Hours" value={summary.total_hours} />
+        <StatCard label="Total Hours" value={roundHoursToQuarter(summary.total_hours)} />
         <StatCard label="Entries" value={summary.total_entries} />
         <StatCard label="Members" value={summary.unique_members} />
       </div>
@@ -51,7 +52,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
           <div className="flex flex-wrap gap-2">
             {Object.entries(summary.hours_by_category).map(([cat, hrs]) => (
               <span key={cat} className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-1 text-xs">
-                {cat}: <span className="text-theme-text-primary font-semibold">{hrs}h</span>
+                {cat}: <span className="text-theme-text-primary font-semibold">{formatHours(hrs)}h</span>
               </span>
             ))}
           </div>

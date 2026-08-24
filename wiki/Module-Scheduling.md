@@ -39,6 +39,151 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 
 ---
 
+## The Shift Board and Standing Shifts _(2026-08-23 → 08-24)_
+
+The Schedule tab is a **board**, not a grid of cards. A card told a member a
+shift existed; it did not say whether it still needed anybody, and claiming a
+seat meant opening a panel and finding a position dropdown.
+
+### What the board shows
+
+Every shift in the month grid carries a **status chip**:
+
+| Chip                | Colour      | Meaning                                |
+| ------------------- | ----------- | -------------------------------------- |
+| `2 open`            | red / amber | Seats still to fill                    |
+| `Full 4/4`          | green       | Staffed                                |
+| `You + 2/4`         | blue        | You are on it                          |
+| Headcount, no ratio | grey        | **The shift never stated a crew size** |
+
+Beside the grid, a day panel shows the crew and **one button that claims the
+first open seat the member is cleared for**. Filters dim rather than hide, so
+the month keeps its shape. On a phone this becomes a bar grid, a day sheet and
+a confirmation screen.
+
+**Every shift response now carries its `roster`**, so a month arrives with its
+seat occupants in one request: selecting a day costs no network call, and a
+cell can be coloured "you are on it" at all.
+
+### The grey shift is deliberate
+
+A shift naming neither positions nor `min_staffing` used to be assumed to have
+four seats, so it rendered "4 open" in critical red. A department that
+configures neither opened the page to a wall of red that meant nothing. Such a
+shift is now grey, shows a headcount rather than a ratio, **stays out of the
+open-seat count and the URGENT flag**, and can still be joined.
+
+Cancelled, finalized and past shifts read as **closed** and offer nothing —
+their empty chairs previously counted toward the day's open-seat total and its
+urgent flag, and they offered a claim button the server refuses.
+
+### Standing shifts
+
+A standing shift is a member's recurring claim on a seat — "every Tuesday
+night". It is **stored as a claim**, not written once as a batch of
+assignments, so giving up a single date leaves the series intact.
+
+**It has two readers and only means anything because both exist:**
+
+1. Creating a claim seats the member on matching shifts **already on record**.
+2. Creating a **shift** seats every member whose active claim matches it.
+
+Without the second, a series would go quiet the month the department generated
+its next block of schedule.
+
+Edge cases:
+
+- **The series is anchored on the shift it was started from**, not on today.
+  Biweekly parity and the monthly ordinal both come from the first matching
+  weekday after the start date — anchoring on today built a fortnight that
+  skipped the very shift the member opened it from.
+- **The horizon is the member's to pick**, defaulting to a year out rather than
+  to December 31, which quietly shrinks as the year goes on.
+- **A series covering only dates the department has not scheduled yet can be
+  saved.** That is the case standing shifts exist for.
+- Standing claims go through the **same self-service validation as any other
+  sign-up**. They previously called `create_assignment` directly, whose
+  `self_signup` flag defaults to false, so a series seated members on shifts
+  they were not eligible for, on cancelled or finalized shifts, on past dates,
+  and past a position's seat count.
+- A claim's `apparatus_id` is verified in-org before it is stored.
+
+### Trades a member can complete
+
+`GET /scheduling/shifts/{id}/trade-candidates` lists who could take over the
+caller's seat, with everyone who could not accept **already excluded**: on the
+shift, on leave, not cleared for the position, or working an abutting tour.
+Ranked least-loaded first.
+
+`POST /scheduling/swap-requests/{id}/respond` lets the member who was offered a
+seat accept it. This is deliberately distinct from manager review, which
+refuses participants by design, and is limited to a one-way targeted offer:
+accepting is the offerer withdrawing and the accepter signing up, in one step,
+both already unprivileged.
+
+**This closed a request nobody could complete.** Manager review reads a set
+`target_user_id` as "there must be an assignment to trade back" and rejects the
+request when there is no requesting shift — which is exactly the shape a
+one-way offer has.
+
+`swap_offer_expiry` is a daily sweep closing offers still pending the day
+before the shift, notifying both members and the duty officer. A pending offer
+holds the seat with the member who made it, so left alone it survived the shift
+itself with nobody told.
+
+Two more rules:
+
+- **Giving up a seat is withheld while your own offer of it stands.** Releasing
+  it, or offering it again, left the first recipient holding an offer that could
+  no longer be honoured. Withdrawing is the only move until they answer.
+- **A training seat cannot be handed over through a trade.** It carries the
+  trainee's program and evaluating officer, and moving only the member id would
+  file one member's training against another. Approved time off is rechecked
+  when an offer is accepted, not only when candidates were picked.
+
+### Seat capacity, and who it applies to
+
+Seat capacity was half-enforced: a shift with named positions was capped seat
+by seat, while a shift with only `min_staffing` had nothing reading it — so the
+calendar could show "Full 4/4" while the server accepted a fifth. Officer
+assignment stays uncapped deliberately.
+
+**Position eligibility is now enforced on both write paths** _(2026-08-24)_.
+`create_assignment` previously applied it only when a member claimed their own
+seat, so a department that had configured which ranks may run a position had
+that configuration enforced against the people least likely to get it wrong and
+ignored when a scheduler seated somebody else. `require_mutable` and
+`reject_past` remain tied to self-signup deliberately — a scheduler backfilling
+last week's roster is doing records work, and being cleared for a position is a
+safety question that does not expire with the shift.
+
+### Dashboard staffing widgets
+
+Seven tiles — Today's Staffing, Future Coverage Gaps, Open Slots, Pending
+Changes, Incomplete Closeouts, Workload Balance, Special Operations — each
+linking into the schedule already filtered to what it counted, so a number is a
+starting point rather than a fact to go and find. Each tile keeps its own
+horizon and filters, stored per member.
+
+`GET /scheduling/dashboard/widgets` bounds its own window: a range that is
+inverted, or 93 days or longer, is a `422` rather than a query that walks the
+whole schedule. `station_id` and `platoon` are validated against the
+organization's own lists, so an unknown value is a `422` and not an empty
+result that reads as "nothing scheduled".
+
+### Also fixed
+
+- **Calendar day labels shifted a day for any viewer west of the department.**
+  They went through a timezone-aware formatter; a calendar date belongs to no
+  timezone, so a cell showing 26 announced itself as "Tuesday, August 25".
+- **Each shift on the board carries a details link again.** The board's own
+  actions cover claiming and giving up a seat; editing a shift, managing its
+  attendance and finalizing it live in the detail panel, which a fully staffed
+  shift an officer is not assigned to had no other route into.
+- The standing service and shift generation resolve the organization's timezone
+  through **one shared helper** instead of disagreeing about the default.
+- The phone month grid got its 44px touch targets back.
+
 ## Full Shift Lifecycle, Calendars & Automation (2026-07-16)
 
 A broad review closing gaps from shift start-up through close-out, plus

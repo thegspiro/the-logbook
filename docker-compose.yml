@@ -186,6 +186,9 @@ services:
       DEBUG: ${DEBUG:-false}
       ENABLE_DOCS: ${ENABLE_DOCS:-true}
       TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # Direct printing is disabled unless the operator approves printer
+      # addresses/CIDRs (for example 192.168.50.10/32).
+      LABEL_PRINTER_ALLOWED_NETWORKS: ${LABEL_PRINTER_ALLOWED_NETWORKS:-}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     volumes:

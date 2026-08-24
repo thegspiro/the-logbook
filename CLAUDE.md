@@ -151,44 +151,46 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 
 ### Two TypeScript installs — do not "tidy" this away
 
-Two TypeScripts are resolved, on purpose. **The arrangement changed on
-2026-08-17** and is currently held together by npm's peer auto-install rather
-than by a declaration — read the drift note at the end of this section before
-touching any of it.
+Two TypeScripts are resolved, on purpose, and **both halves are declared** —
+neither depends on npm choosing to auto-install anything.
 
-**What `frontend/package.json` declares today:**
+**What `frontend/package.json` declares:**
 
-| Declared as                                     | Version | Used by                                          |
-| ----------------------------------------------- | ------- | ------------------------------------------------ |
-| `typescript`                                    | 7.0.2   | _(nothing intentionally — see below)_            |
-| `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
+| Declared as                                     | Version | Used by                                            |
+| ----------------------------------------------- | ------- | -------------------------------------------------- |
+| `typescript`                                    | 5.9.3   | typescript-eslint — i.e. type-aware `npm run lint` |
+| `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor   |
 
-**What actually resolves in `package-lock.json`:**
+**What resolves in `package-lock.json`:**
 
-| Lock path                          | Version | Why it is there                                                     |
-| ---------------------------------- | ------- | ------------------------------------------------------------------- |
-| `node_modules/typescript`          | 5.9.3   | `"peer": true` — npm auto-installed it to satisfy typescript-eslint |
-| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                                       |
-| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested                              |
+| Lock path                        | Version | Why it is there                         |
+| -------------------------------- | ------- | --------------------------------------- |
+| `node_modules/typescript`        | 5.9.3   | The frontend's own declaration, hoisted |
+| `node_modules/typescript-native` | 7.0.2   | The aliased compiler, hoisted           |
 
-**typescript-eslint still cannot run on TypeScript 7.** It throws
+Nothing nests under `frontend/node_modules/` any more: with no version
+conflict left to work around, both hoist to the root.
+
+**typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
 every published version — including the `^8.67.0` this repo uses — caps its
 peer range at `>=4.8.4 <6.1.0` (typescript-eslint#10940 tracks TS >=7.1
-support). Type-aware lint therefore runs against a 5.9.3 that **no manifest in
-this repository asks for**.
+support). A workspace can only declare one package named `typescript`, so the
+plain name is the version the linter needs and the compiler the project builds
+with is the same package installed again under an alias.
 
-This is not cosmetic. Before the split existed, `rm package-lock.json && npm
-install` failed outright with ERESOLVE: the lockfile could not be regenerated,
-and any bump of typescript-eslint broke the install.
+This is not cosmetic. It is what keeps the lockfile regenerable: with
+`typescript` declared at 7.0.2, `rm package-lock.json && npm install` failed
+outright with ERESOLVE against typescript-eslint's peer range, so the lockfile
+could not be rebuilt and any bump of typescript-eslint broke the install.
 
 Consequences worth knowing:
 
 - `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
   which resolves the aliased compiler explicitly. Keep it that way — the
   wrapper is what makes "which compiler ran" a fact rather than a hoisting
-  outcome. (Bare `tsc` inside the frontend workspace now resolves to 7.0.2,
-  not 5.9.3 as this section previously warned; that changed with the bump.)
+  outcome. Bare `tsc` resolves to 5.9.3, because both installs ship a `tsc`
+  bin and npm links only one into `node_modules/.bin`.
 - **Point your editor at the aliased compiler.** In VS Code, set this in your
   local `.vscode/settings.json` (the directory is gitignored, so this cannot
   be committed for you):
@@ -201,22 +203,12 @@ Consequences worth knowing:
   forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
   collapse this to a single `typescript` dependency** and delete the alias, the
   wrapper script, and this section.
-
-#### Drift note (2026-08-17) — the arrangement is currently incidental
-
-Dependabot bumped `typescript` from `5.9.3` to `7.0.2` in
-`frontend/package.json`. `typescript` and `typescript-native` now name the same
-version, so the alias is redundant, and **the 5.9.3 the linter runs against
-survives only because npm chose to auto-install it as a peer.** CI is green, so
-nothing is broken today — but the pin went from declared to incidental, and a
-different npm version, a `--strict-peer-deps` install, or a future lockfile
-regeneration is not guaranteed to reproduce it.
-
-Do not "fix" this by deleting the alias without deciding what the linter
-compiles with. The two honest options are: re-pin `typescript` at `5.9.3`
-(restoring the declared split), or keep 7.0.2 and pin the linter's compiler
-some other way. Tracked as **BUILD-1** in
-[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+- **A Dependabot bump of `typescript` will reopen this.** Raising the plain
+  `typescript` past typescript-eslint's `<6.1.0` cap is what broke the
+  arrangement on 2026-08-17: it left the linter running on a 5.9.3 that no
+  manifest asked for, surviving only as an npm-auto-installed peer, and made
+  the lockfile unregenerable. Bump `typescript-native` for a newer compiler;
+  the plain `typescript` moves only when the linter's cap does.
 
 ## Testing
 

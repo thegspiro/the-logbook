@@ -244,3 +244,86 @@ Settings); nothing about NFC changes it.
 > **Chrome on Android, over HTTPS.** Web NFC exists nowhere else and browsers
 > expose it only in a secure context, so the button renders nothing on iOS,
 > desktop, or a plain-`http://` LAN deployment. QR remains the universal path.
+
+## Equipment Checks — Four Item Types and Sealed Containers _(2026-08-23)_
+
+### Nine item types became four
+
+`check_type` carried nine values, seven of which were checks — and between them
+they only ever stored **four kinds of answer**: a number, a pass/fail, a
+quantity, a date. The extra values were layout decisions wearing a type's
+clothing. `present` and `functional` both store pass/fail and differ only in
+what the crew is asked to do — a sentence on the item, not a column — and
+`reading` and `level` both store a number against a threshold. An admin had to
+choose between near-synonyms, and the same question rendered two ways depending
+on which name somebody had picked years earlier.
+
+| Type       | Stores            | Pass rule                                                                                                                                                                               |
+| ---------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `level`    | The number itself | Against a threshold. The trend is the useful part, so the reading is kept rather than reduced to a tick. An emptied box reads as "not read yet", not zero                               |
+| `function` | Pass / fail       | A fail opens a note and a photo, and **neither blocks the walk** — a crew held at a textarea at 07:00 abandons the check, so an unwritten note is flagged on the finished check instead |
+| `count`    | A quantity        | Short of par is a **restock line, not a failure**                                                                                                                                       |
+| `expiry`   | A date            | Confirms the date already on record rather than asking for it again; stays amber on every shift inside the pull window                                                                  |
+
+`header` and `text` are untouched — they are the layout, and the point of
+naming the four is that a type is no longer allowed to be a layout choice.
+
+`app/utils/check_types.py` is the write-side authority. The request schema
+still **accepts** the legacy names — an older client should not break over a
+rename it never asked for — but normalizes before storing. It is deliberately
+stricter than the reader: an unknown value at a request boundary is the
+caller's mistake and is rejected, where the same value read back from a column
+falls back to `function`.
+
+The template builder now names **what each type stores** beside its label, so
+the choice reads as "what is being asked" rather than as a list of layouts.
+
+### Sealed containers
+
+A compartment can be marked as carrying a **numbered tamper seal** — a drug
+bag, a trauma kit, a sealed pack (`check_template_compartments.is_sealed`, set
+in the template builder). On the check form that compartment gets a seal panel:
+read the number, confirm it matches the last check, and the contents count is
+cleared in one tap instead of counted by hand.
+
+Three rules are load-bearing, and each exists because the obvious alternative
+is a safety defect:
+
+1. **A seal clears counting only.** It never clears expiry dates or pressure
+   readings, which move on their own while the bag sits shut — so an
+   out-of-date vial cannot hide behind an intact tag.
+2. **A seal proves unchanged, not full.** Confirming carries the previous
+   counts forward; it does **not** write each quantity up to its required
+   figure. A drug bag that was three morphine short at its last count is still
+   three short, and that carried shortfall still files as a failure. Writing
+   quantities to par would be the "Set All to Par" trap, on the one control
+   whose entire purpose is that nobody opened the bag.
+3. **The shortcut is offered only when it is earned.** Clearing requires a
+   prior **intact** seal whose normalized number matches. Otherwise the primary
+   action reads _Record seal_, the seal is still filed for the audit record,
+   and the contents are counted by hand.
+
+**Nested sealed containers get their own card** — a broken outer seal says
+nothing about an intact inner one, which previously had nowhere to be recorded.
+
+`GET /equipment-checks/templates/{id}/last-seals` supplies the previous reading
+so the tag number prefills; it lands when the response does, without
+overwriting anything the crew has already typed.
+
+### Not yet available
+
+**Walking a check as a lap** — stops in walking order, the current one open in
+place, finished ones collapsed to a line — is built and tested, and is **not
+connected to the live check screen**, which still renders the previous flat
+compartment list. Swapping it rewrites that screen and the tests pinning its
+markup, which is a deliberate follow-up. Do not expect the lap after this
+upgrade.
+
+### Who can swap stock onto a truck _(2026-08-24)_
+
+The lot-swap endpoint let a crew member **without** `inventory.manage` deploy
+any quantity from ready stock and dispose of lots that were never aboard.
+Submitter-scope swaps are now bounded by what is actually being replaced: the
+disposition path requires the replaced lot to be aboard the item, and the
+quantity is capped at the deployed quantity it replaces. The template-item row
+is selected `FOR UPDATE`, so two concurrent swaps cannot both pass the cap.

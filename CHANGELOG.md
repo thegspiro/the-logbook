@@ -7,6 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
+
+**Changed**
+
+- **A lesson no longer sends you to GitHub to read it.** The three pilot paths
+  carried no content of their own: each one's "Read full guide" button opened a
+  markdown file on github.com. That reached nothing from a station on a
+  firewalled or offline network, pointed at `main` rather than the build the
+  department runs, and landed on a 2,600–3,000 line file with no anchor to the
+  step just clicked. Each step now states why it matters, how to do it against
+  the current screens, and what proves it is done, at `/learning/:pathId`. The
+  full reference guide stays linked at the foot of each lesson.
+- **Progress is stored per member.** The old key was shared by everyone using a
+  browser, so on a station computer one member saw and overwrote another's
+  checkmarks. Progress is now keyed by member; the old data is discarded rather
+  than adopted, because nothing recorded who entered it. Two tabs open at once
+  no longer delete each other's ticks.
+- **The Learning Center index is a menu, not a checklist.** Ticking a task off
+  happens on the lesson, where the member has just read what the task is.
+
+**Added**
+
+- **A dashboard prompt for anyone with orientation left to do.** The Learning
+  Center sat in all three navigation surfaces and new members still never
+  opened it, because the dashboard is where they land and nothing there said
+  the lessons existed. The prompt hides once orientation is complete or waved
+  off.
+- **Three more lessons for a member's first week** — installing the app on a
+  phone and what still works without signal, RSVPing and checking in to an
+  event, and reviewing the gear signed out to you. Six lessons and nineteen
+  tasks in all, hidden where the department has switched the module off.
+
+### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
+
+**Fixed**
+
+- **The lockfile can be regenerated again.** `frontend/package.json` declared
+  `typescript` at `7.0.2`, which typescript-eslint refuses — every published
+  version caps its peer range at `>=4.8.4 <6.1.0` and throws
+  `typescript-eslint does not support TS 7.0` from a hard guard. So
+  `rm package-lock.json && npm install` failed outright with ERESOLVE, and the
+  5.9.3 that type-aware lint actually ran against survived only because npm
+  had auto-installed it as a peer — a version no manifest in the repository
+  asked for. `npm ci` reproduced it and CI stayed green, which is why this sat
+  unnoticed since the 2026-08-17 Dependabot bump; the exposure was that the
+  next regeneration, `--strict-peer-deps` install, or npm version change was
+  not guaranteed to reproduce it.
+- **`typescript` is re-pinned at `5.9.3`**, restoring the declared split: the
+  plain name is the version the linter can load, and `typescript-native` (an
+  npm alias of `typescript@7.0.2`) remains the compiler `npm run typecheck`
+  and `npm run build` use via `frontend/scripts/tsc-native.mjs`. Both halves
+  are now declared. `node_modules/typescript` is a plain dev dependency rather
+  than `"peer": true`, and the nested `frontend/node_modules/typescript@7.0.2`
+  is gone — with no version conflict left, both hoist to the root.
+- Bump `typescript-native` for a newer compiler. Raising the plain
+  `typescript` past the linter's cap is what broke this, and will break it
+  again.
+- The lockfile was rebuilt from scratch, because npm's incremental resolver
+  will not revisit an already-satisfied subtree and left the stale nested
+  `frontend/node_modules/typescript@7.0.2` in place (npm 10 and 11 both). The
+  rebuild therefore also refreshed dependencies to the newest versions their
+  declared ranges already allowed — 9 direct (`eslint` 10.8.1 → 10.9.0,
+  `vitest` / `@vitest/*` 4.1.10 → 4.1.11, `lucide-react` 1.31.0 → 1.34.0,
+  `react-hook-form` 7.85.0 → 7.86.0, `dompurify` 3.4.13 → 3.4.14,
+  `concurrently` 10.0.4 → 10.0.5, `@types/react-dom` 19.2.4 → 19.2.5) and 61
+  transitive, mostly `@rollup`/`@rolldown` platform binaries. No range was
+  widened; these are what a fresh install would have picked up anyway.
+
+### The dashboard tabs, and a card that stretched to nothing (2026-08-24)
+
+**Changed**
+
+- **The leadership tab is "My Department"; the member's own view is
+  "Personal".** The strip read My Department and Organization, which named the
+  member's own dashboard after the department and the department's dashboard
+  after a word no single-department deployment uses for itself. Both were one
+  step off. The panel heading and its load-failure card follow ("Department
+  summary is unavailable"), and the tab ids follow the labels — the leadership
+  view is `?tab=department`, with `?tab=organization` and `?tab=overview` still
+  accepted so existing bookmarks land where they always did.
+- **"My Account" was deliberately not reused for the personal tab.** The
+  sidebar already points that name at `/account` — profile, password,
+  appearance — and one label on two destinations inside the same shell is a
+  worse problem than the one being fixed.
+
+**Fixed**
+
+- **The operations panels no longer stretch to their tallest neighbour.**
+  The chief grid inherited the CSS grid default of `align-items: stretch`, so
+  Operational readiness — one row on a quiet day — grew to match the five rows
+  of Critical exceptions beside it and rendered as a mostly empty box roughly
+  three times the height of its content. The panels are `items-start` and size
+  to what they hold.
+- **The department overview row had no gap above it.** Its wrapper was a plain
+  `div`, so the five stat cards butted directly against the operations panels
+  with zero spacing while every other seam on the page used `gap-4`; the
+  heading's own `mb-4` was the only spacing in the whole block.
+
+### "Medical Categories" did not say what it categorized (2026-08-24)
+
+**Changed**
+
+- **The admin nav entry is now "Medical Supply Categories".** It sat between
+  "Gear Admin" and "Store Admin" with nothing around it to supply the noun, so
+  read cold it could as easily have meant medical records, certifications or
+  incident types. The gear side avoids this by accident of placement rather
+  than by wording: its categories page is titled plainly "Categories" and is
+  reached through the Gear Admin hub, which supplies the scope. The medical
+  page is promoted straight into the admin list, so its label has to carry the
+  scope alone — and "Supply" is the word that does it. The page heading, empty
+  state, modal titles, load-failure toast, the shortcut's `aria-label` on
+  Medical Supplies and the "no categories exist yet" hint in the item form all
+  follow, as do the three docs tables.
+- **The backend's four error details agree with its own docstrings.** The
+  endpoint docstrings already read "medical supply categories"; the
+  `HTTPException` details said "medical category". Routes, API paths, component
+  names and the `medical_category_created` audit event type are unchanged — the
+  URL is already scoped by its `/medical-supplies/` prefix, and the event type
+  is a stored data contract that renaming would orphan existing rows against.
+
 ### Scheduling: the calendar now says which shifts need people, and claiming one is a tap (2026-08-24)
 
 **Changed**
@@ -140,6 +260,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cleared when navigating to a profile whose gear is not visible. A test
   asserts the baseline Member position holds `inventory.view` but not
   `inventory.manage`, so the fact the guard rests on cannot drift unnoticed.
+
+### Five authorization gaps closed across dashboards, pipeline, scheduling and checks (2026-08-24)
+
+**Security**
+
+- **The prospect widget counted the caller's own application.** A member who
+  had applied and then been given `prospective_members.view` — a recruiter, a
+  membership officer, anybody vetting the intake they are themselves in — read
+  their own record back through `GET /prospective-members/widget-summary`.
+  Every other pipeline read already hid a caller's own prospect row; the widget
+  was written later and never picked up the filter. It now takes the same
+  `hidden_prospect_ids` dependency, and the exclusion reaches the totals, the
+  aging buckets **and** the manager-only `details` list, not just one of the
+  three. Two regression tests pin it: one asserts the SQL carries the
+  `NOT IN`, one drives real rows through the endpoint.
+- **Inventory asset widgets were gated on `inventory.view`.** That permission
+  is part of the baseline Member position — every member holds it so they can
+  browse the catalog — so `GET /dashboard/asset-widgets` handed every member
+  department-wide item counts, low-stock lines and overdue-checkout totals.
+  The gate is now `inventory.manage` **or** `settings.manage`. The test asserts
+  the service is never even constructed for a plain viewer, so the fix cannot
+  regress into "queried, then filtered".
+- **Officer assignment skipped position eligibility.** `create_assignment`
+  passed `enforce_position_eligibility=self_signup`, so the rule applied to a
+  member claiming their own seat and not to a scheduler seating somebody else.
+  A department that had configured which ranks may run a position — driver,
+  officer, paramedic — had that configuration enforced against the people
+  least likely to get it wrong and ignored for the write path that seats
+  everyone else. It is now enforced on both paths. The other two flags
+  (`require_mutable`, `reject_past`) stay tied to `self_signup` deliberately:
+  a scheduler backfilling last week's roster is doing records work, and being
+  cleared for the position is a safety question that does not expire with the
+  shift.
+- **The admin hub's medical-screening metric and queue needed no health
+  permission.** "Screening current" and the members attention queue read
+  protected health information, and both were reachable with `members.manage`
+  alone. `MetricSpec` and `ModuleSpec` gained a `permission` /
+  `attention_permission` field, both set to `medical_screening.view` on the
+  members module. A caller without it now gets the metric rendered as unknown
+  rather than omitted — an absent tile invites a second look; a stated
+  "unknown" does not — and an empty attention queue.
+- **A check submitter could move unlimited stock onto a truck.** The lot-swap
+  endpoint let a crew member without `inventory.manage` deploy any quantity
+  from ready stock and dispose of lots that were never aboard. Submitter-scope
+  swaps are now bounded by what is actually being replaced: the disposition
+  path requires the replaced lot to be aboard the item, and the quantity is
+  capped at the deployed quantity it replaces. The template-item row is
+  selected `FOR UPDATE` so two concurrent swaps cannot both pass the cap.
 
 ### Department Store: the member storefront, checkout and My Orders redesigned (2026-08-24)
 
@@ -364,6 +532,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   express it, so a position built in the editor could browse the catalogue with
   no way to place an order. View now grants ordering alongside it — all
   fourteen seeded positions holding one hold the other.
+- **Enabling the store could not complete setup at all.** `save_session_modules`
+  validated against a **fourth** hardcoded module list — separate from the
+  registry, the wizard's and the Settings screen's — and it named neither
+  `storefront` nor `medical_supplies`. Enabling the Department Store therefore
+  reached the final Continue and failed with `400 Invalid modules: storefront`:
+  onboarding could not be finished. The comment above that list cited
+  `AVAILABLE_MODULES` in `types/modules.ts` as its source; that array is the
+  member-profile sections and has nothing to do with onboarding, so the list
+  had drifted from a source it never matched. Both endpoints now validate
+  against one `ONBOARDING_ACCEPTED_MODULE_IDS`, with hyphenated spellings
+  **derived rather than hand-listed**, since saved sessions carry both.
+- **The parity test could not have caught it.** It compared the registry, the
+  wizard's list and the Settings screen, and never knew a fourth list existed —
+  which is how it stayed green while setup was broken. It now asserts that
+  every offered module is accepted end to end, and asserts **by source** that
+  the endpoint still uses the shared set, because the failure mode is a second
+  list that agrees today and drifts tomorrow.
+- **The store's per-module configuration step was removed rather than kept for
+  parity.** The previous commit had given the storefront a `configRoute` to
+  match its peers; that was the wrong instinct, because parity with a screen
+  that changes nothing is a liability. The store now enables directly. **The
+  step remains inert for the fifteen other modules that point at it** — see
+  ONBOARD-1 in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
 
 **Added**
 
@@ -888,6 +1079,169 @@ still on the shipped default are upgraded by the migration.
 - Retired and on-leave members can still tap in. They attend meetings and
   banquets, which is exactly what a station records. Suspended, dropped,
   archived and deleted members cannot.
+
+### Administration pages: one frame, three chosen metrics, and a queue that names the work (2026-08-23)
+
+**Added**
+
+- **Every module's admin page now renders through one frame.** Members,
+  Training, Inventory and Events each had their own header, their own stat
+  layout and their own idea of what belonged above the tab bar. They now share
+  `AdminHubFrame`: a header, a four-metric row, a **Needs attention** queue,
+  and the module's existing tabs underneath. The tabs and their contents are
+  unchanged — this replaces what sat above them, not the work itself.
+- **Three of the four metric slots are configurable.** The fourth is always the
+  count feeding the attention queue, so it is not stored at all — a page cannot
+  be configured into hiding the number its own queue is about.
+  `GET`/`PUT /admin-hub/{module_key}/metrics` read and write the choice; new
+  table `admin_hub_metric_preferences`.
+- **Two scopes, one table.** The department-wide row (`user_id` NULL, scope key
+  `__department__`) is the default every admin sees. `applies_to_everyone` on
+  that row decides whether an individual admin may keep a personal selection.
+  **Absence of any row means the module's built-in default four, never "no
+  metrics"** — the Pitfall #19 rule, applied at the point it would have bitten:
+  an upgrade must not blank every admin page in the department.
+- **The attention queue is per module and names people.** So it is authorized
+  as the module's own manage permission — `members.manage`, `training.manage`,
+  `inventory.manage`, `events.manage` — never a blanket admin gate. An
+  inventory officer who cannot manage members has no business reading the
+  member queue.
+- **An unknown module and a forbidden one both answer 404.** A caller who may
+  not administer Training should not learn from this endpoint whether the
+  department runs Training at all.
+
+**Fixed**
+
+- **A broken attention query no longer takes the page down.** The resolver
+  catches per-metric and per-queue failures and renders that one tile as
+  unknown; the tab body below it is the administrator's actual work and must
+  survive one bad aggregate.
+- **The members hub validates `?tab=` against the tabs the viewer may open.**
+  `?tab=add` without `members.create` selected a tab that was neither in the
+  bar nor allowed to render, leaving the page empty below the header.
+- **The screening queue counts members, not rows.** It counted every historical
+  expired record, so a member who had renewed was current in the metric and
+  lapsed in the queue simultaneously. It now counts a (member, screening type)
+  pair only where no unexpired record covers it, and only for members on the
+  roster.
+- **Events refreshes its metrics row after a save**, as the other three hubs
+  already did.
+
+**Migration notes**
+
+- `c3e91a7f4d28`. Adds `admin_hub_metric_preferences` only. No backfill, and
+  none is wanted: a department with no rows gets its built-in defaults.
+
+### Equipment checks: a sealed container can be cleared by its seal (2026-08-23)
+
+**Added**
+
+- **A compartment can be marked as carrying a numbered tamper seal** — a drug
+  bag, a trauma kit, a sealed pack. `check_template_compartments.is_sealed`,
+  set in the template builder. On the check form that compartment gets a
+  **SealPanel**: read the number, confirm it matches the last check, and the
+  contents count is cleared in one tap instead of counted by hand.
+- **What the seal clears, and what it never clears.** An intact matching seal
+  clears the **counting** inside the bag. It does not clear expiry dates or
+  pressure readings, which move on their own while the bag sits shut — so an
+  out-of-date vial cannot hide behind an intact tag.
+- **A seal proves unchanged, not full.** Confirming a seal carries the previous
+  count forward; it does not write each quantity up to par. A drug bag that was
+  three morphine short at its last count is still three short, and that
+  carried shortfall still files as a failure. Writing quantities up to their
+  required figure would be the "Set All to Par" trap, on the one control whose
+  entire purpose is that nobody opened the bag.
+- **The shortcut is offered only when it is earned.** Clearing requires a prior
+  **intact** seal whose normalized number matches. Otherwise the primary action
+  reads _Record seal_, the seal is still filed for the audit record, and the
+  contents are counted by hand.
+- **Nested sealed containers get their own card.** A broken outer seal says
+  nothing about an intact inner one, which previously had nowhere to be
+  recorded.
+- `GET /equipment-checks/templates/{template_id}/last-seals` supplies the
+  previous reading so the tag number prefills — and it lands when the response
+  does, without overwriting anything the crew has already typed.
+
+**Fixed**
+
+- **Seals persist with the draft.** Confirming wrote passing statuses into the
+  saved results but not the seal itself, so a reload restored passes with
+  nothing vouching for them.
+- **Seals reach the common completion path.** `submit_check` forwarded them
+  only from the post-flush race branch, so resuming a saved incomplete check
+  went through the ordinary branch and discarded the audit record.
+
+**Migration notes**
+
+- `d5b207e4f139`. Adds `check_template_compartments.is_sealed` (default false)
+  and the `shift_equipment_check_seals` table. **No backfill.** Every existing
+  compartment stays unsealed, which is what every department has today; the
+  shortcut appears only once somebody marks a container as sealed.
+
+### My Admin Hours: a reporting period, requirement progress, and totals that are yours (2026-08-23)
+
+**Security**
+
+- **The personal page fetched its summary unscoped.** `GET /admin-hours/summary`
+  returns organization-wide totals when no user is named, so any member holding
+  `admin_hours.manage` was reading **the whole department's hours** under "My
+  Admin Hours" headings. The summary is now always scoped to the signed-in
+  member, and lives in its own store slice, so an org-wide fetch from the
+  management screen cannot linger under the personal headings.
+
+**Changed**
+
+- **The six-tile grid is gone.** It was four fixed stats plus one tile per
+  category that had hours, so the layout count varied with the data and a
+  category tile looked identical to a headline stat while meaning something
+  entirely different. Categories with no hours never appeared at all, "Total
+  Hours" restated Approved + Pending, and "Entries" was a bare count with
+  nothing to compare it against.
+- **A reporting period drives both the totals and the entry list**, so the two
+  always describe the same window. Period edges are derived from the
+  department's calendar date and converted to UTC instants through the
+  day-boundary helpers, now shared with `SummaryTab` rather than duplicated in
+  it.
+- **The period defaults to all time, not the calendar year.** A year opening
+  view hid older entries behind a control the member has to notice first, and
+  "no hours logged in this year" reads as an empty account rather than as an
+  active filter. The period phrasing sits on the option as a trailing clause,
+  so all time reads "No hours logged yet" rather than the ungrammatical "in all
+  time".
+- Three fixed stats — approved, awaiting review, logged this period — with
+  entry counts as sublines instead of tiles of their own.
+
+**Added**
+
+- **Requirement progress from the compliance endpoint**, which the personal
+  page never surfaced despite it answering the question members actually have.
+  Rendered only where the department has configured requirements for the
+  member's profile.
+- A ranked category breakdown with share bars, and one muted line naming the
+  categories with no hours in the period, rather than a tile reading zero for
+  each.
+- An empty state that says what to do, in place of a row of zeros.
+
+### Dashboard: scheduling staffing widgets, each with its own window and filters (2026-08-23)
+
+**Added**
+
+- **Seven staffing tiles on the dashboard** — Today's Staffing, Future Coverage
+  Gaps, Open Slots, Pending Changes, Incomplete Closeouts, Workload Balance and
+  Special Operations. Each links into the schedule already filtered to what it
+  counted, so a number is a starting point rather than a fact to go and find.
+- `GET /scheduling/dashboard/widgets` (bounded `start_date`/`end_date`, with
+  optional `station_id`, `platoon`, `shift_type`, `position`) and
+  `GET`/`PUT /scheduling/dashboard/widget-preferences`. Gated on
+  `scheduling.view`.
+- **The window is bounded at the server.** A range that is inverted or 93 days
+  or longer is refused with a 422 rather than answered with a query that walks
+  the whole schedule. Station and platoon are validated against the
+  organization's own lists, so an unknown value is a 422 and not an empty
+  result that reads as "nothing scheduled".
+- **Each tile carries its own horizon and filters**, stored per member, so an
+  officer watching one station's coverage and a chief watching the department
+  can share a dashboard without sharing a lens.
 
 ### Equipment checks: four item types, and the groundwork for walking a check as a lap (2026-08-23)
 

@@ -1,5 +1,200 @@
 # Screenshot currency
 
+## Flagged by the 2026-08-23 → 08-24 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-23_TO_24.md`](../CHANGE_AUDIT_2026-08-23_TO_24.md#documentation-and-media-disposition).
+
+> **Also landed 2026-08-24, and it retracts a published claim:** the dark-mode
+> scrollbar gutter *could* be photographed after all, and the white strip in
+> those captures was a real product bug rather than a capture artifact. See
+> [Corrected 2026-08-24](#corrected-2026-08-24--the-white-strip-i-said-could-not-be-photographed)
+> immediately below this section.
+
+**Two changes invalidate captures in bulk rather than individually**, and both
+are called out first because a targeted list will miss shots nobody remembers
+taking:
+
+1. **The settings shell.** Nine settings screens — Organization, Events,
+   Scheduling, Elections, User Settings, Email Templates and three more —
+   carried five navigation idioms between them and now share one. **Every
+   existing capture of any of those screens shows an idiom that no longer
+   exists**, at desktop and at phone widths alike (where the section list is now
+   a scrollable tab strip). This is a re-capture _class_, not a list.
+2. **The email notification shell.** Every screenshot or B-roll frame of a
+   received Logbook email predates the 5px accent rule and the status chip.
+   **Caption which state you shot**: a department that has not pressed **Reset**
+   on a template still receives the old shell, so both are current depending on
+   the department. An uncaptioned shot of either one reads as a promise about
+   the other.
+
+Beyond those: four screens that have never been captured (the check-in station,
+the ID Cards panel, Label Printers, the metrics settings screen), four
+administration page headers that all changed at once, and four screens rebuilt
+end to end.
+
+### Tooling: Prettier was silently deleting markers from the tracker
+
+Found 2026-08-24, while formatting this window's documentation. **Running
+`prettier --write` over the training guides removed 40 tracked screenshot
+requests from `SCREENSHOT_STATUS.md`** — and changed nothing a
+reader would notice.
+
+The mechanism: the marker convention is `> **[SCREENSHOT NEEDED — …]**`, a
+blockquote whose opening `**` is closed several lines later. Prettier reads
+that opening as unmatched emphasis and escapes it to `\*\*`. The page still
+renders identically. But `status_report.py` anchors its pattern on
+`^>\s*\*\*\[?`, so an escaped marker is invisible to it, and the guide's
+"remaining" count silently drops.
+
+**This was not caused by this window's edits.** Running Prettier over an
+unmodified `03-scheduling.md` from `main` reproduces it exactly: nine markers
+gone. `lint-staged` runs `prettier --write` over `*.md` on commit, so the next
+commit touching any of the five would have done it, and the diff a reviewer saw
+would have been backslashes.
+
+It is the same failure this file already records under **"0 remaining was
+measuring the wrong thing"** — a marker the tooling cannot see reads as work
+that does not exist — arriving by a different route.
+
+**Fixed** in `.prettierignore`, with the reasoning and a re-derivation snippet
+written there.
+
+The list is keyed on **"carries a multi-line marker"**, not on "Prettier breaks
+it today" — and the merge with `main` on 2026-08-24 is why. Filling markers
+changed which files Prettier escapes: guides 08 and 19 stopped being affected,
+while this file and guide 04 started. Whether a given marker escapes depends on
+the surrounding context, so a file that survives now flips the next time
+somebody adds one. Turning prose formatting off a file costs nothing that
+matters; losing a tracked capture silently does. Take a file off the list once
+it has no multi-line markers left.
+
+### DO NOT CAPTURE
+
+| Screen                                                                         | Why                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The equipment-check **lap** — stops in walking order, collapsed finished stops | **Built, tested, and not wired.** The live check screen still renders the flat compartment list. A capture of the lap would be a screenshot of code no member can reach. `CheckLap.tsx` has no importer outside its own test file — verify with `grep` before believing any claim to the contrary |
+
+### REPLACE — existing images now show a screen that no longer matches
+
+Filenames below were checked against `docs/training/images/` on 2026-08-24. An
+area named without a filename is one where the affected image does not exist
+yet — those are listed under **SCREENSHOT NEEDED** instead.
+
+| Image / area                                                                                                                                                                                                                                                                                                                                                                                                                           | Guide          | Why                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `08-02-organization-settings.png`, `14-16-election-settings.png`, `03-15-scheduling-settings.png`, `03-32-settings-general-closeout.png`, `03-33-settings-eligibility.png`, `03-34-settings-checklist-timing.png`, `03-35-settings-form-sections.png`, `03-36-settings-apparatus-skills.png`, `03-37-settings-rating-scale.png`, `03-40-settings-position-eligibility.png`, `00-09-account-settings.png`, `00-17-account-settings.png` | 00, 03, 08, 14 | The settings shell. One idiom now on all nine screens                                                                                                                          |
+| `03-47-settings-desktop.png` and `03-48-settings-phone.png`                                                                                                                                                                                                                                                                                                                                                                            | 03             | These two exist specifically to show the settings navigation, so they are the most wrong of the set. The phone one must be re-shot at 390×844 against the scrollable tab strip |
+| **Any capture of a received Logbook email**                                                                                                                                                                                                                                                                                                                                                                                            | all            | New shell. **Caption whether the department has pressed Reset** — both states are current                                                                                      |
+| `01-22-member-lifecycle.png` (Members Admin hub)                                                                                                                                                                                                                                                                                                                                                                                       | 01             | Now opens with the shared frame: four metrics and a Needs attention queue above the tab bar                                                                                    |
+| `02-41-training-admin-reports.png`, `02-64-skills-testing-admin.png`                                                                                                                                                                                                                                                                                                                                                                   | 02             | Same frame above the Training Admin tabs. The tab bodies themselves are unchanged, so a capture cropped to the tab content survives                                            |
+| `05-25-admin-hub.png`, `05-60-admin-hub-groups.png`, `05-54-admin-hub-assign.png`, `05-72-setup-prompt.png`                                                                                                                                                                                                                                                                                                                            | 05             | Same frame above the Inventory admin hub                                                                                                                                       |
+| `03-01-scheduling-tabs.png`, `03-44-month-calendar.png`, `03-04-my-shifts.png`, `03-05-open-shifts.png`, `03-54-crew-board-open-slots.png`, `03-55-staffing-status-cards.png`, `03-59-open-shifts-signup.png`, `03-62-dashboard-signup-positions.png`                                                                                                                                                                                  | 03             | The Schedule tab is a **board** with a status chip per shift and a day panel, not a grid of cards, and claiming a seat is one button rather than a position dropdown           |
+| `03-60-dashboard-my-shifts.png`                                                                                                                                                                                                                                                                                                                                                                                                        | 03             | Plus the seven new scheduling staffing tiles beside it                                                                                                                         |
+| `01-02-member-profile.png`                                                                                                                                                                                                                                                                                                                                                                                                             | 01             | The Assigned Inventory table is **absent** for a viewer without `inventory.manage`. **Caption the capturing account's grants**                                                 |
+| `05-02-inventory-dashboard.png`                                                                                                                                                                                                                                                                                                                                                                                                        | 05             | The organization dashboard's inventory tiles now require `inventory.manage` or `settings.manage`; a shot taken under a plain member account no longer reproduces               |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png`, `00-20-member-dashboard.png`                                                                                                                                                                                                                                                                                                                                             | 00, 10         | Seven scheduling staffing tiles are new. **Caption the capturing account's permissions**                                                                                       |
+| `02-03-submit-training.png`                                                                                                                                                                                                                                                                                                                                                                                                            | 02             | Submit External Training is rebuilt: the certificate attaches inline, duration is one stepper, and the start time is asked for and kept                                        |
+| `04-01-events-list.png`                                                                                                                                                                                                                                                                                                                                                                                                                | 04             | Ranked by what each event wants from the viewer, with a **Needs you** band                                                                                                     |
+| `18-01-member-storefront.png`, `18-02-store-admin.png`, `18-03-order-windows.png`, `18-04-my-orders-unpaid.png`                                                                                                                                                                                                                                                                                                                        | 18             | The storefront was redesigned end to end; checkout is now its own route at `/store/checkout`                                                                                   |
+| `03-22-equipment-check-builder.png`                                                                                                                                                                                                                                                                                                                                                                                                    | 03             | Nine item types became four, each labelled with what it stores, plus a sealed-container flag                                                                                   |
+| `03-25-equipment-checks-tab.png`                                                                                                                                                                                                                                                                                                                                                                                                       | 03             | Item types were renamed in stored data. A capture showing `present` or `functional` shows a value that no longer exists                                                        |
+| `05-51-label-print-settings.png`, `05-64-label-settings.png`                                                                                                                                                                                                                                                                                                                                                                           | 05             | The label settings moved onto the settings shell alongside the new Label Printers section                                                                                      |
+
+### SCREENSHOT NEEDED (new captures)
+
+Marked in the guides as `> **[SCREENSHOT NEEDED — …]**` and counted by
+`status_report.py`. Repeated here with the demo-data state each needs, because
+that is what a capture run has to set up and the marker cannot carry.
+
+**Release lesson / guide 03 — the Schedule board (2 markers)**
+
+- **Desktop board.** _Demo data:_ a month containing one shift of **each** chip
+  state — one red with open seats, one green and full, one blue with the demo
+  member on it, and **one grey shift that names neither positions nor a minimum
+  staffing level**. The grey one is the teaching point and the easiest to omit.
+  Select a day so the crew panel and the claim button are both in frame.
+- **Phone board (390×844).** Same month; capture the bar grid with the day
+  sheet open. **The bottom navigation must be absent** — it hides while an
+  overlay is open, and a shot showing it is a shot of the pre-08-20 defect.
+
+**Release lesson — standing shifts (1 marker)**
+
+- **The standing shift dialog.** _Demo data:_ a Tuesday evening shift, biweekly
+  pattern selected, horizon left at its default so the "a year out" default is
+  visible. Desktop. The panel must show its own action row — a dialog clipped
+  at the viewport edge is the defect `modal-panel-scroll` exists to prevent.
+
+**Release lesson / guide 01 / guide 10 — ID cards (3 markers)**
+
+- **Member profile → ID Cards panel.** _Demo data:_ one active card and one
+  revoked card on the same demo member, so the status difference and the
+  four-character preview are both visible in one frame. **Use demo data** — a
+  real member's card record must not be published, even as a hash preview.
+- **The check-in station, armed** (release lesson), and the same screen at
+  **tablet width** (guide 10). _Demo data:_ a target selected — use a drill
+  night, not a medical screening clinic — the reader armed, and at least one
+  successful tap in the recent-taps list. Tablet width is how it is actually
+  used; a desktop-width shot teaches the wrong deployment.
+
+**Release lesson — label printers (1 marker)**
+
+- **Settings → Label Printers.** _Demo data:_ two registered printers, one ZPL
+  and one ESC/POS, one marked default, with a status result visible on at least
+  one so the reader sees what a healthy answer looks like. **Use RFC 5737
+  documentation addresses (`192.0.2.x`)** — never a real department's printer
+  address, which is an internal network detail.
+
+**Release lesson — the administration frame (1 marker)**
+
+- **The metrics settings screen.** _Demo data:_ the Members module, **department
+  scope** selected, the "applies to everyone" control visible, and one metric
+  mid-swap. **The fourth (queue) slot must be visibly fixed** — that it cannot
+  be chosen is the rule the screenshot exists to teach.
+
+**Release lesson — sealed containers (1 marker)**
+
+- **The seal panel on a check.** _Demo data:_ **two** sealed compartments — one
+  whose seal matches the previous check, so the clearing shortcut is offered,
+  and one whose number differs, so the reader sees **Record seal** and a hand
+  count instead. The contrast is the entire teaching point; a single-state shot
+  teaches that a seal always clears, which is the misreading the feature was
+  designed against.
+
+**Release lesson / guide 08 — My Admin Hours (1 marker)**
+
+- **The rebuilt My Admin Hours page.** No capture of this page exists in any
+  guide, and the version one would have shown is gone. _Demo data:_ a member
+  with hours in at least three categories and one configured requirement, so
+  the category bars and the requirement-progress section are both populated,
+  plus at least one category with **no** hours in the period so the muted
+  "nothing logged in" line appears. Capture under an account that does **not**
+  hold `admin_hours.manage`, so the figures are unambiguously the member's own.
+
+**Guide 18 — storefront (marked as REPLACE, but the states are new)**
+
+- Cart holding two different products, at least one with a size or variant
+  selected, so the cart lines and the order stepper are both populated.
+
+### Captions that are now mandatory
+
+Three screens render differently for different viewers, and an uncaptioned
+capture of any of them reads as a promise about what everyone sees:
+
+| Screen                      | Caption must state                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Member profile              | Whether the capturing account held `inventory.manage`, or was viewing its own profile                                                |
+| Any dashboard               | Which permissions the capturing account held                                                                                         |
+| Members administration page | Whether the capturing account held `medical_screening.view` — without it the screening tile reads **unknown** and the queue is empty |
+
+### Not affected
+
+- **Guides 09, 11, 12, 13, 14, 15, 17** — no screen in this window's scope.
+  Guide 13 (medical screening) is unaffected in its own pages; the change is on
+  the **Members administration page**, which is guide 01/08.
+- **Equipment check compartment tree and item rows** at the item level — the
+  types were renamed in storage and in the builder, but a captured check sheet
+  showing item names and results is still accurate.
 ## Corrected 2026-08-24 — the white strip I said could not be photographed
 
 CI's image audit caught what a DOM probe had missed, and the finding retracts a
@@ -140,6 +335,21 @@ would go with it: the permission half of the marker is real
 `scheduling.manage`, or being the named shift officer), and the approved-leave
 half needs care, because approving time-off cancels any assignment inside its
 range.
+
+## Flagged 2026-08-24 — the dashboard tabs were renamed the same day
+
+`00-24`/`00-25` were shot hours before the tab strip changed, so **both now show
+labels that no longer exist**. The strip reads **Personal** and **My
+Department**; the leadership panel's heading reads My Department rather than
+Organization, and its failure card says "Department summary is unavailable".
+
+Captions in `00-getting-started.md` were rewritten to describe the two views
+without naming the old labels, so the prose is not false while the pixels are
+stale — but the frames themselves need re-shooting. Nothing else about either
+capture changed: the boundary they exist to demonstrate is the same boundary.
+
+Re-shoot both together, as a pair, for the reason the original pass recorded
+below: a department total and your own gear are never on screen at once.
 
 ## Captured 2026-08-24 (tenth) — the dashboard's data boundary, under the wrong tab names
 

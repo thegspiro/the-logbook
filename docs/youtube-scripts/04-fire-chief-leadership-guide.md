@@ -456,11 +456,42 @@ appears — ten advanced, two named and skipped with reasons.]**
 > coverage. As a Chief, you're looking at the big picture — are all shifts
 > covered? Are there any gaps?"
 
-**[SCREEN: Show the scheduling calendar with shifts displayed]**
+**[REWRITTEN 2026-08-24 — the Schedule tab is a board now. The previous take
+described week/month/individual views and a colour key that no longer matches.
+Re-shoot.]**
 
-> "You can view by week, by month, or by individual. Color coding shows shift
-> types and coverage status — green for fully staffed, yellow for minimum
-> staffing, red for gaps."
+**[SCREEN: Show the month board. Point at each chip state in turn.]**
+
+> "Every shift carries a chip, and the chip is the answer to the only question
+> you're asking. Red or amber with a number: that many seats open, and red
+> means it's urgent. Green: staffed. Blue: you're on it."
+
+**[SCREEN: Point at a grey shift]**
+
+> "Grey with a plain headcount is the one to understand. That's a shift that
+> never said how many people it wants — no positions, no minimum staffing.
+> It's not short. It's unspecified, and it stays out of your open-seat count
+> and out of the urgent flag entirely."
+
+**[CALLOUT: "Grey means unspecified, not empty"]**
+
+> "That distinction is worth a moment. Before this release, a shift that named
+> neither would be assumed to want four people and show four open in critical
+> red. If your department doesn't configure crew sizes, you opened this page to
+> a wall of red that meant nothing at all — and a warning that always fires is
+> a warning nobody reads."
+
+**[SCREEN: Filter by station; show shifts dimming rather than disappearing]**
+
+> "Filters dim rather than hide, so the month keeps its shape and you can still
+> see what you filtered out."
+
+**[SCREEN: Select a day; show the crew panel]**
+
+> "Pick a day and you get the crew. Cancelled, finalized and past shifts read
+> as closed — their empty chairs used to count toward the day's shortfall and
+> the urgent flag, which is exactly the kind of false alarm that trains people
+> to ignore the real ones."
 
 ### APPROVING SHIFT SWAPS (18:45 – 19:45)
 
@@ -626,6 +657,61 @@ one, the screen does not render it. SCHED-13/15/16 in
 **[TRANSITION: Reports section]**
 
 ---
+
+### THE NUMBERS AT THE TOP OF EVERY ADMIN PAGE (ADDED 2026-08-24)
+
+**[SCREEN: The Members administration page, then Training, then Inventory, then
+Events — same frame each time]**
+
+> "Something changed across four screens at once, and it's aimed at you more
+> than anyone. Members, Training, Inventory and Events administration pages all
+> open the same way now: four numbers, a Needs attention queue, then the tabs
+> you already know. The tabs didn't change. What sat above them did."
+
+**[SCREEN: Open the metrics settings]**
+
+> "Three of those four numbers are yours to choose. The fourth is always the
+> count that the attention queue is about — you can't configure a page into
+> hiding the number its own queue is measuring, and you shouldn't want to."
+
+**[CALLOUT: "Department default, or let each officer pick their own"]**
+
+> "There are two scopes. You set a department default that everybody sees. And
+> you decide whether individual officers may keep their own selection on top of
+> it — turn that off and the whole command staff is looking at the same four
+> numbers, which is sometimes exactly what you want before a meeting."
+
+> "If you change nothing, you keep the built-in four. This upgrade does not
+> blank anybody's page."
+
+**[SCREEN: The Members page under an account without `medical_screening.view`,
+showing the screening tile reading 'unknown']**
+
+> "One change to know before somebody reports it as broken. The screening
+> compliance number and the members attention queue read medical information,
+> and until this release anybody with member management could see them. Now
+> they need `medical_screening.view` as well."
+
+> "Notice what it does without it: the tile says **unknown**. It doesn't
+> vanish. That's deliberate — a tile that disappears makes people hunt for it
+> and file a ticket. A tile that says it can't tell you is answering the
+> question."
+
+### THE STAFFING TILES ON YOUR DASHBOARD (ADDED 2026-08-24)
+
+**[SCREEN: The dashboard, showing the seven scheduling tiles]**
+
+> "Seven staffing numbers, on the dashboard: today's staffing, future coverage
+> gaps, open slots, pending changes, incomplete closeouts, workload balance,
+> special operations."
+
+**[SCREEN: Click one; show the schedule opening already filtered]**
+
+> "Click any of them and the schedule opens already filtered to what that
+> number counted. That's the part that matters — a number you then have to go
+> and find is a number you stop clicking. Each tile keeps its own horizon and
+> its own filters, so if you watch the whole department and your station
+> captain watches one station, you're not fighting over one setting."
 
 ## CHAPTER 7: Reports & Decision-Making (22:15 – 25:15)
 

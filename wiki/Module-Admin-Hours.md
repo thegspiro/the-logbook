@@ -192,3 +192,51 @@ leaves the scan armed and says so rather than navigating somewhere unintended.
 and browsers expose it only in a secure context — a LAN deployment on plain
 `http://` cannot use it. The writer panel says which of the two you are hitting
 rather than a bare "unavailable". QR remains the universal path.
+
+## The Personal View, Rebuilt _(2026-08-23)_
+
+### The summary is now scoped to you
+
+`GET /admin-hours/summary` returns **organization-wide** totals when no user is
+named, and the personal page fetched it unscoped — so any member holding
+`admin_hours.manage` was reading the whole department's hours under "My Admin
+Hours" headings.
+
+The summary is now always scoped to the signed-in member, and lives in its own
+store slice so an org-wide fetch from the management screen cannot linger under
+the personal headings.
+
+### What replaced the six-tile grid
+
+The old layout was four fixed stats plus one tile per category that had hours,
+so the tile count varied with the data and a category tile looked identical to
+a headline stat while meaning something entirely different. Categories with no
+hours never appeared at all, "Total Hours" restated Approved + Pending, and
+"Entries" was a bare count with nothing to compare it against.
+
+| Now                                                                       | Note                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A reporting period** — this month / last 30 days / this year / all time | Drives both the totals and the entry list, so the two always describe the same window. Period edges come from the department's calendar date and are converted to UTC instants through the shared day-boundary helpers |
+| **Three fixed stats** — approved, awaiting review, logged this period     | Entry counts appear as sublines rather than tiles of their own                                                                                                                                                         |
+| **Requirement progress**, from the compliance endpoint                    | The personal page never surfaced it, despite it answering the question members actually have. Rendered only where the department has configured requirements for the member's profile                                  |
+| **A ranked category breakdown** with share bars                           | One muted line names the categories with no hours in the period, instead of a tile reading zero for each                                                                                                               |
+| **An empty state that says what to do**                                   | In place of a row of zeros                                                                                                                                                                                             |
+
+**The period defaults to all time.** A calendar-year opening view hid older
+entries behind a control the member has to notice first, and "no hours logged
+in this year" reads as an empty account rather than as an active filter. The
+period phrasing sits on the option as a trailing clause, so all time reads "No
+hours logged yet" rather than the ungrammatical "in all time".
+
+## NFC Station Check-In _(2026-08-23)_
+
+An ID card tapped at an officer-operated station now records entry method
+**`nfc_station`**. It was previously recorded as `qr_scan` — the value the
+clock-in path was originally written for — so exports and audits claimed a
+member had scanned a category's QR code with their own phone when in fact
+somebody else had tapped their card at a station. **The two are different acts
+by different people** and need to be distinguishable.
+
+Historical `qr_scan` rows are left alone: they really were written by the QR
+path, and rewriting any of them would invent a provenance the database never
+recorded.

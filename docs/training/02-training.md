@@ -2546,3 +2546,58 @@ This PDF is saved to the department's records and can be submitted to the state 
 ---
 
 **Previous:** [Membership Management](./01-membership.md) | **Next:** [Shifts & Scheduling](./03-scheduling.md)
+
+---
+
+## Submit External Training, Rebuilt _(2026-08-23 → 08-24)_
+
+Full operator walkthrough:
+[release lesson](./19-august-2026-release-changes.md#submit-external-training-the-certificate-goes-with-it).
+
+### The certificate goes with the submission
+
+Attaching evidence used to be a **second step after submitting**, which meant it
+could be — and often was — skipped. The certificate now attaches on the form
+itself: PDF, JPG or PNG, up to 10 MB.
+
+### The start time is kept
+
+The form has always asked for a start time and a length and worked the hours
+out from the pair, but only the date and the hours were stored. So editing a
+submission had to **invent** a start — it assumed 9am — and an officer
+reviewing a four-hour entry could not tell a morning class from an evening one.
+
+**Entries submitted before this release have no start time**, and that shows as
+blank rather than as 9am. Blank is the truth; 9am would be a guess.
+
+The form also stopped asking one question with three controls: duration is one
+stepper.
+
+### What records officers should know about the files
+
+- **Approved certificates are kept indefinitely.** That is what a training
+  record is for, and nothing expires them. If your department has a
+  records-retention rule, this needs a decision from you.
+- **Files are not scanned for malware.** They are checked to be genuinely the
+  file type they claim and stored under a name the server chooses, so nothing
+  runs on the server — but a certificate opened by an officer is whatever the
+  member uploaded.
+- **Voiding a record keeps its file.** A delete marks the record cancelled
+  rather than removing it, so the correction stays auditable and its evidence
+  stays with it.
+
+## The Training Administration Page Has a New Top _(2026-08-23)_
+
+Training Admin now opens with the same frame as the Members, Inventory and
+Events administration pages: a header, **four headline metrics**, a **Needs
+attention** queue, then the tabs you already know. **The tabs and their
+contents did not change.**
+
+Three of the four metrics are the department's choice; the fourth is always the
+count the attention queue is about, so a page cannot be set up to hide the
+number its own queue is measuring. Training's built-in three are **Compliance**,
+**Hours this quarter** and **Active programs** — a department that changes
+nothing keeps them.
+
+Access is `training.manage` plus the Training module enabled. See the
+[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
