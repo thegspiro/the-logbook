@@ -30,7 +30,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 import { formatDuration } from '../utils/formatDuration';
-import { formatHours, roundHoursToQuarter } from '../../../utils/hoursFormatting';
+import { QUARTER_HOUR, formatHours, formatHoursExact, roundHoursToQuarter } from '../../../utils/hoursFormatting';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
 
 const PAGE_SIZE = 20;
@@ -411,10 +411,20 @@ const AdminHoursPage: React.FC = () => {
               const exactProgress =
                 item.requiredHours > 0 ? Math.min(100, (item.loggedHours / item.requiredHours) * 100) : 100;
               const progress = Math.round(exactProgress);
-              // Against the *shown* logged figure, so "2.75 / 8 hrs" is never
-              // followed by a shortfall that does not subtract to it.
-              const loggedHours = roundHoursToQuarter(item.loggedHours);
-              const remaining = Math.max(0, roundHoursToQuarter(item.requiredHours - loggedHours));
+              // Whether the requirement is met is decided on the raw hours, never
+              // on the rounded display. At 7.9 of 8, rounding first would print
+              // "Requirement met" beside a status badge that still reads behind,
+              // which is how a member stops logging while short.
+              const met = item.loggedHours >= item.requiredHours;
+              // So an unmet requirement never *looks* met: the shown figure is
+              // held an increment below the target until the raw hours reach it,
+              // and the shortfall is then the difference of the two as shown.
+              // Floored at zero, because the column takes any positive float and
+              // a target under a quarter would otherwise print negative hours.
+              const loggedHours = met
+                ? roundHoursToQuarter(item.loggedHours)
+                : Math.max(0, Math.min(roundHoursToQuarter(item.loggedHours), item.requiredHours - QUARTER_HOUR));
+              const remaining = met ? 0 : item.requiredHours - loggedHours;
               return (
                 <div key={`${item.categoryId}-${item.frequency}`}>
                   <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -429,7 +439,7 @@ const AdminHoursPage: React.FC = () => {
                       </span>
                     </span>
                     <span className="text-theme-text-primary text-sm font-semibold">
-                      {formatHours(loggedHours)} / {formatHours(item.requiredHours)} hrs{' '}
+                      {formatHours(loggedHours)} / {formatHoursExact(item.requiredHours)} hrs{' '}
                       <span className="text-theme-text-muted font-normal">
                         · {item.frequency === 'quarterly' ? 'this quarter' : 'this year'}
                       </span>
@@ -446,7 +456,7 @@ const AdminHoursPage: React.FC = () => {
                     <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${exactProgress}%` }} />
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    {remaining > 0 ? `${formatHours(remaining)} hrs still needed` : 'Requirement met'} · period ends{' '}
+                    {met ? 'Requirement met' : `${formatHoursExact(remaining)} hrs still needed`} · period ends{' '}
                     {formatDate(item.periodEnd, tz)}
                   </p>
                 </div>
