@@ -212,6 +212,14 @@ async def get_public_location_display(
                 check_in_start=check_in_start.isoformat(),
                 check_in_end=check_in_end.isoformat(),
                 is_valid=is_valid,
+                # `_validate_check_in_window` is the permissive check (it
+                # admits a Flexible/Window event's early-arrival grace), so
+                # this kiosk's own `is_valid` already carries can_check_in's
+                # meaning, not the strict on-time window the field name
+                # suggests elsewhere. Same value, both fields, rather than
+                # reworking this endpoint's established (and differently-
+                # named) variable.
+                can_check_in=is_valid,
                 location=event.location,
                 location_id=str(event.location_id) if event.location_id else None,
                 location_name=location.name,

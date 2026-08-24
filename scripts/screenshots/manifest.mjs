@@ -599,6 +599,92 @@ export function openStaffedShift(extraMatch) {
  * The seeder deliberately leaves the department on `detailed`, so a run that
  * captures nothing from this group leaves the demo database as it found it.
  */
+/**
+ * The seeded bylaw draft, put back the way the seeder leaves it.
+ *
+ * Applying a saved ballot template replaces the whole ballot *and* writes the
+ * template's own voting method over the election's — which is the subject of
+ * `19-26`, and which leaves this draft holding four officer seats at simple
+ * majority once that shot has run. Three shots read it in its seeded state
+ * (`14-21` and `14-22` match on "Ballot Items (1)"), so each restores what it
+ * needs rather than trusting manifest order or a fresh database. The seeder
+ * repairs it too, for the run that starts from a database somebody else left
+ * mutated.
+ *
+ * The draft is `simple_majority` with a two-thirds victory condition -- the
+ * create form's "Supermajority Required (2/3)", which is one control setting
+ * both. The saved template is ranked choice, so applying it visibly changes the
+ * method. A template carrying the election's own method would change nothing
+ * visible, and the silent overwrite the pair is about would have no picture.
+ */
+export async function resetBylawDraft(page) {
+  await page.evaluate(async () => {
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    const list = await (
+      await fetch("/api/v1/elections?limit=50", { credentials: "include" })
+    ).json();
+    const rows = Array.isArray(list) ? list : (list.elections ?? []);
+    const bylaw = rows.find((row) => row.title === "Bylaw Amendment Vote");
+    if (!bylaw) return;
+    // The list carries neither the voting method nor the ballot items, so
+    // whether a reset is needed can only be read from the detail.
+    const current = await (
+      await fetch(`/api/v1/elections/${bylaw.id}`, { credentials: "include" })
+    ).json();
+    // Keyed on the ballot, not the method: the item count is what the shots
+    // match on, and a reset that leaves four items behind is worse than none.
+    if (
+      (current.ballot_items ?? []).length === 1 &&
+      current.voting_method === "simple_majority"
+    ) {
+      return;
+    }
+    await fetch(`/api/v1/elections/${bylaw.id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      },
+      body: JSON.stringify({
+        ballot_items: [
+          {
+            id: "item-1",
+            type: "general_vote",
+            title: "Article VII Amendment",
+            description: "Vote for Article VII Amendment.",
+            position: "Article VII Amendment",
+            eligible_voter_types: ["all"],
+            vote_type: "approval",
+          },
+        ],
+        voting_method: "simple_majority",
+        victory_condition: "supermajority",
+        victory_percentage: 67,
+        allow_write_ins: true,
+      }),
+    });
+  });
+}
+
+/**
+ * Open the seeded bylaw draft's detail page, in its seeded state.
+ *
+ * Matched on title rather than "the first draft": which election that is
+ * depends on seed order, and the two shots either side of an applied template
+ * have to be looking at the same record.
+ */
+export async function openBylawDraft(page) {
+  await resetBylawDraft(page);
+  await openFirstFromApi(
+    "/elections?limit=50",
+    (id) => `/elections/${id}`,
+    "elections",
+    (election) => (election.title ?? "") === "Bylaw Amendment Vote",
+  )(page);
+}
+
 export function setCallTracking(mode) {
   return async (page) => {
     await page.evaluate(async (wanted) => {
@@ -969,6 +1055,39 @@ function openPartStaffedShift(shotId) {
     await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1800);
   };
+}
+
+/**
+ * Open the seeded platoon shift's detail drawer.
+ *
+ * `Shift.platoon` is written only by the recurring-pattern generator, so these
+ * are the only shifts in the department that carry one — the seeder generates
+ * three, five weeks out, deliberately clear of every board, dashboard and
+ * open-shift count the guides already picture. A is the one it prepares.
+ *
+ * Same `?shift=` entry the other shift shots use; the drawer is state on the
+ * scheduling page rather than a route of its own.
+ */
+async function openPlatoonShift(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/scheduling/shifts?limit=400", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const rows = Array.isArray(body) ? body : body.shifts || body.items || [];
+    // Platoon A by name, not "the first shift carrying any platoon". The
+    // generator writes one occurrence each for A, B and C, the seeder prepares
+    // A's roster, and the shots below match on a "Platoon A Roster" heading --
+    // so opening whichever the API listed first was a timeout waiting to
+    // happen on any date where A is not the first of the three.
+    return rows.find((shift) => shift.platoon === "A")?.id ?? null;
+  });
+  if (!id) throw new Error("no shift carries Platoon A");
+  const url = new URL(page.url());
+  url.searchParams.set("shift", id);
+  await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1800);
 }
 
 /** Open the Shift Reports tab and switch to one of its views. */
@@ -1444,6 +1563,47 @@ export async function openApparatusCrewSeats(page) {
   await page.waitForTimeout(500);
 }
 
+/**
+ * Generate the Call Volume report and frame its summary cards.
+ *
+ * The mode is forced by the caller, not inherited: this report renames all
+ * three stat cards on it (Unit Responses vs Total Calls) and shows the
+ * per-unit footnote only in count-only, so a shot that inherited the mode
+ * would still succeed and write the other half's picture under this half's
+ * name.
+ *
+ * Last 90 Days rather than the default: the department's recorded calls sit in
+ * a three-week band, and a year-to-date window divides them across 236 days
+ * and reports an average of 0.2 per day — arithmetic that is correct and reads
+ * as a broken screen.
+ */
+export function openCallVolumeReport(mode) {
+  return async (page) => {
+    await setCallTracking(mode)(page);
+    await page.goto(`${new URL(page.url()).origin}/reports`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByRole("button", { name: /Last 90 Days/i }).click();
+    await page.waitForTimeout(500);
+    const heading = page
+      .getByText("Incident / Call Volume", { exact: true })
+      .first();
+    await heading.waitFor({ state: "visible", timeout: 20_000 });
+    // The card is the nearest ancestor that owns a button; the grid renders one
+    // Generate Report per report, so scoping to the card is what picks this one.
+    await heading
+      .locator("xpath=ancestor::*[.//button][1]")
+      .getByRole("button", { name: /Generate Report/i })
+      .first()
+      .click({ timeout: 15_000 });
+    const label = mode === "count_only" ? /Unit Responses/ : /Total Calls/;
+    const card = page.getByText(label).first();
+    await card.waitFor({ state: "visible", timeout: 20_000 });
+    await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(500);
+  };
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -1557,6 +1717,65 @@ export const SHOTS = [
       await page.waitForTimeout(700);
     },
     selector: "div.fixed.inset-0 > div",
+  },
+  {
+    // The scheduler's half of the pair. Framed on the drawer, not the page:
+    // the roster panel sits well down a long drawer over a board that is not
+    // what the caption is about.
+    id: "03-84-platoon-roster-scheduler",
+    doc: "03-scheduling.md",
+    line: 633,
+    anchor: "the shift detail page as a scheduler with the",
+    alt: "Platoon A's roster on a shift, as a scheduler: six members on shift, one on leave, and one available with an Assign control beside them",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await openPlatoonShift(page);
+      const roster = page.getByRole("heading", { name: /^Platoon A Roster$/ });
+      await roster.waitFor({ timeout: 20_000 });
+      await roster.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
+    },
+    // `div.drawer-panel`, not the `div.fixed.inset-0 > div` the modal shots
+    // use: the shift drawer is laid out inside the page's own main element,
+    // not as a fixed overlay, so that selector matches nothing here.
+    selector: "div.drawer-panel",
+    allowEmptyState:
+      '"No calls logged for this shift." belongs to the Calls panel below ' +
+      "the roster, and is true: this shift is five weeks away and has not " +
+      "run. The roster this shot is about is fully populated. Same reason " +
+      "03-57 carries the flag.",
+  },
+  {
+    // The member's half. Same shift, same URL, no roster: the panel is gated
+    // on scheduling.assign / scheduling.manage or being the shift's named
+    // officer, and an ordinary member holds none of those. Nothing tells them
+    // a panel is missing, which is the point -- the rest of the shift page
+    // works exactly as it does above.
+    id: "03-85-platoon-roster-member",
+    doc: "03-scheduling.md",
+    line: 633,
+    anchor: "__paired-with-03-84__",
+    alt: "The same shift as an ordinary member: the crew board is there, the platoon roster is not, and nothing marks its absence",
+    route: "/scheduling",
+    auth: "member",
+    prepare: async (page) => {
+      await openPlatoonShift(page);
+      await page
+        .getByRole("heading", { name: /Shift Details|Crew/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      // Scrolled to the foot of the drawer, where the scheduler's copy has the
+      // roster panel. Framed at the top instead, the pair would differ mostly
+      // in where each one happens to be scrolled to.
+      await page
+        .locator("div.drawer-panel")
+        .evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await page.waitForTimeout(500);
+    },
+    selector: "div.drawer-panel",
+    allowEmptyState:
+      "The absence of the roster panel is the subject of the shot, and the " +
+      "scheduler's copy beside it carries what this one withholds.",
   },
   {
     id: "03-57-shift-assignment-controls",
@@ -8360,13 +8579,10 @@ export const SHOTS = [
     route: "/elections",
     prepare: async (page) => {
       // A draft election, because Save as Template is hidden on a closed one
-      // and the guide's steps say to build the ballot on a draft.
-      await openFirstFromApi(
-        "/elections?limit=50",
-        (id) => `/elections/${id}`,
-        "elections",
-        (election) => (election.status ?? "") === "draft",
-      )(page);
+      // and the guide's steps say to build the ballot on a draft. Reset first:
+      // the selector below reads "Ballot Items (1)", and `19-26` leaves this
+      // draft holding the four items of an applied template.
+      await openBylawDraft(page);
       const save = page.getByRole("button", { name: /^Save as Template$/ });
       await save.waitFor({ timeout: 20_000 });
       await save.click();
@@ -8385,12 +8601,7 @@ export const SHOTS = [
     alt: 'The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates',
     route: "/elections",
     prepare: async (page) => {
-      await openFirstFromApi(
-        "/elections?limit=50",
-        (id) => `/elections/${id}`,
-        "elections",
-        (election) => (election.status ?? "") === "draft",
-      )(page);
+      await openBylawDraft(page);
       const use = page.getByRole("button", { name: /^Use Template$/ });
       await use.waitFor({ timeout: 20_000 });
       await use.click();
@@ -9885,15 +10096,16 @@ export const SHOTS = [
       // A passing one that is *not* full marks: the failed scorecard is 09-19,
       // and a flat 100% demonstrates nothing about how the percentage is made
       // up — no section differs from another and no step carries a note.
-      (test) => {
-        const score = test.overallScore ?? test.overall_score ?? null;
-        return (
-          test.status === "completed" &&
-          test.result === "pass" &&
-          score !== null &&
-          score < 100
-        );
-      },
+      //
+      // Pinned to the 78% fixture (39 of 50, which `seed_scored_test` fixes and
+      // comments) rather than "any pass under 100". Three seeded results now
+      // satisfy the looser test — one awaiting validation at 80%, and the
+      // deduction fixture at 74% that `19-30` is about — so which one this
+      // opened would otherwise be decided by the order the API listed them in.
+      (test) =>
+        test.status === "completed" &&
+        test.result === "pass" &&
+        (test.overallScore ?? test.overall_score) === 78,
     ),
     // Viewport rather than full page: the scorecard's "Back to Tests" bar is
     // sticky, and a full-page shot paints it across the middle of the sheet,
@@ -10690,10 +10902,45 @@ export const SHOTS = [
       // voided, because a rebuilt fixture leaves its predecessor behind -- a
       // validated result cannot be deleted -- and the withdrawn copy carries
       // the same scores as the live one.
+      // Pinned to the 78% fixture. This shot and 09-24 are a pair -- the same
+      // record under two accounts -- and both matched "any validated pass"
+      // until the deduction fixture gave them a second one to choose from,
+      // with nothing making the two halves agree on which.
       (test) =>
         Boolean(test.validated_at ?? test.validatedAt) &&
         !(test.voided_at ?? test.voidedAt) &&
-        test.result === "pass",
+        test.result === "pass" &&
+        (test.overallScore ?? test.overall_score) === 78,
+    ),
+    fullPage: true,
+  },
+  {
+    // The same record as 09-23, printed by the candidate it belongs to. The
+    // weighted template's result_disclosure is seeded as `scores` -- an
+    // override that changes nothing about the officer's own view above, only
+    // what the candidate is shown: marks and the arithmetic, no examiner
+    // notes. Officers always see the full sheet regardless of this setting.
+    id: "09-24-scorecard-print-candidate",
+    doc: "09-skills-testing.md",
+    line: 1246,
+    anchor:
+      "the same scorecard as seen by a candidate under `scores` disclosure",
+    alt: "The same validated scorecard printed by the candidate under scores disclosure: per-step marks and the section arithmetic, with the examiner's note absent",
+    route: "/training/skills-testing",
+    auth: "member",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=200",
+      (id) => `/training/skills-testing/print/scorecard?id=${id}`,
+      "tests",
+      // Pinned to the 78% fixture. This shot and 09-24 are a pair -- the same
+      // record under two accounts -- and both matched "any validated pass"
+      // until the deduction fixture gave them a second one to choose from,
+      // with nothing making the two halves agree on which.
+      (test) =>
+        Boolean(test.validated_at ?? test.validatedAt) &&
+        !(test.voided_at ?? test.voidedAt) &&
+        test.result === "pass" &&
+        (test.overallScore ?? test.overall_score) === 78,
     ),
     fullPage: true,
   },
@@ -10846,6 +11093,130 @@ export const SHOTS = [
         .locator("#checkin-window")
         .waitFor({ state: "visible", timeout: 20_000 });
     },
+  },
+  {
+    // The mandatory counterpart to 04-44: checking Mandatory attendance with
+    // the audience never touched flips the default to All active members, per
+    // the edge case above the marker. Nothing is submitted, so this writes
+    // nothing and needs no `mutatesSeedData` flag.
+    id: "04-46-mandatory-reminder-audience",
+    doc: "04-events-meetings.md",
+    line: 1572,
+    anchor:
+      "mandatory-event form after the Mandatory switch is enabled, showing",
+    alt: "The Notifications panel after checking Mandatory attendance on a new event: the reminder audience switching to All active members",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Notifications'))",
+    prepare: async (page) => {
+      await page.locator("#is-mandatory").check();
+      await page
+        .locator("#reminder-target")
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    // Same false trigger as 04-44/19-10: "No reminders" is one of the three
+    // <option>s on #reminder-target, present in the DOM whatever is
+    // selected. The control itself reads All active members.
+    allowEmptyState:
+      '"No reminders" is an unselected <option> of the reminder-target ' +
+      "select, not a state this form is in -- the control reads All active " +
+      "members. Unselected options sit in the DOM whatever is chosen.",
+  },
+  {
+    // The other half of the marker: a template's own audience, saved
+    // independently of any event's mandatory flag. "Weekly Company Drill" is
+    // seeded non-mandatory but with reminder_target overridden to `all` --
+    // the value a mandatory event defaults to, on a template that is not one
+    // -- which is what "independently saved" means in a single frame.
+    //
+    // Applied by hand alongside 04-46, not by apply_placeholders: the marker
+    // is one blockquote for both images, and once 04-46 fills it there is no
+    // placeholder left for a second anchor to find -- the same reason 17-04
+    // is a manual pair with 17-03. This entry exists so a future UI change
+    // still gets the image re-captured.
+    id: "04-47-template-reminder-audience",
+    doc: "04-events-meetings.md",
+    line: 1572,
+    anchor: "__paired-with-04-46__",
+    alt: "The Weekly Company Drill event template, not mandatory, with its own reminder audience saved as All active members",
+    route: "/events/templates",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Weekly Company Drill" })
+        .click({ timeout: 15_000 });
+      // Not #reminder-target: the template form's own control, distinct from
+      // the event form's id of the same name.
+      const control = page.locator("#template-reminder-target");
+      await control.waitFor({ state: "visible", timeout: 20_000 });
+      // The reminders section sits below the fold in the modal's own
+      // scrolling panel -- a full-page shot of the outer document does not
+      // reach it, so this scrolls the panel itself rather than the page.
+      await control.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+    fullPage: false,
+  },
+  {
+    // The Prospective Members card on the event detail page, populated. The
+    // event is Recruitment-typed with guest sign-in and create-a-prospect
+    // both on, and three named guests actually signed in through the public
+    // kiosk path -- an attendee added by an officer creates no pipeline card
+    // at all, so only that path produces this state.
+    id: "04-48-event-linked-prospects",
+    doc: "04-events-meetings.md",
+    line: 1627,
+    anchor: "an event detail page showing its linked prospects",
+    alt: "An event's detail page with the Prospective Members card populated: three named applicants who came from this open house, each linked into the pipeline",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=100",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Fall Recruitment Open House",
+    ),
+    fullPage: true,
+    // The event does not collect RSVPs -- guests sign in at the kiosk, not
+    // through the app -- so that section's own empty state is correct and
+    // unrelated to the Prospective Members card the shot is about, which is
+    // populated with three named applicants.
+    allowEmptyState:
+      "The event has requires_rsvp off, so its RSVP section correctly " +
+      "reads no RSVPs yet -- guests sign in at the kiosk. The Prospective " +
+      "Members card lower on the page carries the three named applicants.",
+  },
+  {
+    // Signed-in member, not the guest kiosk -- the marker is explicit that a
+    // guest account must not be used for this capture, since an anonymous
+    // early arrival is blocked outright rather than admitted with a notice.
+    // The event is seeded 90 minutes out on every run, the midpoint of the
+    // one-to-two-hour early-arrival band `_validate_check_in_window` allows,
+    // so a capture some minutes after seeding still lands inside it.
+    //
+    // Real mutation (self_check_in auto-creates the RSVP and marks it
+    // checked in), and this is the last 04-* shot in the manifest, so it is
+    // flagged rather than relying on nothing later existing by accident.
+    id: "04-49-early-checkin-notice",
+    doc: "04-events-meetings.md",
+    line: 1606,
+    anchor: "early Flexible member notice with the localized official",
+    alt: "A member checking in about 30 minutes before a Flexible event's official window opens: a success screen with an informational notice naming the localized time the window actually starts",
+    route: "/events",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=100",
+        (id) => `/events/${id}/check-in`,
+        "events",
+        (event) => event.title === "Thursday Skills Review",
+      )(page);
+      await page
+        .getByRole("button", { name: /^Check In to This Event$/ })
+        .click({ timeout: 15_000 });
+      await page.getByRole("status").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
+    mutatesSeedData: true,
   },
   {
     // Half of a permission pair, both opening the SAME colleague's profile.
@@ -11285,6 +11656,317 @@ export const SHOTS = [
       "reads Level 2. Unselected options are in the DOM whatever is chosen.",
   },
   {
+    // The section lists forms whose integration type is `event_request` and
+    // nothing else: `/event-requests/forms` filters on that server-side, so
+    // the department's three ordinary forms -- near-miss, gear sizing,
+    // community request -- are absent from a screen an event administrator
+    // reaches without holding `forms.manage` at all. That absence is the
+    // marker's subject, and it is the one thing an image cannot show, so the
+    // caption names the three forms that are not here.
+    id: "19-24-outreach-form-section",
+    doc: "19-august-2026-release-changes.md",
+    line: 143,
+    anchor: "Event Settings outreach-form picker under an event-admin account",
+    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
+    route: "/events/admin?tab=settings",
+    prepare: clickByName(/^Public Form/),
+    fullPage: true,
+  },
+  {
+    // Step 2 of the create wizard, which is where all three links the marker
+    // names sit together: the course above, and the category / requirement /
+    // program pickers below it. The event-detail card corrects these links
+    // afterwards but never shows the course, so it cannot carry the caption.
+    //
+    // Nothing is submitted -- the wizard creates on step 4 -- so this writes
+    // nothing and needs no `mutatesSeedData` flag.
+    id: "19-29-training-session-linkage",
+    doc: "19-august-2026-release-changes.md",
+    line: 237,
+    anchor: "training-session edit flow with requirement, course, and program",
+    alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
+    route: "/training/sessions/new",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Next$/ })
+        .click({ timeout: 20_000 });
+      await page.getByText(/Use existing course template/).click();
+      // Located by its own placeholder option, not by label: the "Select
+      // Course" label on this wizard carries no `htmlFor` and the select no
+      // `id`, so it has no accessible name to match on.
+      const course = page.locator(
+        'select:has(option:text-is("Select a course..."))',
+      );
+      await course.waitFor({ timeout: 10_000 });
+      // Option labels carry the record's code -- "PUMP - Pump Operations",
+      // "Driver / Operator Pipeline (DRV-OP)" -- and `selectOption({ label })`
+      // matches exactly, so each pick is resolved to a value by substring.
+      const pickByText = async (select, text) => {
+        const value = await select.evaluate(
+          (el, wanted) =>
+            Array.from(el.options).find((option) =>
+              option.text.includes(wanted),
+            )?.value ?? "",
+          text,
+        );
+        if (!value) throw new Error(`no option matching "${text}"`);
+        await select.selectOption(value);
+      };
+      await pickByText(course, "Pump Operations");
+      // Selecting a course pre-fills whatever it declares, so the picks below
+      // are set afterwards rather than before -- the reverse order loses them.
+      await pickByText(
+        page.getByLabel(/^Training Program$/),
+        "Driver / Operator Pipeline",
+      );
+      await pickByText(
+        page.getByLabel(/^Requirement$/),
+        "Pump Panel Evolutions",
+      );
+      await pickByText(
+        page.getByLabel(/^Training Category$/),
+        "Driver/Operator",
+      );
+      await page.waitForTimeout(500);
+    },
+    // Framed on the wizard, not the page. The wizard renders inside the
+    // training admin frame, whose headline cards would put "COMPLIANCE --
+    // could not be calculated" above a caption about linking a session: true
+    // of this database (the seeded members hold three records against 26
+    // requirements) and nothing to do with the marker.
+    // Matched on the h1's inner <span>: the heading also holds an icon, and a
+    // `text-is` on the h1 itself does not match through it.
+    selector: "main:has(h1 > span:text-is('Create Training Session'))",
+    allowEmptyState:
+      '"No category" is the unselected first <option> of the category select, ' +
+      "not a state this form is in -- the control reads Driver/Operator " +
+      "(DRIVER). Unselected options sit in the DOM whatever is chosen.",
+  },
+  {
+    // The score-breakdown panel is what carries a deduction as a line item
+    // distinct from the point totals -- the officer's own scoring view, not
+    // the print page, which is why this is a fresh template rather than an
+    // addition to the weighted sheet 09-22/09-23 already depend on.
+    id: "19-30-skill-point-deduction",
+    doc: "19-august-2026-release-changes.md",
+    line: 295,
+    anchor: "skill result illustrating point deduction without automatic whole",
+    alt: "A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=200",
+      (id) => `/training/skills-testing/test/${id}/active`,
+      "tests",
+      (test) =>
+        (test.template_name ?? "").includes("Ladder Raise") &&
+        test.result === "pass",
+    ),
+    // Not fullPage: a fixed "Back to Tests" bar sits mid-page below the
+    // fold, and stitching a full-page shot over it duplicates the bar across
+    // the Raise section it is meant to be beneath. Everything the caption
+    // needs -- the calculation line and the deduction row -- is in the first
+    // viewport.
+    fullPage: false,
+  },
+  {
+    // The seeder runs `post_event_validation` against a freshly-ended,
+    // unfinalized event on every seed, so the prompt is already in the inbox
+    // -- this shot only has to read it.
+    id: "19-31-notification-before-action",
+    doc: "19-august-2026-release-changes.md",
+    line: 311,
+    anchor: "same notification before and after completing its related",
+    alt: "The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByText(/Action Required: Validate attendance/)
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
+    fullPage: true,
+  },
+  {
+    // Completes the notification's related action directly against the API
+    // (finalize-attendance), the same call `EventDetailPage`'s End Event
+    // flow makes -- `archive_related_notifications` runs inside that
+    // endpoint, so this is the same code path a chief clicking through would
+    // take, not a shortcut around it.
+    //
+    // Real mutation, deliberately unflagged: `mutatesSeedData` would force
+    // this to be the last shot of guide 19, and `19-26` already holds that
+    // position for unrelated (election) data with its own ordering
+    // dependencies. Placed before `19-25`/`19-26` instead, which is what the
+    // guard actually requires -- nothing later in guide 19 reads event or
+    // notification state, so no later shot can be broken by this one.
+    id: "19-32-notification-after-action",
+    doc: "19-august-2026-release-changes.md",
+    line: 311,
+    anchor: "__paired-with-19-31__",
+    alt: "The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      const eventId = await page.evaluate(async () => {
+        const res = await fetch("/api/v1/notifications/my?limit=100", {
+          credentials: "include",
+        });
+        const body = await res.json();
+        const notif = (body.logs ?? []).find(
+          (log) => log.category === "event_validation",
+        );
+        if (!notif) throw new Error("no event_validation notification found");
+        return notif.metadata?.event_id;
+      });
+      await page.evaluate(async (id) => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        const res = await fetch(`/api/v1/events/${id}/finalize-attendance`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+        });
+        if (!res.ok) throw new Error(`finalize-attendance: ${res.status}`);
+      }, eventId);
+      await page.reload({ waitUntil: "networkidle" });
+      await page
+        .getByText(/New Shift Assignment/)
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
+  },
+  {
+    // The station board's message rail, framed rather than the whole board.
+    // The board itself is already pictured twice -- `00-24` for the member's
+    // tab and `08-75`/`08-76` for the conditional cards, which is what the
+    // marker's "identified in the caption" is about -- and a third full-page
+    // dashboard would be the same screen under a different caption. What is
+    // not pictured anywhere is a feed carrying both kinds of item at once.
+    id: "19-28-station-board-messages",
+    doc: "19-august-2026-release-changes.md",
+    line: 118,
+    anchor: "populated station board with one pending message, one persistent",
+    alt: "My Updates on the station board: unread notifications and announcements above a standing order badged Persistent, with the clear control only a manager sees",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await page
+        .getByText(/^Spotter Required$/)
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='my-updates-heading']",
+  },
+  {
+    // The roster bound, refused. Not on the results page -- results carry no
+    // trace of which votes arrived on paper, because each paper ballot is
+    // written as an ordinary vote row -- so the only screen that states the
+    // rule is the one that enforces it. 14 + 10 is a plausible tally for a
+    // room of 22, and two over the roster is exactly the miscount this guard
+    // is for.
+    //
+    // Refused, so it writes nothing: the batch is rejected before any vote row
+    // is created, which is why this needs no `mutatesSeedData` flag.
+    id: "19-27-paper-ballot-over-roster",
+    doc: "19-august-2026-release-changes.md",
+    line: 74,
+    anchor: "closed election results showing manual paper-ballot count and its",
+    alt: "Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead",
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) =>
+          (election.title ?? "") === "Line Officer Election — 2027 Term",
+      )(page);
+      await clickByName(/^Record Paper Ballots$/)(page);
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByLabel(/Dana Ruiz/).fill("14");
+      await dialog.getByLabel(/Emeka Adeyemi/).fill("10");
+      await dialog
+        .getByRole("button", { name: /^Record 24 Ballots$/ })
+        .click({ timeout: 10_000 });
+      // The override checkbox renders only once the server has answered with a
+      // message containing "over-count", so waiting for the alert is waiting
+      // for the whole state this shot is about.
+      await dialog
+        .getByRole("alert")
+        .getByText(/only 22 member\(s\) are eligible/)
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='dialog']",
+  },
+  {
+    // The first half of the pair the marker asks for. Framed on the whole page
+    // rather than the ballot alone, because the two facts that change sit in
+    // different places: the item count inside the builder, and the voting
+    // method in the details card above it. "Simple Majority" here is the
+    // create form's "Supermajority Required (2/3)" -- one control that sets
+    // the method and the victory condition, and only the method is on display.
+    id: "19-25-ballot-template-settings-before",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "Ballot Builder → Your saved ballots, showing the visible template",
+    alt: "The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      const tab = page.locator("#tab-ballot");
+      await tab.waitFor({ timeout: 20_000 });
+      await tab.click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    // Applied through the picker rather than the API: the point of the pair is
+    // that nothing in the confirmation says the voting method is about to
+    // change, so the change has to arrive by the route a secretary takes.
+    //
+    // Must stay the last shot of guide 19 -- it leaves the draft holding the
+    // template's four officer seats under ranked choice. `openBylawDraft` puts
+    // it back for the shots that need it seeded, including the one above.
+    id: "19-26-ballot-template-settings-after",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "__paired-with-19-25__",
+    alt: "The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      const tab = page.locator("#tab-ballot");
+      await tab.waitFor({ timeout: 20_000 });
+      await tab.click({ timeout: 10_000 });
+      const use = page.getByRole("button", { name: /^Use Template$/ });
+      await use.waitFor({ timeout: 20_000 });
+      await use.click();
+      const popover = page.locator(
+        "div:has(> h4:text-is('Select a Template'))",
+      );
+      const saved = popover
+        .getByRole("button", { name: /Annual officer election/ })
+        .first();
+      await saved.waitFor({ timeout: 10_000 });
+      await saved.click();
+      await popover.getByRole("button", { name: /^Replace$/ }).click();
+      // Two toasts fire on a successful apply ("Ballot items saved", then
+      // "Applied ..."), and a toast cannot be removed from the DOM. Waited out
+      // instead: react-hot-toast's default is four seconds.
+      await page
+        .getByText(/^Applied "Annual officer election"$/)
+        .waitFor({ timeout: 20_000 });
+      await page
+        .getByText(/^Applied "Annual officer election"$/)
+        .waitFor({ state: "detached", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+    mutatesSeedData: true,
+  },
+  {
     // 375 wide, not the 390 the rest of the mobile shots use: the marker names
     // 375, and it is the narrower of the two common phone widths -- if the
     // targets hold here they hold at 390.
@@ -11318,6 +12000,28 @@ export const SHOTS = [
       await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(500);
     },
+    fullPage: false,
+  },
+  {
+    // Half of a pair, and the marker asks for the pair explicitly: the labels
+    // are the lesson, and one frame cannot show that they differ.
+    id: "03-82-call-volume-count-only",
+    doc: "03-scheduling.md",
+    line: 423,
+    anchor: "Reports → Call Volume for a count-only department",
+    alt: "Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each",
+    route: "/reports",
+    prepare: openCallVolumeReport("count_only"),
+    fullPage: false,
+  },
+  {
+    id: "03-83-call-volume-detailed",
+    doc: "03-scheduling.md",
+    line: 423,
+    anchor: "__paired-with-03-82__",
+    alt: "The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone",
+    route: "/reports",
+    prepare: openCallVolumeReport("detailed"),
     fullPage: false,
   },
   {

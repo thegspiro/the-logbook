@@ -204,11 +204,28 @@ SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 # level and the apparatus and so differs per refusal.
 DRIVER_NOT_QUALIFIED = re.compile(r"LB-SCHED-001")
 
+# `ShiftEligibilityService.get_eligible_positions` gates every non-open shift
+# by rank and training-unlocked position, not just the driver seat — the same
+# mechanism, a wider net. The seeder's day pool rotates every active member
+# through every seat label without checking rank, so this fires whenever the
+# pool happens to land a non-officer in the "officer" slot or similar. Named
+# generically because the sentence names whichever position refused
+# ("firefighter", "officer", "driver", …), unlike the driver-specific code
+# above.
+POSITION_NOT_ELIGIBLE = re.compile(r"no longer eligible for the .+ position")
+
+# The seeder is single-threaded, but a re-run tops up crew on shifts an
+# earlier run already partly filled, and the two runs' view of "how many
+# seats are left" can disagree by the time the write lands -- same effect as
+# concurrent writers, without any. Both sentences come from the same ordinary
+# contention path in `create_assignment`.
+SEAT_TAKEN = re.compile(r"was just claimed|filled after this request", re.IGNORECASE)
+
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Two refusals are ordinary and must not fail the seed:
+    Four refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -219,16 +236,27 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
       operators are certified for only the first four rigs — so a driver seat
       landing on an uncertified member is the demonstration working, not a
       seeding error.
+    * **Rank-ineligible for the position.** The same eligibility gate applies
+      to every seat, not only the driver's — an ordinary firefighter picked for
+      the "officer" slot is refused the same way.
+    * **The seat was already taken.** A re-seed tops up shifts a prior run left
+      short; if that top-up runs twice (a re-run interrupted and restarted, or
+      a manual assignment made between runs), the second attempt on the same
+      seat is refused, not double-booked.
 
-    Both leave the shift a seat short, which is what the Open Shifts tab exists
-    to show. Treating the second as fatal aborted the whole scheduling step: a
-    single EVOC refusal left the demo with 2 shifts and no scheduling
+    All four leave the shift a seat short, which is what the Open Shifts tab
+    exists to show. Treating any of them as fatal aborted the whole scheduling
+    step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
     trainee, the shift reminder inbox and every guide-03 capture downstream of
-    them.
+    them. The EVOC case was fixed this way once already; the rank and seat-race
+    cases reproduced the identical failure mode by a different door.
     """
     return exc.code == 400 and bool(
-        SHIFT_CONFLICT.search(exc.detail) or DRIVER_NOT_QUALIFIED.search(exc.detail)
+        SHIFT_CONFLICT.search(exc.detail)
+        or DRIVER_NOT_QUALIFIED.search(exc.detail)
+        or POSITION_NOT_ELIGIBLE.search(exc.detail)
+        or SEAT_TAKEN.search(exc.detail)
     )
 
 
@@ -2127,6 +2155,278 @@ class Seeder:
         except ApiError as exc:
             self.blocked.append(f"guest sign-in: {exc}")
 
+    RECRUITMENT_EVENT_TITLE = "Fall Recruitment Open House"
+
+    #: Three named guests, not one — the event-detail Prospective Members
+    #: card is a list, and a single row does not read as "a result" the way
+    #: three named applicants under a stat line does.
+    RECRUITMENT_GUESTS = [
+        {
+            "first_name": "Marcus",
+            "last_name": "Webb",
+            "email": "marcus.webb@example.com",
+            "phone": "(703) 555-0171",
+            "interest_reason": (
+                "Saw the flyer at the library. Curious what the training "
+                "commitment looks like alongside a full-time job."
+            ),
+        },
+        {
+            "first_name": "Elena",
+            "last_name": "Vasquez",
+            "email": "elena.vasquez@example.com",
+            "phone": "(703) 555-0172",
+            "interest_reason": (
+                "My cousin volunteers with a department upstate and always "
+                "talks it up. Wanted to see what it's actually like."
+            ),
+        },
+        {
+            "first_name": "Tyrell",
+            "last_name": "James",
+            "email": "tyrell.james@example.com",
+            "phone": "(703) 555-0173",
+            "interest_reason": (
+                "Former EMT, moved to town this spring and looking to get "
+                "back into it."
+            ),
+        },
+    ]
+
+    def seed_recruitment_event_with_prospects(
+        self, locations: list[dict]
+    ) -> dict | None:
+        """A Recruitment-type event that has actually brought applicants in.
+
+        `EventProspectsCard` on the event detail page reads applicants by
+        `event_id`, and nothing else in this seeder creates a Recruitment
+        event at all — 19-10 captures the *type picker*, on the create form,
+        never a saved event. Without this the card's populated state (as
+        opposed to its "nobody yet" empty state, which any event with the
+        flags on already shows) has nothing to be captured from.
+        """
+        with_codes = [
+            loc
+            for loc in locations
+            if pick(loc, "display_code", "displayCode") and pick(loc, "id")
+        ]
+        # Not the Training room: `seed_guest_check_in_event` already books it
+        # for the same "starts an hour ago" window, and a double-booked
+        # location refuses the second create outright.
+        room = next(
+            (loc for loc in with_codes if "Training" not in str(pick(loc, "name"))),
+            with_codes[0] if with_codes else None,
+        )
+        if not room:
+            self.blocked.append("recruitment event: no location has a display code")
+            return None
+
+        # Guest check-in enforces the same window a member's self check-in
+        # does (`EventService._get_check_in_window`), so a fixed past date
+        # only accepts sign-ins on the day it was seeded. Slid forward like
+        # `seed_guest_check_in_event`'s kiosk fixture, on every run, so
+        # today's seed always lands inside the window.
+        start = (NOW - timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=4)),
+        }
+        guest_settings = {
+            "allow_guest_check_in": True,
+            "guest_check_in_creates_prospect": True,
+            "location_id": pick(room, "id"),
+            "location": None,
+        }
+
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.RECRUITMENT_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            event = existing
+            ends = str(pick(existing, "end_datetime", "endDatetime") or "")
+            updates = dict(guest_settings)
+            if ends and ends < iso(NOW):
+                updates.update(window)
+            self.api.patch(f"/events/{pick(event, 'id')}", updates)
+        else:
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.RECRUITMENT_EVENT_TITLE,
+                    "description": (
+                        "Tour the station, meet the crew, and find out what "
+                        "the application and training process looks like."
+                    ),
+                    "event_type": "recruitment",
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                    **window,
+                    **guest_settings,
+                },
+            )
+        event_id = pick(event, "id")
+        display_code = pick(room, "display_code", "displayCode")
+        if not (event_id and display_code):
+            return event
+
+        attendees = items(
+            self.api.get(f"/events/{event_id}/external-attendees"), "attendees"
+        )
+        signed_in = {pick(a, "email") for a in attendees}
+        for guest in self.RECRUITMENT_GUESTS:
+            if guest["email"] in signed_in:
+                continue
+            try:
+                self.api.post_public(
+                    f"/display/{display_code}/events/{event_id}/guest-check-in",
+                    guest,
+                )
+            except ApiError as exc:
+                self.blocked.append(f"recruitment guest sign-in: {exc}")
+        return event
+
+    VALIDATION_EVENT_TITLE = "Wednesday Evening Drill — Attendance Pending"
+
+    def seed_event_validation_notification(self) -> dict | None:
+        """A finished, unfinalized event, ready for the post-event-validation task.
+
+        `run_post_event_validation` only notices events that ended within the
+        last two hours and have not already been finalized or notified about
+        — a fixed past date works exactly once, then the window has closed
+        for good. Slid forward like the guest check-in event, and with
+        `custom_fields` reset alongside it: finalizing (the manifest's "after"
+        shot) stamps `attendance_finalized` permanently, so a capture run that
+        already used this fixture needs it un-stamped, not just re-dated, to
+        produce a fresh "before" state.
+        """
+        end = (NOW - timedelta(minutes=45)).replace(second=0, microsecond=0)
+        start = end - timedelta(hours=2)
+        window = {"start_datetime": iso(start), "end_datetime": iso(end)}
+
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.VALIDATION_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            event = self.api.patch(
+                f"/events/{pick(existing, 'id')}",
+                {**window, "custom_fields": {}},
+            )
+        else:
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.VALIDATION_EVENT_TITLE,
+                    "description": (
+                        "Standard company drill. Attendance recorded at the "
+                        "door; not yet reviewed."
+                    ),
+                    "event_type": "training",
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                    **window,
+                },
+            )
+        # Manually triggered rather than waited for: the task runs every 30
+        # minutes on its own schedule, and a capture run cannot wait for a
+        # cron tick. Every organization, not just this one, but the demo
+        # database has exactly one.
+        self.api.post("/scheduled/run-task?task=post_event_validation", {})
+        return event
+
+    EARLY_CHECKIN_EVENT_TITLE = "Thursday Skills Review"
+
+    def seed_early_checkin_event(self) -> dict | None:
+        """A Flexible event whose official check-in window opens shortly.
+
+        `_validate_check_in_window` admits an early Flexible check-in only
+        inside a narrow band: the scheduled start must be between one and two
+        hours out (60-120 minutes before the official window, which itself
+        opens 60 minutes before start). Slid forward to 90 minutes out on
+        every seed run, the midpoint of that band, so a capture some minutes
+        after seeding still lands inside it. `check_in_window_type` is left
+        unset -- FLEXIBLE is the default, and setting it explicitly would
+        read as though the marker depended on a non-default configuration.
+        """
+        start = (NOW + timedelta(minutes=90)).replace(second=0, microsecond=0)
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=2)),
+        }
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.EARLY_CHECKIN_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            event = self.api.patch(f"/events/{pick(existing, 'id')}", window)
+            self._clear_early_checkin_rsvp(pick(existing, "id"))
+            return event
+        return self.api.post(
+            "/events",
+            {
+                "title": self.EARLY_CHECKIN_EVENT_TITLE,
+                "description": "Monthly skills review and equipment refresher.",
+                "event_type": "training",
+                # Not requires_rsvp: self_check_in auto-creates the RSVP on
+                # first tap, and requiring one here would also require an
+                # rsvp_deadline the fixture has no use for.
+                "requires_rsvp": False,
+                "is_mandatory": False,
+                "send_reminders": False,
+                "is_draft": False,
+                **window,
+            },
+        )
+
+    def _clear_early_checkin_rsvp(self, event_id: str) -> None:
+        """Un-check-in the member `04-49` signs in as, before the next capture.
+
+        The capture is a real check-in: `self_check_in` creates the RSVP and
+        stamps it. Sliding the window forward on a re-seed is not enough on its
+        own — a second capture takes the ALREADY_CHECKED_IN path, which returns
+        no early-arrival notice at all, and the shot waits on the notice and
+        times out. Removing the RSVP puts the member back to never having
+        responded, which is the state the shot starts from.
+        """
+        member_id = next(
+            (
+                pick(u, "id")
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == DEMO_MEMBER_USERNAME
+            ),
+            None,
+        )
+        if not member_id:
+            return
+        try:
+            self.api.delete(f"/events/{event_id}/rsvps/{member_id}")
+        except ApiError as exc:
+            # "RSVP not found" is the ordinary case — she has not responded to
+            # this event, which is exactly the state wanted. Reported as a 400
+            # rather than a 404, so the message is what this matches on.
+            if not (
+                exc.code == 404
+                or (exc.code == 400 and "RSVP not found" in str(exc.detail))
+            ):
+                raise
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -2907,6 +3207,84 @@ class Seeder:
                 self.blocked.append(f"admin hours: review refused ({exc})")
                 break
         return created
+
+    #: Runs per shift, cycled across the roster, with the type mix a volunteer
+    #: department actually reports: mostly EMS, a scatter of everything else,
+    #: and quiet tours that ran nothing. Kept deliberately uneven so the Call
+    #: Volume report has a busiest day worth naming rather than a flat line.
+    COUNT_ONLY_RUNS = [
+        {"ems": 2},
+        {"ems": 1, "mva": 1},
+        {},
+        {"ems": 3, "fire": 1},
+        {"ems": 1},
+        {"alarm": 1},
+        {},
+        {"ems": 2, "rescue": 1},
+        {"fire": 1, "mutual_aid": 1},
+        {"ems": 1, "service": 1},
+        {},
+        {"ems": 4, "mva": 1, "hazmat": 1},
+        {"ems": 1},
+        {"alarm": 2},
+    ]
+
+    def seed_count_only_calls(self) -> None:
+        """A department-wide call history for the count-only Call Volume report.
+
+        `OrgCall` rows have no endpoint of their own: they are written by step 2
+        of the close-out wizard, through
+        ``PATCH /scheduling/shifts/{id}/closeout/calls``. So a call history can
+        only be built by recording counts against real shifts, which is also
+        exactly how a count-only department's data comes to exist.
+
+        Without it the report is technically correct and useless: four calls,
+        all on one day, and an average of `0.0` per day across the period —
+        which reads as a broken screen rather than as a quiet department.
+
+        Recording counts does **not** finalize anything. Step 2 saves and the
+        shift stays open, so this neither spends the close-out fixture nor
+        changes any shift's finalized state.
+        """
+        shifts = [
+            s
+            for s in items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+            if pick(s, "id")
+            # The close-out fixture is excluded: 03-76 and 03-77 photograph its
+            # call rows at specific values, and writing others over them would
+            # leave two captions describing numbers no longer on screen.
+            and str(pick(s, "notes") or "").strip() != CLOSEOUT_SHIFT_NOTE
+            and not pick(s, "is_finalized", "isFinalized")
+        ]
+        shifts.sort(key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""))
+        if not shifts:
+            self.blocked.append("count-only calls: no open shifts to record against")
+            return
+
+        recorded = 0
+        for index, shift in enumerate(shifts):
+            types = self.COUNT_ONLY_RUNS[index % len(self.COUNT_ONLY_RUNS)]
+            if not types:
+                continue
+            existing = items(
+                self.api.get(f"/scheduling/shifts/{pick(shift, 'id')}/calls"), "calls"
+            )
+            if existing:
+                continue
+            try:
+                self.api.patch(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/closeout/calls",
+                    {
+                        "reported_call_count": sum(types.values()),
+                        "reported_call_types": types,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"count-only calls: {exc}")
+                return
+            recorded += 1
+        if not recorded:
+            self.blocked.append("count-only calls: every shift already had calls")
 
     def seed_shift_calls(self) -> list[dict]:
         """Runs logged against past shifts.
@@ -6510,6 +6888,12 @@ class Seeder:
                 {"review_status": "approved"},
             )
         self._flag_review_queue(reports, demo_member_id)
+        # Unconditional, not only on the states-present early return above:
+        # the rotation that crews each day's shifts is keyed on offset and
+        # roster position, not on who still needs a report, so a given seed
+        # run can complete every review state above without ever putting the
+        # `auth: "member"` account on a past shift's crew.
+        self._ensure_demo_member_report(reports, demo_member_id)
         return reports
 
     def _ensure_demo_member_report(
@@ -6518,10 +6902,11 @@ class Seeder:
         """File and approve one report for the demo member if none exists.
 
         My Reports and the My Shift Progress stats card render only from the
-        member's own *approved* reports, and the filing loop's states-present
-        early return can leave the one member the `auth: "member"` shots sign
-        in as with nothing — the states were all satisfied by other people's
-        reports before a shift of hers came up.
+        member's own *approved* reports, and the day-pool rotation that crews
+        each shift can complete every other review state without ever seating
+        this specific member on a past shift — a report can only be filed
+        about someone who was actually on the shift, so nothing upstream can
+        be relied on to have done it.
         """
         if not demo_member_id:
             return
@@ -6550,6 +6935,7 @@ class Seeder:
             key=lambda s: str(pick(s, "shift_date", "shiftDate")),
             reverse=True,
         )
+        target = None
         for shift in past:
             crew = items(
                 self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
@@ -6563,16 +6949,36 @@ class Seeder:
                 ),
                 None,
             )
-            if me is None:
-                continue
-            shift_date = str(pick(shift, "shift_date", "shiftDate"))
+            if me is not None:
+                target = shift
+                break
+        if target is None:
+            # Never on any crewed past shift's roster at all -- seat her on
+            # one directly rather than reporting the fixture as unreachable.
+            # `is_expected_seat_refusal` lets this walk past shifts she was
+            # already double-booked on that day, the same tolerance the main
+            # crewing loop uses.
+            for shift in past:
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                        {"user_id": demo_member_id, "position": "firefighter"},
+                    )
+                except ApiError as exc:
+                    if not is_expected_seat_refusal(exc):
+                        raise
+                    continue
+                target = shift
+                break
+        if target is not None:
+            shift_date = str(pick(target, "shift_date", "shiftDate"))
             self._name_on_run_log(
-                str(pick(shift, "id")), shift_date, demo_member_id, count=2
+                str(pick(target, "id")), shift_date, demo_member_id, count=2
             )
             report = self.api.post(
                 "/training/shift-reports",
                 {
-                    "shift_id": pick(shift, "id"),
+                    "shift_id": pick(target, "id"),
                     "shift_date": shift_date,
                     "trainee_id": demo_member_id,
                     "hours_on_shift": 12.0,
@@ -6955,10 +7361,25 @@ class Seeder:
                 False,
                 False,
             ),
+            # The one standing notice. A persistent message is exempt from the
+            # dashboard feed's "unread only" filter and from its 10-item
+            # window, so it is the only kind that stays on the station board
+            # after everyone has read it — which is what the guides picture,
+            # and what an announcement about a bay door is deliberately not.
+            (
+                "Spotter Required",
+                "No apparatus backs up without a spotter on the ground and in "
+                "sight of the driver. This is a standing order, not a "
+                "reminder: it applies to every movement, every shift.",
+                "important",
+                False,
+                False,
+                True,
+            ),
         ]
 
         created = list(existing)
-        for title, body, priority, requires_ack, pinned in blueprint:
+        for title, body, priority, requires_ack, pinned, *rest in blueprint:
             if title in titles:
                 continue
             created.append(
@@ -6971,6 +7392,7 @@ class Seeder:
                         "target_type": "all",
                         "is_pinned": pinned,
                         "requires_acknowledgment": requires_ack,
+                        "is_persistent": bool(rest and rest[0]),
                     },
                 )
             )
@@ -8672,6 +9094,185 @@ class Seeder:
 
     # -- event RSVPs --------------------------------------------------
 
+    #: The platoon whose roster the guide-03 pair photographs, and the two
+    #: members taken off its shift so the roster has something to say: one
+    #: booked off, one free to be held over.
+    PLATOON_NAMES = ("A", "B", "C")
+    #: The one whose roster `03-84` photographs, named in the shot's own
+    #: heading match — so the fixture has to prepare this platoon and not
+    #: whichever happens to be on duty first in the generated window.
+    ROSTER_PLATOON = "A"
+    PLATOON_PATTERN_NAME = "A/B/C Platoon Rotation"
+    #: Far enough out that no board, dashboard or open-shift count the guides
+    #: already picture reaches these shifts. The roster shot opens its shift by
+    #: id, so it does not need them near today.
+    PLATOON_SHIFT_DAYS_AHEAD = 35
+
+    def seed_platoon_roster(self) -> dict | None:
+        """Duty platoons, and one shift whose roster shows all three states.
+
+        `Shift.platoon` is written in exactly one place — the recurring-pattern
+        generator, when a `platoon` pattern carries `schedule_config.platoons`.
+        Neither `ShiftCreate` nor `ShiftUpdate` accepts the field, so a shift
+        made by hand can never have one, and the department's platoon roster
+        (the fill-in / hold-over panel on the shift page) had nothing to render
+        for any seeded shift. That is the whole of the gap this closes.
+
+        The generator seats *every* member of the platoon on every occurrence,
+        which is a fully-crewed shift and a roster with nothing to say. Two
+        assignments are removed afterwards, the way a real shift loses them:
+        one member is booked off — an approved time-off request covering the
+        date, so the roster reads "On leave" — and one is simply free, which is
+        the "Available" row an officer holds over.
+        """
+        # Membership is `seed_platoons`' job, and it is idempotent: dealing the
+        # roster again here would reshuffle the columns of the Platoon
+        # Management screen `03-16` pictures, for no gain. This step only needs
+        # the platoons to exist.
+        overview = self.api.get("/scheduling/platoons/overview") or {}
+        staffed = sum(
+            group.get("member_count") or 0
+            for group in (overview.get("groups") or [])
+            if (group.get("platoon") or "").strip()
+        )
+        if staffed < 6:
+            self.blocked.append("platoon roster: no platoon has members")
+            return None
+
+        pattern = next(
+            (
+                p
+                for p in items(self.api.get("/scheduling/patterns"), "patterns")
+                if pick(p, "name") == self.PLATOON_PATTERN_NAME
+            ),
+            None,
+        )
+        if not pattern:
+            self.blocked.append("platoon roster: the A/B/C pattern is missing")
+            return None
+
+        # Without this the generator falls through to its single-track branch
+        # and writes no platoon at all — the pattern is typed `platoon` and
+        # still produces ordinary shifts.
+        self.api.patch(
+            f"/scheduling/patterns/{pick(pattern, 'id')}",
+            {"schedule_config": {"platoons": list(self.PLATOON_NAMES)}},
+        )
+
+        # Three days, one platoon on duty per day under a 1-on/2-off rotation,
+        # so the window always contains exactly one occurrence of each.
+        first = TODAY + timedelta(days=self.PLATOON_SHIFT_DAYS_AHEAD)
+        last = first + timedelta(days=2)
+
+        def _target_shift() -> dict | None:
+            """The A occurrence, by name rather than by position.
+
+            Which platoon lands on the first day of the window depends on the
+            rotation offset and therefore on today's date. Taking the first
+            generated shift prepared whichever platoon happened to be on that
+            day while `03-84` waits for the "Platoon A Roster" heading — green
+            on the date it was written and a timeout on most others.
+            """
+            return next(
+                (
+                    sh
+                    for sh in items(
+                        self.api.get(
+                            f"/scheduling/shifts?start_date={first}"
+                            f"&end_date={last}&limit=50"
+                        ),
+                        "shifts",
+                    )
+                    if pick(sh, "platoon") == self.ROSTER_PLATOON
+                ),
+                None,
+            )
+
+        shift = _target_shift()
+        if not shift:
+            self.api.post(
+                f"/scheduling/patterns/{pick(pattern, 'id')}/generate",
+                {"start_date": str(first), "end_date": str(last)},
+            )
+            shift = _target_shift()
+        if not shift:
+            self.blocked.append(
+                f"platoon roster: no Platoon {self.ROSTER_PLATOON} shift in "
+                f"{first}..{last}"
+            )
+            return None
+
+        self._open_two_platoon_seats(shift)
+        return shift
+
+    def _open_two_platoon_seats(self, shift: dict) -> None:
+        """Take two of the platoon off this shift, one of them on leave.
+
+        Guarded on the roster's own statuses rather than on "have I run
+        before". Freeing the last two assignments unconditionally cost the
+        shift two more members on every re-seed — six on shift became four,
+        then two — so a database that was meant to be repairable by re-seeding
+        instead drifted further from the capture each time, and each pass also
+        raised another leave request.
+
+        The states the shot needs are one `available` and one `on_leave`, so
+        that is what this checks for.
+        """
+        shift_id = pick(shift, "id")
+        detail = self.api.get(f"/scheduling/shifts/{shift_id}")
+        roster = detail.get("platoon_roster") or []
+        have = {str(entry.get("status")) for entry in roster}
+        if {"available", "on_leave"} <= have:
+            return
+
+        assignments = items(
+            self.api.get(f"/scheduling/shifts/{shift_id}/assignments"), "assignments"
+        )
+        # Two is the minimum that shows both remaining states at once; more
+        # than that and the shift reads as unstaffed rather than short-handed.
+        if len(assignments) < 4:
+            return
+        freed = assignments[-2:]
+        for row in freed:
+            self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
+
+        booked_off = pick(freed[0], "user_id", "userId")
+        username = next(
+            (
+                pick(u, "username")
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "id") == booked_off
+            ),
+            None,
+        )
+        if not booked_off or not username:
+            return
+        shift_date = str(pick(shift, "shift_date", "shiftDate") or "")
+        if not shift_date:
+            return
+        try:
+            session = self.member_session(self.base_url, booked_off, str(username))
+            created = session.post(
+                "/scheduling/time-off",
+                {
+                    "start_date": shift_date,
+                    "end_date": shift_date,
+                    "reason": "Family commitment — booked well ahead.",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"platoon roster: leave request refused ({exc})")
+            return
+        request_id = pick(created or {}, "id")
+        if not request_id:
+            return
+        # Approved, not pending: the roster reads active leave, and a request
+        # still awaiting a decision leaves the member simply available.
+        self.api.post(
+            f"/scheduling/time-off/{request_id}/review",
+            {"status": "approved", "review_notes": "Approved — cover arranged."},
+        )
+
     def member_session(self, base_url: str, user_id: str, username: str) -> Api:
         """A signed-in session for an ordinary member, usable for API calls.
 
@@ -8899,6 +9500,242 @@ class Seeder:
                 )
             )
         return tests
+
+    def seed_scored_template_disclosure(self, templates: list[dict]) -> None:
+        """Override the weighted sheet's result disclosure to `scores`.
+
+        Officers always see the full scorecard regardless of this setting, so
+        it changes nothing about 09-23 or any other officer-facing capture of
+        this template — only what the *candidate* sees when they print or view
+        their own result. Left at the organization default (`full`), the
+        candidate scorecard is identical to the officer one and there is
+        nothing to show a redaction against.
+        """
+        scored_template = next(
+            (t for t in templates if pick(t, "name") == SCORED_TEMPLATE_NAME), None
+        )
+        if not scored_template:
+            return
+        if pick(scored_template, "result_disclosure", "resultDisclosure") == "scores":
+            return
+        self.api.put(
+            f"/training/skills-testing/templates/{pick(scored_template, 'id')}",
+            {"result_disclosure": "scores"},
+        )
+
+    DEDUCTION_TEMPLATE_NAME = "Ladder Raise — Point Deductions"
+
+    def seed_deduction_test(
+        self, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """A result with a deduct-mode step failed, and the test still passes.
+
+        `score_mode: "deduct"` is a third way a pass/fail-judged criterion can
+        affect the percentage, alongside "points" and the default "none" — a
+        non-critical step whose failure costs a fixed number of points rather
+        than either earning nothing (the old free behavior) or failing the
+        whole sheet (critical). No seeded template used it, so the guide's
+        claim that a failed step can deduct points without an automatic whole-
+        test failure had nothing to point at. Kept off the weighted sheet
+        (`SCORED_TEMPLATE_NAME`) deliberately: that template backs 09-22/09-23
+        and the candidate-disclosure pair above, and a fourth criterion on it
+        would show up, unexplained, in all four.
+        """
+        template = next(
+            (t for t in templates if pick(t, "name") == self.DEDUCTION_TEMPLATE_NAME),
+            None,
+        )
+        if not template:
+            template = self.api.post(
+                "/training/skills-testing/templates",
+                {
+                    "name": self.DEDUCTION_TEMPLATE_NAME,
+                    "description": (
+                        "Ground ladder raise, scored with a point deduction "
+                        "for an unsafe-but-not-disqualifying step."
+                    ),
+                    "category": "Fire Suppression",
+                    "passing_percentage": 70,
+                    "require_all_critical": True,
+                    "visibility": "all_members",
+                    "sections": [
+                        {
+                            "name": "Setup",
+                            "sort_order": 0,
+                            "criteria": [
+                                criterion_payload(
+                                    {
+                                        "label": "Selects correct ladder for the target",
+                                        "type": "score",
+                                        "max_score": 10,
+                                        "passing_score": 7,
+                                        "required": False,
+                                    },
+                                    0,
+                                ),
+                                criterion_payload(
+                                    {
+                                        "label": "Checks ladder condition before use",
+                                        "type": "score",
+                                        "max_score": 10,
+                                        "passing_score": 7,
+                                        "required": False,
+                                    },
+                                    1,
+                                ),
+                            ],
+                        },
+                        {
+                            "name": "Raise",
+                            "sort_order": 1,
+                            "criteria": [
+                                criterion_payload(
+                                    {
+                                        "label": "Raises ladder using proper technique",
+                                        "type": "score",
+                                        "max_score": 20,
+                                        "passing_score": 14,
+                                        "required": False,
+                                    },
+                                    0,
+                                ),
+                                criterion_payload(
+                                    {
+                                        # Non-critical (`required: False`) and
+                                        # in deduct mode: failing it costs
+                                        # points rather than failing the test
+                                        # outright, which is the whole point
+                                        # of this fixture.
+                                        "label": "Footed and secured before climbing",
+                                        "type": "pass_fail",
+                                        "required": False,
+                                        "score_mode": "deduct",
+                                        "deduction_points": 10,
+                                    },
+                                    1,
+                                ),
+                                criterion_payload(
+                                    {
+                                        "label": "Climbs with three points of contact",
+                                        "type": "score",
+                                        "max_score": 10,
+                                        "passing_score": 7,
+                                        "required": False,
+                                    },
+                                    2,
+                                ),
+                            ],
+                        },
+                    ],
+                },
+            )
+            self.api.post(
+                f"/training/skills-testing/templates/{pick(template, 'id')}/publish"
+            )
+
+        existing = items(
+            self.api.get("/training/skills-testing/tests?limit=200"), "tests"
+        )
+        template_id = pick(template, "id")
+        for test in existing:
+            if (
+                pick(test, "template_id", "templateId") == template_id
+                and pick(test, "completed_at", "completedAt")
+                and pick(test, "validated_at", "validatedAt")
+                and not pick(test, "voided_at", "voidedAt")
+                and pick(test, "result") == "pass"
+            ):
+                return test
+
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidate = next(
+            (
+                m
+                for m in members
+                if pick(m, "username") == DEMO_MEMBER_USERNAME
+                and pick(m, "id") != examiner_id
+            ),
+            None,
+        )
+        if not candidate or not template_id:
+            return None
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": pick(candidate, "id"),
+                "notes": "Annual ladders evaluation.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # The three `score` criteria total 50 available points (10+10+20+10 --
+        # the deduct-mode step never enters the denominator, per
+        # `_criterion_point_value`). 10 + 9 + 19 + 9 = 47 earned, minus the
+        # 10-point deduction on the failed step = 37 net, which is 74% --
+        # comfortably above the 70% pass mark. Keep the net above 35 (70% of
+        # 50) if these numbers are ever edited: dropping under it turns this
+        # into a second failed-test fixture, which `seed_failed_test` already
+        # provides and which teaches the opposite of what this one is for.
+        awarded = {
+            "Selects correct ladder for the target": 10,
+            "Checks ladder condition before use": 9,
+            "Raises ladder using proper technique": 19,
+            "Climbs with three points of contact": 9,
+        }
+        DEDUCT_STEP = "Footed and secured before climbing"
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if not isinstance(criterion, dict):
+                    continue
+                label = criterion.get("label", "")
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": label,
+                        "passed": label != DEDUCT_STEP,
+                        "score": awarded.get(label),
+                        "notes": (
+                            "Foot held the rail but did not brace it before "
+                            "the climb started."
+                            if label == DEDUCT_STEP
+                            else None
+                        ),
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 180,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
 
     def seed_scored_test(
         self, templates: list[dict], members: list[dict]
@@ -9804,6 +10641,18 @@ class Seeder:
             "events@oakvillelibrary.example.org",
             "info@oakvillechamber.example.org",
         ],
+        # A `phone` field is validated server-side (digits, +, -, (), space
+        # only) and rejects whatever falls through to the generic "text" pool
+        # below -- "Engine 1" is not a phone number. Missing this entry failed
+        # every submission on the first form carrying a phone field, which
+        # `seed_form_submissions` cannot recover from: the create succeeds and
+        # the raise aborts the round for every remaining field on that form.
+        "phone": [
+            "(703) 555-0161",
+            "(703) 555-0162",
+            "(703) 555-0163",
+            "(703) 555-0164",
+        ],
     }
 
     #: Answers keyed on a word in the field's label, checked before the
@@ -9866,6 +10715,15 @@ class Seeder:
             if not form_id:
                 continue
             detail = self.api.get(f"/forms/{form_id}")
+            # A form wired to another module does not merely record an answer.
+            # The generated outreach form carries an `event_request`
+            # integration, so every submission here opens a request in the
+            # events pipeline -- four of them, on a queue the events step seeds
+            # deliberately with one, through the endpoint a member of the
+            # public actually uses. Nothing in the guides accounts for the
+            # other three.
+            if pick(detail, "integration_type", "integrationType"):
+                continue
             if str(pick(detail, "status") or "").lower() != "published":
                 detail = self.api.post(f"/forms/{form_id}/publish")
             if items(self.api.get(f"/forms/{form_id}/submissions"), "submissions"):
@@ -10053,6 +10911,32 @@ class Seeder:
             },
         )
 
+    def seed_event_request_form(self) -> None:
+        """The outreach request form itself, published.
+
+        **Events -> Settings -> Public Form** lists only forms whose
+        integration type is `event_request`, and the demo department's three
+        hand-built forms (near-miss, gear sizing, community request) are
+        ordinary forms with no integration — so the section rendered nothing
+        but its Generate button. The list is what guide 19 pictures.
+
+        Generated through the same endpoint the button calls rather than
+        posted to `/forms`, because the integration type, the twenty mapped
+        fields and the public slug all come from that generator; a form
+        created by hand would appear in the section without being wired to
+        the request pipeline behind it.
+        """
+        if items(self.api.get("/event-requests/forms"), "forms"):
+            return
+        created = self.api.post("/event-requests/generate-form")
+        form_id = pick(created, "form_id")
+        if not form_id:
+            return
+        # Generated as a draft. Left that way the section shows only its
+        # "must be published before it can accept submissions" warning, and
+        # the public URL the caption is about never renders.
+        self.api.post(f"/forms/{form_id}/publish")
+
     MINUTES_TITLE = "July Business Meeting"
 
     def seed_minutes(self) -> list[dict]:
@@ -10132,6 +11016,8 @@ class Seeder:
                     break
         return [minutes]
 
+    BYLAW_ELECTION_TITLE = "Bylaw Amendment Vote"
+
     def seed_elections(self, minutes: list[dict] | None = None) -> list[dict]:
         elections = items(self.api.get("/elections"), "elections")
         titles = {e.get("title") for e in elections}
@@ -10143,7 +11029,7 @@ class Seeder:
                 start,
             ),
             (
-                "Bylaw Amendment Vote",
+                self.BYLAW_ELECTION_TITLE,
                 ["Article VII Amendment"],
                 start + timedelta(days=30),
             ),
@@ -10151,6 +11037,17 @@ class Seeder:
         for title, positions, opens in blueprint:
             if title in titles:
                 continue
+            # A bylaw amendment is the one vote a department cannot carry on a
+            # simple majority, so the draft that pictures one is configured the
+            # way its subject requires: two-thirds of those voting.
+            #
+            # Method stays `simple_majority`: the create form offers method and
+            # victory condition as one control, and its "Supermajority Required
+            # (2/3)" option is `simple_majority|supermajority`. There is no
+            # option that sets the method itself to `supermajority`, so seeding
+            # one would put the demo department in a state the product cannot
+            # produce.
+            supermajority = title == self.BYLAW_ELECTION_TITLE
             elections.append(
                 self.api.post(
                     "/elections",
@@ -10187,12 +11084,16 @@ class Seeder:
                         "allow_write_ins": True,
                         "results_visible_immediately": False,
                         "voting_method": "simple_majority",
-                        "victory_condition": "most_votes",
+                        "victory_condition": (
+                            "supermajority" if supermajority else "most_votes"
+                        ),
+                        **({"victory_percentage": 67} if supermajority else {}),
                         "quorum_type": "percentage",
                         "quorum_value": 50,
                     },
                 )
             )
+        self._restore_bylaw_draft(elections)
         self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
@@ -10215,17 +11116,95 @@ class Seeder:
         ("Secretary", "all"),
     )
 
+    #: The bylaw draft as it is meant to stand: one issue, decided by two
+    #: thirds. The item carries no method of its own, so the builder reports it
+    #: as "Election default" and it follows whatever the election is set to —
+    #: which is the whole point of the pair that pictures this.
+    BYLAW_DRAFT_ITEMS = [
+        {
+            "id": "item-1",
+            "type": "general_vote",
+            "title": "Article VII Amendment",
+            "description": "Vote for Article VII Amendment.",
+            "position": "Article VII Amendment",
+            "eligible_voter_types": ["all"],
+            "vote_type": "approval",
+        }
+    ]
+
+    def _restore_bylaw_draft(self, elections: list[dict]) -> None:
+        """Put the bylaw draft back after a capture applied a template over it.
+
+        `19-25`/`19-26` picture what applying a saved ballot does to an
+        election's settings, which means one of them leaves this draft holding
+        the template's four officer seats under ranked choice. Re-seeding is how
+        a demo database is repaired, and the create loop above skips a title
+        that already exists — so without this the repair never happens and the
+        two shots that read "Ballot Items (1)" break on the next run.
+
+        Keyed on the ballot rather than the method: the method is what the
+        applied template changes, but the item count is what the shots match on,
+        and a repair that leaves four items behind is worse than none.
+        """
+        summary = next(
+            (e for e in elections if pick(e, "title") == self.BYLAW_ELECTION_TITLE),
+            None,
+        )
+        if not summary or pick(summary, "status") != "draft":
+            return
+        election_id = pick(summary, "id")
+        # The list response carries neither the voting method nor the ballot
+        # items, so whether a repair is needed can only be read from the
+        # detail. A create above returns the full record, but a pre-existing
+        # row arrives as a summary — and it is the pre-existing row this is for.
+        bylaw = self.api.get(f"/elections/{election_id}")
+        intact = (
+            len(bylaw.get("ballot_items") or []) == 1
+            and pick(bylaw, "voting_method") == "simple_majority"
+        )
+        if intact:
+            return
+        try:
+            self.api.patch(
+                f"/elections/{election_id}",
+                {
+                    "ballot_items": self.BYLAW_DRAFT_ITEMS,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "supermajority",
+                    "victory_percentage": 67,
+                    "allow_write_ins": True,
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"bylaw draft restore: {exc}")
+
     def _seed_saved_ballot_template(self) -> None:
         """A reusable ballot snapshot, so the template picker is not empty.
 
         The picker's "Your saved ballots" section only renders when the
         organization has at least one — without this the guide's two template
         screenshots have nothing to photograph but the built-in item grid.
+
+        Saved under **ranked choice**, which is what an officer election that
+        elects one of several candidates is often run under, and which the
+        create form offers as a single option. It is also what gives `19-25` and
+        `19-26` something to show: a template carries the voting method of the
+        election it was saved from and writes it over the election it is applied
+        to, silently. A template saved under the same method as every seeded
+        election would demonstrate nothing.
         """
         existing = self.api.get("/elections/templates/saved-ballots")
         rows = existing if isinstance(existing, list) else items(existing, "templates")
-        if any(r.get("name") == self.SAVED_BALLOT_TEMPLATE_NAME for r in rows):
-            return
+        current = next(
+            (r for r in rows if r.get("name") == self.SAVED_BALLOT_TEMPLATE_NAME),
+            None,
+        )
+        if current:
+            if pick(current, "voting_method") == "ranked_choice":
+                return
+            # There is no update endpoint, and the name is unique per
+            # organization, so correcting a template means replacing it.
+            self.api.delete(f"/elections/templates/saved-ballots/{pick(current, 'id')}")
         try:
             self.api.post(
                 "/elections/templates/saved-ballots",
@@ -10244,12 +11223,12 @@ class Seeder:
                             "position": position,
                             "eligible_voter_types": [eligibility],
                             "vote_type": "candidate_selection",
-                            "voting_method": "simple_majority",
                         }
                         for index, (position, eligibility) in enumerate(
                             self.SAVED_BALLOT_TEMPLATE_ITEMS
                         )
                     ],
+                    "voting_method": "ranked_choice",
                 },
             )
         except ApiError as exc:
@@ -12570,6 +13549,21 @@ class Seeder:
                     },
                 )
             )
+
+        # "Weekly Company Drill" carries its reminder audience saved as `all`
+        # -- the value a *mandatory* event defaults to -- while the template
+        # itself stays non-mandatory. That mismatch is the marker: a
+        # template's audience is its own stored value, not derived from its
+        # mandatory flag, and applying a template does not touch it either.
+        drill = next(
+            (t for t in templates if pick(t, "name") == "Weekly Company Drill"),
+            None,
+        )
+        if drill and pick(drill, "reminder_target", "reminderTarget") != "all":
+            self.api.patch(
+                f"/events/templates/{pick(drill, 'id')}",
+                {"reminder_target": "all"},
+            )
         return templates
 
     # -- storefront ---------------------------------------------------
@@ -12912,8 +13906,10 @@ class Seeder:
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
         self.step("shift calls", self.seed_shift_calls)
+        self.step("count-only calls", self.seed_count_only_calls)
         self.step("admin hours entries", self.seed_admin_hours_entries)
         self.step("apparatus crew positions", self.seed_apparatus_crew_positions)
+        self.step("platoon roster", self.seed_platoon_roster)
         self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))
@@ -12934,6 +13930,17 @@ class Seeder:
         self.step(
             "skills test with points",
             lambda: self.seed_scored_test(templates, members),
+        )
+        # After the scored test exists: this overrides the disclosure the
+        # candidate sees on that same record, so it belongs right after the
+        # test it applies to rather than up with template creation.
+        self.step(
+            "scored template disclosure",
+            lambda: self.seed_scored_template_disclosure(templates),
+        )
+        self.step(
+            "skills test with point deduction",
+            lambda: self.seed_deduction_test(templates, members),
         )
         self.step(
             "skills test that failed",
@@ -12995,6 +14002,7 @@ class Seeder:
         # minutes record at creation, and it cannot be patched once closed.
         minutes = self.step("meeting minutes", self.seed_minutes) or []
         self.step("meetings", lambda: self.seed_meetings(members))
+        self.step("event request form", self.seed_event_request_form)
         self.step("event request", self.seed_event_request)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
@@ -13009,6 +14017,15 @@ class Seeder:
             "guest check-in event",
             lambda: self.seed_guest_check_in_event(stations),
         )
+        self.step(
+            "recruitment event with prospects",
+            lambda: self.seed_recruitment_event_with_prospects(stations),
+        )
+        self.step(
+            "event validation notification",
+            self.seed_event_validation_notification,
+        )
+        self.step("early check-in event", self.seed_early_checkin_event)
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(

@@ -342,6 +342,13 @@ async def get_location_display_info(
                 check_in_start=check_in_start.isoformat(),
                 check_in_end=check_in_end.isoformat(),
                 is_valid=True,  # Already filtered by check-in window
+                # `get_current_events_in_check_in_window` keeps only events
+                # satisfying `check_in_start <= now <= check_in_end` — the
+                # strict window. Anything the permissive rule adds (the
+                # Flexible/Window early-arrival grace) is a superset of that,
+                # so an event that reached this loop can certainly be checked
+                # into. Hardcoded for the same reason `is_valid` is.
+                can_check_in=True,
                 location=event.location,
                 location_id=str(event.location_id) if event.location_id else None,
                 location_name=location.name,

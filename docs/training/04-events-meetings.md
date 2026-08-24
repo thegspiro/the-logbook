@@ -1569,7 +1569,11 @@ audience without sharing the source record's mutable JSON.
 
 ![The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up](./images/04-44-reminder-audience.png)
 
-> **[SCREENSHOT NEEDED — mandatory-event form after the Mandatory switch is enabled, showing “All active members”; then show a template with its independently saved audience.]**
+![The Notifications panel after checking Mandatory attendance on a new event: the reminder audience switching to All active members](./images/04-46-mandatory-reminder-audience.png)
+
+![The Weekly Company Drill event template, not mandatory, with its own reminder audience saved as All active members](./images/04-47-template-reminder-audience.png)
+
+**Above: a mandatory event, audience untouched. Below: a non-mandatory template, audience explicitly set.** Both read "All active members," and they get there two different ways — the first from the automatic default this section describes, the second from a value saved on the template itself, independent of its own `is_mandatory` flag: the template is not mandatory, and its audience is "all" anyway. Starting a new event from this template carries that saved value in, the same as every other template default.
 
 ### Check-in lead time
 
@@ -1603,7 +1607,35 @@ window because an unidentified early entry cannot be corrected reliably.
 
 ![Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start](./images/04-45-checkin-flexible-default.png)
 
-> **[SCREENSHOT NEEDED — early Flexible member notice with the localized official opening time; do not use a guest account for this capture.]**
+### Arriving before the window opens
+
+Flexible does not mean "any time". It means the window the organizer set, plus
+a **one-hour early-arrival grace** in front of it — the member who turns up half
+an hour before check-in opens gets in, and is told when the official window
+starts:
+
+![A member checking in about 30 minutes before a Flexible event's official window opens: a success screen with an informational notice naming the localized time the window actually starts](./images/04-49-early-checkin-notice.png)
+
+Three things that notice is doing, in order of how often they are misread:
+
+- **The time is the department's, not the phone's.** `03:27 PM EDT` above is the
+  organization's configured timezone, because what is being quoted back is the
+  organizer's setting. A member travelling with their laptop reads the same
+  sentence as the member standing in the bay.
+- **It is a caution, not a refusal.** The check-in succeeded — the record, the
+  training credit and the attendance row all exist. The notice exists so an
+  early arrival knows the window they were told about has not started yet, and
+  is not left wondering whether the tap counted.
+- **The grace is exactly an hour, and Strict has none.** Earlier than an hour
+  before the window, the page says "Check-in is not available yet" with the same
+  opening time — the same fact reported as a refusal. On a **Strict** event
+  there is no grace at any distance: nothing before the window, by design.
+
+_(Fixed in this release: the check-in page computed its own window instead of
+asking the rule the check-in itself applies, so it hid the button on exactly
+these arrivals. A member inside the grace read "Check-in Not Available" on an
+event the server would have admitted them to, and the notice above could not be
+reached from the page written for it.)_
 
 ## August 19–23, 2026 update — the Recruitment event type
 
@@ -1624,10 +1656,7 @@ attendees never reach the pipeline has not recruited anybody.
 The event page now also shows the applicants an event brought in, and the
 pipeline board can be filtered by the event applicants came from.
 
-> **[SCREENSHOT NEEDED — an event detail page showing its linked prospects.
->
-> > Seed a recruitment event with at least three guest sign-ins converted to
-> > prospects, so the list reads as a result rather than a single row.]**
+![An event's detail page with the Prospective Members card populated: three named applicants who came from this open house, each linked into the pipeline](./images/04-48-event-linked-prospects.png)
 
 ### Edge cases
 
