@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
+
+**Fixed**
+
+- **The lockfile can be regenerated again.** `frontend/package.json` declared
+  `typescript` at `7.0.2`, which typescript-eslint refuses — every published
+  version caps its peer range at `>=4.8.4 <6.1.0` and throws
+  `typescript-eslint does not support TS 7.0` from a hard guard. So
+  `rm package-lock.json && npm install` failed outright with ERESOLVE, and the
+  5.9.3 that type-aware lint actually ran against survived only because npm
+  had auto-installed it as a peer — a version no manifest in the repository
+  asked for. `npm ci` reproduced it and CI stayed green, which is why this sat
+  unnoticed since the 2026-08-17 Dependabot bump; the exposure was that the
+  next regeneration, `--strict-peer-deps` install, or npm version change was
+  not guaranteed to reproduce it.
+- **`typescript` is re-pinned at `5.9.3`**, restoring the declared split: the
+  plain name is the version the linter can load, and `typescript-native` (an
+  npm alias of `typescript@7.0.2`) remains the compiler `npm run typecheck`
+  and `npm run build` use via `frontend/scripts/tsc-native.mjs`. Both halves
+  are now declared. `node_modules/typescript` is a plain dev dependency rather
+  than `"peer": true`, and the nested `frontend/node_modules/typescript@7.0.2`
+  is gone — with no version conflict left, both hoist to the root.
+- Bump `typescript-native` for a newer compiler. Raising the plain
+  `typescript` past the linter's cap is what broke this, and will break it
+  again.
+- The lockfile was rebuilt from scratch, because npm's incremental resolver
+  will not revisit an already-satisfied subtree and left the stale nested
+  `frontend/node_modules/typescript@7.0.2` in place (npm 10 and 11 both). The
+  rebuild therefore also refreshed dependencies to the newest versions their
+  declared ranges already allowed — 9 direct (`eslint` 10.8.1 → 10.9.0,
+  `vitest` / `@vitest/*` 4.1.10 → 4.1.11, `lucide-react` 1.31.0 → 1.34.0,
+  `react-hook-form` 7.85.0 → 7.86.0, `dompurify` 3.4.13 → 3.4.14,
+  `concurrently` 10.0.4 → 10.0.5, `@types/react-dom` 19.2.4 → 19.2.5) and 61
+  transitive, mostly `@rollup`/`@rolldown` platform binaries. No range was
+  widened; these are what a fresh install would have picked up anyway.
+
 ### The dashboard tabs, and a card that stretched to nothing (2026-08-24)
 
 **Changed**
