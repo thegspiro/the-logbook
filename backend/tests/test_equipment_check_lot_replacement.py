@@ -204,10 +204,11 @@ class TestAPositionWhoseUnitsWereNeverLotTracked:
         with pytest.raises(ValueError, match="no expired stock"):
             await _swap(service, disposition="discarded")
 
-    # One unit in, one unit out. Two expired boxes are two exchanges, so the
-    # second stays aboard — and keeps the position reading expired, which is
-    # true: there is still an expired box in the bag.
-    async def test_one_swapped_unit_retires_one_expired_unit(self, service, item):
+    # One unit in, one unit out, and the one that goes is the one that expired
+    # first. Two expired boxes are two exchanges, so the later of them stays
+    # aboard — keeping the position expired, which is true: there is still an
+    # expired box in the bag.
+    async def test_one_swapped_unit_retires_the_earliest_expiring(self, service, item):
         item.deployed_lots.append(_deployed("dl-old-a", "OLD-1", -10))
         item.deployed_lots.append(_deployed("dl-old-b", "OLD-2", -40))
 
@@ -215,8 +216,21 @@ class TestAPositionWhoseUnitsWereNeverLotTracked:
 
         assert sorted(lot.lot_number for lot in item.deployed_lots) == [
             "NEW-9",
-            "OLD-2",
+            "OLD-1",
         ]
+
+    # The rows come back from the database in no defined order, so retiring the
+    # first one handed over could leave last month's box aboard and take one
+    # expiring next week.
+    async def test_the_order_rows_arrive_in_does_not_decide_which_goes(
+        self, service, item
+    ):
+        item.deployed_lots.append(_deployed("dl-recent", "RECENT", -1))
+        item.deployed_lots.append(_deployed("dl-ancient", "ANCIENT", -400))
+
+        await _swap(service, disposition="discarded")
+
+        assert "ANCIENT" not in [lot.lot_number for lot in item.deployed_lots]
 
     async def test_a_multi_unit_swap_retires_that_many(self, service, item):
         item.deployed_lots.append(_deployed("dl-old-a", "OLD-1", -10))

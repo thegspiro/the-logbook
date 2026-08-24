@@ -2117,7 +2117,7 @@ Full walkthrough and edge cases:
 
 ![Governance → Legal Documents: the Privacy Notice published with its last-updated line and published history, beside a Terms of Service tab still carrying an unpublished draft](./images/19-09-legal-documents.png)
 
-_Shared with the [release lesson](./19-august-2026-release-changes.md#departments-can-publish-their-own-privacy-notice-and-terms); the two documents are tabs on one screen rather than side-by-side cards._
+_Shared with the [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice); the two documents are tabs on one screen rather than side-by-side cards._
 
 ### Drafting and publishing are separate permissions
 

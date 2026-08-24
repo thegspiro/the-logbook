@@ -2843,19 +2843,43 @@ async def check_in_external_attendee(
         )
         if prospect is not None:
             attendee.prospect_id = prospect.id
-            # The same link the kiosk writes, for the same attendance. Setting
-            # prospect_id alone advanced the pipeline off a meeting that the
-            # applicant's linked-events section and the by-event applicant
-            # filter — both of which read prospect_event_links — went on
-            # reporting as never attended.
-            if event is not None:
-                await GuestCheckInService(db).link_prospect_to_event(prospect, event)
 
     await db.commit()
 
-    # Attendance is already durable before pipeline automation runs; the hook
-    # applies its own type/category rules.
+    # Committed first, and everything below is best-effort against it. The
+    # sign-in is what the member came to do; neither the link nor the pipeline
+    # may cost them it.
     if attendee.prospect_id and event is not None:
+        # Written for an attendee that already carried a prospect_id too, not
+        # only one matched just now: rows checked in before this linking existed
+        # are exactly the inconsistent state it repairs, and a guard on the
+        # match would skip them on every later re-check-in, leaving the
+        # linked-events view permanently short of a meeting the pipeline had
+        # already advanced on.
+        try:
+            await GuestCheckInService(db).link_prospect_to_event(
+                str(attendee.prospect_id),
+                event,
+                # Not the kiosk's wording: a coordinator reading this history
+                # would otherwise be told a guest scanned the room code when a
+                # staff member entered them by hand.
+                note=f"Checked in at {event.title} by staff",
+            )
+            await db.commit()
+        except Exception as exc:
+            # A select-then-insert against a unique (prospect, event) index, so
+            # two staff checking guests in at once can both find no row and one
+            # insert then conflicts. The attendance is already durable above;
+            # this must not turn it into a 500.
+            await db.rollback()
+            logger.error(
+                "Could not link prospect {} to event {}: {}",
+                attendee.prospect_id,
+                event_id,
+                exc,
+            )
+
+        # The shared attendance hook applies its own type/category rules.
         await GuestCheckInService(db).try_advance_attendance_pipeline(
             str(attendee.prospect_id), event
         )
