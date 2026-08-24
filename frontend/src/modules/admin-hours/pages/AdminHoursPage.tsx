@@ -30,6 +30,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 import { formatDuration } from '../utils/formatDuration';
+import { formatHours, roundHoursToQuarter } from '../../../utils/hoursFormatting';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
 
 const PAGE_SIZE = 20;
@@ -410,7 +411,10 @@ const AdminHoursPage: React.FC = () => {
               const exactProgress =
                 item.requiredHours > 0 ? Math.min(100, (item.loggedHours / item.requiredHours) * 100) : 100;
               const progress = Math.round(exactProgress);
-              const remaining = Math.max(0, Math.round((item.requiredHours - item.loggedHours) * 100) / 100);
+              // Against the *shown* logged figure, so "2.75 / 8 hrs" is never
+              // followed by a shortfall that does not subtract to it.
+              const loggedHours = roundHoursToQuarter(item.loggedHours);
+              const remaining = Math.max(0, roundHoursToQuarter(item.requiredHours - loggedHours));
               return (
                 <div key={`${item.categoryId}-${item.frequency}`}>
                   <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -425,7 +429,7 @@ const AdminHoursPage: React.FC = () => {
                       </span>
                     </span>
                     <span className="text-theme-text-primary text-sm font-semibold">
-                      {item.loggedHours} / {item.requiredHours} hrs{' '}
+                      {formatHours(loggedHours)} / {formatHours(item.requiredHours)} hrs{' '}
                       <span className="text-theme-text-muted font-normal">
                         · {item.frequency === 'quarterly' ? 'this quarter' : 'this year'}
                       </span>
@@ -442,7 +446,7 @@ const AdminHoursPage: React.FC = () => {
                     <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${exactProgress}%` }} />
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    {remaining > 0 ? `${remaining} hrs still needed` : 'Requirement met'} · period ends{' '}
+                    {remaining > 0 ? `${formatHours(remaining)} hrs still needed` : 'Requirement met'} · period ends{' '}
                     {formatDate(item.periodEnd, tz)}
                   </p>
                 </div>
@@ -482,7 +486,7 @@ const AdminHoursPage: React.FC = () => {
             <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
           </div>
           <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
-            {mySummary?.approvedHours ?? 0}
+            {formatHours(mySummary?.approvedHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>
           <p className="text-theme-text-muted mt-1 text-xs">
@@ -495,7 +499,7 @@ const AdminHoursPage: React.FC = () => {
             <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
           </div>
           <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
-            {mySummary?.pendingHours ?? 0}
+            {formatHours(mySummary?.pendingHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>
           <p className="text-theme-text-muted mt-1 text-xs">
@@ -512,7 +516,7 @@ const AdminHoursPage: React.FC = () => {
             <Clock className="h-5 w-5 text-blue-500" aria-hidden="true" />
           </div>
           <p className="text-theme-text-primary mt-2 text-3xl font-bold">
-            {mySummary?.totalHours ?? 0}
+            {formatHours(mySummary?.totalHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>
           <p className="text-theme-text-muted mt-1 text-xs">
@@ -546,7 +550,7 @@ const AdminHoursPage: React.FC = () => {
                       {category.categoryName}
                     </span>
                     <span className="text-theme-text-primary text-sm font-semibold">
-                      {category.totalHours} hrs{' '}
+                      {formatHours(category.totalHours)} hrs{' '}
                       <span className="text-theme-text-muted font-normal">
                         · {category.entryCount} entries · {share}%
                       </span>

@@ -336,6 +336,21 @@ would go with it: the permission half of the marker is real
 half needs care, because approving time-off cancels any assignment inside its
 range.
 
+## Flagged 2026-08-24 — the dashboard tabs were renamed the same day
+
+`00-24`/`00-25` were shot hours before the tab strip changed, so **both now show
+labels that no longer exist**. The strip reads **Personal** and **My
+Department**; the leadership panel's heading reads My Department rather than
+Organization, and its failure card says "Department summary is unavailable".
+
+Captions in `00-getting-started.md` were rewritten to describe the two views
+without naming the old labels, so the prose is not false while the pixels are
+stale — but the frames themselves need re-shooting. Nothing else about either
+capture changed: the boundary they exist to demonstrate is the same boundary.
+
+Re-shoot both together, as a pair, for the reason the original pass recorded
+below: a department total and your own gear are never on screen at once.
+
 ## Captured 2026-08-24 (tenth) — the dashboard's data boundary, under the wrong tab names
 
 `00-24`/`00-25`, opened and checked. **483 of 507 filled.**

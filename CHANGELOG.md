@@ -7,6 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
+
+**Changed**
+
+- **A lesson no longer sends you to GitHub to read it.** The three pilot paths
+  carried no content of their own: each one's "Read full guide" button opened a
+  markdown file on github.com. That reached nothing from a station on a
+  firewalled or offline network, pointed at `main` rather than the build the
+  department runs, and landed on a 2,600–3,000 line file with no anchor to the
+  step just clicked. Each step now states why it matters, how to do it against
+  the current screens, and what proves it is done, at `/learning/:pathId`. The
+  full reference guide stays linked at the foot of each lesson.
+- **Progress is stored per member.** The old key was shared by everyone using a
+  browser, so on a station computer one member saw and overwrote another's
+  checkmarks. Progress is now keyed by member; the old data is discarded rather
+  than adopted, because nothing recorded who entered it. Two tabs open at once
+  no longer delete each other's ticks.
+- **The Learning Center index is a menu, not a checklist.** Ticking a task off
+  happens on the lesson, where the member has just read what the task is.
+
+**Added**
+
+- **A dashboard prompt for anyone with orientation left to do.** The Learning
+  Center sat in all three navigation surfaces and new members still never
+  opened it, because the dashboard is where they land and nothing there said
+  the lessons existed. The prompt hides once orientation is complete or waved
+  off.
+- **Three more lessons for a member's first week** — installing the app on a
+  phone and what still works without signal, RSVPing and checking in to an
+  event, and reviewing the gear signed out to you. Six lessons and nineteen
+  tasks in all, hidden where the department has switched the module off.
+
+### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
+
+**Fixed**
+
+- **The lockfile can be regenerated again.** `frontend/package.json` declared
+  `typescript` at `7.0.2`, which typescript-eslint refuses — every published
+  version caps its peer range at `>=4.8.4 <6.1.0` and throws
+  `typescript-eslint does not support TS 7.0` from a hard guard. So
+  `rm package-lock.json && npm install` failed outright with ERESOLVE, and the
+  5.9.3 that type-aware lint actually ran against survived only because npm
+  had auto-installed it as a peer — a version no manifest in the repository
+  asked for. `npm ci` reproduced it and CI stayed green, which is why this sat
+  unnoticed since the 2026-08-17 Dependabot bump; the exposure was that the
+  next regeneration, `--strict-peer-deps` install, or npm version change was
+  not guaranteed to reproduce it.
+- **`typescript` is re-pinned at `5.9.3`**, restoring the declared split: the
+  plain name is the version the linter can load, and `typescript-native` (an
+  npm alias of `typescript@7.0.2`) remains the compiler `npm run typecheck`
+  and `npm run build` use via `frontend/scripts/tsc-native.mjs`. Both halves
+  are now declared. `node_modules/typescript` is a plain dev dependency rather
+  than `"peer": true`, and the nested `frontend/node_modules/typescript@7.0.2`
+  is gone — with no version conflict left, both hoist to the root.
+- Bump `typescript-native` for a newer compiler. Raising the plain
+  `typescript` past the linter's cap is what broke this, and will break it
+  again.
+- The lockfile was rebuilt from scratch, because npm's incremental resolver
+  will not revisit an already-satisfied subtree and left the stale nested
+  `frontend/node_modules/typescript@7.0.2` in place (npm 10 and 11 both). The
+  rebuild therefore also refreshed dependencies to the newest versions their
+  declared ranges already allowed — 9 direct (`eslint` 10.8.1 → 10.9.0,
+  `vitest` / `@vitest/*` 4.1.10 → 4.1.11, `lucide-react` 1.31.0 → 1.34.0,
+  `react-hook-form` 7.85.0 → 7.86.0, `dompurify` 3.4.13 → 3.4.14,
+  `concurrently` 10.0.4 → 10.0.5, `@types/react-dom` 19.2.4 → 19.2.5) and 61
+  transitive, mostly `@rollup`/`@rolldown` platform binaries. No range was
+  widened; these are what a fresh install would have picked up anyway.
+
+### The dashboard tabs, and a card that stretched to nothing (2026-08-24)
+
+**Changed**
+
+- **The leadership tab is "My Department"; the member's own view is
+  "Personal".** The strip read My Department and Organization, which named the
+  member's own dashboard after the department and the department's dashboard
+  after a word no single-department deployment uses for itself. Both were one
+  step off. The panel heading and its load-failure card follow ("Department
+  summary is unavailable"), and the tab ids follow the labels — the leadership
+  view is `?tab=department`, with `?tab=organization` and `?tab=overview` still
+  accepted so existing bookmarks land where they always did.
+- **"My Account" was deliberately not reused for the personal tab.** The
+  sidebar already points that name at `/account` — profile, password,
+  appearance — and one label on two destinations inside the same shell is a
+  worse problem than the one being fixed.
+
+**Fixed**
+
+- **The operations panels no longer stretch to their tallest neighbour.**
+  The chief grid inherited the CSS grid default of `align-items: stretch`, so
+  Operational readiness — one row on a quiet day — grew to match the five rows
+  of Critical exceptions beside it and rendered as a mostly empty box roughly
+  three times the height of its content. The panels are `items-start` and size
+  to what they hold.
+- **The department overview row had no gap above it.** Its wrapper was a plain
+  `div`, so the five stat cards butted directly against the operations panels
+  with zero spacing while every other seam on the page used `gap-4`; the
+  heading's own `mb-4` was the only spacing in the whole block.
+
+### "Medical Categories" did not say what it categorized (2026-08-24)
+
+**Changed**
+
+- **The admin nav entry is now "Medical Supply Categories".** It sat between
+  "Gear Admin" and "Store Admin" with nothing around it to supply the noun, so
+  read cold it could as easily have meant medical records, certifications or
+  incident types. The gear side avoids this by accident of placement rather
+  than by wording: its categories page is titled plainly "Categories" and is
+  reached through the Gear Admin hub, which supplies the scope. The medical
+  page is promoted straight into the admin list, so its label has to carry the
+  scope alone — and "Supply" is the word that does it. The page heading, empty
+  state, modal titles, load-failure toast, the shortcut's `aria-label` on
+  Medical Supplies and the "no categories exist yet" hint in the item form all
+  follow, as do the three docs tables.
+- **The backend's four error details agree with its own docstrings.** The
+  endpoint docstrings already read "medical supply categories"; the
+  `HTTPException` details said "medical category". Routes, API paths, component
+  names and the `medical_category_created` audit event type are unchanged — the
+  URL is already scoped by its `/medical-supplies/` prefix, and the event type
+  is a stored data contract that renaming would orphan existing rows against.
+
 ### Scheduling: the calendar now says which shifts need people, and claiming one is a tap (2026-08-24)
 
 **Changed**

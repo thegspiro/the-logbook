@@ -7,6 +7,7 @@ import { CalendarDays, CheckCircle2, Clock3, Info, ListChecks } from 'lucide-rea
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateCustom } from '../../../utils/dateFormatting';
+import { formatHours } from '../../../utils/hoursFormatting';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
 
 type DatePreset = 'all' | '30-days' | 'year' | 'custom';
@@ -147,7 +148,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 <Clock3 className="h-5 w-5 text-blue-500" aria-hidden="true" />
               </div>
               <p className="text-theme-text-primary mt-2 text-3xl font-bold">
-                {summary.totalHours}
+                {formatHours(summary.totalHours)}
                 <span className="ml-1 text-base font-medium">hrs</span>
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{summary.totalEntries} approved or pending entries</p>
@@ -158,7 +159,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
               </div>
               <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
-                {summary.approvedHours}
+                {formatHours(summary.approvedHours)}
                 <span className="ml-1 text-base font-medium">hrs</span>
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{summary.approvedEntries} finalized entries</p>
@@ -169,7 +170,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
               </div>
               <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
-                {summary.pendingHours}
+                {formatHours(summary.pendingHours)}
                 <span className="ml-1 text-base font-medium">hrs</span>
               </p>
               <div className="mt-2 flex items-center justify-between gap-2">
@@ -235,7 +236,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                             {category.categoryName}
                           </span>
                           <span className="text-theme-text-primary text-sm font-semibold">
-                            {category.totalHours} hrs{' '}
+                            {formatHours(category.totalHours)} hrs{' '}
                             <span className="text-theme-text-muted font-normal">
                               · {category.entryCount} entries · {share}%
                             </span>
