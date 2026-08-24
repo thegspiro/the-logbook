@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Submit External Training: the certificate travels with the submission (2026-08-23)
+
+**Fixed**
+
+- **The confirmation screen never appeared in a running app.** The refresh
+  after a save went through the page's loading branch, which unmounted the
+  form — and the receipt lives in the form's state. In a test the mocks resolve
+  in the same tick, so the spinner never rendered, the form never unmounted,
+  and the assertion passed against a feature that could not work. Refreshes
+  after a save are silent now, and the regression test drives one that is still
+  in flight.
+- **A certificate could not reach an auto-approved submission.** Such a
+  submission is frozen the moment it exists — the attachment endpoint refuses
+  it, and its training record has already been copied from it — so the upload
+  that followed always failed. `POST /training/submissions/with-attachment`
+  takes the payload and the file together, attaching the evidence inside the
+  same transaction that routes the submission. The three-step client dance
+  (create draft, upload, hand over) is gone.
+- Row actions in Recent Submissions were 28px on a phone, under the project's
+  44px floor; the row now stacks so a course name is not ellipsed to make room
+  for them.
+
+**Added**
+
+- **The reported start time is stored.** `training_submissions.start_time` and
+  `training_records.start_time` (migration `a71c9d4e5b62`, both nullable, no
+  backfill). Editing a submission restored 09:00 because the API kept only a
+  date and a number of hours; an officer reviewing four hours could not tell a
+  morning class from an evening one.
+- **"Does not expire" beside the expiry date.** Whether an expiry is required
+  follows the certification rather than a blanket rule, so a department can ask
+  for the date and still accept a credential that never expires.
+- `attachments` in the officer's self-report settings editor — the submit form
+  already honoured it, but only an API call could change it.
+- A Playwright spec for the member's path: hours derived from a stepper, the
+  certificate travelling with the create, a draft that round-trips on one row,
+  a returned submission opening on the officer's note, and the phone action bar
+  clearing the bottom navigation.
+
+**Changed**
+
+- The screen's presentational pieces (`DurationStepper`, `AttachmentField`,
+  `SubmissionReceipt`, `RevisionNotice`, `Checklist`, the card and label shell)
+  now live in `components/training/submit/`.
+- `docs/KNOWN_LIMITATIONS.md` records where attachment files live, why the
+  submission delete may unlink them, and what is still open: no retention
+  policy and no malware scanning.
+
 ### Submit External Training asked one question with three controls (2026-08-23)
 
 **Changed**

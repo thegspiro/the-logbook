@@ -10,7 +10,17 @@ import os
 import uuid as uuid_lib
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -90,6 +100,47 @@ async def create_submission(
             submitted_by=current_user.id,
             **data.model_dump(exclude_unset=True),
         )
+        return submission
+
+
+@router.post(
+    "/with-attachment",
+    response_model=TrainingSubmissionResponse,
+    status_code=201,
+)
+async def create_submission_with_attachment(
+    payload: str = Form(..., description="TrainingSubmissionCreate as a JSON string"),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a submission with its certificate in one step.
+
+    Uploading after the fact cannot work for a submission the department
+    auto-approves: it is frozen the moment it exists, and its training record
+    has already been copied from it. Attaching here means the evidence is part
+    of the row that routing and record creation see, in the same transaction.
+    """
+    try:
+        data = TrainingSubmissionCreate.model_validate_json(payload)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+
+    stored = await _store_attachment_file(file, current_user)
+
+    service = TrainingSubmissionService(db)
+    async with handle_service_errors("Failed to create submission"):
+        try:
+            submission = await service.create_submission(
+                organization_id=current_user.organization_id,
+                submitted_by=current_user.id,
+                attachments=[stored],
+                **data.model_dump(exclude_unset=True, exclude={"attachments"}),
+            )
+        except Exception:
+            # The row never landed, so the bytes on disk belong to nothing.
+            await asyncio.to_thread(_remove_quietly, stored["file_path"])
+            raise
         return submission
 
 
@@ -218,6 +269,12 @@ async def delete_submission(
         # Collected before the row goes: a withdrawn submission's certificate
         # can carry PHI, and deleting only the row leaves the file in the
         # uploads volume — and in its backups — indefinitely.
+        #
+        # Safe only because a submission is deletable in draft, pending_review
+        # and revision_requested alone — never after approval, the one state
+        # where a TrainingRecord also points at these files. Widen that guard
+        # in the service and this unlink has to go, or an approved member's
+        # evidence vanishes from their training record.
         submission = await service.get_submission(
             submission_id, current_user.organization_id
         )
@@ -466,28 +523,13 @@ def _confined_attachment_paths(attachments) -> list[str]:
     return [path for path in paths if path]
 
 
-@router.post("/{submission_id}/attachments")
-async def upload_submission_attachment(
-    submission_id: str,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Attach a certificate or photo to a submission (submitter only)."""
-    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+async def _store_attachment_file(file: UploadFile, current_user: User) -> dict:
+    """Validate an upload and write it under the org's attachment directory.
 
-    if str(submission.submitted_by) != str(current_user.id):
-        raise HTTPException(
-            status_code=403,
-            detail="Only the submitter can attach a certificate.",
-        )
-
-    if submission.status not in EDITABLE_SUBMISSION_STATUSES:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot attach to a submission that has been approved or rejected.",
-        )
-
+    MIME type comes from the file's magic bytes, never the client-supplied
+    Content-Type, and the stored name is server-generated with a magic-derived
+    extension so a double extension (cert.pdf.exe) cannot survive the trip.
+    """
     try:
         content = await read_upload_limited(file, MAX_SUBMISSION_ATTACHMENT_BYTES)
     except ValueError:
@@ -519,8 +561,6 @@ async def upload_submission_attachment(
 
     org_dir = os.path.join(SUBMISSION_ATTACHMENT_DIR, str(current_user.organization_id))
     await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
-    # Server-generated name + magic-derived extension, so a double extension
-    # (cert.pdf.exe) cannot survive the round trip.
     stored_name = f"{uuid_lib.uuid4().hex}{ext}"
     file_path = os.path.join(org_dir, stored_name)
 
@@ -530,7 +570,7 @@ async def upload_submission_attachment(
 
     await asyncio.to_thread(_write_file, file_path, content)
 
-    attachment = {
+    return {
         "file_name": file.filename or stored_name,
         "file_path": file_path,
         "file_type": detected_mime,
@@ -538,6 +578,32 @@ async def upload_submission_attachment(
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": str(current_user.id),
     }
+
+
+@router.post("/{submission_id}/attachments")
+async def upload_submission_attachment(
+    submission_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Attach a certificate or photo to a submission (submitter only)."""
+    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+
+    if str(submission.submitted_by) != str(current_user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the submitter can attach a certificate.",
+        )
+
+    if submission.status not in EDITABLE_SUBMISSION_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot attach to a submission that has been approved or rejected.",
+        )
+
+    attachment = await _store_attachment_file(file, current_user)
+
     # Plain JSON column — reassign rather than append in place so SQLAlchemy
     # detects the change (CLAUDE.md pitfall #12).
     submission.attachments = list(submission.attachments or []) + [attachment]
@@ -547,7 +613,7 @@ async def upload_submission_attachment(
         await db.commit()
         await db.refresh(submission)
     except Exception as e:
-        await asyncio.to_thread(_remove_quietly, file_path)
+        await asyncio.to_thread(_remove_quietly, attachment["file_path"])
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     return {
