@@ -1,5 +1,72 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (twentieth) — a mandatory event's default, a template's own, and who an open house brought in
+
+`04-46`, `04-47`, `04-48`, opened and checked. **5 markers remaining.**
+
+**Found first, fixed first: the scheduling seed step was aborting silently.**
+Reproducing this pass from a genuinely empty database (not a long-lived
+container) surfaced something every prior pass on this branch had a
+pre-populated roster to paper over. `ShiftEligibilityService.get_eligible_positions`
+gates every shift-assignment seat by rank, and the seeder's day-pool rotation
+picks a member for a seat without checking it — a member who happens to be
+one rank short of a slot is refused with "Member is no longer eligible for
+the {position} position." `is_expected_seat_refusal` already tolerated the
+driver/EVOC version of exactly this refusal; the general one wasn't in the
+list, so it re-raised, and the per-day loop that builds every shift died on
+the first occurrence. On this run that was the **second day**: 2 shifts
+existed where 67 belong, and everything downstream that reads shifts —
+crewed rosters, shift reports, the close-out fixture, the batch-report
+trainee — was empty or blocked in ways that read as separate failures.
+Widened the tolerance list to the same message pattern (any position, not
+only the driver's), and to the ordinary seat-taken race a re-seed produces
+when it tops up a shift a previous run already partly crewed
+("`was just claimed`" / "`filled after this request was submitted`").
+Neither is a seeding defect; both are the eligibility and contention rules
+working, on a roster the day-pool rotation does not pre-filter.
+
+**Second, the same failure mode one level up.** `_ensure_demo_member_report`
+— the fixture that guarantees the `auth: "member"` account has an approved
+shift-completion report — only ran inside the states-satisfied early return
+of `seed_shift_reports`. A run that completes every review state without
+happening to crew that one member onto a past shift's roster left her with
+nothing, silently, because the function that exists to prevent exactly that
+was gated behind the condition most likely to make it unnecessary. Made the
+call unconditional, and taught the fallback to seat her directly (with the
+same tolerance list) when no existing crew placement has her, rather than
+only searching for one that already does. Not yet needed by an image in this
+entry — the personal-export marker that reads it is still open — but it is
+what makes that fixture reachable at all on a fresh install.
+
+**A silent, deterministic form-submission failure, found the same way.**
+`_form_answer`'s type-keyed sample pool had no `"phone"` entry, so a `phone`
+field fell through to the generic `"text"` pool and submitted "Engine 1" —
+which the server correctly rejects as not a phone number. Added a
+phone-shaped pool; every form with a phone field now submits cleanly.
+
+**The markers themselves, once the department could seed properly:**
+
+- `04-46` is the mandatory counterpart to `04-44`: checking Mandatory
+  attendance on a new event with the audience untouched flips it to All
+  active members, per the edge case already written above the marker.
+- `04-47` is `04-46`'s pair, applied by hand the way `17-04` sits beside
+  `17-03` — the marker is one blockquote for both images, so only the first
+  fills it through `apply_placeholders`. "Weekly Company Drill" is seeded
+  non-mandatory with `reminder_target` explicitly overridden to `all`, which
+  is what "independently saved" means: the value does not derive from the
+  template's own mandatory flag. **Checked before writing the caption:**
+  `EventCreatePage.templateToInitialData` copies `reminder_target` from the
+  template into a new event same as every other default — the first draft
+  of this caption claimed the opposite without checking, and would have
+  taught the wrong thing.
+- `04-48` needed a Recruitment-type event that had actually produced
+  applicants, and nothing else in the seeder makes one — `19-10` captures
+  only the type picker on the create form. Three named guests signed in
+  through the public kiosk path (an attendee added by an officer creates no
+  pipeline card at all, so only the guest path produces this), giving the
+  Prospective Members card three rows instead of the single one a bare
+  reproduction would show.
+
 ## Captured 2026-08-24 (nineteenth) — the candidate's own scorecard, redacted where the officer's is not
 
 `09-24`, opened and checked against `09-23`. **7 markers remaining.**

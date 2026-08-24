@@ -204,11 +204,28 @@ SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 # level and the apparatus and so differs per refusal.
 DRIVER_NOT_QUALIFIED = re.compile(r"LB-SCHED-001")
 
+# `ShiftEligibilityService.get_eligible_positions` gates every non-open shift
+# by rank and training-unlocked position, not just the driver seat — the same
+# mechanism, a wider net. The seeder's day pool rotates every active member
+# through every seat label without checking rank, so this fires whenever the
+# pool happens to land a non-officer in the "officer" slot or similar. Named
+# generically because the sentence names whichever position refused
+# ("firefighter", "officer", "driver", …), unlike the driver-specific code
+# above.
+POSITION_NOT_ELIGIBLE = re.compile(r"no longer eligible for the .+ position")
+
+# The seeder is single-threaded, but a re-run tops up crew on shifts an
+# earlier run already partly filled, and the two runs' view of "how many
+# seats are left" can disagree by the time the write lands -- same effect as
+# concurrent writers, without any. Both sentences come from the same ordinary
+# contention path in `create_assignment`.
+SEAT_TAKEN = re.compile(r"was just claimed|filled after this request", re.IGNORECASE)
+
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Two refusals are ordinary and must not fail the seed:
+    Four refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -219,16 +236,27 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
       operators are certified for only the first four rigs — so a driver seat
       landing on an uncertified member is the demonstration working, not a
       seeding error.
+    * **Rank-ineligible for the position.** The same eligibility gate applies
+      to every seat, not only the driver's — an ordinary firefighter picked for
+      the "officer" slot is refused the same way.
+    * **The seat was already taken.** A re-seed tops up shifts a prior run left
+      short; if that top-up runs twice (a re-run interrupted and restarted, or
+      a manual assignment made between runs), the second attempt on the same
+      seat is refused, not double-booked.
 
-    Both leave the shift a seat short, which is what the Open Shifts tab exists
-    to show. Treating the second as fatal aborted the whole scheduling step: a
-    single EVOC refusal left the demo with 2 shifts and no scheduling
+    All four leave the shift a seat short, which is what the Open Shifts tab
+    exists to show. Treating any of them as fatal aborted the whole scheduling
+    step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
     trainee, the shift reminder inbox and every guide-03 capture downstream of
-    them.
+    them. The EVOC case was fixed this way once already; the rank and seat-race
+    cases reproduced the identical failure mode by a different door.
     """
     return exc.code == 400 and bool(
-        SHIFT_CONFLICT.search(exc.detail) or DRIVER_NOT_QUALIFIED.search(exc.detail)
+        SHIFT_CONFLICT.search(exc.detail)
+        or DRIVER_NOT_QUALIFIED.search(exc.detail)
+        or POSITION_NOT_ELIGIBLE.search(exc.detail)
+        or SEAT_TAKEN.search(exc.detail)
     )
 
 
@@ -2126,6 +2154,145 @@ class Seeder:
             )
         except ApiError as exc:
             self.blocked.append(f"guest sign-in: {exc}")
+
+    RECRUITMENT_EVENT_TITLE = "Fall Recruitment Open House"
+
+    #: Three named guests, not one — the event-detail Prospective Members
+    #: card is a list, and a single row does not read as "a result" the way
+    #: three named applicants under a stat line does.
+    RECRUITMENT_GUESTS = [
+        {
+            "first_name": "Marcus",
+            "last_name": "Webb",
+            "email": "marcus.webb@example.com",
+            "phone": "(703) 555-0171",
+            "interest_reason": (
+                "Saw the flyer at the library. Curious what the training "
+                "commitment looks like alongside a full-time job."
+            ),
+        },
+        {
+            "first_name": "Elena",
+            "last_name": "Vasquez",
+            "email": "elena.vasquez@example.com",
+            "phone": "(703) 555-0172",
+            "interest_reason": (
+                "My cousin volunteers with a department upstate and always "
+                "talks it up. Wanted to see what it's actually like."
+            ),
+        },
+        {
+            "first_name": "Tyrell",
+            "last_name": "James",
+            "email": "tyrell.james@example.com",
+            "phone": "(703) 555-0173",
+            "interest_reason": (
+                "Former EMT, moved to town this spring and looking to get "
+                "back into it."
+            ),
+        },
+    ]
+
+    def seed_recruitment_event_with_prospects(
+        self, locations: list[dict]
+    ) -> dict | None:
+        """A Recruitment-type event that has actually brought applicants in.
+
+        `EventProspectsCard` on the event detail page reads applicants by
+        `event_id`, and nothing else in this seeder creates a Recruitment
+        event at all — 19-10 captures the *type picker*, on the create form,
+        never a saved event. Without this the card's populated state (as
+        opposed to its "nobody yet" empty state, which any event with the
+        flags on already shows) has nothing to be captured from.
+        """
+        with_codes = [
+            loc
+            for loc in locations
+            if pick(loc, "display_code", "displayCode") and pick(loc, "id")
+        ]
+        # Not the Training room: `seed_guest_check_in_event` already books it
+        # for the same "starts an hour ago" window, and a double-booked
+        # location refuses the second create outright.
+        room = next(
+            (loc for loc in with_codes if "Training" not in str(pick(loc, "name"))),
+            with_codes[0] if with_codes else None,
+        )
+        if not room:
+            self.blocked.append(
+                "recruitment event: no location has a display code"
+            )
+            return None
+
+        # Guest check-in enforces the same window a member's self check-in
+        # does (`EventService._get_check_in_window`), so a fixed past date
+        # only accepts sign-ins on the day it was seeded. Slid forward like
+        # `seed_guest_check_in_event`'s kiosk fixture, on every run, so
+        # today's seed always lands inside the window.
+        start = (NOW - timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=4)),
+        }
+        guest_settings = {
+            "allow_guest_check_in": True,
+            "guest_check_in_creates_prospect": True,
+            "location_id": pick(room, "id"),
+            "location": None,
+        }
+
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.RECRUITMENT_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            event = existing
+            ends = str(pick(existing, "end_datetime", "endDatetime") or "")
+            updates = dict(guest_settings)
+            if ends and ends < iso(NOW):
+                updates.update(window)
+            self.api.patch(f"/events/{pick(event, 'id')}", updates)
+        else:
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.RECRUITMENT_EVENT_TITLE,
+                    "description": (
+                        "Tour the station, meet the crew, and find out what "
+                        "the application and training process looks like."
+                    ),
+                    "event_type": "recruitment",
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                    **window,
+                    **guest_settings,
+                },
+            )
+        event_id = pick(event, "id")
+        display_code = pick(room, "display_code", "displayCode")
+        if not (event_id and display_code):
+            return event
+
+        attendees = items(
+            self.api.get(f"/events/{event_id}/external-attendees"), "attendees"
+        )
+        signed_in = {pick(a, "email") for a in attendees}
+        for guest in self.RECRUITMENT_GUESTS:
+            if guest["email"] in signed_in:
+                continue
+            try:
+                self.api.post_public(
+                    f"/display/{display_code}/events/{event_id}/guest-check-in",
+                    guest,
+                )
+            except ApiError as exc:
+                self.blocked.append(f"recruitment guest sign-in: {exc}")
+        return event
 
     # -- scheduling --------------------------------------------------
 
@@ -6588,6 +6755,12 @@ class Seeder:
                 {"review_status": "approved"},
             )
         self._flag_review_queue(reports, demo_member_id)
+        # Unconditional, not only on the states-present early return above:
+        # the rotation that crews each day's shifts is keyed on offset and
+        # roster position, not on who still needs a report, so a given seed
+        # run can complete every review state above without ever putting the
+        # `auth: "member"` account on a past shift's crew.
+        self._ensure_demo_member_report(reports, demo_member_id)
         return reports
 
     def _ensure_demo_member_report(
@@ -6596,10 +6769,11 @@ class Seeder:
         """File and approve one report for the demo member if none exists.
 
         My Reports and the My Shift Progress stats card render only from the
-        member's own *approved* reports, and the filing loop's states-present
-        early return can leave the one member the `auth: "member"` shots sign
-        in as with nothing — the states were all satisfied by other people's
-        reports before a shift of hers came up.
+        member's own *approved* reports, and the day-pool rotation that crews
+        each shift can complete every other review state without ever seating
+        this specific member on a past shift — a report can only be filed
+        about someone who was actually on the shift, so nothing upstream can
+        be relied on to have done it.
         """
         if not demo_member_id:
             return
@@ -6628,6 +6802,7 @@ class Seeder:
             key=lambda s: str(pick(s, "shift_date", "shiftDate")),
             reverse=True,
         )
+        target = None
         for shift in past:
             crew = items(
                 self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
@@ -6641,16 +6816,36 @@ class Seeder:
                 ),
                 None,
             )
-            if me is None:
-                continue
-            shift_date = str(pick(shift, "shift_date", "shiftDate"))
+            if me is not None:
+                target = shift
+                break
+        if target is None:
+            # Never on any crewed past shift's roster at all -- seat her on
+            # one directly rather than reporting the fixture as unreachable.
+            # `is_expected_seat_refusal` lets this walk past shifts she was
+            # already double-booked on that day, the same tolerance the main
+            # crewing loop uses.
+            for shift in past:
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/assignments",
+                        {"user_id": demo_member_id, "position": "firefighter"},
+                    )
+                except ApiError as exc:
+                    if not is_expected_seat_refusal(exc):
+                        raise
+                    continue
+                target = shift
+                break
+        if target is not None:
+            shift_date = str(pick(target, "shift_date", "shiftDate"))
             self._name_on_run_log(
-                str(pick(shift, "id")), shift_date, demo_member_id, count=2
+                str(pick(target, "id")), shift_date, demo_member_id, count=2
             )
             report = self.api.post(
                 "/training/shift-reports",
                 {
-                    "shift_id": pick(shift, "id"),
+                    "shift_id": pick(target, "id"),
                     "shift_date": shift_date,
                     "trainee_id": demo_member_id,
                     "hours_on_shift": 12.0,
@@ -9920,6 +10115,18 @@ class Seeder:
             "events@oakvillelibrary.example.org",
             "info@oakvillechamber.example.org",
         ],
+        # A `phone` field is validated server-side (digits, +, -, (), space
+        # only) and rejects whatever falls through to the generic "text" pool
+        # below -- "Engine 1" is not a phone number. Missing this entry failed
+        # every submission on the first form carrying a phone field, which
+        # `seed_form_submissions` cannot recover from: the create succeeds and
+        # the raise aborts the round for every remaining field on that form.
+        "phone": [
+            "(703) 555-0161",
+            "(703) 555-0162",
+            "(703) 555-0163",
+            "(703) 555-0164",
+        ],
     }
 
     #: Answers keyed on a word in the field's label, checked before the
@@ -12807,6 +13014,21 @@ class Seeder:
                     },
                 )
             )
+
+        # "Weekly Company Drill" carries its reminder audience saved as `all`
+        # -- the value a *mandatory* event defaults to -- while the template
+        # itself stays non-mandatory. That mismatch is the marker: a
+        # template's audience is its own stored value, not derived from its
+        # mandatory flag, and applying a template does not touch it either.
+        drill = next(
+            (t for t in templates if pick(t, "name") == "Weekly Company Drill"),
+            None,
+        )
+        if drill and pick(drill, "reminder_target", "reminderTarget") != "all":
+            self.api.patch(
+                f"/events/templates/{pick(drill, 'id')}",
+                {"reminder_target": "all"},
+            )
         return templates
 
     # -- storefront ---------------------------------------------------
@@ -13254,6 +13476,10 @@ class Seeder:
         self.step(
             "guest check-in event",
             lambda: self.seed_guest_check_in_event(stations),
+        )
+        self.step(
+            "recruitment event with prospects",
+            lambda: self.seed_recruitment_event_with_prospects(stations),
         )
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []

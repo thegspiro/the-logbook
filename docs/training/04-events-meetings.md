@@ -1569,7 +1569,11 @@ audience without sharing the source record's mutable JSON.
 
 ![The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up](./images/04-44-reminder-audience.png)
 
-> **[SCREENSHOT NEEDED — mandatory-event form after the Mandatory switch is enabled, showing “All active members”; then show a template with its independently saved audience.]**
+![The Notifications panel after checking Mandatory attendance on a new event: the reminder audience switching to All active members](./images/04-46-mandatory-reminder-audience.png)
+
+![The Weekly Company Drill event template, not mandatory, with its own reminder audience saved as All active members](./images/04-47-template-reminder-audience.png)
+
+**Above: a mandatory event, audience untouched. Below: a non-mandatory template, audience explicitly set.** Both read "All active members," and they get there two different ways — the first from the automatic default this section describes, the second from a value saved on the template itself, independent of its own `is_mandatory` flag: the template is not mandatory, and its audience is "all" anyway. Starting a new event from this template carries that saved value in, the same as every other template default.
 
 ### Check-in lead time
 
@@ -1624,10 +1628,7 @@ attendees never reach the pipeline has not recruited anybody.
 The event page now also shows the applicants an event brought in, and the
 pipeline board can be filtered by the event applicants came from.
 
-> **[SCREENSHOT NEEDED — an event detail page showing its linked prospects.
->
-> > Seed a recruitment event with at least three guest sign-ins converted to
-> > prospects, so the list reads as a result rather than a single row.]**
+![An event's detail page with the Prospective Members card populated: three named applicants who came from this open house, each linked into the pipeline](./images/04-48-event-linked-prospects.png)
 
 ### Edge cases
 

@@ -11011,6 +11011,13 @@ export const SHOTS = [
         .waitFor({ state: "visible", timeout: 20_000 });
       await page.waitForTimeout(300);
     },
+    // Same false trigger as 04-44/19-10: "No reminders" is one of the three
+    // <option>s on #reminder-target, present in the DOM whatever is
+    // selected. The control itself reads All active members.
+    allowEmptyState:
+      '"No reminders" is an unselected <option> of the reminder-target ' +
+      "select, not a state this form is in -- the control reads All active " +
+      "members. Unselected options sit in the DOM whatever is chosen.",
   },
   {
     // The other half of the marker: a template's own audience, saved
@@ -11034,12 +11041,45 @@ export const SHOTS = [
       await page
         .getByRole("button", { name: "Edit Weekly Company Drill" })
         .click({ timeout: 15_000 });
-      await page
-        .locator("#reminder-target")
-        .waitFor({ state: "visible", timeout: 20_000 });
+      // Not #reminder-target: the template form's own control, distinct from
+      // the event form's id of the same name.
+      const control = page.locator("#template-reminder-target");
+      await control.waitFor({ state: "visible", timeout: 20_000 });
+      // The reminders section sits below the fold in the modal's own
+      // scrolling panel -- a full-page shot of the outer document does not
+      // reach it, so this scrolls the panel itself rather than the page.
+      await control.scrollIntoViewIfNeeded();
       await page.waitForTimeout(300);
     },
+    fullPage: false,
+  },
+  {
+    // The Prospective Members card on the event detail page, populated. The
+    // event is Recruitment-typed with guest sign-in and create-a-prospect
+    // both on, and three named guests actually signed in through the public
+    // kiosk path -- an attendee added by an officer creates no pipeline card
+    // at all, so only that path produces this state.
+    id: "04-48-event-linked-prospects",
+    doc: "04-events-meetings.md",
+    line: 1627,
+    anchor: "an event detail page showing its linked prospects",
+    alt: "An event's detail page with the Prospective Members card populated: three named applicants who came from this open house, each linked into the pipeline",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=100",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Fall Recruitment Open House",
+    ),
     fullPage: true,
+    // The event does not collect RSVPs -- guests sign in at the kiosk, not
+    // through the app -- so that section's own empty state is correct and
+    // unrelated to the Prospective Members card the shot is about, which is
+    // populated with three named applicants.
+    allowEmptyState:
+      "The event has requires_rsvp off, so its RSVP section correctly " +
+      "reads no RSVPs yet -- guests sign in at the kiosk. The Prospective " +
+      "Members card lower on the page carries the three named applicants.",
   },
   {
     // Half of a permission pair, both opening the SAME colleague's profile.
