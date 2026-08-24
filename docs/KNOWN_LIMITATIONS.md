@@ -67,6 +67,36 @@ here.
 | **No knowledge-test engine (officer-entered scores only)**             | Open (feature)       | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Skills-test completion does not enforce requirement `max_attempts`** | ✅ Resolved          | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
 
+## Self-Report Attachments — What Happens to the File (2026-08-23)
+
+A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported
+training. Where the bytes end up, and when they are removed, is deliberate —
+and partly still open.
+
+**Where they live.** `/app/uploads/training_attachments/self_reported_submissions/<org_id>/`,
+under the _training-record_ attachment root on purpose. Approval copies the
+submission's attachment dicts onto the `TrainingRecord` verbatim, and the
+record download route confines paths to `TRAINING_ATTACHMENT_DIR`; a sibling
+directory would 404 every approved certificate from the member's own training
+history. `tests/test_training_submission_drafts_attachments.py` asserts the
+nesting.
+
+**When they are removed.** Deleting or withdrawing a submission unlinks its
+confined attachment paths along with the row. That is safe only because a
+submission is deletable in `draft`, `pending_review` and `revision_requested`
+alone — never after approval, which is the one state where a `TrainingRecord`
+also references the file. **If that guard is ever widened, the delete must
+stop unlinking**, or an approved member's evidence disappears from their
+training record.
+
+**What is still open:**
+
+| Item                             | Status         | Detail                                                                                                                                                                                                                                                              |
+| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No retention policy**          | Open (policy)  | Approved certificates are kept indefinitely, which is what a training record is for, but nothing expires them and nothing sweeps an organization's files if the organization itself is removed. Needs a records-retention decision from the department before code. |
+| **No malware scanning**          | Open (feature) | Uploads are validated by magic bytes and confined to a server-generated name, so a double extension cannot survive the trip and nothing is executed server-side. They are not scanned. A file served back to an officer is whatever the member uploaded.            |
+| **Voided records keep the file** | By design      | `DELETE /training/records/{id}` marks a record `cancelled` rather than removing it, so the correction stays auditable — and the evidence behind the corrected entry stays with it.                                                                                  |
+
 ## Scheduling Module
 
 ### Naming: scheduled vs. worked (resolved 2026-08-01)

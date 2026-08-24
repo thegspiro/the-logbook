@@ -187,7 +187,7 @@ class GuestCheckInService:
                 organization_id, email
             )
             if existing is not None:
-                await self._link_prospect_to_event(existing, event)
+                await self.link_prospect_to_event(existing.id, event)
                 return existing, False
 
             prospect = await pipeline_service.create_prospect(
@@ -207,7 +207,7 @@ class GuestCheckInService:
                     },
                 },
             )
-            await self._link_prospect_to_event(prospect, event)
+            await self.link_prospect_to_event(prospect.id, event)
             return prospect, True
         except Exception as exc:
             logger.error(
@@ -217,18 +217,28 @@ class GuestCheckInService:
             )
             return None, False
 
-    async def _link_prospect_to_event(
-        self, prospect: ProspectiveMember, event: Event
+    async def link_prospect_to_event(
+        self, prospect_id: str, event: Event, note: Optional[str] = None
     ) -> None:
         """Attach the prospect to the event, if not already attached.
 
         ``prospect_event_links`` carries a unique (prospect, event) index, so a
         second sign-in must find the existing row rather than insert a clashing
         one.
+
+        Public because staff-entered attendance links a prospect too, and the
+        link is what the applicant's linked-events section and the by-event
+        applicant filter both read — setting ``prospect_id`` alone advanced the
+        pipeline off an attendance that then appeared nowhere.
+
+        ``note`` describes how the attendance was recorded and is kept in the
+        prospect's event history, so the caller supplies it: the kiosk default
+        below would tell a coordinator a guest scanned the room code when a
+        staff member in fact entered them by hand.
         """
         existing = await self.db.execute(
             select(ProspectEventLink).where(
-                ProspectEventLink.prospect_id == prospect.id,
+                ProspectEventLink.prospect_id == str(prospect_id),
                 ProspectEventLink.event_id == str(event.id),
             )
         )
@@ -238,9 +248,9 @@ class GuestCheckInService:
         self.db.add(
             ProspectEventLink(
                 id=generate_uuid(),
-                prospect_id=prospect.id,
+                prospect_id=str(prospect_id),
                 event_id=str(event.id),
-                notes=f"Checked in at {event.title} via room QR code",
+                notes=note or f"Checked in at {event.title} via room QR code",
             )
         )
         await self.db.flush()

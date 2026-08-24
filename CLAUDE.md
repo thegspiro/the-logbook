@@ -160,16 +160,16 @@ touching any of it.
 
 | Declared as                                     | Version | Used by                                          |
 | ----------------------------------------------- | ------- | ------------------------------------------------ |
-| `typescript`                                    | 7.0.2   | *(nothing intentionally — see below)*            |
+| `typescript`                                    | 7.0.2   | _(nothing intentionally — see below)_            |
 | `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
 
 **What actually resolves in `package-lock.json`:**
 
-| Lock path                          | Version | Why it is there                                   |
-| ---------------------------------- | ------- | ------------------------------------------------- |
+| Lock path                          | Version | Why it is there                                                     |
+| ---------------------------------- | ------- | ------------------------------------------------------------------- |
 | `node_modules/typescript`          | 5.9.3   | `"peer": true` — npm auto-installed it to satisfy typescript-eslint |
-| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                     |
-| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested            |
+| `node_modules/typescript-native`   | 7.0.2   | The aliased compiler, hoisted                                       |
+| `frontend/node_modules/typescript` | 7.0.2   | The frontend's own declaration, nested                              |
 
 **typescript-eslint still cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
@@ -387,6 +387,7 @@ backend/app/
 - **Auth (httpOnly cookies):** Auth tokens are stored exclusively in **httpOnly cookies** set by the backend — never in `localStorage`. The global axios instance uses `withCredentials: true` so cookies are sent automatically. A lightweight `has_session` flag in `localStorage` tells `loadUser()` whether to attempt an API call on page refresh. **Never store tokens in localStorage or send `Authorization` headers.** CSRF protection: state-changing requests (POST/PUT/PATCH/DELETE) read a `csrf_token` cookie and attach it as an `X-CSRF-Token` header (double-submit pattern). Response interceptor catches 401 → attempts cookie-based refresh via `POST /auth/refresh` → retries original request. A shared `refreshPromise` prevents concurrent refresh races (token rotation).
 - **Toast notifications:** `react-hot-toast` — use `toast.success()`, `toast.error()` for user feedback. `<Toaster>` is mounted in `App.tsx`
 - **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
+- **Contrast is AAA, and the palette is one decision** _(2026-08-23)_: the primary fill is **red-800** (`#991b1b`), not red-600 — white on red-600 measures 4.83:1, which is AA for large text only, and a button label is not large text. The light text tiers are slate-700 / slate-600, and in dark mode `--text-primary`, `--text-secondary` and `--text-muted` are **all `#ffffff`**: no tint of grey clears 7:1 against a 6% surface on this gradient, so dark-mode hierarchy comes from size and weight, never colour. Do not reintroduce a grey text tier in `.dark`, and do not add a red-600 primary fill — a mixed palette is worse than either choice, which is why the uplift was applied to every call site at once rather than screen by screen.
 - **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `btn-primary`/`btn-icon` (44px touch target), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px. When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
 - **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `PromptDialog` (single typed value), `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays). **Confirmations go through `useConfirm()`**, whose dialog is mounted once by `ConfirmProvider` at the app root — see Pitfall #16
 - **Settings screens:** All three (Organization, Events, Scheduling) render through `components/settings/SettingsLayout.tsx` — section sidebar with descriptions on desktop, scrollable tab strip on phones, body in a surface card, `aria-current` on the active section, and the selected section mirrored into `?tab=`. A new settings screen uses this rather than a fourth design; the section list is a `SettingsSection[]` declared beside the screen (see `modules/scheduling/components/schedulingSettingsSections.ts`). Show a Save/Reset footer **only** on sections the footer actually writes
@@ -1041,6 +1042,52 @@ events bulk-action bar. `pb-safe` and `action-bar-safe` already fold the
 allowance in; a hand-written `bottom-*` does not. Dialogs get out of this by
 registering with `useOverlaySurface` (which `useDialog` does for you), which
 hides the bar outright.
+
+### 22. Never Hold One `patch()` Open in Two Coroutines at Once _(2026-08-23)_
+
+`unittest.mock.patch` saves whatever it finds as "the original" when it enters.
+Two patches of the **same** target open at the same time therefore record each
+other, and the second exit reinstalls the first one's mock permanently:
+
+```
+A enters -> saves the real function, installs mock A
+B enters -> saves *mock A*, installs mock B
+A exits  -> restores the real function
+B exits  -> restores *mock A*      <- the module keeps a mock for the session
+```
+
+This is not a hypothetical ordering. `TestConcurrentShiftTemplateSubmission`
+drove two `submit_check` calls through `asyncio.gather`, and each coroutine
+entered the same `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+The `AsyncMock` it stranded returned a `SimpleNamespace` with no `full`
+attribute, so every later test reaching `if ref.full is not None` raised — and
+with `pytest-randomly` reshuffling module order each run, the victims changed
+run to run. The same commit passed and failed on alternate CI runs for a day,
+always failing in a file unrelated to the one at fault.
+
+```python
+# WRONG — both coroutines patch the same module attribute
+async def run(service):
+    with patch("app.services.equipment_check_service.resolve_apparatus_ref", AsyncMock(...)):
+        return await service.submit_check(...)
+
+await asyncio.gather(run(a), run(b))
+
+# CORRECT — patch once, outside the concurrent section
+with patch("app.services.equipment_check_service.resolve_apparatus_ref", AsyncMock(...)):
+    await asyncio.gather(run(a), run(b))
+```
+
+`patch.object(instance, ...)` against a per-coroutine object is fine — each
+targets a different object, and an instance built inside a test cannot outlive
+it. Only shared targets (modules, classes) collide.
+
+**Rule:** never enter the same `patch()` from concurrently running coroutines.
+Hoist it above the `gather`, or patch each instance separately.
+`tests/conftest.py` enforces this: an autouse guard records every module- and
+class-level patch target and fails the test that leaves a mock behind, naming
+the attribute and restoring the original. If you see that failure, the fix is
+this rule, not a re-run.
 
 ## Environment Variables
 

@@ -160,4 +160,19 @@ describe('PaymentOptions', () => {
 
     expect(screen.getByText('ORD-2026-0001')).toBeInTheDocument();
   });
+
+  it('leaves the reference to the caller when the surrounding block states it', () => {
+    // My Orders prints the reference under the balance in 13px; repeating it
+    // per method turns one instruction into three.
+    render(
+      <PaymentOptions
+        instructions={instructions({ options: [option({ prefillsReference: false })] })}
+        amount={45}
+        showReference={false}
+      />
+    );
+
+    expect(screen.queryByText(/Reference/)).not.toBeInTheDocument();
+    expect(screen.getByText('@FallsChurchFire')).toBeInTheDocument();
+  });
 });

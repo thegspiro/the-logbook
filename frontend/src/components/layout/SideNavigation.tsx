@@ -36,6 +36,7 @@ import {
   Activity,
   CreditCard,
   ScanLine,
+  Nfc,
   Scale,
   Stethoscope,
   Store,
@@ -45,6 +46,8 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
@@ -95,6 +98,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
   const { isModuleOn } = useEnabledModules();
+  const { isConnected } = useConnectedIntegrations();
+  const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -358,6 +363,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 // backend serves to users.view or members.manage holders.
                 anyPermission: ['users.view', 'members.manage'],
               },
+              // Only where the department actually issues cards. The route
+              // and the endpoints behind it refuse independently; this keeps a
+              // dead entry out of the menu for everyone else.
+              ...(isNfcCardsOn
+                ? [
+                    {
+                      label: 'Check-In Station',
+                      path: '/members/check-in-station',
+                      icon: Nfc,
+                      permission: 'members.check_in',
+                    },
+                  ]
+                : []),
               {
                 label: 'Waivers',
                 path: '/members/admin/waivers',
@@ -750,7 +768,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                         collapsed ? 'justify-center p-3' : 'px-4 py-3'
                       } ${
                         parentActive && !hasSubItems
-                          ? 'bg-red-600 text-white shadow-sm'
+                          ? 'bg-red-800 text-white shadow-sm'
                           : parentActive && hasSubItems
                             ? 'bg-theme-surface-secondary text-theme-text-primary'
                             : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
@@ -803,7 +821,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                                 aria-current={subActive ? 'page' : undefined}
                                 className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] ${
                                   subActive
-                                    ? 'bg-red-600 text-white shadow-sm'
+                                    ? 'bg-red-800 text-white shadow-sm'
                                     : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
                                 }`}
                               >

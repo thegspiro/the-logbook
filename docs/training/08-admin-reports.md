@@ -130,6 +130,35 @@ Configure how membership IDs are assigned:
 - Set the ID format (prefix, numeric pattern)
 - View and manage the next available ID number
 
+### Label Printers
+
+Registers the department's network barcode label printers. Once one is
+registered, every label print page in the app — inventory, apparatus,
+facilities, members, applicants — gains a **Send to Printer** button that prints
+without going through a print dialog, so nothing can rescale a barcode and stop
+it scanning.
+
+Two printer languages are supported. **ZPL** covers Zebra — and, worth knowing,
+the many non-Zebra printers with a ZPL emulation mode (TSC, Godex, Honeywell,
+Citizen, SATO), which work here with no further change once emulation is turned
+on at the printer. **ESC/POS** covers receipt-class printers such as the Epson
+TM and Star units already sitting at watch desks; loaded with linerless label
+roll, one of those prints asset tags perfectly well.
+
+Each printer records its network address, resolution, and the label stock
+loaded in it. **Test connection** checks an address before it is saved — the
+printer is asked to identify itself, and its reported resolution fills the
+field — and **Check status** asks a saved printer whether it can print right
+now, reporting faults such as out of labels or printhead open. That check also
+runs after every direct print, so a job sent to a printer that is out of stock
+says so instead of reporting success over an empty roll.
+
+Printers are shared department-wide; the _label size_ and _barcode style_ each
+person prefers stay per-position preferences.
+
+Full walkthrough: [Direct printing to a network label
+printer](./05-inventory.md#direct-printing-to-a-network-label-printer).
+
 ---
 
 ## Module Management

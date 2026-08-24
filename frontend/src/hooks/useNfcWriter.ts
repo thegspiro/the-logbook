@@ -13,6 +13,15 @@ interface UseNfcWriterReturn {
   error: string | null;
   /** Begins a write; resolves true once a tag was written. */
   writeUrl: (url: string) => Promise<boolean>;
+  /**
+   * Writes a plain text record; resolves true once a tag was written.
+   *
+   * Used to put an issued ID card code onto a blank tag. A url record would
+   * be wrong here: the value is an opaque credential, not somewhere to send a
+   * phone, and writing it as a link means any phone that brushes the card
+   * offers to open something.
+   */
+  writeText: (text: string) => Promise<boolean>;
   /** Aborts a pending write (the browser stays armed until a tag taps). */
   cancel: () => void;
   /** Returns to `idle`, clearing any success/error result. */
@@ -20,7 +29,7 @@ interface UseNfcWriterReturn {
 }
 
 /**
- * Writes a URL to an NFC tag via Web NFC.
+ * Writes a URL or a text record to an NFC tag via Web NFC.
  *
  * `NDEFReader.write()` does not resolve when the call is made — it arms the
  * radio and stays pending until a tag is physically held against the phone.
@@ -59,7 +68,7 @@ export function useNfcWriter(): UseNfcWriterReturn {
     setError(null);
   }, []);
 
-  const writeUrl = useCallback(async (url: string): Promise<boolean> => {
+  const writeRecord = useCallback(async (record: NDEFRecordInit): Promise<boolean> => {
     const Reader = typeof window !== 'undefined' ? window.NDEFReader : undefined;
     if (!Reader) {
       setError(getNfcUnavailableReason() ?? 'NFC is not available on this device.');
@@ -77,7 +86,7 @@ export function useNfcWriter(): UseNfcWriterReturn {
     setStatus('waiting');
 
     try {
-      await new Reader().write({ records: [{ recordType: 'url', data: url }] }, { signal: controller.signal });
+      await new Reader().write({ records: [record] }, { signal: controller.signal });
       if (!mountedRef.current || controller.signal.aborted) return false;
       setStatus('success');
       return true;
@@ -93,5 +102,15 @@ export function useNfcWriter(): UseNfcWriterReturn {
     }
   }, []);
 
-  return { supported, unavailableReason, status, error, writeUrl, cancel, reset };
+  const writeUrl = useCallback(
+    (url: string): Promise<boolean> => writeRecord({ recordType: 'url', data: url }),
+    [writeRecord]
+  );
+
+  const writeText = useCallback(
+    (text: string): Promise<boolean> => writeRecord({ recordType: 'text', data: text }),
+    [writeRecord]
+  );
+
+  return { supported, unavailableReason, status, error, writeUrl, writeText, cancel, reset };
 }

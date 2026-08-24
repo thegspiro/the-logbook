@@ -74,9 +74,9 @@ const ApplicantInfoSection: React.FC<ApplicantInfoSectionProps> = ({ applicant, 
           <h3 className="text-theme-text-primary text-sm font-semibold">Applicant Information</h3>
         </div>
         {expanded ? (
-          <ChevronUp className="text-theme-text-tertiary h-4 w-4" />
+          <ChevronUp className="text-theme-text-muted h-4 w-4" />
         ) : (
-          <ChevronDown className="text-theme-text-tertiary h-4 w-4" />
+          <ChevronDown className="text-theme-text-muted h-4 w-4" />
         )}
       </button>
 
@@ -101,24 +101,24 @@ const ApplicantInfoSection: React.FC<ApplicantInfoSectionProps> = ({ applicant, 
                 content, so an email longer than half the card ran straight
                 through the phone number in the next grid column. */}
             <div className="flex min-w-0 items-center gap-2 text-sm">
-              <Mail className="text-theme-text-tertiary h-4 w-4 shrink-0" />
+              <Mail className="text-theme-text-muted h-4 w-4 shrink-0" />
               <span className="text-theme-text-primary break-all">{applicant.email}</span>
             </div>
             {applicant.phone && (
               <div className="flex items-center gap-2 text-sm">
-                <Phone className="text-theme-text-tertiary h-4 w-4" />
+                <Phone className="text-theme-text-muted h-4 w-4" />
                 <span className="text-theme-text-primary">{applicant.phone}</span>
               </div>
             )}
             {applicant.date_of_birth && (
               <div className="flex items-center gap-2 text-sm">
-                <Calendar className="text-theme-text-tertiary h-4 w-4" />
+                <Calendar className="text-theme-text-muted h-4 w-4" />
                 <span className="text-theme-text-primary">DOB: {formatDate(applicant.date_of_birth, timezone)}</span>
               </div>
             )}
             {applicant.address && (
               <div className="flex items-center gap-2 text-sm">
-                <MapPin className="text-theme-text-tertiary h-4 w-4" />
+                <MapPin className="text-theme-text-muted h-4 w-4" />
                 <span className="text-theme-text-primary">
                   {[
                     applicant.address.street,
@@ -135,7 +135,7 @@ const ApplicantInfoSection: React.FC<ApplicantInfoSectionProps> = ({ applicant, 
 
           {/* Notes */}
           {applicant.notes && (
-            <div className="bg-theme-bg-secondary mt-3 rounded-md p-3">
+            <div className="bg-theme-surface-secondary mt-3 rounded-md p-3">
               <p className="text-theme-text-secondary text-xs font-medium">Applicant Notes</p>
               <p className="text-theme-text-primary mt-1 text-sm whitespace-pre-wrap">{applicant.notes}</p>
             </div>
@@ -170,9 +170,9 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
           <h3 className="text-theme-text-primary text-sm font-semibold">Pipeline Progress</h3>
         </div>
         {expanded ? (
-          <ChevronUp className="text-theme-text-tertiary h-4 w-4" />
+          <ChevronUp className="text-theme-text-muted h-4 w-4" />
         ) : (
-          <ChevronDown className="text-theme-text-tertiary h-4 w-4" />
+          <ChevronDown className="text-theme-text-muted h-4 w-4" />
         )}
       </button>
 
@@ -208,7 +208,7 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
                   ) : isCurrent ? (
                     <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500" />
                   ) : (
-                    <Circle className="text-theme-text-tertiary mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <Circle className="text-theme-text-muted mt-0.5 h-4 w-4 flex-shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
                     <p
@@ -219,7 +219,7 @@ const PipelineProgressSection: React.FC<PipelineProgressSectionProps> = ({ appli
                       {entry.stage_name}
                     </p>
                     {isCompleted && entry.completed_at && (
-                      <p className="text-theme-text-tertiary text-xs">
+                      <p className="text-theme-text-muted text-xs">
                         Completed {formatDateTime(entry.completed_at, timezone)}
                         {entry.completed_by_name ? ` by ${entry.completed_by_name}` : ''}
                       </p>
@@ -380,7 +380,7 @@ const InterviewForm: React.FC<InterviewFormProps> = ({ applicantId, existingInte
           <button
             type="button"
             onClick={onCancel}
-            className="text-theme-text-secondary hover:bg-theme-bg-secondary rounded-lg px-4 py-2 text-sm font-medium"
+            className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-lg px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>
@@ -451,7 +451,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
       {/* Header */}
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <div className="bg-theme-bg-secondary text-theme-text-secondary flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium">
+          <div className="bg-theme-surface-secondary text-theme-text-secondary flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium">
             <User className="h-4 w-4" />
           </div>
           <div>
@@ -464,7 +464,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <p className="text-theme-text-tertiary text-xs">
+          <p className="text-theme-text-muted text-xs">
             {formatDateTime(interview.interview_date ?? interview.created_at, timezone)}
           </p>
           {isOwn && (
@@ -472,7 +472,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="text-theme-text-tertiary hover:bg-theme-bg-secondary hover:text-theme-text-secondary ml-2 rounded p-1"
+                className="text-theme-text-muted hover:bg-theme-surface-secondary hover:text-theme-text-secondary ml-2 rounded p-1"
                 title="Edit"
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -481,7 +481,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
                 type="button"
                 onClick={() => void handleDelete()}
                 disabled={isDeleting}
-                className="text-theme-text-tertiary rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                className="text-theme-text-muted rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                 title="Delete"
               >
                 {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -514,7 +514,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
 
       {/* Recommendation details */}
       {interview.recommendation_notes && (
-        <div className="bg-theme-bg-secondary rounded-md p-3">
+        <div className="bg-theme-surface-secondary rounded-md p-3">
           <p className="text-theme-text-secondary mb-1 text-xs font-medium">Recommendation Details</p>
           <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{interview.recommendation_notes}</p>
         </div>
@@ -582,7 +582,7 @@ export const InterviewPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/prospective-members')}
-            className="text-theme-text-secondary hover:bg-theme-bg-secondary rounded-lg p-2"
+            className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-lg p-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -683,7 +683,7 @@ export const InterviewPage: React.FC = () => {
               </div>
             ) : interviews.length === 0 ? (
               <div className="border-theme-surface-border flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
-                <MessageSquare className="text-theme-text-tertiary mb-2 h-8 w-8" />
+                <MessageSquare className="text-theme-text-muted mb-2 h-8 w-8" />
                 <p className="text-theme-text-secondary text-sm">No interviews recorded yet</p>
                 <button
                   type="button"

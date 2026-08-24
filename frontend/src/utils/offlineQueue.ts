@@ -139,6 +139,48 @@ export async function dequeueCheck(id: string): Promise<void> {
 }
 
 /**
+ * Read-modify-write one queued check inside a single readwrite transaction.
+ *
+ * SEC (FE-7): a read in one transaction followed by a put in another can
+ * resurrect an entry `clearAllQueuedChecks` removed in between. That window is
+ * reachable — `authStore.logout` leaves the check form mounted while it awaits
+ * the device purge — so a submission completing during logout could re-create
+ * the previous member's payload and photo blobs on a shared browser profile.
+ * Holding both operations in one transaction makes the purge authoritative:
+ * whichever runs second sees the other's result.
+ *
+ * `mutate` returns the entry to store, or null to leave the record untouched.
+ */
+async function updateQueuedCheck(
+  id: string,
+  mutate: (entry: QueuedCheck) => QueuedCheck | null
+): Promise<QueuedCheck | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const store = txStore(db, 'readwrite');
+    const read = store.get(id);
+    read.onerror = () => reject(read.error ?? new Error('IndexedDB request failed'));
+    read.onsuccess = () => {
+      const entry = read.result as QueuedCheck | undefined;
+      if (!entry) {
+        resolve(null);
+        return;
+      }
+      const next = mutate(entry);
+      if (!next) {
+        resolve(null);
+        return;
+      }
+      // Issued from inside the read's success handler, so it joins the same
+      // still-active transaction rather than opening a second one.
+      const write = store.put(next);
+      write.onsuccess = () => resolve(next);
+      write.onerror = () => reject(write.error ?? new Error('IndexedDB request failed'));
+    };
+  });
+}
+
+/**
  * Increment the retry count for a failed sync attempt.
  *
  * Returns the updated entry (or null if it is already gone) so the caller can
@@ -146,25 +188,7 @@ export async function dequeueCheck(id: string): Promise<void> {
  * the server will never accept. Transient failures must not call this helper.
  */
 export async function markRetry(id: string): Promise<QueuedCheck | null> {
-  const db = await openDB();
-  const entry = await new Promise<QueuedCheck | undefined>((resolve, reject) => {
-    const store = txStore(db, 'readonly');
-    const req = store.get(id);
-    req.onsuccess = () => resolve(req.result as QueuedCheck | undefined);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
-
-  if (!entry) return null;
-  entry.retries += 1;
-
-  await new Promise<void>((resolve, reject) => {
-    const store = txStore(db, 'readwrite');
-    const req = store.put(entry);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
-
-  return entry;
+  return updateQueuedCheck(id, (entry) => ({ ...entry, retries: entry.retries + 1 }));
 }
 
 /** Persist an accepted check before attempting any of its queued photo uploads. */
@@ -173,25 +197,25 @@ export async function markCheckSubmitted(
   submittedCheckId: string,
   submittedItemIds: Record<string, string>
 ): Promise<QueuedCheck | null> {
-  const db = await openDB();
-  const entry = await new Promise<QueuedCheck | undefined>((resolve, reject) => {
-    const store = txStore(db, 'readonly');
-    const req = store.get(id);
-    req.onsuccess = () => resolve(req.result as QueuedCheck | undefined);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
+  return updateQueuedCheck(id, (entry) => ({ ...entry, submittedCheckId, submittedItemIds }));
+}
 
-  if (!entry) return null;
-  entry.submittedCheckId = submittedCheckId;
-  entry.submittedItemIds = submittedItemIds;
-
-  await new Promise<void>((resolve, reject) => {
-    const store = txStore(db, 'readwrite');
-    const req = store.put(entry);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
-  });
-  return entry;
+/**
+ * Drop the photos for one item after the server has accepted them.
+ *
+ * The upload endpoint appends to `photo_urls` and caps an item at three
+ * photos, so a group left in the queue after a successful POST is re-uploaded
+ * on the next drain: it either files duplicate evidence for the same item or
+ * trips the cap and returns a permanent 400. That 400 counts toward
+ * CHECK_QUEUE_MAX_RETRIES, so the entry is eventually discarded along with the
+ * groups that never made it. Checkpointing each accepted group keeps a retry
+ * scoped to the photos still missing.
+ */
+export async function markPhotosUploaded(id: string, itemId: string): Promise<QueuedCheck | null> {
+  return updateQueuedCheck(id, (entry) => ({
+    ...entry,
+    photos: entry.photos.filter((photo) => photo.itemId !== itemId),
+  }));
 }
 
 /** Return the number of items waiting in the queue. */

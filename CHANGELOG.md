@@ -7,6 +7,1127 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling: the calendar now says which shifts need people, and claiming one is a tap (2026-08-24)
+
+**Changed**
+
+- **The Schedule tab is a board, not a grid of cards.** A card told you a shift
+  existed; it did not say whether it still needed anybody, and claiming a seat
+  meant opening a panel and finding a position dropdown. The month grid now
+  carries a status chip per shift — `2 open` / `Full 4/4` / `You + 2/4`, red /
+  amber / green / blue — beside a day panel showing the crew, with a single
+  button that claims the first open seat the member is cleared for. Filters dim
+  rather than hide, so the month keeps its shape. Phone gets a bar grid, a day
+  sheet and a confirmation screen.
+- **Every shift response carries its `roster`.** A month of shifts arrives with
+  its seat occupants in one request, so selecting a day costs no network call
+  and a cell can be coloured "you are on it" at all.
+- **A shift that never stated a crew size reads as unset, not as an
+  emergency.** The board previously assumed four seats when a shift named
+  neither positions nor `min_staffing`, so it rendered "4 open" in critical
+  red — a department that configures neither opened the page to a wall of red
+  that meant nothing. Such a shift is now grey, shows its headcount rather than
+  a ratio, stays out of the open-seat count and the URGENT flag, and can still
+  be joined.
+
+**Added**
+
+- **Standing shifts** — a member's recurring claim on a seat ("every Tuesday
+  night"). Stored rather than written once as a batch of assignments, so giving
+  up a single date leaves the series intact. It has two readers and only means
+  anything because both exist: creating a claim seats the member on matching
+  shifts already on record, and creating a _shift_ seats every member whose
+  active claim matches it — without the second, a series would go quiet the
+  month the department generated its schedule. The horizon is the member's to
+  pick, defaulting to a year out rather than to December 31, which quietly
+  shrinks as the year goes on.
+- **Trade candidates** (`GET /scheduling/shifts/{id}/trade-candidates`) — who
+  could take over the caller's seat, with anyone who could not accept already
+  excluded: on the shift, on leave, not cleared for the position, or working a
+  tour that abuts this one. Ranked least-loaded first.
+- **A member can accept the seat they were offered**
+  (`POST /scheduling/swap-requests/{id}/respond`). Deliberately distinct from
+  manager review, which refuses participants by design, and limited to a
+  one-way targeted offer: accepting is the offerer withdrawing and the accepter
+  signing up, in one step, both already unprivileged.
+- **`swap_offer_expiry`** — a daily sweep closing offers still pending the day
+  before the shift, notifying both members and the duty officer. A pending
+  offer holds the seat with the member who made it, so left alone it survived
+  the shift itself with nobody told.
+- **`GET /scheduling/eligibility/positions/bulk`** — one call per day rather
+  than one per shift. The expensive half of the answer is about the member and
+  identical across shifts.
+
+**Fixed**
+
+- **A targeted trade offer could never be completed by anybody.** Manager
+  review reads a set `target_user_id` as "there must be an assignment to trade
+  back" and rejects the request when there is no requesting shift, which is the
+  shape a one-way offer has. The new participant-acceptance path completes it.
+- **Standing claims bypassed every self-service check.** They called
+  `create_assignment` directly, whose `self_signup` flag defaults to False, so
+  a series seated members on shifts they were not eligible for, on cancelled or
+  finalized shifts, on past dates, and past a position's seat count.
+- **Seat capacity was half-enforced.** A shift with named positions was capped
+  seat by seat; a shift with only `min_staffing` had nothing reading it, so the
+  calendar could show "Full 4/4" while the server accepted a fifth. Officer
+  assignment stays uncapped deliberately.
+- **Calendar day labels shifted a day for any viewer west of the
+  department.** They went through a timezone-aware formatter; a calendar date
+  belongs to no timezone, so a cell showing 26 announced itself as "Tuesday,
+  August 25".
+- A standing claim's `apparatus_id` is verified in-org before it is stored, and
+  the standing service and shift generation now resolve the organisation's
+  timezone through one shared helper instead of disagreeing about the default.
+- **A cancelled, finalized or past shift no longer reads as short-staffed.**
+  Its empty chairs counted towards the day's open-seat total and its urgent
+  flag, and it offered a claim button the server refuses. It now reads as
+  closed and offers nothing.
+- **Each shift on the board carries a details link again.** The board's own
+  actions cover claiming and giving up a seat; editing a shift, managing its
+  attendance and finalizing it live in the detail panel, which a fully staffed
+  shift an officer is not assigned to had no other route into.
+- **Giving up a seat is withheld while your own offer of it stands.** Releasing
+  it, or offering it again, left the first recipient holding an offer that
+  could no longer be honoured. Withdrawing is the only move until they answer.
+- **A standing series is anchored on the shift it was started from.** Biweekly
+  parity and the monthly ordinal both come from the first matching weekday
+  after the start date, so anchoring on today built a fortnight that skipped
+  the very shift the member opened it from. A series covering only dates the
+  department has not scheduled yet can also be saved — that is the case
+  standing shifts exist for.
+- **A training seat cannot be handed over through a trade.** It carries the
+  trainee's program and evaluating officer, and moving only the member id
+  would file one member's training against another. Approved time off is
+  rechecked when an offer is accepted, not only when candidates are picked.
+
+### A member profile showed everyone the gear its member signed for (2026-08-24)
+
+**Security**
+
+- **The Assigned Inventory table rendered on every member profile, for every
+  viewer.** It was gated on "is the inventory module enabled" and nothing else,
+  unlike the training, admin-hours, emergency-contact and ID-card sections
+  beside it, which each gate on self-or-permission. A member profile is a
+  directory card — the contact details a colleague is meant to look up. Which
+  turnout coat, radio or SCBA mask somebody signed for, and what condition it
+  is in, is quartermaster business. The section and its Quick Stats line now
+  require `inventory.manage`, or that the profile is the viewer's own.
+- **`inventory.view` could never have been the gate.** It is part of the
+  baseline Member position — every member holds it, so they can browse the
+  catalog and their own kit — so a check for it says only "this person is a
+  member". The per-member endpoints checked exactly that, which is why the
+  server did not stop the page: `/users/{id}/inventory`, `/assignments`,
+  `/issuances`, `/issuance-history` and `/clearance` all passed for the whole
+  department, and their docstrings claimed quartermasters-only while the code
+  did not implement it. Cross-member reads now go through one shared guard and
+  require `inventory.manage`; a member still reads their own without any
+  inventory permission at all.
+- **`/inventory/members-summary` moves to `inventory.manage` outright.** It
+  names who holds which gear for every member at once, and its only callers are
+  pages already behind `inventory.manage` routes.
+- **Gating the per-member routes alone would not have closed it.** Every route
+  that answers "who has this item" was reachable the same way:
+  `/items?assigned_to={id}` rebuilt a colleague's kit item by item, and the
+  item history, per-item issuances and outstanding-checkout lists all name
+  members. The catalog stays open — members browse it for gear and search it
+  for a replacement — so `/items` and `/items/{id}` strip the holder's id and
+  name for callers without `inventory.manage`, a member still seeing their own
+  name on their own gear, and the filter naming another member is refused. The
+  history, issuance and checkout lists move to `inventory.manage`.
+- The profile fetches nothing it may not show: a viewer without the permission
+  issues no request, rather than being turned away at the server, and items are
+  cleared when navigating to a profile whose gear is not visible. A test
+  asserts the baseline Member position holds `inventory.view` but not
+  `inventory.manage`, so the fact the guard rests on cannot drift unnoticed.
+
+### Department Store: the member storefront, checkout and My Orders redesigned (2026-08-24)
+
+**Changed**
+
+- **Sizes are chips on the card, not a `<select>`.** A dropdown hid how many
+  sizes a garment came in, hid which were already sold out until you opened
+  it, and on a phone handed the choice to a native picker that covered the
+  price you were choosing against. Every size is now visible at once, with the
+  unavailable ones struck through and unpressable.
+- **The Add button carries the price.** It reads `Add $73.00` — the live total
+  for the size, quantity and embroidery currently selected — so the amount a
+  member is committing to sits on the control they press rather than three
+  lines above it.
+- **Embroidery is a labelled opt-in with a live preview.** The name renders as
+  it will be stitched, uppercased, and the upcharge only applies once there is
+  text to stitch. A required personalization keeps the box ticked and blocks
+  the add until it is filled.
+- **One card answers "is the store open, and how long have I got".** The green
+  "Ordering is open" banner and the separate window card said the same thing
+  twice and still left the deadline as a date the member had to subtract today
+  from. They are now a single card with a countdown that shrinks its unit as
+  the deadline nears (`5 days` → `4h 12m` → `43m`), the closing datetime, and
+  a bar showing how much of the window is gone.
+- **Checkout is a page, not a dialog.** A 512px modal column could not hold
+  four decisions plus a summary without scrolling, which is what made a
+  checkout read as a form to fill in. It now lives at `/store/checkout`.
+- **Checkout names where the money goes.** Each accepted method is a tile
+  showing the department's handle for it, and the "what happens after you
+  submit" line follows the department's own payment policy instead of
+  asserting one behaviour for every configuration.
+- **My Orders shows where an order has got to.** A four-stop stepper —
+  Submitted, Payment due, Ordered, Ready for pickup — replaces two status
+  badges a member had to translate. The balance due leads with the amount and
+  the order number to reference. Settled orders collapse to a single row.
+- **Contrast across the whole app is now WCAG AAA.** Primary buttons move from
+  red-600 to red-800 (white on red-600 measures 4.83:1 — AA for large text
+  only, and a button label is not large text), the light theme's secondary and
+  muted text each move a step darker, and the dark theme drops its grey text
+  tiers for white, taking its hierarchy from size and weight instead. Applied
+  everywhere at once rather than screen by screen: a primary button that is
+  one red on the store and another elsewhere reads as two different actions.
+
+**Added**
+
+- **Search and category filtering on the catalog**, with per-category counts
+  taken against the whole catalog rather than the current filter.
+- **A sticky cart bar on phones**, above the bottom navigation, carrying the
+  item count and running total down the page.
+- The shopper-facing storefront response now carries the window's opening
+  time, the accepted payment methods with their handles, and the department's
+  payment policy — the three things the countdown, the checkout tiles and the
+  post-submit wording need.
+
+### Nine settings screens, five navigation idioms, one shell (2026-08-23)
+
+**Changed**
+
+- **Every settings screen now renders through the same shell.** Nine screens
+  called themselves "settings" and shared almost nothing: five navigation
+  idioms, four save models, four container widths, and four different page
+  title sizes — 30px on User Settings, 24px on Elections, 20px on Scheduling,
+  and no title at all on Organization or Events settings. They now share one
+  chrome, one 960px column (replacing `max-w-4xl`, `max-w-5xl`, `max-w-6xl` and
+  the `max-w-[1600px]` Email Templates had grown to), and one title that names
+  the page rather than the module.
+- **Sections run across the top; a section's own pages take a left rail.**
+  Sections read as a segmented pill row in blue-muted; sub-pages take the 3px
+  red left marker the navigation already used for a partially-active group.
+  Neither treatment is new to the product. A section with no sub-pages drops
+  the rail entirely rather than showing an empty one, and no screen carries two
+  stacked horizontal strips any more.
+- **Settings save as you change them, and one pill in the header says whether
+  it stuck.** This replaces per-block Save buttons on General, Modules, Members,
+  Ranks, Events and Elections. Election Settings in particular had a single Save
+  button at the top right covering five screens' worth of fields, so changing a
+  value near the bottom gave no indication anything still needed saving.
+- **The per-toggle success toast is gone.** Events Settings fired one on every
+  switch, so flipping four visibility toggles produced four stacked
+  confirmations — and a real failure would have arrived looking like the fourth.
+  Failures still toast, once, and never roll the field back: restoring the
+  stored value is indistinguishable from the keystrokes never registering, and
+  it destroys the only copy of what the member meant to type.
+- **Authentication, Email, Storage and User Settings keep an explicit Save.**
+  These write credentials. A half-typed SSO secret dispatched on a debounce can
+  lock a department out of its own sign-in.
+- **EVOC Levels is no longer a top-level section beside Email and Storage.** It
+  is a second rank ladder, so it is now the Ranks section's second page. Its
+  `apparatus.manage` gate drops that one page rather than the whole section.
+- **Election Settings' seven raw red checkboxes became switches**, and the
+  switch itself is now one shared component instead of two copies.
+
+**Fixed**
+
+- **The MFA and email switches remounted on every render.** `EmailSettingsSection`
+  declared its `Toggle` inside its own component body, making it a fresh
+  component type each render — React unmounted and remounted the switch whenever
+  anything else in the form changed, discarding its focus and cutting its
+  transition short mid-slide.
+- **Violet is gone from the settings surfaces.** `#7c3aed` / `violet-600` /
+  `violet-500/15` are declared in no theme, so they never adapted in dark or
+  high-contrast mode — the same mid-purple rendered against slate-900 as against
+  white. Each usage moved to the token that already carried its meaning.
+
+### Printer support has a reference doc (2026-08-24)
+
+**Fixed**
+
+- **A `~HQES` condition in the high nibble group was silently dropped.**
+  `parse_error_status` captured the high group and decoded only the low one,
+  so a reply naming both — `ERRORS: 1 00000001 00000001` — reported "Out of
+  labels" and lost the other condition. The high group now adds the generic
+  line, gated on the printer's own fault flag so a unit that parks something
+  benign there does not report a fault on every query. Found while writing the
+  reference doc, which had promised the behaviour the parser did not have.
+
+**Added**
+
+- **[`docs/LABEL_PRINTING_MODULE.md`](docs/LABEL_PRINTING_MODULE.md).** Label
+  and station printing had thorough training coverage — how a quartermaster
+  registers a printer and prints a sheet — and no reference doc at all. There
+  was nowhere documenting the API surface, the permission model, the ZPL and
+  ESC/POS status flag tables, or the SSRF boundary the printer transport is,
+  which is the material the next person changing it needs.
+- **The status flag tables are written down**, with their sources named: the
+  ZPL II Programming Guide for `~HQES`, Epson's ESC/POS reference for
+  `DLE EOT`. The point is that the next person extending them checks the table
+  rather than a symptom — which is exactly how three wrong flags got shipped
+  and then corrected.
+
+**Changed**
+
+- **The training guide now separates printer errors from warnings.** "Labels
+  nearly out" does not stop a print and the old wording did not say so; a
+  table now gives each fault, its kind, and what to do about it.
+- **The guide no longer implies a direct print reports unavailable status.**
+  It does not: `status_known` reaches the client and no print screen reads it,
+  so a printer whose firmware cannot answer shows an ordinary success. The
+  guide now scopes that message to **Check status** and says to read a
+  successful print from such a printer as "sent", not "printed".
+
+### Submit External Training: the certificate travels with the submission (2026-08-23)
+
+**Fixed**
+
+- **The confirmation screen never appeared in a running app.** The refresh
+  after a save went through the page's loading branch, which unmounted the
+  form — and the receipt lives in the form's state. In a test the mocks resolve
+  in the same tick, so the spinner never rendered, the form never unmounted,
+  and the assertion passed against a feature that could not work. Refreshes
+  after a save are silent now, and the regression test drives one that is still
+  in flight.
+- **A certificate could not reach an auto-approved submission.** Such a
+  submission is frozen the moment it exists — the attachment endpoint refuses
+  it, and its training record has already been copied from it — so the upload
+  that followed always failed. `POST /training/submissions/with-attachment`
+  takes the payload and the file together, attaching the evidence inside the
+  same transaction that routes the submission. The three-step client dance
+  (create draft, upload, hand over) is gone.
+- Row actions in Recent Submissions were 28px on a phone, under the project's
+  44px floor; the row now stacks so a course name is not ellipsed to make room
+  for them.
+
+**Added**
+
+- **The reported start time is stored.** `training_submissions.start_time` and
+  `training_records.start_time` (migration `a71c9d4e5b62`, both nullable, no
+  backfill). Editing a submission restored 09:00 because the API kept only a
+  date and a number of hours; an officer reviewing four hours could not tell a
+  morning class from an evening one.
+- **"Does not expire" beside the expiry date.** Whether an expiry is required
+  follows the certification rather than a blanket rule, so a department can ask
+  for the date and still accept a credential that never expires.
+- `attachments` in the officer's self-report settings editor — the submit form
+  already honoured it, but only an API call could change it.
+- A Playwright spec for the member's path: hours derived from a stepper, the
+  certificate travelling with the create, a draft that round-trips on one row,
+  a returned submission opening on the officer's note, and the phone action bar
+  clearing the bottom navigation.
+
+**Changed**
+
+- The screen's presentational pieces (`DurationStepper`, `AttachmentField`,
+  `SubmissionReceipt`, `RevisionNotice`, `Checklist`, the card and label shell)
+  now live in `components/training/submit/`.
+- `docs/KNOWN_LIMITATIONS.md` records where attachment files live, why the
+  submission delete may unlink them, and what is still open: no retention
+  policy and no malware scanning.
+
+### The Department Store errored for admins and was invisible to everyone else (2026-08-24)
+
+**Fixed**
+
+- **The store admin console returned a 500 on load**, for any department that
+  had an order window open. The dashboard renders the open window through the
+  full window payload, which reads its offerings, but `get_open_windows` was
+  the one window query that did not eager-load them — `list_windows` and
+  `get_window` both do. Under async SQLAlchemy that lazy load raises
+  `MissingGreenlet`, so the page failed on its own landing request. A
+  department hit it the moment it opened its first window and never saw the
+  page work again.
+- **The Department Store could not be enabled during setup, so members never
+  saw it.** The wizard's module step renders the frontend registry, and the
+  registry had no storefront entry. Setup therefore saved the store as
+  disabled — alongside the marker that tells the backend the choice was
+  deliberate — and it stayed hidden from every member's navigation until
+  somebody found Settings → Modules. Departments already installed keep that
+  stored `false`: **turn the store on at Settings → Modules → Department
+  Store** to make it appear.
+- **A module with no configuration step could not be enabled at all.** The
+  wizard set a module's status only on its way to a config route, so a card
+  without one fell through every branch: no status, no confirmation, nothing.
+  The button looked like it worked and did not. That was the Department Store,
+  and it is still why Medical Supplies could not be switched on during setup.
+- **The position editor silently revoked the quartermaster's store access.**
+  Saving positions rebuilds each one from two checkboxes per module, and the
+  quartermaster, apparatus officer and facilities manager are seeded with
+  `storefront.manage` but were presented with Manage unticked. The first save
+  took the store console away from the person who runs the store.
+- **Members could reach the checkout and get a 403.** `storefront.order` is a
+  separate permission from `storefront.view`, and the two checkboxes cannot
+  express it, so a position built in the editor could browse the catalogue with
+  no way to place an order. View now grants ordering alongside it — all
+  fourteen seeded positions holding one hold the other.
+
+**Added**
+
+- **A route can now be gated on its organization's module flag**, via
+  `requiredModule` on `ProtectedRoute`. Module flags used to hide navigation
+  and nothing else, so a bookmark or a typed URL still opened the page — which
+  is how a store came to be configured that no member could see. Applied to the
+  three store routes for now. It is a usability gate, not an access control:
+  the API is not module-aware, and the permission checks still do the real
+  gating.
+- The refusal names the module and, for anyone who can fix it, links straight
+  to Settings → Modules rather than reporting a permission problem it is not.
+  It waits for the module lookup instead of rendering optimistically, and falls
+  through to the page if that lookup fails — a flaky request must not lock a
+  department out of a module it has switched on.
+- The Logistics Admin hub's Department Store card is gated on the module and
+  `storefront.manage`, the way every other navigation surface already was. It
+  was the one unguarded door into the console.
+- **Contract tests against this whole class of drift.** Every module setting
+  must now be placed deliberately as core, offered during setup, or
+  Settings-only, with the registry and the Settings screen asserted to agree —
+  a module can no longer ship with a toggle and no way to reach it. A second
+  test asserts no position seeded with a manage grant is shown Manage unticked,
+  since an unticked box is read as an intentional revocation.
+- The setup wizard's module cards name their module on every button. Eight
+  buttons shared six accessible names, so a screen reader heard a page of
+  identical "Enable" controls.
+
+**Notes**
+
+- Turning the module off now makes `/store/admin` and `/store/orders`
+  unreachable, so an administrator cannot wind down a live store and members
+  cannot see orders they have already paid for. Recoverable from the link on
+  the refusal screen, but worth knowing before switching it off mid-window.
+
+### A contract-test server that will not boot now says so (2026-08-24)
+
+**Fixed**
+
+- **`collected 0 items` was all CI reported when the contract suite could not
+  start.** Every generated test in `test_api_contract.py` is defined inside
+  `if SCHEMA_AVAILABLE`, so a server that fails to come up leaves the module
+  with no tests at all — not even skipped ones. pytest exits 5 and the job
+  goes red with nothing else in the log, while `SKIP_REASON`, which names the
+  actual cause, was computed and then discarded. A `skipif` on the class read
+  as though it handled the case; it could not, because there were no tests for
+  it to skip. One test now always exists to carry the reason, and it **fails**
+  rather than skips once `RUN_API_CONTRACT_TESTS=1` has asked for the suite —
+  skipping would let "the application does not start" pass for green.
+- **A dead server thread reported no cause.** uvicorn raises inside the
+  thread, where the exception was lost, so the only symptom was a thread that
+  was no longer alive. The exception is now recorded and named in the failure,
+  which is what separates a runner hiccup from the app genuinely failing to
+  start.
+- **The schema fetch was losing a coin toss to its own default timeout.**
+  `schemathesis.openapi.from_url` allows 10s, and generating this app's
+  OpenAPI document — 1114 paths, 1364 component schemas — measures 9.6–11.7s
+  cold. A run that landed on the wrong side of that raised, and hit the
+  zero-collection hole above; the same commit could pass on one database
+  matrix and fail on the other purely on runner speed. The fetch now allows
+  120s, and retries a transient connection error rather than taking the
+  module down with it.
+
+### The events list now shows what it wants from you (2026-08-24)
+
+**Added**
+
+- **A "Needs You" band above `/events`**, holding only events with an
+  outstanding action — check-in open now, mandatory with no RSVP, mandatory and
+  ended with no check-in recorded — each beside the single control that clears
+  it. Capped at five rows, and rendered not at all when there is nothing to do.
+- **Event cards ranked by state.** A coloured left accent and a status strip
+  naming what the event wants; routine events get neither, which is what makes
+  the urgent ones findable. The card gained a footer carrying RSVP / Check In /
+  add-to-calendar, so the common actions no longer need the detail page.
+- **`GET /events/missed-mandatory`** and new `EventListItem` fields
+  (`rsvp_deadline`, `max_attendees`, the derived check-in window,
+  `user_attended`, `credited_hours`, `hour_category_label`) — the list response
+  could not previously support any of the above.
+
+**Fixed**
+
+- **Members are no longer told they missed drills they could not have
+  attended.** A mandatory-and-no-check-in query also catches events held before
+  the member was hired, events during an approved leave of absence, and events
+  mandatory only for a membership type they do not hold. None can be cleared by
+  responding, which is what the band promises. All three are excluded
+  server-side so a client cannot skip the check. This is the first code to read
+  `mandatory_membership_types`, which had been stored and projected and never
+  consulted.
+- **Credited hours are stated as a ceiling, not a fact.** The figure is the
+  event's scheduled length under the org's hour mappings; what reaches a
+  member's record is their attended time, settled at check-out. The row now
+  reads "Credits up to 2.0 drill hours".
+
+### Email Templates keeps the shared settings shell and its two panes (2026-08-24)
+
+**Changed**
+
+- **`SettingsLayout` gained one documented alternative width.** Moving Email
+  Templates onto the shared shell fixed its column at 960px, which is right for
+  the four sections that are lists and wrong for the one that puts an editor
+  and the live preview of what it renders side by side — at 960px the editor
+  column collapses to about 84px, and narrowing either pane defeats the reason
+  they are beside each other. `width="wide"` opts a panel up to 1600px; every
+  other screen, and Email Templates' own other four sections, are unchanged.
+  Two widths is a design decision; a free-form class or a pixel number would be
+  the drift the shell was written to end, so it is neither.
+- **The cap is applied to the column and its container.** The container's
+  `max-w-6xl` is 1152px and would otherwise clamp a wide column back down with
+  nothing in the markup saying why. A test asserts both, and fails if either is
+  missed.
+- **Save, Discard and Send Test moved into a sticky bar inside the Templates
+  panel** rather than the shell's header, which is not sticky. Making that
+  header sticky would have moved every settings screen for the sake of this one.
+
+### Printer status flags checked against the published command tables (2026-08-24)
+
+**Fixed**
+
+- **"Paper feed stopped" was the wrong name for a real ESC/POS bit.** Bit 5 of
+  `DLE EOT 2` is _printing stops due to paper end_ — the same condition the
+  paper-roll query reports, not a feed jam — so the status panel sent someone
+  looking for a jam that was not there. It now reads "Out of paper", and the
+  two queries' overlapping findings are deduplicated so one empty roll is one
+  fault rather than two.
+- **A cutter jam arrived as "Printer reports an error".** `DLE EOT 2` carries a
+  single undifferentiated error bit and the cause lives in `DLE EOT 3`, which
+  was not being asked, so the most common receipt-printer fault after paper
+  reached the watch desk as text nobody could act on. The query is now sent and
+  its three flags — autocutter, unrecoverable, automatically recoverable — are
+  named. The generic bit only speaks when nothing else identified the cause,
+  which also fixes a printer that was out of paper _and_ jammed dropping the
+  jam.
+- **A Zebra printer whose roll was nearly out said nothing.** `~HQES` warning
+  bit 8 is the paper-near-end sensor and was not decoded. Reported as "Labels
+  nearly out" — a warning, not an error, because the printer will finish the
+  label in front of it and the point is to load a roll before the next shift
+  rather than during it.
+
+The ZPL command syntax and the rest of both flag tables verified as written
+against the ZPL II Programming Guide and Epson's ESC/POS reference; the bit
+tables now carry a note in `printer_status.py` naming where they came from.
+
+### The email colourway migration skipped every non-notice template (2026-08-24)
+
+**Fixed**
+
+- **Four shipped defaults would have been left unconverted.** The upgrade
+  recognises a body still byte-identical to a shipped default by rebuilding
+  what the renderer would have written, and it rebuilt only at the default
+  `notice` layout. `build_shell` deferred the content class one commit later
+  than it deferred the colours, so a receipt or digest body written in between
+  carries `class="content-receipt"` literally rather than the token — no
+  match, and the two storefront and two digest notices would have come out
+  with NULL columns, indistinguishable from a body somebody had edited and so
+  never picked up by anything later either. Both forms are now candidates,
+  deduplicated so a notice still matches on one. Driven up and down against
+  MySQL, including a row recoloured after the upgrade, which the downgrade
+  returns with its own accent rather than the shipped one.
+
+### Saving an email template dropped fields it said it had saved (2026-08-23)
+
+**Fixed**
+
+- **Clearing the default CC or BCC on a template did nothing.** The service
+  guarded its writes with `if value is not None`, and the endpoint dumped the
+  payload with `exclude_none=True` — the two halves of the mirror-image bug in
+  CLAUDE.md pitfall #1. Emptying the box sent an explicit `null` to say so, both
+  layers read that as "the client did not mention this field", and the old
+  address kept receiving every copy behind a success toast. Now `exclude_unset`
+  at the endpoint and `apply_updates` in the service, which distinguishes
+  absent from explicitly-null and raises a 400 rather than a flush-time 500 for
+  a null against a NOT NULL column.
+
+### 58 theme classes across 22 files generated no CSS at all (2026-08-23)
+
+**Fixed**
+
+- **`bg-theme-bg` was never a utility.** Tailwind emits a `bg-theme-*` rule only
+  when a matching `--color-theme-*` variable is declared, and the only tokens
+  near that name were `--color-theme-bg-from` / `-via` / `-to`, the three stops
+  of the page gradient. The class was in use at 26 call sites and had never
+  produced a single rule. Nothing warns about this: the class sits in the DOM
+  looking exactly like one that works, and the element renders with no colour.
+- **Twelve of those were full-page wrappers, where it looked right anyway** —
+  the gradient lives on `html` and showed straight through — which is why
+  nobody had cause to look at the rest. The rest were four sticky bars that
+  were meant to occlude what scrolled under them and did not, and seven inset
+  panels drawn with a border and no fill.
+- **`--color-theme-bg` now exists**: the page canvas as one flat, opaque
+  colour, for anything that has to cover what scrolls beneath it. The surface
+  tokens cannot do that job — in dark mode they are translucent white by
+  design, meant to sit _on_ the gradient — so a sticky bar painted with one
+  shows the content sliding underneath. The page wrappers drop the class
+  instead of gaining a colour, so the gradient still shows.
+- **Nine more dead names turned up once there was something to check against.**
+  `focus-visible:ring-theme-focus` was missing its `-ring` suffix in two places,
+  so those controls had no visible focus ring for keyboard users at all;
+  `text-theme-text-tertiary` (14 uses), `bg-theme-surface-primary`,
+  `bg-theme-surface-alt`, `bg-theme-background`, `text-theme-primary`,
+  `text-theme-info` and `text-theme-success` all named tiers that do not exist.
+  Each now points at the token it meant.
+
+**Added**
+
+- **`themeTokenIntegrity.test.ts`** walks the source and fails on any
+  `bg-`/`text-`/`border-`/`ring-`… `-theme-*` class with no declared token,
+  naming the file and line. This bug is invisible by construction — no build
+  warning, no lint error, nothing at runtime — so a test is the only thing that
+  can see it.
+
+### Every notification the platform sends has a new shell (2026-08-23)
+
+**Changed**
+
+- **The solid red header band is gone.** Every notice now renders into a white
+  card with a 5px accent rule along its top edge, a tinted status chip in the
+  header lockup, a dark-on-white 27px title, and a details panel that keeps its
+  box but picks up the app's left-accent treatment with a real label column.
+  The accent is per category — members, security, events, shifts, training,
+  elections, store — so it is one design in seven colourways rather than seven
+  designs.
+- **The department logo moved into the header lockup at 36px**, on a white cell
+  of its own, rather than sitting centred above the card. A department with no
+  logo now leads with its name instead of an empty bordered box: the cell is
+  built as a unit by the renderer, which is something `{{name}}` substitution
+  cannot express.
+- **`build_shell` is the only place the layout is written.** It was written
+  three times — the service, the storefront and `wrap_email_body` — and the
+  "Send Test Email to Me" body built a fourth, which meant the test send
+  verified SMTP credentials against chrome no member would ever receive.
+- **A notice's colourway is data.** `header_accent`, `status_chip` and `layout`
+  are columns on `email_templates`, edited from the Email Templates screen. The
+  API accepts only the seven accents whose chip tint and white button text have
+  been checked for contrast.
+
+**Fixed**
+
+- **Details panels inherited the data table's heading styling.** `.details`
+  sits inside `.content` and the CSS inliner merges per declaration, so any
+  property `.details th` did not name came from `.content th` — panel labels
+  rendered grey, uppercase and underlined.
+- **Injected chunks opted out of the shell.** Start-of-shift checklists were
+  emitted as `<p><strong>…</strong></p>` where the shell styles `<h2>` as a
+  section heading, and the store's payment block as loose paragraphs where the
+  design puts a panel.
+- **Preview sample data had drifted from the real thing.** `SAMPLE_CONTEXT`
+  carried hand-copied snapshots of the table styles rather than the shared
+  constants, so a preview would have shown the old table beside the new one.
+
+**Added**
+
+- **The editor and the live preview are side by side** instead of behind tabs,
+  and the preview renders the body you are typing rather than the one on the
+  server. Save and Discard moved to a sticky page header.
+- **A block palette** — seven ready-made pieces of a notice inserted at the
+  cursor, so a secretary never has to guess which classes the email shell
+  styles. A backend test reads the palette and fails if a snippet names a class
+  the stylesheet dropped.
+- **A plain-text preview mode**, the half of every template nobody looks at and
+  the half that silently stops matching the HTML.
+- **The template list says which notices a department has changed** and how
+  many messages each has sent, with filter chips for All / Active / Edited /
+  Off.
+
+**Note for existing departments:** `ensure_default_templates` only creates
+missing rows, so a template you have customised keeps your wording. Press Reset
+on it to adopt the new design; your CC/BCC settings are preserved. Templates
+still on the shipped default are upgraded by the migration.
+
+### Submit External Training asked one question with three controls (2026-08-23)
+
+**Changed**
+
+- **The two datetime pickers are gone.** Length is now a date, a start time and
+  a 15-minute stepper with 1h/2h/4h/8h chips; the end time is derived and shown
+  as a live line ("Runs 9:00 AM to 1:00 PM"). Hours are still computed, never
+  typed. The stepper clamps at the department's `max_hours_per_submission`, so
+  the over-max error and the "end must be after start" error are both
+  unreachable by construction — the green/red hours callout that carried them
+  is removed.
+- **Training Type, "Suggested {Type}" and Course Name were three controls
+  asking one question.** The suggestion select is gone: department requirements
+  are now a `<datalist>` on the course-name field, unfiltered by training type,
+  deduped and sorted. Picking one is never required, and changing the training
+  type no longer clears what the member typed.
+- **The certification fields are driven by an always-visible checkbox** —
+  "This training earned a certification" — instead of appearing and vanishing
+  with the training type. The type still seeds the checkbox; once the member
+  touches it, it is theirs, and switching type neither hides the block nor
+  discards what they entered.
+- **A summary rail** tracks hours and a six-row checklist derived from the live
+  field values, and carries the submit, Save Draft and attachment controls. On
+  a phone it flows below the form and a fixed bar carries the hours, the count
+  of fields still missing, and Submit.
+- **The full "My Submissions" list is now three recent rows** plus a "View
+  all N" disclosure. Edit and delete stay available on every listed row.
+- **A successful submission shows a receipt** — course, type, when, hours,
+  instructor, what was attached — and what happens next, rather than only a
+  toast. A submission an officer sent back now opens the page with the
+  officer's note, Fix and Resubmit, and Withdraw.
+
+**Added**
+
+- **Certificate attachments on a submission.** `POST/GET/DELETE
+/training/submissions/{id}/attachments` and a download route, mirroring the
+  training-record attachment endpoints: submitter-only writes, PDF/JPG/PNG
+  verified from magic bytes (not the client's Content-Type), 10 MB cap,
+  server-generated filenames, and a stored path that never leaves the backend.
+  Officers see the attachment on the review queue, which is the point of
+  collecting it.
+- **Draft submissions.** `save_as_draft` on create parks a submission in the
+  member's own list; `POST /training/submissions/{id}/submit` hands it over,
+  and routing (review vs auto-approve) is decided at that moment against the
+  settings then in force. Drafts stay out of the officer queue. The `draft`
+  status existed on the model and in the edit/delete guards but had no way to
+  be reached.
+
+### NFC ID cards: review-round fixes (2026-08-23)
+
+**Fixed**
+
+- **A lost card could be reactivated through the API.** The model documented
+  the state as terminal — whoever picked the card up can still tap it — but
+  only the screen enforced it, by hiding the button. `PATCH /nfc-tags/{id}`
+  accepted `lost → active` and cleared the revocation stamp with it. The
+  transition is now refused server-side for `lost` and `revoked`; `suspended`
+  remains the reversible state, and a lost card can still be relabelled.
+- **An `inactive` member's card went on recording attendance.** The refusal set
+  covered suspended, dropped and archived members but not `inactive`, even
+  though `User.is_active` treats it as not active and the station's own refusal
+  text says "not currently active". Retired and on-leave members keep working
+  cards, which is deliberate — they still attend meetings and banquets.
+- **Admin hours started at a station were recorded as QR scans.** `clock_in`
+  hardcoded `entry_method=qr_scan`, so an export or an audit could not tell a
+  member scanning a category's QR code with their own phone from an officer
+  tapping their card at a station. Added `nfc_station` to the enum and threaded
+  the method through. Historical rows are left alone: a past `qr_scan` really
+  was written by the QR path.
+- **A 24-hour shift disappeared from the station at midnight.** A shift is
+  filed under the date it _started_, and the station asked only for the
+  operator's current local date — so the crew actually on duty vanished from
+  the selector at the turn of the day. It now queries yesterday as well, and
+  drops a yesterday-dated shift that has already ended.
+- **A finished event could still be armed against.** The event window filtered
+  on start time alone, so a drill that ended hours ago stayed in the list — and
+  because the list is ordered by start time it could be the _default_, leaving
+  an operator armed against an event whose check-in window had shut, with every
+  tap refused. Now bounded by `end_after` as well, set behind the present
+  moment: a `window` event's check-in outlives its scheduled end by
+  `check_in_minutes_after`, and a flexible or strict one runs to its
+  `actual_end_time`, none of which reach the client.
+- **A card in a terminal state could be laundered back to active.** The first
+  guard rejected only `lost → active`, so two requests — `lost → suspended`,
+  then `suspended → active` — restored exactly the credential somebody else may
+  be holding. Any transition out of `lost` or `revoked` is now refused;
+  relabelling still works.
+- **Ending a shift took the station away from the crew tapping out.** Dropping
+  a shift the moment its scheduled end passed was wrong in both directions:
+  `member_check_out` has no window at all — it accepts a checkout until an
+  officer finalizes — so the filter cut the station off at exactly the moment
+  a crew goes off duty. Shifts now stay offered through a checkout grace.
+- **A busy previous day could hide today's shifts entirely.** The widened
+  two-day query kept the endpoint's default page size of 100 while it orders by
+  `shift_date` ascending, so an organization with a full day of records behind
+  it would receive only those.
+
+### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
+
+**Fixed**
+
+- **Arriving early inflated attendance hours.** Check-in typically opens an
+  hour before a 19:00 drill, so a member who tapped in at 18:20 was credited
+  from 18:20 — forty extra minutes that flowed straight through to their
+  training record, to any admin hours category the event maps to, and to every
+  compliance report built on those. A training runs from the moment it is
+  scheduled to start; nobody was being trained in the parking lot.
+- Attendance is now credited from the event's **scheduled start** whenever a
+  self-recorded check-in precedes it. Arriving _late_ is untouched — that
+  really does mean less time — and it applies wherever duration is computed:
+  end-of-event finalization, a member checking themselves out, and the admin
+  hours window handed on from either.
+- **A manager's `override_check_in_at` is honoured verbatim and never
+  clamped.** That is the escape hatch for the case the clamp gets wrong —
+  volunteers who genuinely were setting up an hour before the doors opened —
+  and it is a deliberate act by somebody accountable for it, which a tap is
+  not.
+
+**Added**
+
+- **The event's manager is told who tapped in early.** A panel on the check-in
+  monitoring dashboard names them and says how far ahead of the start each one
+  landed ("John Doe — tapped in 42 minutes early, at 6:18 PM"), with the same
+  flag beside the member on the event's attendance list, where their times are
+  edited. Members already ruled on with an override drop off both.
+- The panel says what was already done rather than asking for a correction:
+  the hours are credited from the start time, and the organizer only needs to
+  act for somebody who really was working beforehand. A prompt to go and fix
+  something that is already right would bury the one case that needs them.
+- `EventRSVP.early_check_in_minutes` records how far ahead of the scheduled
+  start a self check-in landed. Deliberately a snapshot of what was true at the
+  tap — an observation about when the member arrived, not a value to recompute
+  if the organizer later moves the event — and not set for manager-recorded
+  check-ins, since an officer checking somebody in early is doing it on purpose.
+- `GET /events/{id}/check-in-monitoring` gains `early_check_ins`,
+  `early_check_in_count` and `early_check_in_threshold_minutes`. The early list
+  is not a slice of `recent_check_ins` and is not capped at ten: a manager who
+  can only see the ten most recent taps cannot act on the one from an hour ago.
+
+**Notes**
+
+- This applies to every self check-in, not only NFC card taps — a QR scan an
+  hour early had exactly the same effect and was credited the same way.
+- Shift attendance is deliberately unchanged. A shift really does run from when
+  the crew arrives, so the actual check-in time is the right one there; it is
+  fixed-duration events (trainings, meetings, drills) where the scheduled start
+  is the honest number.
+
+### NFC ID cards: tap a member's card to check them in (2026-08-23)
+
+**Added**
+
+- **NFC tags can now be bound to members, not just to places.** Until now a tag
+  was a _destination_ — a sticker on a bay door carrying a URL, which sent the
+  member's own phone to a check-in page. A card is the inverse: the tag inside
+  a member's ID card identifies the person holding it, and a station reads it
+  to check them in. Both now exist side by side; neither replaces the other.
+- **An officer issues the card and hands it over.** From the new **ID Cards**
+  section of a member's profile, either write a freshly minted code to a blank
+  NFC tag (a sticker inside an ID card, a fob) or record the chip serial of a
+  card that is already printed and cannot be written to. The written-code route
+  is the one to prefer: the code is 128 random bits from the platform CSPRNG,
+  it is not printed on the card, and a tag can be wiped and reissued to
+  somebody else.
+- **A check-in station at `/members/check-in-station`.** Pick a shift, an event
+  or meeting, or an admin hours category, arm the reader, and members tap and
+  walk in — nobody touches the screen between taps. One tap serves arrival and
+  departure by default; a station covering only one direction can be fixed to
+  it.
+- **Two readers, because departments have both.** Web NFC (Chrome on Android,
+  over HTTPS) reads the card on a tablet at the door. A USB reader — the desk
+  kind that types the serial like a keyboard — works everywhere else, including
+  the iPhones and desktops Web NFC has never shipped on. Keystrokes are
+  captured page-wide rather than into a focused box: a kiosk loses focus to the
+  first stray tap on the screen, and a station that silently stops reading is
+  worse than one that was never armed.
+- Two new permissions, both deliberately narrow. `members.manage_id_cards`
+  issues and revokes cards: handing out a credential is a different act from
+  editing a profile, and the officer who does one is rarely the one who does
+  the other. `members.check_in` operates a station: recording attendance for
+  other members confers no ability to edit the shift or event it writes to.
+  Positions and ranks that already carry `members.manage` receive both.
+- Everything lives in the **membership module** (`modules/membership/`) — the
+  panel, the station page, the service, the types and the card helpers —
+  alongside the member records the cards belong to.
+
+**Security**
+
+- **There is no self-service path, by design.** A member cannot register,
+  relabel or revoke a card, not even their own, and no route here is addressed
+  to the calling member. The surface that lets somebody see their own card is
+  the surface a later change turns into one that lets them register one; a
+  credential that records attendance is issued by somebody accountable for
+  handing it over.
+- **A card credential is stored hashed, never in clear text.** The serial (or
+  the written code) is the whole of the credential — anything holding one can
+  clone it onto a writable tag — so a plaintext column would make a database
+  dump a stack of working ID cards. Lookups go by SHA-256 of the normalized
+  value, peppered with the installation's `ENCRYPTION_SALT` so the hashes are
+  not portable between deployments and the small, structured space of card UIDs
+  cannot simply be enumerated. Only the last four characters are kept, for
+  telling two of a member's cards apart on screen.
+- The unique constraint is per organization, not global: two departments on one
+  platform are separate tenants, and a card issued in one must not be
+  discoverable by registering it in the other.
+- A duplicate-registration refusal does not name the member currently holding
+  the card — otherwise card issuing would turn a pile of found cards into a
+  staff directory.
+- `/nfc-tags` is excluded from the client API cache alongside the other
+  PII-bearing endpoints.
+- Card issue, status change, deletion and every recorded tap are written to the
+  audit log.
+
+**Configuration**
+
+- **The whole feature is an integration a department turns on.** A new **NFC ID
+  Cards** entry under Settings → Integrations; while it is off, no card can be
+  issued and no card can be read. The check is enforced on the server, on every
+  `/nfc-tags` route — hiding a screen leaves its endpoints reachable, and these
+  endpoints issue and consume credentials. It fails closed: an organization
+  whose catalog row has never been seeded has not turned anything on, and both
+  halves (`enabled` **and** `status == "connected"`) have to agree, so
+  disconnecting really does stop the cards working.
+- With it off, the profile section, the station page and both navigation
+  entries are absent rather than empty — an empty "ID Cards" panel reads as
+  "none issued", which is a different statement from "this department does not
+  use cards".
+
+**Notes**
+
+- A tap that lands within a minute of the check-in it would otherwise close is
+  read as a bounce and reports the current state instead: a card held against
+  the reader a beat too long fires twice, and inverting on the second read
+  would file a zero-minute shift.
+- A station forwards both the written code and the chip serial, and the server
+  tries the code first. A blank tag can be wiped and reissued, so the serial
+  underneath may still be registered to whoever held it before.
+- The station reports a training-pipeline phase warning rather than overriding
+  it. A member can read and override that warning on their own screen; a
+  station has nobody to ask, and answering for the officer who set the gate is
+  the wrong default.
+- Reporting a card lost is terminal — whoever picked it up can still tap it —
+  so it is never reactivated and a replacement is a fresh registration.
+  Suspension is the reversible state.
+- Retired and on-leave members can still tap in. They attend meetings and
+  banquets, which is exactly what a station records. Suspended, dropped,
+  archived and deleted members cannot.
+
+### Equipment checks: four item types, and the groundwork for walking a check as a lap (2026-08-23)
+
+**Changed**
+
+- **`check_type` carried nine values; seven were checks storing only four
+  kinds of answer.** A number, a pass/fail, a quantity, a date. The extra
+  values were layout decisions wearing a type's clothing: `present` and
+  `functional` both store pass/fail and differ only in what the crew is asked
+  to do — a sentence on the item, not a column — and `reading` and `level`
+  both store a number against a threshold. An admin had to choose between
+  near-synonyms, and the form carried a distinct control for each, so the same
+  question rendered two ways depending on which name somebody picked years
+  earlier.
+- They collapse to **`level` / `function` / `count` / `expiry`**. `header` and
+  `text` are untouched: they are not checks, they are the layout, and the point
+  of naming the four is that a type is no longer allowed to be a layout choice.
+- `app/utils/check_types.py` is the write-side authority (the same pattern as
+  `app/utils/positions.py`). The request schema still **accepts** the legacy
+  names — an older client should not break over a rename it never asked for —
+  but normalizes before storing. It is deliberately stricter than the reader:
+  an unknown value at a request boundary is the caller's mistake and is
+  rejected, where the same value read back from a column falls back to
+  `function`.
+
+**Added**
+
+- **A control per type, each with its own pass rule.** Level stores the number
+  rather than reducing it to a tick, because the trend is the useful part, and
+  an emptied box reads as "not read yet" rather than zero. Function opens a
+  note and a photo on every fail, and **neither blocks the walk** — a crew held
+  at a textarea at 07:00 abandons the check, so an unwritten note is flagged on
+  the finished check instead. Count treats short of par as a **restock line,
+  not a failure**. Expiry confirms the date already on record rather than
+  asking for it again, and stays amber on every shift inside the pull window.
+- **The lap**: stops in walking order, the current one open in place and
+  finished ones collapsed to a line, any stop reachable at any point. A
+  collapsed stop shows its item count, and switches to naming its fault once it
+  has one. The bulk "All good" **refuses to confirm a level** — that would be a
+  fabricated record on the one type whose whole purpose is the stored value —
+  and its label follows what the stop holds ("All at par" for a bag of counts).
+- The template builder names **what each type stores** beside its label, so
+  the choice reads as "what is being asked" rather than as a list of layouts.
+- The lap honours the **sealed-container rule that arrived separately on
+  main**: an intact seal clears the counting inside a bag, but never its expiry
+  dates or pressure readings, which move on their own while the bag sits shut.
+  A seal proves unchanged, not full — so an out-of-date vial cannot hide behind
+  an intact tag.
+
+**Migration notes**
+
+- `c3f81a4d5e72`. **The type collapse does not reverse**: three legacy names
+  become `function` and two become `level`, and no column remembers which. The
+  downgrade deliberately does not guess — a wrong guess renders the wrong
+  control on a safety checklist.
+- What the old names carried implicitly is preserved rather than dropped.
+  Items with an empty description get the instruction their old type implied
+  ("Confirm the item is in place." / "Switch it on and confirm it works.");
+  an item whose author described the test keeps their own words. The seeded
+  preset library got the same treatment — 185 of its 232 items were
+  pass/fail-family with no description, so collapsing them would have left a
+  crew with "Works / Fails" and no test written on the item.
+
+**Not yet wired**
+
+- The lap and its controls are built and tested but **the live check screen
+  still renders the previous flat compartment list**. Swapping it rewrites that
+  screen and the tests that pin its current markup, which is a deliberate
+  follow-up rather than something to slip in alongside the model change.
+
+### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
+
+**Fixed**
+
+- **The Web Push handlers are now concatenated into the generated service
+  worker at build time instead of being pulled in with `importScripts`.** That
+  call sat inside the generated worker's module factory, ahead of
+  `precacheAndRoute`, `skipWaiting` and `clientsClaim`. So one failed request
+  for one optional file did not degrade push — it aborted the factory, and the
+  freshly downloaded worker installed with no precache and no claim on the
+  page. The old worker kept control and kept serving its old precached
+  `index.html` indefinitely, which is exactly "the app doesn't update until I
+  clear the cache".
+- **Why Brave specifically:** Brave runs `importScripts` requests issued from a
+  service worker through its content blocker, including first-party ones and
+  including when Shields are down for the site
+  ([brave/brave-browser#35461](https://github.com/brave/brave-browser/issues/35461),
+  [#53810](https://github.com/brave/brave-browser/issues/53810)). Chrome makes
+  the same request without inspecting it, so the identical build updated fine
+  there and the failure looked browser-specific rather than structural.
+- `/push-sw.js` is still deployed, and still served `no-store`: workers
+  installed before this change keep importing it until their next successful
+  update, which the change itself makes possible. It is **excluded from the new
+  worker's precache** (`globIgnores`), because workbox fetches every precache
+  entry during `install` and rejects the install if one fails — leaving it in
+  the manifest would have moved the single point of failure from `importScripts`
+  to the install event rather than removing it, over a file the new worker no
+  longer uses.
+- **User settings now follow `?tab=` on an in-place navigation, not only on
+  mount, and mirror the selected section back into the URL.** The banner above
+  links to `/account?tab=app` from anywhere in the app, including from that page
+  with another section already open; `activeTab` was seeded from the query
+  string once at `useState` time, so such a link changed the URL and nothing
+  else. A forced password change or MFA enrollment still wins over the
+  parameter.
+
+**Added**
+
+- **An escalation ladder for a device that will not move onto a new build**
+  (`utils/updateRecovery.ts`). Detection already worked; applying was a plain
+  reload, and when that reload came back on the _old_ build nothing noticed —
+  the next check saw the same mismatch and reloaded again, indefinitely.
+  Attempts are now counted per target build: the first is the plain reload, the
+  second additionally deletes every Cache Storage entry first (the same thing
+  members were doing by hand), and after that the app stops reloading itself
+  and the banner switches to pointing at Settings → App → Force refresh.
+- The ladder deliberately stops short of unregistering the service worker: a
+  push subscription belongs to the registration and nothing re-subscribes
+  automatically, so silently dropping callout notifications to fix a stale
+  build is the wrong trade. It also refuses to purge while the server is
+  unreachable, which would leave the device with no working copy of the app,
+  and leaves that attempt uncounted so the purge is still owed once there is a
+  connection to do it safely.
+- `useAppUpdate` now clears the ladder whenever the running build matches the
+  server — the only proof an update actually took — so the next deployment
+  starts from a plain reload again.
+- `validate-pwa.mjs` asserts the push handlers are inlined and that no
+  `importScripts` of `push-sw.js` survives in `dist/sw.js`, and the build
+  plugin fails loudly rather than silently shipping an un-inlined worker.
+- `infrastructure/nginx/nginx.conf` gained the `location = /version.json`
+  `no-store` rule the container-level config already had.
+
+### Equipment checks: replacing expired stock retires units, not whole lots (2026-08-23)
+
+**Fixed**
+
+- **Swapping one box out of a multi-unit lot deleted every unit in it.** A lot
+  aboard is one row carrying a quantity, so a bracket holding four boxes of one
+  lot is a single row of four. Replacing one box removed the row: the three
+  boxes still in the bag vanished from the apparatus count, all four were
+  recorded as disposed of, and the position read three short of a par it
+  actually met — while ready stock had been drawn down by one and one fresh
+  unit added. The retirement now works in units, oldest row first, and removes
+  a row only once it is emptied. Two expired boxes remain two exchanges.
+- **An in-date lot could be retired under an expired-stock disposition.** The
+  check form offers a replacement only on a position reading expired, but that
+  is a property of the screen rather than of the API, and the endpoint now
+  admits ordinary check submitters. The service verifies the named lot is
+  actually expired before retiring it, so the disposition cannot file a false
+  account of a unit that left the truck.
+- **A submitter could bind a checklist position to any catalog item.** The
+  first swap onto an unlinked position establishes its inventory link
+  permanently, and that decision has its own `equipment_check.manage` screen.
+  Opening the swap endpoint to `equipment_check.submit` (so crews can replace
+  expired stock themselves, rather than hunting for an officer while the item
+  stays force-failed) made the first-swap side effect a way around that review.
+  Submitters may now swap onto positions already linked and are refused on ones
+  that are not; officers still create the link. This narrows the grant recorded
+  against EC-3, which was raised because the endpoint had carried no permission
+  at all.
+- **Staff-entered attendance advanced a pipeline off a meeting it never
+  recorded.** Matching an existing prospect on a staff check-in set
+  `EventExternalAttendee.prospect_id` and nothing else, so the applicant's
+  linked-events section and the by-event applicant filter — both of which read
+  `prospect_event_links` — went on reporting the prospect as never having
+  attended. Check-in now writes the same link the kiosk path does.
+
+### Tests: a leaked patch now fails the test that leaked it (2026-08-23)
+
+**Fixed**
+
+- **One escaped mock made the backend suite look flaky for a day.**
+  `TestConcurrentShiftTemplateSubmission` ran two `submit_check` coroutines
+  through `asyncio.gather`, and each entered the same
+  `patch("...equipment_check_service.resolve_apparatus_ref", ...)`.
+  `unittest.mock.patch` records whatever it finds as "the original", so the
+  second enter saved the first one's mock and its exit reinstalled it — leaving
+  an `AsyncMock` on the module for the rest of the session. Every later test
+  reaching `if ref.full is not None` died on it, and because `pytest-randomly`
+  reshuffles module order per run, _which_ tests those were changed run to run.
+  The same commit passed and failed on alternate CI runs, and the failure always
+  surfaced in a file unrelated to the one that caused it.
+- An autouse guard now records every module- and class-level target a patch
+  touches and checks after each test that it still holds a real value. A leak
+  fails the test that caused it, names the attribute, explains the concurrency
+  trap, and restores the original so the rest of the run stays meaningful.
+  Instance targets are ignored: they cannot outlive their test.
+
+### CI: a green PR took 28 minutes to do 39 minutes of work, almost all of it queueing (2026-08-23)
+
+**Changed**
+
+- **A green PR run went from 28m28s to 6–10 minutes.** Almost none of that gap
+  was test speed. Measured on run 32650130001: `Backend Lint` waited 3m40s to
+  run 1m16s, `Backend Unit Tests` waited 5m13s to run 3m52s, and
+  `Integration MySQL` waited **14m37s** to run 4m39s. The three-hop chain
+  (lint → unit → db) put 23m30s of pure queueing on a critical path holding
+  9m47s of work, because every `needs:` edge is a _re-queue_.
+- **The `needs:` edges are gone** from `backend-test-integration`,
+  `backend-test-contract`, `docker-build` and `frontend-e2e`; every job now
+  starts in the first wave. They existed to avoid spending a database runner
+  when the cheap checks were already red — but this repository is public, so
+  runner minutes are free (a run's billable total is literally 0), and the
+  guard was spending the one resource that is scarce. `ci-success` still
+  enforces that every job ran, so this removed serialization, not gating.
+- **`frontend-lint`, `frontend-security` and `frontend-build` are now one
+  `frontend-checks` job.** Each paid the same checkout + setup-node + npm ci to
+  do 108s, 18s and 27s of work, and waited 3m29s, 2m44s and 8m47s in the queue
+  to do it. This also removed a real duplication: `npm run build` _is_
+  `tsc-native.mjs && vite build`, so the separate `npm run typecheck` step was
+  a second full compile of the same tree.
+- **Every commit on `main` now gets its own concurrency group**, in `ci.yml` as
+  well as `secret-scan` and `supply-chain`. `cancel-in-progress: false` does
+  not guarantee a run per commit: GitHub keeps at most one running and one
+  _pending_ run per group, so when three or more main runs overlap each new
+  arrival evicts the pending one. `8c61c948` (#1709) merged and had its run
+  evicted 17 seconds later by the next merge; it sits on `main` with no CI
+  record at all. The cost is deliberate — a merge train of N commits now runs
+  N full matrices concurrently rather than collapsing to two — and if PR
+  latency degrades the fix is a cheaper main run, not a shared group.
+
+**Added**
+
+- **`scripts/check_ci_gate.py`, run as a step of `ci-success` itself.**
+  `ci-success` is the single check branch protection should require, and it
+  only gates a job named in its `needs:` list — so a job added to `ci.yml`
+  without a matching entry runs, reports its own status, and is required by
+  nothing. Neither half looks wrong in review. The checker also rejects a gate
+  whose `if:` is not genuinely unconditional: `always() && needs.x.result ==
+'...'` and `!always()` both contain the substring and both leave the job
+  skippable. It runs _inside_ the gate on purpose — anywhere else, dropping a
+  job from `needs:` detaches the checker from what it validates.
+  `scripts/test_check_ci_gate.py` covers the logic (12 cases).
+
+**Notes**
+
+- The MariaDB leg of the contract matrix was briefly removed and **restored**.
+  Response shapes come from Pydantic serializers and cannot vary by engine —
+  true of the _assertions_, and beside the point about the _execution_:
+  `case.call_and_validate()` issues a real request and the test asserts
+  `status_code < 500`, making that suite broad smoke coverage of the SQL behind
+  every `/api/public/` route. Nothing else covers those paths on MariaDB — the
+  integration matrix excludes the module by its `slow` marker, and the only
+  other test touching `get_form_by_slug` has no `integration` marker and so
+  runs in the database-less unit job.
+
 ### Dashboard: permission-scoped widgets for chiefs, assets and training officers (2026-08-23)
 
 **Added**
@@ -10083,7 +11204,7 @@ Large-page components decomposed into focused, maintainable sub-components:
 | Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
 | All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
 | Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
+| Notes cleared to empty string                 | Converted to `undefined` via `\|\|` to prevent 422                               |
 | Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)

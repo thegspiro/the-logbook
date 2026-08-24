@@ -159,6 +159,25 @@ Officers can view real-time check-in activity from the event's **Monitoring** vi
 
 > **Hint:** Officers can also manually check in members or override check-in/check-out times from the monitoring view, useful for members who forgot to scan.
 
+#### Members who check in early _(2026-08-23)_
+
+Check-in usually opens an hour before the event, so somebody can tap their ID
+card or scan the QR well before the thing actually starts. When that happens:
+
+- **Their hours are credited from the event's scheduled start**, not from when
+  they tapped. A drill that runs 19:00–21:00 credits two hours whether the
+  member arrived at 18:20 or at 19:00. Arriving _late_ still costs them the
+  time they missed.
+- The monitoring view shows a panel naming everyone who tapped in before the
+  start and how early they were, and the same flag appears beside them on the
+  attendance list.
+
+There is nothing to correct for a member who simply turned up early — the
+arithmetic is already right. The panel is there for the other case: somebody
+who genuinely **was** working before the event, setting up or on another task.
+Use **Edit Times** on the attendance list to set their check-in time, and that
+value is credited exactly as entered.
+
 ---
 
 ## Guest Check-In for Non-Members (2026-08-09)

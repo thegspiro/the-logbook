@@ -131,7 +131,9 @@ const MessagesInboxPage: React.FC = () => {
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      {msg.is_pinned && <Pin className="text-theme-info h-4 w-4 shrink-0" aria-label="Pinned" />}
+                      {msg.is_pinned && (
+                        <Pin className="text-theme-alert-info-text h-4 w-4 shrink-0" aria-label="Pinned" />
+                      )}
                       <span className={`text-theme-text-primary font-semibold ${msg.is_read ? '' : 'font-bold'}`}>
                         {msg.title}
                       </span>
@@ -150,7 +152,7 @@ const MessagesInboxPage: React.FC = () => {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {msg.is_acknowledged ? (
-                      <span className="text-theme-success flex items-center gap-1 text-xs">
+                      <span className="text-theme-alert-success-text flex items-center gap-1 text-xs">
                         <CheckCheck className="h-4 w-4" aria-hidden="true" />
                         Acknowledged
                       </span>

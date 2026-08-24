@@ -43,7 +43,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       icon: Trash2,
       iconBg: 'bg-red-500/10',
       iconColor: 'text-red-600 dark:text-red-400',
-      buttonClass: 'bg-red-600 hover:bg-red-700 text-white',
+      buttonClass: 'bg-red-800 hover:bg-red-900 text-white',
     },
     warning: {
       icon: AlertTriangle,

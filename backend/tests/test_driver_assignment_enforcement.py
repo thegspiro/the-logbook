@@ -131,6 +131,28 @@ class TestEnforcementIsWiredIntoBothWritePaths:
         )
         assert "_check_driver_qualification" in validator_source
 
+    async def test_officer_assignment_enforces_position_eligibility(self):
+        svc = SchedulingService(MagicMock())
+        svc.get_shift_by_id = AsyncMock(return_value=SimpleNamespace(id="shift-1"))
+        svc._validate_training_slot_fields = AsyncMock(return_value=None)
+        svc._validate_assignment_candidate = AsyncMock(return_value="ineligible")
+
+        assignment, error = await svc.create_assignment(
+            organization_id="org-1",
+            shift_id="shift-1",
+            assignment_data={"user_id": "member-1", "position": "officer"},
+            assigned_by="scheduler-1",
+        )
+
+        assert assignment is None
+        assert error == "ineligible"
+        assert (
+            svc._validate_assignment_candidate.await_args.kwargs[
+                "enforce_position_eligibility"
+            ]
+            is True
+        )
+
     def test_create_assignment_does_not_swallow_the_refusal(self):
         # A bare `except Exception` would flatten the coded refusal into an
         # anonymous 400 and the UI would lose its cue to offer help.

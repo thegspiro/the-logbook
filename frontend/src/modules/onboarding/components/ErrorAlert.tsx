@@ -71,7 +71,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
                   onClick={() => {
                     void onRetry?.();
                   }}
-                  className="inline-flex items-center rounded-sm bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                  className="inline-flex items-center rounded-sm bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
                   aria-label="Retry action"
                 >
                   <RefreshCw className="mr-1.5 h-3.5 w-3.5" />

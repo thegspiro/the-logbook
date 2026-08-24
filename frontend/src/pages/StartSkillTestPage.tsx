@@ -353,7 +353,7 @@ export const StartSkillTestPage: React.FC = () => {
                   ? 'Results are recorded and count toward certifications'
                   : 'Recorded, then sent to a training officer to validate'}
               </span>
-              {!isPractice && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-red-600" />}
+              {!isPractice && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-red-800" />}
             </button>
             <button
               onClick={() => {
@@ -549,7 +549,7 @@ export const StartSkillTestPage: React.FC = () => {
           onClick={() => void handleStart()}
           disabled={!selectedTemplateId || candidates.length === 0 || selfOfficialBlocked || isStarting}
           className={`flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-            isPractice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
+            isPractice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-800 hover:bg-red-900'
           }`}
         >
           <Play className="h-6 w-6" />

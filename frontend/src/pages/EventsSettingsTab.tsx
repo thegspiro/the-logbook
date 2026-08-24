@@ -15,11 +15,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { Settings, Loader2, FileText, ExternalLink, ClipboardList, Clock, Mail, Tag } from 'lucide-react';
+import { Settings, Loader2, FileText, ExternalLink, ClipboardList, Clock, Mail, Tag, LayoutGrid } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
 import type { EventModuleSettings, EventType, EventCategoryConfig, EmailTemplate } from '../types/event';
-import { getEventTypeLabel } from '../utils/eventHelpers';
 import {
   VisibilitySection,
   CategoriesSection,
@@ -31,6 +30,8 @@ import {
 } from './events-settings';
 import type { OrgMember, EventRequestFormSummary } from './events-settings';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
+import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
+import { AdminMetricsSettings } from '../components/admin';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,8 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
-type SectionKey = 'visibility' | 'categories' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form';
+type SectionKey =
+  'visibility' | 'categories' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form' | 'metrics';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
@@ -55,16 +57,23 @@ const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'Request processing config' },
   { key: 'email', label: 'Email', icon: Mail, description: 'Triggers and email templates' },
   { key: 'form', label: 'Public Form', icon: ExternalLink, description: 'Public event request form' },
+  { key: 'metrics', label: 'Headline Metrics', icon: LayoutGrid, description: 'The four cards above this page' },
 ];
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-const EventsSettingsTab: React.FC = () => {
+interface EventsSettingsTabProps {
+  /** Called after the headline metrics save, so the frame above can refetch. */
+  onMetricsSaved?: (() => void) | undefined;
+}
+
+const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved }) => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { saveState, save, retry } = useSettingsAutosave();
   const [error, setError] = useState<string | null>(null);
 
   // Org members for default assignee picker
@@ -147,31 +156,38 @@ const EventsSettingsTab: React.FC = () => {
 
   // ─── Save Helper ───────────────────────────────────────────────────────────
 
+  /**
+   * Every control on this screen writes on change, and the header pill is the
+   * single report of whether it stuck. There is deliberately no success toast:
+   * this screen used to fire one per switch, which meant a member flipping four
+   * visibility toggles got four stacked confirmations and would have missed a
+   * real failure in among them.
+   */
   const saveSettings = async (
     patch: Partial<EventModuleSettings>,
-    successMsg?: string,
     errorMsg = 'Failed to update setting.'
   ): Promise<EventModuleSettings | null> => {
     if (!settings) return null;
+    setSaving(true);
     try {
-      setSaving(true);
-      const result = await eventService.updateModuleSettings(patch);
-      setSettings(result);
-      if (successMsg) toast.success(successMsg);
-      return result;
-    } catch {
-      toast.error(errorMsg);
-      return null;
+      // The state update lives *inside* the saver so a retry from the status
+      // pill redoes it too. Applying the response outside would leave a
+      // successful retry writing the server while the switch it came from
+      // stayed visibly unchanged.
+      return await save(
+        async () => {
+          const result = await eventService.updateModuleSettings(patch);
+          setSettings(result);
+          return result;
+        },
+        { errorMessage: errorMsg }
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const savePipeline = (
-    pipelinePatch: Partial<EventModuleSettings['request_pipeline']>,
-    successMsg?: string,
-    errorMsg?: string
-  ) =>
+  const savePipeline = (pipelinePatch: Partial<EventModuleSettings['request_pipeline']>, errorMsg?: string) =>
     saveSettings(
       {
         request_pipeline: {
@@ -179,7 +195,6 @@ const EventsSettingsTab: React.FC = () => {
           ...pipelinePatch,
         },
       },
-      successMsg,
       errorMsg
     );
 
@@ -197,12 +212,7 @@ const EventsSettingsTab: React.FC = () => {
 
     const updated = isVisible ? current.filter((t) => t !== eventType) : [...current, eventType];
 
-    void saveSettings(
-      { visible_event_types: updated },
-      isVisible
-        ? `${getEventTypeLabel(eventType)} moved to "Other" category`
-        : `${getEventTypeLabel(eventType)} is now a primary category`
-    );
+    void saveSettings({ visible_event_types: updated });
   };
 
   const toggleCategoryVisibility = (categoryValue: string) => {
@@ -211,13 +221,7 @@ const EventsSettingsTab: React.FC = () => {
     const isVisible = current.includes(categoryValue);
     const updated = isVisible ? current.filter((v) => v !== categoryValue) : [...current, categoryValue];
 
-    const cat = (settings.custom_event_categories || []).find((c) => c.value === categoryValue);
-    const name = cat?.label || categoryValue;
-
-    void saveSettings(
-      { visible_custom_categories: updated },
-      isVisible ? `"${name}" hidden from primary filters` : `"${name}" is now a primary filter`
-    );
+    void saveSettings({ visible_custom_categories: updated });
   };
 
   // ─── Custom Event Categories ────────────────────────────────────────────────
@@ -238,11 +242,7 @@ const EventsSettingsTab: React.FC = () => {
     }
 
     const updated: EventCategoryConfig[] = [...existing, { value, label, color: newCategoryColor }];
-    const result = await saveSettings(
-      { custom_event_categories: updated },
-      `Created "${label}" category.`,
-      'Failed to add category.'
-    );
+    const result = await saveSettings({ custom_event_categories: updated }, 'Failed to add category.');
     if (result) {
       setNewCategoryLabel('');
       setNewCategoryColor(DEFAULT_CATEGORY_COLOR);
@@ -258,7 +258,6 @@ const EventsSettingsTab: React.FC = () => {
         custom_event_categories: existing.filter((c) => c.value !== categoryValue),
         visible_custom_categories: (settings.visible_custom_categories || []).filter((v) => v !== categoryValue),
       },
-      'Category removed.',
       'Failed to remove category.'
     );
   };
@@ -281,7 +280,6 @@ const EventsSettingsTab: React.FC = () => {
 
     const result = await saveSettings(
       { outreach_event_types: [...settings.outreach_event_types, { value, label }] },
-      `Added "${label}" outreach type.`,
       'Failed to add outreach type.'
     );
     if (result) setNewTypeLabel('');
@@ -295,7 +293,6 @@ const EventsSettingsTab: React.FC = () => {
     }
     void saveSettings(
       { outreach_event_types: settings.outreach_event_types.filter((t) => t.value !== typeValue) },
-      'Outreach type removed.',
       'Failed to remove outreach type.'
     );
   };
@@ -303,52 +300,27 @@ const EventsSettingsTab: React.FC = () => {
   // ─── Request Pipeline ─────────────────────────────────────────────────────
 
   const updateLeadTime = (days: number) => {
-    void savePipeline(
-      { min_lead_time_days: days },
-      `Minimum lead time set to ${days} days.`,
-      'Failed to update lead time.'
-    );
+    void savePipeline({ min_lead_time_days: days }, 'Failed to update lead time.');
   };
 
   const updateDefaultAssignee = (userId: string | null) => {
-    void savePipeline(
-      { default_assignee_id: userId },
-      userId ? 'Default assignee updated.' : 'Default assignee cleared.',
-      'Failed to update default assignee.'
-    );
+    void savePipeline({ default_assignee_id: userId }, 'Failed to update default assignee.');
   };
 
-  const toggleAcceptPublicRequests = async () => {
+  const toggleAcceptPublicRequests = () => {
     if (!settings) return;
-    const enabling = !settings.request_pipeline.accept_public_requests;
-    const result = await savePipeline(
-      { accept_public_requests: enabling },
-      undefined,
+    void savePipeline(
+      { accept_public_requests: !settings.request_pipeline.accept_public_requests },
       'Failed to update public request intake.'
     );
-    if (result) {
-      toast.success(
-        result.request_pipeline.accept_public_requests
-          ? 'Your public request form is now open.'
-          : 'Your public request form is now closed. Staff can still create requests.'
-      );
-    }
   };
 
-  const togglePublicVisibility = async () => {
+  const togglePublicVisibility = () => {
     if (!settings) return;
-    const result = await savePipeline(
+    void savePipeline(
       { public_progress_visible: !settings.request_pipeline.public_progress_visible },
-      undefined,
       'Failed to update visibility.'
     );
-    if (result) {
-      toast.success(
-        result.request_pipeline.public_progress_visible
-          ? 'Pipeline progress is now visible to requesters.'
-          : 'Pipeline progress is now hidden from requesters.'
-      );
-    }
   };
 
   const addPipelineTask = async () => {
@@ -367,7 +339,7 @@ const EventsSettingsTab: React.FC = () => {
     }
 
     const updated = [...settings.request_pipeline.tasks, { id, label, description: description || label }];
-    const result = await savePipeline({ tasks: updated }, `Added "${label}" task.`, 'Failed to add task.');
+    const result = await savePipeline({ tasks: updated }, 'Failed to add task.');
     if (result) {
       setNewTaskLabel('');
       setNewTaskDesc('');
@@ -378,7 +350,6 @@ const EventsSettingsTab: React.FC = () => {
     if (!settings) return;
     void savePipeline(
       { tasks: settings.request_pipeline.tasks.filter((t) => t.id !== taskId) },
-      'Pipeline task removed.',
       'Failed to remove task.'
     );
   };
@@ -395,7 +366,7 @@ const EventsSettingsTab: React.FC = () => {
     tasks[index] = swapItem;
     tasks[swapIndex] = temp;
 
-    void savePipeline({ tasks }, undefined, 'Failed to reorder tasks.');
+    void savePipeline({ tasks }, 'Failed to reorder tasks.');
   };
 
   // ─── Email Triggers & Templates ───────────────────────────────────────────
@@ -406,7 +377,7 @@ const EventsSettingsTab: React.FC = () => {
     const current = triggers[triggerKey] || { enabled: false };
     triggers[triggerKey] = { ...current, enabled: !current.enabled };
 
-    void savePipeline({ email_triggers: triggers }, undefined, 'Failed to update email trigger.');
+    void savePipeline({ email_triggers: triggers }, 'Failed to update email trigger.');
   };
 
   const handleCreateTemplate = async () => {
@@ -568,6 +539,15 @@ const EventsSettingsTab: React.FC = () => {
             onNewTemplateTriggerChange={setNewTemplateTrigger}
           />
         );
+      case 'metrics':
+        return (
+          <AdminMetricsSettings
+            moduleKey="events"
+            moduleLabel="Events"
+            permission="events.manage"
+            onSaved={onMetricsSaved}
+          />
+        );
       case 'form':
         return (
           <FormSection
@@ -584,11 +564,15 @@ const EventsSettingsTab: React.FC = () => {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <SettingsLayout
+    <SettingsLayout<SectionKey>
       sections={SECTIONS}
       activeSection={activeSection}
       onSectionChange={setActiveSection}
       navLabel="Event settings sections"
+      title="Event Settings"
+      subtitle="How the events module behaves for this department"
+      saveState={saveState}
+      onRetrySave={retry}
     >
       {renderContent()}
     </SettingsLayout>

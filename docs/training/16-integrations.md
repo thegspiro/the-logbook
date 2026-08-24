@@ -18,9 +18,10 @@ The Integrations module connects The Logbook to external services — calendar s
 10. [Weather Alerts](#weather-alerts)
 11. [EMS & Fire Reporting](#ems--fire-reporting)
 12. [Generic Webhooks](#generic-webhooks)
-13. [Training Provider Integrations](#training-provider-integrations)
-14. [Monitoring Integration Health](#monitoring-integration-health)
-15. [Troubleshooting](#troubleshooting)
+13. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
+14. [Training Provider Integrations](#training-provider-integrations)
+15. [Monitoring Integration Health](#monitoring-integration-health)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -45,20 +46,21 @@ The integrations page shows:
 
 ### Currently Available
 
-| Category       | Integration        | Description                                                               |
-| -------------- | ------------------ | ------------------------------------------------------------------------- |
-| **Calendar**   | Google Calendar    | Two-way event sync                                                        |
-| **Calendar**   | Microsoft Outlook  | Calendar and contact sync                                                 |
-| **Calendar**   | iCalendar (ICS)    | Advertises the per-member shift feed; no configuration screen of its own  |
-| **Messaging**  | Slack              | Event alerts, training reminders, custom channels                         |
-| **Messaging**  | Discord            | Webhook notifications, event reminders                                    |
-| **Messaging**  | Microsoft Teams    | Adaptive Cards, channel notifications                                     |
-| **CRM**        | Salesforce         | Contact sync, donor management, bidirectional                             |
-| **Documents**  | Documenso          | Send documents for e-signature (open-source DocuSign alternative)         |
-| **Scheduling** | Cal.com            | Self-scheduling links and booking sync (open-source Calendly alternative) |
-| **Payments**   | PayPal             | Match incoming store payments to department store orders automatically    |
-| **Data**       | Generic Webhooks   | HMAC-signed event notifications to any URL                                |
-| **Safety**     | NWS Weather Alerts | Tornado, flood, fire weather alerts (free)                                |
+| Category           | Integration        | Description                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------- |
+| **Calendar**       | Google Calendar    | Two-way event sync                                                        |
+| **Calendar**       | Microsoft Outlook  | Calendar and contact sync                                                 |
+| **Calendar**       | iCalendar (ICS)    | Advertises the per-member shift feed; no configuration screen of its own  |
+| **Messaging**      | Slack              | Event alerts, training reminders, custom channels                         |
+| **Messaging**      | Discord            | Webhook notifications, event reminders                                    |
+| **Messaging**      | Microsoft Teams    | Adaptive Cards, channel notifications                                     |
+| **CRM**            | Salesforce         | Contact sync, donor management, bidirectional                             |
+| **Documents**      | Documenso          | Send documents for e-signature (open-source DocuSign alternative)         |
+| **Scheduling**     | Cal.com            | Self-scheduling links and booking sync (open-source Calendly alternative) |
+| **Payments**       | PayPal             | Match incoming store payments to department store orders automatically    |
+| **Data**           | Generic Webhooks   | HMAC-signed event notifications to any URL                                |
+| **Safety**         | NWS Weather Alerts | Tornado, flood, fire weather alerts (free)                                |
+| **Access Control** | NFC ID Cards       | Issue member ID cards with an NFC tag and check members in by tapping one |
 
 ### Coming Soon
 
@@ -139,11 +141,11 @@ IDs.
 
 ### Sync Types
 
-| Action            | Description                                    |
-| ----------------- | ---------------------------------------------- |
-| **Push Members**  | Sync all active members to Salesforce contacts |
-| **Push Training** | Sync training records and certifications       |
-| **Push Events**   | Sync department events                         |
+| Action            | Description                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Push Members**  | Sync all active members to Salesforce contacts                                                                                                                                            |
+| **Push Training** | Sync training records and certifications                                                                                                                                                  |
+| **Push Events**   | Sync department events                                                                                                                                                                    |
 | **Pull Contacts** | Update existing Logbook members from Salesforce contacts — contact details only (names, phones, station, address). Never creates members, and never changes rank, email, status, or dates |
 
 ### How to Sync
@@ -176,15 +178,15 @@ Salesforce can push contact updates back to The Logbook via a webhook at `POST /
 
 ### Edge Cases
 
-| Scenario                       | Behavior                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Scenario                                              | Behavior                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A Contact's **Title** (rank) is changed in Salesforce | Ignored on pull _(2026-08-12)_ — rank never syncs into The Logbook, because rank affects what a member can do here and Salesforce is not authoritative for it. The Logbook still **pushes** rank out to the Contact `Title`. If a member's rank looks wrong, fix it in The Logbook, not Salesforce |
-| Salesforce API rate limit hit  | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff           |
-| A later SOQL result page fails | The pull fails; partial results are never applied as a successful pull                           |
-| Field mapping mismatch         | Warning logged; unmatched fields skipped                                                         |
-| Sandbox vs production mismatch | Warning shown; data won't sync to production from sandbox                                        |
-| OAuth token expired            | Auto-refreshed transparently                                                                     |
-| Conflict on bidirectional sync | There is no conflict-policy setting; the permitted direction determines which write applies last |
+| Salesforce API rate limit hit                         | Retried up to three times, honoring `Retry-After` or using bounded exponential backoff                                                                                                                                                                                                             |
+| A later SOQL result page fails                        | The pull fails; partial results are never applied as a successful pull                                                                                                                                                                                                                             |
+| Field mapping mismatch                                | Warning logged; unmatched fields skipped                                                                                                                                                                                                                                                           |
+| Sandbox vs production mismatch                        | Warning shown; data won't sync to production from sandbox                                                                                                                                                                                                                                          |
+| OAuth token expired                                   | Auto-refreshed transparently                                                                                                                                                                                                                                                                       |
+| Conflict on bidirectional sync                        | There is no conflict-policy setting; the permitted direction determines which write applies last                                                                                                                                                                                                   |
 
 ---
 
@@ -513,6 +515,62 @@ Send event notifications to any external system via HTTP POST:
 ### Available Events
 
 Events you can subscribe to include: member created/updated, training completed, event scheduled, shift changed, inventory assigned, and more.
+
+---
+
+## NFC ID Cards — Tap-In Attendance
+
+Turns a member's ID card into the thing that records their attendance. Once the
+integration is on, an officer binds a card to a member from the **ID Cards**
+section of that member's profile, and the member taps it at a check-in station
+to be checked into a shift, a meeting or an admin hours category.
+
+**While the integration is off nothing exists** — no ID Cards section, no
+station page, no navigation entry, and every card endpoint refuses. Turning it
+off later stops issued cards working without deleting the record of who held
+them.
+
+### Issuing a card
+
+Officers with `members.manage_id_cards` see **Issue card** on a member's
+profile. Two ways to bind one, and the first is the better one:
+
+| Option                           | Use it when                            | What is stored                                      |
+| -------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| **Write a code to a blank card** | The tag is writable — a sticker, a fob | A freshly minted 128-bit code, written onto the tag |
+| **Read a printed card's serial** | The card is already made and locked    | The chip's own serial number                        |
+
+Prefer writing a code. It is unguessable, it is not printed anywhere on the
+card, and the tag can be wiped and reissued to somebody else later — where a
+card identified only by its chip serial is that member's forever.
+
+On a desktop with no NFC radio, hold the card against a **USB reader** with the
+cursor in the serial box, or type the serial printed on the card. Writing a code
+needs Chrome on Android over HTTPS.
+
+**Members cannot do any of this.** There is no self-service screen and no
+member-facing endpoint: a card records attendance on somebody's behalf, so it is
+issued the way a key is — by an officer, who hands it over.
+
+### Running a station
+
+**Members → Check-In Station** (`members.check_in`). Pick what members are
+checking into, arm the reader, and leave the device at the door. Each tap shows
+the member's name and what was recorded, then clears itself for the next person.
+
+- **In, then out** — the default. One card serves arrival and departure.
+- **Checks in** / **Checks out** — fix the direction when a second station
+  covers the other door.
+
+A card tapped again within a minute is treated as a bounce and reports the
+current state rather than checking the member back out.
+
+### Losing a card
+
+Suspend it to stop it working temporarily. **Report lost** if it is gone: that
+is permanent and cannot be undone, because whoever picked the card up can still
+tap it. Issue a replacement afterwards — for a written card, that can be the
+same tag rewritten.
 
 ---
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router';
+import { AlertTriangle } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -11,7 +12,28 @@ import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
  *
  * Provides real-time monitoring of check-in activity for event managers.
  * Auto-refreshes every 10 seconds to show live updates.
+ *
+ * Also surfaces members who tapped in before the event started. Their credited
+ * time already begins at the scheduled start, so this is not a correction the
+ * manager has to make — it is the one case where they might want to, for
+ * somebody who really was setting up beforehand, and it is not visible from a
+ * column of timestamps.
  */
+/**
+ * Renders a minutes count as the phrase a person would say out loud.
+ *
+ * "tapped in 95 minutes early" makes the reader do arithmetic to work out that
+ * somebody turned up before the doors were open at all.
+ */
+function formatEarlyBy(minutes: number | null): string {
+  if (minutes === null || minutes <= 0) return 'moments';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const hourPart = `${hours} hour${hours === 1 ? '' : 's'}`;
+  return rest === 0 ? hourPart : `${hourPart} ${rest} minute${rest === 1 ? '' : 's'}`;
+}
+
 const EventCheckInMonitoringPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const tz = useTimezone();
@@ -192,6 +214,51 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Early check-ins — members who tapped in before the event started. */}
+      {stats.early_check_in_count > 0 && (
+        <div
+          className="mb-6 rounded-lg border border-yellow-500/40 bg-yellow-50 p-6 dark:bg-yellow-500/10"
+          role="status"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400"
+              aria-hidden="true"
+            />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-theme-text-primary text-lg font-semibold">
+                {stats.early_check_in_count === 1
+                  ? '1 member checked in before the event started'
+                  : `${stats.early_check_in_count} members checked in before the event started`}
+              </h2>
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                Their hours are credited from {formatTime(stats.start_datetime, tz)}, not from when they tapped in, so
+                nothing needs correcting for a member who simply arrived early. If somebody was genuinely working before
+                the event — setting up, or on another task — override their check-in time on the event's attendance list
+                to credit it.
+              </p>
+              <ul className="mt-3 space-y-1">
+                {stats.early_check_ins.map((activity) => (
+                  <li key={activity.user_id} className="text-theme-text-primary text-sm">
+                    <span className="font-medium">{activity.user_name}</span>
+                    {' — tapped in '}
+                    {formatEarlyBy(activity.early_check_in_minutes)}
+                    {' early, at '}
+                    {formatTime(activity.checked_in_at, tz)}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to={`/events/${eventId}`}
+                className="mt-3 inline-block text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Open the attendance list →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Event Info */}
       <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
         <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Event Details</h2>
@@ -268,7 +335,19 @@ const EventCheckInMonitoringPage: React.FC = () => {
                 {stats.recent_check_ins.map((activity) => (
                   <tr key={activity.user_id} className="hover:bg-theme-surface-hover">
                     <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-theme-text-primary text-sm font-medium">{activity.user_name}</div>
+                      <div className="text-theme-text-primary text-sm font-medium">
+                        {activity.user_name}
+                        {activity.early_check_in_minutes !== null &&
+                          activity.early_check_in_minutes >= stats.early_check_in_threshold_minutes &&
+                          !activity.check_in_overridden && (
+                            <span
+                              className="ml-2 inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400"
+                              title={`Tapped in ${formatEarlyBy(activity.early_check_in_minutes)} before the event started`}
+                            >
+                              Early
+                            </span>
+                          )}
+                      </div>
                     </td>
                     <td data-label="Email" className="px-6 py-4 whitespace-nowrap">
                       <div className="text-theme-text-secondary text-sm">{activity.user_email}</div>
