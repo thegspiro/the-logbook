@@ -449,10 +449,10 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 
 ## Medical Supplies _(documented 2026-08-18)_
 
-| URL                            | Page               | Permission                                       |
-| ------------------------------ | ------------------ | ------------------------------------------------ |
-| `/medical-supplies`            | Medical Supplies   | `inventory.view_medical` **OR** `inventory.view` |
-| `/medical-supplies/categories` | Medical Categories | `inventory.view_medical` **OR** `inventory.view` |
+| URL                            | Page                      | Permission                                       |
+| ------------------------------ | ------------------------- | ------------------------------------------------ |
+| `/medical-supplies`            | Medical Supplies          | `inventory.view_medical` **OR** `inventory.view` |
+| `/medical-supplies/categories` | Medical Supply Categories | `inventory.view_medical` **OR** `inventory.view` |
 
 > The EMS side of the department's stock, on its own pages so it can be run by
 > its own officer. Gear and uniforms live under **Inventory** and never appear

@@ -7,6 +7,7 @@ import type { AnnualTrainingReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { formatHours, roundHoursToQuarter } from '@/utils/hoursFormatting';
 
 interface Props {
   data: AnnualTrainingReport;
@@ -27,13 +28,13 @@ export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) =>
       key: 'training_hours',
       header: 'Training Hrs',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : toStr(v, '0')),
+      render: (v: unknown) => (typeof v === 'number' ? formatHours(v) : toStr(v, '0')),
     },
     {
       key: 'shift_hours',
       header: 'Shift Hrs',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : toStr(v, '0')),
+      render: (v: unknown) => (typeof v === 'number' ? formatHours(v) : toStr(v, '0')),
     },
     { key: 'courses_completed', header: 'Courses', align: 'right' as const },
     { key: 'shifts_completed', header: 'Shifts', align: 'right' as const },
@@ -49,10 +50,10 @@ export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) =>
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Hours" value={summary.total_combined_hours} />
+        <StatCard label="Total Hours" value={roundHoursToQuarter(summary.total_combined_hours)} />
         <StatCard label="Completions" value={summary.total_completions} />
         <StatCard label="Calls Responded" value={summary.total_calls_responded} />
-        <StatCard label="Avg Hours/Member" value={summary.avg_hours_per_member} />
+        <StatCard label="Avg Hours/Member" value={roundHoursToQuarter(summary.avg_hours_per_member)} />
       </div>
 
       {Object.keys(summary.training_by_type).length > 0 && (

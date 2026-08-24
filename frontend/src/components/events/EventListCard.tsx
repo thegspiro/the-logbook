@@ -37,6 +37,7 @@ import {
 } from '../../utils/eventHelpers';
 import { formatAbsoluteDate } from '../../hooks/useRelativeTime';
 import { formatDateCustom, formatTime } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import { EventType as EventTypeEnum } from '../../constants/enums';
 import { getUrgencyPresentation } from './eventUrgencyPresentation';
 
@@ -299,7 +300,7 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                     requirement they believed they had met. */}
                 <span className="truncate" title={CREDITED_HOURS_BASIS}>
                   Credits up to{' '}
-                  <span className="text-theme-text-primary font-mono">{event.credited_hours.toFixed(1)}</span>{' '}
+                  <span className="text-theme-text-primary font-mono">{formatHours(event.credited_hours)}</span>{' '}
                   {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
                 </span>
               </div>

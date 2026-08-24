@@ -59,6 +59,7 @@ import {
   localToUTC,
 } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
@@ -2265,9 +2266,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             try {
                               const result = await schedulingService.checkOut(shift.id);
                               setMyAttendance(result);
-                              toast.success(
-                                `Checked out (${Math.round(((result.duration_minutes ?? 0) / 60) * 10) / 10} hrs)`
-                              );
+                              toast.success(`Checked out (${formatHours((result.duration_minutes ?? 0) / 60)} hrs)`);
                             } catch {
                               toast.error('Failed to check out');
                             } finally {
@@ -2288,7 +2287,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     </>
                   ) : (
                     <span className="text-theme-text-muted text-xs">
-                      {Math.round(((myAttendance.duration_minutes ?? 0) / 60) * 10) / 10} hrs recorded
+                      {formatHours((myAttendance.duration_minutes ?? 0) / 60)} hrs recorded
                     </span>
                   )}
                 </div>

@@ -54,6 +54,7 @@ import type {
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
@@ -788,7 +789,7 @@ export const ShiftReportsTab: React.FC = () => {
           {traineeStats.total_hours != null && (
             <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {traineeStats.total_hours.toFixed(1)}
+                {formatHours(traineeStats.total_hours)}
               </p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Hours</p>
             </div>
@@ -848,7 +849,7 @@ export const ShiftReportsTab: React.FC = () => {
           </div>
           <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {officerAnalytics.total_hours.toFixed(1)}
+              {formatHours(officerAnalytics.total_hours)}
             </p>
             <p className="text-theme-text-muted mt-0.5 text-xs">Total Hours</p>
           </div>
@@ -910,7 +911,7 @@ export const ShiftReportsTab: React.FC = () => {
                     <tr key={t.trainee_id} className="text-theme-text-primary">
                       <td className="py-2 text-left font-medium">{t.name}</td>
                       <td className="py-2 pl-4 text-center">{t.reports}</td>
-                      <td className="py-2 pl-4 text-center">{t.hours.toFixed(1)}</td>
+                      <td className="py-2 pl-4 text-center">{formatHours(t.hours)}</td>
                       <td className="py-2 pl-4 text-center">{t.calls}</td>
                       <td className="py-2 pl-4 text-center">{t.avg_rating ?? '—'}</td>
                     </tr>
@@ -1009,7 +1010,7 @@ export const ShiftReportsTab: React.FC = () => {
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   {/* One decimal, like the summary table above. Raw, the same
                       record read 11.87h here and 11.9 up there. */}
-                  <Clock className="h-3 w-3" /> {Number(report.hours_on_shift).toFixed(1)}h
+                  <Clock className="h-3 w-3" /> {formatHours(Number(report.hours_on_shift))}h
                 </span>
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   <Phone className="h-3 w-3" /> {report.calls_responded} call{report.calls_responded === 1 ? '' : 's'}
@@ -1565,7 +1566,7 @@ export const ShiftReportsTab: React.FC = () => {
                               {shift.call_count > 0
                                 ? ` · ${shift.call_count} call${shift.call_count !== 1 ? 's' : ''}`
                                 : ''}
-                              {shift.total_hours ? ` · ${shift.total_hours}h` : ''}
+                              {shift.total_hours ? ` · ${formatHours(shift.total_hours)}h` : ''}
                             </p>
                           </div>
                         </div>
@@ -2379,7 +2380,7 @@ export const ShiftReportsTab: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                       <span className="text-theme-text-muted flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {reviewReport.hours_on_shift}h
+                        <Clock className="h-3.5 w-3.5" /> {formatHours(reviewReport.hours_on_shift)}h
                       </span>
                       <span className="text-theme-text-muted flex items-center gap-1">
                         <Phone className="h-3.5 w-3.5" /> {reviewReport.calls_responded} call

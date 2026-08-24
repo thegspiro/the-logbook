@@ -15,6 +15,7 @@ import { trainingService } from '../services/trainingServices';
 import type { MemberComplianceStatusColor, MemberPeriodStatusRow } from '../types/training';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { escapeCsvCell } from '../utils/csv';
 import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
@@ -167,7 +168,7 @@ const MemberTrainingStatusPage: React.FC = () => {
   }, [rows, sortField, sortDir]);
 
   const summary = useMemo(() => {
-    const totalHours = rows.reduce((s, r) => s + r.hours_completed, 0);
+    const totalHours = sumHoursToQuarter(rows.map((r) => r.hours_completed));
     const activeMembers = rows.filter((r) => r.trainings_completed > 0).length;
     const behind = rows.filter((r) => r.compliance_status === 'red').length;
     return { totalHours, activeMembers, behind, totalMembers: rows.length };
@@ -274,7 +275,7 @@ const MemberTrainingStatusPage: React.FC = () => {
         {[
           { label: 'Members', value: summary.totalMembers },
           { label: 'Trained this period', value: summary.activeMembers },
-          { label: 'Hours logged', value: summary.totalHours.toFixed(1) },
+          { label: 'Hours logged', value: formatHours(summary.totalHours) },
           { label: 'Behind on requirements', value: summary.behind },
         ].map((t) => (
           <div key={t.label} className="card">
@@ -347,7 +348,7 @@ const MemberTrainingStatusPage: React.FC = () => {
                   <tr key={r.user_id} className="border-theme-surface-border border-t">
                     <td className="text-theme-text-primary px-4 py-2 font-medium">{r.member_name}</td>
                     <td className="text-theme-text-secondary px-4 py-2">{r.trainings_completed}</td>
-                    <td className="text-theme-text-secondary px-4 py-2">{r.hours_completed.toFixed(1)}</td>
+                    <td className="text-theme-text-secondary px-4 py-2">{formatHours(r.hours_completed)}</td>
                     <td className="text-theme-text-muted px-4 py-2">
                       {r.last_activity ? formatDate(r.last_activity, tz) : '—'}
                     </td>

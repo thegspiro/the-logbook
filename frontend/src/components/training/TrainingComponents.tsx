@@ -18,6 +18,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { daysBetween } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import type { TrainingStatus, TrainingType, EnrollmentStatus, ProgramPhase } from '../../types/training';
 
 // ---------------------------------------------------------------------------
@@ -354,7 +355,8 @@ export const TrainingHoursDisplay: React.FC<TrainingHoursDisplayProps> = ({ comp
     <div className="w-full">
       {label && <span className="text-theme-text-muted mb-0.5 block text-xs font-medium">{label}</span>}
       <span className="text-theme-text-primary text-sm font-semibold">
-        {completed} <span className="text-theme-text-muted font-normal">/ {required} hrs</span>
+        {formatHours(completed)}{' '}
+        <span className="text-theme-text-muted font-normal">/ {formatHours(required)} hrs</span>
       </span>
       <div className="bg-theme-surface-secondary mt-1 h-1.5 w-full overflow-hidden rounded-full">
         <div
