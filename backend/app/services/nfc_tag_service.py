@@ -31,7 +31,11 @@ from app.schemas.nfc_tag import (
     NfcCheckInTarget,
 )
 from app.services.admin_hours_service import AdminHoursService
-from app.services.event_service import PHASE_GATE_PREFIX, EventService
+from app.services.event_service import (
+    ATTENDANCE_LOCKED_PREFIX,
+    PHASE_GATE_PREFIX,
+    EventService,
+)
 from app.services.scheduling_service import SchedulingService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -493,6 +497,10 @@ class NfcTagService:
                     + " Check this member in from the event screen.",
                     target_name=target_name,
                 )
+            # Sentinel prefixes are for the HTTP layer; a station reader shows
+            # the sentence to whoever is standing at it.
+            if error.startswith(ATTENDANCE_LOCKED_PREFIX):
+                error = error[len(ATTENDANCE_LOCKED_PREFIX) :]
             return self._result(
                 NfcCheckInStatus.REFUSED, error, target_name=target_name
             )

@@ -101,6 +101,15 @@ const EventRecordTimesModal: React.FC<EventRecordTimesModalProps> = ({
               Currently: {formatShortDateTime(currentActualEndTime, timezone)}
             </p>
           )}
+          {/* Recording an end time has always finalized attendance as a side
+              effect — it is what credits the hours. Now that finalizing also
+              locks the event, saying so beforehand is the difference between a
+              deliberate close and a typo that needs a chief to undo. */}
+          {actualEndTime && (
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Saving an end time finalizes attendance and closes the event.
+            </p>
+          )}
         </div>
 
         {actualStartTime && actualEndTime && (

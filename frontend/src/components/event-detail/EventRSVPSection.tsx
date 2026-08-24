@@ -27,6 +27,12 @@ export interface EventRSVPSectionProps {
   onRemoveAttendee: (userId: string) => void;
   onPrintRoster: () => void;
   onExportCSV: () => void;
+  /**
+   * Attendance is closed. The roster stays readable and exportable — that is
+   * the point of finalizing — but the per-row writes are gone, because the API
+   * refuses all of them.
+   */
+  attendanceFinalized?: boolean;
 }
 
 export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
@@ -40,6 +46,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
   onRemoveAttendee,
   onPrintRoster,
   onExportCSV,
+  attendanceFinalized = false,
 }) => {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -100,7 +107,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                         >
                           {getRSVPStatusLabel(rsvp.status)}
                         </span>
-                        {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && (
+                        {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && !attendanceFinalized && (
                           <button
                             onClick={() => {
                               onCheckIn(rsvp.user_id);
@@ -146,40 +153,42 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                     )}
 
                     {/* Action buttons */}
-                    <div className="mt-2 flex items-center gap-3">
-                      <button
-                        onClick={() => onOpenOverrideModal(rsvp)}
-                        className="text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        Edit Times
-                      </button>
-                      {!isRemoving ? (
+                    {!attendanceFinalized && (
+                      <div className="mt-2 flex items-center gap-3">
                         <button
-                          onClick={() => onSetRemoveConfirmUserId(rsvp.user_id)}
-                          className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          onClick={() => onOpenOverrideModal(rsvp)}
+                          className="text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                         >
-                          Remove
+                          Edit Times
                         </button>
-                      ) : (
-                        <span className="flex items-center gap-2">
-                          <span className="text-theme-text-muted text-xs">Remove?</span>
+                        {!isRemoving ? (
                           <button
-                            onClick={() => {
-                              onRemoveAttendee(rsvp.user_id);
-                            }}
-                            className="text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                            onClick={() => onSetRemoveConfirmUserId(rsvp.user_id)}
+                            className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
-                            Yes
+                            Remove
                           </button>
-                          <button
-                            onClick={() => onSetRemoveConfirmUserId(null)}
-                            className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
-                          >
-                            No
-                          </button>
-                        </span>
-                      )}
-                    </div>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span className="text-theme-text-muted text-xs">Remove?</span>
+                            <button
+                              onClick={() => {
+                                onRemoveAttendee(rsvp.user_id);
+                              }}
+                              className="text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => onSetRemoveConfirmUserId(null)}
+                              className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
+                            >
+                              No
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
