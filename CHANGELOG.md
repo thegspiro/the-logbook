@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling: the calendar now says which shifts need people, and claiming one is a tap (2026-08-24)
+
+**Changed**
+
+- **The Schedule tab is a board, not a grid of cards.** A card told you a shift
+  existed; it did not say whether it still needed anybody, and claiming a seat
+  meant opening a panel and finding a position dropdown. The month grid now
+  carries a status chip per shift — `2 open` / `Full 4/4` / `You + 2/4`, red /
+  amber / green / blue — beside a day panel showing the crew, with a single
+  button that claims the first open seat the member is cleared for. Filters dim
+  rather than hide, so the month keeps its shape. Phone gets a bar grid, a day
+  sheet and a confirmation screen.
+- **Every shift response carries its `roster`.** A month of shifts arrives with
+  its seat occupants in one request, so selecting a day costs no network call
+  and a cell can be coloured "you are on it" at all.
+- **A shift that never stated a crew size reads as unset, not as an
+  emergency.** The board previously assumed four seats when a shift named
+  neither positions nor `min_staffing`, so it rendered "4 open" in critical
+  red — a department that configures neither opened the page to a wall of red
+  that meant nothing. Such a shift is now grey, shows its headcount rather than
+  a ratio, stays out of the open-seat count and the URGENT flag, and can still
+  be joined.
+
+**Added**
+
+- **Standing shifts** — a member's recurring claim on a seat ("every Tuesday
+  night"). Stored rather than written once as a batch of assignments, so giving
+  up a single date leaves the series intact. It has two readers and only means
+  anything because both exist: creating a claim seats the member on matching
+  shifts already on record, and creating a _shift_ seats every member whose
+  active claim matches it — without the second, a series would go quiet the
+  month the department generated its schedule. The horizon is the member's to
+  pick, defaulting to a year out rather than to December 31, which quietly
+  shrinks as the year goes on.
+- **Trade candidates** (`GET /scheduling/shifts/{id}/trade-candidates`) — who
+  could take over the caller's seat, with anyone who could not accept already
+  excluded: on the shift, on leave, not cleared for the position, or working a
+  tour that abuts this one. Ranked least-loaded first.
+- **A member can accept the seat they were offered**
+  (`POST /scheduling/swap-requests/{id}/respond`). Deliberately distinct from
+  manager review, which refuses participants by design, and limited to a
+  one-way targeted offer: accepting is the offerer withdrawing and the accepter
+  signing up, in one step, both already unprivileged.
+- **`swap_offer_expiry`** — a daily sweep closing offers still pending the day
+  before the shift, notifying both members and the duty officer. A pending
+  offer holds the seat with the member who made it, so left alone it survived
+  the shift itself with nobody told.
+- **`GET /scheduling/eligibility/positions/bulk`** — one call per day rather
+  than one per shift. The expensive half of the answer is about the member and
+  identical across shifts.
+
+**Fixed**
+
+- **A targeted trade offer could never be completed by anybody.** Manager
+  review reads a set `target_user_id` as "there must be an assignment to trade
+  back" and rejects the request when there is no requesting shift, which is the
+  shape a one-way offer has. The new participant-acceptance path completes it.
+- **Standing claims bypassed every self-service check.** They called
+  `create_assignment` directly, whose `self_signup` flag defaults to False, so
+  a series seated members on shifts they were not eligible for, on cancelled or
+  finalized shifts, on past dates, and past a position's seat count.
+- **Seat capacity was half-enforced.** A shift with named positions was capped
+  seat by seat; a shift with only `min_staffing` had nothing reading it, so the
+  calendar could show "Full 4/4" while the server accepted a fifth. Officer
+  assignment stays uncapped deliberately.
+- **Calendar day labels shifted a day for any viewer west of the
+  department.** They went through a timezone-aware formatter; a calendar date
+  belongs to no timezone, so a cell showing 26 announced itself as "Tuesday,
+  August 25".
+- A standing claim's `apparatus_id` is verified in-org before it is stored, and
+  the standing service and shift generation now resolve the organisation's
+  timezone through one shared helper instead of disagreeing about the default.
+- **A cancelled, finalized or past shift no longer reads as short-staffed.**
+  Its empty chairs counted towards the day's open-seat total and its urgent
+  flag, and it offered a claim button the server refuses. It now reads as
+  closed and offers nothing.
+- **Each shift on the board carries a details link again.** The board's own
+  actions cover claiming and giving up a seat; editing a shift, managing its
+  attendance and finalizing it live in the detail panel, which a fully staffed
+  shift an officer is not assigned to had no other route into.
+- **Giving up a seat is withheld while your own offer of it stands.** Releasing
+  it, or offering it again, left the first recipient holding an offer that
+  could no longer be honoured. Withdrawing is the only move until they answer.
+- **A standing series is anchored on the shift it was started from.** Biweekly
+  parity and the monthly ordinal both come from the first matching weekday
+  after the start date, so anchoring on today built a fortnight that skipped
+  the very shift the member opened it from. A series covering only dates the
+  department has not scheduled yet can also be saved — that is the case
+  standing shifts exist for.
+- **A training seat cannot be handed over through a trade.** It carries the
+  trainee's program and evaluating officer, and moving only the member id
+  would file one member's training against another. Approved time off is
+  rechecked when an offer is accepted, not only when candidates are picked.
+
 ### A member profile showed everyone the gear its member signed for (2026-08-24)
 
 **Security**

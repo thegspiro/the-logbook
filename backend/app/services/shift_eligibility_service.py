@@ -235,6 +235,73 @@ class ShiftEligibilityService:
 
         return sorted(eligible)
 
+    async def get_eligible_positions_bulk(
+        self,
+        user: User,
+        organization_id: str,
+        shift_ids: List[str],
+    ) -> Dict[str, List[str]]:
+        """The same answer as ``get_eligible_positions``, for many shifts at once.
+
+        Steps 1–3 above are about the *member* — their membership type, rank,
+        completed training, and the org's open positions — and do not vary by
+        shift. Asking per shift re-ran all of it and reloaded the same maps
+        each time; a day panel showing two shifts paid for it twice, and a
+        station running six apparatus paid six times for one answer.
+
+        Only the open-to-all check and the intersection with the shift's own
+        positions are per shift, and both are pure work over rows this loads in
+        a single query.
+        """
+        if not shift_ids:
+            return {}
+
+        org = await self._get_org(organization_id)
+        if not org:
+            return {shift_id: [] for shift_id in shift_ids}
+
+        result = await self.db.execute(
+            select(Shift).where(
+                Shift.id.in_(sorted(set(shift_ids))),
+                Shift.organization_id == organization_id,
+            )
+        )
+        shifts = {str(shift.id): shift for shift in result.scalars().all()}
+
+        excluded = self.get_excluded_membership_types(org)
+        member_type = getattr(user, "membership_type", None) or "active"
+        blocked = member_type in excluded
+
+        base: Set[str] = set()
+        if not blocked:
+            base.update(await self._get_rank_positions(user.rank, organization_id))
+            base.update(
+                await self._get_training_positions(str(user.id), organization_id)
+            )
+            base.update(self.get_open_positions(org))
+
+        answers: Dict[str, List[str]] = {}
+        for shift_id in shift_ids:
+            shift = shifts.get(str(shift_id))
+            if not shift:
+                # An id from another org, or one that has since been deleted.
+                # Empty rather than absent: the caller asked about it, and a
+                # missing key would read as "not answered yet".
+                answers[str(shift_id)] = []
+                continue
+            if shift.open_to_all_members:
+                answers[str(shift_id)] = sorted(set(self._shift_position_list(shift)))
+                continue
+            if blocked:
+                answers[str(shift_id)] = []
+                continue
+            eligible = set(base)
+            shift_positions = set(self._shift_position_list(shift))
+            if shift_positions:
+                eligible &= shift_positions
+            answers[str(shift_id)] = sorted(eligible)
+        return answers
+
     # ------------------------------------------------------------------
     # Department-wide position roster
     # ------------------------------------------------------------------

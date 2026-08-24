@@ -3480,6 +3480,111 @@ class ShiftTimeOff(Base):
 
 
 # ============================================
+# Standing Shift Claim (recurring member self-signup)
+# ============================================
+
+
+class StandingShiftPattern(str, enum.Enum):
+    """How often a standing shift claim repeats."""
+
+    WEEKLY = "weekly"
+    BIWEEKLY = "biweekly"
+    MONTHLY = "monthly"
+
+
+class StandingShiftPeriod(str, enum.Enum):
+    """Which half of the day a standing claim targets.
+
+    Departments define their own templates and times, so a claim cannot name
+    one; it names the half of the day it wants and the series matches whatever
+    shift starts in that window. ``DAY`` is a local start time before noon,
+    ``NIGHT`` is noon or later.
+    """
+
+    DAY = "day"
+    NIGHT = "night"
+
+
+class StandingShiftClaim(Base):
+    """A member's recurring claim on a shift — "every Tuesday night".
+
+    This is a *member's* commitment, not a department schedule: shift patterns
+    (``ShiftPattern``) generate the shifts, and a standing claim seats one
+    member on the ones that match it. Giving up a single date leaves the claim
+    intact, which is the whole point of storing it rather than just writing
+    the assignments once.
+
+    The claim is read in two places, and both must exist for it to mean
+    anything: creating one seats the member on the matching shifts that
+    already exist, and creating a *shift* seats the members whose active
+    claims match it.
+    """
+
+    __tablename__ = "standing_shift_claims"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    pattern = Column(
+        Enum(StandingShiftPattern, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=StandingShiftPattern.WEEKLY,
+        server_default="weekly",
+    )
+    # 0 = Sunday … 6 = Saturday, matching the weekday picker the member sees
+    # (S M T W T F S) rather than Python's Monday-first convention.
+    weekday = Column(Integer, nullable=False)
+    period = Column(
+        Enum(StandingShiftPeriod, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=StandingShiftPeriod.DAY,
+        server_default="day",
+    )
+    position = Column(
+        Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ShiftPosition.FIREFIGHTER,
+        server_default="firefighter",
+    )
+    # Optional narrowing to one unit. NULL means "whichever shift runs in that
+    # window", which is the right default for a single-apparatus department.
+    apparatus_id = Column(String(36), nullable=True)
+
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_standing_claim_org", "organization_id"),
+        Index("idx_standing_claim_user", "user_id"),
+        # The shift-creation reader looks up active claims by org and weekday.
+        Index("idx_standing_claim_lookup", "organization_id", "is_active", "weekday"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<StandingShiftClaim(user={self.user_id}, {self.pattern} "
+            f"weekday={self.weekday} {self.period})>"
+        )
+
+
+# ============================================
 # Basic Apparatus (Lightweight, for non-module departments)
 # ============================================
 

@@ -4,8 +4,6 @@ import {
   Clock,
   CalendarDays,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   AlertCircle,
   X,
   Loader2,
@@ -20,24 +18,20 @@ import {
   Truck,
   ShieldCheck,
   ChevronDown,
-  CheckCircle2,
-  AlertTriangle,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
-import { useTheme } from '../contexts/ThemeContext';
-import { formatDateCustom, formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
+import { formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
 import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
-import ShiftCard from './scheduling/ShiftCard';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 import SchedulingHeader from './scheduling/SchedulingHeader';
-import { NfcTapButton } from '../components/nfc/NfcTapButton';
+import ShiftBoard from './scheduling/board/ShiftBoard';
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import('./scheduling/MyShiftsTab'));
@@ -94,8 +88,6 @@ const FALLBACK_TEMPLATES: ShiftTemplateRecord[] = [
     is_active: true,
   },
 ];
-
-const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const formatDateISO = (date: Date): string => {
   const year = date.getFullYear();
@@ -167,7 +159,6 @@ const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const navigate = useNavigate();
   const tz = useTimezone();
-  const { resolvedTheme } = useTheme();
   const canManage = checkPermission('scheduling.manage');
 
   // Expiring-item count for the "Supply" admin card badge.
@@ -293,10 +284,11 @@ const SchedulingPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(() => parseCalendarDate(searchParams.get('date')) ?? new Date());
   const [showCreateShift, setShowCreateShift] = useState(false);
 
-  const [shifts, setShifts] = useState<ShiftRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [calendarAnnouncement, setCalendarAnnouncement] = useState('');
+  // The calendar's own data lives in ShiftBoard: it fetches the visible range
+  // with the roster attached and mutates it optimistically, so a second copy
+  // up here could only ever be the stale one. `boardRefreshKey` is how this
+  // page asks it to re-read after creating a shift.
+  const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
@@ -362,91 +354,6 @@ const SchedulingPage: React.FC = () => {
     void loadInitialData();
   }, [loadInitialData]);
 
-  const weekDates = useMemo(() => {
-    const start = new Date(currentDate);
-    start.setDate(start.getDate() - start.getDay());
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-  }, [currentDate]);
-
-  const monthDates = useMemo(() => {
-    if (viewMode !== 'month') return [];
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startPad = firstDay.getDay();
-    const start = new Date(firstDay);
-    start.setDate(start.getDate() - startPad);
-    const totalDays = startPad + lastDay.getDate();
-    const rows = Math.ceil(totalDays / 7);
-    return Array.from({ length: rows * 7 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-  }, [currentDate, viewMode]);
-
-  // Pre-index shifts by date for O(1) lookups instead of filtering per cell
-  const shiftsByDate = useMemo(() => {
-    const map = new Map<string, ShiftRecord[]>();
-    for (const shift of shifts) {
-      const existing = map.get(shift.shift_date);
-      if (existing) {
-        existing.push(shift);
-      } else {
-        map.set(shift.shift_date, [shift]);
-      }
-    }
-    return map;
-  }, [shifts]);
-
-  const navigate_ = (direction: number) => {
-    const newDate = new Date(currentDate);
-    if (viewMode === 'month') {
-      newDate.setMonth(newDate.getMonth() + direction);
-    } else {
-      newDate.setDate(newDate.getDate() + direction * 7);
-    }
-    setCurrentDate(newDate);
-  };
-
-  const dateRangeLabel = useMemo(() => {
-    if (viewMode === 'month') {
-      return formatDateCustom(
-        currentDate,
-        {
-          month: 'long',
-          year: 'numeric',
-        },
-        tz
-      );
-    }
-    const start = weekDates[0] ?? currentDate;
-    const end = weekDates[6] ?? currentDate;
-    const startMonth = formatDateCustom(
-      start,
-      {
-        month: 'short',
-      },
-      tz
-    );
-    const endMonth = formatDateCustom(
-      end,
-      {
-        month: 'short',
-      },
-      tz
-    );
-    if (startMonth === endMonth) {
-      return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
-    }
-    return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
-  }, [currentDate, viewMode, weekDates, tz]);
-
   // Keep the calendar location shareable and preserve it across browser history.
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -455,54 +362,10 @@ const SchedulingPage: React.FC = () => {
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [currentDate, searchParams, setSearchParams, viewMode]);
 
-  const isToday = (date: Date) => {
-    const today = new Date();
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
-  };
-
-  const fetchShifts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let fetchedShifts: ShiftRecord[];
-      if (viewMode === 'month') {
-        fetchedShifts = await schedulingService.getMonthCalendar(currentDate.getFullYear(), currentDate.getMonth() + 1);
-      } else {
-        const weekStartStr = formatDateISO(weekDates[0] ?? currentDate);
-        fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
-      }
-      setShifts(fetchedShifts);
-      setCalendarAnnouncement(
-        `${fetchedShifts.length} ${fetchedShifts.length === 1 ? 'shift' : 'shifts'} loaded for ${dateRangeLabel}`
-      );
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load shifts';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate, dateRangeLabel, viewMode]);
-
-  useEffect(() => {
-    void fetchShifts();
-  }, [fetchShifts]);
-
   // Fetch summary on mount via the store
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
-
-  const getShiftsForDate = useCallback(
-    (date: Date): ShiftRecord[] => {
-      return shiftsByDate.get(formatDateISO(date)) || [];
-    },
-    [shiftsByDate]
-  );
 
   const handleCreateShift = async () => {
     if (!shiftForm.startDate) {
@@ -561,8 +424,9 @@ const SchedulingPage: React.FC = () => {
           : {}),
       });
 
-      // Refresh shifts and summary
-      await fetchShifts();
+      // Tell the board to re-read the range it is showing, and refresh the
+      // department totals above it.
+      setBoardRefreshKey((key) => key + 1);
       void loadSummary();
 
       setShiftForm({
@@ -588,8 +452,6 @@ const SchedulingPage: React.FC = () => {
     setSelectedShift(shift);
   };
 
-  const hasShifts = shifts.length > 0;
-
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateShift, onClose: () => setShowCreateShift(false) });
 
   return (
@@ -608,10 +470,6 @@ const SchedulingPage: React.FC = () => {
             ) : undefined
           }
         />
-        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {calendarAnnouncement}
-        </p>
-
         {/* Tab Navigation */}
         <div className="border-theme-surface-border relative -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
           <div
@@ -726,408 +584,29 @@ const SchedulingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Calendar Navigation */}
-            <div className="card mb-6 p-3 sm:p-4">
-              <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
-                <div className="flex items-center space-x-2 sm:space-x-4">
-                  <button
-                    onClick={() => navigate_(-1)}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors"
-                    aria-label={viewMode === 'month' ? 'Previous month' : 'Previous week'}
-                  >
-                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <h2 className="text-theme-text-primary text-base font-semibold whitespace-nowrap sm:text-lg">
-                    {dateRangeLabel}
-                  </h2>
-                  <button
-                    onClick={() => navigate_(1)}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors"
-                    aria-label={viewMode === 'month' ? 'Next month' : 'Next week'}
-                  >
-                    <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <NfcTapButton />
-                  <button
-                    onClick={() => setCurrentDate(new Date())}
-                    className="rounded-lg px-3 py-1.5 text-sm text-violet-700 transition-colors hover:bg-violet-500/10 max-md:min-h-[44px] dark:text-violet-400"
-                  >
-                    Today
-                  </button>
-                  <div className="bg-theme-input-bg flex rounded-lg p-1" role="tablist" aria-label="Calendar view mode">
-                    <button
-                      onClick={() => setViewMode('week')}
-                      role="tab"
-                      aria-selected={viewMode === 'week'}
-                      className={`rounded-sm px-3 py-1 text-sm max-md:min-h-[44px] ${viewMode === 'week' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-white'}`}
-                    >
-                      Week
-                    </button>
-                    <button
-                      onClick={() => setViewMode('month')}
-                      role="tab"
-                      aria-selected={viewMode === 'month'}
-                      className={`rounded-sm px-3 py-1 text-sm max-md:min-h-[44px] ${viewMode === 'month' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-white'}`}
-                    >
-                      Month
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {/* What the colours and the ratio mean. Every cell below is
-                  shorthand — a unit code, a filled/target ratio and a coloured
-                  icon — and none of it is guessable without being told once. */}
-              <dl className="border-theme-surface-border text-theme-text-muted mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" aria-hidden="true" />
-                  <dt className="sr-only">Green tick</dt>
-                  <dd>Fully crewed</dd>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                  <dt className="sr-only">Amber triangle</dt>
-                  <dd>Short-staffed</dd>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                  <dt className="sr-only">Crew count</dt>
-                  <dd>Positions filled of the minimum</dd>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Truck className="h-3.5 w-3.5" aria-hidden="true" />
-                  <dt className="sr-only">Unit code</dt>
-                  {/* Not "hover for the name" — half the people reading this are
-                      on a phone, which has no hover. */}
-                  <dd>Apparatus unit</dd>
-                </div>
-              </dl>
-            </div>
-
-            {/* Error State */}
-            {error && (
-              <div className="mb-6 flex items-center space-x-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-                <AlertCircle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
-                <p className="text-red-700 dark:text-red-300">{error}</p>
-              </div>
-            )}
-
-            {/* Loading State */}
-            {loading && (
-              <div className="card mb-8 p-12 text-center" role="status" aria-live="polite">
-                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-violet-700 dark:text-violet-400" />
-                <p className="text-theme-text-secondary">Loading shifts...</p>
-              </div>
-            )}
-
-            {/* Week Calendar Grid — desktop: 7-column grid, mobile: stacked list */}
-            {!loading && viewMode === 'week' && (
-              <>
-                {/* Desktop grid (hidden on mobile) */}
-                <div className="card mb-8 hidden overflow-hidden md:block">
-                  <div className="border-theme-surface-border grid grid-cols-7 border-b">
-                    {weekDates.map((date, i) => (
-                      <div
-                        key={i}
-                        className={`border-theme-surface-border border-r p-3 text-center last:border-r-0 ${
-                          isToday(date) ? 'bg-violet-600/20' : ''
-                        }`}
-                      >
-                        <p className="text-theme-text-muted text-xs uppercase">{DAYS_OF_WEEK[i]}</p>
-                        <p
-                          className={`mt-1 text-lg font-bold ${
-                            isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                          }`}
-                        >
-                          {date.getDate()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid min-h-[300px] grid-cols-7">
-                    {weekDates.map((date, i) => {
-                      const dayShifts = getShiftsForDate(date);
-                      return (
-                        <div
-                          key={i}
-                          className={`border-theme-surface-border border-r p-2 last:border-r-0 ${
-                            isToday(date) ? 'bg-violet-600/5' : ''
-                          }`}
-                        >
-                          {dayShifts.map((shift) => (
-                            <ShiftCard
-                              key={shift.id}
-                              shift={shift}
-                              variant="desktop-week"
-                              selected={selectedShift?.id === shift.id}
-                              resolvedTheme={resolvedTheme}
-                              timezone={tz}
-                              onClick={handleShiftClick}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Mobile list view (shown on mobile only) */}
-                <div className="mb-8 space-y-2 md:hidden">
-                  {weekDates.map((date, i) => {
-                    const dayShifts = getShiftsForDate(date);
-                    return (
-                      <div
-                        key={i}
-                        className={`card overflow-hidden ${isToday(date) ? 'ring-2 ring-violet-500/30' : ''}`}
-                      >
-                        <div
-                          className={`border-theme-surface-border flex items-center justify-between border-b px-4 py-2 ${
-                            isToday(date) ? 'bg-violet-600/10' : 'bg-theme-surface-secondary'
-                          }`}
-                        >
-                          <span
-                            className={`text-sm font-semibold ${
-                              isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                            }`}
-                          >
-                            {DAYS_OF_WEEK[i]},{' '}
-                            {formatDateCustom(
-                              date,
-                              {
-                                month: 'short',
-                                day: 'numeric',
-                              },
-                              tz
-                            )}
-                          </span>
-                          {isToday(date) && (
-                            <span className="rounded-full bg-violet-600 px-2 py-0.5 text-xs text-white">Today</span>
-                          )}
-                        </div>
-                        <div className="p-3">
-                          {dayShifts.length === 0 ? (
-                            <p className="text-theme-text-muted py-2 text-center text-sm">No shifts</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {dayShifts.map((shift) => (
-                                <ShiftCard
-                                  key={shift.id}
-                                  shift={shift}
-                                  variant="mobile"
-                                  selected={selectedShift?.id === shift.id}
-                                  resolvedTheme={resolvedTheme}
-                                  timezone={tz}
-                                  onClick={handleShiftClick}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            {/* Month Calendar Grid — desktop: 7-column grid, mobile: stacked list */}
-            {!loading && viewMode === 'month' && (
-              <>
-                {/* Desktop grid (hidden on mobile) */}
-                <div className="card mb-8 hidden overflow-hidden md:block">
-                  <div className="border-theme-surface-border grid grid-cols-7 border-b">
-                    {DAYS_OF_WEEK.map((day) => (
-                      <div key={day} className="border-theme-surface-border border-r p-3 text-center last:border-r-0">
-                        <p className="text-theme-text-muted text-xs uppercase">{day}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7">
-                    {monthDates.map((date, i) => {
-                      const dayShifts = getShiftsForDate(date);
-                      const isCurrentMonth = date.getMonth() === currentDate.getMonth();
-                      return (
-                        <div
-                          key={i}
-                          className={`border-theme-surface-border min-h-[100px] border-r border-b p-2 last:border-r-0 ${
-                            isToday(date) ? 'bg-violet-600/5' : ''
-                          } ${!isCurrentMonth ? 'opacity-40' : ''}`}
-                        >
-                          <p
-                            className={`mb-1 text-sm font-medium ${
-                              isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                            }`}
-                          >
-                            {date.getDate()}
-                          </p>
-                          {dayShifts.map((shift) => (
-                            <ShiftCard
-                              key={shift.id}
-                              shift={shift}
-                              variant="compact"
-                              selected={selectedShift?.id === shift.id}
-                              resolvedTheme={resolvedTheme}
-                              timezone={tz}
-                              onClick={handleShiftClick}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Mobile: compact mini-calendar + shift list below */}
-                <div className="mb-8 space-y-3 md:hidden">
-                  {/* Mini month calendar with dot indicators */}
-                  <div className="card p-3">
-                    <div className="mb-1 grid grid-cols-7 gap-0.5">
-                      {DAYS_OF_WEEK.map((d) => (
-                        <div
-                          key={d}
-                          className="text-theme-text-muted py-1 text-center text-[10px] font-medium uppercase"
-                        >
-                          {d.charAt(0)}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-0.5">
-                      {monthDates.map((date, i) => {
-                        const isCurrentMonth = date.getMonth() === currentDate.getMonth();
-                        const dayShifts = getShiftsForDate(date);
-                        const hasShiftsOnDay = dayShifts.length > 0;
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              if (hasShiftsOnDay && dayShifts.length > 0) {
-                                // Scroll to the day in the list below
-                                const el = document.getElementById(`month-mobile-day-${formatDateISO(date)}`);
-                                el?.scrollIntoView({
-                                  behavior: 'smooth',
-                                  block: 'nearest',
-                                });
-                              }
-                            }}
-                            className={`relative flex flex-col items-center rounded-md py-1.5 text-xs transition-colors ${
-                              !isCurrentMonth ? 'opacity-30' : ''
-                            } ${isToday(date) ? 'bg-violet-600 font-bold text-white' : 'text-theme-text-primary'} ${
-                              hasShiftsOnDay && !isToday(date) ? 'bg-violet-500/10 font-medium' : ''
-                            }`}
-                          >
-                            {date.getDate()}
-                            {hasShiftsOnDay && (
-                              <span
-                                className={`absolute bottom-0.5 h-1 w-1 rounded-full ${isToday(date) ? 'bg-white' : 'bg-violet-500'}`}
-                              />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Shift list for days with shifts */}
-                  {(() => {
-                    const daysWithShifts = monthDates
-                      .filter((date) => date.getMonth() === currentDate.getMonth())
-                      .filter((date) => getShiftsForDate(date).length > 0);
-
-                    if (daysWithShifts.length === 0) {
-                      return (
-                        <div className="card p-8 text-center">
-                          <CalendarDays className="text-theme-text-muted mx-auto mb-2 h-10 w-10" />
-                          <p className="text-theme-text-muted text-sm">No shifts this month</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-2">
-                        {daysWithShifts.map((date, i) => {
-                          const dayShifts = getShiftsForDate(date);
-                          return (
-                            <div
-                              key={i}
-                              id={`month-mobile-day-${formatDateISO(date)}`}
-                              className={`card overflow-hidden ${isToday(date) ? 'ring-2 ring-violet-500/30' : ''}`}
-                            >
-                              <div
-                                className={`border-theme-surface-border flex items-center justify-between border-b px-4 py-2 ${
-                                  isToday(date) ? 'bg-violet-600/10' : 'bg-theme-surface-secondary'
-                                }`}
-                              >
-                                <span
-                                  className={`text-sm font-semibold ${
-                                    isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
-                                  }`}
-                                >
-                                  {formatDateCustom(
-                                    date,
-                                    {
-                                      weekday: 'short',
-                                      month: 'short',
-                                      day: 'numeric',
-                                    },
-                                    tz
-                                  )}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-theme-text-muted text-xs">
-                                    {dayShifts.length} shift
-                                    {dayShifts.length !== 1 ? 's' : ''}
-                                  </span>
-                                  {isToday(date) && (
-                                    <span className="rounded-full bg-violet-600 px-2 py-0.5 text-xs text-white">
-                                      Today
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="space-y-2 p-3">
-                                {dayShifts.map((shift) => (
-                                  <ShiftCard
-                                    key={shift.id}
-                                    shift={shift}
-                                    variant="mobile"
-                                    selected={selectedShift?.id === shift.id}
-                                    resolvedTheme={resolvedTheme}
-                                    timezone={tz}
-                                    onClick={handleShiftClick}
-                                    touchOnly
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </>
-            )}
-
-            {/* Empty State */}
-            {!loading && !hasShifts && (
-              <div className="card p-12 text-center">
-                <CalendarDays className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-                <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Shifts Scheduled</h3>
-                <p className="text-theme-text-secondary mb-6">
-                  Start building shift schedules and duty rosters for your department.
-                </p>
-                {canManage && (
+            {/* The board: month grid, day panel, and one-tap claim. Replaces
+                the old month/week grid of ShiftCards — a card told you a shift
+                existed; the board tells you whether it still needs somebody
+                and lets you be that somebody without leaving the page. */}
+            <ShiftBoard
+              view={viewMode === 'week' ? 'week' : 'month'}
+              visibleDate={currentDate}
+              onVisibleDateChange={setCurrentDate}
+              onViewChange={setViewMode}
+              refreshKey={boardRefreshKey}
+              onViewShift={handleShiftClick}
+              emptyAction={
+                canManage ? (
                   <button
                     onClick={() => setShowCreateShift(true)}
-                    className="inline-flex items-center space-x-2 rounded-lg bg-violet-600 px-6 py-3 text-white transition-colors hover:bg-violet-700"
+                    className="btn-primary inline-flex items-center gap-2 rounded-lg"
                   >
-                    <Plus className="h-5 w-5" />
-                    <span>Create First Shift</span>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    <span>Create the first shift</span>
                   </button>
-                )}
-              </div>
-            )}
+                ) : undefined
+              }
+            />
           </>
         )}
 
@@ -1148,9 +627,7 @@ const SchedulingPage: React.FC = () => {
             <ShiftDetailPanel
               shift={selectedShift}
               onClose={() => setSelectedShift(null)}
-              onRefresh={() => {
-                void fetchShifts();
-              }}
+              onRefresh={() => setBoardRefreshKey((key) => key + 1)}
             />
           </Suspense>
         )}
