@@ -39,22 +39,44 @@ That matches the app-wide rule in CLAUDE.md: **tokens live in httpOnly cookies,
 never in `localStorage`, `sessionStorage`, or JS-reachable state, and no
 request carries an `Authorization` header.**
 
-### What sessionStorage actually holds
+### What browser storage actually holds
 
-The complete set of keys this module writes:
+Two mechanisms write, and a security inventory has to name both — an earlier
+version of this section listed only the first and called it complete.
+
+**`sessionStorage`, written directly (tab-scoped, gone when the tab closes):**
 
 | Key | Contents |
 | --- | -------- |
 | `departmentName`, `logoData`, `hasLogo` | Display data for the wizard's own header |
-| `navigationLayout` | A UI preference (`localStorage`) |
 | `emailConfigMethod` | The **method** — `oauth` or `apppassword`. Never the credential |
 | `emailConfigured`, `fileStorageConfigured`, `authConfigured`, `itTeamConfigured`, `adminCreated` | Step-completion booleans |
-| `onboarding_session_id`, `onboarding_csrf_token` | Tab-scoped session handles |
+| `onboarding_session_id`, `onboarding_csrf_token` | Session handles |
+
+**`localStorage`, written by the Zustand `persist` middleware — this one
+outlives the tab:**
+
+| Key | Contents |
+| --- | -------- |
+| `navigationLayout` | A UI preference |
+| **`onboarding-storage`** | The store's `partialize` set: department name, logo, navigation layout, email/file-storage/auth **platform names**, the "configured" booleans, **`systemOwnerFirstName` / `systemOwnerLastName` / `systemOwnerEmail`**, `stations`, `apparatus`, `positionsConfig`, `selectedModules`, `moduleStatuses`, `modulePermissionConfigs`, and wizard progress (`currentStep`, `completedSteps`, `lastSaved`) |
 
 No passwords. No API keys. No OAuth secrets. Provider credentials —
 `googleClientSecret`, `microsoftClientSecret`, `s3SecretAccessKey`,
 `authentikClientSecret`, SMTP passwords — are posted to the backend and held
 server-side; the wizard keeps only the platform name and a "configured" flag.
+`partialize` also excludes `sessionId`, `csrfToken`, `itTeamMembers`,
+`backupEmail`, `backupPhone` and `secondaryAdminEmail` by name.
+
+**But `onboarding-storage` does persist the installation owner's first name,
+last name and email in `localStorage`**, and it survives the tab. That is not a
+credential, and it is the identity the wizard is in the middle of creating — but
+it is PII sitting on a shared setup machine after the browser is closed, so it
+belongs in this inventory rather than being discovered later. `ResetProgressButton`
+clears it; nothing else does automatically.
+
+`modulePermissionConfigs` is persisted here too — and is read by nothing. See
+**ONBOARD-1** in [`docs/KNOWN_LIMITATIONS.md`](../../../../docs/KNOWN_LIMITATIONS.md).
 
 `utils/storage.ts` keeps the old key names in a `DEPRECATED_SENSITIVE_KEYS`
 list, purely so a returning browser gets them purged:
@@ -79,6 +101,12 @@ still has those keys, and nothing else clears them.
 A new wizard step that collects a credential posts it to the backend and keeps
 **nothing but a completion flag**. If a step needs to show what was configured,
 show the platform name. If it needs to prove it worked, ask the backend.
+
+If the step adds a field to the store, decide explicitly whether it belongs in
+`partialize`. Anything left out of that list stays in memory for the tab;
+anything added to it is written to `localStorage` and outlives the browser
+session. That list is the actual boundary, so a field added without a decision
+gets persisted by default.
 
 ## Uploads
 

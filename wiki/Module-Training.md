@@ -1433,7 +1433,7 @@ changes matter beyond the layout.
 Attaching evidence used to be a second step after the submission was created,
 which meant it could be skipped — and frequently was. The form now sends the
 file with the submission as multipart
-(`POST /training-submissions/with-attachment`). PDF, JPG or PNG, up to 10 MB,
+(`POST /training/submissions/with-attachment`). PDF, JPG or PNG, up to 10 MB,
 validated by magic bytes and stored under a server-generated name, so a double
 extension cannot survive the trip and nothing is executed server-side.
 

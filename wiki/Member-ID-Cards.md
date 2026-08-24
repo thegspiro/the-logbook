@@ -56,7 +56,9 @@ station that silently stops reading is worse than one that was never armed.
 ### What a tap can be checked into
 
 An event or meeting, an admin-hours category, or a shift check-in. The station
-will **not attach to a shift that has already ended**, and its target lists are
+keeps offering a shift until an officer **finalizes** it — not merely because
+its end time has passed, since checking out has no deadline and a crew coming
+off a tour still needs to tap out. Its target lists are
 cut at the same boundaries the server enforces — the station never offers a
 target the check-in endpoint would refuse.
 

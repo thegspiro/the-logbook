@@ -1916,18 +1916,27 @@ each with a `permission`, an `aggregatePath` and a `queuePath`. **Only one —
 other seven are exported, covered by a test that asserts the registry against
 itself, and consumed by nothing.
 
-Five of the eight `aggregatePath` values have no backend endpoint at all:
+Seven of the eight `aggregatePath` values do not resolve to a mounted route:
 
-| `aggregatePath`                           | Endpoint exists? |
-| ----------------------------------------- | ---------------- |
-| `/membership-pipeline/widget-summary`     | ✅ yes           |
-| `/users/leaves-of-absence/widget-summary` | ✅ yes           |
-| `/organizations/setup-checklist`          | ✅ yes           |
-| `/onboarding/widget-summary`              | ❌ no            |
-| `/users/status/widget-summary`            | ❌ no            |
-| `/admin-hours/widget-summary`             | ❌ no            |
-| `/meetings/widget-summary`                | ❌ no            |
-| `/messages/widget-summary`                | ❌ no            |
+| `aggregatePath`                           | Resolves to a mounted route?                                   |
+| ----------------------------------------- | -------------------------------------------------------------- |
+| `/users/leaves-of-absence/widget-summary` | ✅ yes                                                         |
+| `/membership-pipeline/widget-summary`     | ❌ **no** — the route is `/prospective-members/widget-summary` |
+| `/organizations/setup-checklist`          | ❌ **no** — the router mounts at `/organization`, singular     |
+| `/onboarding/widget-summary`              | ❌ no                                                          |
+| `/users/status/widget-summary`            | ❌ no                                                          |
+| `/admin-hours/widget-summary`             | ❌ no                                                          |
+| `/meetings/widget-summary`                | ❌ no                                                          |
+| `/messages/widget-summary`                | ❌ no                                                          |
+
+> **Corrected 2026-08-24 — it is seven of eight, not five.** The two rows now
+> marked ❌ were previously recorded as ✅. Both were checked by finding the
+> route decorator (`@router.get("/widget-summary")`,
+> `@router.get("/setup-checklist")`) without also checking the `include_router`
+> prefix in `app/api/v1/api.py` — which is `/prospective-members` and
+> `/organization` respectively, not the paths the registry declares. A
+> decorator alone never gives the URL. The same mistake produced three wrong
+> endpoint URLs in the August 23–24 API reference, caught in review on #1772.
 
 **Status:** Open (LOW — found 2026-08-23, verified against the code the same
 day).

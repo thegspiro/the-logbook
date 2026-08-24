@@ -1459,7 +1459,9 @@ reading is worse than one that was never armed.
 | **Retired, on leave**                 | **Yes**      | They attend meetings and banquets, which is what a station records |
 | Suspended, dropped, archived, deleted | No           | —                                                                  |
 
-A station **will not attach to a shift that has already ended**, and it only
+A station **offers a shift until an officer finalizes it**, not until it ends
+— checking out has no deadline, so a crew coming off a tour can still tap out
+on a shift whose end time has passed. It only
 offers targets the check-in itself would accept. An unregistered card, a member
 already checked in, or a closed window are shown on screen and the station
 **stays armed** — those are outcomes, not errors.

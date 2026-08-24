@@ -715,7 +715,11 @@ failure surfaces at print or status time.
 
 ### Status
 
-`GET /label-printers/{id}/status` asks the printer whether it actually printed.
+`GET /label-printers/{id}/status` asks the printer to identify itself and
+report its current faults. **It is not tied to a print job and is not proof
+that anything printed** — on firmware that does not answer, all a successful
+send confirms is that the bytes were accepted. Treat a successful print as
+"sent", not as "printed", and check the tray.
 Status is **best-effort and per printer**: one printer failing to answer no
 longer suppresses the answers from the others. The status flag meanings were
 corrected against the published command tables in the same window.

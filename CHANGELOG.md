@@ -148,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The prospect widget counted the caller's own application.** A member who
   had applied and then been given `prospective_members.view` — a recruiter, a
   membership officer, anybody vetting the intake they are themselves in — read
-  their own record back through `GET /membership-pipeline/widget/summary`.
+  their own record back through `GET /prospective-members/widget-summary`.
   Every other pipeline read already hid a caller's own prospect row; the widget
   was written later and never picked up the filter. It now takes the same
   `hidden_prospect_ids` dependency, and the exclusion reaches the totals, the
@@ -1038,7 +1038,7 @@ still on the shipped default are upgraded by the migration.
 - **Nested sealed containers get their own card.** A broken outer seal says
   nothing about an intact inner one, which previously had nowhere to be
   recorded.
-- `GET /equipment-check/templates/{template_id}/last-seals` supplies the
+- `GET /equipment-checks/templates/{template_id}/last-seals` supplies the
   previous reading so the tag number prefills — and it lands when the response
   does, without overwriting anything the crew has already typed.
 

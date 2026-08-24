@@ -1106,7 +1106,9 @@ never armed.
 | **Retired, on leave**                 | **Yes**  | They attend meetings and banquets, which is what a station is recording |
 | Suspended, dropped, archived, deleted | No       | —                                                                       |
 
-**A station will not attach to a shift that has already ended**, and it only
+**A station offers a shift until an officer finalizes it** — not until it
+ends. That is deliberate: checking out has no deadline, so a crew coming off
+a tour at 07:00 can still tap out on a shift whose end time has passed. Only
 offers targets the check-in itself would accept.
 
 An unregistered card, a member who is already checked in, or a closed window

@@ -306,7 +306,7 @@ is a safety defect:
 **Nested sealed containers get their own card** — a broken outer seal says
 nothing about an intact inner one, which previously had nowhere to be recorded.
 
-`GET /equipment-check/templates/{id}/last-seals` supplies the previous reading
+`GET /equipment-checks/templates/{id}/last-seals` supplies the previous reading
 so the tag number prefills; it lands when the response does, without
 overwriting anything the crew has already typed.
 

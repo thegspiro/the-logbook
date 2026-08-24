@@ -483,7 +483,11 @@ two of a member's cards apart. There is no endpoint that reads a card number
 back out, and none should be added.
 
 `POST /nfc-tags/check-in` is what a station calls. It will not attach to a
-shift that has already ended. Retired and on-leave members are accepted —
+shift once it is **finalized** — but not merely because its end time has
+passed. `member_check_out` has no deadline, so an unfinalized shift is one
+somebody may still need to tap out of, and a clock-based cutoff would take the
+station away from a crew at the moment they go off duty. Retired and on-leave
+members are accepted —
 they attend meetings and banquets, which is what a station records — while
 suspended, dropped, archived and deleted members are refused. A revoked card
 is never reactivated; a replacement is a fresh registration.
@@ -534,7 +538,7 @@ check itself, and a pass-down stays with its own crew.
 ## Equipment Checks — Sealed Containers _(2026-08-23)_
 
 ```
-GET /api/v1/equipment-check/templates/{template_id}/last-seals
+GET /api/v1/equipment-checks/templates/{template_id}/last-seals
 ```
 
 A template compartment marked `is_sealed` carries a numbered tamper seal. On a
@@ -564,11 +568,11 @@ at a request boundary is the caller's mistake.
 ## Self-Reported Training — Attachment With Submission _(2026-08-23 → 08-24)_
 
 ```
-POST /api/v1/training-submissions/with-attachment      (multipart)
-POST /api/v1/training-submissions/{id}/submit
-POST /api/v1/training-submissions/{id}/attachments
-GET  /api/v1/training-submissions/{id}/attachments
-GET  /api/v1/training-submissions/{id}/attachments/{index}/download
+POST /api/v1/training/submissions/with-attachment      (multipart)
+POST /api/v1/training/submissions/{id}/submit
+POST /api/v1/training/submissions/{id}/attachments
+GET  /api/v1/training/submissions/{id}/attachments
+GET  /api/v1/training/submissions/{id}/attachments/{index}/download
 ```
 
 The certificate travels **with** the submission rather than as a second step
