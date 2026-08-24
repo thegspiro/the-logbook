@@ -3120,15 +3120,21 @@ async def get_label_formats(
 async def generate_barcode_labels(
     request: LabelGenerateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Generate a PDF of barcode labels for the specified inventory items.
 
     Returns a PDF file with printable Code128 barcode labels.
 
+    Manage-gated, not view-gated: the caller names arbitrary item ids and gets
+    back a document describing them, so on `inventory.view` — which every
+    seeded member holds — this was a way to read out the catalogue that
+    survived closing the catalogue page itself. Labelling stock is
+    quartermaster work in any case.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     from fastapi.responses import StreamingResponse
 
