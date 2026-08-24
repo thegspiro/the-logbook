@@ -110,6 +110,7 @@ async def pipeline_widget_summary(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Aggregate the prospect workflow without exposing applicant records.
 
@@ -119,17 +120,13 @@ async def pipeline_widget_summary(
     from app.models.membership_pipeline import ProspectiveMember
 
     now = datetime.now(timezone.utc)
-    rows = (
-        (
-            await db.execute(
-                select(ProspectiveMember).where(
-                    ProspectiveMember.organization_id == current_user.organization_id
-                )
-            )
-        )
-        .scalars()
-        .all()
+    query = select(ProspectiveMember).where(
+        ProspectiveMember.organization_id == current_user.organization_id
     )
+    if hidden_prospect_ids:
+        query = query.where(ProspectiveMember.id.notin_(hidden_prospect_ids))
+
+    rows = (await db.execute(query)).scalars().all()
     by_status: dict[str, int] = {}
     aging = {"0_7_days": 0, "8_30_days": 0, "31_plus_days": 0}
     for prospect in rows:
