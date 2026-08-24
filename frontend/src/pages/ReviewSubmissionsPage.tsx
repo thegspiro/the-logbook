@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
@@ -664,6 +664,16 @@ const SubmissionCard: React.FC<{
                   <span className="text-theme-text-secondary">{submission.course_code}</span>
                 </div>
               )}
+              {/* The member reports a start time; without it a four-hour entry
+                  gives a reviewer no way to tell a morning class from an
+                  evening one. Absent on submissions filed before the field. */}
+              {submission.start_time && (
+                <div className="flex items-center space-x-1">
+                  <Clock className="text-theme-text-muted h-3 w-3" />
+                  <span className="text-theme-text-muted">Started: </span>
+                  <span className="text-theme-text-secondary">{formatTimeOfDay(submission.start_time)}</span>
+                </div>
+              )}
               {submission.instructor && (
                 <div className="flex items-center space-x-1">
                   <User className="text-theme-text-muted h-3 w-3" />
@@ -775,6 +785,11 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   certification_number: { visible: true, required: false, label: 'Certificate / ID Number' },
   issuing_agency: { visible: true, required: false, label: 'Issuing Agency' },
   expiration_date: { visible: true, required: false, label: 'Expiration Date' },
+  // The submit form reads this one to decide whether to offer the certificate
+  // upload at all, and enforces `required` at the draft handoff. It is in the
+  // backend's default config, so leaving it out of this editor left a setting
+  // that only an API call could change.
+  attachments: { visible: true, required: false, label: 'Supporting Documents' },
 };
 
 const ConfigEditor: React.FC<{

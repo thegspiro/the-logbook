@@ -90,6 +90,35 @@ ONBOARDING_LEGACY_MODULES = [
 ]
 
 
+def _with_hyphenated(ids: set[str]) -> set[str]:
+    """Accept "hr-payroll" wherever "hr_payroll" is accepted.
+
+    Saved onboarding sessions carry both spellings, and the wizard's own
+    config routes are hyphenated.
+    """
+    return ids | {module_id.replace("_", "-") for module_id in ids}
+
+
+# Every module ID the onboarding endpoints will accept, from any step.
+#
+# There were three of these lists — the wizard's, the session endpoint's, and
+# the Settings screen's — and they disagreed. Storefront was added to one of
+# them, which is how enabling the Department Store could get as far as the
+# final Continue and then fail validation with "Invalid modules". A single set
+# is the only thing that keeps a newly offered module working end to end;
+# tests/test_onboarding_module_parity.py holds it to the offered list.
+ONBOARDING_ACCEPTED_MODULE_IDS: frozenset[str] = frozenset(
+    _with_hyphenated(
+        {
+            *ONBOARDING_CORE_MODULES,
+            *ONBOARDING_OFFERED_MODULES,
+            *ONBOARDING_SETTINGS_ONLY_MODULES,
+            *ONBOARDING_LEGACY_MODULES,
+        }
+    )
+)
+
+
 class OnboardingService:
     """
     Manages the onboarding process for first-time system setup
@@ -1182,12 +1211,7 @@ class OnboardingService:
         """
         # Core modules are always enabled — they power cross-module features
         core_modules = list(ONBOARDING_CORE_MODULES)
-
-        available_modules = [
-            *core_modules,
-            *ONBOARDING_OFFERED_MODULES,
-            *ONBOARDING_LEGACY_MODULES,
-        ]
+        available_modules = sorted(ONBOARDING_ACCEPTED_MODULE_IDS)
 
         # Validate modules
         invalid_modules = [m for m in enabled_modules if m not in available_modules]

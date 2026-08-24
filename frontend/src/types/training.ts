@@ -1569,6 +1569,8 @@ export interface TrainingSubmission {
   training_type: TrainingType;
   description?: string;
   completion_date: string;
+  /** "HH:MM:SS" when the member reported one; absent on rows predating the field. */
+  start_time?: string | null;
   hours_completed: number;
   credit_hours?: number;
   instructor?: string;
@@ -1593,6 +1595,8 @@ export interface TrainingSubmissionCreate {
   training_type: TrainingType;
   description?: string | undefined;
   completion_date: string;
+  /** "HH:MM" — the API keeps it so an edit does not have to invent one. */
+  start_time?: string | undefined;
   hours_completed: number;
   credit_hours?: number | undefined;
   instructor?: string | undefined;
@@ -1618,6 +1622,7 @@ export interface TrainingSubmissionUpdate {
   training_type?: TrainingType | undefined;
   description?: string | null | undefined;
   completion_date?: string | undefined;
+  start_time?: string | null | undefined;
   hours_completed?: number | undefined;
   credit_hours?: number | undefined;
   instructor?: string | null | undefined;

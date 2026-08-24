@@ -1,7 +1,7 @@
 """Add the email template colourway columns.
 
 Revision ID: e7c4a913b8d2
-Revises: e7a41b9c3d85
+Revises: a71c9d4e5b62
 
 ``header_accent``, ``status_chip`` and ``layout`` record what a notice looks
 like as data, so an officer can change it from the Email Templates screen.
@@ -41,7 +41,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "e7c4a913b8d2"
-down_revision = "e7a41b9c3d85"
+down_revision = "a71c9d4e5b62"
 branch_labels = None
 depends_on = None
 
