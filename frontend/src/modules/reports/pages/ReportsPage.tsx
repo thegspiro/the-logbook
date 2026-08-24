@@ -449,7 +449,7 @@ export const ReportsPage: React.FC = () => {
                 onClick={() => setSelectedCategory(category.id)}
                 className={`focus:ring-theme-focus-ring rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                   selectedCategory === category.id
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
@@ -474,7 +474,7 @@ export const ReportsPage: React.FC = () => {
                 onClick={() => handlePresetChange(preset.id)}
                 className={`focus:ring-theme-focus-ring rounded px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                   datePreset === preset.id
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >

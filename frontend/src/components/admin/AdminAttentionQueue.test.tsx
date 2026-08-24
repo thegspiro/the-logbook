@@ -58,8 +58,8 @@ describe('AdminAttentionQueue', () => {
       />
     );
 
-    expect(screen.getByRole('link', { name: 'Send renewals' })).toHaveClass('bg-red-600');
-    expect(screen.getByRole('link', { name: 'Notify members' })).not.toHaveClass('bg-red-600');
+    expect(screen.getByRole('link', { name: 'Send renewals' })).toHaveClass('bg-red-800');
+    expect(screen.getByRole('link', { name: 'Notify members' })).not.toHaveClass('bg-red-800');
   });
 
   it('counts the exceptions in the header badge', () => {

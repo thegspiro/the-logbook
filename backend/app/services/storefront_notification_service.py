@@ -78,6 +78,7 @@ from app.services.email_theme import (
     ACCENT_BLUE,
     ACCENT_GREEN,
     ACCENT_RED,
+    ACCENT_VIOLET,
     TABLE_STYLE,
     TD_STYLE,
     TFOOT_STYLE,
@@ -295,9 +296,9 @@ class StorefrontNotificationService:
             if url:
                 buttons.append(
                     f'<a href="{_html.escape(url, quote=True)}" '
-                    'style="display:inline-block;background:#1d4ed8;color:#ffffff;'
-                    "padding:10px 18px;border-radius:6px;text-decoration:none;"
-                    'font-weight:600;margin:0 8px 8px 0;">'
+                    f'style="display:inline-block;background:{ACCENT_VIOLET};'
+                    "color:#ffffff;padding:10px 18px;border-radius:6px;"
+                    'text-decoration:none;font-weight:600;margin:0 8px 8px 0;">'
                     f"Pay with {_html.escape(option['label'])}</a>"
                 )
 
@@ -306,11 +307,19 @@ class StorefrontNotificationService:
 
         if settings.payment_instructions:
             lines.append(
-                '<p style="white-space:pre-line;color:#6b7280;">'
+                '<p class="fineprint" style="white-space:pre-line;">'
                 f"{_html.escape(settings.payment_instructions)}</p>"
             )
 
-        return "".join(lines)
+        # The panel, not loose paragraphs: the balance and the pay buttons are
+        # the one thing in a store email the member has to act on, and the
+        # shell's .details treatment is what marks that out. Left bare they
+        # read as more of the receipt.
+        return (
+            f'<div class="details" style="border-left-color: {ACCENT_VIOLET};">'
+            + "".join(lines)
+            + "</div>"
+        )
 
     def _payment_option_detail(
         self, option: Dict[str, Any], reference: str

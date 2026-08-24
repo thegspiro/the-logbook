@@ -165,7 +165,7 @@ const ChargeManagementPanel: React.FC = () => {
                   <div className="mt-3 flex gap-2">
                     <button
                       onClick={() => openChargeModal(item)}
-                      className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-700"
+                      className="flex-1 rounded-lg bg-red-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-900"
                     >
                       Charge
                     </button>
@@ -241,7 +241,7 @@ const ChargeManagementPanel: React.FC = () => {
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => openChargeModal(item)}
-                            className="rounded bg-red-600 px-2 py-1 text-xs text-white transition-colors hover:bg-red-700"
+                            className="rounded bg-red-800 px-2 py-1 text-xs text-white transition-colors hover:bg-red-900"
                             title="Apply charge"
                           >
                             Charge
@@ -355,7 +355,7 @@ const ChargeManagementPanel: React.FC = () => {
                   }}
                   disabled={submitting}
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
-                    actionModal.action === 'charged' ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600 hover:bg-gray-700'
+                    actionModal.action === 'charged' ? 'bg-red-800 hover:bg-red-900' : 'bg-gray-600 hover:bg-gray-700'
                   }`}
                 >
                   {submitting ? 'Processing...' : actionModal.action === 'charged' ? 'Apply Charge' : 'Waive Charge'}

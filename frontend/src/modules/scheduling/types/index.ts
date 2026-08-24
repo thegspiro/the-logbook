@@ -91,6 +91,109 @@ export interface SwapRequestReview {
   reviewer_notes?: string;
 }
 
+/**
+ * A member who could take over the caller's seat on a shift.
+ *
+ * The server has already excluded anyone who cannot accept — on the shift
+ * already, not cleared for the seat, or working a tour that abuts this one —
+ * so the picker never offers a trade that would be refused.
+ */
+export interface TradeCandidate {
+  user_id: string;
+  user_name?: string | null;
+  rank?: string | null;
+  rank_display_name?: string | null;
+  position: string;
+  shifts_this_month: number;
+  owes_trade: boolean;
+}
+
+// ============================================================================
+// Standing Shifts (recurring member self-signup)
+// ============================================================================
+
+export const StandingShiftPattern = {
+  WEEKLY: 'weekly',
+  BIWEEKLY: 'biweekly',
+  MONTHLY: 'monthly',
+} as const;
+export type StandingShiftPattern = (typeof StandingShiftPattern)[keyof typeof StandingShiftPattern];
+
+/**
+ * Which half of the day a standing claim targets. Departments define their own
+ * templates and times, so a claim names the window rather than a template and
+ * the series matches whatever shift starts in it.
+ */
+export const StandingShiftPeriod = {
+  DAY: 'day',
+  NIGHT: 'night',
+} as const;
+export type StandingShiftPeriod = (typeof StandingShiftPeriod)[keyof typeof StandingShiftPeriod];
+
+export interface StandingShiftClaim {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  pattern: StandingShiftPattern;
+  /** 0 = Sunday … 6 = Saturday, matching the weekday picker. */
+  weekday: number;
+  period: StandingShiftPeriod;
+  position: string;
+  apparatus_id?: string | null;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  ended_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StandingShiftPreviewParams {
+  pattern: StandingShiftPattern;
+  weekday: number;
+  period: StandingShiftPeriod;
+  start_date: string;
+  end_date: string;
+  apparatus_id?: string | undefined;
+}
+
+/**
+ * Why one date in a series can or cannot be claimed. Every date is reported,
+ * including the ones that cannot be taken — a preview that dropped them would
+ * understate the commitment the member is about to make.
+ */
+export type StandingShiftDateStatus = 'available' | 'conflict' | 'already_yours' | 'no_shift';
+
+export interface StandingShiftPreviewDate {
+  date: string;
+  shift_id?: string | null;
+  status: StandingShiftDateStatus;
+}
+
+export interface StandingShiftPreview {
+  dates: StandingShiftPreviewDate[];
+  claimable_count: number;
+  conflict_count: number;
+  missing_count: number;
+}
+
+export interface StandingShiftCreate {
+  pattern: StandingShiftPattern;
+  weekday: number;
+  period: StandingShiftPeriod;
+  position: string;
+  start_date: string;
+  end_date: string;
+  apparatus_id?: string | undefined;
+}
+
+export interface StandingShiftCreateResult {
+  claim: StandingShiftClaim;
+  claimed: number;
+  skipped: number;
+  no_shift: number;
+}
+
 // ============================================================================
 // Time Off Create/Review
 // ============================================================================

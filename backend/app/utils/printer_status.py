@@ -123,16 +123,24 @@ def parse_error_status(raw: str) -> Optional[Dict[str, List[str]]]:
         if not match:
             continue
         seen = True
-        kind, flag, _high, low = match.groups()
+        kind, flag, high, low = match.groups()
         mask = int(low, 16)
         table = _ERROR_FLAGS if kind == "ERRORS" else _WARNING_FLAGS
         decoded = _decode_flags(mask, table)
 
-        # Something is wrong that this table cannot name — either the flag is
-        # set with no recognised bit at all, or recognised bits are mixed with
-        # unrecognised ones. Either way it is reported generically rather than
-        # dropped on the floor.
-        if (flag == "1" and not decoded) or _unrecognized(mask, table):
+        # The high group holds conditions this table does not name, so a bit
+        # there is an unnamed fault exactly like an unnamed bit in the low
+        # group. It is gated on the flag digit because the flag is the
+        # printer's own answer to "is anything wrong": without that gate, a
+        # unit that parks something benign in the high group would report a
+        # fault on every single query.
+        high_set = flag == "1" and int(high, 16) != 0
+
+        # Something is wrong that this table cannot name — the flag is set with
+        # no recognised bit at all, recognised bits are mixed with unrecognised
+        # ones, or the condition is in the group this table does not cover.
+        # Reported generically rather than dropped on the floor.
+        if (flag == "1" and not decoded) or _unrecognized(mask, table) or high_set:
             decoded.append(
                 "Printer reports an error"
                 if kind == "ERRORS"

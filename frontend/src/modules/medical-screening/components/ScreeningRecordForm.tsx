@@ -240,7 +240,7 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : record ? 'Update' : 'Create'}
             </button>

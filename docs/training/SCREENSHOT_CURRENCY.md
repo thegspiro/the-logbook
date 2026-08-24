@@ -593,15 +593,19 @@ Three defects came out of the sweep, none of them the one it was looking for.
 
 **1. A sticky bar with no background, which read as a layout bug.** The
 equipment check form's Submit bar and page header carried `bg-theme-bg` and
-`bg-theme-background`. Neither token exists — the stylesheet defines
-`--color-theme-surface`, `--color-theme-nav-bg` and three `--color-theme-bg-*`
-gradient stops — so both compile to nothing and resolve to `rgba(0, 0, 0, 0)`
-in the running app. The item list scrolled visibly through the notes field and
-the Submit button, which looks like overlapping content rather than a missing
-colour, and is why it survived. Fixed here; `themeColorIntegrity.test.ts` now
-walks the source and fails on a background utility naming an undefined token,
-with the other 15 sites recorded as a ratchet baseline rather than pretended
-fixed — each needs a per-screen decision about which token it meant.
+`bg-theme-background`. Neither token existed at the time — the stylesheet
+defined `--color-theme-surface`, `--color-theme-nav-bg` and three
+`--color-theme-bg-*` gradient stops — so both compiled to nothing and resolved
+to `rgba(0, 0, 0, 0)` in the running app. The item list scrolled visibly
+through the notes field and the Submit button, which looks like overlapping
+content rather than a missing colour, and is why it survived.
+
+Main has since settled this for the whole app: `--color-theme-bg` is now a
+real token, deliberately opaque so a sticky bar occludes what scrolls under it
+(a surface token cannot — in dark mode those are translucent by design), and
+all 26 call sites were repointed. `themeTokenIntegrity.test.ts` walks the
+source and fails on any theme utility naming a token the stylesheet does not
+declare, with an empty allowlist.
 
 _This was nearly misdiagnosed._ The overlap appeared when the width changed, so
 it looked like a 390 regression. It reproduces identically at 414 on the same

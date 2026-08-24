@@ -312,7 +312,7 @@ const ExpenseReportFormPage: React.FC = () => {
             <button
               type="button"
               onClick={addLineItem}
-              className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+              className="inline-flex items-center gap-1 rounded-md bg-red-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-900"
             >
               <Plus className="h-3 w-3" />
               Add Item
@@ -413,7 +413,7 @@ const ExpenseReportFormPage: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {isSubmitting ? 'Saving...' : 'Create Report'}

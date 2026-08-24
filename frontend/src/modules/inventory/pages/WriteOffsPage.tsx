@@ -82,7 +82,7 @@ const WriteOffsPage: React.FC = () => {
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <FileX className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -198,7 +198,7 @@ const WriteOffsPage: React.FC = () => {
                 setStatusFilter((prev) =>
                   prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'
                 ),
-              color: 'bg-red-600',
+              color: 'bg-red-800',
             },
             {
               id: 'refresh',
@@ -210,7 +210,7 @@ const WriteOffsPage: React.FC = () => {
               color: 'bg-blue-600',
             },
           ]}
-          color="bg-red-600"
+          color="bg-red-800"
         />
 
         {/* Review Modal */}

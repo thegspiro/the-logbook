@@ -7,8 +7,16 @@
  */
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Monitor, Smartphone, Loader2, Eye, RefreshCw, Users } from 'lucide-react';
+import { Monitor, Smartphone, Loader2, Eye, RefreshCw, Type, Users } from 'lucide-react';
 import type { EmailTemplatePreview } from '../types';
+
+type PreviewMode = 'desktop' | 'mobile' | 'text';
+
+const PREVIEW_MODES: { mode: PreviewMode; icon: React.ElementType; title: string }[] = [
+  { mode: 'desktop', icon: Monitor, title: 'Desktop preview' },
+  { mode: 'mobile', icon: Smartphone, title: 'Mobile preview' },
+  { mode: 'text', icon: Type, title: 'Plain-text preview' },
+];
 
 interface PreviewMember {
   id: string;
@@ -24,6 +32,8 @@ interface TemplatePreviewProps {
   onRefresh: (memberId?: string) => void;
   members?: PreviewMember[] | undefined;
   isLoadingMembers?: boolean | undefined;
+  /** Whether the pane is showing unsaved edits rather than the stored template. */
+  isDirty?: boolean | undefined;
 }
 
 export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
@@ -32,12 +42,18 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
   onRefresh,
   members = [],
   isLoadingMembers = false,
+  isDirty = false,
 }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop');
+  // Three states, not a boolean pair. Plain text is the third: it is what a
+  // recipient on a text-only client actually receives, it is the half of
+  // every template nobody looks at, and it is the half that silently stops
+  // matching the HTML the first time somebody edits one of them.
+  const [viewport, setViewport] = useState<PreviewMode>('desktop');
   const [selectedMemberId, setSelectedMemberId] = useState<string>('');
 
   useEffect(() => {
+    if (viewport === 'text') return;
     if (preview?.html_body && iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
@@ -46,7 +62,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
         doc.close();
       }
     }
-  }, [preview?.html_body]);
+  }, [preview?.html_body, viewport]);
 
   const handleMemberChange = (memberId: string) => {
     setSelectedMemberId(memberId);
@@ -59,33 +75,33 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
       <div className="flex items-center justify-between">
         <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Eye className="h-5 w-5" />
-          Preview
+          Live preview
+          {/* Said out loud, because the pane now shows the draft: without
+              this an admin reading a correct-looking preview has no way to
+              tell whether anyone else would receive that email yet. */}
+          {isDirty && (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              Unsaved
+            </span>
+          )}
         </h3>
         <div className="flex items-center space-x-2">
           {/* Viewport toggle */}
           <div className="bg-theme-surface-secondary flex rounded-lg p-0.5">
-            <button
-              onClick={() => setViewport('desktop')}
-              className={`rounded-md p-1.5 transition-colors ${
-                viewport === 'desktop'
-                  ? 'bg-orange-600 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
-              }`}
-              title="Desktop preview"
-            >
-              <Monitor className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewport('mobile')}
-              className={`rounded-md p-1.5 transition-colors ${
-                viewport === 'mobile'
-                  ? 'bg-orange-600 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
-              }`}
-              title="Mobile preview"
-            >
-              <Smartphone className="h-4 w-4" />
-            </button>
+            {PREVIEW_MODES.map(({ mode, icon: Icon, title }) => (
+              <button
+                key={mode}
+                onClick={() => setViewport(mode)}
+                aria-pressed={viewport === mode}
+                className={`rounded-md p-1.5 transition-colors ${
+                  viewport === mode ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+                title={title}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only">{title}</span>
+              </button>
+            ))}
           </div>
           <button
             onClick={() => onRefresh(selectedMemberId || undefined)}
@@ -134,10 +150,15 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
         {isPreviewing && !preview ? (
           <div className="flex h-[600px] items-center justify-center">
             <div className="text-center">
-              <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-orange-500" />
+              <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-red-500" />
               <p className="text-theme-text-muted text-sm">Loading preview...</p>
             </div>
           </div>
+        ) : preview && viewport === 'text' ? (
+          <pre className="text-theme-text-primary h-[600px] overflow-auto p-4 font-mono text-xs whitespace-pre-wrap">
+            {preview.text_body ||
+              'This template has no plain-text body. Clients that cannot render HTML will show nothing.'}
+          </pre>
         ) : preview ? (
           <iframe
             ref={iframeRef}

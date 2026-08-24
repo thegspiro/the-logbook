@@ -50,6 +50,9 @@ pytestmark = [pytest.mark.slow, pytest.mark.integration]
 # database and seconds once it is at head.
 _SERVER_BOOT_TIMEOUT_S = 600
 
+# How long to wait for /openapi.json. Generous on purpose — see the call site.
+_SCHEMA_FETCH_TIMEOUT_S = 120
+
 
 # One traceback is worth reading; a boot loop's worth is not, and this string
 # ends up in an assertion message.
@@ -231,7 +234,19 @@ else:
     # collection for every other suite.
     try:
         BASE_URL = _start_server()
-        schema = schemathesis.openapi.from_url(f"{BASE_URL}/openapi.json")
+        # Explicit timeout. schemathesis defaults to 10s, and generating this
+        # app's OpenAPI document is right on that line: 1114 paths and 1364
+        # component schemas measure 9.6-11.7s cold, so which side of the
+        # default a run lands on is decided by runner speed, not by the code.
+        # A run that lost the coin toss raised here, left SCHEMA_AVAILABLE
+        # False, and the class below then defined no test methods at all —
+        # pytest collected 0 items and exited 5. FastAPI caches the document
+        # after the first call, so this cost is paid once.
+        schema = schemathesis.openapi.from_url(
+            f"{BASE_URL}/openapi.json",
+            timeout=_SCHEMA_FETCH_TIMEOUT_S,
+            wait_for_schema=_SCHEMA_FETCH_TIMEOUT_S,
+        )
         SCHEMA_AVAILABLE = True
         SKIP_REASON = ""
     except Exception as exc:  # pragma: no cover - environment-dependent

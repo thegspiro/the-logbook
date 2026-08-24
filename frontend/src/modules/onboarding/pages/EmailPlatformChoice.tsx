@@ -210,7 +210,7 @@ const EmailPlatformChoice: React.FC = () => {
 
                 {/* Selected indicator */}
                 {emailPlatform === platform.id && (
-                  <div className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-600">
+                  <div className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-800">
                     <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>

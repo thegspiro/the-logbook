@@ -297,6 +297,29 @@ def build_payment_option(
     return None
 
 
+def build_payment_method_summaries(settings: StoreSettings) -> List[Dict[str, Any]]:
+    """Accepted methods and their handles, for the pre-order checkout screen.
+
+    Deliberately carries no payment_url. Before an order exists there is no
+    amount and no order number to prefill, and a link that opens Venmo for $0
+    with no reference is worse than no link at all — the member sends money the
+    treasurer cannot match to anything.
+
+    Configured-or-not is decided by build_payment_option, so a method the
+    department listed but never entered a handle for is omitted here exactly as
+    it is omitted from a placed order's instructions.
+    """
+    return [
+        {
+            "method": option["method"],
+            "label": option["label"],
+            "handle": option["handle"],
+            "instructions": option["instructions"],
+        }
+        for option in build_payment_options(settings, Decimal("0"), "")
+    ]
+
+
 def build_payment_options(
     settings: StoreSettings, balance: Decimal, reference: str
 ) -> List[Dict[str, Any]]:

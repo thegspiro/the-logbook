@@ -77,7 +77,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
                     value="single"
                     checked={deleteScope === 'single'}
                     onChange={() => setDeleteScope('single')}
-                    className="text-theme-primary focus:ring-theme-focus-ring"
+                    className="text-primary-600 focus:ring-theme-focus-ring"
                   />
                   <span className="text-theme-text-primary text-sm">Delete only this event</span>
                 </label>
@@ -88,7 +88,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
                     value="series"
                     checked={deleteScope === 'series'}
                     onChange={() => setDeleteScope('series')}
-                    className="text-theme-primary focus:ring-theme-focus-ring"
+                    className="text-primary-600 focus:ring-theme-focus-ring"
                   />
                   <span className="text-theme-text-primary text-sm">Delete all events in this series</span>
                 </label>

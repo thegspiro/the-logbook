@@ -121,7 +121,7 @@ const NavigationChoice: React.FC = () => {
                 {/* Icon */}
                 <div
                   className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-colors ${
-                    navigationLayout === 'top' ? 'bg-red-600' : 'bg-theme-surface group-hover:bg-red-600/20'
+                    navigationLayout === 'top' ? 'bg-red-800' : 'bg-theme-surface group-hover:bg-red-600/20'
                   }`}
                 >
                   <LayoutDashboard
@@ -173,7 +173,7 @@ const NavigationChoice: React.FC = () => {
 
               {/* Selected indicator */}
               {navigationLayout === 'top' && (
-                <div className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-600">
+                <div className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-800">
                   <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
@@ -196,7 +196,7 @@ const NavigationChoice: React.FC = () => {
                 {/* Icon */}
                 <div
                   className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-colors ${
-                    navigationLayout === 'left' ? 'bg-red-600' : 'bg-theme-surface group-hover:bg-red-600/20'
+                    navigationLayout === 'left' ? 'bg-red-800' : 'bg-theme-surface group-hover:bg-red-600/20'
                   }`}
                 >
                   <PanelLeft
@@ -248,7 +248,7 @@ const NavigationChoice: React.FC = () => {
 
               {/* Selected indicator */}
               {navigationLayout === 'left' && (
-                <div className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-600">
+                <div className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-800">
                   <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>

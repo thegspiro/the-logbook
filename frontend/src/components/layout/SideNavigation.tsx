@@ -768,7 +768,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                         collapsed ? 'justify-center p-3' : 'px-4 py-3'
                       } ${
                         parentActive && !hasSubItems
-                          ? 'bg-red-600 text-white shadow-sm'
+                          ? 'bg-red-800 text-white shadow-sm'
                           : parentActive && hasSubItems
                             ? 'bg-theme-surface-secondary text-theme-text-primary'
                             : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
@@ -821,7 +821,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                                 aria-current={subActive ? 'page' : undefined}
                                 className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] ${
                                   subActive
-                                    ? 'bg-red-600 text-white shadow-sm'
+                                    ? 'bg-red-800 text-white shadow-sm'
                                     : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
                                 }`}
                               >

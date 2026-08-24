@@ -14,7 +14,6 @@ import { SCHEDULING_SETTINGS_SECTIONS } from '../../modules/scheduling/component
 import type { SettingsTab } from '../../modules/scheduling/components/schedulingSettingsSections';
 import { SettingsLayout } from '../../components/settings/SettingsLayout';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
-import SchedulingHeader from './SchedulingHeader';
 
 const isSettingsTab = (value: string | null): value is SettingsTab =>
   value !== null && SCHEDULING_SETTINGS_SECTIONS.some((s) => s.key === value);
@@ -78,17 +77,17 @@ const SchedulingSettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <SettingsLayout
+      <SettingsLayout<SettingsTab>
         sections={sections}
         activeSection={visibleTab}
         onSectionChange={handleTabChange}
         navLabel="Scheduling settings sections"
-        header={
-          <SchedulingHeader
-            backTo="/scheduling"
-            description="Settings · Configure department-wide scheduling defaults"
-          />
-        }
+        // Names the page, not the module: the module header said "Shift
+        // Scheduling" on a screen whose subject is its settings.
+        title="Scheduling Settings"
+        subtitle="Department-wide scheduling defaults"
+        onBack={() => void navigate('/scheduling')}
+        backLabel="Back to scheduling"
       >
         {!templatesLoaded ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">

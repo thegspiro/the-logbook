@@ -96,7 +96,7 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
       <div className="border-theme-surface-border bg-theme-surface-secondary flex items-center justify-between gap-3 border-b px-5 py-3">
         <div className="flex items-center gap-2">
           <span className="text-theme-text-muted text-[10px] font-bold tracking-[0.12em] uppercase">Needs You</span>
-          <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+          <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-800 px-1 text-xs font-semibold text-white">
             {rows.length}
           </span>
         </div>

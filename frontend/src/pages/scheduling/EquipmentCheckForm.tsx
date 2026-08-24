@@ -1504,7 +1504,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
           }`}
         >
@@ -2027,7 +2027,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   <button
                     type="button"
                     onClick={() => toggleCompartmentCollapse(comp.id)}
-                    className={`sticky top-[76px] z-10 w-full rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
+                    className={`bg-theme-bg sticky top-[76px] z-10 w-full rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
                     aria-expanded={!isCollapsed}
                     aria-label={`${comp.name}, ${checked} of ${checkable.length} checked, ${STATUS_LABELS[status] ?? ''}`}
                   >
@@ -2147,15 +2147,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Overall notes + submit.
 
-            The sticky wrappers below are bg-theme-surface because no token
-            backs the two names they used to carry — those compiled to nothing
-            and left the block transparent, so the item list scrolled visibly
-            through the notes field and the Submit button. That reads as
-            overlapping content rather than as a missing colour, which is why it
-            survived: it looks like a layout bug that is not there.
-            themeColorIntegrity.test.ts guards the rest. */}
+            The sticky wrappers below are bg-theme-bg, not a surface token: the
+            two names they used to carry backed no token at all, compiled to
+            nothing and left the block transparent, so the item list scrolled
+            visibly through the notes field and the Submit button. A surface
+            token would not have fixed it either — in dark mode those are
+            translucent by design, so the content still slides beneath. The
+            canvas token is the opaque one. That the bar reads as overlapping
+            content rather than as a missing colour is why it survived so long:
+            it looks like a layout bug that is not there.
+            themeTokenIntegrity.test.ts guards the rest. */}
         {!previewMode && (
-          <div className="bg-theme-surface border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
+          <div className="bg-theme-bg border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>
               <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes
@@ -2173,7 +2176,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {/* Sticky: on a real engine inventory Submit sat several screens
                 below the last item, and the count of what was still unanswered
                 was at the very top. Both travel with the crew now. */}
-            <div className="bg-theme-surface border-theme-surface-border action-bar-safe sticky bottom-0 z-20 -mx-3 space-y-2 border-t px-3">
+            <div className="bg-theme-bg border-theme-surface-border action-bar-safe sticky bottom-0 z-20 -mx-3 space-y-2 border-t px-3">
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
@@ -2247,7 +2250,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           real engine inventory a member scrolled to the very end to find out
           they had missed something in the cab. It also carries the shift — the
           template name alone is identical for two trucks running one template. */}
-      <div className="bg-theme-surface sticky top-0 z-20 -mx-3 space-y-2 px-3 pt-2 pb-2">
+      <div className="bg-theme-bg sticky top-0 z-20 -mx-3 space-y-2 px-3 pt-2 pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             {onBack && (
@@ -2383,7 +2386,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                           onClick={() => setDisposition(value)}
                           className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                             disposition === value
-                              ? 'border-red-500 bg-red-600 text-white'
+                              ? 'border-red-500 bg-red-800 text-white'
                               : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
                           }`}
                         >

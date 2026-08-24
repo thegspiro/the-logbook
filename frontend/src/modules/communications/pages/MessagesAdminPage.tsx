@@ -263,7 +263,7 @@ const MessagesAdminPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      {m.is_pinned && <Pin className="text-theme-info h-4 w-4" aria-label="Pinned" />}
+                      {m.is_pinned && <Pin className="text-theme-alert-info-text h-4 w-4" aria-label="Pinned" />}
                       <span className="text-theme-text-primary font-semibold">{m.title}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
@@ -283,7 +283,7 @@ const MessagesAdminPage: React.FC = () => {
                         </span>
                       )}
                       {m.scheduled_at && new Date(m.scheduled_at).getTime() > Date.now() && (
-                        <span className="bg-theme-info/15 text-theme-info inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                        <span className="bg-theme-alert-info-bg text-theme-alert-info-text inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
                           <Clock className="h-3 w-3" aria-hidden="true" />
                           Scheduled · {formatDateTime(m.scheduled_at, tz)}
                         </span>
@@ -350,7 +350,7 @@ const MessagesAdminPage: React.FC = () => {
                                 ? {
                                     icon: Check,
                                     label: 'Acknowledged',
-                                    cls: 'text-theme-success',
+                                    cls: 'text-theme-alert-success-text',
                                   }
                                 : r.is_read
                                   ? { icon: Eye, label: 'Read', cls: 'text-theme-text-muted' }

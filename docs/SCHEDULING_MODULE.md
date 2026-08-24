@@ -340,6 +340,115 @@ PATCH  /api/v1/scheduling/swap-requests/{id}/review # Approve/deny (scheduling.m
 DELETE /api/v1/scheduling/swap-requests/{id}        # Cancel own request
 ```
 
+**Trade candidates** — who could take over the caller's seat:
+
+```
+GET    /api/v1/scheduling/shifts/{id}/trade-candidates   # Member self-service
+```
+
+The server has already excluded anyone who could not accept: already on the
+shift, on leave or approved time off, not cleared for the seat's position, or
+already rostered on a shift that overlaps or abuts this one (a 12-hour
+department does not want an accepted trade to produce a 24-hour tour silently).
+Each candidate carries their shift count for the month and whether they owe the
+caller a trade, so the picker ranks by who is least loaded rather than
+alphabetically. Holding no seat on the shift is a 409, not an empty list —
+"nobody can cover this" is a different and much more alarming answer.
+
+**Accepting an offer** _(2026-08-24)_ — the member an offer was made to
+answers it themselves:
+
+```
+POST   /api/v1/scheduling/swap-requests/{id}/respond   # {accept, note?}
+```
+
+Deliberately distinct from `/review`, which is the manager workflow and
+[refuses participants by design](#). It is limited to a **one-way targeted
+offer** — a member handing their own seat to a named colleague, nothing coming
+back — and grants no authority anybody lacked: accepting is exactly the
+offerer withdrawing and the accepter signing up, in one step, both already
+unprivileged self-service. A two-way exchange moves two rosters and stays with
+manager review.
+
+Without it a targeted offer was a dead end. Manager review reads a set
+`target_user_id` as "there must be an assignment to trade back" and rejects
+the request when there is no requesting shift, so nothing could complete an
+offer of the shape the board creates. The seat being handed over is excluded
+from the accepter's duplicate and capacity checks — it is vacated in the same
+transaction, and counting it would refuse every acceptance on a full crew,
+which is every crew a member is likely to be offered a seat on.
+
+The board shows both sides: the offerer sees "Offered to T. Nguyen — still
+yours until they accept" with a withdraw button, and the recipient sees the
+offer on the day it belongs to with Take/Decline.
+
+**Expiry** _(2026-08-23)_ — a pending offer holds the seat with the member who
+made it, so left alone it survives the shift itself: the offerer believes they
+are covered, the duty officer sees a name that will not turn up, and nobody is
+told. The daily `swap_offer_expiry` task cancels offers still pending the day
+before the shift and notifies the offerer, the member they asked, and the duty
+officer. Email is the channel of record; the in-app entry is an addition to it.
+
+### Standing Shifts _(2026-08-23)_
+
+A standing shift is a member's recurring claim on a seat — "every Tuesday night
+through December". It is a _member_ record, not a department schedule:
+`ShiftPattern` generates the shifts, and a standing claim seats one member on
+the ones that match it. Giving up a single date leaves the series intact, which
+is the whole reason it is stored rather than written once as a batch of
+assignments.
+
+```
+GET    /api/v1/scheduling/standing-shifts/preview       # Dates + conflicts, no writes
+GET    /api/v1/scheduling/standing-shifts               # The caller's own claims
+POST   /api/v1/scheduling/standing-shifts               # Create, and claim matching dates
+DELETE /api/v1/scheduling/standing-shifts/{id}          # End a series (?release_future=)
+GET    /api/v1/scheduling/shifts/{id}/standing-claim    # The series this shift belongs to
+```
+
+All member self-service, like signup — no `scheduling.manage` anywhere.
+
+**The claim has two readers, and only means something because both exist.**
+Creating one seats the member on the matching shifts already on record;
+creating a _shift_ seats every member whose active claim matches it
+(`SchedulingService.apply_standing_claims`, called after `create_shift` and
+after pattern generation). Without the second, a member's series would go quiet
+the moment the department generated next month's schedule — the very month they
+set it up for.
+
+Seating goes through `SchedulingService.seat_member_self_service`, which pins
+`self_signup=True` so eligibility, capacity, past-date and driver checks apply
+to every date exactly as they would to a single tap on the calendar. That
+wrapper exists rather than calling `create_assignment` directly because the
+flag defaults to False there — handing the raw method over is the silent way
+to seat a member on dates they could not have claimed by hand. A date the
+signup path refuses is reported as _skipped_ rather than failing the series:
+one full shift in November must not cost the member the other eleven months.
+
+`tests/test_standing_shift_wiring.py` guards both readers and this wrapper.
+The failure it exists for is invisible at the call site and shows up weeks
+later as members not being seated on a schedule that was generated normally.
+
+A claim names the half of the day it wants (`day` = a local start before noon,
+`night` = noon or later) rather than a template, because departments define
+their own templates and times. Day/night is decided in the organisation's
+timezone — reading the hour off the stored UTC column would relabel a
+department's night shift twice a year as daylight saving moved it across
+midnight.
+
+A series runs for a member-chosen span, defaulting to a year out rather than
+to the end of the calendar year. A December horizon quietly shrinks as the
+year goes on — set one up in November and it covers six dates, on Boxing Day
+almost none, for no reason the member can see. The picker bounds itself to
+between a week and `MAX_SERIES_DAYS` (366) so an out-of-range date is refused
+while it is being chosen rather than as a 400 after saving; the server
+enforces the same cap.
+
+`DELETE` defaults to `release_future=false`. Ending a series and giving up the
+dates already on the roster are separate decisions: a member moving off
+Tuesdays next quarter still works the Tuesdays already rostered, and quietly
+emptying those seats is how a shift goes short with nobody notified.
+
 ### Time-Off Requests
 
 ```
@@ -466,15 +575,101 @@ worked a shift they were never assigned to appears in the report with
 
 The main scheduling interface is a 7-tab hub accessible at `/scheduling` (supports `?tab=` deep-linking):
 
-| Tab                  | Access              | Description                                                                                                            |
-| -------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Schedule**         | All members         | Calendar view (week/month) with shift cards. Click a shift to open the detail panel. Admins see "Create Shift" button. |
-| **My Shifts**        | All members         | Personal upcoming/past shifts. Confirm or decline assignments. Request swaps or time off.                              |
-| **Open Shifts**      | All members         | Browse upcoming shifts grouped by date. Sign up for positions with inline position selector.                           |
-| **Requests**         | All members         | View swap and time-off requests. Admins can approve/deny with reviewer notes.                                          |
-| **Templates**        | `scheduling.manage` | Manage shift templates and scheduling patterns. Generate shifts from patterns.                                         |
-| **Equipment Checks** | All members         | Browse apparatus checklists, perform ad-hoc or shift-linked equipment checks                                           |
-| **Reports**          | `scheduling.manage` | Scheduling analytics: member hours, coverage, call volume, availability.                                               |
+| Tab                  | Access              | Description                                                                                                                                |
+| -------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Schedule**         | All members         | The shift board (see below) — month/week grid beside a day panel with the crew roster and one-tap claim. Admins see "Create Shift" button. |
+| **My Shifts**        | All members         | Personal upcoming/past shifts. Confirm or decline assignments. Request swaps or time off.                                                  |
+| **Open Shifts**      | All members         | Browse upcoming shifts grouped by date. Sign up for positions with inline position selector.                                               |
+| **Requests**         | All members         | View swap and time-off requests. Admins can approve/deny with reviewer notes.                                                              |
+| **Templates**        | `scheduling.manage` | Manage shift templates and scheduling patterns. Generate shifts from patterns.                                                             |
+| **Equipment Checks** | All members         | Browse apparatus checklists, perform ad-hoc or shift-linked equipment checks                                                               |
+| **Reports**          | `scheduling.manage` | Scheduling analytics: member hours, coverage, call volume, availability.                                                                   |
+
+### The Shift Board _(2026-08-23)_
+
+`pages/scheduling/board/` replaces the Schedule tab's grid of shift cards. A
+card said a shift existed; the board says whether it still needs somebody and
+lets a member be that somebody without leaving the page.
+
+| File                     | What it is                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `ShiftBoard.tsx`         | Orchestrator: fetches the visible range, owns selection, filters and the modals  |
+| `MonthGrid.tsx`          | Desktop day cells with one status chip per shift                                 |
+| `DayDetailPanel.tsx`     | Right column: "your next shift", then the selected day's crews                   |
+| `ShiftSeatList.tsx`      | One shift's seats and its single action; shared by the panel and the phone sheet |
+| `PhoneMonth.tsx`         | Phone grid — one coloured bar per shift, plus the legend that decodes them       |
+| `PhoneDaySheet.tsx`      | Phone day sheet and the post-claim confirmation                                  |
+| `GiveUpShiftModal.tsx`   | Release / offer flow, three steps                                                |
+| `StandingShiftModal.tsx` | Recurring-claim setup with a live preview of the dates                           |
+| `statusStyles.ts`        | The four status colours, written down once                                       |
+
+The judgements behind it — capacity, open seats, which colour a shift earns,
+which seat the primary button claims — live in
+`modules/scheduling/utils/shiftBoard.ts` rather than in JSX, so the cell, the
+panel and the phone sheet cannot drift into three different answers about the
+same shift.
+
+**Status colours**, in precedence order. "You are on it" deliberately beats the
+staffing colours: a member scanning the month is first asking where they are
+already committed, and a shift they hold is not one they can claim again.
+
+| State             | Meaning | Chip        |
+| ----------------- | ------- | ----------- |
+| You are on it     | Blue    | `You + 2/4` |
+| 2+ seats open     | Red     | `2 open`    |
+| 1 seat open       | Amber   | `1 open`    |
+| Fully staffed     | Green   | `Full 4/4`  |
+| Crew size not set | Grey    | `3 on`      |
+
+**"Crew size not set" is the absence of a staffing level, not one of them.** A
+shift naming neither positions nor `min_staffing` has never said how many
+people it takes, so `shiftCapacity` returns null rather than guessing:
+inventing a number turns "we don't know" into "this is an emergency", and a
+department that configures neither would open the page to a wall of red that
+means nothing. Such a shift stays out of the open-seat count and the `URGENT`
+flag, shows its headcount rather than a ratio, lists exactly who is on it with
+no invented empty chairs, and can still be joined. **Needs staffing** keeps it
+— it may well need people — and its legend entry appears only when something
+on screen is in that state.
+
+A day carrying three or more open seats across its shifts gets an `URGENT`
+flag. Filters (**All shifts / Needs staffing / My shifts**) _dim_ rather than
+hide, so the month keeps its shape and a member counting Tuesdays does not have
+to re-find them after switching.
+
+**Seat capacity is enforced on self-signup.** A shift with named positions was
+already capped seat by seat. A shift that names none has only `min_staffing` to
+say how big the crew is, and nothing read it — so the calendar could show
+"Full 4/4" while the server kept accepting a fifth. Both now refuse a
+self-service claim, with the message naming which race was lost. Officer
+assignment is deliberately _not_ capped: adding a fifth body is something an
+officer does on purpose, and refusing it would make the roster disagree with
+who is actually turning up.
+
+**One request per range.** Eligible positions come from
+`GET /scheduling/eligibility/positions/bulk?shift_ids=…` — one call for the
+selected day rather than one per shift. The expensive half of that answer
+(membership type, rank, completed training, the org's open positions) is about
+the _member_ and identical across shifts; asking per shift re-ran all of it
+each time, so a station running six apparatus paid six times for one answer.
+Capped at 50 shifts per call.
+
+**The board re-reads itself while it is on screen** — on focus, and every two
+minutes — because two members working the same day otherwise see each other's
+claims only after navigating. It is a quiet refresh: no spinner, no error
+banner, and it holds off entirely while a claim is in flight or a modal is
+open, so it cannot pull the roster out from under a decision being made on it.
+
+**One request per range.** Every shift response now carries `roster` — the
+occupied seats, with names and positions — so selecting a day costs no network
+call and a cell can be coloured "yours" at all. Claiming is optimistic: the
+chip, the badge and the CTA move together because they read the same roster,
+and a refused claim rolls back and re-reads from the server.
+
+**Not implemented:** the design's "Join the standby list" on a full crew. There
+is no waitlist in the data model, and a button that stored nothing would tell a
+member they were queued for a shift when they were not. A full crew says so
+instead.
 
 ### ShiftDetailPanel
 
@@ -544,13 +739,13 @@ Lightweight apparatus management at `/apparatus-basic`:
 
 ## Permissions
 
-| Permission          | Description                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| `scheduling.manage` | Create/edit/delete shifts, templates, patterns. Approve/deny requests. View reports. |
-| `scheduling.assign` | Assign members to shifts (admin assignment, not self-signup).                        |
+| Permission          | Description                                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scheduling.manage` | Create/edit/delete shifts, templates, patterns. Approve/deny requests. View reports.                                                                                         |
+| `scheduling.assign` | Assign members to shifts (admin assignment, not self-signup).                                                                                                                |
 | `scheduling.view`   | View scheduling data (implicit for all authenticated members). **Not a meaningful gate** — anything genuinely restricted needs `assign`/`manage` or the shift-officer check. |
-| `scheduling.swap`   | Request/manage shift swaps and time-off.                                             |
-| `scheduling.report` | View shift reports and analytics.                                                    |
+| `scheduling.swap`   | Request/manage shift swaps and time-off.                                                                                                                                     |
+| `scheduling.report` | View shift reports and analytics.                                                                                                                                            |
 
 **Note:** Shift signup (`POST /shifts/{id}/signup`) uses `get_current_user`, not `require_permission`. Any authenticated member can sign up for open positions.
 
@@ -749,6 +944,7 @@ groups: [{ platoon, member_count, members: [{ user_id, user_name, rank }] }] }`
   > `/scheduling/platoons` before the change and do not hold
   > `scheduling.manage` now get a permission error; grant `scheduling.manage`
   > to the roles that legitimately need the department-wide roster.
+
 - `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`) → body
   `{ user_ids: [...], platoon: "A" | null }`; only members in the caller's org
   are updated (IDOR-safe), audit-logged `platoon_bulk_assigned`. Returns
