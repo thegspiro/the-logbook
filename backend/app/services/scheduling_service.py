@@ -2940,7 +2940,12 @@ class SchedulingService:
                 position=assignment_data.get("position"),
                 require_mutable=self_signup,
                 reject_past=self_signup,
-                enforce_position_eligibility=self_signup,
+                # Eligibility is enforced for officer-made assignments too
+                # (#1752): an officer seating a member on a position they are
+                # not cleared for is the same risk as the member doing it.
+                # Capacity is not — overfilling a crew is a call an officer is
+                # allowed to make, and the one they make on a busy night.
+                enforce_position_eligibility=True,
                 enforce_capacity=self_signup,
             )
             if validation_error:

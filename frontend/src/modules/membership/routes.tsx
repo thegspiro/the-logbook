@@ -7,6 +7,7 @@
  * Member-facing routes:
  *   /members - Member directory
  *   /members/scan - Scan a member ID (QR or barcode)
+ *   /members/check-in-station - Tap ID cards to check members into a shift, event or admin hours
  *   /members/:userId - Member profile
  *   /members/:userId/training - Member training history
  *   /members/:userId/id-card - Digital member ID card with QR code
@@ -36,6 +37,7 @@ const MemberAdminEditPage = lazyWithRetry(() => import('../../pages/MemberAdminE
 const MemberAuditHistoryPage = lazyWithRetry(() => import('../../pages/MemberAuditHistoryPage'));
 const MemberIdCardPage = lazyWithRetry(() => import('../../pages/MemberIdCardPage'));
 const MemberScanPage = lazyWithRetry(() => import('../../pages/MemberScanPage'));
+const CheckInStationPage = lazyWithRetry(() => import('./pages/CheckInStationPage'));
 const WaiverManagementPage = lazyWithRetry(() => import('../../pages/WaiverManagementPage'));
 const MemberLabelPrintPage = lazyWithRetry(() => import('../../pages/MemberLabelPrintPage'));
 
@@ -70,6 +72,19 @@ export const getMembershipRoutes = () => {
                 in (quartermaster etc.), not a general lookup surface. */}
             <ProtectedRoute requiredAnyPermission={['users.view', 'members.manage']}>
               <MemberScanPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/members/check-in-station"
+        element={
+          <Suspense fallback={null}>
+            {/* Recording attendance for other members is its own grant: a duty
+                officer running the station does not thereby gain the ability
+                to edit the shift or the event it writes to. */}
+            <ProtectedRoute requiredPermission="members.check_in">
+              <CheckInStationPage />
             </ProtectedRoute>
           </Suspense>
         }

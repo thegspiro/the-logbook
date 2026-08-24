@@ -17,6 +17,8 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
@@ -65,6 +67,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isModuleOn } = useEnabledModules();
+  const { isConnected } = useConnectedIntegrations();
+  const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
   // tap closes it again. Toggling matters because the bar stays visible above
@@ -218,6 +222,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               // Scanning resolves a card to a member profile, which the
               // backend serves to users.view or members.manage holders.
               { label: 'Scan Member ID', path: '/members/scan', anyPermission: ['users.view', 'members.manage'] },
+              ...(isNfcCardsOn
+                ? [{ label: 'Check-In Station', path: '/members/check-in-station', permission: 'members.check_in' }]
+                : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
               DIV,
               { label: 'Manage Events', path: '/events', permission: 'events.manage' },

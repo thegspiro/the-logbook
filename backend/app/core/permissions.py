@@ -91,6 +91,25 @@ MEMBERS_ASSIGN_POSITIONS = Permission(
     PermissionCategory.MEMBERS,
 )
 
+# Issuing a physical credential is a separate act from editing a profile: the
+# officer who hands out ID cards is rarely the one who edits membership
+# records, and a card that opens attendance for someone else is worth its own
+# grant rather than riding along with members.manage.
+MEMBERS_MANAGE_ID_CARDS = Permission(
+    "members.manage_id_cards",
+    "Issue and revoke member ID card (NFC) credentials",
+    PermissionCategory.MEMBERS,
+)
+# Operating a check-in station means recording attendance on other members'
+# behalf. Deliberately narrower than events.manage / scheduling.manage so a
+# duty officer can run the station without gaining the ability to edit the
+# shift or the event itself.
+MEMBERS_CHECK_IN = Permission(
+    "members.check_in",
+    "Check members in at an ID card check-in station",
+    PermissionCategory.MEMBERS,
+)
+
 PROSPECTIVE_MEMBERS_VIEW = Permission(
     "prospective_members.view",
     "View prospective member pipeline",
@@ -572,6 +591,8 @@ ALL_PERMISSIONS: list[Permission] = [
     MEMBERS_VIEW,
     MEMBERS_MANAGE,
     MEMBERS_ASSIGN_POSITIONS,
+    MEMBERS_MANAGE_ID_CARDS,
+    MEMBERS_CHECK_IN,
     # Positions
     POSITIONS_VIEW,
     POSITIONS_CREATE,
@@ -851,6 +872,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             USERS_DELETE.name,
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
@@ -927,6 +950,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             USERS_EDIT.name,
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
@@ -985,6 +1010,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             USERS_EDIT.name,
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
@@ -1033,6 +1060,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
         "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS
         + [
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             TRAINING_MANAGE.name,
             COMPLIANCE_MANAGE.name,
@@ -1221,6 +1250,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
@@ -1315,6 +1346,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
@@ -1398,6 +1431,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
@@ -1628,6 +1663,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_UPDATE_POSITIONS.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
@@ -1744,6 +1781,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_MANAGE_ID_CARDS.name,
+            MEMBERS_CHECK_IN.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,

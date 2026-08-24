@@ -17,7 +17,7 @@ function item(id: string, name: string) {
     compartmentId: 'x',
     name,
     sortOrder: 0,
-    checkType: 'pass_fail' as const,
+    checkType: 'function' as const,
     isRequired: false,
     hasExpiration: false,
     expirationWarningDays: 30,

@@ -19,7 +19,11 @@ export const getStorefrontRoutes = () => {
       <Route
         path="/store"
         element={
-          <ProtectedRoute requiredPermission="storefront.view">
+          <ProtectedRoute
+            requiredPermission="storefront.view"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
             <Suspense fallback={null}>
               <StorefrontPage />
             </Suspense>
@@ -30,7 +34,11 @@ export const getStorefrontRoutes = () => {
       <Route
         path="/store/orders"
         element={
-          <ProtectedRoute requiredPermission="storefront.view">
+          <ProtectedRoute
+            requiredPermission="storefront.view"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
             <Suspense fallback={null}>
               <MyOrdersPage />
             </Suspense>
@@ -41,7 +49,11 @@ export const getStorefrontRoutes = () => {
       <Route
         path="/store/admin"
         element={
-          <ProtectedRoute requiredPermission="storefront.manage">
+          <ProtectedRoute
+            requiredPermission="storefront.manage"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
             <Suspense fallback={null}>
               <StoreAdminPage />
             </Suspense>

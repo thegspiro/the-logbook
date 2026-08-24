@@ -34,6 +34,16 @@ vi.mock('../../../stores/authStore', () => ({
     selector({ checkPermission: (...args: unknown[]) => mockCheckPermission(...args) as boolean }),
 }));
 
+// The hook reads organizationService from the same module mocked above, so it
+// is stubbed here rather than left to resolve against a partial mock.
+const mockIsModuleOn = vi.fn();
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    enabledModules: null,
+    isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
+  }),
+}));
+
 import { InventoryAdminHub } from './InventoryAdminHub';
 
 const mockSummary = {
@@ -65,6 +75,7 @@ describe('InventoryAdminHub', () => {
       is_complete: true,
     });
     mockCheckPermission.mockReturnValue(true);
+    mockIsModuleOn.mockReturnValue(true);
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'inventory',
       generatedAt: '2026-08-23T12:00:00Z',
@@ -216,6 +227,36 @@ describe('InventoryAdminHub', () => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
+  });
+
+  // The store is its own module with its own grant, and this card used to
+  // ignore both — it was the one unguarded door into a console a department
+  // had never enabled, which is how a store got configured that no member
+  // could see in their navigation.
+  it('hides the Department Store card when the module is off', async () => {
+    mockIsModuleOn.mockImplementation((key: unknown) => key !== 'storefront');
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+  });
+
+  it('hides the Department Store card without storefront.manage', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p !== 'storefront.manage');
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+  });
+
+  it('shows the Department Store card with the module on and the grant held', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Department Store').closest('a')).toHaveAttribute('href', '/store/admin');
   });
 
   it('shows badges on nav cards with counts', async () => {
