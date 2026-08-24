@@ -627,21 +627,6 @@ class TestCreateWithAttachment:
         # The row never landed, so the bytes on disk belong to nothing.
         assert os.listdir(os.path.join(str(tmp_path), "org-1")) == []
 
-    async def test_a_malformed_payload_is_a_422_not_a_500(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(
-            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
-        )
-        with pytest.raises(HTTPException) as exc:
-            await training_submissions.create_submission_with_attachment(
-                payload='{"course_name": "No hours"}',
-                file=SimpleNamespace(
-                    read=AsyncMock(return_value=b"%PDF"), filename="c.pdf"
-                ),
-                db=None,
-                current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
-            )
-        assert exc.value.status_code == 422
-
 
 class TestStartTime:
     def test_the_reported_start_time_reaches_the_record(self):
@@ -653,3 +638,163 @@ class TestStartTime:
             TrainingSubmissionService._create_record_from_submission
         )
         assert "start_time=submission.start_time" in source
+
+
+class TestRequiredEvidenceEverywhere:
+    """A rule only the form keeps is not a rule.
+
+    `attachments: required` is offered in the officer's settings screen, so
+    every server path that can put a submission in front of a reviewer — or
+    leave one there — has to hold it.
+    """
+
+    _CONFIG = dict(field_config={"attachments": {"visible": True, "required": True}})
+
+    async def _create(self, svc_config, **kwargs):
+        svc = TrainingSubmissionService(_Session())
+        svc.get_config = AsyncMock(return_value=svc_config)
+        svc._check_duplicate = AsyncMock(return_value=None)
+        svc._create_record_from_submission = AsyncMock()
+        return await svc.create_submission(
+            organization_id=str(uuid4()),
+            submitted_by=str(uuid4()),
+            course_name="Pump Ops",
+            training_type="continuing_education",
+            completion_date=date.today(),
+            hours_completed=2.0,
+            **kwargs,
+        )
+
+    async def test_a_plain_create_cannot_file_without_evidence(self):
+        with pytest.raises(ValueError, match="supporting documents"):
+            await self._create(_config(**self._CONFIG))
+
+    async def test_a_create_carrying_evidence_is_accepted(self):
+        submission = await self._create(
+            _config(**self._CONFIG), attachments=[{"file_name": "cert.pdf"}]
+        )
+        assert submission.status == SubmissionStatus.PENDING_REVIEW
+
+    async def test_a_draft_may_be_saved_without_evidence(self):
+        """A draft is a note to oneself; nobody is looking at it yet."""
+        submission = await self._create(_config(**self._CONFIG), save_as_draft=True)
+        assert submission.status == SubmissionStatus.DRAFT
+
+    async def test_removing_the_last_attachment_from_a_filed_submission_is_refused(
+        self, monkeypatch, tmp_path
+    ):
+        submission = _submission(
+            submitted_by="user-1",
+            status=SubmissionStatus.PENDING_REVIEW,
+            attachments=[
+                {"file_name": "cert.pdf", "file_path": str(tmp_path / "c.pdf")}
+            ],
+        )
+        monkeypatch.setattr(
+            training_submissions,
+            "_load_submission_for_attachment",
+            AsyncMock(return_value=submission),
+        )
+        monkeypatch.setattr(
+            training_submissions,
+            "TrainingSubmissionService",
+            lambda db: SimpleNamespace(
+                assert_evidence_requirement=AsyncMock(
+                    side_effect=ValueError(
+                        "This department requires supporting documents on a submission"
+                    )
+                )
+            ),
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await training_submissions.delete_submission_attachment(
+                submission.id,
+                0,
+                db=None,
+                current_user=SimpleNamespace(
+                    id="user-1", organization_id=submission.organization_id
+                ),
+            )
+        assert exc.value.status_code == 400
+        # The row keeps its evidence.
+        assert submission.attachments
+
+
+class TestMultipartFailureHandling:
+    async def test_a_post_commit_failure_leaves_the_file_alone(
+        self, monkeypatch, tmp_path
+    ):
+        """An orphaned file is recoverable; deleted evidence is not.
+
+        `create_submission` commits before it refreshes, so a failure after
+        that point belongs to a submission — and possibly a training record —
+        that durably references this path.
+        """
+        monkeypatch.setattr(
+            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
+        )
+        monkeypatch.setattr(
+            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+        )
+
+        async def _commits_then_trips(**kwargs):
+            raise OSError("connection lost during refresh")
+
+        monkeypatch.setattr(
+            training_submissions,
+            "TrainingSubmissionService",
+            lambda db: SimpleNamespace(create_submission=_commits_then_trips),
+        )
+
+        payload = json.dumps(
+            {
+                "course_name": "Pump Ops",
+                "training_type": "continuing_education",
+                "completion_date": str(date.today()),
+                "hours_completed": 2.0,
+            }
+        )
+        with pytest.raises(HTTPException, match="500|error"):
+            await training_submissions.create_submission_with_attachment(
+                payload=payload,
+                file=SimpleNamespace(
+                    read=AsyncMock(return_value=b"%PDF-1.4"), filename="cert.pdf"
+                ),
+                db=None,
+                current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
+            )
+
+        assert os.listdir(os.path.join(str(tmp_path), "org-1"))
+
+    async def test_a_bad_payload_raises_the_frameworks_validation_error(
+        self, monkeypatch, tmp_path
+    ):
+        """Answered as a RequestValidationError, not a hand-built 422.
+
+        A custom validator's ctx carries the raw ValueError, which the JSON
+        response cannot serialize — returning `e.errors()` as the detail turns
+        the 422 into a 500.
+        """
+        from fastapi.exceptions import RequestValidationError
+
+        monkeypatch.setattr(
+            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
+        )
+        payload = json.dumps(
+            {
+                "course_name": "Pump Ops",
+                "training_type": "not_a_training_type",
+                "completion_date": str(date.today()),
+                "hours_completed": 2.0,
+            }
+        )
+        with pytest.raises(RequestValidationError):
+            await training_submissions.create_submission_with_attachment(
+                payload=payload,
+                file=SimpleNamespace(
+                    read=AsyncMock(return_value=b"%PDF"), filename="c.pdf"
+                ),
+                db=None,
+                current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
+            )

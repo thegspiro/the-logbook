@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
@@ -662,6 +662,16 @@ const SubmissionCard: React.FC<{
                 <div>
                   <span className="text-theme-text-muted">Course Code: </span>
                   <span className="text-theme-text-secondary">{submission.course_code}</span>
+                </div>
+              )}
+              {/* The member reports a start time; without it a four-hour entry
+                  gives a reviewer no way to tell a morning class from an
+                  evening one. Absent on submissions filed before the field. */}
+              {submission.start_time && (
+                <div className="flex items-center space-x-1">
+                  <Clock className="text-theme-text-muted h-3 w-3" />
+                  <span className="text-theme-text-muted">Started: </span>
+                  <span className="text-theme-text-secondary">{formatTimeOfDay(submission.start_time)}</span>
                 </div>
               )}
               {submission.instructor && (

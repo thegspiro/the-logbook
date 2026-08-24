@@ -101,8 +101,10 @@ class TrainingSubmissionService:
         self._assert_within_department_limits(config, training_type, hours_completed)
 
         if save_as_draft:
+            # A draft is a note to oneself; it is not in front of anybody yet.
             status = SubmissionStatus.DRAFT
         else:
+            self._assert_required_evidence(config, kwargs.get("attachments"))
             status = self._route_for_review(
                 config, training_type, hours_completed, kwargs
             )
@@ -179,7 +181,7 @@ class TrainingSubmissionService:
         self._assert_within_department_limits(
             config, submission.training_type, submission.hours_completed
         )
-        self._assert_required_evidence(config, submission)
+        self._assert_required_evidence(config, submission.attachments)
 
         submission.status = self._route_for_review(
             config,
@@ -229,22 +231,40 @@ class TrainingSubmissionService:
                 f"Training type '{training_type}' is not allowed for self-reporting"
             )
 
-    @staticmethod
-    def _assert_required_evidence(
-        config: SelfReportConfig, submission: TrainingSubmission
+    async def assert_evidence_requirement(
+        self, organization_id: str, attachments
     ) -> None:
+        """Raise when the department requires evidence and there is none left.
+
+        The endpoint layer's way in to the same rule the create and the draft
+        handoff apply, so removing the last attachment cannot sidestep it.
+        """
+        config = await self.get_config(organization_id)
+        self._assert_required_evidence(config, attachments)
+
+    @staticmethod
+    def _requires_evidence(config: SelfReportConfig) -> bool:
+        """Whether the department marked supporting documents required.
+
+        Tolerant of a config without `field_config` at all: the column is NOT
+        NULL with a default, but a response that lacked it once took the submit
+        page down, and this guard sits on the create path for every submission.
+        """
+        field_config = getattr(config, "field_config", None) or {}
+        return bool((field_config.get("attachments") or {}).get("required"))
+
+    @classmethod
+    def _assert_required_evidence(cls, config: SelfReportConfig, attachments) -> None:
         """Enforce a department that requires supporting documents.
 
-        Only reachable at the draft handoff: an attachment cannot exist before
-        the row it hangs off, so a straight create has nothing to check. The
-        form routes a submission carrying a file through a draft for exactly
-        this reason.
+        Checked at every point a submission can reach — or stay in — the review
+        queue without evidence: a create that is not a draft, the draft handoff,
+        and removing the last attachment from a filed submission. A promise made
+        in the settings screen that only the form kept is not a rule.
         """
-        field_config = config.field_config or {}
-        attachments_config = field_config.get("attachments") or {}
-        if not attachments_config.get("required"):
+        if not cls._requires_evidence(config):
             return
-        if not submission.attachments:
+        if not attachments:
             raise ValueError(
                 "This department requires supporting documents on a submission"
             )

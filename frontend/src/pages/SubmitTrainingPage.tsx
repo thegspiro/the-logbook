@@ -173,9 +173,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setCertificationNumber(editSubmission.certification_number || '');
     setIssuingAgency(editSubmission.issuing_agency || '');
     setExpirationDate(editSubmission.expiration_date || '');
-    setCertificationNeverExpires(
-      !editSubmission.expiration_date && !!(editSubmission.certification_number || editSubmission.issuing_agency)
-    );
+    // Never inferred from an absent date. A submission an officer sent back
+    // *because* the expiry was missing would otherwise reopen with "does not
+    // expire" already ticked and the field disabled — answering for the member,
+    // and letting them resubmit without the date they were asked for.
+    setCertificationNeverExpires(false);
     setStoredAttachments(editSubmission.attachments ?? []);
     // Reported start times are kept now. 09:00 is the fallback only for rows
     // written before the column existed, which genuinely have none.

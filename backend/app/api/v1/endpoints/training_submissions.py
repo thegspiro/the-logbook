@@ -20,6 +20,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -124,7 +125,12 @@ async def create_submission_with_attachment(
     try:
         data = TrainingSubmissionCreate.model_validate_json(payload)
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        # Re-raised as the framework's own error rather than answered here: a
+        # custom validator's ctx carries the raw ValueError, which the JSON
+        # response cannot serialize — the 422 would render as a 500. Going
+        # through RequestValidationError also gives this endpoint the same
+        # {field, message} body as every other validation failure in the app.
+        raise RequestValidationError(e.errors()) from e
 
     stored = await _store_attachment_file(file, current_user)
 
@@ -137,8 +143,16 @@ async def create_submission_with_attachment(
                 attachments=[stored],
                 **data.model_dump(exclude_unset=True, exclude={"attachments"}),
             )
-        except Exception:
-            # The row never landed, so the bytes on disk belong to nothing.
+        except (ValueError, PermissionError):
+            # The service raises these before it writes anything — hours out of
+            # range, a training type the department disallows — so the row
+            # never landed and the bytes on disk belong to nothing.
+            #
+            # Deliberately narrow. Anything else may have failed *after* the
+            # commit (a refresh that trips on a dropped connection), where the
+            # submission — and for an auto-approved one its training record —
+            # durably references this path. An orphaned file is recoverable;
+            # a record whose evidence was deleted out from under it is not.
             await asyncio.to_thread(_remove_quietly, stored["file_path"])
             raise
         return submission
@@ -693,6 +707,19 @@ async def delete_submission_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     removed = attachments.pop(index)
+
+    # Removing the last one would leave a filed submission sitting in the
+    # review queue with no evidence behind it, which is the state the
+    # department's `attachments: required` setting exists to prevent. A draft
+    # is not in front of anybody yet, so it may be emptied freely.
+    if submission.status != SubmissionStatus.DRAFT:
+        try:
+            await TrainingSubmissionService(db).assert_evidence_requirement(
+                current_user.organization_id, attachments
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     submission.attachments = attachments
     flag_modified(submission, "attachments")
     await db.commit()
