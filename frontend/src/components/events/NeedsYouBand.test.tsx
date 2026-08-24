@@ -114,7 +114,7 @@ describe('NeedsYouBand', () => {
     const row = screen.getByRole('listitem');
     expect(within(row).getByRole('link', { name: /check in/i })).toHaveAttribute('href', '/events/live-1/check-in');
     expect(row).toHaveTextContent('Training Grounds');
-    expect(row).toHaveTextContent('Credits up to 2.0 drill hours');
+    expect(row).toHaveTextContent('Credits up to 2 drill hours');
   });
 
   it('wires the action row buttons to the RSVP handler', async () => {

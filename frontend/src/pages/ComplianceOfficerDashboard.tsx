@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
 import { formatDate, formatNumber } from '../utils/dateFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
@@ -198,11 +199,11 @@ const AnnualReportSection: React.FC = () => {
         />
         <SummaryCard
           label="Training Hours"
-          value={formatNumber(summary.total_training_hours)}
+          value={formatHours(summary.total_training_hours)}
           color="purple"
           icon={Award}
         />
-        <SummaryCard label="Admin Hours" value={formatNumber(summary.total_admin_hours)} color="orange" icon={Award} />
+        <SummaryCard label="Admin Hours" value={formatHours(summary.total_admin_hours)} color="orange" icon={Award} />
         <SummaryCard
           label="Total Contributed"
           value={formatNumber(summary.total_contributed_hours)}
@@ -241,8 +242,10 @@ const AnnualReportSection: React.FC = () => {
             {report.admin_hours_summary.by_category.map((cat) => (
               <div key={cat.category_id} className="bg-theme-input-bg/50 rounded-lg p-3">
                 <p className="text-theme-text-muted mb-1 text-xs">{cat.category_name}</p>
-                <p className="text-theme-text-primary text-lg font-bold">{cat.approved_hours} hrs</p>
-                {cat.pending_hours > 0 && <p className="text-xs text-yellow-500">{cat.pending_hours} hrs pending</p>}
+                <p className="text-theme-text-primary text-lg font-bold">{formatHours(cat.approved_hours)} hrs</p>
+                {cat.pending_hours > 0 && (
+                  <p className="text-xs text-yellow-500">{formatHours(cat.pending_hours)} hrs pending</p>
+                )}
                 <p className="text-theme-text-muted text-xs">{cat.total_entries} entries</p>
               </div>
             ))}
@@ -501,7 +504,9 @@ const AnnualReportSection: React.FC = () => {
                     className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                   >
                     <td className="text-theme-text-primary px-4 py-2 font-medium">{member.name}</td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">{member.hours_completed}</td>
+                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                      {formatHours(member.hours_completed)}
+                    </td>
                     <td className="text-theme-text-secondary px-4 py-2 text-center">{member.admin_hours_approved}</td>
                     <td className="px-4 py-2 text-center font-semibold text-green-500">
                       {member.total_contributed_hours}
@@ -627,8 +632,8 @@ const ISOReadinessSection: React.FC = () => {
               />
             </div>
             <div className="text-theme-text-muted mt-2 flex justify-between text-xs">
-              <span>Avg: {cat.avg_hours_completed} hrs/member</span>
-              <span>Dept Total: {cat.total_department_hours} hrs</span>
+              <span>Avg: {formatHours(cat.avg_hours_completed)} hrs/member</span>
+              <span>Dept Total: {formatHours(cat.total_department_hours)} hrs</span>
             </div>
           </div>
         ))}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatHours } from '../../utils/hoursFormatting';
 import { Link } from 'react-router';
 import type { AdminHoursSummary } from '../../modules/admin-hours/types';
 import type { AdminHoursComplianceItem } from '../../modules/admin-hours/types';
@@ -22,7 +23,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
       </div>
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-          <p className="text-theme-text-primary text-2xl font-bold">{adminHoursSummary.totalHours.toFixed(1)}</p>
+          <p className="text-theme-text-primary text-2xl font-bold">{formatHours(adminHoursSummary.totalHours)}</p>
           <p className="text-theme-text-muted text-xs">Total Hours</p>
         </div>
         <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
@@ -41,7 +42,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
                 )}
                 <span className="text-theme-text-secondary">{cat.categoryName}</span>
               </div>
-              <span className="text-theme-text-primary font-medium">{cat.totalHours.toFixed(1)} hrs</span>
+              <span className="text-theme-text-primary font-medium">{formatHours(cat.totalHours)} hrs</span>
             </div>
           ))}
         </div>
@@ -66,7 +67,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
                     <span className="text-theme-text-secondary">{req.categoryName}</span>
                   </div>
                   <span className="text-theme-text-primary font-medium">
-                    {req.loggedHours} / {req.requiredHours} hrs
+                    {formatHours(req.loggedHours)} / {formatHours(req.requiredHours)} hrs
                   </span>
                 </div>
                 <div className="bg-theme-surface-secondary h-2 w-full overflow-hidden rounded-full">

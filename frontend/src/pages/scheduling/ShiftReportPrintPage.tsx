@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router';
 import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 
@@ -110,7 +111,7 @@ const ShiftReportPrintPage: React.FC = () => {
             </div>
             <div>
               <dt>Hours on Shift</dt>
-              <dd>{report.hours_on_shift}</dd>
+              <dd>{formatHours(report.hours_on_shift)}</dd>
             </div>
             <div>
               <dt>Calls Responded</dt>

@@ -32,6 +32,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
+import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
@@ -1074,7 +1075,7 @@ export const MemberProfilePage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-theme-text-secondary text-sm">Total Hours</span>
                       <span className="text-theme-text-primary text-sm font-semibold">
-                        {trainings.reduce((sum, t) => sum + (t.hours_completed || 0), 0)} hrs
+                        {formatHours(sumHoursToQuarter(trainings.map((t) => t.hours_completed)))} hrs
                       </span>
                     </div>
                   </>
@@ -1089,7 +1090,7 @@ export const MemberProfilePage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-theme-text-secondary text-sm">Admin Hours</span>
                     <span className="text-theme-text-primary text-sm font-semibold">
-                      {adminHoursSummary.totalHours.toFixed(1)} hrs
+                      {formatHours(adminHoursSummary.totalHours)} hrs
                     </span>
                   </div>
                 )}

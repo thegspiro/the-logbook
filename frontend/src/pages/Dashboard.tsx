@@ -57,6 +57,7 @@ import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { requirementTarget } from '../utils/pipelineProgress';
+import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import {
   addCalendarDays,
@@ -654,7 +655,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const totalHours = hours.training + hours.standby + hours.administrative;
+  const totalHours = sumHoursToQuarter([hours.training, hours.standby, hours.administrative]);
   const monthLabel = formatDateCustom(new Date(), { month: 'long' }, tz);
 
   // ── The seven-day list ────────────────────────────────────────────────────
@@ -1082,7 +1083,8 @@ const Dashboard: React.FC = () => {
             <span className="border-theme-surface-border bg-theme-surface text-theme-text-secondary inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-4 text-[13px]">
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
-                <span className="text-theme-text-primary font-bold tabular-nums">{totalHours}</span> hrs in {monthLabel}
+                <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span> hrs in{' '}
+                {monthLabel}
               </span>
             </span>
           </div>
@@ -1602,7 +1604,7 @@ const Dashboard: React.FC = () => {
                       value={`${adminSummary?.training_completion_pct ?? 0}%`}
                       icon={GraduationCap}
                       iconColor="text-green-700 dark:text-green-400"
-                      description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
+                      description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
                       loading={loadingAdmin}
                     />
 
@@ -1636,7 +1638,7 @@ const Dashboard: React.FC = () => {
 
                     <DashboardStatCard
                       label="Admin Hours"
-                      value={adminSummary?.recent_admin_hours ?? 0}
+                      value={formatHours(adminSummary?.recent_admin_hours)}
                       icon={ClipboardCheck}
                       iconColor="text-indigo-700 dark:text-indigo-400"
                       description={
@@ -1646,7 +1648,7 @@ const Dashboard: React.FC = () => {
                       }
                       loading={loadingAdmin}
                       {...(canManageAdminHours ? { onClick: () => void navigate('/admin-hours/manage') } : {})}
-                      ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
+                      ariaLabel={`Admin Hours: ${formatHours(adminSummary?.recent_admin_hours)}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ''}`}
                     />
                   </div>
                 ))}

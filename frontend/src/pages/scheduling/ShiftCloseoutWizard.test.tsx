@@ -284,8 +284,8 @@ describe('ShiftCloseoutWizard', () => {
   it('shows combined hours, not a bare total', async () => {
     renderWizard();
     // 12h + 6h across two members on a 12-hour shift — the word is what stops
-    // "18.0" reading as the shift's length.
-    expect(await screen.findByText(/18\.0 combined hours/)).toBeInTheDocument();
+    // "18" reading as the shift's length.
+    expect(await screen.findByText(/18 combined hours/)).toBeInTheDocument();
   });
 
   describe('the call count', () => {

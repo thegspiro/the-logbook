@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router';
 import { formatDate } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import type { TrainingRecord, ComplianceSummary } from '../../types/training';
 
 interface TrainingSectionProps {
@@ -98,7 +99,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                 <div>
                   <p className="text-theme-text-muted text-xs">Hours (YTD)</p>
                   <p className="text-theme-text-primary text-lg font-semibold">
-                    {complianceSummary.hours_this_year.toFixed(1)}
+                    {formatHours(complianceSummary.hours_this_year)}
                   </p>
                 </div>
                 <div>
@@ -179,7 +180,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                         Expires: {formatDate(training.expiration_date, tz)}
                       </span>
                     )}
-                    {training.hours_completed > 0 && <span>{training.hours_completed} hrs</span>}
+                    {training.hours_completed > 0 && <span>{formatHours(training.hours_completed)} hrs</span>}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">

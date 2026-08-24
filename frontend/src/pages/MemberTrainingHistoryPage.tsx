@@ -18,6 +18,7 @@ import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState } from '../components/ux';
 import { GraduationCap, Download, Paperclip, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
+import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
 import { useTimezone } from '../hooks/useTimezone';
@@ -294,7 +295,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   // Calculate statistics
   const stats = useMemo(() => {
     const completed = trainings.filter((t) => t.status === 'completed');
-    const totalHours = completed.reduce((sum, t) => sum + (t.hours_completed || 0), 0);
+    const totalHours = sumHoursToQuarter(completed.map((t) => t.hours_completed));
     const expiringSoon = trainings.filter((t) => isExpiringSoon(t) && !isExpired(t));
     const expired = trainings.filter((t) => isExpired(t));
     const scheduled = trainings.filter((t) => t.status === 'scheduled');
@@ -555,7 +556,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                         {formatDate(training.completion_date || training.scheduled_date, tz)}
                       </td>
                       <td data-label="Hours" className="text-theme-text-secondary px-6 py-4 text-sm">
-                        {training.hours_completed || 0}
+                        {formatHours(training.hours_completed)}
                       </td>
                       <td data-label="Expires" className="px-6 py-4 text-sm">
                         <span

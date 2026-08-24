@@ -7,6 +7,7 @@ import type { TrainingSummaryReport } from '../../types';
 import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { formatHours } from '@/utils/hoursFormatting';
 
 interface Props {
   data: TrainingSummaryReport;
@@ -25,7 +26,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
       key: 'total_hours',
       header: 'Hours',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : v != null ? toDisplayString(v) : '0'),
+      render: (v: unknown) => (typeof v === 'number' ? formatHours(v) : v != null ? toDisplayString(v) : '0'),
     },
   ];
 
@@ -37,7 +38,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
       key: 'total_hours',
       header: 'Total Hours',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : v != null ? toDisplayString(v) : '0'),
+      render: (v: unknown) => (typeof v === 'number' ? formatHours(v) : v != null ? toDisplayString(v) : '0'),
     },
   ];
 

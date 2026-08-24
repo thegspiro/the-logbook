@@ -31,6 +31,7 @@ import toast from 'react-hot-toast';
 import { trainingModuleConfigService } from '../services/api';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
 import { formatDate, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { SubmissionStatus } from '../constants/enums';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
@@ -701,7 +702,7 @@ const MyTrainingPage: React.FC = () => {
             <StatCard
               icon={Clock}
               label="Completed Hours"
-              value={data.hours_summary?.total_hours ?? 0}
+              value={formatHours(data.hours_summary?.total_hours)}
               color="text-blue-700 dark:text-blue-400"
             />
             <StatCard
@@ -980,7 +981,7 @@ const MyTrainingPage: React.FC = () => {
                             {r.training_type.replace('_', ' ')}
                           </td>
                           <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
-                          <td className="px-4 py-2 whitespace-nowrap">{r.hours_completed}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">{formatHours(r.hours_completed)}</td>
                           <td className="px-4 py-2">
                             <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
@@ -1008,7 +1009,7 @@ const MyTrainingPage: React.FC = () => {
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-theme-text-primary text-sm font-medium">{formatDate(sr.shift_date, tz)}</p>
                       <div className="text-theme-text-muted flex items-center space-x-3 text-xs">
-                        <span>{sr.hours_on_shift}h</span>
+                        <span>{formatHours(sr.hours_on_shift)}h</span>
                         <span>{sr.calls_responded} calls</span>
                         {v?.show_performance_rating && sr.performance_rating && (
                           <span className="flex items-center space-x-1">
@@ -1084,7 +1085,7 @@ const MyTrainingPage: React.FC = () => {
                       <tr key={s.id} className="text-theme-text-secondary">
                         <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date, tz)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{formatHours(s.hours_completed)}</td>
                         <td className="px-4 py-2">
                           <span className={`rounded-sm px-2 py-1 text-xs ${getStatusColor(s.status)}`}>
                             {s.status.replace('_', ' ')}
