@@ -360,6 +360,44 @@ class TestLinkingAPositionToTheCatalog:
         assert "NEW-9" in [lot.lot_number for lot in item.deployed_lots]
 
 
+class TestSubmitterLimits:
+    async def test_a_submitter_cannot_top_up_a_full_position(self, service, item):
+        item.expected_quantity = 1
+
+        with pytest.raises(PermissionError, match="position's shortfall"):
+            await _swap(service, enforce_submitter_limits=True)
+
+        service.db.commit.assert_not_awaited()
+
+    async def test_a_submitter_cannot_overfill_a_short_position(self, service, item):
+        item.expected_quantity = 2
+
+        with pytest.raises(PermissionError, match="position's shortfall"):
+            await _swap(service, quantity=2, enforce_submitter_limits=True)
+
+    async def test_a_submitter_can_fill_exactly_the_shortfall(self, service, item):
+        item.expected_quantity = 2
+
+        await _swap(service, enforce_submitter_limits=True)
+
+        assert EquipmentCheckService._on_truck(item) == 2
+
+    async def test_a_submitter_cannot_replace_more_than_the_expired_lot(self, service):
+        with pytest.raises(PermissionError, match="expired units aboard"):
+            await _swap(
+                service,
+                quantity=2,
+                replaced_deployed_lot_id="dl-expired",
+                disposition="discarded",
+                enforce_submitter_limits=True,
+            )
+
+    async def test_a_manager_can_still_top_up_without_a_shortfall(self, service):
+        await _swap(service, quantity=2)
+
+        assert service.db.commit.await_count == 1
+
+
 class TestToppingUpIsUnchanged:
     async def test_a_swap_naming_no_replacement_retires_nothing(self, service, item):
         await _swap(service)

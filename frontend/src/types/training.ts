@@ -1546,6 +1546,19 @@ export interface SelfReportConfigUpdate {
   member_instructions?: string | null;
 }
 
+/**
+ * One stored certificate/photo on a submission, as the API reports it.
+ * Server file paths are stripped before the list leaves the backend, so an
+ * attachment is addressed by its index, never by path.
+ */
+export interface SubmissionAttachment {
+  index: number;
+  file_name?: string | null;
+  file_type?: string | null;
+  file_size?: number | null;
+  uploaded_at?: string | null;
+}
+
 export interface TrainingSubmission {
   id: string;
   organization_id: string;
@@ -1556,6 +1569,8 @@ export interface TrainingSubmission {
   training_type: TrainingType;
   description?: string;
   completion_date: string;
+  /** "HH:MM:SS" when the member reported one; absent on rows predating the field. */
+  start_time?: string | null;
   hours_completed: number;
   credit_hours?: number;
   instructor?: string;
@@ -1564,7 +1579,7 @@ export interface TrainingSubmission {
   issuing_agency?: string;
   expiration_date?: string;
   category_id?: string;
-  attachments?: string[];
+  attachments?: SubmissionAttachment[];
   status: SubmissionStatus;
   reviewed_by?: string;
   reviewed_at?: string;
@@ -1580,6 +1595,8 @@ export interface TrainingSubmissionCreate {
   training_type: TrainingType;
   description?: string | undefined;
   completion_date: string;
+  /** "HH:MM" — the API keeps it so an edit does not have to invent one. */
+  start_time?: string | undefined;
   hours_completed: number;
   credit_hours?: number | undefined;
   instructor?: string | undefined;
@@ -1589,22 +1606,31 @@ export interface TrainingSubmissionCreate {
   expiration_date?: string | undefined;
   category_id?: string | undefined;
   attachments?: string[] | undefined;
+  /** Park the submission in the member's own list instead of sending it for review. */
+  save_as_draft?: boolean | undefined;
 }
 
+/**
+ * Update payload. Optional text fields accept an explicit `null` because the
+ * backend dumps updates with `exclude_unset` — omitting a key means "leave it
+ * alone", so a field the member cleared has to travel as `null` to be cleared
+ * (CLAUDE.md pitfall #1, update path).
+ */
 export interface TrainingSubmissionUpdate {
   course_name?: string | undefined;
-  course_code?: string | undefined;
+  course_code?: string | null | undefined;
   training_type?: TrainingType | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   completion_date?: string | undefined;
+  start_time?: string | null | undefined;
   hours_completed?: number | undefined;
   credit_hours?: number | undefined;
-  instructor?: string | undefined;
-  location?: string | undefined;
-  certification_number?: string | undefined;
-  issuing_agency?: string | undefined;
-  expiration_date?: string | undefined;
-  category_id?: string | undefined;
+  instructor?: string | null | undefined;
+  location?: string | null | undefined;
+  certification_number?: string | null | undefined;
+  issuing_agency?: string | null | undefined;
+  expiration_date?: string | null | undefined;
+  category_id?: string | null | undefined;
   attachments?: string[] | undefined;
 }
 

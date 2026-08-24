@@ -156,7 +156,7 @@ const PassFailCriterion: React.FC<{
           aria-pressed={result?.passed === false}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
             result?.passed === false
-              ? 'scale-[1.02] bg-red-600 text-white shadow-lg shadow-red-600/30'
+              ? 'scale-[1.02] bg-red-800 text-white shadow-lg shadow-red-600/30'
               : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-red-500'
           }`}
         >
@@ -240,7 +240,7 @@ const ScoreCriterion: React.FC<{
                   ? isCritical
                     ? i >= passingScore
                       ? 'scale-105 bg-green-600 text-white shadow-lg shadow-green-600/30'
-                      : 'scale-105 bg-red-600 text-white shadow-lg shadow-red-600/30'
+                      : 'scale-105 bg-red-800 text-white shadow-lg shadow-red-600/30'
                     : 'scale-105 bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted border-2'
               }`}
@@ -392,7 +392,7 @@ const TimedCriterion: React.FC<{
           ) : (
             <button
               onClick={handleStop}
-              className="rounded-full bg-red-500 p-3 text-white transition-colors hover:bg-red-600"
+              className="rounded-full bg-red-500 p-3 text-white transition-colors hover:bg-red-800"
               aria-label={`Stop timer for ${criterion.label}`}
             >
               <Square className="h-6 w-6" />
@@ -938,7 +938,7 @@ const ReviewSection: React.FC<{
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Add notes for this section..."
           rows={2}
-          className="bg-theme-bg border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted/50 focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+          className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted/50 focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
         />
       </div>
     </div>
@@ -2139,7 +2139,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           ) : (
             <button
               onClick={() => void navigate(backTarget)}
-              className="w-full rounded-xl bg-red-600 py-3 font-medium text-white transition-colors hover:bg-red-700"
+              className="w-full rounded-xl bg-red-800 py-3 font-medium text-white transition-colors hover:bg-red-900"
             >
               Back to Tests
             </button>
@@ -2265,7 +2265,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             <button
               onClick={requestSubmit}
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-4 text-lg font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-800 py-4 text-lg font-bold text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               <Save className="h-5 w-5" />
               {submitting ? 'Submitting...' : 'Submit Test'}
@@ -2347,7 +2347,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                   aria-label={`Section ${i + 1}, ${progress.name}: ${progress.scored} of ${progress.total} steps scored`}
                   className={`mobile-touch-target gap-1 rounded-full border-2 px-3 text-sm font-bold transition-colors ${
                     isCurrent
-                      ? 'border-red-600 bg-red-600 text-white'
+                      ? 'border-red-600 bg-red-800 text-white'
                       : complete
                         ? 'border-green-500/50 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                         : 'border-theme-surface-border text-theme-text-muted'
@@ -2479,7 +2479,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           {canGoForward && (
             <button
               onClick={() => goToSection(activeSectionIndex + 1)}
-              className="flex min-h-[52px] flex-1 items-center justify-center gap-1 rounded-xl bg-red-600 font-bold text-white transition-colors hover:bg-red-700"
+              className="flex min-h-[52px] flex-1 items-center justify-center gap-1 rounded-xl bg-red-800 font-bold text-white transition-colors hover:bg-red-900"
             >
               Next
               <ChevronRight className="h-5 w-5" />
@@ -2490,7 +2490,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             className={`flex min-h-[52px] items-center justify-center rounded-xl px-4 font-bold transition-colors ${
               canGoForward
                 ? 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary border font-medium'
-                : 'flex-1 bg-red-600 text-white hover:bg-red-700'
+                : 'flex-1 bg-red-800 text-white hover:bg-red-900'
             }`}
           >
             {canGoForward ? 'Finish' : 'Finish & Review'}

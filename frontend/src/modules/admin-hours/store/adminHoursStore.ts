@@ -37,8 +37,15 @@ interface AdminHoursState {
   activeSessions: AdminHoursActiveSessionAdmin[];
   activeSessionsLoading: boolean;
 
-  // Summary
+  // Summary (organization-wide reporting view)
   summary: AdminHoursSummary | null;
+
+  // Summary scoped to the signed-in member. Kept separate from `summary`
+  // because the org view and the personal view are live at different routes
+  // over the same store: sharing one slice let the last org-wide fetch linger
+  // under the "My Admin Hours" headings until the personal fetch resolved.
+  mySummary: AdminHoursSummary | null;
+  mySummaryLoading: boolean;
 
   // Pending count (for badge)
   pendingCount: number;
@@ -84,6 +91,11 @@ interface AdminHoursState {
     startDate?: string | undefined;
     endDate?: string | undefined;
   }) => Promise<void>;
+  fetchMySummary: (params: {
+    userId: string;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+  }) => Promise<void>;
   fetchPendingCount: () => Promise<void>;
 
   // Active sessions (admin)
@@ -97,6 +109,7 @@ interface AdminHoursState {
 // a new fetch on every preset change; without this, a slow earlier response
 // arriving after a fast later one would overwrite the selected range's data.
 let summaryRequestToken = 0;
+let mySummaryRequestToken = 0;
 
 export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   categories: [],
@@ -111,6 +124,8 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
   activeSessions: [],
   activeSessionsLoading: false,
   summary: null,
+  mySummary: null,
+  mySummaryLoading: false,
   pendingCount: 0,
   error: null,
 
@@ -304,6 +319,19 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
     } catch (error) {
       if (requestToken !== summaryRequestToken) return;
       set({ error: handleStoreError(error, 'Failed to load summary') });
+    }
+  },
+
+  fetchMySummary: async (params) => {
+    const requestToken = ++mySummaryRequestToken;
+    set({ error: null, mySummaryLoading: true });
+    try {
+      const mySummary = await adminHoursEntryService.getSummary(params);
+      if (requestToken !== mySummaryRequestToken) return;
+      set({ mySummary, mySummaryLoading: false });
+    } catch (error) {
+      if (requestToken !== mySummaryRequestToken) return;
+      set({ error: handleStoreError(error, 'Failed to load summary'), mySummaryLoading: false });
     }
   },
 

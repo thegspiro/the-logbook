@@ -11,27 +11,26 @@ import type { CheckType } from '@/modules/scheduling/types/equipmentCheck';
 // Check-type metadata
 // ============================================================================
 
+// What the admin picks from. Four answer shapes, then the two structural rows.
+// The order is the design's: level, function, count, expiry.
 export const CHECK_TYPES = [
-  { value: 'pass_fail', label: 'Pass / Fail' },
-  { value: 'present', label: 'Present' },
-  { value: 'functional', label: 'Functional' },
-  { value: 'quantity', label: 'Quantity' },
   { value: 'level', label: 'Level' },
-  { value: 'date_lot', label: 'Date / Lot' },
-  { value: 'reading', label: 'Reading' },
-  { value: 'text', label: 'Text' },
+  { value: 'function', label: 'Function' },
+  { value: 'count', label: 'Count' },
+  { value: 'expiry', label: 'Expiry' },
+  { value: 'text', label: 'Statement' },
   { value: 'header', label: 'Section Header' },
 ] as const;
 
 export const CHECK_TYPE_HELP: Record<string, string> = {
-  pass_fail: 'Simple pass or fail check. Good for binary inspections like "lights working" or "no visible damage".',
-  present: 'Verify the item is present. Use for mandatory equipment that must be on the apparatus.',
-  functional: 'Test that the item works correctly. Similar to pass/fail but implies active testing.',
-  quantity:
-    'Count items and compare against the expected quantity. Set the expected count, a minimum to pass, and an optional critical threshold that triggers urgent leadership alerts.',
-  level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
-  date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
-  reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+  level:
+    'A reading against a threshold — O2, fuel, coolant, battery volts. The number is kept, so the trend over shifts stays visible. Under the threshold fails the item and opens a swap task.',
+  function:
+    'Something switched on and watched — suction, lights and siren, radio, monitor. Write the test on the item so two people run it the same way. A fail always takes a note and a photo, neither of which blocks the walk.',
+  count:
+    'A par level to match. One tap confirms par; the stepper is for when it does not. Short of par becomes a restock line, not a failure.',
+  expiry:
+    'A date already on record, shown and confirmed rather than retyped, so the check is a glance at the vial. Inside the pull window the line stays amber on every shift until it is replaced.',
   text: 'Read-only statement or instruction. Displayed as informational text — no action required from the member.',
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
@@ -71,9 +70,23 @@ export const APPARATUS_TYPES = [
 // Vehicle presets — pre-built compartment templates by apparatus type
 // ============================================================================
 
+/**
+ * One line in a preset checklist.
+ *
+ * `description` is the test written on the item — "Run 10 seconds · must pull
+ * 300 mmHg". A Function item without one asks the crew to judge "does it work"
+ * with no shared definition of works, which is how two people run the same
+ * check two ways.
+ */
+export interface PresetItem {
+  name: string;
+  checkType: CheckType;
+  description?: string;
+}
+
 export interface VehiclePreset {
   label: string;
-  compartments: { name: string; items: { name: string; checkType: CheckType }[] }[];
+  compartments: { name: string; items: PresetItem[] }[];
 }
 
 export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
@@ -83,13 +96,29 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren', checkType: 'functional' },
-          { name: 'Horn', checkType: 'functional' },
-          { name: 'Mirrors', checkType: 'functional' },
-          { name: 'Windshield wipers / washer', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Mirrors', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Windshield wipers / washer',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
@@ -98,38 +127,54 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
           { name: 'Power steering fluid', checkType: 'level' },
-          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
-          { name: 'Battery condition & connections', checkType: 'pass_fail' },
+          {
+            name: 'Belts & hoses condition',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Battery condition & connections',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
         name: 'Pump Panel',
         items: [
-          { name: 'Pump engages properly', checkType: 'functional' },
-          { name: 'Gauges operational', checkType: 'functional' },
-          { name: 'Primer works', checkType: 'functional' },
-          { name: 'Pump panel lights', checkType: 'functional' },
-          { name: 'Drain valves closed', checkType: 'pass_fail' },
+          { name: 'Pump engages properly', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Gauges operational', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Primer works', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Pump panel lights', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Drain valves closed', checkType: 'function', description: 'Confirm the item passes inspection.' },
           { name: 'Tank water level', checkType: 'level' },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission (all gears)', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Transmission (all gears)',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
       {
         name: 'Safety & Cab Interior',
         items: [
-          { name: 'Seat belts', checkType: 'functional' },
-          { name: 'SCBA mounted & secured', checkType: 'present' },
-          { name: 'Radio(s) operational', checkType: 'functional' },
-          { name: 'MDT / computer operational', checkType: 'functional' },
-          { name: 'Cab clean & organized', checkType: 'pass_fail' },
+          { name: 'Seat belts', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'SCBA mounted & secured', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Radio(s) operational', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'MDT / computer operational',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Cab clean & organized', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
     ],
@@ -140,12 +185,24 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren', checkType: 'functional' },
-          { name: 'Horn', checkType: 'functional' },
-          { name: 'Mirrors', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Mirrors', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
@@ -153,28 +210,44 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
+          {
+            name: 'Belts & hoses condition',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Aerial Device',
         items: [
-          { name: 'Aerial extends & retracts', checkType: 'functional' },
-          { name: 'Aerial rotation', checkType: 'functional' },
-          { name: 'Outriggers / stabilizers deploy', checkType: 'functional' },
+          {
+            name: 'Aerial extends & retracts',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Aerial rotation', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Outriggers / stabilizers deploy',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
           { name: 'Aerial hydraulic fluid level', checkType: 'level' },
-          { name: 'Aerial lights / spotlight', checkType: 'functional' },
-          { name: 'Rungs & rail condition', checkType: 'pass_fail' },
+          {
+            name: 'Aerial lights / spotlight',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Rungs & rail condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Transmission', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -185,11 +258,23 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren', checkType: 'functional' },
-          { name: 'Horn', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
@@ -197,28 +282,44 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Patient Compartment',
         items: [
-          { name: 'Stretcher locks & operation', checkType: 'functional' },
-          { name: 'O2 system / regulators', checkType: 'functional' },
-          { name: 'Suction unit', checkType: 'functional' },
-          { name: 'Climate control (heat/AC)', checkType: 'functional' },
-          { name: 'Patient compartment lights', checkType: 'functional' },
-          { name: 'Sharps container level', checkType: 'pass_fail' },
-          { name: 'Compartment clean & sanitized', checkType: 'pass_fail' },
+          {
+            name: 'Stretcher locks & operation',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'O2 system / regulators', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Suction unit', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Climate control (heat/AC)',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          {
+            name: 'Patient compartment lights',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Sharps container level', checkType: 'function', description: 'Confirm the item passes inspection.' },
+          {
+            name: 'Compartment clean & sanitized',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Transmission', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -229,11 +330,23 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren / horn', checkType: 'functional' },
-          { name: 'Mirrors', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren / horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Mirrors', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
@@ -241,29 +354,49 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
-          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
+          {
+            name: 'Belts & hoses condition',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
         name: 'Water Tank & Pump',
         items: [
           { name: 'Tank water level', checkType: 'level' },
-          { name: 'Pump engages properly', checkType: 'functional' },
-          { name: 'Pump gauges operational', checkType: 'functional' },
-          { name: 'Dump valves / portable tank connections', checkType: 'functional' },
+          { name: 'Pump engages properly', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Pump gauges operational', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Dump valves / portable tank connections',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
           { name: 'Foam concentrate level', checkType: 'level' },
-          { name: 'Drain & fill valves closed', checkType: 'pass_fail' },
-          { name: 'Hose connections & fittings', checkType: 'pass_fail' },
+          {
+            name: 'Drain & fill valves closed',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Hose connections & fittings',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission (all gears)', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Transmission (all gears)',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -274,12 +407,28 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren / horn', checkType: 'functional' },
-          { name: 'Mirrors', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
-          { name: 'Scene lighting / light tower', checkType: 'functional' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren / horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Mirrors', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Scene lighting / light tower',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
         ],
       },
       {
@@ -287,40 +436,56 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Extrication Equipment',
         items: [
-          { name: 'Hydraulic spreaders', checkType: 'functional' },
-          { name: 'Hydraulic cutters', checkType: 'functional' },
-          { name: 'Hydraulic rams', checkType: 'functional' },
+          { name: 'Hydraulic spreaders', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Hydraulic cutters', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Hydraulic rams', checkType: 'function', description: 'Switch it on and confirm it works.' },
           { name: 'Hydraulic power unit oil level', checkType: 'level' },
-          { name: 'Hydraulic hoses & fittings', checkType: 'pass_fail' },
-          { name: 'Cribbing blocks', checkType: 'quantity' },
-          { name: 'Step chocks / stabilization struts', checkType: 'present' },
-          { name: 'Hand tools (pry bars, axes, etc.)', checkType: 'present' },
+          {
+            name: 'Hydraulic hoses & fittings',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          { name: 'Cribbing blocks', checkType: 'count' },
+          {
+            name: 'Step chocks / stabilization struts',
+            checkType: 'function',
+            description: 'Confirm the item is in place.',
+          },
+          {
+            name: 'Hand tools (pry bars, axes, etc.)',
+            checkType: 'function',
+            description: 'Confirm the item is in place.',
+          },
         ],
       },
       {
         name: 'Power Tools & Equipment',
         items: [
-          { name: 'Generator starts & runs', checkType: 'functional' },
+          { name: 'Generator starts & runs', checkType: 'function', description: 'Switch it on and confirm it works.' },
           { name: 'Generator fuel level', checkType: 'level' },
-          { name: 'Reciprocating / circular saw', checkType: 'functional' },
-          { name: 'Ventilation fan (PPV)', checkType: 'functional' },
-          { name: 'Air bags / lifting equipment', checkType: 'present' },
-          { name: 'Rope & rigging gear', checkType: 'present' },
+          {
+            name: 'Reciprocating / circular saw',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Ventilation fan (PPV)', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Air bags / lifting equipment', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Rope & rigging gear', checkType: 'function', description: 'Confirm the item is in place.' },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Transmission', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -331,11 +496,23 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren / horn', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body / skid plate damage', checkType: 'pass_fail' },
-          { name: '4WD / AWD engagement', checkType: 'functional' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren / horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body / skid plate damage',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          { name: '4WD / AWD engagement', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
       {
@@ -343,27 +520,39 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Water Tank & Pump',
         items: [
           { name: 'Tank water level', checkType: 'level' },
-          { name: 'Pump engages / prime', checkType: 'functional' },
-          { name: 'Booster reel hose condition', checkType: 'pass_fail' },
-          { name: 'Nozzle(s) present & operational', checkType: 'present' },
-          { name: 'Foam system (if equipped)', checkType: 'functional' },
+          { name: 'Pump engages / prime', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Booster reel hose condition',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Nozzle(s) present & operational',
+            checkType: 'function',
+            description: 'Confirm the item is in place.',
+          },
+          {
+            name: 'Foam system (if equipped)',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
         ],
       },
       {
         name: 'Wildland Equipment',
         items: [
-          { name: 'Hand tools (Pulaski, McLeod, shovel)', checkType: 'quantity' },
-          { name: 'Drip torches', checkType: 'present' },
-          { name: 'Fire shelters', checkType: 'quantity' },
-          { name: 'Portable radio(s)', checkType: 'quantity' },
-          { name: 'Chain saw & fuel', checkType: 'functional' },
+          { name: 'Hand tools (Pulaski, McLeod, shovel)', checkType: 'count' },
+          { name: 'Drip torches', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Fire shelters', checkType: 'count' },
+          { name: 'Portable radio(s)', checkType: 'count' },
+          { name: 'Chain saw & fuel', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -374,11 +563,23 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Hull & Exterior',
         items: [
-          { name: 'Hull integrity / damage', checkType: 'pass_fail' },
-          { name: 'Navigation lights', checkType: 'functional' },
-          { name: 'Emergency strobe / blue light', checkType: 'functional' },
-          { name: 'Trailer lights & tongue hitch', checkType: 'functional' },
-          { name: 'Drain plug installed', checkType: 'present' },
+          {
+            name: 'Hull integrity / damage',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          { name: 'Navigation lights', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Emergency strobe / blue light',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          {
+            name: 'Trailer lights & tongue hitch',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Drain plug installed', checkType: 'function', description: 'Confirm the item is in place.' },
         ],
       },
       {
@@ -386,22 +587,26 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Engine oil level', checkType: 'level' },
           { name: 'Fuel level', checkType: 'level' },
-          { name: 'Engine starts & runs', checkType: 'functional' },
-          { name: 'Steering & throttle response', checkType: 'functional' },
-          { name: 'Kill switch / lanyard', checkType: 'present' },
-          { name: 'Propeller condition', checkType: 'pass_fail' },
+          { name: 'Engine starts & runs', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Steering & throttle response',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Kill switch / lanyard', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Propeller condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Safety Equipment',
         items: [
-          { name: 'PFDs / life jackets', checkType: 'quantity' },
-          { name: 'Throw bag / ring buoy', checkType: 'present' },
-          { name: 'First aid kit', checkType: 'present' },
-          { name: 'Fire extinguisher', checkType: 'present' },
-          { name: 'Anchor & line', checkType: 'present' },
-          { name: 'Paddle / oar', checkType: 'present' },
-          { name: 'VHF marine radio', checkType: 'functional' },
+          { name: 'PFDs / life jackets', checkType: 'count' },
+          { name: 'Throw bag / ring buoy', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'First aid kit', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Fire extinguisher', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Anchor & line', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Paddle / oar', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'VHF marine radio', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -412,11 +617,23 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren / horn', checkType: 'functional' },
-          { name: 'Mirrors', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren / horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Mirrors', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
@@ -424,26 +641,26 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Command & Communication',
         items: [
-          { name: 'Mobile radio(s)', checkType: 'functional' },
-          { name: 'MDT / laptop & charger', checkType: 'functional' },
-          { name: 'Accountability system / tags', checkType: 'present' },
-          { name: 'Command board / ICS forms', checkType: 'present' },
-          { name: 'Vest (IC, Safety, etc.)', checkType: 'present' },
+          { name: 'Mobile radio(s)', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'MDT / laptop & charger', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Accountability system / tags', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Command board / ICS forms', checkType: 'function', description: 'Confirm the item is in place.' },
+          { name: 'Vest (IC, Safety, etc.)', checkType: 'function', description: 'Confirm the item is in place.' },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Transmission', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -454,11 +671,23 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       {
         name: 'Cab & Exterior',
         items: [
-          { name: 'Lights & emergency warning system', checkType: 'functional' },
-          { name: 'Siren / horn', checkType: 'functional' },
-          { name: 'Mirrors', checkType: 'functional' },
-          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
-          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          {
+            name: 'Lights & emergency warning system',
+            checkType: 'function',
+            description: 'Switch it on and confirm it works.',
+          },
+          { name: 'Siren / horn', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Mirrors', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          {
+            name: 'Tire condition & pressure',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
+          {
+            name: 'Body damage / fluid leaks',
+            checkType: 'function',
+            description: 'Confirm the item passes inspection.',
+          },
         ],
       },
       {
@@ -466,16 +695,16 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
         items: [
           { name: 'Oil level', checkType: 'level' },
           { name: 'Coolant level', checkType: 'level' },
-          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'function', description: 'Confirm the item passes inspection.' },
         ],
       },
       {
         name: 'Brakes & Drivetrain',
         items: [
-          { name: 'Service brakes', checkType: 'functional' },
-          { name: 'Parking brake', checkType: 'functional' },
-          { name: 'Transmission', checkType: 'functional' },
-          { name: 'Steering responsiveness', checkType: 'functional' },
+          { name: 'Service brakes', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Parking brake', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Transmission', checkType: 'function', description: 'Switch it on and confirm it works.' },
+          { name: 'Steering responsiveness', checkType: 'function', description: 'Switch it on and confirm it works.' },
         ],
       },
     ],
@@ -488,100 +717,100 @@ export const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
 
 export interface EquipmentPreset {
   label: string;
-  items: { name: string; checkType: CheckType }[];
+  items: PresetItem[];
 }
 
 export const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
   scba: {
     label: 'SCBA Kit',
     items: [
-      { name: 'SCBA pack & harness', checkType: 'functional' },
-      { name: 'SCBA mask (face piece)', checkType: 'present' },
+      { name: 'SCBA pack & harness', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'SCBA mask (face piece)', checkType: 'function', description: 'Confirm the item is in place.' },
       { name: 'SCBA cylinder pressure', checkType: 'level' },
-      { name: 'SCBA regulator', checkType: 'functional' },
-      { name: 'PASS device activates', checkType: 'functional' },
-      { name: 'Spare SCBA cylinder', checkType: 'present' },
+      { name: 'SCBA regulator', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'PASS device activates', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Spare SCBA cylinder', checkType: 'function', description: 'Confirm the item is in place.' },
     ],
   },
   aed: {
     label: 'AED / Defibrillator',
     items: [
-      { name: 'AED unit powers on', checkType: 'functional' },
-      { name: 'AED pads (adult)', checkType: 'date_lot' },
-      { name: 'AED pads (pediatric)', checkType: 'date_lot' },
+      { name: 'AED unit powers on', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'AED pads (adult)', checkType: 'expiry' },
+      { name: 'AED pads (pediatric)', checkType: 'expiry' },
       { name: 'AED battery level', checkType: 'level' },
     ],
   },
   vitals: {
     label: 'Basic Vitals Set',
     items: [
-      { name: 'Blood pressure cuff (adult)', checkType: 'present' },
-      { name: 'Blood pressure cuff (pediatric)', checkType: 'present' },
-      { name: 'Stethoscope', checkType: 'present' },
-      { name: 'Pulse oximeter', checkType: 'functional' },
-      { name: 'Glucometer & test strips', checkType: 'date_lot' },
-      { name: 'Thermometer', checkType: 'functional' },
+      { name: 'Blood pressure cuff (adult)', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Blood pressure cuff (pediatric)', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Stethoscope', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Pulse oximeter', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Glucometer & test strips', checkType: 'expiry' },
+      { name: 'Thermometer', checkType: 'function', description: 'Switch it on and confirm it works.' },
     ],
   },
   airway: {
     label: 'Airway Management',
     items: [
-      { name: 'BVM (adult)', checkType: 'present' },
-      { name: 'BVM (pediatric)', checkType: 'present' },
-      { name: 'OPA set', checkType: 'present' },
-      { name: 'NPA set', checkType: 'present' },
-      { name: 'Suction unit', checkType: 'functional' },
-      { name: 'Oxygen regulator', checkType: 'functional' },
+      { name: 'BVM (adult)', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'BVM (pediatric)', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'OPA set', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'NPA set', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Suction unit', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Oxygen regulator', checkType: 'function', description: 'Switch it on and confirm it works.' },
       { name: 'Oxygen cylinder pressure', checkType: 'level' },
-      { name: 'Non-rebreather masks', checkType: 'quantity' },
-      { name: 'Nasal cannulas', checkType: 'quantity' },
+      { name: 'Non-rebreather masks', checkType: 'count' },
+      { name: 'Nasal cannulas', checkType: 'count' },
     ],
   },
   ppe: {
     label: 'PPE / Turnout Gear',
     items: [
-      { name: 'Helmet & face shield', checkType: 'pass_fail' },
-      { name: 'Turnout coat', checkType: 'pass_fail' },
-      { name: 'Turnout pants', checkType: 'pass_fail' },
-      { name: 'Boots', checkType: 'pass_fail' },
-      { name: 'Gloves (structural)', checkType: 'pass_fail' },
-      { name: 'Hood / balaclava', checkType: 'pass_fail' },
+      { name: 'Helmet & face shield', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Turnout coat', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Turnout pants', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Boots', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Gloves (structural)', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Hood / balaclava', checkType: 'function', description: 'Confirm the item passes inspection.' },
     ],
   },
   hose: {
     label: 'Hose & Nozzles',
     items: [
-      { name: 'Attack line (1.75")', checkType: 'pass_fail' },
-      { name: 'Supply line (5")', checkType: 'pass_fail' },
-      { name: 'Backup line (2.5")', checkType: 'pass_fail' },
-      { name: 'Nozzle (combination)', checkType: 'functional' },
-      { name: 'Nozzle (smooth bore)', checkType: 'present' },
-      { name: 'Wye / gated valve', checkType: 'present' },
-      { name: 'Spanner wrenches', checkType: 'present' },
+      { name: 'Attack line (1.75")', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Supply line (5")', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Backup line (2.5")', checkType: 'function', description: 'Confirm the item passes inspection.' },
+      { name: 'Nozzle (combination)', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Nozzle (smooth bore)', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Wye / gated valve', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Spanner wrenches', checkType: 'function', description: 'Confirm the item is in place.' },
     ],
   },
   firstaid: {
     label: 'First Aid / Trauma',
     items: [
-      { name: 'Trauma shears', checkType: 'present' },
-      { name: 'Tourniquets', checkType: 'quantity' },
-      { name: 'Hemostatic gauze', checkType: 'date_lot' },
-      { name: 'Chest seals', checkType: 'date_lot' },
-      { name: 'Gauze / bandages', checkType: 'quantity' },
-      { name: 'Splint set', checkType: 'present' },
-      { name: 'Cervical collars', checkType: 'quantity' },
-      { name: 'Backboard & straps', checkType: 'present' },
+      { name: 'Trauma shears', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Tourniquets', checkType: 'count' },
+      { name: 'Hemostatic gauze', checkType: 'expiry' },
+      { name: 'Chest seals', checkType: 'expiry' },
+      { name: 'Gauze / bandages', checkType: 'count' },
+      { name: 'Splint set', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Cervical collars', checkType: 'count' },
+      { name: 'Backboard & straps', checkType: 'function', description: 'Confirm the item is in place.' },
     ],
   },
   lighting: {
     label: 'Lighting & Electrical',
     items: [
-      { name: 'Scene lights', checkType: 'functional' },
-      { name: 'Portable spotlight', checkType: 'functional' },
-      { name: 'Flashlights', checkType: 'quantity' },
-      { name: 'Light tower', checkType: 'functional' },
-      { name: 'Extension cords', checkType: 'present' },
-      { name: 'Power strip / adapter', checkType: 'present' },
+      { name: 'Scene lights', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Portable spotlight', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Flashlights', checkType: 'count' },
+      { name: 'Light tower', checkType: 'function', description: 'Switch it on and confirm it works.' },
+      { name: 'Extension cords', checkType: 'function', description: 'Confirm the item is in place.' },
+      { name: 'Power strip / adapter', checkType: 'function', description: 'Confirm the item is in place.' },
     ],
   },
 };

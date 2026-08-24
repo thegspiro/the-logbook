@@ -334,7 +334,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Equipment and inventory management',
         icon: Wrench,
         priority: 85,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'storefront']),
       },
       {
         id: 'scheduling_officer',
@@ -366,7 +366,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Day-to-day fleet tracking, maintenance logging, and equipment checks',
         icon: Truck,
         priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory']),
+        permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory', 'storefront']),
       },
       {
         id: 'membership_coordinator',
@@ -398,7 +398,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Day-to-day building management, maintenance logging, and inspections',
         icon: Building2,
         priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities']),
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities', 'storefront']),
       },
     ],
   },
@@ -733,7 +733,7 @@ const PositionSetup: React.FC = () => {
 
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-800">
               <Users className="h-8 w-8 text-white" aria-hidden="true" />
             </div>
             <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">

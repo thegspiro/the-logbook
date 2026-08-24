@@ -267,7 +267,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                 onClick={() => setCategoryFilter('all')}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   categoryFilter === 'all'
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
@@ -283,7 +283,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                     onClick={() => setCategoryFilter(cat.value)}
                     className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                       categoryFilter === cat.value
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-red-800 text-white'
                         : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >

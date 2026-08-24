@@ -21,7 +21,7 @@ interface LinkifiedTextProps {
   linkClassName?: string;
 }
 
-const DEFAULT_LINK_CLASS = 'text-theme-info underline underline-offset-2 hover:no-underline';
+const DEFAULT_LINK_CLASS = 'text-theme-alert-info-text underline underline-offset-2 hover:no-underline';
 
 export const LinkifiedText: React.FC<LinkifiedTextProps> = ({ text, linkClassName }) => {
   const nodes: React.ReactNode[] = [];

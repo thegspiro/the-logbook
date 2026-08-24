@@ -2916,10 +2916,14 @@ class EquipmentCheckService:
         }
 
     async def _get_item_with_template(
-        self, template_item_id: str, organization_id: str
+        self,
+        template_item_id: str,
+        organization_id: str,
+        *,
+        for_update: bool = False,
     ) -> tuple:
         """Org-scoped item fetch that also yields its template id for the log."""
-        result = await self.db.execute(
+        statement = (
             select(CheckTemplateItem, EquipmentCheckTemplate.id)
             .join(
                 CheckTemplateCompartment,
@@ -2934,6 +2938,9 @@ class EquipmentCheckService:
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
         )
+        if for_update:
+            statement = statement.with_for_update(of=CheckTemplateItem)
+        result = await self.db.execute(statement)
         row = result.first()
         return (None, None) if not row else (row[0], row[1])
 
@@ -3049,6 +3056,7 @@ class EquipmentCheckService:
         replaced_deployed_lot_id: Optional[str] = None,
         disposition: Optional[str] = None,
         allow_first_link: bool = True,
+        enforce_submitter_limits: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Move units from a ready-stock lot onto the apparatus.
 
@@ -3085,7 +3093,7 @@ class EquipmentCheckService:
         if replaced_deployed_lot_id and not disposition:
             raise ValueError("A replaced lot must record what became of it")
         item, template_id = await self._get_item_with_template(
-            template_item_id, organization_id
+            template_item_id, organization_id, for_update=True
         )
         if item is None:
             return None
@@ -3107,6 +3115,47 @@ class EquipmentCheckService:
             )
             .with_for_update()
         )
+
+        if enforce_submitter_limits:
+            if disposition:
+                if replaced_deployed_lot_id:
+                    replaced = next(
+                        (
+                            deployed
+                            for deployed in (item.deployed_lots or [])
+                            if str(deployed.id) == str(replaced_deployed_lot_id)
+                        ),
+                        None,
+                    )
+                    if replaced is None:
+                        raise ValueError(
+                            "The lot being replaced is not aboard this item"
+                        )
+                    replaceable = replaced.quantity
+                else:
+                    replaceable = sum(
+                        deployed.quantity
+                        for deployed in (item.deployed_lots or [])
+                        if deployed.expiration_date
+                        and deployed.expiration_date < date.today()
+                    )
+                    if not item.deployed_lots and (
+                        item.expiration_date and item.expiration_date < date.today()
+                    ):
+                        replaceable = self._on_truck(item)
+                if quantity > replaceable:
+                    raise PermissionError(
+                        "Check submitters may deploy only enough stock to replace "
+                        "the expired units aboard"
+                    )
+            else:
+                target = self._target_quantity(item)
+                shortfall = max(target - self._on_truck(item), 0) if target else 0
+                if quantity > shortfall:
+                    raise PermissionError(
+                        "Check submitters may deploy only enough stock to fill "
+                        "this position's shortfall"
+                    )
 
         # Lock the lot row for the read-check-decrement so two concurrent
         # swaps of the same unit can't both pass the stock guard and

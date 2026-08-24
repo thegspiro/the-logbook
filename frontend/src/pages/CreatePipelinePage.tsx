@@ -1515,7 +1515,7 @@ const CreatePipelinePage: React.FC = () => {
                   aria-current={isActive ? 'step' : undefined}
                   className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : isComplete
                         ? 'hover:bg-theme-surface-hover text-red-700 dark:text-red-400'
                         : 'text-theme-text-muted hover:text-theme-text-secondary'

@@ -22,10 +22,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.label_renderer import (
+    SYMBOLOGY_CODE128,
     LabelSpec,
     is_known_label_format,
     render_labels,
     sanitize_barcode_value,
+    validate_symbology,
 )
 
 # A builder fetches the module's records (org-scoped) for the given ids and
@@ -234,6 +236,9 @@ class LabelService:
             "preset": pref.get("preset"),
             "custom_width": pref.get("custom_width"),
             "custom_height": pref.get("custom_height"),
+            # Absent on presets saved before symbology was a choice, which must
+            # read as Code 128 — the symbology every existing label carries.
+            "symbology": pref.get("symbology") or SYMBOLOGY_CODE128,
             "position_id": position_id,
             "module": module,
         }
@@ -246,11 +251,13 @@ class LabelService:
         preset: str,
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
+        symbology: str = SYMBOLOGY_CODE128,
     ) -> Dict[str, Any]:
         from app.models.user import Position
 
         if not is_known_label_format(preset):
             raise ValueError(f"Unknown label preset: {preset}")
+        validate_symbology(symbology)
 
         position_id = await self._primary_position_id(user_id, organization_id)
         if position_id is None:
@@ -275,6 +282,7 @@ class LabelService:
             "preset": preset,
             "custom_width": custom_width,
             "custom_height": custom_height,
+            "symbology": symbology,
         }
         settings["label_presets"] = presets
         position.settings = settings
@@ -300,6 +308,7 @@ class LabelService:
         auto_rotate: Optional[bool] = None,
         extra_lines: Optional[List[str]] = None,
         exclude_ids: Optional[Set[str]] = None,
+        symbology: str = SYMBOLOGY_CODE128,
     ) -> Tuple[BytesIO, int]:
         entry = MODULE_LABELS.get(module)
         if entry is None:
@@ -313,7 +322,7 @@ class LabelService:
             raise ValueError("No records found for label generation")
 
         pdf = render_labels(
-            specs, label_format, custom_width, custom_height, auto_rotate
+            specs, label_format, custom_width, custom_height, auto_rotate, symbology
         )
         return pdf, auto_populated
 

@@ -188,6 +188,61 @@ router = APIRouter()
 MAX_INVENTORY_CSV_BYTES = 10 * 1024 * 1024
 
 
+def _is_quartermaster(current_user: User) -> bool:
+    """Whether the caller may see which member holds a given item.
+
+    See ``_require_self_or_quartermaster`` for why ``inventory.view`` cannot
+    answer this question.
+    """
+    return _has_permission("inventory.manage", _collect_user_permissions(current_user))
+
+
+def _redact_holder(
+    payload: InventoryItemResponse,
+    current_user: User,
+    can_see_holders: bool,
+) -> InventoryItemResponse:
+    """Strip the holder's identity from an item the caller may not trace.
+
+    The item catalog stays open to every member — they browse it to find gear
+    and to search for a replacement — but *who* carries a given coat or radio
+    is quartermaster business, the same rule the per-member routes enforce.
+    Without this, `GET /items?assigned_to=<uuid>` reconstructs a colleague's
+    kit from the catalog, which is the disclosure the per-member guard exists
+    to prevent. A member always sees their own name on their own gear.
+    """
+    if can_see_holders:
+        return payload
+    if payload.assigned_to_user_id is not None and str(
+        payload.assigned_to_user_id
+    ) == str(current_user.id):
+        return payload
+    payload.assigned_to_user_id = None
+    payload.assigned_to_name = None
+    return payload
+
+
+def _require_self_or_quartermaster(user_id: UUID, current_user: User) -> None:
+    """Guard a per-member inventory read.
+
+    ``inventory.view`` is part of the baseline Member position — every member
+    holds it so they can browse the catalog and their own gear — so it says
+    nothing about whether the caller may read a *colleague's* kit. Which
+    turnout coat, radio or SCBA mask a named member carries, and what
+    condition it is in, is quartermaster business; gating these routes on
+    ``inventory.view`` left them readable by the whole department. Cross-member
+    reads therefore require ``inventory.manage``.
+    """
+    if str(user_id) == str(current_user.id):
+        return
+    if _has_permission("inventory.manage", _collect_user_permissions(current_user)):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not authorized to view this member's inventory",
+    )
+
+
 async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
     """Publish a real-time inventory event to WebSocket clients."""
     try:
@@ -558,6 +613,12 @@ async def list_items(
     """
     service = InventoryService(db)
 
+    # Filtering the catalog by holder is the same cross-member read the
+    # per-member routes guard; without this a member reconstructs a
+    # colleague's kit from an endpoint every member can reach.
+    if assigned_to is not None:
+        _require_self_or_quartermaster(assigned_to, current_user)
+
     # Convert status string to enum if provided
     status_enum = None
     if status:
@@ -614,8 +675,12 @@ async def list_items(
         limit=limit,
     )
 
+    can_see_holders = _is_quartermaster(current_user)
     return ItemsListResponse(
-        items=[_item_response(item) for item in items],
+        items=[
+            _redact_holder(_item_response(item), current_user, can_see_holders)
+            for item in items
+        ],
         total=total,
         skip=skip,
         limit=limit,
@@ -1412,14 +1477,14 @@ async def get_item(
         # The detail page's Assignment card prints who holds the item; without
         # a name it showed the raw user id.
         payload.assigned_to_name = item.assigned_to_user.full_name
-    return payload
+    return _redact_holder(payload, current_user, _is_quartermaster(current_user))
 
 
 @router.get("/items/{item_id}/history")
 async def get_item_history(
     item_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Get unified activity history for an item.
@@ -1427,8 +1492,12 @@ async def get_item_history(
     Returns a chronologically sorted list of all assignments, checkouts,
     pool issuances, and maintenance events.
 
+    Gated on inventory.manage: the history is an item's chain of custody,
+    naming every member who has held it, which the baseline member-level
+    inventory.view must not open up.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
 
@@ -1682,14 +1751,18 @@ async def get_user_assignments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get all assignments for a user
 
+    Members can view their own assignments. Quartermasters
+    (inventory.manage) can view any member's.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    _require_self_or_quartermaster(user_id, current_user)
+
     service = InventoryService(db)
     assignments = await service.get_user_assignments(
         user_id=user_id,
@@ -1832,13 +1905,16 @@ async def get_item_issuances(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Get issuance records for a pool item (who has been issued units).
 
+    Gated on inventory.manage: the records name the members holding units,
+    which the baseline member-level inventory.view must not open up.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
     issuances = await service.get_item_issuances(
@@ -1858,14 +1934,18 @@ async def get_user_issuances(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get all pool items issued to a specific user.
 
+    Members can view their own issuances. Quartermasters
+    (inventory.manage) can view any member's.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    _require_self_or_quartermaster(user_id, current_user)
+
     service = InventoryService(db)
     issuances = await service.get_user_issuances(
         user_id=user_id,
@@ -2094,13 +2174,17 @@ async def get_active_checkouts(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Get all active (not returned) checkouts
 
+    Gated on inventory.manage: each record names the member holding the item,
+    and the user_id filter would otherwise single a colleague out. A member
+    reads their own outstanding items from /users/{id}/inventory.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
     checkouts = await service.get_active_checkouts(
@@ -2122,13 +2206,16 @@ async def get_overdue_checkouts(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Get all overdue checkouts
 
+    Gated on inventory.manage: the list names members and what they are late
+    returning, which the baseline member-level inventory.view must not open up.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
     checkouts = await service.get_overdue_checkouts(
@@ -2403,16 +2490,18 @@ async def get_members_inventory_summary(
         None, description="Search by name, username, or membership number"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     List all active members with their inventory item counts.
 
     Returns permanent assignment, checkout, issuance, and overdue counts
-    for every member. Used by the Quartermaster's Members tab.
+    for every member. Used by the Quartermaster's Members tab. Gated on
+    inventory.manage: the roster names who holds which gear, which the
+    baseline member-level inventory.view must not open up.
 
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
     members = await service.get_members_inventory_summary(
@@ -2827,21 +2916,11 @@ async def get_user_inventory(
     Get user's complete inventory (for dashboard)
 
     Users can view their own inventory.
-    Quartermasters can view any user's inventory.
+    Quartermasters (inventory.manage) can view any user's inventory.
 
     **Authentication required**
     """
-    # Check if user is viewing their own inventory or has inventory.view permission
-    if str(user_id) != str(current_user.id):
-        # Check if user has inventory.view permission
-        has_permission = _has_permission(
-            "inventory.view", _collect_user_permissions(current_user)
-        )
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view this user's inventory",
-            )
+    _require_self_or_quartermaster(user_id, current_user)
 
     service = InventoryService(db)
     inventory = await service.get_user_inventory(
@@ -3212,20 +3291,12 @@ async def get_user_departure_clearance(
     """
     Get the active departure clearance for a specific member.
 
-    Members can view their own clearance. Staff with inventory.view
-    can view any member's clearance.
+    Members can view their own clearance. Quartermasters
+    (inventory.manage) can view any member's clearance.
 
     **Authentication required**
     """
-    if str(user_id) != str(current_user.id):
-        has_permission = _has_permission(
-            "inventory.view", _collect_user_permissions(current_user)
-        )
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view this member's clearance",
-            )
+    _require_self_or_quartermaster(user_id, current_user)
 
     service = DepartureClearanceService(db)
     clearance = await service.get_clearance_for_user(
@@ -5640,14 +5711,18 @@ async def review_return_request(
 async def get_user_issuance_history(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get full issuance history (active + returned) for a member.
 
+    Members can view their own history. Quartermasters
+    (inventory.manage) can view any member's.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    _require_self_or_quartermaster(user_id, current_user)
+
     service = InventoryService(db)
     issuances = await service.get_user_issuance_history(
         user_id=user_id,

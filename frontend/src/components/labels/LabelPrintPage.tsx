@@ -7,14 +7,33 @@
  * remembered printer (via labelService), copies, custom sizes, PDF download,
  * browser printing, and a test print are all handled here. The PDF itself is
  * generated server-side at the exact label size (recommended for thermal).
+ *
+ * When the organization has registered a network label printer, a third output
+ * appears: **Send to Printer**, which renders ZPL server-side and writes it
+ * straight to the printer. That path has no print dialog and therefore no
+ * scaling step, which is what makes it the reliable one for barcodes.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import JsBarcode from 'jsbarcode';
-import { AlertCircle, ArrowLeft, Download, Loader2, Printer, RotateCw, Settings2, TestTube2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Barcode,
+  Download,
+  Loader2,
+  Printer,
+  QrCode,
+  RotateCw,
+  Send,
+  Settings2,
+  TestTube2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { labelService } from '../../services/labelService';
+import { QRCodeSVG } from 'qrcode.react';
+import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
+import type { LabelPrinterConfig } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { prefersPdfOverBrowserPrint } from '../../utils/printEnvironment';
@@ -43,13 +62,21 @@ interface LabelPrintPageProps {
   backLabel?: string;
 }
 
-const presetKey = (preset: string, w: string, h: string) => (preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset);
+// The symbology is part of the key so switching Code 128 <-> QR is a change
+// worth persisting, not one the comparison swallows.
+const presetKey = (preset: string, w: string, h: string, symbology: string) =>
+  `${preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset}:${symbology}`;
 
-const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset }> = ({ item, preset }) => {
+const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbology: Symbology }> = ({
+  item,
+  preset,
+  symbology,
+}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const value = sanitizeForCode128((item.barcodeValue || '').trim());
+  const isQr = symbology === Symbology.QR;
   useEffect(() => {
-    if (!svgRef.current || !value) return;
+    if (isQr || !svgRef.current || !value) return;
     try {
       const quietZone = Math.ceil(preset.barcodeWidth * 10);
       JsBarcode(svgRef.current, value, {
@@ -68,7 +95,7 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset }> = ({ 
     } catch {
       /* invalid value — leave empty */
     }
-  }, [value, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize]);
+  }, [isQr, value, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize]);
 
   return (
     <div
@@ -93,7 +120,14 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset }> = ({ 
         <div style={{ fontSize: preset.subtitleFontSize, textAlign: 'center', color: '#000' }}>{item.subtitle}</div>
       ) : null}
       {value ? (
-        <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
+        isQr ? (
+          <>
+            <QRCodeSVG value={value} size={Math.round(preset.barcodeHeight * 1.6)} level="M" marginSize={2} />
+            <div style={{ fontSize: preset.subtitleFontSize, fontFamily: 'monospace', color: '#000' }}>{value}</div>
+          </>
+        ) : (
+          <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
+        )
       ) : (
         <div style={{ fontSize: preset.subtitleFontSize, color: '#999' }}>No barcode value</div>
       )}
@@ -115,6 +149,10 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
   const [customWidth, setCustomWidth] = useState('2');
   const [customHeight, setCustomHeight] = useState('1');
+  const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
+  const [selectedPrinterId, setSelectedPrinterId] = useState('');
+  const [sendingToPrinter, setSendingToPrinter] = useState(false);
+  const [symbology, setSymbology] = useState<Symbology>(Symbology.CODE128);
 
   const lastSavedKeyRef = useRef<string | null>(null);
 
@@ -176,6 +214,9 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         if (cancelled) return;
         let w = customWidth;
         let h = customHeight;
+        if (pref?.symbology === Symbology.QR || pref?.symbology === Symbology.CODE128) {
+          setSymbology(pref.symbology);
+        }
         if (pref?.preset && isKnownPreset(pref.preset)) {
           setPresetId(pref.preset);
           if (pref.preset === CUSTOM_PRESET_ID) {
@@ -188,12 +229,12 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               setCustomHeight(h);
             }
           }
-          lastSavedKeyRef.current = presetKey(pref.preset, w, h);
+          lastSavedKeyRef.current = presetKey(pref.preset, w, h, pref.symbology ?? symbology);
         } else {
-          lastSavedKeyRef.current = presetKey(presetId, w, h);
+          lastSavedKeyRef.current = presetKey(presetId, w, h, symbology);
         }
       } catch {
-        lastSavedKeyRef.current = presetKey(presetId, customWidth, customHeight);
+        lastSavedKeyRef.current = presetKey(presetId, customWidth, customHeight, symbology);
       }
     })();
     return () => {
@@ -202,17 +243,38 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [module]);
 
+  // Registered network printers. Best-effort: an organization with none simply
+  // does not see the direct-print option, which is the pre-existing behaviour.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await labelPrinterService.list();
+        if (cancelled) return;
+        setPrinters(list);
+        const preferred = list.find((p) => p.is_default) ?? list[0];
+        if (preferred) setSelectedPrinterId(preferred.id);
+      } catch {
+        /* printing to a network printer is optional; the PDF paths still work */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Persist a deliberate change to the position (debounced, best-effort).
   useEffect(() => {
     if (lastSavedKeyRef.current === null) return;
     if (isCustom && !customValid) return;
-    const key = presetKey(presetId, customWidth, customHeight);
+    const key = presetKey(presetId, customWidth, customHeight, symbology);
     if (key === lastSavedKeyRef.current) return;
     const timer = setTimeout(() => {
       lastSavedKeyRef.current = key;
       void labelService
         .setPreset(module, {
           preset: presetId,
+          symbology,
           ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         })
         .catch(() => {
@@ -220,10 +282,62 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         });
     }, 500);
     return () => clearTimeout(timer);
-  }, [module, presetId, customWidth, customHeight, isCustom, customValid, customW, customH]);
+  }, [module, presetId, customWidth, customHeight, isCustom, customValid, customW, customH, symbology]);
 
   const labelItems: LabelListItem[] = [];
   for (let c = 0; c < copies; c++) for (const it of items) labelItems.push(it);
+
+  const selectedPrinter = printers.find((p) => p.id === selectedPrinterId) ?? null;
+  // A receipt printer's stock is the roll loaded in it, so the size chosen on
+  // this page does not apply and is not sent — which also means an Avery sheet
+  // selection cannot block it.
+  const isReceiptPrinter = selectedPrinter?.language === PrinterLanguage.ESCPOS;
+  // Avery sheet layouts have no meaning on a roll-fed label printer; the
+  // backend rejects them, so the button says so instead of offering a failure.
+  const canSendToPrinter = selectedPrinter !== null && (isReceiptPrinter || isThermal);
+  const printerStockMismatch =
+    selectedPrinter !== null && !isReceiptPrinter && !isCustom && selectedPrinter.label_format !== preset.id;
+
+  const sendToPrinter = async () => {
+    if (!selectedPrinter || items.length === 0) return;
+    setSendingToPrinter(true);
+    try {
+      const result = await labelPrinterService.print(
+        module,
+        items.map((i) => i.id),
+        {
+          printer_id: selectedPrinter.id,
+          // Omitted for a receipt printer: its paper roll decides the size,
+          // and sending this page's die-cut label size would mean nothing.
+          ...(isReceiptPrinter
+            ? {}
+            : {
+                label_format: isCustom ? CUSTOM_PRESET_ID : preset.id,
+                ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
+              }),
+          copies,
+          symbology,
+        }
+      );
+      if (result.auto_populated > 0) {
+        toast.success(
+          `${result.auto_populated} record${result.auto_populated !== 1 ? 's' : ''} had a barcode generated`
+        );
+      }
+      toast.success(`Sent ${result.labels_sent} label${result.labels_sent !== 1 ? 's' : ''} to ${result.printer_name}`);
+      // A printer that is out of stock accepts the job and prints nothing, so
+      // a bare success toast would be a lie. Report what it told us.
+      if (result.printer_errors.length > 0) {
+        toast.error(`${result.printer_name}: ${result.printer_errors.join(', ')}`, { duration: 8000 });
+      } else if (result.printer_warnings.length > 0) {
+        toast(`${result.printer_name}: ${result.printer_warnings.join(', ')}`, { duration: 6000 });
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to send labels to the printer'));
+    } finally {
+      setSendingToPrinter(false);
+    }
+  };
 
   const downloadPdf = async (onlyFirst = false) => {
     const ids = (onlyFirst ? items.slice(0, 1) : items).map((i) => i.id);
@@ -234,6 +348,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         label_format: isCustom ? CUSTOM_PRESET_ID : preset.id,
         ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         auto_rotate: effectiveAutoRotate,
+        symbology,
       });
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} record${autoPopulated !== 1 ? 's' : ''} had a barcode generated`);
@@ -371,6 +486,61 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               >
                 {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} PDF
               </button>
+              <div>
+                <label className="text-theme-text-muted mb-2 block text-xs font-medium tracking-wider uppercase">
+                  Barcode Style
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    {
+                      id: Symbology.CODE128,
+                      icon: Barcode,
+                      name: 'Code 128',
+                      hint: 'Scans with any handheld laser scanner',
+                    },
+                    {
+                      id: Symbology.QR,
+                      icon: QrCode,
+                      name: 'QR code',
+                      hint: 'Fits a long id on a small square label; scans with a phone',
+                    },
+                  ].map((option) => {
+                    const Icon = option.icon;
+                    const active = symbology === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => setSymbology(option.id)}
+                        className={`flex flex-1 items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors sm:flex-none ${active ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500' : 'border-theme-surface-border hover:bg-theme-surface-secondary'}`}
+                      >
+                        <Icon className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                          <span className="text-theme-text-primary block text-sm font-medium">{option.name}</span>
+                          <span className="text-theme-text-muted block text-xs">{option.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {printers.length > 0 && (
+                <button
+                  onClick={() => {
+                    void sendToPrinter();
+                  }}
+                  disabled={sendingToPrinter || !canSendToPrinter || items.length === 0 || (isCustom && !customValid)}
+                  title={
+                    canSendToPrinter
+                      ? `Send directly to ${selectedPrinter?.name ?? 'the label printer'}`
+                      : 'Choose a thermal label size to send directly to a label printer'
+                  }
+                  className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                >
+                  {sendingToPrinter ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  <span className="hidden sm:inline">Send to</span> Printer
+                </button>
+              )}
               <button
                 onClick={handlePrint}
                 disabled={items.length === 0 || (isCustom && !customValid)}
@@ -467,6 +637,54 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 )}
               </div>
 
+              {printers.length > 0 && (
+                <div>
+                  <label
+                    htmlFor="label-printer"
+                    className="text-theme-text-muted mb-1 block text-xs font-medium tracking-wider uppercase"
+                  >
+                    Label Printer
+                  </label>
+                  <select
+                    id="label-printer"
+                    value={selectedPrinterId}
+                    onChange={(e) => setSelectedPrinterId(e.target.value)}
+                    className="form-input w-full sm:w-80"
+                  >
+                    {printers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                        {p.location ? ` — ${p.location}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {printerStockMismatch && selectedPrinter ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        This printer is set up for{' '}
+                        <strong>
+                          {LABEL_PRESETS.find((lp) => lp.id === selectedPrinter.label_format)?.name ??
+                            selectedPrinter.label_format}
+                        </strong>
+                        . Sending at a different size may not match the loaded labels.
+                      </p>
+                      <button
+                        onClick={() => setPresetId(selectedPrinter.label_format)}
+                        className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg border px-2 py-1 text-xs transition-colors"
+                      >
+                        Match printer
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-theme-text-muted mt-1.5 text-xs">
+                      {isReceiptPrinter
+                        ? 'Receipt printer — prints on whatever roll is loaded, so the label size above does not apply.'
+                        : 'Sends the label to the printer directly — no print dialog, and nothing can rescale the barcode.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label
                   htmlFor="copies"
@@ -535,7 +753,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               }
             >
               {labelItems.map((item, i) => (
-                <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} />
+                <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} symbology={symbology} />
               ))}
             </div>
           </div>

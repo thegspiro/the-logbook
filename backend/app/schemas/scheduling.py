@@ -87,6 +87,24 @@ class ShiftUpdate(BaseModel):
         return self
 
 
+class ShiftRosterSeat(UTCResponseBase):
+    """One occupied seat on a shift, as carried by every shift response.
+
+    Deliberately thin: a calendar needs who holds which seat, not the full
+    assignment record. Anything richer (training slots, evaluator, notes)
+    stays on the assignment endpoints.
+    """
+
+    assignment_id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    position: Optional[str] = None
+    status: Optional[str] = None
+    is_training: bool = False
+
+    model_config = _response_config
+
+
 class ShiftResponse(UTCResponseBase):
     """Schema for shift response"""
 
@@ -116,6 +134,7 @@ class ShiftResponse(UTCResponseBase):
     notes: Optional[str] = None
     activities: Optional[Any] = None
     attendee_count: Optional[int] = 0
+    roster: List[ShiftRosterSeat] = Field(default_factory=list)
     call_count: int = 0
     total_hours: Optional[float] = None
     is_finalized: bool = False
@@ -865,6 +884,17 @@ class ShiftSwapReview(BaseModel):
     reviewer_notes: Optional[str] = None
 
 
+class ShiftSwapOfferResponseRequest(BaseModel):
+    """A member answering an offer of someone else's seat.
+
+    Distinct from ``ShiftSwapReview``: that carries a manager's verdict on any
+    swap, this one is the answer from the member the offer was made to.
+    """
+
+    accept: bool
+    note: Optional[str] = None
+
+
 class ShiftSwapRequestResponse(UTCResponseBase):
     """Schema for shift swap request response"""
 
@@ -898,6 +928,117 @@ class ShiftSwapRequestsPage(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class TradeCandidateResponse(BaseModel):
+    """A member who could take over the caller's seat on a shift."""
+
+    user_id: str
+    user_name: Optional[str] = None
+    rank: Optional[str] = None
+    rank_display_name: Optional[str] = None
+    position: str
+    shifts_this_month: int = 0
+    owes_trade: bool = False
+
+    model_config = _response_config
+
+
+# ============================================
+# Standing Shift Schemas
+# ============================================
+
+
+class StandingShiftPattern(str, PyEnum):
+    """How often a standing shift claim repeats."""
+
+    WEEKLY = "weekly"
+    BIWEEKLY = "biweekly"
+    MONTHLY = "monthly"
+
+
+class StandingShiftPeriod(str, PyEnum):
+    """Which half of the day a standing claim targets."""
+
+    DAY = "day"
+    NIGHT = "night"
+
+
+class StandingShiftBase(BaseModel):
+    """The pattern a standing claim repeats on."""
+
+    pattern: StandingShiftPattern = StandingShiftPattern.WEEKLY
+    # 0 = Sunday … 6 = Saturday, matching the member-facing weekday picker.
+    weekday: int = Field(..., ge=0, le=6)
+    period: StandingShiftPeriod = StandingShiftPeriod.DAY
+    start_date: date
+    end_date: date
+    apparatus_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "StandingShiftBase":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        return self
+
+
+class StandingShiftCreate(StandingShiftBase):
+    """Schema for creating a standing shift claim."""
+
+    position: ShiftPosition = ShiftPosition.FIREFIGHTER
+
+
+class StandingShiftResponse(UTCResponseBase):
+    """Schema for a standing shift claim."""
+
+    id: UUID
+    organization_id: UUID
+    user_id: UUID
+    pattern: str
+    weekday: int
+    period: str
+    position: str
+    apparatus_id: Optional[str] = None
+    start_date: date
+    end_date: date
+    is_active: bool = True
+    ended_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+class StandingShiftPreviewDate(BaseModel):
+    """One date in a standing series, and whether it can be claimed.
+
+    ``status`` is reported for every date rather than only the claimable ones:
+    a preview that silently dropped the rest would understate the commitment
+    the member is about to make.
+    """
+
+    date: date
+    shift_id: Optional[str] = None
+    # available | conflict | already_yours | no_shift
+    status: str
+
+
+class StandingShiftPreviewResponse(BaseModel):
+    """The dates a standing claim would cover, with conflicts flagged."""
+
+    dates: List[StandingShiftPreviewDate]
+    claimable_count: int = 0
+    conflict_count: int = 0
+    missing_count: int = 0
+
+
+class StandingShiftCreateResult(BaseModel):
+    """What creating a standing claim actually did."""
+
+    claim: StandingShiftResponse
+    claimed: int = 0
+    skipped: int = 0
+    no_shift: int = 0
 
 
 # ============================================

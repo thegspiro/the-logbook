@@ -57,7 +57,7 @@ describe('TrainingAdminPage', () => {
     expect(menu).not.toHaveTextContent('Advanced');
 
     await user.click(screen.getByRole('menuitem', { name: /Program Management/ }));
-    expect(screen.getByRole('button', { name: 'More' })).toHaveClass('bg-red-600');
+    expect(screen.getByRole('button', { name: 'More' })).toHaveClass('bg-red-800');
     expect(window.location.search).toBe('?page=enhancements&tab=recertification');
   });
 

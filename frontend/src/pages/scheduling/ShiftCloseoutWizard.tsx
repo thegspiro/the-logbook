@@ -294,7 +294,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                 n < step
                   ? 'bg-green-600 text-white'
                   : n === step
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'border-theme-surface-border text-theme-text-muted border'
               }`}
             >
