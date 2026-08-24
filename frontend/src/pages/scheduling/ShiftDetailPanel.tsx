@@ -63,6 +63,8 @@ import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
+import { PrintDocumentButton } from '../../components/PrintDocumentButton';
+import { StationDocument } from '../../services/stationDocumentService';
 import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
@@ -1039,6 +1041,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   </button>
                 </>
               )}
+              {/* Outside the manage block on purpose: the endpoint authorizes
+                  scheduling.view as well as scheduling.manage, so gating the
+                  control on manage would deny it to the crew the roster is
+                  for — including the shift officer without a department-wide
+                  grant. Not tied to the shift's lifecycle either: a finished
+                  shift's roster is still worth printing for the record. The
+                  button hides itself when no receipt printer is registered. */}
+              <PrintDocumentButton document={StationDocument.SHIFT_ROSTER} recordId={shift.id} label="Print roster" />
               {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
                 <button
                   onClick={() => setShowCancelConfirm(true)}
