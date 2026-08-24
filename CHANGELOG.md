@@ -57,6 +57,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   high-contrast mode — the same mid-purple rendered against slate-900 as against
   white. Each usage moved to the token that already carried its meaning.
 
+### Printer support has a reference doc (2026-08-24)
+
+**Added**
+
+- **[`docs/LABEL_PRINTING_MODULE.md`](docs/LABEL_PRINTING_MODULE.md).** Label
+  and station printing had thorough training coverage — how a quartermaster
+  registers a printer and prints a sheet — and no reference doc at all. There
+  was nowhere documenting the API surface, the permission model, the ZPL and
+  ESC/POS status flag tables, or the SSRF boundary the printer transport is,
+  which is the material the next person changing it needs.
+- **The status flag tables are written down**, with their sources named: the
+  ZPL II Programming Guide for `~HQES`, Epson's ESC/POS reference for
+  `DLE EOT`. The point is that the next person extending them checks the table
+  rather than a symptom — which is exactly how three wrong flags got shipped
+  and then corrected.
+
+**Changed**
+
+- **The training guide now separates printer errors from warnings.** "Labels
+  nearly out" does not stop a print and the old wording did not say so; a
+  table now gives each fault, its kind, and what to do about it.
+
 ### Submit External Training: the certificate travels with the submission (2026-08-23)
 
 **Fixed**
@@ -333,7 +355,24 @@ tables now carry a note in `printer_status.py` naming where they came from.
   on start time alone, so a drill that ended hours ago stayed in the list — and
   because the list is ordered by start time it could be the _default_, leaving
   an operator armed against an event whose check-in window had shut, with every
-  tap refused. Now bounded by `end_after` as well.
+  tap refused. Now bounded by `end_after` as well, set behind the present
+  moment: a `window` event's check-in outlives its scheduled end by
+  `check_in_minutes_after`, and a flexible or strict one runs to its
+  `actual_end_time`, none of which reach the client.
+- **A card in a terminal state could be laundered back to active.** The first
+  guard rejected only `lost → active`, so two requests — `lost → suspended`,
+  then `suspended → active` — restored exactly the credential somebody else may
+  be holding. Any transition out of `lost` or `revoked` is now refused;
+  relabelling still works.
+- **Ending a shift took the station away from the crew tapping out.** Dropping
+  a shift the moment its scheduled end passed was wrong in both directions:
+  `member_check_out` has no window at all — it accepts a checkout until an
+  officer finalizes — so the filter cut the station off at exactly the moment
+  a crew goes off duty. Shifts now stay offered through a checkout grace.
+- **A busy previous day could hide today's shifts entirely.** The widened
+  two-day query kept the endpoint's default page size of 100 while it orders by
+  `shift_date` ascending, so an organization with a full day of records behind
+  it would receive only those.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
