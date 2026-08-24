@@ -212,7 +212,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         {(rank.eligible_positions ?? []).map((pos) => (
                           <span
                             key={pos}
-                            className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-400"
+                            className="bg-theme-accent-blue-muted text-theme-accent-blue rounded px-1.5 py-0.5 text-[10px] font-medium"
                           >
                             {POSITION_LABELS[pos] ?? pos}
                           </span>
@@ -275,8 +275,8 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                             }}
                             className={`rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
                               isEligible
-                                ? 'bg-violet-600 text-white shadow-sm'
-                                : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-400'
+                                ? 'bg-theme-accent-blue text-white shadow-sm'
+                                : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-accent-blue border'
                             }`}
                           >
                             {POSITION_LABELS[pos] ?? pos}

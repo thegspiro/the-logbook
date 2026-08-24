@@ -76,6 +76,26 @@ const DUPLICATE_TAP_MS = 4000;
 const RESULT_VISIBLE_MS = 7000;
 
 /**
+ * How long a shift stays offered after its scheduled end.
+ *
+ * Matches the backend's default `checkin_closes_hours_after`, which is the
+ * window a department is already configured to think of as "still this shift".
+ * Checkout itself has no server-side deadline before finalization, so this is
+ * about keeping the list short rather than about enforcing anything.
+ */
+const CHECKOUT_GRACE_MS = 12 * 60 * 60 * 1000;
+
+/** Upper bound for the two-day shift query; the endpoint allows up to 1000. */
+const SHIFT_QUERY_LIMIT = 500;
+
+/**
+ * How far past an event's scheduled end it stays offered, to cover a check-in
+ * window that outlives it. See the call site for why the client cannot compute
+ * the exact cutoff.
+ */
+const EVENT_CHECKIN_GRACE_MS = 2 * 60 * 60 * 1000;
+
+/**
  * How often an armed station re-checks that its target still exists.
  *
  * Five minutes: long enough not to matter next to the traffic a station
@@ -137,16 +157,23 @@ const CheckInStationPage: React.FC = () => {
       const { shifts } = await schedulingService.getShifts({
         start_date: addCalendarDays(today, -1),
         end_date: today,
+        // The endpoint pages at 100 by default and orders by shift_date
+        // ascending, so widening the query to two days without this would let
+        // a busy yesterday fill the page and hide today's shifts entirely —
+        // the exact opposite of the problem the second day was added to solve.
+        limit: SHIFT_QUERY_LIMIT,
       });
       const now = Date.now();
       return shifts
         .filter((s) => !s.is_finalized)
         .filter((s) => {
-          // A yesterday-dated shift only belongs here while it is still
-          // running; without this the station would offer every finished tour
-          // from the previous day.
+          // Not "has it ended" but "is it past the point anyone would still be
+          // tapping out". `member_check_out` has no window at all — it accepts
+          // a checkout until an officer finalizes the shift — so dropping a
+          // shift the moment its scheduled end passed took the station away
+          // from the crew at exactly the moment they go off duty and tap out.
           if (!s.end_time) return true;
-          return new Date(s.end_time).getTime() >= now;
+          return new Date(s.end_time).getTime() + CHECKOUT_GRACE_MS >= now;
         })
         .map((s) => ({
           id: s.id,
@@ -168,7 +195,16 @@ const CheckInStationPage: React.FC = () => {
       const events = await eventService.getEvents({
         start_after: new Date(now - 12 * 60 * 60 * 1000).toISOString(),
         start_before: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
-        end_after: new Date(now).toISOString(),
+        // Deliberately *behind* now. An event's check-in can outlive its
+        // scheduled end — a `window` event stays open for
+        // `check_in_minutes_after`, and a flexible or strict one runs to its
+        // `actual_end_time` — and none of those fields reach this list, so the
+        // client cannot compute the real cutoff. Filtering on the scheduled
+        // end alone hid events whose late-arrival period was still open. The
+        // grace covers the realistic span of that; the server still refuses a
+        // tap outside the true window, so an over-generous list costs a
+        // refusal message rather than a wrong attendance record.
+        end_after: new Date(now - EVENT_CHECKIN_GRACE_MS).toISOString(),
       });
       return events
         .filter((e) => !e.is_cancelled && !e.is_draft)

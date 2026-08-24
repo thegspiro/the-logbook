@@ -111,7 +111,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
             void handleSave();
           }}
           disabled={saving}
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50 sm:self-auto"
+          className="btn-primary inline-flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save Settings
@@ -125,7 +125,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
             type="checkbox"
             checked={enabled}
             onChange={(e) => setEnabled(e.target.checked)}
-            className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
+            className="form-checkbox"
           />
           <div>
             <span className="text-theme-text-primary text-sm font-medium">Enable Manual Shift Entry</span>
@@ -150,7 +150,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                 type="checkbox"
                 checked={requireApparatus}
                 onChange={(e) => setRequireApparatus(e.target.checked)}
-                className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
+                className="form-checkbox"
               />
               <span className="text-theme-text-secondary text-sm">Require apparatus selection on the form</span>
             </label>
@@ -171,7 +171,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                       key={a.id || a.name}
                       className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
                         selectedApparatusIds.has(a.id || '')
-                          ? 'border-violet-500/40 bg-violet-500/5'
+                          ? 'border-theme-accent-blue/40 bg-theme-accent-blue-muted'
                           : 'border-theme-surface-border hover:bg-theme-surface-hover'
                       }`}
                     >
@@ -179,7 +179,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                         type="checkbox"
                         checked={selectedApparatusIds.has(a.id || '')}
                         onChange={() => toggleApparatus(a.id || '')}
-                        className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
+                        className="form-checkbox"
                       />
                       <div className="min-w-0 flex-1">
                         <span className="text-theme-text-primary text-sm">{a.name}</span>
@@ -188,7 +188,9 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                         )}
                         <span className="text-theme-text-muted block text-xs capitalize">{a.apparatus_type}</span>
                       </div>
-                      {selectedApparatusIds.has(a.id || '') && <Check className="h-4 w-4 shrink-0 text-violet-500" />}
+                      {selectedApparatusIds.has(a.id || '') && (
+                        <Check className="text-theme-accent-blue h-4 w-4 shrink-0" />
+                      )}
                     </label>
                   ))}
                 </div>
@@ -212,7 +214,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                   type="time"
                   value={defaultStartTime}
                   onChange={(e) => setDefaultStartTime(e.target.value)}
-                  className="form-input text-sm focus:ring-violet-500"
+                  className="form-input text-sm"
                   placeholder="e.g. 08:00"
                 />
               </div>
@@ -227,7 +229,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                   step="0.5"
                   value={defaultDuration}
                   onChange={(e) => setDefaultDuration(parseFloat(e.target.value) || '')}
-                  className="form-input text-sm focus:ring-violet-500"
+                  className="form-input text-sm"
                   placeholder="e.g. 24"
                 />
               </div>
