@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pencil, RotateCcw } from 'lucide-react';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
+import { formatHours } from '../../../utils/hoursFormatting';
 import type { TrainingSubmission } from '../../../types/training';
 
 export const RevisionNotice: React.FC<{
@@ -9,7 +10,7 @@ export const RevisionNotice: React.FC<{
   onWithdraw: () => void;
 }> = ({ submission, onFix, onWithdraw }) => {
   const meta = [
-    `${submission.hours_completed}h`,
+    `${formatHours(submission.hours_completed)}h`,
     formatCalendarDate(submission.completion_date, { month: 'short', day: 'numeric' }),
     submission.issuing_agency,
     submission.certification_number ? `Cert ${submission.certification_number}` : null,

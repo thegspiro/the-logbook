@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router';
 import { trainingService, trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import type { TrainingRecord, ComplianceSummary, UserTrainingStats, ProgramEnrollment } from '../../types/training';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 
@@ -121,8 +122,8 @@ const MemberTrainingPrintPage: React.FC = () => {
           {stats && (
             <dl className="member-training-print__stats" aria-label="Training summary">
               {[
-                { label: 'Total Hours', value: stats.total_hours },
-                { label: 'Hours This Year', value: stats.hours_this_year },
+                { label: 'Total Hours', value: formatHours(stats.total_hours) },
+                { label: 'Hours This Year', value: formatHours(stats.hours_this_year) },
                 { label: 'Active Certifications', value: stats.active_certifications },
                 { label: 'Completed Courses', value: stats.completed_courses },
               ].map(({ label, value }) => (
@@ -272,7 +273,7 @@ const MemberTrainingPrintPage: React.FC = () => {
                           <td>{r.course_name}</td>
                           <td>{r.training_type?.replace(/_/g, ' ') || '—'}</td>
                           <td>{fmtDate(r.completion_date || r.scheduled_date)}</td>
-                          <td className="member-training-print__hours">{r.hours_completed}</td>
+                          <td className="member-training-print__hours">{formatHours(r.hours_completed)}</td>
                           <td>{r.instructor || '—'}</td>
                           <td>{STATUS_LABELS[r.status] || r.status}</td>
                         </tr>

@@ -11,6 +11,7 @@ import React from 'react';
 import { UserPlus, Loader2, LogIn } from 'lucide-react';
 import { POSITION_LABELS } from '../../constants/enums';
 import { formatTime } from '../../utils/dateFormatting';
+import { formatHours } from '../../utils/hoursFormatting';
 import type { Assignment } from '../../types/scheduling';
 import type { ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
 import { AssignmentActions } from './AssignmentActions';
@@ -191,7 +192,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
 const AttendanceBadge: React.FC<{ record: ShiftAttendanceRecord | undefined; tz: string }> = ({ record, tz }) => {
   if (!record) return null;
   if (record.checked_out_at) {
-    const hrs = Math.round(((record.duration_minutes ?? 0) / 60) * 10) / 10;
+    const hrs = formatHours((record.duration_minutes ?? 0) / 60);
     return (
       <span
         className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-700 dark:text-green-400"
