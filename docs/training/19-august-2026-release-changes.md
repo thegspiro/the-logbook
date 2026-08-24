@@ -1,11 +1,12 @@
-# August 12–23, 2026 workflow updates
+# August 12–24, 2026 workflow updates
 
 This lesson is the operator-facing companion to the
 [six-day change audit](../CHANGE_AUDIT_2026-08-10_TO_16.md), its
 [three-day detail](../CHANGE_AUDIT_2026-08-12_TO_14.md), the
 [August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md), the
-[August 17–19 audit](../CHANGE_AUDIT_2026-08-17_TO_19.md), and the
-[August 19–23 audit](../CHANGE_AUDIT_2026-08-19_TO_23.md). It explains what
+[August 17–19 audit](../CHANGE_AUDIT_2026-08-17_TO_19.md), the
+[August 19–23 audit](../CHANGE_AUDIT_2026-08-19_TO_23.md), and the
+[August 23–24 audit](../CHANGE_AUDIT_2026-08-23_TO_24.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
@@ -910,3 +911,575 @@ neutralized everywhere rather than in some exports and not others.
 - **Check who holds `scheduling.manage`.** If exactly one person does, and they
   also request swaps, they can no longer approve their own — grant a second
   person before a Saturday morning finds out for you.
+
+---
+
+# August 23–24, 2026
+
+Companion to the
+[August 23–24 change audit](../CHANGE_AUDIT_2026-08-23_TO_24.md). Nineteen
+hours, 46 pull requests, twelve migrations. Three things arrive that a
+department has never seen before — ID cards, label printers and a shift board —
+and **five authorization gaps close**, four of which an ordinary member could
+reach. Read the last of those sections even if you skip the rest.
+
+## Scheduling: the calendar says which shifts need people, and claiming one is a tap
+
+Open **Scheduling → Schedule**. Instead of a grid of cards, each shift now
+carries a status chip:
+
+| Chip                                 | What it means                       |
+| ------------------------------------ | ----------------------------------- |
+| **`2 open`** (red or amber)          | Seats still to fill. Red is urgent  |
+| **`Full 4/4`** (green)               | Staffed                             |
+| **`You + 2/4`** (blue)               | You are on it                       |
+| A headcount with **no ratio** (grey) | This shift never stated a crew size |
+
+Select a day and the panel beside the grid shows the crew and **one button that
+claims the first open seat you are cleared for**. There is no position dropdown
+to find. Filters dim rather than hide, so the month keeps its shape.
+
+On a phone this is a bar grid, a day sheet and a confirmation screen.
+
+**The grey shift is not a bug.** A shift that names neither positions nor a
+minimum staffing level used to be assumed to want four people, so it showed
+"4 open" in critical red. A department that configures neither opened the page
+to a wall of red that meant nothing. Those shifts now read grey, show a
+headcount, stay out of the open-seat count, and can still be joined.
+
+Cancelled, finalized and past shifts read as **closed** and offer nothing.
+Previously their empty chairs counted toward the day's open-seat total and its
+urgent flag, and they showed a claim button the server refuses.
+
+> **[SCREENSHOT NEEDED — the Schedule board, desktop.** _Demo data:_ a month
+> containing at least one shift of each chip state: one red with open seats, one
+> green and full, one blue with the demo member on it, and one grey shift that
+> names neither positions nor a minimum. A day selected so the crew panel and the
+> claim button are both in frame.**]**
+
+> **[SCREENSHOT NEEDED — the Schedule board, phone (390×844).** _Demo data:_ same
+> month; capture the bar grid with the day sheet open. The bottom navigation
+> should be absent — it hides while an overlay is open.**]**
+
+### Standing shifts: "every Tuesday night"
+
+From a shift, a member can make it a **standing shift** — a recurring claim on
+that seat.
+
+It is stored as a claim rather than written out as a pile of assignments, and
+that has a consequence worth teaching: **giving up one Tuesday does not end the
+series.** The claim stays; only that date is released.
+
+It works in both directions, and only means anything because both do:
+
+1. Creating a claim seats you on **matching shifts already scheduled**.
+2. Creating a **shift** later seats everyone whose active claim matches it.
+
+Without the second, a series would go quiet the month the department generated
+its next block of schedule.
+
+**Edge cases to teach:**
+
+- **The series is anchored on the shift you started it from**, not on today.
+  "Every other Tuesday" means every other one of _those_ Tuesdays.
+- **You choose the horizon**, and it defaults to a year out — not to
+  December 31, which quietly shrinks as the year goes on.
+- **You can create a series covering only dates nobody has scheduled yet.**
+  That is the case standing shifts exist for.
+- A standing claim goes through the **same checks as claiming any shift by
+  hand**: eligibility, seat capacity, whether the shift is still open, whether
+  the date has passed. It previously bypassed all of them.
+
+> **[SCREENSHOT NEEDED — the standing shift dialog.** _Demo data:_ a Tuesday
+> evening shift, biweekly pattern selected, horizon left at its default so the
+> "a year out" default is visible. Capture on desktop; the panel must show its
+> own action row, not one clipped by the viewport.**]**
+
+### Trading a shift somebody can actually accept
+
+Ask for a trade and you now get a **candidate list with everyone who could not
+accept already removed** — anyone on the shift, on approved leave, not cleared
+for the position, or working a tour that runs into this one. Least-loaded
+first.
+
+**The member you offered it to can now accept it.** Previously a one-way offer
+could not be completed by anybody: manager review reads a named target as
+"there must be a shift to trade back", and rejects the request when there isn't
+one — which is the shape every one-way offer has.
+
+Three rules to teach:
+
+- **You cannot give up a seat while your own offer of it stands.** Releasing it
+  or offering it again would leave the first person holding an offer that can
+  no longer be honoured. Withdraw first.
+- **An offer left pending is closed the day before the shift**, and both
+  members and the duty officer are told. A pending offer holds the seat with
+  the person who made it, so left alone it used to survive the shift itself
+  with nobody informed.
+- **A training seat cannot be traded.** It carries the trainee's program and
+  evaluating officer; moving only the member would file one member's training
+  against another.
+
+### For schedulers: position eligibility now applies to you too
+
+If your department has configured which ranks may run a position — driver,
+officer, paramedic — **that is now enforced when a scheduler assigns somebody**,
+not only when a member claims their own seat.
+
+Until this release the rule applied to the people least likely to get it wrong
+and was ignored on the path that seats everyone else. Expect assignments that
+used to go through to be refused, and read the refusal — it names the missing
+qualification.
+
+Backfilling last week's roster is unaffected: a scheduler may still write to a
+past or closed shift. Being cleared for a position is a safety question that
+does not expire with the shift, which is why that one still applies.
+
+### On the dashboard
+
+Seven staffing tiles — Today's Staffing, Future Coverage Gaps, Open Slots,
+Pending Changes, Incomplete Closeouts, Workload Balance, Special Operations.
+Each one **links into the schedule already filtered to what it counted**, so a
+number is somewhere to start rather than a fact to go and find. Each tile keeps
+its own horizon and filters, per person.
+
+Requires `scheduling.view`.
+
+**[SCREENSHOT — REPLACE `00-04-dashboard-overview.png` and
+`00-07-dashboard-panels.png`.** The scheduling tiles are new. **Caption which
+permissions the capturing account held** — what a reader sees depends on their
+own grants.**]**
+
+## ID cards: officers issue them, stations read them
+
+**Turn it on first.** Settings → Integrations → **NFC ID Cards**. It starts off
+and the feature does not appear until it is on. The check is on the server, not
+just in the interface, so nothing is reachable while it is off.
+
+### Issuing a card
+
+Member profile → **ID Cards**, with `members.manage_id_cards`. Bind a physical
+card to a member, label it, and later suspend it, report it lost, or revoke it.
+
+Cards ship blank, so **the tag's serial number is the credential**.
+
+**What your department stores is a hash, not the number.** Nobody — not an
+officer, not an administrator, not somebody who obtains a database backup — can
+read a member's card number back out of The Logbook. The last four characters
+are kept so an officer can tell two of a member's cards apart on screen, and
+that is all.
+
+**Revoking is permanent.** A revoked card is never reactivated; issue a
+replacement instead. **Suspension is the reversible state**, for a card a member
+has mislaid and may still find.
+
+> **[SCREENSHOT NEEDED — member profile → ID Cards panel.** _Demo data:_ one
+> active card and one revoked card on the same demo member, so the status
+> difference and the four-character preview are both visible. Use demo data — do
+> not capture a real member's card record.**]**
+
+### The check-in station
+
+`/members/check-in-station`, requires `members.check_in`.
+
+An officer leaves a phone, tablet or desktop at the door, picks what is being
+checked into, and arms the reader. **From then on nobody touches the screen
+between taps** — members tap and walk in.
+
+Two readers, because departments have both:
+
+| Reader         | What it is                                                            |
+| -------------- | --------------------------------------------------------------------- |
+| **Web NFC**    | Chrome on Android, over HTTPS. The tablet reads the card itself       |
+| **USB reader** | The desk kind that types the serial like a keyboard and presses Enter |
+
+Keystrokes from a USB reader are captured **page-wide**, not into a box you
+have to keep focused. A kiosk loses focus to the first stray tap on the screen,
+and a station that has silently stopped reading is worse than one that was
+never armed.
+
+**Who can tap in:**
+
+| Status                                | Accepted | Why                                                                     |
+| ------------------------------------- | -------- | ----------------------------------------------------------------------- |
+| Active, probationary                  | Yes      | —                                                                       |
+| **Retired, on leave**                 | **Yes**  | They attend meetings and banquets, which is what a station is recording |
+| Suspended, dropped, archived, deleted | No       | —                                                                       |
+
+**A station offers a shift until an officer finalizes it** — not until it
+ends. That is deliberate: checking out has no deadline, so a crew coming off
+a tour at 07:00 can still tap out on a shift whose end time has passed. Only
+offers targets the check-in itself would accept.
+
+An unregistered card, a member who is already checked in, or a closed window
+are shown on screen and the station **stays armed**. They are not errors — an
+error page in front of a queue of members is worse than the tap it was
+reporting.
+
+> **[SCREENSHOT NEEDED — the check-in station, armed.** _Demo data:_ a target
+> selected (a drill night), the reader armed, and at least one successful tap in
+> the recent-taps list. Capture on a tablet-width viewport, which is how it is
+> actually used.**]**
+
+### One thing that changed in your records
+
+An ID card tapped at a station is now recorded as entry method **`nfc_station`**,
+not `qr_scan`. Those are different acts by different people: `qr_scan` means
+the member scanned a category's QR code with their own phone. If you audit
+admin hours, this is the distinction you have been unable to make.
+
+**Historical rows are not rewritten.** A `qr_scan` recorded before this really
+was written by the QR path.
+
+## Label printers: register once, print with no dialog
+
+Settings → **Label Printers**. Register each physical printer once — name,
+location, host, port, resolution, label stock, darkness, and the **command
+language** it speaks. Printing then goes straight to it, with **no browser
+print dialog to get wrong**.
+
+| Language    | Which printers                                                              |
+| ----------- | --------------------------------------------------------------------------- |
+| **ZPL**     | Zebra, and the many printers that emulate ZPL                               |
+| **ESC/POS** | Receipt-class thermal printers, several of which take linerless label media |
+
+The choice changes more than the bytes: the renderer, the label sizes you are
+offered, and the status query all depend on it. **A printer that emulates ZPL
+should be registered as ZPL.**
+
+> **The single most useful thing to know when a print fails.** **The server
+> opens the connection to the printer, not your browser.** A printer you can
+> ping from your laptop may be unreachable from the machine running The
+> Logbook. Nothing checks the address when you save it, so registration will
+> succeed either way and the failure appears at print or status time. If a
+> printer tests fine from a desk and fails from the app, that is the first
+> thing to check.
+
+**What else prints.** Beyond inventory labels: the **shift roster** and the
+**equipment check sheet**, straight to the watch-desk printer. The check sheet
+needs the same permission as the check itself, and a pass-down stays with its
+own crew. A label can carry a QR code.
+
+**Status is per printer.** One printer failing to answer no longer suppresses
+the answers from the others.
+
+> **[SCREENSHOT NEEDED — Settings → Label Printers.** _Demo data:_ two registered
+> printers, one ZPL and one ESC/POS, one marked default, with a status result
+> visible on at least one so the reader sees what a healthy answer looks like.
+> Use RFC 5737 documentation addresses (`192.0.2.x`), never a real one.**]**
+
+## Every administration page opens the same way
+
+Members, Training, Inventory and Events administration pages now share one
+frame: a header, **four headline metrics**, a **Needs attention** queue, then
+the tabs you already know.
+
+**The tabs and their contents did not change.** This replaced what sat above
+them.
+
+### Choosing the metrics
+
+Three of the four slots are yours to choose. **The fourth is always the count
+the attention queue is about**, so a page cannot be set up to hide the number
+its own queue is measuring.
+
+| Module    | Built-in default three                           |
+| --------- | ------------------------------------------------ |
+| Members   | Active, Probationary, Inactive                   |
+| Training  | Compliance, Hours this quarter, Active programs  |
+| Inventory | Items tracked, Issued to members, Out for repair |
+| Events    | Upcoming, RSVPs this week, Check-ins logged      |
+
+**A department that changes nothing keeps these.** The upgrade does not blank
+anybody's page.
+
+There are two scopes: a **department default** every administrator sees, and
+optionally a **personal** selection. The department decides whether personal
+selections are allowed at all — turn that off and everyone looks at the same
+four numbers.
+
+> **[SCREENSHOT NEEDED — the metrics settings screen.** _Demo data:_ the Members
+> module, department scope selected, with the "applies to everyone" control
+> visible and one metric being swapped. The fourth (queue) slot must be visibly
+> fixed.**]**
+
+### Who can see the queue
+
+The queue lists work, and **its rows name people**. So it is gated on the
+module's own manage permission, not a general administrator flag:
+
+| Page      | Permission         | Also needs                                                          |
+| --------- | ------------------ | ------------------------------------------------------------------- |
+| Members   | `members.manage`   | **`medical_screening.view`** for the queue and the screening metric |
+| Training  | `training.manage`  | The Training module enabled                                         |
+| Inventory | `inventory.manage` | The Inventory module enabled                                        |
+| Events    | `events.manage`    | —                                                                   |
+
+**Medical screening is health information.** Until this release, "screening
+current" and the members queue were readable by anyone with `members.manage`.
+Somebody without `medical_screening.view` now sees that tile read **unknown**
+rather than disappear — a missing tile makes people look for it, a stated
+unknown does not — and an empty queue.
+
+Two smaller fixes an administrator will notice:
+
+- **A member who renewed is no longer both current and lapsed at once.** The
+  screening queue counted every historical expired record; it now counts a
+  member and screening type only where nothing unexpired covers it.
+- **One broken number does not take the page down.** A metric that fails to
+  work out renders as unknown and the tabs below it still work.
+
+**[SCREENSHOT — REPLACE the four administration page headers.** The Members,
+Training, Inventory and Events admin captures all show a layout that no longer
+exists.**]**
+
+## Equipment checks: four item types, and sealed containers
+
+### Nine item types became four
+
+An admin building a check template used to choose between near-synonyms —
+`present` and `functional` both stored pass/fail and differed only in what the
+crew was asked to do. There are now four:
+
+| Type         | What it stores    | What "passing" means                                                                                                                                                                    |
+| ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Level**    | The number itself | Compared to a threshold. The reading is kept because the trend is the useful part. An empty box means "not read yet", not zero                                                          |
+| **Function** | Pass / fail       | A fail opens a note and a photo — and **neither blocks the walk.** A crew held at a text box at 07:00 abandons the check, so an unwritten note is flagged on the finished check instead |
+| **Count**    | A quantity        | Short of par is a **restock line, not a failure**                                                                                                                                       |
+| **Expiry**   | A date            | Confirms the date already on record. Stays amber on every shift inside the pull window                                                                                                  |
+
+Headings and free text are untouched — they are layout, not checks. The builder
+now names what each type stores beside its label.
+
+**Your existing templates were converted for you.** Where an item had no
+description, the migration wrote in the instruction its old type used to imply
+("Confirm the item is in place." / "Switch it on and confirm it works.").
+**An item whose author wrote their own description keeps their words.**
+
+### Sealed containers
+
+A compartment — a drug bag, a trauma kit, a sealed pack — can be marked as
+**closed with a numbered tamper seal**, in the template builder. On the check,
+the crew reads the number, confirms it matches the last check, and **the
+counting inside is cleared in one tap.**
+
+Three rules, and each one is the reason the feature is safe:
+
+1. **A seal clears counting only.** It never clears expiry dates or pressure
+   readings — those move on their own while the bag sits shut, so an
+   out-of-date vial cannot hide behind an intact tag.
+2. **A seal proves unchanged, not full.** Confirming carries the previous
+   counts forward. It does **not** fill the bag up to par. A bag that was three
+   morphine short at its last count is still three short, and that still files
+   as a failure.
+3. **The shortcut has to be earned.** If there is no earlier intact seal whose
+   number matches, the button reads **Record seal** — the seal is still filed
+   for the record, and the contents are counted by hand.
+
+**A sealed bag inside a sealed bag gets its own card.** A broken outer seal
+says nothing about an intact inner one.
+
+> **[SCREENSHOT NEEDED — the seal panel on a check.** _Demo data:_ two sealed
+> compartments — one whose seal matches the previous check (so the clearing
+> shortcut is offered) and one whose number differs (so the reader sees
+> _Record seal_ and a hand count instead). This contrast is the whole teaching
+> point and must be in one frame or two adjacent ones.**]**
+
+### What is _not_ here yet
+
+**Walking a check as a lap** — stop by stop in walking order, with finished
+stops collapsed — is built and tested but **not connected to the check screen**,
+which still shows the flat compartment list you have today. Do not teach it,
+screenshot it, or promise it in this release.
+
+### One change for crews who swap stock
+
+A crew member without `inventory.manage` could move **any** quantity from ready
+stock onto the truck, and dispose of lots that were never aboard it. A swap is
+now bounded by the lot it replaces, and that lot has to actually be on the item.
+
+## Submit External Training: the certificate goes with it
+
+**Attach the certificate on the form.** It used to be a second step after
+submitting, which meant it could be — and often was — skipped. PDF, JPG or PNG,
+up to 10 MB.
+
+**The start time is now kept.** The form has always asked for a start time and
+a length and worked out the hours from the pair, but only the date and the
+hours were stored. Editing a submission therefore had to invent a start — it
+assumed 9am — and an officer reviewing a four-hour entry could not tell a
+morning class from an evening one.
+
+**Entries submitted before this release have no start time**, and that shows as
+blank rather than as 9am. Blank is the truth; 9am would be a guess.
+
+The form also stopped asking one question with three controls: duration is one
+stepper.
+
+Two things for records officers to know about the files:
+
+- **Certificates are kept indefinitely** once approved — that is what a
+  training record is for. Nothing expires them. If your department has a
+  records-retention rule, this needs a decision from you before it needs code.
+- **Files are not scanned for malware.** They are checked to be genuinely the
+  file type they claim and stored under a name the server chooses, so nothing
+  runs on the server. But a certificate opened by an officer is whatever the
+  member uploaded.
+
+**[SCREENSHOT — REPLACE the Submit External Training capture.** The screen is
+rebuilt; the certificate now attaches inline.**]**
+
+## My Admin Hours
+
+**If you hold `admin_hours.manage`, the numbers you were seeing on this page
+were the whole department's.** `My Admin Hours` fetched its totals without
+scoping them to you. It is now always your own hours.
+
+The six-tile grid is gone. In its place:
+
+- **A reporting period** — this month, last 30 days, this year, all time —
+  driving both the totals **and** the entry list, so the two always describe
+  the same window.
+- **Three fixed stats**: approved, awaiting review, logged this period, with
+  entry counts as sublines.
+- **Requirement progress**, where your department has configured requirements
+  for your profile. The personal page never showed this, despite it being the
+  question members actually have.
+- **A ranked category breakdown** with share bars, and one line naming the
+  categories with nothing in the period — instead of a tile reading zero for
+  each.
+
+**The period defaults to all time.** A calendar-year default hid older entries
+behind a control you have to notice first, and "no hours logged in this year"
+reads as an empty account rather than an active filter.
+
+> **[SCREENSHOT NEEDED — the rebuilt My Admin Hours page.** No capture of this
+> page exists in the guides, and the version it would have shown is gone.
+> _Demo data:_ a member with hours in at least three categories and one
+> configured requirement, so the category bars and the requirement-progress
+> section are both populated, and at least one category with **no** hours in the
+> period so the muted "nothing logged in" line appears.**]**
+
+## Events: the list says what it wants from you
+
+`/events` is now ranked by what each event needs from you, with a **Needs you**
+band at the top.
+
+**An early check-in is flagged and never credited as attendance.** Tapping in at
+17:00 for a 19:00 drill records the honest arrival time and tells the event's
+manager how early it was. Attendance credit still runs from the scheduled
+start.
+
+Check-ins recorded before this release carry no early figure. Working one out
+after the fact would mean deciding what each event's start time was at the
+moment somebody tapped, and an event whose start was edited since would be
+given a number that was never true.
+
+Two corrections members will notice:
+
+- **The page no longer accuses people who could not have attended.** A member
+  who joined after an event ran is not counted as having missed it.
+- Credited hours read **"up to"**, because what you are credited depends on
+  your recorded attendance, not the event's nominal length.
+
+## Department Store, settings and email
+
+**The Department Store** catalog, checkout and My Orders were redesigned around
+the cart, and several setup defects were fixed: the admin dashboard returned an
+error, onboarding's **Enable** button did not actually enable the store, and
+the position editor stripped store permissions on first save. Worse than any of
+those, **enabling the store during setup made setup impossible to finish** —
+the final Continue failed outright, because a fourth hardcoded module list
+inside the save endpoint had never heard of `storefront`. If you gave up on
+turning the store on, try again.
+
+> **Do not use the wizard's per-module "configure permissions" step to restrict
+> a module.** It says _"permissions configured!"_ and throws the answer away —
+> nothing submits it. That is true of the fifteen modules that still point at
+> it; the Department Store's route was removed in this window rather than
+> repaired. Set permissions on the positions themselves instead. Tracked as
+> **ONBOARD-1** in `docs/KNOWN_LIMITATIONS.md`.
+
+**Nine settings screens** — Organization, Events, Scheduling, Elections, User
+Settings, Email Templates and three more — carried five different navigation
+idioms between them. They all use one now: a section list on desktop, a
+scrollable tab strip on a phone, and the section you are in reflected in the
+URL so a link opens where you meant it to. **Save/Reset appears only on
+sections it actually writes.** No setting moved or changed meaning.
+
+**Email notifications have a new shell** — a 5px accent rule and a status chip.
+**Nothing changes for your department until somebody presses Reset on a
+template.** A department that leaves its templates alone keeps exactly the
+emails it has today. The Email Templates screen now shows the editor and the
+preview side by side, and says which notices your department has changed and
+how heavily each is used.
+
+**[SCREENSHOT — REPLACE every settings capture, and every capture of a received
+Logbook email.** For the email shots, caption whether the department has
+adopted the new shell — both are current, depending on whether Reset was
+pressed.**]**
+
+## Who could see what — five fixes to tell your officers about
+
+Four of these were reachable by an ordinary member. Three rested on the same
+mistake, and it is worth naming so nobody repeats it: **`inventory.view` and
+`prospective_members.view` are part of the baseline Member position.** Checking
+for one of them proves only that the person signed in.
+
+| What was visible                                                                                               | To whom                                            | Now                                                         |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------- |
+| **A member's assigned gear** — turnout coat, radio, SCBA mask — and its condition, on **every** member profile | Every viewer                                       | `inventory.manage`, or your own profile                     |
+| **Department-wide inventory counts**, low stock and overdue checkouts on the dashboard                         | Every member                                       | `inventory.manage` or `settings.manage`                     |
+| **Your own membership application**, through the prospect widget                                               | Anyone reviewing intake who had themselves applied | Excluded from the counts, the aging buckets and the details |
+| **Medical-screening compliance and the members queue**                                                         | Anyone with `members.manage`                       | Also needs `medical_screening.view`                         |
+| **Unlimited stock movable onto a truck**, and disposal of lots never aboard                                    | Any check submitter                                | Bounded by the lot being replaced                           |
+
+**A member profile is a directory card** — the contact details a colleague is
+meant to look up. Which turnout coat somebody signed for, and what condition it
+is in, is quartermaster business. If your officers ask why the Assigned
+Inventory table vanished from a profile, that is the answer.
+
+**[SCREENSHOT — REPLACE the member profile capture.** Assigned Inventory is now
+absent for a viewer without `inventory.manage`. **Caption the capturing
+account's grants** — the page differs by viewer, and an uncaptioned shot reads
+as a promise.**]**
+
+## Also fixed
+
+- **The app never updated in Brave** until the browser cache was cleared by
+  hand. If you have been telling Brave users to clear their cache after every
+  release, stop.
+- **Calendar day labels shifted a day for any viewer west of the department** —
+  a cell showing 26 announced itself as "Tuesday, August 25".
+- **The phone month grid got its 44px touch targets back.**
+
+## Upgrade notes for administrators (August 23–24)
+
+- **Twelve migrations.** Back up, confirm `alembic heads` returns exactly one,
+  then `alembic upgrade head`. **The head is `e7a41b6d09c2`.**
+- **One migration does not reverse.** The equipment-check item-type collapse
+  turns nine types into four, and nothing records which of three old names a
+  `function` item started as. The downgrade deliberately leaves the types
+  collapsed rather than guessing — **a wrong guess renders the wrong control on
+  a safety checklist.** No data is lost either way.
+- **That same migration writes instructions into items that had none**, and
+  leaves alone any item whose author wrote their own description. In the
+  shipped preset library it touched 185 of 232 items.
+- **Seven migrations deliberately backfill nothing**, and an empty column is
+  not a bug: no compartment is sealed, no historical check-in gets an
+  early-arrival figure, no historical `qr_scan` is rewritten, training
+  submitted before this has no start time, existing email templates keep their
+  own colours, no standing shift claims are inferred from anyone's
+  assignments, and a department with no metric preferences gets its built-in
+  four.
+- **Turn on NFC ID Cards** (Settings → Integrations) if you want cards, and
+  grant `members.manage_id_cards` to whoever issues them and `members.check_in`
+  to whoever runs a station. Neither is granted by the upgrade.
+- **Register your label printers** before anyone tries to print. Check that the
+  address you enter is reachable **from the server**, not just from your desk.
+- **Check who holds `medical_screening.view`.** Officers who could previously
+  see screening compliance on the Members administration page will find it
+  reading _unknown_ until they hold it.
+- **Expect scheduler assignments to start being refused** where a member is not
+  cleared for the position. That rule now applies to schedulers, not only to
+  members claiming their own seats.

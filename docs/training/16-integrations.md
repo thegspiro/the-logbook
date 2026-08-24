@@ -736,3 +736,27 @@ The next week, Steve checks the integrations dashboard:
 Salesforce retry, pagination, secret handling, and redacted webhook diagnostics
 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#notifications-and-integrations),
 with a redacted readiness/preview screenshot marker and invalid-credential edge case.
+
+## August 23, 2026 update — NFC ID Cards
+
+**NFC ID Cards is an integration**, not a always-present feature: Settings →
+Integrations → **NFC ID Cards**. It starts **off**, and the switch is enforced
+on the server, not only by hiding the screens — so nothing is reachable while
+it is off.
+
+The guard **fails closed**: a department whose integration catalog has never
+been opened counts as not having turned it on. A fresh install therefore has no
+live credential surface until somebody deliberately enables one.
+
+Turning it off again is the intended way to stop cards already handed out from
+working, **without deleting the records that say who held them**.
+
+Two permissions to grant alongside it — neither is granted by the upgrade:
+
+| Permission                | For                                               |
+| ------------------------- | ------------------------------------------------- |
+| `members.manage_id_cards` | Issuing, labelling, suspending and revoking cards |
+| `members.check_in`        | Running a check-in station                        |
+
+Full walkthrough:
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).

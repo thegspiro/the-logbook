@@ -1413,3 +1413,85 @@ For the other side, the member sidebar in the
 [Getting Started guide](./00-getting-started.md) shows what a holder of
 ordinary roster permissions sees: **Members** is present, and there is no
 Administration section for the scanner to appear in.
+
+---
+
+## Member ID Cards and the Check-In Station _(2026-08-23)_
+
+Full operator walkthrough and screenshot states:
+[release lesson](./19-august-2026-release-changes.md#id-cards-officers-issue-them-stations-read-them).
+
+> **Turn it on first.** Settings → Integrations → **NFC ID Cards**. It starts
+> off, and nothing appears until it is on. The check is enforced on the server,
+> not only in the interface, so nothing is reachable while it is off.
+
+### Issuing a card
+
+Member profile → **ID Cards**, with `members.manage_id_cards`. Bind a physical
+card to a member, label it, and later suspend it, report it lost, or revoke it.
+
+Cards ship blank, so **the tag's serial number is the credential**.
+
+**Your department stores a hash, not the number.** Nobody — officer,
+administrator, or somebody who obtains a database backup — can read a member's
+card number back out of The Logbook. The last four characters are kept only so
+an officer can tell two of a member's cards apart on screen.
+
+**Revoking is permanent.** A revoked card is never reactivated; issue a
+replacement instead. **Suspension is the reversible state**, for a card a
+member has mislaid and may still find.
+
+### The station
+
+`/members/check-in-station`, with `members.check_in`. An officer picks what is
+being checked into, arms the reader, and **nobody touches the screen between
+taps**.
+
+Two readers: **Web NFC** (Chrome on Android, over HTTPS) and a **USB reader**
+of the desk kind that types the serial and presses Enter. USB keystrokes are
+captured page-wide rather than into a box you have to keep focused — a kiosk
+loses focus to the first stray tap, and a station that has silently stopped
+reading is worse than one that was never armed.
+
+| Member status                         | Tap accepted | Why                                                                |
+| ------------------------------------- | ------------ | ------------------------------------------------------------------ |
+| Active, probationary                  | Yes          | —                                                                  |
+| **Retired, on leave**                 | **Yes**      | They attend meetings and banquets, which is what a station records |
+| Suspended, dropped, archived, deleted | No           | —                                                                  |
+
+A station **offers a shift until an officer finalizes it**, not until it ends
+— checking out has no deadline, so a crew coming off a tour can still tap out
+on a shift whose end time has passed. It only
+offers targets the check-in itself would accept. An unregistered card, a member
+already checked in, or a closed window are shown on screen and the station
+**stays armed** — those are outcomes, not errors.
+
+### In the record
+
+A card tapped at a station is recorded with entry method **`nfc_station`**, not
+`qr_scan`. Those are different acts by different people: `qr_scan` means the
+member scanned a category's QR code with their own phone. **Historical rows are
+not rewritten** — a `qr_scan` recorded before this really was written by the QR
+path.
+
+## A Member Profile No Longer Shows Everyone's Gear _(2026-08-24)_
+
+**The Assigned Inventory table used to render on every member profile, for
+every viewer.** It was gated on "is the inventory module enabled" and nothing
+else — unlike the training, admin-hours, emergency-contact and ID-card sections
+beside it, each of which gates on self-or-permission.
+
+A member profile is a **directory card**: the contact details a colleague is
+meant to look up. Which turnout coat, radio or SCBA mask somebody signed for,
+and what condition it is in, is quartermaster business.
+
+The section and its Quick Stats line now require **`inventory.manage`**, or
+that the profile is the viewer's own.
+
+> **Why `inventory.view` could not have been the gate.** It is part of the
+> baseline Member position — every member holds it so they can browse the
+> catalog and their own kit — so a check for it says only "this person is a
+> member". If an officer asks why the table disappeared, that is the answer.
+
+The profile now **fetches nothing it may not show**: a viewer without the
+permission issues no request at all.

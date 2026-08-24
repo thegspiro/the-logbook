@@ -685,6 +685,84 @@ printing the two `.env` lines.]**
 
 ---
 
+### NETWORK LABEL PRINTERS (27:00 – 29:00) — ADDED 2026-08-24
+
+**[SCREEN: Settings → Label Printers, empty state]**
+
+> "New in this release, and it lands squarely on your desk: label printers are
+> now something you register once, and everything prints straight to them. No
+> browser print dialog."
+
+> "That matters more than it sounds. A print dialog is where barcodes go wrong
+> — somebody leaves scale on 'Fit to page', the bars shrink three percent, the
+> label still looks fine, and the scanner refuses it. Take the dialog out and
+> that whole class of ticket disappears."
+
+**[SCREEN: Add a printer. Fill in name, location, host, port 9100, resolution,
+label stock, language]**
+
+> "Name it something people will recognise. Hostname or IP, port nine thousand
+> one hundred unless the printer says otherwise. Resolution has to match the
+> printer — two-oh-three on most desktop units, three hundred on
+> high-resolution ones — because the wrong number prints the label at the wrong
+> physical size."
+
+**[SCREEN: Highlight the language selector — ZPL / ESC/POS]**
+
+> "And pick the language. ZPL is Zebra's, and it's the one to choose for a
+> Zebra — but know that a lot of non-Zebras speak it too. TSC, Godex, Honeywell
+> PC42 and PC43, Citizen, SATO all ship a ZPL emulation mode. Turn it on in the
+> printer's own settings, register it here as ZPL, and you get the same
+> exact-size output a Zebra does."
+
+> "ESC/POS is the receipt-printer language — Epson TM, Star, the generic 58 and
+> 80 millimetre units a lot of stations already have at the watch desk. Several
+> of those take linerless label roll, which turns one into a perfectly good
+> asset-tag printer."
+
+**[CALLOUT: "The choice changes the renderer, the stock sizes offered, and the
+status query — not just the bytes"]**
+
+**[SCREEN: THE CRITICAL BEAT — a network diagram or a terminal, showing the
+server reaching the printer, not the laptop. Do not stage this as a browser
+print.]**
+
+> "Here is the thing to burn into your memory, because it is the support call
+> you will get. **The server opens the connection to the printer. Not the
+> browser.**"
+
+> "So the address has to be reachable from the machine running The Logbook. If
+> your app is in a container on one segment and the printer is on another,
+> somebody at a desk can ping that printer all day and it will still fail from
+> the app."
+
+> "And nothing checks the address when you save it. Registration succeeds
+> either way. The failure shows up at print time, or when somebody hits Check
+> status — which is exactly when nobody wants to be discovering it."
+
+**[SCREEN: Test connection, then Send test label]**
+
+> "So test it before you leave. Test connection asks the printer to identify
+> itself — you find out straight away whether that address really is a label
+> printer, and if it reports its own resolution, the field gets set from that
+> instead of from your guess. Then send a test label. It carries the printer's
+> name and a scannable barcode, so one label confirms three things: the server
+> reached it, the stock size is right, and the code scans."
+
+**[SCREEN: Check status on a saved printer, showing an error and a warning]**
+
+> "Check status is worth knowing properly. A network connection succeeds
+> against a printer that is powered on and out of labels — and against whatever
+> else has picked up that address — so 'connected' on its own is not good news.
+> Status reports the model and any fault the printer names, and it separates
+> errors, which mean it cannot print now, from warnings, which mean it can but
+> somebody should do something soon."
+
+**[CALLOUT: "One printer failing to answer no longer silences the others"]**
+
+> "One more: label printing isn't only labels now. The shift roster and the
+> apparatus check sheet print to the watch-desk printer too."
+
 ## CHAPTER 8: Platform Analytics & Monitoring (27:00 – 30:00)
 
 ### PLATFORM ANALYTICS (27:00 – 28:00)
@@ -798,6 +876,78 @@ row.]**
 > that haven't been reflected?"
 
 **[CALLOUT: "Keep two administrators"]**
+
+### THE AUGUST 24 UPGRADE, AND THE ONE MIGRATION THAT DOES NOT REVERSE (ADDED 2026-08-24)
+
+**[SCREEN: Terminal — backup, `alembic heads`, `alembic upgrade head`]**
+
+> "This release carries twelve migrations. Same drill as always: back up, run
+> `alembic heads` and confirm you get exactly one, then upgrade. The head you
+> should land on is `e7a41b6d09c2`."
+
+**[CALLOUT: "Head: e7a41b6d09c2 — confirm it, don't assume it"]**
+
+> "One of the twelve does not reverse, and you should know which before you
+> need to know."
+
+**[SCREEN: The equipment-check template builder, before and after — nine item
+types collapsing to four]**
+
+> "Equipment-check item types collapse from nine to four. Three old names
+> become 'function', two become 'level', and nothing anywhere records which one
+> a row started as. The downgrade deliberately leaves them collapsed rather
+> than guessing — because a wrong guess renders the wrong control on a safety
+> checklist, and that is worse than a modern column name."
+
+> "No data is lost either way. You simply cannot get the old names back."
+
+> "That same migration writes an instruction into any check item whose
+> description was empty — the sentence its old type used to imply. If somebody
+> wrote their own description, it keeps their words. In the preset library that
+> shipped with the product, it touched a hundred and eighty-five items out of
+> two hundred and thirty-two."
+
+**[SCREEN: A column list showing several new nullable columns, all empty]**
+
+> "Seven of the twelve deliberately backfill nothing, and I want you to hear
+> why, because your first instinct on seeing an empty column is going to be
+> that the migration failed."
+
+> "No compartment is sealed. No historical check-in gets an early-arrival
+> figure — working one out would mean deciding what each event's start time was
+> at the moment somebody tapped, and an event whose start was edited since
+> would get a number that was never true. No historical scan is rewritten.
+> Training submitted before this has no start time recorded, because blank is
+> the truth and nine in the morning would be a guess. Existing email templates
+> keep their own colours. Nobody's standing shifts are inferred from their past
+> assignments. And a department with no metric preferences gets the built-in
+> defaults, not a blank administration page."
+
+**[CALLOUT: "Empty is a decision here, not a failure"]**
+
+> "Three things to do after the upgrade, none of which the upgrade does for
+> you."
+
+> "One: if you want ID cards, turn on the NFC ID Cards integration and grant
+> `members.manage_id_cards` to whoever issues them, and `members.check_in` to
+> whoever runs a station. It ships off, and it is enforced on the server — not
+> just by hiding a screen."
+
+> "Two: register your label printers, and check the address is reachable from
+> the server."
+
+> "Three: check who holds `medical_screening.view`. Officers who could
+> previously see screening compliance on the Members administration page will
+> find it reading 'unknown' until somebody grants it — that was health
+> information behind a general management permission, and it isn't any more."
+
+**[CALLOUT: "Expect scheduler assignments to start being refused"]**
+
+> "And warn your schedulers. Position eligibility now applies when they assign
+> somebody, not only when a member claims their own seat. If your department
+> configured which ranks may run a position, that rule has been enforced
+> against members and quietly ignored for schedulers. That is fixed, and it
+> will look like a new bug the first time it fires."
 
 > "While you're auditing permissions, check that **at least two active people**
 > can manage members. The app won't let you remove the last one — it refuses
@@ -1193,3 +1343,27 @@ no re-ordering. Final timecodes are a recording-production task.
 **Demo environment:** the `--compose` beat needs a compose file that genuinely
 drops a setting present in `.env`, or the output is an empty list and the
 section has nothing behind it. Prepare that fixture before the shoot.
+
+### Added 2026-08-24 — written in-script, not queued
+
+Two new sections are in the script body above:
+
+- **Chapter 7, "Network label printers"** (~2:00). The load-bearing beat is
+  that **the server opens the socket, not the browser** — a printer reachable
+  from a desk may be unreachable from the container, and nothing validates the
+  address at save time. Do not let a delivery pass reduce that to "enter the IP
+  address". It is the support call this chapter exists to prevent.
+- **Chapter 9, "The August 24 upgrade, and the one migration that does not
+  reverse"** (~2:30). Head `e7a41b6d09c2`; the check-type collapse is
+  irreversible by design; seven migrations backfill nothing **on purpose**, and
+  an empty column is a decision rather than a failure.
+
+**EDITOR:** ~4:30 total on top of everything above. Chapter 7's addition
+re-times Chapters 8 and 9 and the clip table; Chapter 9's re-times only its own
+tail. Final timecodes are a recording-production task.
+
+**Demo environment:** the label-printer chapter needs a printer that genuinely
+answers on port 9100, and — for the "unreachable from the server" beat — a
+second address that is reachable from the presenter's desk and not from the
+app. Use RFC 5737 documentation addresses (`192.0.2.x`) on screen; never a real
+department's printer address.
