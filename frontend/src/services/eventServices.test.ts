@@ -485,6 +485,65 @@ describe('eventRequestService', () => {
     });
   });
 
+  describe('getStaffing', () => {
+    it('should GET the volunteer staffing state for a request', async () => {
+      const staffing = { shift_id: 's1', slots_total: 3, slots_filled: 1, volunteers: [] };
+      mockGet.mockResolvedValueOnce({ data: staffing });
+
+      const result = await eventRequestService.getStaffing('r1');
+
+      expect(mockGet).toHaveBeenCalledWith('/event-requests/r1/staffing');
+      expect(result).toEqual(staffing);
+    });
+  });
+
+  describe('openStaffing', () => {
+    it('should POST the requested seat count', async () => {
+      const staffing = { shift_id: 's1', slots_total: 3, slots_filled: 0, volunteers: [] };
+      mockPost.mockResolvedValueOnce({ data: staffing });
+
+      const result = await eventRequestService.openStaffing('r1', {
+        volunteer_slots: 3,
+        include_officer_slot: true,
+      });
+
+      expect(mockPost).toHaveBeenCalledWith('/event-requests/r1/staffing', {
+        volunteer_slots: 3,
+        include_officer_slot: true,
+      });
+      expect(result).toEqual(staffing);
+    });
+  });
+
+  describe('sendVolunteerCall', () => {
+    it('should POST the coordinator note to the volunteer-call endpoint', async () => {
+      const response = {
+        message: 'Volunteer call emailed to 12 members.',
+        recipients: 12,
+        skipped_opted_out: 1,
+        volunteer_call_sent_at: '2026-09-01T12:00:00Z',
+      };
+      mockPost.mockResolvedValueOnce({ data: response });
+
+      const result = await eventRequestService.sendVolunteerCall('r1', {
+        message: 'Bring the smoke trailer.',
+      });
+
+      expect(mockPost).toHaveBeenCalledWith('/event-requests/r1/volunteer-call', {
+        message: 'Bring the smoke trailer.',
+      });
+      expect(result).toEqual(response);
+    });
+
+    it('should omit an empty note rather than sending a blank message', async () => {
+      mockPost.mockResolvedValueOnce({ data: { message: 'ok', recipients: 1, skipped_opted_out: 0 } });
+
+      await eventRequestService.sendVolunteerCall('r1', { message: undefined });
+
+      expect(mockPost).toHaveBeenCalledWith('/event-requests/r1/volunteer-call', { message: undefined });
+    });
+  });
+
   describe('updateRequestStatus', () => {
     it('should PATCH /event-requests/:id/status', async () => {
       const data = { status: 'approved', notes: 'Looks good' };

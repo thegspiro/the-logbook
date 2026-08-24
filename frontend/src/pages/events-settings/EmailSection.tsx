@@ -4,6 +4,7 @@ import type { EmailSectionProps } from './types';
 
 const TRIGGER_LABELS: Record<string, string> = {
   on_submitted: 'New request submitted',
+  on_assigned: 'Coordinator assigned (internal)',
   on_in_progress: 'Request work started',
   on_scheduled: 'Request scheduled',
   on_postponed: 'Request postponed',
@@ -11,6 +12,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   on_declined: 'Request declined',
   on_cancelled: 'Request cancelled',
   days_before_event: 'Days before event reminder',
+  volunteer_call: 'Volunteer call to the membership',
 };
 
 const EmailSection: React.FC<EmailSectionProps> = ({

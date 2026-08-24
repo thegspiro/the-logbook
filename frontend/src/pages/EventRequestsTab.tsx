@@ -31,6 +31,8 @@ import {
   Pause,
   Mail,
   Copy,
+  UserPlus,
+  Megaphone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService, locationsService } from '../services/api';
@@ -42,6 +44,7 @@ import type {
   TaskCompletion,
   DateFlexibility,
   EmailTemplate,
+  EventRequestStaffing,
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
@@ -151,6 +154,14 @@ const EventRequestsTab: React.FC = () => {
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
+  // Volunteer staffing (the tie-in to the shift schedule)
+  const [staffing, setStaffing] = useState<EventRequestStaffing | null>(null);
+  const [staffingLoading, setStaffingLoading] = useState(false);
+  const [volunteerSlots, setVolunteerSlots] = useState(2);
+  const [includeOfficerSlot, setIncludeOfficerSlot] = useState(false);
+  const [showVolunteerCall, setShowVolunteerCall] = useState(false);
+  const [volunteerCallMessage, setVolunteerCallMessage] = useState('');
+
   const tz = useTimezone();
 
   const fetchRequests = useCallback(async () => {
@@ -199,12 +210,27 @@ const EventRequestsTab: React.FC = () => {
     return outreachLabels[value] || value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
+  const loadStaffing = useCallback(async (requestId: string) => {
+    setStaffingLoading(true);
+    try {
+      setStaffing(await eventRequestService.getStaffing(requestId));
+    } catch {
+      // A request with no signup sheet is the common case, not an error worth
+      // a toast — the panel falls back to its "open signups" prompt.
+      setStaffing(null);
+    } finally {
+      setStaffingLoading(false);
+    }
+  }, []);
+
   const toggleExpand = async (id: string) => {
     if (expandedId === id) {
       setExpandedId(null);
       setExpandedDetail(null);
       setShowScheduleForm(false);
       setShowPostponeForm(false);
+      setStaffing(null);
+      setShowVolunteerCall(false);
       return;
     }
 
@@ -212,9 +238,15 @@ const EventRequestsTab: React.FC = () => {
     setDetailLoading(true);
     setShowScheduleForm(false);
     setShowPostponeForm(false);
+    setStaffing(null);
+    setShowVolunteerCall(false);
+    setVolunteerCallMessage('');
     try {
       const detail = await eventRequestService.getRequest(id);
       setExpandedDetail(detail);
+      if (detail.status === 'scheduled') {
+        await loadStaffing(id);
+      }
     } catch {
       toast.error('Failed to load request details.');
     } finally {
@@ -230,6 +262,41 @@ const EventRequestsTab: React.FC = () => {
       // ignore
     }
     void fetchRequests();
+  };
+
+  const handleOpenStaffing = async (requestId: string) => {
+    setActionLoading(true);
+    try {
+      const result = await eventRequestService.openStaffing(requestId, {
+        volunteer_slots: volunteerSlots,
+        include_officer_slot: includeOfficerSlot,
+      });
+      setStaffing(result);
+      toast.success('Volunteer signups are open on the schedule.');
+      await refreshDetail(requestId);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to open volunteer signups.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleVolunteerCall = async (requestId: string) => {
+    setActionLoading(true);
+    try {
+      const result = await eventRequestService.sendVolunteerCall(requestId, {
+        message: volunteerCallMessage.trim() || undefined,
+      });
+      toast.success(result.message);
+      setShowVolunteerCall(false);
+      setVolunteerCallMessage('');
+      await loadStaffing(requestId);
+      await refreshDetail(requestId);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to email the membership.'));
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleStatusChange = async (
@@ -897,24 +964,31 @@ const EventRequestsTab: React.FC = () => {
                                   </button>
                                 )}
 
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={declineReason}
-                                    onChange={(e) => setDeclineReason(e.target.value)}
-                                    className="form-input"
-                                    placeholder="Reason for declining..."
-                                  />
-                                  <button
-                                    onClick={() =>
-                                      void handleStatusChange(expandedDetail.id, 'declined', undefined, declineReason)
-                                    }
-                                    disabled={actionLoading}
-                                    className="rounded-lg bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30"
-                                  >
-                                    Decline
-                                  </button>
-                                </div>
+                                {/* Only offered where the backend allows it: a
+                                    scheduled or postponed request can be
+                                    cancelled but not declined, and showing the
+                                    button anyway produced a 400 the coordinator
+                                    read as the app being broken. */}
+                                {(expandedDetail.status === 'submitted' || expandedDetail.status === 'in_progress') && (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={declineReason}
+                                      onChange={(e) => setDeclineReason(e.target.value)}
+                                      className="form-input"
+                                      placeholder="Reason for declining..."
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        void handleStatusChange(expandedDetail.id, 'declined', undefined, declineReason)
+                                      }
+                                      disabled={actionLoading}
+                                      className="rounded-lg bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30"
+                                    >
+                                      Decline
+                                    </button>
+                                  </div>
+                                )}
 
                                 <button
                                   onClick={() => void handleStatusChange(expandedDetail.id, 'cancelled')}
@@ -1033,6 +1107,153 @@ const EventRequestsTab: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => setShowPostponeForm(false)}
+                                      className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 text-sm font-medium transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Volunteer staffing — signups live on the shift schedule */}
+                          {expandedDetail.status === 'scheduled' && (
+                            <div className="border-theme-surface-border space-y-3 border-t pt-4">
+                              <h4 className="text-theme-text-secondary flex items-center gap-2 text-sm font-semibold tracking-wider uppercase">
+                                <UserPlus className="h-4 w-4" />
+                                Volunteer Staffing
+                              </h4>
+
+                              {staffingLoading && (
+                                <p className="text-theme-text-muted flex items-center gap-2 text-sm">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Loading signups…
+                                </p>
+                              )}
+
+                              {!staffingLoading && !staffing?.shift_id && (
+                                <div className="card space-y-3 p-4">
+                                  <p className="text-theme-text-muted text-sm">
+                                    Open a signup sheet on the schedule so members can claim a seat for this event. It
+                                    appears under <span className="font-medium">Scheduling → Open Shifts</span> like any
+                                    other open shift.
+                                  </p>
+                                  <div className="flex flex-wrap items-end gap-3">
+                                    <div>
+                                      <label
+                                        htmlFor="volunteer-slots"
+                                        className="text-theme-text-muted mb-1 block text-xs font-medium"
+                                      >
+                                        Members needed
+                                      </label>
+                                      <input
+                                        id="volunteer-slots"
+                                        type="number"
+                                        min={1}
+                                        max={50}
+                                        value={volunteerSlots}
+                                        onChange={(e) => {
+                                          const val = parseInt(e.target.value, 10);
+                                          if (!isNaN(val) && val >= 1 && val <= 50) setVolunteerSlots(val);
+                                        }}
+                                        className="form-input w-24 text-sm"
+                                      />
+                                    </div>
+                                    <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={includeOfficerSlot}
+                                        onChange={(e) => setIncludeOfficerSlot(e.target.checked)}
+                                        className="form-checkbox"
+                                      />
+                                      Include an officer seat
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleOpenStaffing(expandedDetail.id)}
+                                      disabled={actionLoading}
+                                      className="btn-primary flex items-center gap-1.5 text-sm font-medium"
+                                    >
+                                      <UserPlus className="h-4 w-4" />
+                                      Open Signups
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {!staffingLoading && staffing?.shift_id && (
+                                <div className="card space-y-3 p-4">
+                                  <p className="text-theme-text-primary text-sm font-medium">
+                                    {staffing.slots_filled} of {staffing.slots_total} seats filled
+                                  </p>
+                                  {staffing.volunteers.length === 0 ? (
+                                    <p className="text-theme-text-muted text-sm">
+                                      Nobody has signed up yet. Email the membership below to ask for help.
+                                    </p>
+                                  ) : (
+                                    <ul className="space-y-1">
+                                      {staffing.volunteers.map((v) => (
+                                        <li
+                                          key={v.user_id}
+                                          className="text-theme-text-secondary flex items-center gap-2 text-sm"
+                                        >
+                                          <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                          <span className="text-theme-text-primary font-medium">{v.member_name}</span>
+                                          <span className="text-theme-text-muted text-xs capitalize">
+                                            {v.position.replace(/_/g, ' ')}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowVolunteerCall(!showVolunteerCall)}
+                                  disabled={actionLoading}
+                                  className="btn-info flex items-center gap-1.5 px-3 text-sm font-medium"
+                                >
+                                  <Megaphone className="h-4 w-4" />
+                                  Email the Membership
+                                </button>
+                                {staffing?.volunteer_call_sent_at && (
+                                  <span className="text-theme-text-muted text-xs">
+                                    Last sent {formatShortDateTime(staffing.volunteer_call_sent_at, tz)}
+                                  </span>
+                                )}
+                              </div>
+
+                              {showVolunteerCall && (
+                                <div className="card space-y-3 p-4">
+                                  <p className="text-theme-text-muted text-xs">
+                                    Emails every active member with the event details and a link to sign up. Members who
+                                    have turned off email notifications are skipped.
+                                  </p>
+                                  <textarea
+                                    value={volunteerCallMessage}
+                                    onChange={(e) => setVolunteerCallMessage(e.target.value)}
+                                    rows={3}
+                                    maxLength={2000}
+                                    placeholder="Optional note — e.g. 'Looking for two people with the smoke trailer.'"
+                                    className="form-input placeholder-theme-text-muted text-sm"
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleVolunteerCall(expandedDetail.id)}
+                                      disabled={actionLoading}
+                                      className="btn-primary flex items-center gap-1.5 text-sm font-medium"
+                                    >
+                                      <Send className="h-4 w-4" />
+                                      Send Request for Help
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowVolunteerCall(false)}
                                       className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 text-sm font-medium transition-colors"
                                     >
                                       Cancel

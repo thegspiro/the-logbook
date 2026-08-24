@@ -138,6 +138,19 @@ class EventRequest(Base):
         String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Volunteer staffing. Once a date is agreed the coordinator opens a shift
+    # on the schedule that members sign up for through the ordinary open-shift
+    # flow, so "who is covering this demo" lives with every other seat the
+    # department fills rather than in a side list only the pipeline knows
+    # about. NULL means no signup sheet has been opened yet.
+    staffing_shift_id = Column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
+    )
+    # When the department last emailed the membership asking for help. Recorded
+    # so a second coordinator can see the call already went out rather than
+    # sending the roster a duplicate.
+    volunteer_call_sent_at = Column(DateTime(timezone=True), nullable=True)
+
     # Public status tracking
     status_token = Column(
         String(64), unique=True, index=True, default=generate_status_token

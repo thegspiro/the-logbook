@@ -631,6 +631,9 @@ export interface EventRequest {
   event_end_date?: string;
   event_location_id?: string;
   event_location_name?: string;
+  /** Shift members sign up on to cover this event; null until signups are opened. */
+  staffing_shift_id?: string;
+  volunteer_call_sent_at?: string;
   status_token?: string;
   created_at: string;
   updated_at: string;
@@ -652,7 +655,34 @@ export interface EventRequestListItem {
   assignee_name?: string;
   task_completions?: Record<string, TaskCompletion>;
   event_date?: string;
+  staffing_shift_id?: string;
   created_at: string;
+}
+
+/** One member who has signed up to cover an outreach event. */
+export interface EventRequestVolunteer {
+  user_id: string;
+  member_name: string;
+  position: string;
+  status: string;
+  assigned_at?: string;
+}
+
+/** Volunteer staffing state for a scheduled request. */
+export interface EventRequestStaffing {
+  shift_id?: string;
+  shift_date?: string;
+  slots_total: number;
+  slots_filled: number;
+  volunteers: EventRequestVolunteer[];
+  volunteer_call_sent_at?: string;
+}
+
+export interface EventRequestVolunteerCallResult {
+  message: string;
+  recipients: number;
+  skipped_opted_out: number;
+  volunteer_call_sent_at: string;
 }
 
 export interface EventRequestPublicStatus {

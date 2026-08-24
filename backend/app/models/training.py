@@ -2932,6 +2932,13 @@ class Shift(Base):
         Boolean, default=False, nullable=False, server_default="0"
     )
 
+    # A community-outreach signup sheet opened from an event request, not a
+    # duty shift. Standing claims skip these: "every Saturday day shift" is a
+    # commitment to the department's regular coverage, and honouring it here
+    # would seat a member on a school visit they never volunteered for and
+    # spend one of the sheet's limited seats doing it.
+    is_outreach = Column(Boolean, default=False, nullable=False, server_default="0")
+
     # Summary totals — computed on finalization, also served live via API
     call_count = Column(Integer, nullable=True)
     total_hours = Column(Float, nullable=True)

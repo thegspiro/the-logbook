@@ -2299,6 +2299,12 @@ class FormsService:
             EventRequestActivity,
             EventRequestStatus,
         )
+        from app.services.event_request_service import (
+            apply_default_assignee,
+            get_pipeline_settings,
+            lead_time_error,
+            send_request_notification,
+        )
 
         sub_data: Dict[str, Any] = (
             submission.data if isinstance(submission.data, dict) else {}
@@ -2331,18 +2337,20 @@ class FormsService:
                 ),
             }
 
+        org = await self.db.scalar(
+            select(Organization).where(
+                Organization.id == str(submission.organization_id)
+            )
+        )
+        pipeline = get_pipeline_settings(org)
+
         # A date picker submits a calendar date ("2026-09-10") with no time.
         # Stamping it midnight UTC turns it into the previous evening for
         # every negative-offset department, so the coordinator's screen shows
         # the day before the requester chose. Anchor date-only values to
         # midnight in the organization's own timezone instead.
-        org_timezone = await self.db.scalar(
-            select(Organization.timezone).where(
-                Organization.id == str(submission.organization_id)
-            )
-        )
         try:
-            request_tz = ZoneInfo(org_timezone or "UTC")
+            request_tz = ZoneInfo(getattr(org, "timezone", None) or "UTC")
         except (ZoneInfoNotFoundError, ValueError):
             request_tz = timezone.utc
 
@@ -2362,6 +2370,18 @@ class FormsService:
                 parsed = parsed.replace(tzinfo=request_tz)
             return parsed
 
+        date_flexibility = mapped_data.get("date_flexibility", "flexible")
+        preferred_start = _parse_request_date(mapped_data.get("preferred_date_start"))
+
+        # The department's minimum notice applies to every intake path, but a
+        # form submission has already been accepted by the time we get here —
+        # dropping the request would lose a community enquiry behind a success
+        # page nobody can appeal. So it is flagged for the coordinator instead
+        # of refused, which is the difference between this path and the JSON
+        # endpoint, where the submitter is still there to be told and can pick
+        # another date.
+        lead_warning = lead_time_error(pipeline, date_flexibility, preferred_start)
+
         try:
             event_request = EventRequest(
                 organization_id=submission.organization_id,
@@ -2371,11 +2391,9 @@ class FormsService:
                 organization_name=mapped_data.get("organization_name"),
                 outreach_type=mapped_data.get("outreach_type", "other"),
                 description=mapped_data.get("description", "Submitted via form"),
-                date_flexibility=mapped_data.get("date_flexibility", "flexible"),
+                date_flexibility=date_flexibility,
                 preferred_timeframe=mapped_data.get("preferred_timeframe"),
-                preferred_date_start=_parse_request_date(
-                    mapped_data.get("preferred_date_start")
-                ),
+                preferred_date_start=preferred_start,
                 preferred_date_end=_parse_request_date(
                     mapped_data.get("preferred_date_end")
                 ),
@@ -2392,6 +2410,9 @@ class FormsService:
                 venue_address=mapped_data.get("venue_address"),
                 special_requests=mapped_data.get("special_requests"),
                 status=EventRequestStatus.SUBMITTED,
+                reviewer_notes=(
+                    f"Short notice: {lead_warning}" if lead_warning else None
+                ),
                 form_submission_id=str(submission.id),
                 ip_address=submission.ip_address,
             )
@@ -2405,7 +2426,31 @@ class FormsService:
                 notes="Request submitted via public form",
             )
             self.db.add(activity)
+
+            if lead_warning:
+                self.db.add(
+                    EventRequestActivity(
+                        request_id=event_request.id,
+                        action="lead_time_warning",
+                        notes=lead_warning,
+                        details={
+                            "min_lead_time_days": pipeline.get("min_lead_time_days"),
+                        },
+                    )
+                )
+
+            # Auto-assignment and the acknowledgement/coordinator emails belong
+            # to intake, not to one intake endpoint. Without these, a request
+            # arriving through the department's own published form sat
+            # unassigned and unannounced until somebody happened to open the
+            # requests board — while the same request sent to the JSON endpoint
+            # was assigned and emailed immediately.
+            await apply_default_assignee(self.db, event_request, pipeline)
             await self.db.flush()
+            if org is not None:
+                await send_request_notification(
+                    self.db, event_request, "on_submitted", org
+                )
 
             return {
                 "success": True,

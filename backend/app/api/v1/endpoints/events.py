@@ -551,13 +551,32 @@ EVENT_SETTINGS_DEFAULTS = {
                 "notify_assignee": True,
                 "notify_requester": True,
             },
+            # Internal hand-off: the coordinator hears about it, the member of
+            # the public does not. Reassignment used to reuse "on_submitted",
+            # which emailed the requester "we have received your request" again.
+            "on_assigned": {
+                "enabled": True,
+                "notify_assignee": True,
+                "notify_requester": False,
+            },
             "on_in_progress": {"enabled": True, "notify_requester": True},
             "on_scheduled": {"enabled": True, "notify_requester": True},
             "on_postponed": {"enabled": True, "notify_requester": True},
             "on_completed": {"enabled": True, "notify_requester": True},
             "on_declined": {"enabled": True, "notify_requester": True},
             "on_cancelled": {"enabled": True, "notify_requester": True},
-            "days_before_event": {"enabled": True, "days": [7, 1]},
+            # notify_requester matters: _send_request_notification only mails
+            # the requester when it is set, so without it the reminder task
+            # runs, marks the reminder sent, and delivers nothing.
+            "days_before_event": {
+                "enabled": True,
+                "notify_requester": True,
+                "days": [7, 1],
+            },
+            # Sent to the membership, not the requester: "we need help staffing
+            # this". Manual (a coordinator presses the button) — this entry is
+            # what lets a department turn the button off entirely.
+            "volunteer_call": {"enabled": True},
         },
     },
     "defaults": {

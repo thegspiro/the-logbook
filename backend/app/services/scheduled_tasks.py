@@ -34,6 +34,9 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — send event reminders
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=event_reminders
 
+# Daily at 7:00 AM — outreach request pre-event reminders to requesters
+0 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=event_request_reminders
+
 # Every 30 minutes — post-event validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_event_validation
 
@@ -200,6 +203,16 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
+    },
+    "event_request_reminders": {
+        "description": (
+            "Send the outreach request pipeline's pre-event reminders to "
+            "requesters, on the day offsets configured in "
+            "request_pipeline.email_triggers.days_before_event"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:00",
+        "cron": "0 7 * * *",
     },
     "event_reminders": {
         "description": "Send email and in-app reminders for upcoming events based on each event's reminder_schedule setting",
@@ -4922,6 +4935,198 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_maintenance", "marked_overdue": total}
 
 
+async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Send the pre-event reminders the request pipeline's settings promise.
+
+    ``request_pipeline.email_triggers.days_before_event`` — enabled with
+    ``[7, 1]`` out of the box — and the ``trigger``/``trigger_days_before``
+    columns on the pipeline's own email templates both shipped with a settings
+    screen, a create form, and no code that read them (CLAUDE.md pitfall #19).
+    A coordinator could configure "email the requester a week out", see it
+    listed, and nothing was ever sent.
+
+    Each (request, day-offset) pair is sent at most once, recorded as a
+    ``reminder_sent:{days}`` activity row on the request. The activity log is
+    the ledger rather than a side table because a coordinator asking "did the
+    requester get their reminder?" is already looking at it.
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.models.event_request import (
+        EventRequest,
+        EventRequestActivity,
+        EventRequestEmailTemplate,
+        EventRequestStatus,
+    )
+    from app.services.event_request_service import (
+        get_pipeline_settings,
+        send_request_notification,
+    )
+
+    now = datetime.now(dt_timezone.utc)
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
+    organizations = list(orgs.scalars().all())
+
+    total_sent = 0
+    results = []
+
+    for org in organizations:
+        org_sent = 0
+        try:
+            pipeline = get_pipeline_settings(org)
+            trigger = (pipeline.get("email_triggers", {}) or {}).get(
+                "days_before_event", {}
+            )
+            if not trigger.get("enabled", False):
+                continue
+
+            # A day list somebody typed by hand can hold anything; a bad entry
+            # must cost that entry, not the organization's whole reminder run.
+            offsets = set()
+            for raw in trigger.get("days", []) or []:
+                try:
+                    day = int(raw)
+                except (TypeError, ValueError):
+                    continue
+                if 0 < day <= 365:
+                    offsets.add(day)
+
+            templates = list(
+                (
+                    await db.execute(
+                        select(EventRequestEmailTemplate).where(
+                            EventRequestEmailTemplate.organization_id == str(org.id),
+                            EventRequestEmailTemplate.trigger == "days_before_event",
+                            EventRequestEmailTemplate.is_active.is_(True),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for template in templates:
+                if template.trigger_days_before:
+                    offsets.add(int(template.trigger_days_before))
+
+            if not offsets:
+                continue
+
+            horizon = now + timedelta(days=max(offsets))
+            requests = list(
+                (
+                    await db.execute(
+                        select(EventRequest).where(
+                            EventRequest.organization_id == str(org.id),
+                            EventRequest.status == EventRequestStatus.SCHEDULED,
+                            EventRequest.event_date.isnot(None),
+                            EventRequest.event_date > now,
+                            EventRequest.event_date <= horizon,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+            for event_request in requests:
+                event_date = event_request.event_date
+                if event_date.tzinfo is None:
+                    event_date = event_date.replace(tzinfo=dt_timezone.utc)
+
+                already = set(
+                    (
+                        await db.execute(
+                            select(EventRequestActivity.action).where(
+                                EventRequestActivity.request_id == event_request.id,
+                                EventRequestActivity.action.like("reminder_sent:%"),
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+
+                # Largest first: a run that has been down for a week must send
+                # the 7-day notice's content once, not fire 7, 3 and 1 in the
+                # same minute. Once one reminder goes out for a request the
+                # closer offsets are marked as covered and stay silent.
+                for days in sorted(offsets, reverse=True):
+                    action = f"reminder_sent:{days}"
+                    if action in already:
+                        continue
+                    if event_date - timedelta(days=days) > now:
+                        continue
+
+                    message = (
+                        f"This is a reminder that your event is coming up in "
+                        f"{days} {'day' if days == 1 else 'days'}."
+                    )
+                    for template in templates:
+                        if int(template.trigger_days_before or 0) == days:
+                            message = template.body_text or message
+                            break
+
+                    await send_request_notification(
+                        db,
+                        event_request,
+                        "days_before_event",
+                        org,
+                        extra_context={"message": message},
+                    )
+                    db.add(
+                        EventRequestActivity(
+                            request_id=event_request.id,
+                            action=action,
+                            notes=f"Sent {days}-day reminder to the requester",
+                            details={"days_before": days},
+                        )
+                    )
+                    already.add(action)
+                    org_sent += 1
+                    # Anything closer is now redundant: mark it sent so a
+                    # catch-up run does not email the same requester three
+                    # times on the same afternoon.
+                    for closer in (d for d in offsets if d < days):
+                        closer_action = f"reminder_sent:{closer}"
+                        if closer_action in already:
+                            continue
+                        db.add(
+                            EventRequestActivity(
+                                request_id=event_request.id,
+                                action=closer_action,
+                                notes=(
+                                    f"Superseded by the {days}-day reminder "
+                                    f"sent in the same run"
+                                ),
+                                details={"days_before": closer, "superseded": True},
+                            )
+                        )
+                        already.add(closer_action)
+                    break
+
+            # Commit per org so a later org's failure cannot discard this
+            # one's ledger rows and re-send the same reminders next tick.
+            await db.commit()
+            total_sent += org_sent
+            if org_sent:
+                results.append({"organization": str(org.id), "reminders": org_sent})
+        except Exception as e:
+            logger.warning("Event request reminders failed for org {}: {}", org.id, e)
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    return {
+        "task": "event_request_reminders",
+        "reminders_sent": total_sent,
+        "organizations": results,
+    }
+
+
 async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     """Refresh each organization's cached office directory.
 
@@ -5125,6 +5330,7 @@ TASK_RUNNERS = {
     "shift_pattern_generation": run_shift_pattern_generation,
     "swap_offer_expiry": run_swap_offer_expiry,
     "officer_directory_sync": run_officer_directory_sync,
+    "event_request_reminders": run_event_request_reminders,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -5174,6 +5380,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "shift_pattern_generation": 86400,
     "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,
+    "event_request_reminders": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

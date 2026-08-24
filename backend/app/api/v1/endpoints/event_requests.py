@@ -16,7 +16,6 @@ import html as _html
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -48,46 +47,35 @@ from app.schemas.event_request import (
     EventRequestPublicStatus,
     EventRequestResponse,
     EventRequestSchedule,
+    EventRequestStaffingCreate,
+    EventRequestStaffingResponse,
     EventRequestStatusUpdate,
+    EventRequestVolunteerCall,
+    EventRequestVolunteerCallResult,
     SendTemplateEmail,
     TaskCompletionUpdate,
 )
 from app.schemas.forms import FormResponse, FormsListResponse
+from app.services.event_request_service import (
+    apply_default_assignee,
+    configured_task_ids,
+    get_outreach_types,
+    get_pipeline_settings,
+    get_staffing_state,
+    get_user_name,
+    lead_time_error,
+    open_staffing_shift,
+)
+from app.services.event_request_service import (
+    send_request_notification as _send_request_notification,
+)
+from app.services.event_request_service import (
+    send_volunteer_call,
+)
 from app.services.forms_service import FormsService
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
-
-
-def _get_outreach_types_from_settings(org: Organization) -> list[dict[str, str]]:
-    """Read outreach event types from organization settings, falling back to defaults."""
-    from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
-
-    settings = (org.settings or {}).get("events", {})
-    return settings.get(
-        "outreach_event_types", EVENT_SETTINGS_DEFAULTS["outreach_event_types"]
-    )
-
-
-def _get_pipeline_settings(org: Organization) -> dict:
-    """Read pipeline settings from organization, falling back to defaults."""
-    from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
-
-    settings = (org.settings or {}).get("events", {})
-    defaults = EVENT_SETTINGS_DEFAULTS["request_pipeline"]
-    stored = settings.get("request_pipeline", {})
-    return {**defaults, **stored}
-
-
-async def _get_user_name(db: AsyncSession, user_id: str) -> str | None:
-    """Look up a user's display name."""
-    result = await db.execute(
-        select(User.first_name, User.last_name).where(User.id == user_id)
-    )
-    row = result.first()
-    if row:
-        return f"{row[0]} {row[1]}".strip()
-    return None
 
 
 async def _get_location_name(
@@ -109,190 +97,13 @@ async def _get_location_name(
     return row[0] if row else None
 
 
-async def _send_request_notification(
-    db: AsyncSession,
-    event_request: EventRequest,
-    trigger_key: str,
-    org: Organization,
-    extra_context: dict | None = None,
-) -> None:
-    """
-    Send email notification based on pipeline trigger settings.
-
-    Reads trigger config from org settings, sends to requester and/or assignee
-    as configured. Failures are logged but do not block the request.
-    """
-    try:
-        from app.services.email_service import EmailService
-        from app.services.notifications_service import NotificationsService
-
-        pipeline = _get_pipeline_settings(org)
-        triggers = pipeline.get("email_triggers", {})
-        trigger_config = triggers.get(trigger_key, {})
-
-        if not trigger_config.get("enabled", False):
-            return
-
-        email_service = EmailService(organization=org)
-        notifications_service = NotificationsService(db)
-
-        status_labels = {
-            "submitted": "Submitted",
-            "in_progress": "In Progress",
-            "scheduled": "Scheduled",
-            "postponed": "Postponed",
-            "completed": "Completed",
-            "declined": "Declined",
-            "cancelled": "Cancelled",
-        }
-        status_label = status_labels.get(
-            event_request.status.value, event_request.status.value
-        )
-
-        # Notify the requester
-        if trigger_config.get("notify_requester", False):
-            from app.models.email_template import EmailTemplateType
-            from app.services.email_template_service import (
-                DEFAULT_EVENT_REQUEST_STATUS_HTML,
-                DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
-                DEFAULT_EVENT_REQUEST_STATUS_TEXT,
-            )
-
-            org_name = org.name if org else "Department"
-            event_date = (
-                event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
-                if event_request.event_date
-                else ""
-            )
-            decline_reason = event_request.decline_reason or ""
-            message = extra_context.get("message", "") if extra_context else ""
-
-            # Build the optional blocks here rather than labelling them in the
-            # template: a scheduled request has a date and no decline reason,
-            # a declined one the reverse, and the recipient is a member of the
-            # public who should not receive a bare "Reason:" with nothing after
-            # it. Escaped at the point of assembly — every value below is
-            # either department-entered or public-supplied.
-            detail_rows = []
-            detail_lines = []
-            if event_date:
-                detail_rows.append(
-                    f"<p><strong>Scheduled Date:</strong> {_html.escape(event_date)}</p>"
-                )
-                detail_lines.append(f"Scheduled Date: {event_date}")
-            if decline_reason:
-                detail_rows.append(
-                    f"<p><strong>Reason:</strong> {_html.escape(decline_reason)}</p>"
-                )
-                detail_lines.append(f"Reason: {decline_reason}")
-
-            context = {
-                "contact_name": event_request.contact_name or "",
-                "status_label": status_label,
-                "event_date": event_date,
-                "decline_reason": decline_reason,
-                "message": message,
-                "details_html": (
-                    f'<div class="details">{"".join(detail_rows)}</div>'
-                    if detail_rows
-                    else ""
-                ),
-                "details_text": "\n".join(detail_lines),
-                "message_html": (
-                    f'<p style="white-space:pre-line;">{_html.escape(message)}</p>'
-                    if message
-                    else ""
-                ),
-                "organization_name": org_name,
-            }
-
-            # _render_with_fallback loads the department's template and falls
-            # back to the built-in default, escaping each destination the way
-            # it needs. Hand-rolling that here previously fed each value to
-            # re.sub as a replacement string, so a backslash in a public
-            # contact name was read as a group reference.
-            subject, html_body, text_body = await email_service._render_with_fallback(
-                template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
-                context=context,
-                db=db,
-                organization_id=str(org.id) if org else None,
-                default_subject=DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
-                default_html=DEFAULT_EVENT_REQUEST_STATUS_HTML,
-                default_text=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
-            )
-
-            await email_service.send_email(
-                to_emails=[event_request.contact_email],
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
-                db=db,
-                template_type=EmailTemplateType.EVENT_REQUEST_STATUS.value,
-            )
-
-        # Notify the assigned coordinator
-        if trigger_config.get("notify_assignee", False) and event_request.assigned_to:
-            assignee_result = await db.execute(
-                select(User).where(User.id == event_request.assigned_to)
-            )
-            assignee = assignee_result.scalar_one_or_none()
-            if assignee and assignee.email:
-                from app.services.email_service import build_email_logo_html
-
-                outreach_label = event_request.outreach_type.replace("_", " ").title()
-                e_assignee = _html.escape(assignee.first_name or "")
-                e_contact = _html.escape(event_request.contact_name or "")
-                e_outreach = _html.escape(outreach_label)
-                e_org_name = _html.escape(event_request.organization_name or "N/A")
-                _logo = build_email_logo_html(org)
-                subject = f"New Event Request Assigned — {outreach_label}"
-                body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
-{_logo}
-<p>Hello {e_assignee},</p>
-<p>A new event request has been assigned to you:</p>
-<ul>
-<li><strong>Contact:</strong> {e_contact}</li>
-<li><strong>Type:</strong> {e_outreach}</li>
-<li><strong>Organization:</strong> {e_org_name}</li>
-</ul>
-<p>Please review and begin processing this request.</p>
-</div>"""
-
-                await email_service.send_email(
-                    to_emails=[assignee.email],
-                    subject=subject,
-                    html_body=body,
-                )
-
-                await notifications_service.log_notification(
-                    organization_id=org.id,
-                    log_data={
-                        "recipient_id": assignee.id,
-                        "channel": "email",
-                        "category": "events",
-                        "trigger": "event_reminder",
-                        "subject": subject,
-                        "body": f"New event request from {event_request.contact_name}",
-                    },
-                )
-    except Exception as e:
-        # A failed notification must not roll back an event request the public
-        # already submitted — but swallowing it without a trace meant nobody
-        # could tell "no assignee was notified" from "no request came in".
-        logger.warning(
-            "Event request assignee notification failed for org {}: {}",
-            org.id,
-            e,
-        )
-
-
 async def _build_response(
     db: AsyncSession, event_request: EventRequest
 ) -> EventRequestResponse:
     """Build a full EventRequestResponse from a model instance."""
     assignee_name = None
     if event_request.assigned_to:
-        assignee_name = await _get_user_name(db, event_request.assigned_to)
+        assignee_name = await get_user_name(db, event_request.assigned_to)
 
     location_name = None
     if event_request.event_location_id:
@@ -304,7 +115,7 @@ async def _build_response(
     for entry in event_request.activity_log:
         performer_name = None
         if entry.performed_by:
-            performer_name = await _get_user_name(db, entry.performed_by)
+            performer_name = await get_user_name(db, entry.performed_by)
         activity_items.append(
             {
                 "id": entry.id,
@@ -349,6 +160,8 @@ async def _build_response(
         event_end_date=event_request.event_end_date,
         event_location_id=event_request.event_location_id,
         event_location_name=location_name,
+        staffing_shift_id=event_request.staffing_shift_id,
+        volunteer_call_sent_at=event_request.volunteer_call_sent_at,
         status_token=event_request.status_token,
         created_at=event_request.created_at,
         updated_at=event_request.updated_at,
@@ -429,7 +242,7 @@ async def submit_public_event_request(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    pipeline = _get_pipeline_settings(org)
+    pipeline = get_pipeline_settings(org)
 
     # EV-5: public intake is opt-in. Answer exactly as we do for an
     # organization that does not exist — a distinguishable response turns this
@@ -461,8 +274,12 @@ async def submit_public_event_request(
             detail="This department is not accepting further requests today.",
         )
 
-    # Check default assignee from pipeline settings
-    default_assignee = pipeline.get("default_assignee_id")
+    # The department's minimum notice, enforced rather than merely stored.
+    lead_error = lead_time_error(
+        pipeline, data.date_flexibility, data.preferred_date_start
+    )
+    if lead_error:
+        raise HTTPException(status_code=400, detail=lead_error)
 
     event_request = EventRequest(
         organization_id=organization_id,
@@ -483,7 +300,6 @@ async def submit_public_event_request(
         venue_address=data.venue_address,
         special_requests=data.special_requests,
         status=EventRequestStatus.SUBMITTED,
-        assigned_to=default_assignee,
         ip_address=get_client_ip(request),
     )
     db.add(event_request)
@@ -497,15 +313,7 @@ async def submit_public_event_request(
     )
     db.add(activity)
 
-    if default_assignee:
-        assignee_name = await _get_user_name(db, default_assignee)
-        assign_activity = EventRequestActivity(
-            request_id=event_request.id,
-            action="auto_assigned",
-            notes=f"Auto-assigned to {assignee_name or 'default coordinator'}",
-            details={"assigned_to": default_assignee},
-        )
-        db.add(assign_activity)
+    await apply_default_assignee(db, event_request, pipeline)
 
     await db.commit()
     await db.refresh(event_request)
@@ -543,7 +351,7 @@ async def check_request_status(
         select(Organization).where(Organization.id == event_request.organization_id)
     )
     org = org_result.scalar_one_or_none()
-    pipeline = _get_pipeline_settings(org) if org else {}
+    pipeline = get_pipeline_settings(org) if org else {}
     show_progress = pipeline.get("public_progress_visible", False)
 
     task_progress = None
@@ -701,7 +509,7 @@ async def list_event_requests(
     for req in requests:
         assignee_name = None
         if req.assigned_to:
-            assignee_name = await _get_user_name(db, req.assigned_to)
+            assignee_name = await get_user_name(db, req.assigned_to)
 
         items.append(
             EventRequestListItem(
@@ -719,6 +527,7 @@ async def list_event_requests(
                 assignee_name=assignee_name,
                 task_completions=req.task_completions,
                 event_date=req.event_date,
+                staffing_shift_id=req.staffing_shift_id,
                 created_at=req.created_at,
             )
         )
@@ -960,13 +769,16 @@ async def assign_request(
     db.add(activity)
     await db.commit()
 
-    # Notify the new assignee
+    # Notify the new assignee. This fires "on_assigned", not "on_submitted":
+    # the submission trigger notifies the *requester* as well, so reassigning a
+    # coordinator sent a member of the public a second "we have received your
+    # request" email every time an internal hand-off happened.
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     org = org_result.scalar_one_or_none()
     if org:
-        await _send_request_notification(db, event_request, "on_submitted", org)
+        await _send_request_notification(db, event_request, "on_assigned", org)
 
     return {
         "message": f"Request assigned to {assignee_name}",
@@ -1008,7 +820,7 @@ async def add_comment(
     await db.commit()
     await db.refresh(activity)
 
-    performer_name = await _get_user_name(db, current_user.id)
+    performer_name = await get_user_name(db, current_user.id)
 
     return {
         "id": activity.id,
@@ -1096,7 +908,7 @@ async def schedule_request(
             select(Organization).where(Organization.id == current_user.organization_id)
         )
         org = org_result.scalar_one_or_none()
-        outreach_types = _get_outreach_types_from_settings(org) if org else []
+        outreach_types = get_outreach_types(org) if org else []
         type_label = event_request.outreach_type.replace("_", " ").title()
         for t in outreach_types:
             if t["value"] == event_request.outreach_type:
@@ -1301,6 +1113,21 @@ async def update_task_completion(
             ),
         )
 
+    # A task id the department has not configured can never be rendered,
+    # completed or reported on — it only accretes in the JSON column and
+    # skews nothing visible while looking like progress in the raw record.
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    known_task_ids = configured_task_ids(org_result.scalar_one_or_none())
+    if update.completed and update.task_id not in known_task_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(
+                ValueError(f"Unknown pipeline task: {update.task_id}")
+            ),
+        )
+
     completions = copy.deepcopy(event_request.task_completions or {})
 
     if update.completed:
@@ -1402,6 +1229,11 @@ async def send_template_email(
         if data.additional_context:
             context.update(data.additional_context)
 
+        # organization_logo_img is markup this module builds (and has already
+        # escaped the url and alt text inside). Escaping it again renders the
+        # tag as literal "<img ...>" text at the top of every template email.
+        raw_html_keys = {"organization_logo_img"}
+
         subject = template.subject
         body = template.body_html
         for key, value in context.items():
@@ -1410,7 +1242,10 @@ async def send_template_email(
             # value would otherwise raise TypeError -> 500.
             safe_value = "" if value is None else str(value)
             subject = subject.replace(f"{{{{{key}}}}}", safe_value)
-            body = body.replace(f"{{{{{key}}}}}", _html.escape(safe_value))
+            body = body.replace(
+                f"{{{{{key}}}}}",
+                safe_value if key in raw_html_keys else _html.escape(safe_value),
+            )
 
         await email_service.send_email(
             to_emails=[event_request.contact_email],
@@ -1435,6 +1270,148 @@ async def send_template_email(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# ============================================
+# Volunteer staffing — signups on the shift schedule
+# ============================================
+
+
+async def _load_request_for_staffing(
+    db: AsyncSession, request_id: str, organization_id: str
+) -> EventRequest:
+    """Fetch an org-scoped request or 404."""
+    result = await db.execute(
+        select(EventRequest).where(
+            EventRequest.id == request_id,
+            EventRequest.organization_id == organization_id,
+        )
+    )
+    event_request = result.scalar_one_or_none()
+    if not event_request:
+        raise HTTPException(status_code=404, detail="Event request not found")
+    return event_request
+
+
+@router.get("/{request_id}/staffing", response_model=EventRequestStaffingResponse)
+async def get_request_staffing(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """Who has signed up to cover this request, and how many seats are left."""
+    event_request = await _load_request_for_staffing(
+        db, request_id, current_user.organization_id
+    )
+    return EventRequestStaffingResponse(**await get_staffing_state(db, event_request))
+
+
+@router.post(
+    "/{request_id}/staffing",
+    response_model=EventRequestStaffingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def open_request_staffing(
+    request_id: str,
+    data: EventRequestStaffingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Open a volunteer signup sheet for a scheduled request.
+
+    Creates an open-to-all shift on the confirmed date so members sign up
+    through the ordinary Open Shifts flow, and links it to the request. Only
+    a scheduled request has a date to staff.
+    """
+    event_request = await _load_request_for_staffing(
+        db, request_id, current_user.organization_id
+    )
+
+    if event_request.status != EventRequestStatus.SCHEDULED:
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(
+                ValueError(
+                    "Confirm a date for this request before opening volunteer "
+                    "signups."
+                )
+            ),
+        )
+    if event_request.staffing_shift_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Volunteer signups are already open for this request.",
+        )
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+
+    shift, error = await open_staffing_shift(
+        db,
+        event_request,
+        org,
+        volunteer_slots=data.volunteer_slots,
+        include_officer=data.include_officer_slot,
+        actor_id=current_user.id,
+        notes=data.notes,
+    )
+    if error or shift is None:
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(
+                ValueError(error or "Unable to open volunteer signups.")
+            ),
+        )
+
+    await db.commit()
+    await db.refresh(event_request)
+    return EventRequestStaffingResponse(**await get_staffing_state(db, event_request))
+
+
+@router.post(
+    "/{request_id}/volunteer-call", response_model=EventRequestVolunteerCallResult
+)
+async def send_request_volunteer_call(
+    request_id: str,
+    data: EventRequestVolunteerCall,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Email the membership asking who can help cover this event.
+
+    Email only — a call for help on a community event is not one of the alerts
+    in ``SmsAlert``. Members who have turned off email notifications are
+    skipped and counted in the response.
+    """
+    event_request = await _load_request_for_staffing(
+        db, request_id, current_user.organization_id
+    )
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+
+    try:
+        result = await send_volunteer_call(
+            db,
+            event_request,
+            org,
+            actor=current_user,
+            message=data.message,
+            membership_types=data.membership_types,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    await db.commit()
+    return EventRequestVolunteerCallResult(**result)
 
 
 # ============================================
@@ -1540,7 +1517,7 @@ async def get_outreach_type_labels(
         )
         org = result.scalar_one_or_none()
         if org:
-            types = _get_outreach_types_from_settings(org)
+            types = get_outreach_types(org)
             return {t["value"]: t["label"] for t in types}
 
     default_types = EVENT_SETTINGS_DEFAULTS["outreach_event_types"]
@@ -1576,7 +1553,7 @@ async def generate_event_request_form(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    outreach_types = _get_outreach_types_from_settings(org)
+    outreach_types = get_outreach_types(org)
     outreach_options = [
         {"value": t["value"], "label": t["label"]} for t in outreach_types
     ]

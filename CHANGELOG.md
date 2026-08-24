@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Community outreach requests: the settings now do what they say, and a confirmed date reaches the schedule (2026-08-24)
+
+**Fixed**
+
+- **A request submitted through the department's own public form was neither
+  assigned nor announced.** The Forms path — the one the "Generate public
+  request form" button builds, and the one the public actually uses — created
+  the row and stopped: no default coordinator, no acknowledgement to the
+  requester, no email to anybody. The same request posted to the JSON intake
+  endpoint was assigned and emailed immediately. Both paths now run the same
+  intake.
+- **Reassigning a coordinator emailed the requester again.** The hand-off
+  reused the `on_submitted` trigger, whose default notifies the requester, so
+  an internal change of coordinator told a member of the public "we have
+  received your request" a second time. Assignment has its own trigger,
+  notifying the coordinator only.
+- **Minimum lead time gated nothing.** `min_lead_time_days` had a slider on the
+  settings screen and no code that read it, so a school could ask for a truck
+  on Friday and the pipeline accepted it exactly as it accepted six months'
+  notice. A public submission naming a date inside the minimum is now refused
+  while the submitter is still there to pick another; a form submission,
+  already accepted, is flagged as short notice for the coordinator rather than
+  dropped behind a success page nobody can appeal.
+- **The "days before event" reminder never fired.** The trigger shipped enabled
+  at 7 and 1 days, and the pipeline's email templates carried `trigger` and
+  `trigger_days_before` columns, with nothing anywhere that read them. A daily
+  task now sends them, once per request per offset, recorded in the request's
+  activity log. A catch-up run after downtime sends one reminder, not three.
+- **The department logo rendered as literal `<img …>` text** at the top of every
+  template email sent to a requester.
+- **Pipeline task completions accepted any task id**, including ones the
+  department has never configured. Clearing a task that has since been removed
+  from settings still works.
+- **The public status page could show the wrong time.** Its dates carried no
+  timezone marker, so a browser read them as local: a department in UTC-05:00
+  told the public their 6pm demo was at 1pm.
+- **Decline was offered on requests that cannot be declined.** A scheduled or
+  postponed request can be cancelled but not declined, and pressing the button
+  produced a 400 the coordinator read as the app being broken.
+
+**Added**
+
+- **Volunteer signups live on the shift schedule.** Once a date is agreed, a
+  coordinator opens a signup sheet from the request: it appears under
+  Scheduling → Open Shifts like any other open shift, members claim a seat
+  through the flow they already use, and the request shows who has signed up
+  and how many seats are left. The sheet is open to all members — an outreach
+  event is staffed by whoever can come, not by operational rank — and standing
+  shift claims deliberately skip it, so "every Saturday day shift" cannot seat
+  a member on a school visit they never volunteered for.
+- **A call for help to the membership.** One button emails every active member
+  the event details, the coordinator's note, and a link to sign up. Email only,
+  as the notification policy requires for a routine request acted on during the
+  week; members who have turned off email notifications are skipped and
+  counted back to the sender.
+
 ### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
 
 **Changed**
