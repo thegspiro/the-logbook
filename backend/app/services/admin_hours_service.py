@@ -1427,6 +1427,42 @@ class AdminHoursService:
             for mapping, cat in result.all()
         ]
 
+    async def get_active_mappings_by_source(
+        self, organization_id: str
+    ) -> Dict[Tuple[str, str], List[Tuple[int, str]]]:
+        """Bulk-load active event-hour mappings, keyed by their source.
+
+        The per-event :meth:`get_mappings_for_event` is one query per event,
+        which the events list cannot afford. Keys are ``("event_type", value)``
+        or ``("custom_category", value)``; values are ``(percentage, category
+        name)`` pairs. Callers must resolve with the same precedence
+        :meth:`get_mappings_for_event` uses — event_type first, custom_category
+        only when the event has no type — so a displayed credit matches what
+        :meth:`credit_event_attendance` will actually award.
+        """
+        result = await self.db.execute(
+            select(EventHourMapping, AdminHoursCategory)
+            .join(
+                AdminHoursCategory,
+                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+                AdminHoursCategory.is_active.is_(True),
+            )
+        )
+        by_source: Dict[Tuple[str, str], List[Tuple[int, str]]] = {}
+        for mapping, cat in result.all():
+            if mapping.event_type:
+                key = ("event_type", mapping.event_type)
+            elif mapping.custom_category:
+                key = ("custom_category", mapping.custom_category)
+            else:
+                continue
+            by_source.setdefault(key, []).append((mapping.percentage, cat.name))
+        return by_source
+
     async def credit_event_attendance(
         self,
         organization_id: str,
