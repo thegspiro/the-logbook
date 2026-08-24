@@ -848,7 +848,17 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    return entries.sort((a, b) => b.sortAt - a.sortAt);
+    // Standing items first, then newest.
+    //
+    // The inbox already arrives ordered pinned → persistent → newest, and
+    // merging it with notifications under a plain recency sort threw both
+    // away. Only FEED_ROWS_SHOWN rows render, so a pinned "Station 2 bay
+    // doors out of service" sat below four routine notifications and a
+    // standing order dropped off the board entirely — the pin icon rendered
+    // beside it either way, which is the part that misleads: an officer who
+    // pins a notice has no way to tell it did nothing.
+    const standing = (entry: FeedEntry) => (entry.message?.is_pinned ? 2 : entry.message?.is_persistent ? 1 : 0);
+    return entries.sort((a, b) => standing(b) - standing(a) || b.sortAt - a.sortAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deptMessages, notifications, pendingAcknowledgements, tz]);
 

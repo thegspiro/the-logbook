@@ -115,7 +115,32 @@ reading a message does not remove it mid-read, but it clears on the next load;
 persistent notices remain; calendar year is not “last 365 days.” Mobile cards
 and breadcrumb/action targets must remain at least 44px.
 
-> **[SCREENSHOT NEEDED — populated station board with one pending message, one persistent notice, and conditional cards identified in the caption.]**
+**My Updates** is the board's one feed: department announcements and your own
+notifications in a single list, in place of the three panels that used to
+restate each other. It asks for pending items only — a message you have read
+drops off on the next load — with two exceptions that are the point of the
+design.
+
+![My Updates on the station board: a pinned announcement and a standing order badged Persistent above the unread notifications, with the clear control only a manager sees](./images/19-28-station-board-messages.png)
+
+**Pinned first, then persistent, then newest.** The pinned bay-door notice at
+the top is four days older than the notifications under it, and the standing
+order below it is older still: neither is here because it is recent. A
+persistent notice is also exempt from the "unread only" filter, so it stays on
+the board after everyone has read it, and only the ✕ — which is a manager's
+control, and does not appear for an ordinary member — takes it off.
+
+_(Fixed in this release: the merged feed sorted purely by recency, which threw
+away both. The pin icon rendered all the same, so an officer pinning an urgent
+notice had no way to tell it had done nothing — and with five rows on screen, a
+standing order left the board as soon as five notifications arrived.)_
+
+Everything else on the board is conditional and this department shows it: the
+five rows above are all this feed holds, **Older Items** carries the rest, and
+the cards around it appear only where the module and the data apply.
+[Guide 8 pairs the same board under two accounts](./08-admin-reports.md#august-1923-2026-update--exports-and-dashboards)
+— one holding `finance.manage` and one without — which is the clearest reading
+of what "conditional" means here.
 
 ![The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against](./images/19-22-admin-hours-summary-year.png)
 

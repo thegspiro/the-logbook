@@ -11421,6 +11421,28 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // The station board's message rail, framed rather than the whole board.
+    // The board itself is already pictured twice -- `00-24` for the member's
+    // tab and `08-75`/`08-76` for the conditional cards, which is what the
+    // marker's "identified in the caption" is about -- and a third full-page
+    // dashboard would be the same screen under a different caption. What is
+    // not pictured anywhere is a feed carrying both kinds of item at once.
+    id: "19-28-station-board-messages",
+    doc: "19-august-2026-release-changes.md",
+    line: 118,
+    anchor: "populated station board with one pending message, one persistent",
+    alt: "My Updates on the station board: unread notifications and announcements above a standing order badged Persistent, with the clear control only a manager sees",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await page
+        .getByText(/^Spotter Required$/)
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='my-updates-heading']",
+  },
+  {
     // The roster bound, refused. Not on the results page -- results carry no
     // trace of which votes arrived on paper, because each paper ballot is
     // written as an ordinary vote row -- so the only screen that states the

@@ -31,6 +31,7 @@ const {
   mockSignupForShift,
   mockGetInbox,
   mockGetUnreadCount,
+  mockGetMyNotifications,
   mockAcknowledge,
   mockGetMyTraining,
   mockGetEvents,
@@ -47,6 +48,7 @@ const {
   mockSignupForShift: vi.fn(),
   mockGetInbox: vi.fn(),
   mockGetUnreadCount: vi.fn(),
+  mockGetMyNotifications: vi.fn(),
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
@@ -73,7 +75,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
 
 vi.mock('../services/api', () => ({
   notificationsService: {
-    getMyNotifications: vi.fn().mockResolvedValue({ logs: [], total: 0 }),
+    getMyNotifications: mockGetMyNotifications,
     markMyNotificationRead: vi.fn().mockResolvedValue(undefined),
   },
   messagesService: {
@@ -170,6 +172,7 @@ describe('Dashboard', () => {
     mockSignupForShift.mockResolvedValue({});
     mockGetInbox.mockResolvedValue([]);
     mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
+    mockGetMyNotifications.mockResolvedValue({ logs: [], total: 0 });
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
@@ -733,6 +736,69 @@ describe('Dashboard', () => {
       expect(within(feed).getByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
       expect(within(feed).getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
       expect(within(feed).getByText('Persistent')).toBeInTheDocument();
+    });
+
+    // The inbox arrives ordered pinned -> persistent -> newest, and the feed
+    // merges it with notifications. Sorting the merged list by recency alone
+    // discarded both, so a pinned urgent notice sank below routine
+    // notifications -- and only five rows render, so it left the board while
+    // still showing its pin icon.
+    it('keeps pinned and persistent messages above newer items', async () => {
+      mockGetInbox.mockResolvedValue([
+        makeMessage({
+          id: 'msg-pinned',
+          title: 'Station 2 bay doors out of service',
+          is_pinned: true,
+          created_at: '2026-08-01T12:00:00Z',
+        }),
+        makeMessage({
+          id: 'msg-standing',
+          title: 'Spotter required when backing',
+          is_persistent: true,
+          created_at: '2026-07-01T12:00:00Z',
+        }),
+        makeMessage({
+          id: 'msg-ordinary',
+          title: 'Uniform order window closes Friday',
+          created_at: '2026-08-20T12:00:00Z',
+        }),
+      ]);
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [
+          {
+            id: 'notif-newest',
+            subject: 'Shift reminder for tomorrow',
+            message: 'Your shift starts at 07:00.',
+            // `sent_at`, not `created_at`: the feed sorts notifications on
+            // the send time (the column the backend defaults to now()), and
+            // reads created_at only for the relative-time line.
+            sent_at: '2026-08-24T12:00:00Z',
+            created_at: '2026-08-24T12:00:00Z',
+            read: false,
+          },
+        ],
+        total: 1,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      await within(feed).findByText('Station 2 bay doors out of service');
+      const titles = within(feed)
+        .getAllByText(
+          /Station 2 bay doors out of service|Spotter required when backing|Uniform order window closes Friday|Shift reminder for tomorrow/
+        )
+        .map((node) => node.textContent);
+
+      expect(titles).toEqual([
+        // Pinned, though it is the second-oldest of the four.
+        'Station 2 bay doors out of service',
+        // Persistent, and the oldest of all.
+        'Spotter required when backing',
+        // Then recency: the notification, then the ordinary message.
+        'Shift reminder for tomorrow',
+        'Uniform order window closes Friday',
+      ]);
     });
 
     it('shows an empty state rather than a card full of nothing', async () => {

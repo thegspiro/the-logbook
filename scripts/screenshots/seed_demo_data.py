@@ -7033,10 +7033,25 @@ class Seeder:
                 False,
                 False,
             ),
+            # The one standing notice. A persistent message is exempt from the
+            # dashboard feed's "unread only" filter and from its 10-item
+            # window, so it is the only kind that stays on the station board
+            # after everyone has read it — which is what the guides picture,
+            # and what an announcement about a bay door is deliberately not.
+            (
+                "Spotter Required",
+                "No apparatus backs up without a spotter on the ground and in "
+                "sight of the driver. This is a standing order, not a "
+                "reminder: it applies to every movement, every shift.",
+                "important",
+                False,
+                False,
+                True,
+            ),
         ]
 
         created = list(existing)
-        for title, body, priority, requires_ack, pinned in blueprint:
+        for title, body, priority, requires_ack, pinned, *rest in blueprint:
             if title in titles:
                 continue
             created.append(
@@ -7049,6 +7064,7 @@ class Seeder:
                         "target_type": "all",
                         "is_pinned": pinned,
                         "requires_acknowledgment": requires_ack,
+                        "is_persistent": bool(rest and rest[0]),
                     },
                 )
             )

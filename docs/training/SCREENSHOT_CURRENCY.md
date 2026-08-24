@@ -1,5 +1,54 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (seventeenth) — the station board's feed, and a pin that did not pin
+
+`19-28`, opened and checked. **9 markers remaining.** One product defect found
+and fixed at root cause, with a regression test.
+
+**The defect.** `Dashboard.tsx` merges department messages with the member's own
+notifications into one feed and sorted the result by recency alone. The inbox
+arrives from the backend ordered pinned → persistent → newest
+(`messaging_service.get_inbox`), and the merge threw both away. Only five rows
+render, so a **pinned** "Station 2 bay doors out of service" sat below four
+routine notifications, and a persistent standing order dropped off the board as
+soon as five notifications arrived. The pin icon rendered beside the message
+either way — which is the part that misleads: an officer who pins an urgent
+notice has no way to tell it did nothing.
+
+Fixed by ranking pinned and persistent messages above the recency sort, matching
+what the backend already does for the messages list.
+`Dashboard.test.tsx` gains a test that fails without it: four items, the pinned
+one second-oldest and the persistent one oldest of all, asserted in the order
+the rail renders them.
+
+**Found by seeding, not by reading.** The marker wanted a persistent notice on
+the board and the seed had none — three announcements, all ordinary. Adding one
+put it at the top of the feed, and the reason it was at the top turned out to be
+that it was the newest thing in the department, not that it was persistent.
+
+**A test fixture that lied.** My first version of the regression test gave the
+notification a `created_at` and no `sent_at`. The feed sorts notifications on
+`sent_at` and falls back to `0`, so the notification sorted last and the
+assertion failed on an ordering the product gets right. `sent_at` is
+`server_default=func.now()` on the model, so a real row always has one; the
+fixture, not the code, was wrong. Left the `|| 0` alone — a shape the database
+cannot produce is not a bug to widen this change with.
+
+**Framed on the rail, not the board.** The marker asks for a "populated station
+board", and the board is already captured twice — `00-24` for the member's tab,
+`08-75`/`08-76` for the conditional cards, which is exactly what "conditional
+cards identified in the caption" is about. A third full-page dashboard would be
+the same screen under a different caption. What is nowhere else is a feed
+carrying a pinned announcement, a persistent notice and unread notifications at
+once, so that is what this shot is, and the guide links to the other two.
+
+**Title shortened twice, for the picture.** "Standing Order — Spotter Required
+When Backing" truncated at "Standing Order — Spotter …": the rail is 360px and
+the PERSISTENT badge takes about eleven characters of it. "Spotter Required"
+fits with the badge beside it. The truncation is correct behaviour, not a
+defect — but a caption about a standing order reads badly over a title cut in
+half.
+
 ## Captured 2026-08-24 (sixteenth) — the roster bound, photographed where it is enforced
 
 `19-27`, opened and checked. **10 markers remaining.**
