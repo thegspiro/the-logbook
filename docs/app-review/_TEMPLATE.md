@@ -10,7 +10,7 @@
 
 ## Scope
 
-What was read, and what was explicitly *not* read (with the reason). A reader
+What was read, and what was explicitly _not_ read (with the reason). A reader
 must be able to tell which parts of the feature carry a verified verdict.
 
 ## Verified good ✅
@@ -41,7 +41,7 @@ one.
 ## Dead code
 
 Unreferenced symbols with the grep that established they are unreferenced.
-Separate *deleted this iteration* from *left in place, and why*.
+Separate _deleted this iteration_ from _left in place, and why_.
 
 ## Documentation gaps
 
@@ -55,12 +55,13 @@ product decision.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| tsc --noEmit | |
-| flake8 | |
-| black --check | |
-| eslint | |
-| frontend tests | |
-| backend tests | |
+| Check          | Result |
+| -------------- | ------ |
+| tsc --noEmit   |        |
+| flake8         |        |
+| black --check  |        |
+| eslint         |        |
+| frontend tests |        |
+| backend tests  |        |
+
 </content>

@@ -10,6 +10,7 @@ skills-test scores/pass-fail, evaluator notes, ISO-readiness reports.
 compliance-officer + training-compliance, (C) compliance-config.
 
 ## Verified good ✅
+
 - **No cross-tenant IDOR anywhere in the three modules.** Every by-id
   read/update/delete is org-scoped (skills tests/templates via
   `organization_id == current_user.organization_id`; compliance profiles/reports
@@ -34,6 +35,7 @@ compliance-officer + training-compliance, (C) compliance-config.
 ## Findings
 
 ### CS-1 — MEDIUM (cross-member PHI) — Any member could read every member's skills-test scores + evaluator notes — ✅ FIXED
+
 `GET /skills-testing/tests` and `GET /tests/{id}` were org-scoped but had **no
 intra-tenant object-level authorization** — any authenticated member (no officer
 role) could list every skills-test record in the org (pass/fail, `overall_score`,
@@ -47,12 +49,14 @@ full org view — mirrors the module's existing template-visibility split and th
 audit's TR-1/FIN-3 self-confinement precedent.
 
 ### CS-2 — LOW — `GET /templates/{id}` skipped the visibility filter the list applies — ✅ FIXED
+
 A regular member could fetch an `officers_only` / `assigned_only` template
 directly by id even though the list route hides it from non-officers.
 **Fix:** applied the same `_user_has_officer_role` visibility gate (404 on a
 restricted template for non-officers).
 
 ### CS-3 — MEDIUM (XC-1) — Compliance profile stored unvalidated cross-org FK ids — ✅ FIXED
+
 `create_profile` / `update_profile` persisted client-supplied
 `required_requirement_ids`, `optional_requirement_ids`, `role_ids`, and
 `admin_hours_requirements[].category_id` with no in-org check. A `settings.manage`
@@ -65,6 +69,7 @@ org-scoped query (`TrainingRequirement`, `Position`, `AdminHoursCategory`) befor
 storing; a foreign/unknown id raises (→ 400).
 
 ### CS-4 — MEDIUM — CSV/spreadsheet formula injection in the annual compliance export — ✅ FIXED
+
 `export_annual_report` wrote member `name` (built from user-controlled
 first/last name) verbatim into CSV cells, so a member named `=cmd|…` gets that
 formula executed when a compliance officer opens the export in Excel/Sheets —
@@ -73,6 +78,7 @@ stored injection against the officer's workstation.
 chars with an apostrophe (applied to `name` and `status`). Normal names unchanged.
 
 ### CS-5 — MEDIUM (correctness) — Member with zero requirements mislabeled `at_risk` and dropped from compliant count — ✅ FIXED
+
 In `generate_annual_report`, a member with `req_total == 0` had `compliance_pct`
 set to 100 but the status ladder (`met_count >= req_total and req_total > 0`) fell
 through to `at_risk`, so they were never counted `fully_compliant` and the org-wide
@@ -82,6 +88,7 @@ every member "at_risk"). This contradicted the sibling
 **Fix:** treat `req_total == 0` as compliant, matching the sibling service.
 
 ### CS-6 — MEDIUM (email HTML injection) — Skills-result email interpolated names/labels unescaped — ✅ FIXED
+
 `email_test_results` f-string-interpolated template `section_name`/`label` and
 denormalized candidate/examiner/template names into the result email HTML with no
 escaping.
@@ -89,6 +96,7 @@ escaping.
 pattern from earlier iterations).
 
 ### CS-7 — LOW — Threshold-ordering not validated on compliance config — ✅ FIXED
+
 `compliant_threshold` / `at_risk_threshold` were independent 0-100 fields with no
 cross-field validator, so an inverted pair (compliant=50, at_risk=90) produced
 incoherent status bucketing.
@@ -96,6 +104,7 @@ incoherent status bucketing.
 `at_risk_threshold > compliant_threshold`.
 
 ### CS-8 — MED/LOW — Separation-of-duties on skills tests + attestations — ⚠️ PARTIALLY FIXED
+
 - Skills: an examiner (`training.manage`) could create a test where they were
   also the candidate, then score + pass it, auto-completing their own linked
   training requirement — self-certification. (skills #3) **✅ FIXED (verified in
@@ -112,6 +121,7 @@ incoherent status bucketing.
   approver; a behavior change, correctly still deferred.
 
 ### CS-9 — LOW — partially FIXED — Reporting correctness / abuse-surface polish
+
 - **✅ Report email HTML injection closed.** `_email_report` interpolated the org
   name, `report_type`, and `period_label` raw into the HTML body — `org.name` is
   user-controlled and `report_type` flowed from the request, so an unescaped
@@ -139,10 +149,11 @@ incoherent status bucketing.
   **Note (CS-8 attestation):** `compliance_percentage` is already range-bounded at
   the schema (`Field(ge=0, le=100)`); the open half is the missing server-side
   recompute / dual-control (behavior change, still deferred).
-**Status:** injection + input-validation fixed; monthly windowing (feature) and
-recipient allow-list (policy) deferred.
+  **Status:** injection + input-validation fixed; monthly windowing (feature) and
+  recipient allow-list (policy) deferred.
 
 ## Notes
+
 - Large-file caveat: `compliance_officer_service.py` (1,151 L) and
   `skills_testing.py` (1,412 L) were reviewed for security invariants
   (org-scoping, XC-1/2/3, PHI exposure, injection), not line-by-line. The

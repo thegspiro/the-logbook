@@ -16,6 +16,7 @@ import pytest
 
 from app.models.membership_pipeline import (
     PipelineStepType,
+    ProspectStatus,
     ProspectStepProgress,
     StepProgressStatus,
 )
@@ -39,10 +40,14 @@ def _step(required=("chief", "president")):
     )
 
 
-def _prospect(step, step_progress=None):
+def _prospect(step, step_progress=None, status=ProspectStatus.ACTIVE):
     return SimpleNamespace(
         id="prospect-1",
         organization_id="org-1",
+        # Progression is gated on status, so the stub carries a real one:
+        # a bare namespace stood in for an applicant with no state at all,
+        # which is not a record the service can ever be handed.
+        status=status,
         current_step_id=str(step.id),
         pipeline=SimpleNamespace(steps=[step], auto_transfer_on_approval=False),
         step_progress=step_progress or [],

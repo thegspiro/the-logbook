@@ -245,21 +245,24 @@ Key networking requirements:
 You need three security groups in the same VPC:
 
 **EC2 Security Group** (`logbook-ec2-sg`):
-| Inbound | Port | Source |
-|---------|------|--------|
-| SSH | 22 | Your IP |
-| HTTP | 80 | 0.0.0.0/0 |
-| HTTPS | 443 | 0.0.0.0/0 |
+
+| Inbound | Port | Source    |
+| ------- | ---- | --------- |
+| SSH     | 22   | Your IP   |
+| HTTP    | 80   | 0.0.0.0/0 |
+| HTTPS   | 443  | 0.0.0.0/0 |
 
 **RDS Security Group** (`logbook-rds-sg`):
-| Inbound | Port | Source |
-|---------|------|--------|
-| MySQL | 3306 | `logbook-ec2-sg` |
+
+| Inbound | Port | Source           |
+| ------- | ---- | ---------------- |
+| MySQL   | 3306 | `logbook-ec2-sg` |
 
 **ElastiCache Security Group** (`logbook-redis-sg`):
-| Inbound | Port | Source |
-|---------|------|--------|
-| Redis | 6379 | `logbook-ec2-sg` |
+
+| Inbound | Port | Source           |
+| ------- | ---- | ---------------- |
+| Redis   | 6379 | `logbook-ec2-sg` |
 
 ### Step 5: Launch EC2 and Deploy
 

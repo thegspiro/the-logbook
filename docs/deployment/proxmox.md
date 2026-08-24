@@ -6,11 +6,11 @@ Deploy The Logbook on Proxmox VE using either an LXC container or a VM with Dock
 
 Proxmox VE is an open-source virtualization platform that supports both LXC containers and full virtual machines. The Logbook runs well on both, with LXC being the recommended approach for lower overhead.
 
-| Method | Overhead | Best For |
-|--------|----------|----------|
-| **LXC + Docker** (Recommended) | Low (~50MB) | Most deployments, dedicated Proxmox servers |
-| **VM + Docker** | Medium (~512MB) | Full isolation, mixed workloads |
-| **Docker directly on host** | Minimal | Single-purpose servers |
+| Method                         | Overhead        | Best For                                    |
+| ------------------------------ | --------------- | ------------------------------------------- |
+| **LXC + Docker** (Recommended) | Low (~50MB)     | Most deployments, dedicated Proxmox servers |
+| **VM + Docker**                | Medium (~512MB) | Full isolation, mixed workloads             |
+| **Docker directly on host**    | Minimal         | Single-purpose servers                      |
 
 ---
 
@@ -21,15 +21,15 @@ Proxmox VE is an open-source virtualization platform that supports both LXC cont
 1. In Proxmox web UI, click **Create CT**
 2. Configure:
 
-| Setting | Value | Notes |
-|---------|-------|-------|
-| **Template** | `ubuntu-22.04-standard` or `debian-12-standard` | |
-| **Hostname** | `the-logbook` | |
-| **Root Disk** | 32 GB minimum | 50 GB recommended |
-| **CPU Cores** | 2 minimum | 4 recommended |
-| **Memory** | 4096 MB minimum | 8192 MB recommended |
-| **Swap** | 2048 MB | |
-| **Network** | DHCP or static IP | |
+| Setting       | Value                                           | Notes               |
+| ------------- | ----------------------------------------------- | ------------------- |
+| **Template**  | `ubuntu-22.04-standard` or `debian-12-standard` |                     |
+| **Hostname**  | `the-logbook`                                   |                     |
+| **Root Disk** | 32 GB minimum                                   | 50 GB recommended   |
+| **CPU Cores** | 2 minimum                                       | 4 recommended       |
+| **Memory**    | 4096 MB minimum                                 | 8192 MB recommended |
+| **Swap**      | 2048 MB                                         |                     |
+| **Network**   | DHCP or static IP                               |                     |
 
 3. **Important**: Check **Nesting** under Features (required for Docker)
 
@@ -134,13 +134,13 @@ Complete the onboarding wizard to set up your organization.
 2. Upload an Ubuntu Server 22.04 or Debian 12 ISO
 3. Configure:
 
-| Setting | Value |
-|---------|-------|
-| **OS** | Ubuntu 22.04 or Debian 12 |
-| **CPU** | 2 cores minimum (4 recommended) |
-| **Memory** | 4 GB minimum (8 GB recommended) |
-| **Disk** | 32 GB minimum (50 GB recommended) |
-| **Network** | Bridge vmbr0 |
+| Setting     | Value                             |
+| ----------- | --------------------------------- |
+| **OS**      | Ubuntu 22.04 or Debian 12         |
+| **CPU**     | 2 cores minimum (4 recommended)   |
+| **Memory**  | 4 GB minimum (8 GB recommended)   |
+| **Disk**    | 32 GB minimum (50 GB recommended) |
+| **Network** | Bridge vmbr0                      |
 
 4. Install the OS, then SSH into the VM
 
@@ -215,11 +215,11 @@ pct config 200
 
 #### Recommended Resource Allocation
 
-| Component | Small (1-10 users) | Medium (10-50 users) | Large (50+ users) |
-|-----------|-------------------|---------------------|-------------------|
-| **CPU Cores** | 2 | 4 | 4-8 |
-| **Memory** | 4 GB | 8 GB | 16 GB |
-| **Disk** | 32 GB | 50 GB | 100 GB+ |
+| Component     | Small (1-10 users) | Medium (10-50 users) | Large (50+ users) |
+| ------------- | ------------------ | -------------------- | ----------------- |
+| **CPU Cores** | 2                  | 4                    | 4-8               |
+| **Memory**    | 4 GB               | 8 GB                 | 16 GB             |
+| **Disk**      | 32 GB              | 50 GB                | 100 GB+           |
 
 ### Backup with Proxmox
 
@@ -448,11 +448,13 @@ docker compose exec mysql mysqladmin -u root -p status
 
 1. Backup The Logbook data on Unraid (host-side script, from the install
    directory — `backup.sh` is not shipped inside the backend image):
+
    ```bash
    cd /mnt/user/appdata/the-logbook && ./scripts/backup.sh
    ```
 
 2. Copy backup and configuration:
+
    ```bash
    scp -r /mnt/user/backups/the-logbook/* root@PROXMOX-IP:/tmp/logbook-backup/
    scp /mnt/user/appdata/the-logbook/.env root@PROXMOX-IP:/tmp/logbook-backup/
@@ -473,15 +475,15 @@ Same process — backup data, deploy fresh on Proxmox, restore backup.
 
 ## Summary
 
-| Step | Action |
-|------|--------|
-| 1 | Create LXC or VM with nesting enabled |
-| 2 | Install Docker |
-| 3 | Clone repo and configure .env |
-| 4 | Run `docker compose up -d` |
-| 5 | Access at `http://YOUR-IP:3000` |
-| 6 | Complete onboarding wizard |
-| 7 | Configure backup schedule |
-| 8 | (Optional) Set up reverse proxy with SSL |
+| Step | Action                                   |
+| ---- | ---------------------------------------- |
+| 1    | Create LXC or VM with nesting enabled    |
+| 2    | Install Docker                           |
+| 3    | Clone repo and configure .env            |
+| 4    | Run `docker compose up -d`               |
+| 5    | Access at `http://YOUR-IP:3000`          |
+| 6    | Complete onboarding wizard               |
+| 7    | Configure backup schedule                |
+| 8    | (Optional) Set up reverse proxy with SSL |
 
 **Need help?** See the [Troubleshooting Guide](../TROUBLESHOOTING.md) or open a [GitHub Issue](https://github.com/thegspiro/the-logbook/issues).

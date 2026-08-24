@@ -8,14 +8,14 @@ final compliance status indicator.
 Throughout this document, examples use the following fictitious members of
 **Station 7, Riverside Fire Department**:
 
-| Name                | Role                 | Notes                                  |
-|---------------------|----------------------|----------------------------------------|
-| Maria Torres        | Firefighter/EMT      | Experienced, consistently on track     |
-| Jake Nguyen         | Probationary FF      | First year, still building hours       |
-| Danielle Brooks     | Driver/Operator      | Returning from maternity leave         |
-| Sam Kowalski        | Firefighter          | Back from 4-month military deployment  |
-| Carla Mitchell      | Firefighter/Paramedic| Paramedic cert approaching expiration  |
-| Tom Raines          | Senior Firefighter   | Let his EMT certification lapse        |
+| Name            | Role                  | Notes                                 |
+| --------------- | --------------------- | ------------------------------------- |
+| Maria Torres    | Firefighter/EMT       | Experienced, consistently on track    |
+| Jake Nguyen     | Probationary FF       | First year, still building hours      |
+| Danielle Brooks | Driver/Operator       | Returning from maternity leave        |
+| Sam Kowalski    | Firefighter           | Back from 4-month military deployment |
+| Carla Mitchell  | Firefighter/Paramedic | Paramedic cert approaching expiration |
+| Tom Raines      | Senior Firefighter    | Let his EMT certification lapse       |
 
 All examples assume **today is October 15, 2025** and the department has
 **4 active requirements** unless stated otherwise.
@@ -39,11 +39,11 @@ All examples assume **today is October 15, 2025** and the department has
 Each member receives a compliance status shown on their profile card. The
 status is one of three levels:
 
-| Status   | Label          | Meaning                               |
-|----------|----------------|---------------------------------------|
-| `green`  | Compliant      | All requirements met, no cert issues  |
-| `yellow` | At Risk        | Partially met or certs expiring soon  |
-| `red`    | Non-Compliant  | Significant gaps or expired certs     |
+| Status   | Label         | Meaning                              |
+| -------- | ------------- | ------------------------------------ |
+| `green`  | Compliant     | All requirements met, no cert issues |
+| `yellow` | At Risk       | Partially met or certs expiring soon |
+| `red`    | Non-Compliant | Significant gaps or expired certs    |
 
 ### Decision Logic
 
@@ -140,16 +140,16 @@ she has met.
 
 ### Output Fields
 
-| Field                  | Type    | Description                                         |
-|------------------------|---------|-----------------------------------------------------|
-| `requirements_met`     | integer | Count of requirements the member has satisfied       |
-| `requirements_total`   | integer | Total active requirements for the organization       |
-| `certs_expiring_soon`  | integer | Certs expiring within 90 days                        |
-| `certs_expired`        | integer | Certs already past expiration                        |
-| `compliance_status`    | string  | `green`, `yellow`, or `red`                          |
-| `compliance_label`     | string  | Human-readable label                                 |
-| `hours_this_year`      | float   | Total training hours completed in the current year   |
-| `active_certifications`| integer | Count of non-expired certifications                  |
+| Field                   | Type    | Description                                        |
+| ----------------------- | ------- | -------------------------------------------------- |
+| `requirements_met`      | integer | Count of requirements the member has satisfied     |
+| `requirements_total`    | integer | Total active requirements for the organization     |
+| `certs_expiring_soon`   | integer | Certs expiring within 90 days                      |
+| `certs_expired`         | integer | Certs already past expiration                      |
+| `compliance_status`     | string  | `green`, `yellow`, or `red`                        |
+| `compliance_label`      | string  | Human-readable label                               |
+| `hours_this_year`       | float   | Total training hours completed in the current year |
+| `active_certifications` | integer | Count of non-expired certifications                |
 
 **Source:** `GET /training/compliance-summary/{user_id}`
 (`backend/app/api/v1/endpoints/training.py`)
@@ -180,6 +180,7 @@ is_complete = completed_hours >= required_hours
 ```
 
 **Requirement filters applied in order:**
+
 1. `training_type` — if the requirement specifies a type, only records of
    that type count
 2. `required_courses` — if the requirement lists specific course IDs, only
@@ -195,15 +196,15 @@ Riverside FD requires **36 hours of continuing education** per year
 
 **Maria Torres** completed the following CE sessions in 2025:
 
-| Date       | Course                    | Type                  | Hours |
-|------------|---------------------------|-----------------------|-------|
-| Feb 12     | Hose Operations Drill     | continuing_education  | 4.0   |
-| Mar 22     | Hazmat Awareness Refresher| continuing_education  | 8.0   |
-| May 10     | Live Fire Exercise        | continuing_education  | 6.0   |
-| Jun 14     | Vehicle Extrication       | continuing_education  | 4.0   |
-| Aug 03     | Search & Rescue Scenarios | continuing_education  | 6.0   |
-| Sep 18     | Ladder Operations         | continuing_education  | 4.0   |
-| Oct 05     | EMS Refresher Lecture     | continuing_education  | 4.0   |
+| Date   | Course                     | Type                 | Hours |
+| ------ | -------------------------- | -------------------- | ----- |
+| Feb 12 | Hose Operations Drill      | continuing_education | 4.0   |
+| Mar 22 | Hazmat Awareness Refresher | continuing_education | 8.0   |
+| May 10 | Live Fire Exercise         | continuing_education | 6.0   |
+| Jun 14 | Vehicle Extrication        | continuing_education | 4.0   |
+| Aug 03 | Search & Rescue Scenarios  | continuing_education | 6.0   |
+| Sep 18 | Ladder Operations          | continuing_education | 4.0   |
+| Oct 05 | EMS Refresher Lecture      | continuing_education | 4.0   |
 
 ```
 completed_hours = 4 + 8 + 6 + 4 + 6 + 4 + 4 = 36.0
@@ -216,13 +217,13 @@ Maria has exactly met the requirement.
 
 **Jake Nguyen** started in March and has fewer records:
 
-| Date       | Course                    | Type                  | Hours |
-|------------|---------------------------|-----------------------|-------|
-| Mar 22     | Hazmat Awareness Refresher| continuing_education  | 8.0   |
-| May 10     | Live Fire Exercise        | continuing_education  | 6.0   |
-| Jul 19     | Pumper Operations         | continuing_education  | 4.0   |
-| Sep 18     | Ladder Operations         | continuing_education  | 4.0   |
-| Oct 01     | Forcible Entry Drill      | skills_practice       | 3.0   |
+| Date   | Course                     | Type                 | Hours |
+| ------ | -------------------------- | -------------------- | ----- |
+| Mar 22 | Hazmat Awareness Refresher | continuing_education | 8.0   |
+| May 10 | Live Fire Exercise         | continuing_education | 6.0   |
+| Jul 19 | Pumper Operations          | continuing_education | 4.0   |
+| Sep 18 | Ladder Operations          | continuing_education | 4.0   |
+| Oct 01 | Forcible Entry Drill       | skills_practice      | 3.0   |
 
 Note: Jake's October 1 drill is `skills_practice`, not `continuing_education`.
 Because the requirement filters on `training_type = continuing_education`,
@@ -250,6 +251,7 @@ is_complete = has_valid_cert
 ```
 
 Certification matching considers:
+
 - `training_type` match (if the requirement specifies one)
 - Requirement name as substring of `course_name` (case-insensitive)
 - `registry_code` as substring of `certification_number` (case-insensitive)
@@ -262,11 +264,12 @@ Riverside FD has a requirement: **"EMT Certification"**
 
 **Carla Mitchell** holds:
 
-| Course Name          | Cert Number     | Expiration  |
-|----------------------|-----------------|-------------|
-| Paramedic Certification | NREMT-P-88421 | Nov 30, 2025|
+| Course Name             | Cert Number   | Expiration   |
+| ----------------------- | ------------- | ------------ |
+| Paramedic Certification | NREMT-P-88421 | Nov 30, 2025 |
 
 The system checks:
+
 1. Training type matches (`certification` = `certification`)
 2. Requirement name "EMT Certification" is a substring of
    "Paramedic Certification"? No — but "EMT" is not a substring of
@@ -278,9 +281,9 @@ Carla passes this requirement.
 
 **Tom Raines** holds:
 
-| Course Name          | Cert Number     | Expiration  |
-|----------------------|-----------------|-------------|
-| EMT-Basic Certification | NREMT-B-67230 | Sep 30, 2025|
+| Course Name             | Cert Number   | Expiration   |
+| ----------------------- | ------------- | ------------ |
+| EMT-Basic Certification | NREMT-B-67230 | Sep 30, 2025 |
 
 Match via registry code "NREMT" in "NREMT-B-67230" — yes. But the
 expiration date Sep 30, 2025 < today Oct 15, 2025 → **expired**.
@@ -362,13 +365,13 @@ in the current year.
 Each requirement defines a frequency that determines the date window over
 which progress is measured.
 
-| Frequency    | Period Start                        | Period End                          |
-|-------------|-------------------------------------|--------------------------------------|
-| `annual`     | Jan 1 of requirement year (or current year) | Dec 31 of that year        |
-| `quarterly`  | First day of current quarter        | Last day of current quarter          |
-| `monthly`    | First day of current month          | Last day of current month            |
-| `biannual`   | No date window                      | Compliance based on non-expired cert |
-| `one_time`   | No date window                      | All-time evaluation                  |
+| Frequency   | Period Start                                | Period End                           |
+| ----------- | ------------------------------------------- | ------------------------------------ |
+| `annual`    | Jan 1 of requirement year (or current year) | Dec 31 of that year                  |
+| `quarterly` | First day of current quarter                | Last day of current quarter          |
+| `monthly`   | First day of current month                  | Last day of current month            |
+| `biannual`  | No date window                              | Compliance based on non-expired cert |
+| `one_time`  | No date window                              | All-time evaluation                  |
 
 ### Quarter Calculation
 
@@ -402,16 +405,20 @@ calendar-year period to a 12-month rolling window. Here is how the change
 would affect Jake Nguyen on October 15, 2025.
 
 **Calendar year** (`frequency = annual`, `year = 2025`):
+
 ```
 Period: Jan 1, 2025 – Dec 31, 2025
 ```
+
 Jake's training from 2024 does not count. Only his 2025 records apply.
 He has 22 hours so far (see §2a).
 
 **Rolling 12 months** (`due_date_type = rolling`, `rolling_period_months = 12`):
+
 ```
 Period: Oct 15, 2024 – Oct 15, 2025
 ```
+
 Now Jake's records from late 2024 (before he was even hired) would count if
 he had any. He does not, so his total is still 22 hours. But for a member
 like Maria, who completed a 4-hour drill on November 8, 2024, the rolling
@@ -447,19 +454,19 @@ hour this quarter.
 
 ### Including or Excluding the In-Progress Month (2026-05-03)
 
-Everything above describes how *wide* the date window is. This setting controls
+Everything above describes how _wide_ the date window is. This setting controls
 where the window **ends** — at today, or at the end of last month.
 
-Many departments hold their drills at the *end* of each month. For those
+Many departments hold their drills at the _end_ of each month. For those
 departments, a dashboard that counts the in-progress current month makes members
 look behind for up to 30 days every month, before they have even had a chance to
 train. The `include_current_month` control fixes this by letting compliance be
 evaluated as of an earlier "as-of" date.
 
-| `include_current_month` | Resolved as-of date | Effect |
-|-------------------------|---------------------|--------|
-| `true` (default) | `today` | The in-progress current month counts toward windows, proration, and overdue checks |
-| `false` | Last day of the **previous** month (`today.replace(day=1) - 1 day`) | The in-progress month is excluded; members are evaluated as they stood when this month began |
+| `include_current_month` | Resolved as-of date                                                 | Effect                                                                                       |
+| ----------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `true` (default)        | `today`                                                             | The in-progress current month counts toward windows, proration, and overdue checks           |
+| `false`                 | Last day of the **previous** month (`today.replace(day=1) - 1 day`) | The in-progress month is excluded; members are evaluated as they stood when this month began |
 
 It is configured at two levels (see `COMPLIANCE_CONFIG.md` for the data model):
 
@@ -474,7 +481,7 @@ the real `date.today()`** (e.g. `today + 90 days` in the compliance matrix), so
 excluding the current month never hides a certificate that is genuinely about to
 expire.
 
-> This is *distinct* from the rolling-window concept above. Rolling windows
+> This is _distinct_ from the rolling-window concept above. Rolling windows
 > change how far **back** the period reaches; `include_current_month` only moves
 > the **end** of the period between today and the end of last month.
 
@@ -488,6 +495,7 @@ Maria trained 2 hours at the **September 27** drill (the prior month's last
 Saturday) and nothing yet in October.
 
 **`include_current_month = true`** (resolved as-of = **Oct 15, 2025**):
+
 ```
 Window includes October. October target is due, October hours = 0.
 Maria shows a gap for the current month and is flagged at-risk,
@@ -496,6 +504,7 @@ even though Riverside's October drill is still 11 days away.
 
 **`include_current_month = false`** (resolved as-of = **Sep 30, 2025** —
 last day of the previous month):
+
 ```
 Window stops at the end of September. October is not yet evaluated.
 Maria's September 27 drill (2 hours) counts; she is compliant for the
@@ -505,9 +514,9 @@ period that has actually closed. October is reassessed on Nov 1.
 Now contrast a member who **only** trains mid-current-month. Jake logged a
 3-hour session on **October 3, 2025** but had nothing in September.
 
-| Setting | As-of date | Does Jake's Oct 3 session count? |
-|---------|-----------|----------------------------------|
-| `true` | Oct 15, 2025 | **Yes** — the current month is in the window |
+| Setting | As-of date   | Does Jake's Oct 3 session count?                                                   |
+| ------- | ------------ | ---------------------------------------------------------------------------------- |
+| `true`  | Oct 15, 2025 | **Yes** — the current month is in the window                                       |
 | `false` | Sep 30, 2025 | **No** — Oct 3 is after the as-of date; it counts once the window includes October |
 
 So `include_current_month = false` protects members who train end-of-month from
@@ -534,10 +543,10 @@ their required targets are reduced proportionally.
 
 Waivers come from two database tables:
 
-| Table                        | Scope                                        |
-|------------------------------|----------------------------------------------|
-| `training_waivers`           | May target specific requirement IDs          |
-| `member_leaves_of_absence`   | Applies to **all** training requirements     |
+| Table                      | Scope                                    |
+| -------------------------- | ---------------------------------------- |
+| `training_waivers`         | May target specific requirement IDs      |
+| `member_leaves_of_absence` | Applies to **all** training requirements |
 
 Both are merged into a unified `WaiverPeriod` for calculation purposes.
 
@@ -589,17 +598,18 @@ evaluated against the **36 hours/year** CE requirement.
 
 **Step 1: Count Danielle's waived months**
 
-| Month    | Waiver Coverage        | Days Covered | Waived? |
-|----------|------------------------|--------------|---------|
-| March    | Mar 10 – Mar 31        | 22           | Yes     |
-| April    | Apr 1 – Apr 30         | 30           | Yes     |
-| May      | May 1 – May 31         | 31           | Yes     |
-| June     | Jun 1 – Jun 30         | 30           | Yes     |
-| July     | Jul 1 – Jul 25         | 25           | Yes     |
+| Month | Waiver Coverage | Days Covered | Waived? |
+| ----- | --------------- | ------------ | ------- |
+| March | Mar 10 – Mar 31 | 22           | Yes     |
+| April | Apr 1 – Apr 30  | 30           | Yes     |
+| May   | May 1 – May 31  | 31           | Yes     |
+| June  | Jun 1 – Jun 30  | 30           | Yes     |
+| July  | Jul 1 – Jul 25  | 25           | Yes     |
 
 Waived months = 5
 
 **Step 2: Adjust Danielle's requirement**
+
 ```
 total_months     = 12  (Jan – Dec)
 active_months    = MAX(12 - 5, 1) = 7
@@ -608,10 +618,10 @@ adjusted_required = 36 × (7 / 12) = 21.0 hours
 
 **Step 3: Compare**
 
-| Member   | Required Hours | Completed Hours | Percentage | Met?  |
-|----------|----------------|-----------------|------------|-------|
-| Maria    | 36.0           | 36.0            | 100%       | Yes   |
-| Danielle | 21.0           | 18.0            | 85.7%      | No    |
+| Member   | Required Hours | Completed Hours | Percentage | Met? |
+| -------- | -------------- | --------------- | ---------- | ---- |
+| Maria    | 36.0           | 36.0            | 100%       | Yes  |
+| Danielle | 21.0           | 18.0            | 85.7%      | No   |
 
 Danielle's bar is significantly lower — 21 hours instead of 36 — but she
 still has 3 more hours to complete. Without the waiver, she would need to
@@ -627,14 +637,15 @@ waived because he could renew it remotely.
 
 Riverside FD has 4 requirements. Here is how Sam's waivers apply to each:
 
-| Requirement        | ID           | Waiver Applies? | Why                         |
-|--------------------|--------------|-----------------|------------------------------|
-| CE Hours (36/yr)   | `req_hours`  | Yes             | Listed in `requirement_ids`  |
-| Shift Attendance   | `req_shifts` | Yes             | Listed in `requirement_ids`  |
-| EMT Certification  | `req_cert`   | No              | Not in `requirement_ids`     |
-| EMS Skills (quarterly)| `req_ems` | No              | Not in `requirement_ids`     |
+| Requirement            | ID           | Waiver Applies? | Why                         |
+| ---------------------- | ------------ | --------------- | --------------------------- |
+| CE Hours (36/yr)       | `req_hours`  | Yes             | Listed in `requirement_ids` |
+| Shift Attendance       | `req_shifts` | Yes             | Listed in `requirement_ids` |
+| EMT Certification      | `req_cert`   | No              | Not in `requirement_ids`    |
+| EMS Skills (quarterly) | `req_ems`    | No              | Not in `requirement_ids`    |
 
 **Waived months for `req_hours` and `req_shifts`:**
+
 - Feb: Feb 1–28 = 28 days → waived
 - Mar: Mar 1–31 = 31 days → waived
 - Apr: Apr 1–30 = 30 days → waived
@@ -642,11 +653,13 @@ Riverside FD has 4 requirements. Here is how Sam's waivers apply to each:
 - Waived months = 4
 
 **CE Hours adjustment:**
+
 ```
 adjusted_required = 36 × (MAX(12 - 4, 1) / 12) = 36 × (8/12) = 24.0 hours
 ```
 
 **Shift Attendance adjustment (12 shifts/year):**
+
 ```
 adjusted_required = 12 × (8 / 12) = 8 shifts
 ```
@@ -662,6 +675,7 @@ What if Sam's deployment ended on **May 14** instead of May 31?
 - May: May 1–14 = 14 days → **not waived** (14 < 15)
 
 Waived months would drop from 4 to 3, and the adjustment would be:
+
 ```
 adjusted_required = 36 × (MAX(12 - 3, 1) / 12) = 36 × (9/12) = 27.0 hours
 ```
@@ -705,21 +719,21 @@ The system monitors certification expiration dates and sends tiered alerts.
 
 ### 5a. Expiration Classification
 
-| Condition                                         | Classification   |
-|---------------------------------------------------|------------------|
-| `expiration_date > today + 90 days`               | Current          |
-| `today < expiration_date <= today + 90 days`      | Expiring Soon    |
-| `expiration_date <= today`                         | Expired          |
+| Condition                                    | Classification |
+| -------------------------------------------- | -------------- |
+| `expiration_date > today + 90 days`          | Current        |
+| `today < expiration_date <= today + 90 days` | Expiring Soon  |
+| `expiration_date <= today`                   | Expired        |
 
 ### Example: Classifying Three Members' Certifications
 
 On October 15, 2025:
 
-| Member   | Certification     | Expiration     | Days Until | Classification |
-|----------|-------------------|----------------|------------|----------------|
-| Maria    | EMT-B             | Jun 15, 2027   | +609       | Current        |
-| Carla    | Paramedic         | Nov 30, 2025   | +46        | Expiring Soon  |
-| Tom      | EMT-B             | Sep 30, 2025   | -15        | Expired        |
+| Member | Certification | Expiration   | Days Until | Classification |
+| ------ | ------------- | ------------ | ---------- | -------------- |
+| Maria  | EMT-B         | Jun 15, 2027 | +609       | Current        |
+| Carla  | Paramedic     | Nov 30, 2025 | +46        | Expiring Soon  |
+| Tom    | EMT-B         | Sep 30, 2025 | -15        | Expired        |
 
 - Maria's cert is more than 90 days out → **Current**, no alerts
 - Carla's cert is within 90 days → **Expiring Soon**, alerts triggered
@@ -729,13 +743,13 @@ On October 15, 2025:
 
 Alerts are sent at decreasing intervals as expiration approaches:
 
-| Days Until Expiration | Recipients                          | Channels          |
-|----------------------|--------------------------------------|--------------------|
-| 90 days              | Member only                          | In-app, email      |
-| 60 days              | Member only                          | In-app, email      |
-| 30 days              | Member + training officer            | In-app, email + CC |
-| 7 days               | Member + training + compliance       | In-app, email + CC |
-| Expired              | Member + all escalation officers     | In-app, email + CC |
+| Days Until Expiration | Recipients                       | Channels           |
+| --------------------- | -------------------------------- | ------------------ |
+| 90 days               | Member only                      | In-app, email      |
+| 60 days               | Member only                      | In-app, email      |
+| 30 days               | Member + training officer        | In-app, email + CC |
+| 7 days                | Member + training + compliance   | In-app, email + CC |
+| Expired               | Member + all escalation officers | In-app, email + CC |
 
 Each tier is sent only once (tracked by `alert_*_sent_at` timestamps on
 the record). During each daily run, the system processes one tier per
@@ -746,13 +760,13 @@ certification — the most urgent tier that hasn't been sent yet.
 Carla's Paramedic certification expires November 30, 2025. Here is the
 alert schedule:
 
-| Alert Date    | Days Left | Tier    | Recipients                        |
-|---------------|-----------|---------|-----------------------------------|
-| Sep 1, 2025   | 90        | 90-day  | Carla only                        |
-| Oct 1, 2025   | 60        | 60-day  | Carla only                        |
-| Oct 31, 2025  | 30        | 30-day  | Carla + Lt. Davis (training officer)|
-| Nov 23, 2025  | 7         | 7-day   | Carla + Lt. Davis + Chief Warren  |
-| Dec 1, 2025   | expired   | Expired | Carla + all escalation officers   |
+| Alert Date   | Days Left | Tier    | Recipients                           |
+| ------------ | --------- | ------- | ------------------------------------ |
+| Sep 1, 2025  | 90        | 90-day  | Carla only                           |
+| Oct 1, 2025  | 60        | 60-day  | Carla only                           |
+| Oct 31, 2025 | 30        | 30-day  | Carla + Lt. Davis (training officer) |
+| Nov 23, 2025 | 7         | 7-day   | Carla + Lt. Davis + Chief Warren     |
+| Dec 1, 2025  | expired   | Expired | Carla + all escalation officers      |
 
 If Carla renews her certification before November 30 and a new training
 record is created with an updated expiration date, the system stops sending
@@ -767,6 +781,7 @@ the notification with instructions to follow up.
 ### 5c. Expired Escalation
 
 When a certification has already expired and `escalation_sent_at` is null:
+
 - In-app notifications sent to member and escalation officers (training,
   compliance, chief)
 - Email sent to member's primary and personal email
@@ -802,6 +817,7 @@ expiration_date = October 20, 2027
 
 If Tom had completed it on **January 31, 2025** with a 1-month expiration
 (hypothetical):
+
 ```
 base_month = 1 - 1 + 1 = 1
 year       = 2025 + (1 ÷ 12) = 2025
@@ -826,7 +842,7 @@ The compliance matrix provides a grid view: members (rows) × requirements
 ### Cell Statuses
 
 | Status        | Meaning                                            |
-|---------------|----------------------------------------------------|
+| ------------- | -------------------------------------------------- |
 | `completed`   | Requirement fully met within the evaluation period |
 | `in_progress` | Some progress but not yet fully met                |
 | `not_started` | No relevant records found                          |
@@ -835,6 +851,7 @@ The compliance matrix provides a grid view: members (rows) × requirements
 ### Evaluation by Requirement Type
 
 **Hours:**
+
 ```
 total_hours = SUM(matching records' hours within period)
 required = adjusted for waivers
@@ -846,6 +863,7 @@ ELSE                                   → "not_started"
 ```
 
 **Certification:**
+
 ```
 matching = records matched by training_type, name, or registry_code
 IF matching AND latest is not expired  → "completed"
@@ -854,6 +872,7 @@ ELSE                                   → "not_started"
 ```
 
 **Shifts / Calls:**
+
 ```
 count = COUNT(matching records within period)
 required = adjusted for waivers
@@ -864,6 +883,7 @@ ELSE                  → "not_started"
 ```
 
 **Courses:**
+
 ```
 matched = count of required courses found in completed records
 IF matched >= total required courses  → "completed"
@@ -924,14 +944,14 @@ completion_percentage = (completed_count / total_requirements) × 100
 
 **Applied to the matrix above:**
 
-| Member           | Completed Cells | Total | Completion % |
-|------------------|-----------------|-------|--------------|
-| Maria Torres     | 3               | 4     | 75%          |
-| Jake Nguyen      | 1               | 4     | 25%          |
-| Danielle Brooks  | 2               | 4     | 50%          |
-| Sam Kowalski     | 2               | 4     | 50%          |
-| Tom Raines       | 0               | 4     | 0%           |
-| Carla Mitchell   | 4               | 4     | 100%         |
+| Member          | Completed Cells | Total | Completion % |
+| --------------- | --------------- | ----- | ------------ |
+| Maria Torres    | 3               | 4     | 75%          |
+| Jake Nguyen     | 1               | 4     | 25%          |
+| Danielle Brooks | 2               | 4     | 50%          |
+| Sam Kowalski    | 2               | 4     | 50%          |
+| Tom Raines      | 0               | 4     | 0%           |
+| Carla Mitchell  | 4               | 4     | 100%         |
 
 Note that `expired` and `in_progress` cells do **not** count toward
 `completed_count`. Only cells with `completed` status contribute.
@@ -974,11 +994,12 @@ hold a valid CPR cert right now?"
 
 **Maria** completed CPR recertification on March 15, 2024. Her cert expires
 March 15, 2026 (24-month validity). On October 15, 2025:
+
 - Expiration (Mar 15, 2026) >= today (Oct 15, 2025) → **completed**
 
-**Tom** completed CPR on January 10, 2023. His cert expired January 10,
-2025. Even though Tom logged 50 hours of general training this year, his
+**Tom** completed CPR on January 10, 2023. His cert expired January 10, 2025. Even though Tom logged 50 hours of general training this year, his
 CPR requirement shows:
+
 - Expiration (Jan 10, 2025) < today (Oct 15, 2025) → **expired**
 
 Hours completed are irrelevant for biannual certification requirements.
@@ -995,10 +1016,10 @@ waive January.
 Sam Kowalski's military deployment officially ended May 14 in one scenario
 and May 15 in another. The department's annual CE requirement is 36 hours.
 
-| Scenario    | May Coverage | May Waived? | Waived Months | Adjusted Req |
-|-------------|-------------|-------------|---------------|--------------|
-| Ends May 14 | May 1–14 = 14 days | No (14 < 15) | 3 (Feb–Apr) | 36 × 9/12 = 27.0 hrs |
-| Ends May 15 | May 1–15 = 15 days | Yes (15 >= 15)| 4 (Feb–May) | 36 × 8/12 = 24.0 hrs |
+| Scenario    | May Coverage       | May Waived?    | Waived Months | Adjusted Req         |
+| ----------- | ------------------ | -------------- | ------------- | -------------------- |
+| Ends May 14 | May 1–14 = 14 days | No (14 < 15)   | 3 (Feb–Apr)   | 36 × 9/12 = 27.0 hrs |
+| Ends May 15 | May 1–15 = 15 days | Yes (15 >= 15) | 4 (Feb–May)   | 36 × 8/12 = 24.0 hrs |
 
 That single day changes Sam's required hours by 3 — from 27 to 24. If Sam
 has completed exactly 25 hours, he passes in one scenario and fails in the
@@ -1031,6 +1052,7 @@ With deduplication, the correct result is 36 × (7/12) = 21 hours.
 ### Requirement Applicability
 
 Before evaluating a requirement for a member, the system checks:
+
 1. The requirement must be `active = true`
 2. The requirement must belong to the member's organization
 3. If the requirement specifies `required_roles`, the member must hold one
@@ -1041,11 +1063,11 @@ Before evaluating a requirement for a member, the system checks:
 Riverside FD has a **Driver/Operator Apparatus Check** requirement with
 `applies_to_all = false` and `required_roles = ["driver_operator"]`.
 
-| Member           | Roles                        | Requirement Applies? |
-|------------------|------------------------------|----------------------|
-| Danielle Brooks  | driver_operator, firefighter | Yes (has the role)   |
-| Maria Torres     | firefighter, emt             | No (missing role)    |
-| Jake Nguyen      | probationary                 | No (missing role)    |
+| Member          | Roles                        | Requirement Applies? |
+| --------------- | ---------------------------- | -------------------- |
+| Danielle Brooks | driver_operator, firefighter | Yes (has the role)   |
+| Maria Torres    | firefighter, emt             | No (missing role)    |
+| Jake Nguyen     | probationary                 | No (missing role)    |
 
 Maria and Jake are never evaluated against this requirement. It does not
 appear in their compliance summary or matrix row. Danielle sees it as one
@@ -1059,6 +1081,7 @@ requirement, Danielle's total is 5 while Maria's total is 4.
 
 When determining if a training record satisfies a certification requirement,
 the system checks (in order):
+
 1. **Training type** — record's `training_type` matches requirement's
    `training_type` (if specified)
 2. **Name match** — requirement name appears as a substring of
@@ -1070,12 +1093,12 @@ the system checks (in order):
 
 Requirement: **"HAZMAT Operations"** (`registry_code = "HAZMAT-OPS"`)
 
-| Record Course Name              | Cert Number        | Match? | How                    |
-|---------------------------------|--------------------|--------|------------------------|
-| HAZMAT Operations Certification | HAZMAT-OPS-2025-41 | Yes    | Both name and code     |
+| Record Course Name              | Cert Number        | Match? | How                               |
+| ------------------------------- | ------------------ | ------ | --------------------------------- |
+| HAZMAT Operations Certification | HAZMAT-OPS-2025-41 | Yes    | Both name and code                |
 | Advanced HAZMAT Operations      | AHO-2025-99        | Yes    | Name contains "HAZMAT Operations" |
-| HAZMAT Awareness                | HAZMAT-OPS-2025-22 | Yes    | Code contains "HAZMAT-OPS" |
-| General Safety Training         | GS-2025-88         | No     | Neither name nor code  |
+| HAZMAT Awareness                | HAZMAT-OPS-2025-22 | Yes    | Code contains "HAZMAT-OPS"        |
+| General Safety Training         | GS-2025-88         | No     | Neither name nor code             |
 
 The third record ("HAZMAT Awareness") matches on registry code even though
 the course name does not contain "HAZMAT Operations." This is intentional —
@@ -1091,6 +1114,7 @@ floating-point comparison issues when checking completion.
 #### Example: Rounding in Practice
 
 Sam's adjusted requirement:
+
 ```
 36 × (8 / 12) = 24.000000000000004   (floating point)
 Rounded: 24.0
@@ -1100,6 +1124,7 @@ Without rounding, a member with exactly 24.0 completed hours might fail the
 comparison `24.0 >= 24.000000000000004`. Rounding eliminates this.
 
 A more pronounced example with a 7-month active period:
+
 ```
 36 × (7 / 12) = 20.999999999999996
 Rounded: 21.0
@@ -1138,7 +1163,7 @@ All compliance calculations must consistently use the shared waiver service
 with it:
 
 | Endpoint / Feature                         | Uses Waiver Adjustments |
-|--------------------------------------------|-------------------------|
+| ------------------------------------------ | ----------------------- |
 | `GET /training/compliance-summary/{id}`    | Yes                     |
 | `GET /training/compliance-matrix`          | Yes                     |
 | `GET /training/competency-matrix`          | Yes                     |

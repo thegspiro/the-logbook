@@ -57,11 +57,11 @@ When you generate shifts from a rotation, each platoon runs the same cycle
 offset by `i × cycle_length / num_platoons` days, so exactly one platoon is on
 duty per day. Validated offsets for the common presets:
 
-| Rotation | Cycle | Platoons | Offsets (days) |
-|----------|-------|----------|----------------|
-| 24/48 | 3 | 3 | 0, 1, 2 |
-| Kelly (9-day) | 9 | 3 | 0, 3, 6 |
-| 48/96 | 6 | 3 | 0, 2, 4 |
+| Rotation      | Cycle | Platoons | Offsets (days) |
+| ------------- | ----- | -------- | -------------- |
+| 24/48         | 3     | 3        | 0, 1, 2        |
+| Kelly (9-day) | 9     | 3        | 0, 3, 6        |
+| 48/96         | 6     | 3        | 0, 2, 4        |
 
 The generated shifts reflect each platoon's **actual makeup**: a member on
 approved leave during the window is omitted from the shifts they'd otherwise

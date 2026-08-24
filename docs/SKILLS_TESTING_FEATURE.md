@@ -1183,18 +1183,18 @@ something.
 `candidate_result_view` — the same `resolve_result_view` the read endpoints use,
 with the reader fixed as the candidate — rather than on the calling endpoint:
 
-| Transition                                       | Notified                                                |
-| ------------------------------------------------ | ------------------------------------------------------- |
-| `POST /complete` by an officer (auto-validates)  | Yes, under `on_completion`                              |
-| `POST /validate` under `on_completion`           | Yes                                                     |
-| `POST /validate` under `on_release`              | **No** — it counts, but is not yet readable             |
-| `POST /release`                                  | Yes                                                     |
-| Either, where disclosure resolves to `none`      | **No** — the notification would disclose by implication |
-| `POST /complete` by a member (leaves it pending) | **No** — no decided outcome exists                      |
-| `POST /void` on a result the candidate could see | Yes, with the reason (`notify_candidate_result_voided`) |
-| `POST /void` on a result they could never see    | **No**                                                  |
+| Transition                                          | Notified                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `POST /complete` by an officer (auto-validates)     | Yes, under `on_completion`                                                                                          |
+| `POST /validate` under `on_completion`              | Yes                                                                                                                 |
+| `POST /validate` under `on_release`                 | **No** — it counts, but is not yet readable                                                                         |
+| `POST /release`                                     | Yes                                                                                                                 |
+| Either, where disclosure resolves to `none`         | **No** — the notification would disclose by implication                                                             |
+| `POST /complete` by a member (leaves it pending)    | **No** — no decided outcome exists                                                                                  |
+| `POST /void` on a result the candidate could see    | Yes, with the reason (`notify_candidate_result_voided`)                                                             |
+| `POST /void` on a result they could never see       | **No**                                                                                                              |
 | `POST /void` on a **never-validated** official test | **No** _(2026-08-13)_ — an unvalidated result was only a placeholder, so its withdrawal and reason stay undisclosed |
-| Anything on a practice attempt                   | **No**                                                  |
+| Anything on a practice attempt                      | **No**                                                                                                              |
 
 The message names the tier it is granting: at `scores` it states that examiner
 notes are **not** included, so nobody goes looking for commentary that

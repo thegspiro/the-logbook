@@ -55,7 +55,7 @@ Username and password authentication with Argon2id password hashing.
 > being demanded. The exemption applies only while `must_change_password` is set;
 > once cleared, the minimum-age rule resumes for ordinary voluntary changes.
 
-### Breached-Password Rejection *(2026-08-17, opt-in)*
+### Breached-Password Rejection _(2026-08-17, opt-in)_
 
 Complexity rules say nothing about whether a password has already leaked.
 `Firetruck2024!` satisfies every rule above and appears in public breach
@@ -77,7 +77,7 @@ stored and never compared against a stored credential; password storage remains
 bcrypt/Argon2.
 
 **Failure behaviour — fails open.** An unreachable or slow provider, an HTTP
-error, or an unparseable body all *accept* the password, and the degradation is
+error, or an unparseable body all _accept_ the password, and the degradation is
 logged. This check is supplementary; complexity rules, password history, MFA
 and lockout are unaffected by the outage, and a third-party failure must not
 stop a department setting passwords during an incident.
@@ -90,7 +90,7 @@ different password either way.
 See [Configuration → Security](Configuration-Security#breached-password-detection)
 for the settings.
 
-### Suspicious-IP Throttling *(2026-08-17, on by default)*
+### Suspicious-IP Throttling _(2026-08-17, on by default)_
 
 The per-IP rate limit caps burst speed and the account lockout caps guesses
 against one user. Neither stops a **password spray**: one IP trying two

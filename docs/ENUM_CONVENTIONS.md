@@ -13,6 +13,7 @@ This document establishes conventions for defining and using enums across The Lo
 ### What Happened (2026-02-07)
 
 A critical bug was discovered where:
+
 - **Database enum values**: `FIRE_DEPARTMENT`, `EMS_ONLY`, `FIRE_EMS_COMBINED` (UPPERCASE)
 - **Application expected**: `fire_department`, `ems_only`, `fire_ems_combined` (lowercase)
 - **Result**: MySQL rejected all organization creation attempts with error:
@@ -31,6 +32,7 @@ A critical bug was discovered where:
 ### Rule 1: Always Use Lowercase Values
 
 **✅ CORRECT:**
+
 ```python
 class OrganizationType(str, enum.Enum):
     FIRE_DEPARTMENT = "fire_department"  # Value is lowercase
@@ -39,6 +41,7 @@ class OrganizationType(str, enum.Enum):
 ```
 
 **❌ WRONG:**
+
 ```python
 class OrganizationType(str, enum.Enum):
     FIRE_DEPARTMENT = "FIRE_DEPARTMENT"  # Value is uppercase - WRONG!
@@ -53,11 +56,13 @@ class OrganizationType(str, enum.Enum):
 ### Rule 2: Use snake_case for Multi-Word Values
 
 **✅ CORRECT:**
+
 ```python
 FIRE_EMS_COMBINED = "fire_ems_combined"  # snake_case
 ```
 
 **❌ WRONG:**
+
 ```python
 FIRE_EMS_COMBINED = "FireEmsCombined"    # PascalCase - WRONG!
 FIRE_EMS_COMBINED = "fire-ems-combined"  # kebab-case - WRONG!
@@ -70,6 +75,7 @@ FIRE_EMS_COMBINED = "fire-ems-combined"  # kebab-case - WRONG!
 ### Rule 3: Enum Name Should Match Value Pattern
 
 **✅ CORRECT:**
+
 ```python
 class OrganizationType(str, enum.Enum):
     FIRE_DEPARTMENT = "fire_department"  # Name is UPPERCASE, value is lowercase
@@ -84,6 +90,7 @@ class OrganizationType(str, enum.Enum):
 When creating enum columns in Alembic migrations:
 
 **✅ CORRECT:**
+
 ```python
 op.add_column('organizations', sa.Column(
     'organization_type',
@@ -94,6 +101,7 @@ op.add_column('organizations', sa.Column(
 ```
 
 **❌ WRONG:**
+
 ```python
 # DO NOT use enum names - use the string values!
 sa.Enum(OrganizationType.FIRE_DEPARTMENT, ...)  # This gets the value (OK)
@@ -107,6 +115,7 @@ sa.Enum('FIRE_DEPARTMENT', ...)  # This is uppercase (WRONG!)
 ### Rule 5: Frontend TypeScript Must Match Exactly
 
 **Python Model:**
+
 ```python
 class OrganizationType(str, enum.Enum):
     FIRE_DEPARTMENT = "fire_department"
@@ -115,16 +124,19 @@ class OrganizationType(str, enum.Enum):
 ```
 
 **TypeScript Constants** (defined in `frontend/src/constants/enums.ts`):
+
 ```typescript
 export const OrganizationType = {
-  FIRE_DEPARTMENT: 'fire_department',
-  EMS_ONLY: 'ems_only',
-  FIRE_EMS_COMBINED: 'fire_ems_combined',
+  FIRE_DEPARTMENT: "fire_department",
+  EMS_ONLY: "ems_only",
+  FIRE_EMS_COMBINED: "fire_ems_combined",
 } as const;
-export type OrganizationType = (typeof OrganizationType)[keyof typeof OrganizationType];
+export type OrganizationType =
+  (typeof OrganizationType)[keyof typeof OrganizationType];
 ```
 
 **Frontend Form Values:**
+
 ```tsx
 <option value="fire_department">Fire Department</option>
 <option value="ems_only">EMS Only</option>
@@ -141,6 +153,7 @@ at the point of comparison.
 **Backend (Python):**
 
 **✅ CORRECT:**
+
 ```python
 from app.models.training import TrainingStatus
 
@@ -152,6 +165,7 @@ if update_fields["status"] == TrainingStatus.COMPLETED.value:
 ```
 
 **❌ WRONG:**
+
 ```python
 if record.status == "completed":    # Hardcoded string — WRONG!
 if update_fields["status"] == "completed":  # Hardcoded string — WRONG!
@@ -160,6 +174,7 @@ if update_fields["status"] == "completed":  # Hardcoded string — WRONG!
 **Frontend (TypeScript):**
 
 **✅ CORRECT:**
+
 ```typescript
 import { UserStatus, ElectionStatus } from '../constants/enums';
 
@@ -168,6 +183,7 @@ if (election.status === ElectionStatus.CLOSED) { ... }
 ```
 
 **❌ WRONG:**
+
 ```typescript
 if (member.status === 'active') { ... }    // Hardcoded string — WRONG!
 if (election.status === 'closed') { ... }  // Hardcoded string — WRONG!
@@ -186,6 +202,7 @@ Role-based lookups must reference the constants in `backend/app/core/constants.p
 rather than re-declaring inline arrays.
 
 **✅ CORRECT:**
+
 ```python
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 
@@ -193,18 +210,20 @@ cc_roles = config.get("cc_roles", ADMIN_NOTIFY_ROLE_SLUGS)
 ```
 
 **❌ WRONG:**
+
 ```python
 cc_roles = config.get("cc_roles", ["admin", "quartermaster", "chief"])
 ```
 
 **Available role group constants:**
-| Constant | Roles | Used For |
-|----------|-------|----------|
-| `ADMIN_NOTIFY_ROLE_SLUGS` | admin, quartermaster, chief | Drop/archive CC notifications |
-| `LEADERSHIP_ROLE_SLUGS` | chief, president, VP, secretary | Critical event alerts |
-| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief | Training module officer checks |
-| `OPERATIONAL_ROLE_SLUGS` | chief, asst_chief, captain, … | Election eligibility |
-| `ADMINISTRATIVE_ROLE_SLUGS` | president, VP, secretary, … | Election eligibility |
+
+| Constant                      | Roles                           | Used For                       |
+| ----------------------------- | ------------------------------- | ------------------------------ |
+| `ADMIN_NOTIFY_ROLE_SLUGS`     | admin, quartermaster, chief     | Drop/archive CC notifications  |
+| `LEADERSHIP_ROLE_SLUGS`       | chief, president, VP, secretary | Critical event alerts          |
+| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief  | Training module officer checks |
+| `OPERATIONAL_ROLE_SLUGS`      | chief, asst_chief, captain, …   | Election eligibility           |
+| `ADMINISTRATIVE_ROLE_SLUGS`   | president, VP, secretary, …     | Election eligibility           |
 
 **Individual role slug constants:** `ROLE_TRAINING_OFFICER`, `ROLE_IT_MANAGER`,
 `ROLE_MEMBER`, `ROLE_CHIEF` — for point lookups like `Role.slug == ROLE_MEMBER`.
@@ -229,6 +248,7 @@ pytest tests/test_enum_consistency.py -v
 ```
 
 These tests verify:
+
 - Database migration enum values match Python models
 - Python models match TypeScript definitions
 - All enum values are lowercase
@@ -250,6 +270,7 @@ python scripts/verify_database_enums.py
 ```
 
 Run this:
+
 - After running migrations
 - Before deploying to production
 - When debugging enum-related errors
@@ -348,7 +369,7 @@ def downgrade() -> None:
  * My new enum type
  * IMPORTANT: Values must match backend exactly
  */
-export type MyNewEnum = 'option_one' | 'option_two' | 'option_three';
+export type MyNewEnum = "option_one" | "option_two" | "option_three";
 ```
 
 ---
@@ -357,19 +378,19 @@ export type MyNewEnum = 'option_one' | 'option_two' | 'option_three';
 
 ```tsx
 const MY_NEW_ENUM_OPTIONS = [
-  { value: 'option_one', label: 'Option One' },
-  { value: 'option_two', label: 'Option Two' },
-  { value: 'option_three', label: 'Option Three' },
+  { value: "option_one", label: "Option One" },
+  { value: "option_two", label: "Option Two" },
+  { value: "option_three", label: "Option Three" },
 ];
 
 // In your component:
 <select value={formData.myNewEnum}>
-  {MY_NEW_ENUM_OPTIONS.map(opt => (
+  {MY_NEW_ENUM_OPTIONS.map((opt) => (
     <option key={opt.value} value={opt.value}>
       {opt.label}
     </option>
   ))}
-</select>
+</select>;
 ```
 
 ---
@@ -418,18 +439,22 @@ docker-compose up backend
 ### Symptom: "X is not among the defined enum values"
 
 **Error Message:**
+
 ```
 'fire_ems_combined' is not among the defined enum values.
 Enum name: organizationtype. Possible values: FIRE_DEPART.., EMS_ONLY, FIRE_EMS_CO..
 ```
 
 **Diagnosis:**
+
 1. Check database enum values:
+
    ```bash
    python scripts/verify_database_enums.py
    ```
 
 2. Check migration files:
+
    ```bash
    grep -r "sa.Enum.*organizationtype" backend/alembic/versions/
    ```
@@ -442,6 +467,7 @@ Enum name: organizationtype. Possible values: FIRE_DEPART.., EMS_ONLY, FIRE_EMS_
    ```
 
 **Solution:**
+
 - If database has wrong values, create a migration to fix them
 - See `backend/alembic/versions/20260207_0500_fix_organization_type_enum_case.py` for example
 
@@ -450,6 +476,7 @@ Enum name: organizationtype. Possible values: FIRE_DEPART.., EMS_ONLY, FIRE_EMS_
 ### Symptom: Test Failures on Enum Consistency
 
 **Error:**
+
 ```
 AssertionError: Organization type mismatch between database and backend:
 Database: ['FIRE_DEPARTMENT', 'EMS_ONLY', 'FIRE_EMS_COMBINED']
@@ -457,6 +484,7 @@ Backend:  ['fire_department', 'ems_only', 'fire_ems_combined']
 ```
 
 **Solution:**
+
 1. Check which layer has the wrong case
 2. Update the incorrect layer to use lowercase
 3. If database is wrong, create a migration to fix it
@@ -467,13 +495,16 @@ Backend:  ['fire_department', 'ems_only', 'fire_ems_combined']
 ### Symptom: Startup Warning About Enum Mismatch
 
 **Warning:**
+
 ```
 WARNING  | ⚠️  Enum consistency check failed
 WARNING  | OrganizationType: Database enum values don't match model!
 ```
 
 **Solution:**
+
 1. Run verification script to see exact mismatch:
+
    ```bash
    python scripts/verify_database_enums.py
    ```

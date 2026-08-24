@@ -31,6 +31,7 @@ The fire service faces a unique funding landscape: volunteer departments often o
 ### 1.1 Federal Grant Programs
 
 #### FEMA Assistance to Firefighters Grant (AFG)
+
 - **Purpose:** Equipment, PPE, training, vehicles, wellness programs, facility modifications
 - **FY 2024 funding:** $291.6 million across 1,678 awards
 - **Eligibility:** Career, volunteer, and combination fire departments
@@ -41,21 +42,24 @@ The fire service faces a unique funding landscape: volunteer departments often o
 - **Reporting:** Performance reports required every 6 months
 
 #### FEMA SAFER (Staffing for Adequate Fire and Emergency Response)
+
 - **Purpose:** Hiring firefighters (career) and recruiting/retaining volunteers
 - **FY 2024 funding:** $324 million across 207 awards
 - **Two activities:**
-  - *Hiring:* Salary and benefits for new positions
-  - *Recruitment & Retention (R&R):* Programs to attract and keep volunteer firefighters
+  - _Hiring:_ Salary and benefits for new positions
+  - _Recruitment & Retention (R&R):_ Programs to attract and keep volunteer firefighters
 - **Cost share:** No cost share for R&R activity
 - **Period of performance:** 36 months + 180-day recruitment period
 - **Goal:** Compliance with NFPA 1710/1720 staffing standards
 
 #### FEMA Fire Prevention & Safety (FP&S)
+
 - **Purpose:** Fire prevention projects, firefighter health and safety R&D
 - **Minimum allocation:** 10% of total AFG appropriation
 - **Eligibility:** Fire departments, nonprofits, national/state/local organizations
 
 #### USDA Community Facilities Direct Loan & Grant Program
+
 - **Purpose:** Essential community facilities in rural areas (fire stations, equipment, vehicles)
 - **Grant levels:** Up to 75% for communities with population under 5,000
 - **Population cap:** Communities of 20,000 or fewer
@@ -63,16 +67,19 @@ The fire service faces a unique funding landscape: volunteer departments often o
 - **Key requirement:** Must demonstrate inability to finance commercially
 
 #### FEMA Hazard Mitigation Assistance (BRIC, STRLF, HMGP)
+
 - **Purpose:** Resilience upgrades to existing fire stations
 - **Limitation:** Cannot fund new construction, only modifications
 
 #### HUD Community Development Block Grant (CDBG)
+
 - **Purpose:** Flexible community development funding
 - **Fire-eligible:** Equipment and facilities under Public Facilities category
 
 ### 1.2 Private Foundation Grants
 
 #### Firehouse Subs Public Safety Foundation
+
 - **Grant range:** $15,000–$40,000
 - **Focus:** Lifesaving equipment (SCBA, thermal cameras, extrication tools, AEDs, radios, bunker gear)
 - **Eligibility:** Fire departments, EMS, law enforcement, schools, nonprofits
@@ -82,6 +89,7 @@ The fire service faces a unique funding landscape: volunteer departments often o
 - **Portal:** grants.firehousesubs.com
 
 #### Other Notable Private Sources
+
 - **National Volunteer Fire Council (NVFC)** — various programs and partnerships
 - **State fire marshal programs** — vary by state (e.g., Florida Firefighter Assistance Grant)
 - **Volunteer Fire Assistance (VFA)** — federal/state 50/50 match for wildland equipment
@@ -92,6 +100,7 @@ The fire service faces a unique funding landscape: volunteer departments often o
 ### 1.3 Common Fundraising Methods for Volunteer Departments
 
 #### Traditional
+
 - Pancake breakfasts, spaghetti dinners, chicken BBQs
 - Boot drives (roadside collections)
 - Fire prevention open houses
@@ -102,6 +111,7 @@ The fire service faces a unique funding landscape: volunteer departments often o
 - Memorial runs/walks
 
 #### Modern/Digital
+
 - Online donation pages with QR codes
 - Peer-to-peer fundraising campaigns
 - Text-to-give programs
@@ -132,6 +142,7 @@ The fire service faces a unique funding landscape: volunteer departments often o
 The platform has significant groundwork for this module:
 
 **Database tables** (migration `20260201_0017`):
+
 - `fundraising_campaigns` — campaign management with types, goals, statuses, public page support
 - `donors` — full donor CRM with contact info, giving history, tags, communication preferences
 - `donations` — individual donation records with payment methods, recurring support, dedications, tax receipts
@@ -139,6 +150,7 @@ The platform has significant groundwork for this module:
 - `fundraising_events` — event-based fundraising (dinners, galas, auctions, raffles)
 
 **Permissions system** (`core/permissions.py`):
+
 - `fundraising.view` — View fundraising data
 - `fundraising.manage` — Manage fundraising activities
 - Role assignments: `treasurer`, `fundraising_chair`
@@ -146,6 +158,7 @@ The platform has significant groundwork for this module:
 **Availability**: Controlled per organization at runtime via the organization's `enabled_modules` setting (Organization/Admin Settings); the API routers register unconditionally.
 
 **Module definition** (`types/modules.ts`):
+
 - Listed as optional module with `comingSoon: true`
 - Route: `/grants`
 - Features listed: grant tracking, campaigns, budget, donors, reporting, deadline reminders
@@ -171,37 +184,37 @@ The existing DB tables cover fundraising campaigns and donations well. The follo
 
 ### 3.1 Fire Department Management Software (Existing Players)
 
-| Software | Grant Features | Fundraising | Pricing |
-|----------|---------------|-------------|---------|
-| Station Boss | ISO audit data, grant application support | None | ~$50/mo |
-| Emergency Reporting | Data for grant applications | None | Varies |
-| ImageTrend | Compliance reporting for grants | None | Enterprise |
-| First Due | Equipment/compliance data | None | Enterprise |
+| Software            | Grant Features                            | Fundraising | Pricing    |
+| ------------------- | ----------------------------------------- | ----------- | ---------- |
+| Station Boss        | ISO audit data, grant application support | None        | ~$50/mo    |
+| Emergency Reporting | Data for grant applications               | None        | Varies     |
+| ImageTrend          | Compliance reporting for grants           | None        | Enterprise |
+| First Due           | Equipment/compliance data                 | None        | Enterprise |
 
 **Key insight:** None of the existing fire department management platforms offer integrated grant management or fundraising tools. This is a major differentiator opportunity.
 
 ### 3.2 Grant Management Software (Nonprofit Sector)
 
-| Software | Key Features | Pricing |
-|----------|-------------|---------|
-| Bloomerang | Grant tracking, donor CRM, relationship mapping | $125/mo+ |
-| Neon CRM | Donor management, grant tracking, workflows | $99/mo+ |
-| DonorPerfect | Foundation profiles, grant pipeline | $99/mo+ |
-| AmpliFund | Deadline alerts, compliance tracking, task workflows | Custom |
-| Instrumentl | Grant discovery, deadline tracking, funder matching | $179/mo+ |
-| Good Grants | Simple workflow, small org friendly | Free tier |
+| Software     | Key Features                                         | Pricing   |
+| ------------ | ---------------------------------------------------- | --------- |
+| Bloomerang   | Grant tracking, donor CRM, relationship mapping      | $125/mo+  |
+| Neon CRM     | Donor management, grant tracking, workflows          | $99/mo+   |
+| DonorPerfect | Foundation profiles, grant pipeline                  | $99/mo+   |
+| AmpliFund    | Deadline alerts, compliance tracking, task workflows | Custom    |
+| Instrumentl  | Grant discovery, deadline tracking, funder matching  | $179/mo+  |
+| Good Grants  | Simple workflow, small org friendly                  | Free tier |
 
 **Key insight:** These tools are generic nonprofits — none understand fire service grant programs specifically. They also represent additional subscriptions ($100-200+/month) on top of existing department software.
 
 ### 3.3 Fundraising Platforms
 
-| Platform | Key Features | Fees |
-|----------|-------------|------|
-| Zeffy | Zero-fee donations, events, recurring, P2P | 0% |
-| BetterWorld | Free platform, 95% donor-covered fees | 0% (2.9%+$0.30 CC) |
-| GiveButter | Donation pages, events, auctions, P2P | 1-5% |
-| GoFundMe | Crowdfunding, large donor network | 2.9%+$0.30 |
-| Donorbox | Tiered donations, recurring, embeddable | 1.5%+ |
+| Platform    | Key Features                               | Fees               |
+| ----------- | ------------------------------------------ | ------------------ |
+| Zeffy       | Zero-fee donations, events, recurring, P2P | 0%                 |
+| BetterWorld | Free platform, 95% donor-covered fees      | 0% (2.9%+$0.30 CC) |
+| GiveButter  | Donation pages, events, auctions, P2P      | 1-5%               |
+| GoFundMe    | Crowdfunding, large donor network          | 2.9%+$0.30         |
+| Donorbox    | Tiered donations, recurring, embeddable    | 1.5%+              |
 
 **Key insight:** Departments currently must use separate platforms for fundraising, creating data silos. Integrating fundraising into the department intranet keeps everything in one place.
 
@@ -303,6 +316,7 @@ fundraising.admin         — Module settings, integrations, delete records
 A curated, searchable database of grant programs relevant to fire/EMS departments:
 
 **Pre-loaded grant programs:**
+
 - FEMA AFG (annual cycle, typically opens Jan-Feb)
 - FEMA SAFER (annual cycle)
 - FEMA FP&S (annual cycle)
@@ -311,6 +325,7 @@ A curated, searchable database of grant programs relevant to fire/EMS department
 - State-specific programs (configurable)
 
 **For each opportunity:**
+
 - Grant program name and agency
 - Description and eligible uses
 - Typical award range
@@ -323,6 +338,7 @@ A curated, searchable database of grant programs relevant to fire/EMS department
 - Tags (equipment, staffing, training, prevention, facilities)
 
 **Smart features:**
+
 - Deadline notifications (30/14/7/1 day reminders)
 - Eligibility pre-screening based on department profile (population served, volunteer vs. career, rural vs. urban)
 - "Recommended for you" based on department needs and recent purchases/inventory gaps
@@ -333,6 +349,7 @@ A curated, searchable database of grant programs relevant to fire/EMS department
 Track applications through a pipeline with kanban and table views:
 
 **Pipeline stages:**
+
 1. **Researching** — Evaluating fit, gathering info
 2. **Preparing** — Writing application, gathering documentation
 3. **Internal Review** — Department leadership approval
@@ -345,6 +362,7 @@ Track applications through a pipeline with kanban and table views:
 10. **Closed** — Grant period complete, all reports filed
 
 **For each application:**
+
 - Linked grant opportunity
 - Application status (pipeline stage)
 - Amount requested / Amount awarded
@@ -372,21 +390,21 @@ Once awarded, track compliance obligations:
 
 **This is a key differentiator.** Grant applications require extensive data that already exists elsewhere in The Logbook:
 
-| Application Field | Auto-populated From |
-|-------------------|-------------------|
-| Department name, address, FDID | Organization settings |
-| Population served | Organization profile |
-| Number of members (career/volunteer) | Membership module |
-| Call volume / incident data | Incidents module (future) or manual entry |
-| Current apparatus inventory | Apparatus module |
-| Equipment inventory | Inventory module |
-| Training hours completed | Training module |
-| Certifications held | Training/compliance module |
-| ISO rating | Organization settings |
-| Current staffing levels | Scheduling module |
-| Response time data | Incidents module (future) or manual entry |
-| Station/facility condition | Facilities module |
-| Annual budget | Financial settings |
+| Application Field                    | Auto-populated From                       |
+| ------------------------------------ | ----------------------------------------- |
+| Department name, address, FDID       | Organization settings                     |
+| Population served                    | Organization profile                      |
+| Number of members (career/volunteer) | Membership module                         |
+| Call volume / incident data          | Incidents module (future) or manual entry |
+| Current apparatus inventory          | Apparatus module                          |
+| Equipment inventory                  | Inventory module                          |
+| Training hours completed             | Training module                           |
+| Certifications held                  | Training/compliance module                |
+| ISO rating                           | Organization settings                     |
+| Current staffing levels              | Scheduling module                         |
+| Response time data                   | Incidents module (future) or manual entry |
+| Station/facility condition           | Facilities module                         |
+| Annual budget                        | Financial settings                        |
 
 This eliminates the painful data-gathering process that causes many departments to skip grant applications entirely.
 
@@ -398,19 +416,19 @@ This eliminates the painful data-gathering process that causes many departments 
 
 Building on the existing `fundraising_campaigns` table:
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `general` | Unrestricted fund drives | Annual fund drive |
-| `equipment` | Targeted equipment purchase | New SCBA purchase |
-| `apparatus` | Vehicle acquisition | Engine replacement fund |
-| `facilities` | Building projects | Station renovation |
-| `training` | Training programs/gear | Training prop construction |
-| `community` | Community outreach | Smoke alarm installation program |
-| `memorial` | Memorial/tribute | Line-of-duty memorial |
-| `event` | Event-based | Annual dinner dance |
-| `emergency` | Urgent/disaster relief | Storm damage repair |
-| `capital` | Multi-year capital project | New station build |
-| `match` | Grant match funding | AFG cost-share campaign |
+| Type         | Description                 | Example                          |
+| ------------ | --------------------------- | -------------------------------- |
+| `general`    | Unrestricted fund drives    | Annual fund drive                |
+| `equipment`  | Targeted equipment purchase | New SCBA purchase                |
+| `apparatus`  | Vehicle acquisition         | Engine replacement fund          |
+| `facilities` | Building projects           | Station renovation               |
+| `training`   | Training programs/gear      | Training prop construction       |
+| `community`  | Community outreach          | Smoke alarm installation program |
+| `memorial`   | Memorial/tribute            | Line-of-duty memorial            |
+| `event`      | Event-based                 | Annual dinner dance              |
+| `emergency`  | Urgent/disaster relief      | Storm damage repair              |
+| `capital`    | Multi-year capital project  | New station build                |
+| `match`      | Grant match funding         | AFG cost-share campaign          |
 
 ### 6.2 Campaign Features
 
@@ -558,51 +576,61 @@ The grants dashboard should surface:
 This is where the module truly differentiates from standalone tools:
 
 ### 10.1 Events Module
+
 - Create fundraising events that appear on the department calendar
 - Use event RSVP and QR check-in for ticketed fundraisers
 - Track attendance and correlate with donations
 - Auto-create fundraising events when campaign type is "event"
 
 ### 10.2 Apparatus Module
+
 - Link grant applications to specific apparatus needs
 - When a grant funds equipment, auto-update apparatus records with purchase info
 - Use current apparatus data (age, condition, mileage) to justify grant applications
 - Track apparatus purchased with grant funds for compliance
 
 ### 10.3 Inventory Module
+
 - Same as apparatus — link grants to equipment purchases
 - Auto-populate grant applications with current inventory gaps
 - Track grant-funded equipment for compliance
 
 ### 10.4 Training Module
+
 - Link SAFER/AFG training grants to training records
 - Demonstrate training activity in grant applications
 - Track training purchased with grant funds
 
 ### 10.5 Membership Module
+
 - Use staffing data for SAFER applications
 - Link donors to member records if they join
 - Track volunteer hours for grant compliance
 
 ### 10.6 Documents Module
+
 - Store grant application documents, award letters, compliance reports
 - Template library for common grant documents
 - Version control for application drafts
 
 ### 10.7 Communications Module
+
 - Email templates for donor thank-you letters, pledge reminders, campaign updates
 - Automated notification workflows
 - Tax receipt email templates
 
 ### 10.8 Scheduling Module
+
 - Track volunteer hours contributed to grant-funded activities
 - Use staffing data for SAFER compliance
 
 ### 10.9 Reports Module
+
 - Financial reports integrated into the main reporting dashboard
 - Grant-specific report templates
 
 ### 10.10 Notifications Module
+
 - Grant deadline approaching
 - New donation received
 - Pledge payment due
@@ -611,6 +639,7 @@ This is where the module truly differentiates from standalone tools:
 - Compliance report due
 
 ### 10.11 Public Portal Module
+
 - Public donation pages
 - Campaign landing pages
 - Donor wall / recognition page
@@ -620,7 +649,9 @@ This is where the module truly differentiates from standalone tools:
 ## 11. Out-of-the-Box Ideas
 
 ### 11.1 "Grant Application Wizard"
+
 A step-by-step wizard that walks departments through federal grant applications:
+
 - Pre-fills organizational data from The Logbook
 - Provides writing prompts and example narratives
 - Checklist of required documents with links to upload
@@ -629,7 +660,9 @@ A step-by-step wizard that walks departments through federal grant applications:
 - Could include AI-assisted narrative generation (future)
 
 ### 11.2 "Community Supporter" Program
+
 A membership/subscription model for community support:
+
 - Community members sign up for monthly recurring donations ($5, $10, $25/month)
 - Receive a "Community Supporter" digital badge/card
 - Get quarterly updates on how funds are used
@@ -638,42 +671,54 @@ A membership/subscription model for community support:
 - Different tiers with increasing benefits (Bronze/Silver/Gold/Platinum)
 
 ### 11.3 "Round-Up" Donation Integration
+
 Partner with local businesses:
+
 - QR codes at checkout counters
 - "Round up your purchase" programs
 - Business matches customer donations
 - Automated monthly settlement
 
 ### 11.4 "Impact Tracker"
+
 Show donors exactly what their money bought:
+
 - "$50 bought 2 smoke alarms that were installed at 123 Main St"
 - "Your $500 helped purchase SCBA equipment used in 47 calls this year"
 - Visual timeline of purchases and their community impact
 - Photo updates from equipment in action
 
 ### 11.5 "Grant Match Challenge"
+
 When a department receives a grant with a cost-share requirement:
+
 - Automatically create a "match campaign" showing the community exactly how much needs to be raised
 - "The federal government will give us $200,000 if we can raise $20,000 locally"
 - Real-time progress toward the match with a deadline countdown
 - Powerful motivator — donors see their dollar multiplied 10x
 
 ### 11.6 "Apparatus Fund" Savings Tracker
+
 For long-term capital planning:
+
 - Dedicated fund for apparatus replacement
 - Visualize progress toward a target (e.g., "new engine: $850,000")
 - Show how current savings + potential grants could close the gap
 - Monthly contribution tracking from operational budget
 
 ### 11.7 "Donor-Connected Prospective Members"
+
 When community donors show high engagement:
+
 - Track donation frequency and engagement
 - Offer pathway to become a volunteer member
 - Link to the Prospective Members pipeline module
 - "Your biggest supporters might be your next volunteers"
 
 ### 11.8 "Boot Drive Digital" Companion
+
 Modernize the traditional boot drive:
+
 - QR code stickers for boot drive signs
 - Real-time donation tracking for live events
 - Digital + cash tracking in one dashboard
@@ -681,7 +726,9 @@ Modernize the traditional boot drive:
 - Geo-tagged donation locations for optimizing future drive locations
 
 ### 11.9 "Grant Success Stories" Knowledge Base
+
 Community-contributed best practices:
+
 - Departments share successful grant narratives (anonymized)
 - Tips for specific grant programs
 - Common pitfalls to avoid
@@ -689,7 +736,9 @@ Community-contributed best practices:
 - Could be a premium/community feature
 
 ### 11.10 "Fundraising Gamification"
+
 Motivate the department's fundraising team:
+
 - Leaderboard for members who bring in donations
 - Campaign milestone celebrations (confetti animation at 50%, 100%)
 - "Streak" tracking for recurring donor retention
@@ -697,14 +746,18 @@ Motivate the department's fundraising team:
 - Badge system for members (e.g., "$1,000 Club", "Grant Writer")
 
 ### 11.11 "Smart Grant Recommendations"
+
 Based on department profile and data:
+
 - "You have 3 SCBA units expiring in 6 months — AFG applications open in 2 months"
 - "Your training hours are above average — highlight this in your next AFG narrative"
 - "Based on your call volume growth, you may qualify for SAFER hiring"
 - "Firehouse Subs applications open next quarter — your thermal cameras are 8 years old"
 
 ### 11.12 "Donation Kiosk Mode"
+
 For use at events, open houses, and the station:
+
 - Full-screen tablet-optimized donation form
 - Large buttons for suggested amounts
 - Quick card tap via Stripe Terminal (future)
@@ -736,6 +789,7 @@ campaign_sponsors            — Sponsor tracking for campaigns/events
 The existing fundraising tables from migration `20260201_0017` provide a solid foundation. Consider adding:
 
 **`fundraising_campaigns`:**
+
 - `campaign_subtype` — For more granular categorization (e.g., boot drive vs. mail campaign under "general")
 - `expense_total` — Running expense total for net revenue calculation
 - `qr_code_url` — Generated QR code for the campaign
@@ -744,6 +798,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - `recurring_donors_count` — Count of active recurring donors
 
 **`donors`:**
+
 - `engagement_score` — Calculated engagement level
 - `prospective_member_id` — Link to prospective member pipeline
 - `last_communication_date` — When last contacted
@@ -752,6 +807,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - `employer_match_eligible` — Boolean
 
 **`donations`:**
+
 - `source_type` — online, event, mail, in-person, kiosk, qr_code
 - `campaign_source_tag` — UTM-style source tracking
 - `donor_covered_fees` — Whether donor elected to cover processing fees
@@ -765,6 +821,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 ## 13. Implementation Phases
 
 ### Phase 1: Foundation (MVP)
+
 **Goal:** Core grant tracking and manual donation management
 
 - Grant application tracker (pipeline view + table view)
@@ -777,6 +834,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - Module settings page
 
 ### Phase 2: Public Donations & Automation
+
 **Goal:** Accept online donations and automate communications
 
 - Public donation portal pages
@@ -789,6 +847,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - Campaign progress/thermometer widgets
 
 ### Phase 3: Grant Intelligence & Compliance
+
 **Goal:** Smart grant management and compliance tracking
 
 - Grant compliance task manager
@@ -800,6 +859,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - Semi-annual performance report templates
 
 ### Phase 4: Advanced Features
+
 **Goal:** Differentiation and delight
 
 - Grant application wizard with guided workflows
@@ -813,6 +873,7 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - Kiosk mode for in-person donations
 
 ### Phase 5: Community & Intelligence (Future)
+
 **Goal:** Network effects and smart recommendations
 
 - Smart grant recommendations based on department data

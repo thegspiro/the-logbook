@@ -5,6 +5,7 @@ This directory contains comprehensive tests for The Logbook's onboarding process
 ## Overview
 
 The onboarding test suite validates the critical admin user creation and onboarding flow, ensuring:
+
 - Admin user creation with async role assignment works correctly
 - The MissingGreenlet fix (`await db.refresh(user, ['roles'])`) is validated
 - Organization and role creation functions properly
@@ -45,13 +46,16 @@ pytest tests/test_onboarding_integration.py -v
 ## Test Files
 
 ### `conftest.py`
+
 Test configuration and fixtures:
+
 - **Database connection**: Automatically initializes MySQL connection for test session
 - **Session fixtures**: Provides clean database sessions for each test
 - **Sample data**: Pre-configured test data for organizations, users, roles, etc.
 - **Test isolation**: Each test runs in a transaction that's automatically rolled back
 
 Key fixtures:
+
 ```python
 @pytest.fixture(scope="session")
 async def initialize_database():
@@ -63,15 +67,16 @@ async def db_session():
 ```
 
 ### `test_onboarding_integration.py`
+
 Integration tests for the onboarding flow:
 
-| Test | Purpose | Critical? |
-|------|---------|-----------|
-| `test_admin_user_creation_with_role_assignment` | Validates MissingGreenlet fix | ⭐ YES |
-| `test_create_organization` | Organization creation | ✅ |
-| `test_default_roles_creation` | Super Admin role creation | ✅ |
-| `test_duplicate_admin_user_prevention` | Prevents duplicate admins | ✅ |
-| `test_onboarding_status_tracking` | Status tracking | ✅ |
+| Test                                            | Purpose                       | Critical? |
+| ----------------------------------------------- | ----------------------------- | --------- |
+| `test_admin_user_creation_with_role_assignment` | Validates MissingGreenlet fix | ⭐ YES    |
+| `test_create_organization`                      | Organization creation         | ✅        |
+| `test_default_roles_creation`                   | Super Admin role creation     | ✅        |
+| `test_duplicate_admin_user_prevention`          | Prevents duplicate admins     | ✅        |
+| `test_onboarding_status_tracking`               | Status tracking               | ✅        |
 
 ## Key Tests
 
@@ -83,6 +88,7 @@ async def test_admin_user_creation_with_role_assignment(...)
 ```
 
 **What it tests:**
+
 - Admin user is created successfully
 - Super Admin role is assigned without errors
 - The `await db.refresh(user, ['roles'])` fix works correctly
@@ -99,6 +105,7 @@ async def test_create_organization(...)
 ```
 
 **What it tests:**
+
 - Organization can be created with valid data
 - Organization is persisted to database
 - Required fields are validated
@@ -106,6 +113,7 @@ async def test_create_organization(...)
 ## Test Database
 
 The tests use the actual **MySQL database** configured in your Docker environment:
+
 - ✅ Tests run against real MySQL engine (production-realistic)
 - ✅ Same database configuration as production
 - ✅ Each test runs in an isolated transaction
@@ -134,6 +142,7 @@ async with database_manager.engine.connect() as conn:
 ```
 
 This means:
+
 - Tests don't affect each other
 - Your actual database data is never modified
 - Tests are fast and reliable
@@ -210,6 +219,7 @@ RuntimeError: Database not initialized
 ```
 
 **Solution:** The backend container must be running and database must be healthy:
+
 ```bash
 docker compose ps  # Check all containers are running
 docker compose up -d  # Start containers if needed
@@ -219,10 +229,12 @@ docker compose exec backend pytest tests/test_onboarding_integration.py -v
 ### Tests Are Slow
 
 Expected performance:
+
 - Single test: < 1 second
 - Complete suite (5 tests): < 5 seconds
 
 If slower:
+
 - Check MySQL container is healthy: `docker compose ps`
 - Check database connection: `docker compose logs mysql | tail -20`
 - Verify network connectivity between containers
@@ -243,6 +255,7 @@ docker compose exec backend pip install -r requirements.txt
 ### Transaction Rollback Issues
 
 If tests seem to affect each other:
+
 - Verify each test uses the `db_session` fixture
 - Check that tests aren't committing manually
 - Ensure transactions are properly isolated
@@ -319,6 +332,7 @@ These tests should be part of your CI/CD pipeline:
 ## Test Coverage
 
 Current coverage:
+
 - ✅ Admin user creation with async role assignment (MissingGreenlet fix)
 - ✅ Organization creation
 - ✅ Default role creation (including Super Admin)
@@ -326,6 +340,7 @@ Current coverage:
 - ✅ Onboarding status tracking
 
 Future additions:
+
 - [ ] Complete 10-step onboarding flow validation
 - [ ] Module configuration tests
 - [ ] Email/authentication setup validation

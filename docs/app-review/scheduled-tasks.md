@@ -14,9 +14,10 @@ were never covered — plus a money-precision gap. **6 fixes.**
 
 CRON-1 established that a per-org loop over a shared `AsyncSession` must commit each
 org and roll back a failed one, or one org's failed flush poisons the session and
-every *later* org fails too (self-concealing as "many orgs broken"). Pass-1 fixed 8
+every _later_ org fails too (self-concealing as "many orgs broken"). Pass-1 fixed 8
 runners but missed:
-- **`run_shift_auto_checkout`** — the worst: it *had* a rollback but **deferred its
+
+- **`run_shift_auto_checkout`** — the worst: it _had_ a rollback but **deferred its
   commit** to a single tail commit, so a late org's rollback discarded **every
   earlier org's** checkouts + reminders (and re-sent them next run). Now commits
   per org; tail commit removed.
@@ -25,12 +26,12 @@ runners but missed:
   a failed one.
 - **`cert_alert_service.run_daily_cert_alerts`** (endpoint-invoked, not a registered
   runner) — added the rollback.
-1 DB-free regression test pins the isolation (`test_cron_org_loop_isolation.py`).
+  1 DB-free regression test pins the isolation (`test_cron_org_loop_isolation.py`).
 
 ### CRON-2b — LOW — `run_daily_cert_alerts` didn't skip inactive orgs — ✅ FIXED
 
 The registered `_for_each_org` path filters `Organization.active.isnot(False)`; this
-endpoint-invoked sibling selected *all* orgs, so a decommissioned department would
+endpoint-invoked sibling selected _all_ orgs, so a decommissioned department would
 still be mailed. Aligned to the same filter.
 
 ### CRON-6 — LOW-MED (money) — Overdue-property reminder totalled chargeable value as float — ✅ FIXED
@@ -64,7 +65,7 @@ rollback (SELECT-only body, low risk); and the `cert_alert_service` per-record N
 
 Both endpoints; the `SCHEDULE`/`TASK_RUNNERS` registries in full; the shared
 `_for_each_org` helper; and the org-iteration, error-handling, dedup and
-timezone behavior of the runners. Individual task *business logic* was sampled
+timezone behavior of the runners. Individual task _business logic_ was sampled
 (event reminders, shift reminders, auto-checkout, low-stock alerts, end-of-shift
 summary) rather than read line-by-line across all 38 — at 4570 L that would not
 be an honest single-iteration claim. The findings below are structural and
@@ -75,7 +76,7 @@ own iteration.
 
 - **Both endpoints are correctly gated, and the gating is well-reasoned.**
   `POST /run-task` requires `system.run_tasks` (the wildcard System Owner) with
-  a docstring explaining why: each task iterates *every* organization, so
+  a docstring explaining why: each task iterates _every_ organization, so
   triggering one has platform-wide side effects that a single-org admin must not
   be able to cause. `GET /tasks` requires `admin.access` or `settings.manage`.
 - **`SCHEDULE` and `TASK_RUNNERS` are exactly in sync — 38/38, no drift** in
@@ -87,14 +88,14 @@ own iteration.
 - **Reminder dedup is real and correctly implemented.** Sent intervals are
   recorded (`reminders_sent`, `start_reminder_sent`,
   `eos_checklist_reminder_sent`) so a re-run does not re-send. Notably these
-  live in JSON columns but **avoid Pitfall #12**: the code assigns a *new* dict
+  live in JSON columns but **avoid Pitfall #12**: the code assigns a _new_ dict
   via `{**custom, "reminders_sent": ...}` rather than shallow-copying and
   mutating a nested value, so SQLAlchemy sees a genuine change and issues the
   UPDATE. Had this used `dict(...)` plus nested mutation, every reminder would
   have re-sent on every run.
 - **Timezone handling is correct** in the day-level reminder path: the org's
   IANA timezone is resolved with a sane fallback, the reminder instant is
-  computed in *local* time, then converted to UTC for comparison — not the naive
+  computed in _local_ time, then converted to UTC for comparison — not the naive
   "UTC hour" approximation this class of code usually gets wrong.
 
 ## Findings
@@ -102,9 +103,9 @@ own iteration.
 ### CRON-1 — MED — 8 of 9 org loops never rolled back, so one bad org broke the rest of the run — ✅ FIXED
 
 **What:** `_for_each_org` catches a per-org exception, records it, and then
-rolls the session back — with a comment stating exactly why: *"The orgs share
+rolls the session back — with a comment stating exactly why: _"The orgs share
 one session; roll back the failed unit of work so a broken commit doesn't leave
-the session in a failed state that cascades into every later org's callback."*
+the session in a failed state that cascades into every later org's callback."_
 **Eight other runners re-implement that same loop inline and none of them
 rolled back.**
 
@@ -134,7 +135,7 @@ worthless, so this was checked rather than assumed.
 **What:** all 9 org-iterating queries were a bare `select(Organization)` with no
 filter on `Organization.active`.
 
-**Impact:** *latent, not live.* `Organization.active` exists (indexed, defaults
+**Impact:** _latent, not live._ `Organization.active` exists (indexed, defaults
 True) but **nothing in the codebase ever sets it False** — there is no org
 deactivation or suspension flow — so no inactive org exists to be wrongly
 processed today. The moment one is built, all 38 tasks would keep mailing,
@@ -142,7 +143,7 @@ texting and pushing to members of a decommissioned department, and the bug would
 be spread across nine call sites rather than one.
 
 **Fix:** all nine now filter `Organization.active.isnot(False)` — deliberately
-*not* `== True`, so a row whose flag was never populated still counts as active.
+_not_ `== True`, so a row whose flag was never populated still counts as active.
 That makes the change a provable no-op against today's data while making the
 whole task set correct in advance. Locked by
 `test_org_selects_skip_deactivated_organizations`.
@@ -180,7 +181,7 @@ design change rather than a substitution.
 ## Duplication
 
 **`_for_each_org` has eight inline re-implementations** — this is the finding
-behind CRON-1 and CRON-2. Both defects existed *only* in the copies; the shared
+behind CRON-1 and CRON-2. Both defects existed _only_ in the copies; the shared
 helper was correct in both respects. The copies exist for a real reason: the
 helper's callback contract returns a bare `int`, while these eight need richer
 per-org result payloads (`in_app_reminders`, `emails_sent`, `auto_checkouts`, …).
@@ -189,7 +190,7 @@ Consolidating means widening the helper's contract to accept a dict result and
 migrating eight large functions — worth doing, but it is a refactor of ~1500
 lines of notification logic and does not belong in the same change as a
 correctness fix. Recorded as future development; the two structural tests now
-prevent the *next* copy from losing the same guards, which is the cheaper half
+prevent the _next_ copy from losing the same guards, which is the cheaper half
 of the benefit.
 
 ## Dead code
@@ -232,12 +233,13 @@ registry symmetry test now guarantees none becomes orphaned.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change this iteration) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ clean (one file reformatted during the iteration, then re-verified) |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2501 passed, 0 failed** (was 2498 — the 3 new structural tests). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL (653 matching connection/timeout lines). |
-| new tests | ✅ 3 added in `tests/test_scheduled_tasks_structure.py`, each verified to fail when its invariant is broken |
+| Check                | Result                                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change this iteration)                                                                                                                                                  |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                                  |
+| `black --check`      | ✅ clean (one file reformatted during the iteration, then re-verified)                                                                                                                           |
+| `eslint`             | ✅ clean                                                                                                                                                                                         |
+| backend tests        | ✅ **2501 passed, 0 failed** (was 2498 — the 3 new structural tests). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL (653 matching connection/timeout lines). |
+| new tests            | ✅ 3 added in `tests/test_scheduled_tasks_structure.py`, each verified to fail when its invariant is broken                                                                                      |
+
 </content>

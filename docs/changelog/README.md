@@ -6,15 +6,15 @@ carries the **current** month; a month is moved here once it closes.
 Entries are reproduced unchanged apart from link paths, which were written
 relative to the repository root and are rewritten to `../../` here.
 
-| Month | Sections | Notes |
-| --- | ---: | --- |
-| [August 2026](../../CHANGELOG.md) | 142 | **Current** — still in `CHANGELOG.md` |
-| [July 2026](2026-07.md) | 28 | ISO alignment, module security audit |
-| [June 2026](2026-06.md) | 12 | OAuth, MFA, platoon rotations |
-| [May 2026](2026-05.md) | 4 | Client IP resolution, GeoIP |
-| [April 2026](2026-04.md) | 9 | Shift summaries, trainee follow-up |
-| [March 2026](2026-03.md) | 148 | Frontend consolidation, pipeline auto-advance |
-| [February 2026](2026-02.md) | 122 | Initial release and the build-out after it |
+| Month                             | Sections | Notes                                         |
+| --------------------------------- | -------: | --------------------------------------------- |
+| [August 2026](../../CHANGELOG.md) |      142 | **Current** — still in `CHANGELOG.md`         |
+| [July 2026](2026-07.md)           |       28 | ISO alignment, module security audit          |
+| [June 2026](2026-06.md)           |       12 | OAuth, MFA, platoon rotations                 |
+| [May 2026](2026-05.md)            |        4 | Client IP resolution, GeoIP                   |
+| [April 2026](2026-04.md)          |        9 | Shift summaries, trainee follow-up            |
+| [March 2026](2026-03.md)          |      148 | Frontend consolidation, pipeline auto-advance |
+| [February 2026](2026-02.md)       |      122 | Initial release and the build-out after it    |
 
 ## Why this is split
 

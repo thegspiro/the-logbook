@@ -2,7 +2,7 @@
 
 Every iteration works through these six dimensions for its feature. Not every
 item applies to every feature; record "n/a" rather than skipping silently, so a
-reader can tell the difference between *checked and clean* and *not checked*.
+reader can tell the difference between _checked and clean_ and _not checked_.
 
 ---
 
@@ -27,7 +27,7 @@ reader can tell the difference between *checked and clean* and *not checked*.
       limit, `all()` over an org-wide table, N+1 loops issuing per-row queries.
 - [ ] **Error handling** — bare `except Exception` masking real failures;
       `ValueError` raised in a service but not converted to a 400 at the
-      endpoint; fail-*open* behavior in an access-control helper.
+      endpoint; fail-_open_ behavior in an access-control helper.
 - [ ] **Date/time** — naive datetimes stored where `DateTime(timezone=True)` is
       expected; UTC values rendered raw in the UI (see the banned-API list in
       CLAUDE.md).
@@ -57,7 +57,7 @@ reader can tell the difference between *checked and clean* and *not checked*.
       (`assert_outbound_url_safe`) to close the DNS-rebinding TOCTOU.
 - [ ] **Uploads** — magic-byte MIME check, UUID filenames, no path traversal,
       size cap; deletes remove the backing file.
-- [ ] **Rate limiting** — public/unauthenticated surfaces are limited *before*
+- [ ] **Rate limiting** — public/unauthenticated surfaces are limited _before_
       any expensive work (bcrypt, DB) happens.
 - [ ] **PII / PHI** — sensitive fields are not in cacheable responses
       (`UNCACHEABLE_PREFIXES` in `utils/apiCache.ts`), not in audit/activity log
@@ -85,7 +85,7 @@ reader can tell the difference between *checked and clean* and *not checked*.
       hooks with no caller. Verify with a repo-wide grep before deleting; a
       route may be called by a non-obvious consumer (public portal, kiosk, cron).
 - [ ] **Orphaned endpoints** — a backend route no frontend calls. Distinguish
-      *dead* (delete) from *API-surface for integrators* (document it).
+      _dead_ (delete) from _API-surface for integrators_ (document it).
 - [ ] **Dead branches** — conditions that can't be reached, no-op conversion
       blocks, `if x: pass`.
 - [ ] **Stale flags** — config/env vars and feature flags that gate nothing (the
@@ -98,7 +98,7 @@ reader can tell the difference between *checked and clean* and *not checked*.
 ## 5. Documentation
 
 - [ ] **Feature doc exists** — is there a `docs/<FEATURE>.md`? Does it describe
-      what the code actually does *now*?
+      what the code actually does _now_?
 - [ ] **Claims match reality** — the audit already found a "hashed tokens" claim
       over plaintext storage and an "AES-256" claim over Fernet AES-128-CBC.
       Verify every security/crypto claim against the implementation.
@@ -112,7 +112,7 @@ reader can tell the difference between *checked and clean* and *not checked*.
       seed data files registered in `SEED_DATA_FILES`.
 - [ ] **CHANGELOG** — user-visible changes from this iteration recorded.
 - [ ] **Docstrings on non-obvious logic** — business rules and invariants, per
-      the CLAUDE.md comment policy (explain *why*, never restate *what*).
+      the CLAUDE.md comment policy (explain _why_, never restate _what_).
 
 ## 6. Areas for future development
 
@@ -161,7 +161,7 @@ gate you did not achieve:
 
 - **DB-backed pytest cannot run here.** Any test using the `db_session` fixture
   needs MySQL, and the review sandbox has no Docker daemon. Those tests error at
-  *fixture setup* with a `pymysql` connection timeout. That signature is an
+  _fixture setup_ with a `pymysql` connection timeout. That signature is an
   environment failure, not a regression — but confirm it looks like that before
   dismissing it, and always report the pass count alongside the error count.
   Tests that don't touch the DB do run and must pass.
@@ -169,7 +169,7 @@ gate you did not achieve:
   `isort --check-only`; if it isn't installed, run the other three backend
   checks and say so.
 - **Dependency install:** `pip install -r requirements.txt` aborts on the
-  Debian-managed PyJWT. Use `pip install --ignore-installed PyJWT -r
-  requirements.txt`. `pytest` and its plugins are not in `requirements.txt` and
-  need installing separately.
+Debian-managed PyJWT. Use `pip install --ignore-installed PyJWT -r
+requirements.txt`. `pytest` and its plugins are not in `requirements.txt` and
+need installing separately.
 </content>

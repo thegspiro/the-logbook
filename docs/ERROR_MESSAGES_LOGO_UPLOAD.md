@@ -11,6 +11,7 @@ This document describes all error messages users will see when uploading logos, 
 These errors appear immediately when selecting a file, before uploading to the server.
 
 ### File Size Too Large
+
 **Message**: `"Logo file size must be less than 5MB"`
 
 **Trigger**: User selects a file larger than 5MB
@@ -18,6 +19,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 **Location**: `frontend/src/modules/onboarding/utils/validation.ts:75`
 
 **Example**:
+
 ```
 ❌ Logo file size must be less than 5MB
 ```
@@ -25,6 +27,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 ---
 
 ### Invalid File Type
+
 **Message**: `"Please upload a valid image file (PNG, JPG, or WebP only)"`
 
 **Trigger**: User selects a file that isn't PNG/JPG/WebP
@@ -32,6 +35,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 **Location**: `frontend/src/modules/onboarding/utils/validation.ts:68`
 
 **Example**:
+
 ```
 ❌ Please upload a valid image file (PNG, JPG, or WebP only)
 ```
@@ -39,6 +43,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 ---
 
 ### Invalid File Extension
+
 **Message**: `"Invalid file extension"`
 
 **Trigger**: File extension doesn't match MIME type
@@ -46,6 +51,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 **Location**: `frontend/src/modules/onboarding/utils/validation.ts:86`
 
 **Example**:
+
 ```
 ❌ Invalid file extension
 ```
@@ -53,6 +59,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 ---
 
 ### Large File Warning (Non-blocking)
+
 **Message**: `"File size is large. Consider using a smaller image for better performance."`
 
 **Trigger**: File is between 2MB and 5MB
@@ -60,6 +67,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 **Location**: `frontend/src/modules/onboarding/utils/validation.ts:94`
 
 **Example**:
+
 ```
 ⚠️  File size is large. Consider using a smaller image for better performance.
 ```
@@ -71,6 +79,7 @@ These errors appear immediately when selecting a file, before uploading to the s
 These errors appear when the backend processes the image (after clicking Save/Continue).
 
 ### Image Too Large
+
 **Message**: `"Invalid image: Image too large: {actual_size}MB (max {limit}MB)"`
 
 **Trigger**: File exceeds 5MB after base64 decoding
@@ -78,11 +87,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:148-150`
 
 **Example**:
+
 ```
 ❌ Invalid image: Image too large: 7.50MB (max 5MB)
 ```
 
 **Details**:
+
 - Shows actual file size with 2 decimal places
 - Shows the maximum allowed size
 - Clear actionable message
@@ -90,6 +101,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Unsupported Image Type
+
 **Message**: `"Invalid image: Unsupported image type: {detected_type}. Only PNG and JPEG are allowed."`
 
 **Trigger**: File is not actually a PNG or JPEG (detected via magic bytes)
@@ -97,6 +109,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:162-165`
 
 **Examples**:
+
 ```
 ❌ Invalid image: Unsupported image type: image/svg+xml. Only PNG and JPEG are allowed.
 ❌ Invalid image: Unsupported image type: image/gif. Only PNG and JPEG are allowed.
@@ -104,6 +117,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ```
 
 **Details**:
+
 - Shows the actual detected file type
 - Lists allowed formats
 - Prevents file type spoofing
@@ -111,6 +125,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Image Dimensions Too Small
+
 **Message**: `"Invalid image: Image too small: {width}x{height}. Minimum {min}x{min}"`
 
 **Trigger**: Image dimensions are less than 16x16 pixels
@@ -118,11 +133,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:235-240`
 
 **Example**:
+
 ```
 ❌ Invalid image: Image too small: 8x8. Minimum 16x16
 ```
 
 **Details**:
+
 - Shows actual image dimensions
 - Shows minimum required dimensions
 - Prevents tracking pixels
@@ -130,6 +147,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Image Dimensions Too Large
+
 **Message**: `"Invalid image: Image too large: {width}x{height}. Maximum {max}x{max}"`
 
 **Trigger**: Image dimensions exceed 4096x4096 pixels
@@ -137,11 +155,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:243-248`
 
 **Example**:
+
 ```
 ❌ Invalid image: Image too large: 8000x8000. Maximum 4096x4096
 ```
 
 **Details**:
+
 - Shows actual image dimensions
 - Shows maximum allowed dimensions
 - Prevents memory exhaustion attacks
@@ -149,6 +169,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Decompression Bomb Detected
+
 **Message**: `"Invalid image: Potential decompression bomb detected. Image rejected."`
 
 **Trigger**: Image would decompress to excessive size (>178 million pixels)
@@ -156,11 +177,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:204-206`
 
 **Example**:
+
 ```
 ❌ Invalid image: Potential decompression bomb detected. Image rejected.
 ```
 
 **Details**:
+
 - Prevents DoS attacks via malicious images
 - Detects images that are small when compressed but huge when decompressed
 - Clear security-focused message
@@ -168,6 +191,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Invalid or Corrupted Image
+
 **Message**: `"Invalid image: Invalid or corrupted image: {details}"`
 
 **Trigger**: Image fails Pillow's validation or loading
@@ -175,12 +199,14 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:208`
 
 **Example**:
+
 ```
 ❌ Invalid image: Invalid or corrupted image: cannot identify image file
 ❌ Invalid image: Invalid or corrupted image: broken data stream when reading image file
 ```
 
 **Details**:
+
 - Shows technical details from Pillow
 - Helps users understand what's wrong
 - Catches malformed files
@@ -188,6 +214,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Blocked Image Format
+
 **Message**: `"Invalid image: {format} format is not allowed for security reasons"`
 
 **Trigger**: Image is in a blocked format (SVG, GIF, TIFF, BMP, etc.)
@@ -195,6 +222,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:199-202`
 
 **Examples**:
+
 ```
 ❌ Invalid image: SVG format is not allowed for security reasons
 ❌ Invalid image: GIF format is not allowed for security reasons
@@ -202,6 +230,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ```
 
 **Details**:
+
 - Explicitly states security concern
 - Lists the blocked format
 - Prevents vector-based attacks (SVG with scripts)
@@ -209,6 +238,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Invalid Base64 Encoding
+
 **Message**: `"Invalid image: Invalid base64 encoding: {details}"`
 
 **Trigger**: Base64 data is malformed or corrupted
@@ -216,17 +246,20 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:136`
 
 **Example**:
+
 ```
 ❌ Invalid image: Invalid base64 encoding: Invalid base64-encoded string
 ```
 
 **Details**:
+
 - Catches data corruption during transmission
 - Technical but clear message
 
 ---
 
 ### Empty Image File
+
 **Message**: `"Invalid image: Image file is empty"`
 
 **Trigger**: File has 0 bytes
@@ -234,11 +267,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 **Location**: `backend/app/utils/image_validator.py:143`
 
 **Example**:
+
 ```
 ❌ Invalid image: Image file is empty
 ```
 
 **Details**:
+
 - Simple, clear message
 - Prevents empty file uploads
 
@@ -247,11 +282,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ## Error Display in UI
 
 ### DepartmentInfo Page (Initial Upload)
+
 - Errors displayed via `toast.error()` (red toast notification)
 - Appears immediately when file is selected
 - Frontend validation only (no API call yet)
 
 **User Flow**:
+
 1. User selects file via file picker or drag-and-drop
 2. Frontend validates immediately
 3. If invalid, toast error appears
@@ -260,11 +297,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### NavigationChoice Page (During Save)
+
 - Errors displayed via `toast.error()` after API call
 - Shows backend validation errors
 - Includes detailed error message from server
 
 **User Flow**:
+
 1. User clicks "Continue"
 2. API call to `/api/v1/onboarding/session/department`
 3. Backend validates logo
@@ -273,6 +312,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 6. User remains on page to fix issue
 
 **Code** (`NavigationChoice.tsx:67-70`):
+
 ```typescript
 } else if (error) {
   // Display the actual error message from the backend
@@ -283,11 +323,13 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### OrganizationSetup Page (During Organization Creation)
+
 - Errors displayed via `toast.error()` after API call
 - Shows detailed backend validation errors
 - Includes actual error message (not generic)
 
 **User Flow**:
+
 1. User fills organization form with logo
 2. User clicks "Save & Continue"
 3. API call to `/api/v1/onboarding/session/organization`
@@ -297,6 +339,7 @@ These errors appear when the backend processes the image (after clicking Save/Co
 7. User can fix issue and retry
 
 **Code** (`OrganizationSetup.tsx:618-622`):
+
 ```typescript
 } catch (err: any) {
   console.error('Failed to save organization:', err);
@@ -311,12 +354,15 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ## Error Message Examples by Scenario
 
 ### Scenario 1: User Uploads 10MB Photo
+
 **What happens**:
+
 1. Frontend checks size → `10485760 bytes > 5242880 bytes`
 2. Toast error: `"Logo file size must be less than 5MB"`
 3. File rejected immediately, no upload
 
 **User sees**:
+
 ```
 ❌ Logo file size must be less than 5MB
 ```
@@ -324,17 +370,21 @@ These errors appear when the backend processes the image (after clicking Save/Co
 ---
 
 ### Scenario 2: User Uploads SVG File
+
 **What happens**:
+
 1. Frontend checks MIME type → `image/svg+xml` not in allowed list
 2. Toast error: `"Please upload a valid image file (PNG, JPG, or WebP only)"`
 3. File rejected immediately
 
 **User sees**:
+
 ```
 ❌ Please upload a valid image file (PNG, JPG, or WebP only)
 ```
 
 If bypassed (e.g., via API manipulation), backend catches it:
+
 ```
 ❌ Invalid image: Unsupported image type: image/svg+xml. Only PNG and JPEG are allowed.
 ```
@@ -342,7 +392,9 @@ If bypassed (e.g., via API manipulation), backend catches it:
 ---
 
 ### Scenario 3: User Uploads Malware Renamed to logo.png
+
 **What happens**:
+
 1. Frontend checks extension → `✓ .png`
 2. Frontend checks MIME → `✓ image/png` (spoofed)
 3. File passes frontend validation
@@ -352,6 +404,7 @@ If bypassed (e.g., via API manipulation), backend catches it:
 7. Backend rejects with error
 
 **User sees** (during save):
+
 ```
 ❌ Invalid image: Unsupported image type: application/x-executable. Only PNG and JPEG are allowed.
 ```
@@ -359,7 +412,9 @@ If bypassed (e.g., via API manipulation), backend catches it:
 ---
 
 ### Scenario 4: User Uploads Decompression Bomb
+
 **What happens**:
+
 1. Frontend checks size → `✓ 50KB` (small compressed size)
 2. Frontend checks type → `✓ image/png`
 3. File passes frontend validation
@@ -370,6 +425,7 @@ If bypassed (e.g., via API manipulation), backend catches it:
 8. Backend rejects
 
 **User sees**:
+
 ```
 ❌ Invalid image: Potential decompression bomb detected. Image rejected.
 ```
@@ -377,7 +433,9 @@ If bypassed (e.g., via API manipulation), backend catches it:
 ---
 
 ### Scenario 5: User Uploads 8000x8000 Pixel Image
+
 **What happens**:
+
 1. Frontend checks size → `✓ 3MB` (within limit)
 2. Frontend checks type → `✓ image/jpeg`
 3. File passes frontend validation
@@ -386,6 +444,7 @@ If bypassed (e.g., via API manipulation), backend catches it:
 6. Backend rejects
 
 **User sees**:
+
 ```
 ❌ Invalid image: Image too large: 8000x8000. Maximum 4096x4096
 ```
@@ -394,13 +453,13 @@ If bypassed (e.g., via API manipulation), backend catches it:
 
 ## Summary of Limits
 
-| Limit | Value | Error Message Includes |
-|-------|-------|----------------------|
-| Max file size | 5MB | Actual size + limit |
-| Max dimensions | 4096x4096 | Actual dimensions + limit |
-| Min dimensions | 16x16 | Actual dimensions + limit |
-| Allowed types | PNG, JPEG | Detected type + allowed types |
-| Max pixels | ~178 million | Decompression bomb warning |
+| Limit          | Value        | Error Message Includes        |
+| -------------- | ------------ | ----------------------------- |
+| Max file size  | 5MB          | Actual size + limit           |
+| Max dimensions | 4096x4096    | Actual dimensions + limit     |
+| Min dimensions | 16x16        | Actual dimensions + limit     |
+| Allowed types  | PNG, JPEG    | Detected type + allowed types |
+| Max pixels     | ~178 million | Decompression bomb warning    |
 
 ---
 
@@ -409,6 +468,7 @@ If bypassed (e.g., via API manipulation), backend catches it:
 To verify all error messages work correctly:
 
 ### Test 1: File Too Large
+
 ```bash
 # Create 10MB file
 dd if=/dev/zero of=large.png bs=1M count=10
@@ -418,6 +478,7 @@ dd if=/dev/zero of=large.png bs=1M count=10
 ```
 
 ### Test 2: Wrong File Type
+
 ```bash
 # Upload PDF or text file
 # Should see:
@@ -425,6 +486,7 @@ dd if=/dev/zero of=large.png bs=1M count=10
 ```
 
 ### Test 3: Backend Validation
+
 ```bash
 # Use curl to bypass frontend:
 curl -X POST http://localhost:3001/api/v1/onboarding/session/department \
@@ -439,6 +501,7 @@ curl -X POST http://localhost:3001/api/v1/onboarding/session/department \
 ## Accessibility
 
 All error messages:
+
 - ✅ Display via `toast.error()` (high contrast red)
 - ✅ Include ❌ icon for visual indication
 - ✅ Contain specific details, not generic "Error"
@@ -451,6 +514,7 @@ All error messages:
 ## Future Enhancements
 
 Potential improvements:
+
 1. **Inline validation feedback** - Show error below upload field
 2. **Suggested fixes** - "Try reducing image size to 4MB or less"
 3. **Auto-resize option** - "Image is 8000x8000. Resize to 4096x4096?"

@@ -5,9 +5,11 @@ Endpoints for creating and managing training sessions and approvals.
 """
 
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -294,6 +296,68 @@ async def finalize_training_session(
         "approval_id": approval.id,
         "approval_deadline": approval.approval_deadline,
     }
+
+
+class TrainingSessionReopenRequest(BaseModel):
+    """Request body for reopening a finalized training session."""
+
+    reason: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Why the session is being reopened; recorded on the audit entry.",
+    )
+
+
+@router.post("/{training_session_id}/reopen", response_model=TrainingSessionResponse)
+async def reopen_training_session(
+    training_session_id: UUID,
+    body: TrainingSessionReopenRequest = TrainingSessionReopenRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.reopen_attendance")),
+):
+    """
+    Reopen a finalized training session so it can be corrected and re-finalized.
+
+    Behind the same permission as reopening event attendance, and for the same
+    reason: finalizing feeds training records, certifications and pipeline
+    progress, so undoing it is a department leader's call rather than part of
+    the events.manage grant that finalized it.
+
+    **Authentication required**
+    **Requires permission: events.reopen_attendance**
+    """
+    service = TrainingSessionService(db)
+
+    training_session, error = await service.reopen_training_session(
+        training_session_id=training_session_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+                if error == "Training session not found"
+                else status.HTTP_409_CONFLICT
+            ),
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_reopened",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "session_id": str(training_session_id),
+            "action": "reopened",
+            "reason": (body.reason or "").strip() or None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _session_response(training_session)
 
 
 @router.get("/approve/{token}", response_model=TrainingApprovalResponse)

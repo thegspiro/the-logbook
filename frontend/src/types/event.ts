@@ -55,6 +55,16 @@ export interface Event {
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
+  /**
+   * Attendance lock. Set means the event is closed: check-in, attendee edits,
+   * time corrections and deletion are all refused by the API until someone
+   * with `events.reopen_attendance` reopens it. Absent on list payloads.
+   */
+  attendance_finalized_at?: string | null;
+  attendance_finalized_by?: string | null;
+  /** Resolved on the detail endpoint only; null for rows finalized before the
+   * actor was recorded. */
+  attendance_finalized_by_name?: string | null;
   created_by?: string;
   created_at: string;
   updated_at: string;

@@ -6,15 +6,15 @@ and other major providers.
 
 ## Quick Checklist
 
-| Requirement | Gmail | Microsoft | Where |
-|-------------|-------|-----------|-------|
-| SPF record | Required | Required | DNS TXT |
-| DKIM signing | Required (bulk) | Required | DNS TXT + SMTP relay |
-| DMARC policy | Required (bulk) | Required | DNS TXT |
-| Reverse DNS (PTR) | Recommended | Required | Hosting provider |
-| TLS encryption | Required | Required | `SMTP_ENCRYPTION=tls` |
-| Valid EHLO hostname | Recommended | Required | `SMTP_EHLO_HOSTNAME` |
-| `Message-ID` header | Required | Required | Automatic (app code) |
+| Requirement               | Gmail           | Microsoft       | Where                       |
+| ------------------------- | --------------- | --------------- | --------------------------- |
+| SPF record                | Required        | Required        | DNS TXT                     |
+| DKIM signing              | Required (bulk) | Required        | DNS TXT + SMTP relay        |
+| DMARC policy              | Required (bulk) | Required        | DNS TXT                     |
+| Reverse DNS (PTR)         | Recommended     | Required        | Hosting provider            |
+| TLS encryption            | Required        | Required        | `SMTP_ENCRYPTION=tls`       |
+| Valid EHLO hostname       | Recommended     | Required        | `SMTP_EHLO_HOSTNAME`        |
+| `Message-ID` header       | Required        | Required        | Automatic (app code)        |
 | `List-Unsubscribe` header | Required (bulk) | Required (bulk) | Automatic for ballot emails |
 
 ## 1. SPF Record
@@ -32,15 +32,15 @@ Value: v=spf1 include:_spf.google.com ~all
 
 Replace the `include:` with your SMTP provider:
 
-| Provider | SPF include |
-|----------|-------------|
-| Google Workspace | `include:_spf.google.com` |
-| Microsoft 365 | `include:spf.protection.outlook.com` |
+| Provider                 | SPF include                                                        |
+| ------------------------ | ------------------------------------------------------------------ |
+| Google Workspace         | `include:_spf.google.com`                                          |
+| Microsoft 365            | `include:spf.protection.outlook.com`                               |
 | Cloudflare Email Service | Automatic — managed by Cloudflare when domain DNS is on Cloudflare |
-| Amazon SES | `include:amazonses.com` |
-| SendGrid | `include:sendgrid.net` |
-| Mailgun | `include:mailgun.org` |
-| Self-hosted | `ip4:YOUR.SERVER.IP` |
+| Amazon SES               | `include:amazonses.com`                                            |
+| SendGrid                 | `include:sendgrid.net`                                             |
+| Mailgun                  | `include:mailgun.org`                                              |
+| Self-hosted              | `ip4:YOUR.SERVER.IP`                                               |
 
 > **Important:** Only one SPF record per domain. If you have multiple
 > senders, combine them: `v=spf1 include:_spf.google.com include:sendgrid.net ~all`
@@ -96,11 +96,11 @@ Value: v=DMARC1; p=none; rua=mailto:dmarc-reports@yourdomain.com
 Start with `p=none` (monitor only), then move to `p=quarantine` or
 `p=reject` once you confirm legitimate emails are passing:
 
-| Policy | Effect |
-|--------|--------|
-| `p=none` | Monitor only (receive reports, no action) |
-| `p=quarantine` | Failing messages go to spam |
-| `p=reject` | Failing messages are blocked |
+| Policy         | Effect                                    |
+| -------------- | ----------------------------------------- |
+| `p=none`       | Monitor only (receive reports, no action) |
+| `p=quarantine` | Failing messages go to spam               |
+| `p=reject`     | Failing messages are blocked              |
 
 ## 4. Reverse DNS (PTR Record)
 
@@ -199,12 +199,12 @@ dig -x YOUR.SERVER.IP +short
 
 ### Common rejection codes
 
-| Code | Meaning | Fix |
-|------|---------|-----|
-| 550 5.7.1 | SPF fail | Add/fix SPF record |
-| 550 5.7.26 | DMARC fail | Align SPF/DKIM with From domain |
-| 421 4.7.0 | Rate limited | Reduce send rate (app handles this) |
-| 550 5.7.1 (Microsoft) | PTR mismatch | Set reverse DNS to match EHLO hostname |
+| Code                   | Meaning       | Fix                                    |
+| ---------------------- | ------------- | -------------------------------------- |
+| 550 5.7.1              | SPF fail      | Add/fix SPF record                     |
+| 550 5.7.26             | DMARC fail    | Align SPF/DKIM with From domain        |
+| 421 4.7.0              | Rate limited  | Reduce send rate (app handles this)    |
+| 550 5.7.1 (Microsoft)  | PTR mismatch  | Set reverse DNS to match EHLO hostname |
 | 421 RP-001 (Microsoft) | IP reputation | Warm up IP gradually, check blacklists |
 
 ## 7. Microsoft-Specific Notes
@@ -232,22 +232,22 @@ than Gmail in several areas:
 The following changes were made in the application code to improve email
 deliverability without requiring DNS or SMTP configuration changes:
 
-| Improvement | Description |
-|-------------|-------------|
-| **Message-ID header** | All outgoing emails include a proper RFC 5322 `Message-ID` header, satisfying Gmail and Microsoft authentication checks |
-| **Batch rate limiting** | Large recipient lists are rate-limited per batch to avoid triggering bulk-send throttles (Gmail: ~100/min, Microsoft: ~30/connection) |
-| **Inline CSS** | All email template styles are inlined directly on HTML elements. Gmail strips `<style>` tags from email bodies, so inline styles ensure consistent rendering |
-| **SMTP connection reuse** | SMTP connections are reused within a batch send operation, reducing connection overhead and improving throughput for large batches |
-| **Hosted logo images** | Organization logos use hosted image URLs instead of base64 data URIs. Gmail clips emails exceeding ~102 KB, and base64-encoded logos easily push emails past this limit |
-| **Admin email templates** | Administrators can send emails using saved templates directly from the admin interface |
+| Improvement               | Description                                                                                                                                                             |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Message-ID header**     | All outgoing emails include a proper RFC 5322 `Message-ID` header, satisfying Gmail and Microsoft authentication checks                                                 |
+| **Batch rate limiting**   | Large recipient lists are rate-limited per batch to avoid triggering bulk-send throttles (Gmail: ~100/min, Microsoft: ~30/connection)                                   |
+| **Inline CSS**            | All email template styles are inlined directly on HTML elements. Gmail strips `<style>` tags from email bodies, so inline styles ensure consistent rendering            |
+| **SMTP connection reuse** | SMTP connections are reused within a batch send operation, reducing connection overhead and improving throughput for large batches                                      |
+| **Hosted logo images**    | Organization logos use hosted image URLs instead of base64 data URIs. Gmail clips emails exceeding ~102 KB, and base64-encoded logos easily push emails past this limit |
+| **Admin email templates** | Administrators can send emails using saved templates directly from the admin interface                                                                                  |
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Logo image URL not accessible | Falls back to text-only header with organization name |
-| Batch > 50 recipients (Gmail) | Rate-limited with 1-second delays between sub-batches |
-| Email client without CSS support | Inline styles ensure basic formatting is preserved |
+| Scenario                          | Behavior                                                  |
+| --------------------------------- | --------------------------------------------------------- |
+| Logo image URL not accessible     | Falls back to text-only header with organization name     |
+| Batch > 50 recipients (Gmail)     | Rate-limited with 1-second delays between sub-batches     |
+| Email client without CSS support  | Inline styles ensure basic formatting is preserved        |
 | SMTP connection timeout mid-batch | Automatic reconnection and retry for remaining recipients |
 
 ## 9. Inventory Notification Circuit Breaker (2026-05-02)
@@ -261,13 +261,13 @@ forever, generating repeated failures every scheduled run.
 A circuit breaker now bounds these retries
 (`backend/app/services/inventory_notification_service.py`):
 
-| Mechanism | Behavior |
-|-----------|----------|
-| `attempt_count` column | Incremented on every queued record each time its batch email send fails (migration `20260502_0002`) |
-| `last_attempt_at` column | Set to the time of the most recent failed delivery attempt |
+| Mechanism                                | Behavior                                                                                                                                             |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attempt_count` column                   | Incremented on every queued record each time its batch email send fails (migration `20260502_0002`)                                                  |
+| `last_attempt_at` column                 | Set to the time of the most recent failed delivery attempt                                                                                           |
 | Retry cap (`_MAX_DELIVERY_ATTEMPTS = 5`) | After 5 failed attempts the record is **abandoned**: marked `processed = True` (with `processed_at`) so the next scheduled run no longer picks it up |
-| Abandon log | An `ERROR` is logged: `Inventory notification for user <id> abandoned after N failed delivery attempts; check SMTP credentials` |
-| Pre-abandon log | Each non-final failure logs a `WARNING`: `Email send failed for user <id> (attempt N/5); will retry on next run` |
+| Abandon log                              | An `ERROR` is logged: `Inventory notification for user <id> abandoned after N failed delivery attempts; check SMTP credentials`                      |
+| Pre-abandon log                          | Each non-final failure logs a `WARNING`: `Email send failed for user <id> (attempt N/5); will retry on next run`                                     |
 
 Successful sends mark all the member's records `processed` immediately. The
 abandon path deliberately marks records processed (rather than deleting them)

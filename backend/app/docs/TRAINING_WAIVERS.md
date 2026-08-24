@@ -4,7 +4,7 @@
 
 When a department member takes a leave of absence (medical, military, personal,
 etc.), the system reduces their training requirements proportionally so they are
-not penalised for time they were inactive.  This guide explains how training
+not penalised for time they were inactive. This guide explains how training
 officers create and manage leaves, how the system adjusts compliance
 calculations, and what members see on their end.
 
@@ -38,29 +38,32 @@ calculations, and what members see on their end.
 2. Click the **Create Waiver** tab.
 3. Fill in the form:
 
-   | Field           | Description |
-   |-----------------|-------------|
-   | **Member**      | Select the member from the dropdown (sorted by last name). |
-   | **Applies To**  | Multi-select checkboxes: *Training*, *Meetings*, *Shifts*. Pick any combination. |
-   | **Leave Type**  | Choose one: *Leave of Absence*, *Medical*, *Military*, *Personal*, *Administrative*, *New Member*, or *Other*. |
-   | **Start Date**  | First day the member is on leave. |
-   | **End Date**    | Last day the member is on leave (must be on or after start date). Leave blank and check **Permanent** for waivers with no end date. |
-   | **Reason**      | Optional free-text explanation. |
+   | Field          | Description                                                                                                                         |
+   | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+   | **Member**     | Select the member from the dropdown (sorted by last name).                                                                          |
+   | **Applies To** | Multi-select checkboxes: _Training_, _Meetings_, _Shifts_. Pick any combination.                                                    |
+   | **Leave Type** | Choose one: _Leave of Absence_, _Medical_, _Military_, _Personal_, _Administrative_, _New Member_, or _Other_.                      |
+   | **Start Date** | First day the member is on leave.                                                                                                   |
+   | **End Date**   | Last day the member is on leave (must be on or after start date). Leave blank and check **Permanent** for waivers with no end date. |
+   | **Reason**     | Optional free-text explanation.                                                                                                     |
 
 4. Click **Create Waiver**.
 
 **Applies To options (multi-select):**
+
 - **Training + Meetings + Shifts** (all selected): Creates a Leave of Absence and automatically creates a linked training waiver with matching dates. This is the most common choice.
 - **Training only**: Creates a standalone training waiver without a Leave of Absence. The member's meeting attendance and shift scheduling are not affected.
 - **Meetings and/or Shifts only** (Training unchecked): Creates a Leave of Absence with `exempt_from_training_waiver = true`. Training requirements are not adjusted.
 - Any combination of the three is valid.
 
 **Permanent waivers:**
+
 - Leave the **End Date** blank and check **Permanent (no end date)** to create a waiver that never expires.
 - Permanent waivers display a purple "Permanent" badge in all status columns.
 - Internally, the calculation layer maps a null end date to a far-future sentinel (9999-12-31) for period calculations.
 
 **New Member leave type:**
+
 - The **New Member** leave type is designed for long-service members who are exempt from certain training requirements. It functions identically to other leave types for calculation purposes.
 
 ### From the Member Lifecycle page (alternative)
@@ -76,10 +79,10 @@ covered months from all compliance calculations.
 
 ### Managing existing leaves
 
-- **View inactive leaves**: Toggle the *Show inactive leaves* checkbox above
+- **View inactive leaves**: Toggle the _Show inactive leaves_ checkbox above
   the table to include previously deactivated leaves.
 - **Deactivate a leave**: Click the **Deactivate** button on an active leave
-  row.  This performs a soft-delete; the record is kept for audit history but
+  row. This performs a soft-delete; the record is kept for audit history but
   no longer affects calculations.
 
 ---
@@ -104,7 +107,7 @@ in the sidebar as yellow cards showing the leave type, date range, and reason.
 ### What counts as a "waived month"?
 
 A calendar month is waived if the leave covers **15 or more days** of that
-month.  For example:
+month. For example:
 
 - Leave from Jan 1 – Jan 31 → January is waived (31 days covered).
 - Leave from Jan 10 – Jan 25 → January is waived (16 days covered).
@@ -113,7 +116,7 @@ month.  For example:
 ### Overlapping leaves
 
 If a member has multiple overlapping leave records (e.g., two leaves that both
-cover March), the month is only counted once.  The system uses a set of
+cover March), the month is only counted once. The system uses a set of
 (year, month) tuples to deduplicate.
 
 ### Which requirements are affected?
@@ -127,25 +130,25 @@ When `requirement_ids` is null, the waiver applies to all requirements.
 
 ### Requirement types that are adjusted
 
-| Requirement Type | Adjusted Field |
-|-----------------|----------------|
-| **Hours** | `required_hours` is reduced proportionally. |
-| **Shifts** | `required_shifts` is reduced proportionally. |
-| **Calls** | `required_calls` is reduced proportionally. |
-| **Courses** | Not adjusted (completion is binary, not proportional). |
+| Requirement Type  | Adjusted Field                                            |
+| ----------------- | --------------------------------------------------------- |
+| **Hours**         | `required_hours` is reduced proportionally.               |
+| **Shifts**        | `required_shifts` is reduced proportionally.              |
+| **Calls**         | `required_calls` is reduced proportionally.               |
+| **Courses**       | Not adjusted (completion is binary, not proportional).    |
 | **Certification** | Not adjusted (you either have a valid cert or you don't). |
 
 ### Frequency-based evaluation windows
 
 The adjustment is applied within the requirement's evaluation window:
 
-| Frequency   | Window |
-|------------|--------|
-| Annual     | Jan 1 – Dec 31 of the requirement year |
-| Quarterly  | Current quarter (3-month window) |
-| Monthly    | Current calendar month |
-| Biannual   | Two-year window (certification-based, no hours adjustment) |
-| One-time   | No window (no adjustment applies) |
+| Frequency | Window                                                     |
+| --------- | ---------------------------------------------------------- |
+| Annual    | Jan 1 – Dec 31 of the requirement year                     |
+| Quarterly | Current quarter (3-month window)                           |
+| Monthly   | Current calendar month                                     |
+| Biannual  | Two-year window (certification-based, no hours adjustment) |
+| One-time  | No window (no adjustment applies)                          |
 
 ---
 
@@ -153,14 +156,14 @@ The adjustment is applied within the requirement's evaluation window:
 
 The waiver adjustment is applied consistently across all compliance views:
 
-| View / Endpoint | Description |
-|----------------|-------------|
-| **My Training** (`GET /training/module-config/my-training`) | Member's personal training dashboard. |
-| **Compliance Matrix** (`GET /training/compliance-matrix`) | Officer view: all members x all requirements. |
-| **Competency Matrix** (`GET /training/competency-matrix`) | Department heat-map / readiness view. |
-| **Training Report** (`GET /training/reports/user/{id}`) | Individual member training report. |
-| **Requirements Progress** (`GET /training/requirements/progress/{id}`) | Per-user, per-requirement progress. |
-| **Program Enrollment Progress** | Stored progress percentages in program enrollments. |
+| View / Endpoint                                                        | Description                                         |
+| ---------------------------------------------------------------------- | --------------------------------------------------- |
+| **My Training** (`GET /training/module-config/my-training`)            | Member's personal training dashboard.               |
+| **Compliance Matrix** (`GET /training/compliance-matrix`)              | Officer view: all members x all requirements.       |
+| **Competency Matrix** (`GET /training/competency-matrix`)              | Department heat-map / readiness view.               |
+| **Training Report** (`GET /training/reports/user/{id}`)                | Individual member training report.                  |
+| **Requirements Progress** (`GET /training/requirements/progress/{id}`) | Per-user, per-requirement progress.                 |
+| **Program Enrollment Progress**                                        | Stored progress percentages in program enrollments. |
 
 ---
 
@@ -170,33 +173,33 @@ The waiver adjustment is applied consistently across all compliance views:
 
 These are the endpoints used by the Member Lifecycle UI.
 
-| Method | Endpoint | Permission | Description |
-|--------|----------|-----------|-------------|
-| `POST` | `/api/v1/users/leaves-of-absence` | `members.manage` | Create a leave. |
-| `GET` | `/api/v1/users/leaves-of-absence` | `members.manage` | List org leaves (optional `user_id`, `active_only` filters). |
-| `GET` | `/api/v1/users/{user_id}/leaves-of-absence` | `members.manage` or own user | Get a member's leaves. |
-| `GET` | `/api/v1/users/leaves-of-absence/me` | Any authenticated user | Get your own leaves. |
-| `PATCH` | `/api/v1/users/leaves-of-absence/{id}` | `members.manage` | Update a leave. |
-| `DELETE` | `/api/v1/users/leaves-of-absence/{id}` | `members.manage` | Deactivate (soft-delete) a leave. |
+| Method   | Endpoint                                    | Permission                   | Description                                                  |
+| -------- | ------------------------------------------- | ---------------------------- | ------------------------------------------------------------ |
+| `POST`   | `/api/v1/users/leaves-of-absence`           | `members.manage`             | Create a leave.                                              |
+| `GET`    | `/api/v1/users/leaves-of-absence`           | `members.manage`             | List org leaves (optional `user_id`, `active_only` filters). |
+| `GET`    | `/api/v1/users/{user_id}/leaves-of-absence` | `members.manage` or own user | Get a member's leaves.                                       |
+| `GET`    | `/api/v1/users/leaves-of-absence/me`        | Any authenticated user       | Get your own leaves.                                         |
+| `PATCH`  | `/api/v1/users/leaves-of-absence/{id}`      | `members.manage`             | Update a leave.                                              |
+| `DELETE` | `/api/v1/users/leaves-of-absence/{id}`      | `members.manage`             | Deactivate (soft-delete) a leave.                            |
 
 ### Training Waivers (Training Module)
 
 These are more granular waivers that can target specific requirements.
 
-| Method | Endpoint | Permission | Description |
-|--------|----------|-----------|-------------|
-| `POST` | `/api/v1/training/waivers` | `training.manage` | Create a waiver. |
-| `GET` | `/api/v1/training/waivers` | `training.manage` | List waivers (optional `user_id`, `active_only` filters). |
-| `GET` | `/api/v1/training/waivers/me` | Any authenticated user | Get your own waivers. |
-| `PATCH` | `/api/v1/training/waivers/{id}` | `training.manage` | Update a waiver. |
-| `DELETE` | `/api/v1/training/waivers/{id}` | `training.manage` | Deactivate (soft-delete) a waiver. |
+| Method   | Endpoint                        | Permission             | Description                                               |
+| -------- | ------------------------------- | ---------------------- | --------------------------------------------------------- |
+| `POST`   | `/api/v1/training/waivers`      | `training.manage`      | Create a waiver.                                          |
+| `GET`    | `/api/v1/training/waivers`      | `training.manage`      | List waivers (optional `user_id`, `active_only` filters). |
+| `GET`    | `/api/v1/training/waivers/me`   | Any authenticated user | Get your own waivers.                                     |
+| `PATCH`  | `/api/v1/training/waivers/{id}` | `training.manage`      | Update a waiver.                                          |
+| `DELETE` | `/api/v1/training/waivers/{id}` | `training.manage`      | Deactivate (soft-delete) a waiver.                        |
 
 ---
 
 ## Example Scenario
 
 **Situation**: Firefighter Smith takes a 3-month medical leave from March 1
-through May 31.  The department requires 24 hours of training per rolling
+through May 31. The department requires 24 hours of training per rolling
 12-month period.
 
 1. The training officer navigates to **Member Lifecycle > Leave of Absence**
@@ -207,7 +210,8 @@ through May 31.  The department requires 24 hours of training per rolling
    - Reason: "Shoulder surgery recovery"
 
 2. The system identifies that March, April, and May are each covered by
-   >= 15 days, so **3 months are waived**.
+
+   > = 15 days, so **3 months are waived**.
 
 3. Smith's annual training requirement is adjusted:
    - Total months: 12
@@ -247,10 +251,10 @@ Any meeting whose `meeting_date` falls between a leave's `start_date` and
 
 ### Where attendance is affected
 
-| View / Endpoint | Description |
-|----------------|-------------|
-| **Attendance Dashboard** (`GET /meetings/attendance/dashboard`) | Secretary's per-member attendance summary. |
-| **Voting Eligibility** (election service) | Uses attendance % to determine if a member can vote. |
+| View / Endpoint                                                 | Description                                          |
+| --------------------------------------------------------------- | ---------------------------------------------------- |
+| **Attendance Dashboard** (`GET /meetings/attendance/dashboard`) | Secretary's per-member attendance summary.           |
+| **Voting Eligibility** (election service)                       | Uses attendance % to determine if a member can vote. |
 
 ### Per-meeting waivers vs. Leave of Absence
 
@@ -296,9 +300,9 @@ creation of separate training waivers.
 
 **Q: Do I need to create both a Leave of Absence and a Training Waiver?**
 
-No.  When you create a Leave of Absence (from any UI), the system
+No. When you create a Leave of Absence (from any UI), the system
 automatically creates a linked training waiver unless you explicitly opt out
-with the `exempt_from_training_waiver` flag.  You only need a separate
+with the `exempt_from_training_waiver` flag. You only need a separate
 standalone Training Waiver if you want to waive specific requirements while
 keeping others active (use the "Training Only" option in the Waiver Management
 page).
@@ -312,7 +316,7 @@ Their compliance status is recalculated on the next page load.
 **Q: Can a leave cover only part of a month?**
 
 Yes, but for **training**, a month is only excluded from calculations if the
-leave covers 15 or more days of that month.  For **meeting attendance**, any
+leave covers 15 or more days of that month. For **meeting attendance**, any
 meeting whose date falls within the leave period is excluded regardless of how
 many days the leave covers in that month.
 
@@ -323,8 +327,8 @@ member from scheduling during the leave period.
 
 **Q: Do I need to grant per-meeting waivers for each meeting during a leave?**
 
-No.  The Leave of Absence automatically excludes all meetings during the leave
-period.  Per-meeting waivers are only needed for one-off absences outside a
+No. The Leave of Absence automatically excludes all meetings during the leave
+period. Per-meeting waivers are only needed for one-off absences outside a
 formal leave.
 
 **Q: Where can I see all waivers across the department?**

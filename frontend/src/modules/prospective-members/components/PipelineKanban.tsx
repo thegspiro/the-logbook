@@ -2,7 +2,9 @@
  * Pipeline Kanban Board
  *
  * Kanban-style view where columns represent pipeline stages
- * and cards represent applicants. Supports drag-and-drop to advance.
+ * and cards represent applicants. Supports drag-and-drop between adjacent
+ * stages in both directions — forward runs the stage's completion gate,
+ * backward reopens the previous stage, matching the drawer's Advance/Back.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -13,6 +15,7 @@ import { STAGE_TYPE_ICONS, STAGE_HEADER_COLORS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { ApplicantCard } from './ApplicantCard';
 import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface PipelineKanbanProps {
   stages: PipelineStage[];
@@ -36,7 +39,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   selectedApplicants,
   onToggleSelect,
 }) => {
-  const { advanceApplicant, isAdvancing } = useProspectiveMembersStore();
+  const { advanceApplicant, regressApplicant, isAdvancing, isRegressing } = useProspectiveMembersStore();
   const [draggedApplicant, setDraggedApplicant] = useState<ApplicantListItem | null>(null);
   const [dropTargetStageId, setDropTargetStageId] = useState<string | null>(null);
 
@@ -78,31 +81,50 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     e.preventDefault();
     setDropTargetStageId(null);
 
-    if (!draggedApplicant || isAdvancing) return;
+    if (!draggedApplicant || isAdvancing || isRegressing) return;
 
-    // Only allow advancing to the next stage
     const currentStageIndex = sortedStages.findIndex((s) => s.id === draggedApplicant.current_stage_id);
     const targetStageIndex = sortedStages.findIndex((s) => s.id === targetStageId);
+    const delta = targetStageIndex - currentStageIndex;
 
-    if (targetStageIndex !== currentStageIndex + 1) {
-      toast.error('Applicants can only be advanced to the next stage');
+    // One stage at a time, in either direction. Forward is an advance, which
+    // runs the stage's completion gate server-side; backward is a regress,
+    // which reopens the previous stage. A multi-stage jump has no single
+    // meaning — the stages in between would be neither completed nor skipped —
+    // so it is refused here rather than guessed at; the drawer's Skip button
+    // is the way past a stage that cannot be satisfied.
+    if (currentStageIndex < 0 || targetStageIndex < 0 || delta === 0) {
+      setDraggedApplicant(null);
+      return;
+    }
+
+    if (Math.abs(delta) !== 1) {
+      toast.error('Applicants move one stage at a time — drop on an adjacent stage.');
       setDraggedApplicant(null);
       return;
     }
 
     if (draggedApplicant.status !== ApplicantStatusEnum.ACTIVE) {
-      toast.error('Only active applicants can be advanced');
+      toast.error('Only active applicants can be moved between stages');
       setDraggedApplicant(null);
       return;
     }
 
+    const targetStageName = sortedStages[targetStageIndex]?.name ?? (delta > 0 ? 'next stage' : 'previous stage');
+
     try {
-      await advanceApplicant(draggedApplicant.id);
-      toast.success(
-        `${draggedApplicant.first_name} advanced to ${sortedStages[targetStageIndex]?.name ?? 'next stage'}`
-      );
-    } catch {
-      toast.error('Failed to advance applicant');
+      if (delta > 0) {
+        await advanceApplicant(draggedApplicant.id);
+        toast.success(`${draggedApplicant.first_name} advanced to ${targetStageName}`);
+      } else {
+        await regressApplicant(draggedApplicant.id);
+        toast.success(`${draggedApplicant.first_name} moved back to ${targetStageName}`);
+      }
+    } catch (error: unknown) {
+      // The stage gate's own reason ("All 4 checklist items must be
+      // completed") is what tells the coordinator what to do next; a fixed
+      // "Failed to advance" string threw it away.
+      toast.error(getErrorMessage(error, delta > 0 ? 'Failed to advance applicant' : 'Failed to move applicant back'));
     }
 
     setDraggedApplicant(null);
@@ -142,6 +164,11 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
               onDrop={(e) => {
                 void handleDrop(e, stage.id);
               }}
+              // Named so the column is announced as a landing area rather
+              // than an unlabelled div, and so a drop target is addressable
+              // by the stage a coordinator sees.
+              role="group"
+              aria-label={`${stage.name} stage`}
               className={`drop-surface w-64 shrink-0 sm:w-72 ${isDropTarget ? 'drop-surface-active' : ''}`}
             >
               {/* Column Header */}

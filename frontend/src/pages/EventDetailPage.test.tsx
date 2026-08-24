@@ -30,6 +30,7 @@ vi.mock('../services/api', () => ({
     checkInAttendee: vi.fn(),
     recordActualTimes: vi.fn(),
     finalizeAttendance: vi.fn(),
+    reopenAttendance: vi.fn(),
   },
 }));
 
@@ -413,7 +414,7 @@ describe('EventDetailPage', () => {
       expect(screen.getAllByRole('button', { name: /finalize attendance/i })).toHaveLength(1);
     });
 
-    it('should finalize attendance from the primary action', async () => {
+    it('should finalize attendance once the close is confirmed', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...mockEvent,
         start_datetime: '2025-04-15T18:00:00Z',
@@ -426,9 +427,143 @@ describe('EventDetailPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
       await user.click(await screen.findByRole('button', { name: 'Finalize Attendance' }));
+      await user.click(await screen.findByRole('button', { name: /finalize and close/i }));
 
       await waitFor(() => {
         expect(eventService.finalizeAttendance).toHaveBeenCalledWith('evt-1');
+      });
+    });
+
+    it('should not finalize when the close is declined', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        start_datetime: '2025-04-15T18:00:00Z',
+        end_datetime: '2025-04-15T20:00:00Z',
+      });
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Finalize Attendance' }));
+      await user.click(await screen.findByRole('button', { name: /keep it open/i }));
+
+      await waitFor(() => {
+        expect(eventService.finalizeAttendance).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('once attendance is finalized', () => {
+      const finalizedEvent: Event = {
+        ...mockEvent,
+        start_datetime: '2025-04-15T18:00:00Z',
+        end_datetime: '2025-04-15T20:00:00Z',
+        attendance_finalized_at: '2025-04-15T20:30:00Z',
+        attendance_finalized_by: 'chief-1',
+        attendance_finalized_by_name: 'Pat Ramirez',
+      };
+
+      const renderFinalized = () => {
+        vi.mocked(eventService.getEvent).mockResolvedValue(finalizedEvent);
+        vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+        vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+        renderWithRouter(<EventDetailPage />);
+      };
+
+      it('says who closed it and when', async () => {
+        renderFinalized();
+
+        expect(await screen.findByText('Attendance finalized')).toBeVisible();
+        expect(screen.getByText(/Closed by Pat Ramirez/)).toBeVisible();
+      });
+
+      it('drops the actions the API now refuses', async () => {
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        // Every one of these is a 409 on a closed event; an enabled button
+        // that always fails is worse than an absent one.
+        expect(screen.queryByRole('button', { name: 'Finalize Attendance' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^check in$/i })).not.toBeInTheDocument();
+        // Edit stays: the API still accepts descriptive edits on a closed
+        // event and refuses only the attendance-sensitive fields, so removing
+        // the entry point would force a reopen just to fix a typo.
+        expect(screen.getByRole('button', { name: /^edit$/i })).toBeVisible();
+        expect(screen.queryByRole('button', { name: /send reminders/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /edit times/i })).not.toBeInTheDocument();
+      });
+
+      it('keeps the roster readable and exportable', async () => {
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        expect(screen.getByText('Jane Smith')).toBeVisible();
+        expect(screen.getByRole('button', { name: /export csv/i })).toBeVisible();
+        expect(screen.getByRole('button', { name: /print roster/i })).toBeVisible();
+      });
+
+      it('hides delete and cancel from the More menu', async () => {
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        const user = userEvent.setup();
+        await user.click(screen.getByRole('button', { name: /more/i }));
+
+        expect(screen.queryByRole('button', { name: /delete event/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /cancel event/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /record times/i })).not.toBeInTheDocument();
+        // Harmless ones stay.
+        expect(screen.getByRole('button', { name: /duplicate event/i })).toBeVisible();
+      });
+
+      it('offers no way back without the reopen permission', async () => {
+        // events.manage alone is not enough — that is the grant that closed it.
+        mockCheckPermission.mockImplementation((perm: string) => perm === 'events.manage');
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        expect(screen.queryByRole('button', { name: /reopen attendance/i })).not.toBeInTheDocument();
+      });
+
+      it('offers Reopen Attendance to a leader who holds the grant', async () => {
+        mockCheckPermission.mockImplementation(
+          (perm: string) => perm === 'events.manage' || perm === 'events.reopen_attendance'
+        );
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        expect(screen.getByRole('button', { name: /reopen attendance/i })).toBeVisible();
+      });
+
+      it('offers it to a role holding only the reopen grant', async () => {
+        // The permission is deliberately independent of events.manage, so the
+        // control must not be nested inside the manager-only action group.
+        mockCheckPermission.mockImplementation((perm: string) => perm === 'events.reopen_attendance');
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        expect(screen.getByRole('button', { name: /reopen attendance/i })).toBeVisible();
+      });
+
+      it('reopens with the reason the leader typed', async () => {
+        mockCheckPermission.mockImplementation(
+          (perm: string) => perm === 'events.manage' || perm === 'events.reopen_attendance'
+        );
+        vi.mocked(eventService.reopenAttendance).mockResolvedValue({
+          ...finalizedEvent,
+          attendance_finalized_at: null,
+        });
+        renderFinalized();
+        await screen.findByText('Attendance finalized');
+
+        const user = userEvent.setup();
+        await user.click(screen.getByRole('button', { name: /reopen attendance/i }));
+        await user.type(await screen.findByLabelText(/reason/i), 'Two members were left off');
+        await user.click(screen.getByRole('button', { name: /reopen for corrections/i }));
+
+        await waitFor(() => {
+          expect(eventService.reopenAttendance).toHaveBeenCalledWith('evt-1', 'Two members were left off');
+        });
       });
     });
 

@@ -159,7 +159,7 @@ takes the same validation**:
   `update_maintenance_record` (system_id), `create_access_key` +
   `update_access_key` (assigned_to_user_id).
 - **Lookup tables that legitimately hold system rows with `organization_id IS
-  NULL`** (`facility_type_id`, `status_id`, `maintenance_type_id`) → the
+NULL`** (`facility_type_id`, `status_id`, `maintenance_type_id`) → the
   module's own `get_facility_type` / `get_facility_status` /
   `get_maintenance_type` getters, which allow the NULL-org system rows.
   **Using `assert_in_org` here would have been a bug** — it would reject every
@@ -195,7 +195,7 @@ branch is unreachable from the API. **Left flagged, deliberately:** wiring it is
 a one-line API addition, but it is still an unrequested API-surface change, and
 adding a feature nobody asked for during an unattended review is scope creep the
 owner should sign off on (does it interact with pagination? should every field
-be searchable?). It is *correct* dead-reachability, not a bug — recorded for the
+be searchable?). It is _correct_ dead-reachability, not a bug — recorded for the
 owner, same disposition the prior audit chose.
 
 ## Verified good ✅ (re-confirmed)
@@ -238,11 +238,12 @@ FAC-4 stands.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed**. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| Check                | Result                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                 |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                  |
+| `black --check`      | ✅ 503 files unchanged                                                                                           |
+| `eslint`             | ✅ clean                                                                                                         |
+| backend tests        | ✅ **2517 passed, 0 failed**. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+
 </content>

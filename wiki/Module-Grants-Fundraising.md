@@ -18,16 +18,16 @@ The Grants & Fundraising module provides integrated management for grant applica
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/grants` | Grants Dashboard | `grants.view` |
-| `/grants/applications` | Grant Applications | `grants.view` |
-| `/grants/applications/:id` | Grant Detail | `grants.view` |
-| `/grants/campaigns` | Fundraising Campaigns | `grants.view` |
-| `/grants/campaigns/:id` | Campaign Detail | `grants.view` |
-| `/grants/donors` | Donor Management | `grants.manage` |
-| `/grants/donors/:id` | Donor Detail | `grants.manage` |
-| `/grants/reports` | Financial Reports | `grants.manage` |
+| URL                        | Page                  | Permission      |
+| -------------------------- | --------------------- | --------------- |
+| `/grants`                  | Grants Dashboard      | `grants.view`   |
+| `/grants/applications`     | Grant Applications    | `grants.view`   |
+| `/grants/applications/:id` | Grant Detail          | `grants.view`   |
+| `/grants/campaigns`        | Fundraising Campaigns | `grants.view`   |
+| `/grants/campaigns/:id`    | Campaign Detail       | `grants.view`   |
+| `/grants/donors`           | Donor Management      | `grants.manage` |
+| `/grants/donors/:id`       | Donor Detail          | `grants.manage` |
+| `/grants/reports`          | Financial Reports     | `grants.manage` |
 
 ---
 
@@ -35,23 +35,23 @@ The Grants & Fundraising module provides integrated management for grant applica
 
 ### Core Tables
 
-| Table | Purpose |
-|-------|---------|
-| `grants` | Grant applications with type, status, amounts, deadlines |
-| `grant_notes` | Notes attached to grants (uses `note_metadata` column, aliased as `metadata` in API) |
-| `fundraising_campaigns` | Campaign records with goal, raised amount, dates |
-| `donors` | Donor contact info and preferences |
-| `grant_donors` | Many-to-many linking grants/campaigns to donors |
-| `grant_stages` | Pipeline stage definitions for grant workflows |
+| Table                   | Purpose                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `grants`                | Grant applications with type, status, amounts, deadlines                             |
+| `grant_notes`           | Notes attached to grants (uses `note_metadata` column, aliased as `metadata` in API) |
+| `fundraising_campaigns` | Campaign records with goal, raised amount, dates                                     |
+| `donors`                | Donor contact info and preferences                                                   |
+| `grant_donors`          | Many-to-many linking grants/campaigns to donors                                      |
+| `grant_stages`          | Pipeline stage definitions for grant workflows                                       |
 
 ### Key Enums
 
-| Enum | Values |
-|------|--------|
-| GrantStatus | draft, submitted, under_review, awarded, denied, reporting, closed |
-| GrantType | afg, safer, fps, usda, state, local, private, corporate, foundation, other |
-| CampaignStatus | planning, active, paused, completed, cancelled |
-| DonorType | individual, corporate, foundation, government |
+| Enum           | Values                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| GrantStatus    | draft, submitted, under_review, awarded, denied, reporting, closed         |
+| GrantType      | afg, safer, fps, usda, state, local, private, corporate, foundation, other |
+| CampaignStatus | planning, active, paused, completed, cancelled                             |
+| DonorType      | individual, corporate, foundation, government                              |
 
 ---
 
@@ -87,9 +87,9 @@ GET    /api/v1/grants/reports/summary         # Financial summary report
 
 ## Permissions
 
-| Permission | Description |
-|------------|-------------|
-| `grants.view` | View grants, campaigns, and reports |
+| Permission      | Description                                              |
+| --------------- | -------------------------------------------------------- |
+| `grants.view`   | View grants, campaigns, and reports                      |
 | `grants.manage` | Create, edit, delete grants and campaigns; manage donors |
 
 ---
