@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Printer support has a reference doc (2026-08-24)
 
+**Fixed**
+
+- **A `~HQES` condition in the high nibble group was silently dropped.**
+  `parse_error_status` captured the high group and decoded only the low one,
+  so a reply naming both — `ERRORS: 1 00000001 00000001` — reported "Out of
+  labels" and lost the other condition. The high group now adds the generic
+  line, gated on the printer's own fault flag so a unit that parks something
+  benign there does not report a fault on every query. Found while writing the
+  reference doc, which had promised the behaviour the parser did not have.
+
 **Added**
 
 - **[`docs/LABEL_PRINTING_MODULE.md`](docs/LABEL_PRINTING_MODULE.md).** Label
@@ -28,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The training guide now separates printer errors from warnings.** "Labels
   nearly out" does not stop a print and the old wording did not say so; a
   table now gives each fault, its kind, and what to do about it.
+- **The guide no longer implies a direct print reports unavailable status.**
+  It does not: `status_known` reaches the client and no print screen reads it,
+  so a printer whose firmware cannot answer shows an ordinary success. The
+  guide now scopes that message to **Check status** and says to read a
+  successful print from such a printer as "sent", not "printed".
 
 ### Submit External Training: the certificate travels with the submission (2026-08-23)
 
