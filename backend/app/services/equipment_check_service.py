@@ -1810,7 +1810,25 @@ class EquipmentCheckService:
     async def get_check(
         self, check_id: str, organization_id: str
     ) -> Optional[ShiftEquipmentCheck]:
-        """Get a single completed check with items."""
+        """Get a single completed check with items, in checklist order.
+
+        Two things the plain relationship load does not give, both of which a
+        completed check is read for:
+
+        - **Who signed it.** ``checked_by_name`` is not a column, so without
+          resolving it here the response carries a null and the member-facing
+          detail screen prints "Unknown" over a record whose whole purpose is
+          to say who inspected the truck. Every other endpoint that returns a
+          check already resolves it; this one was the outlier.
+        - **The order it was filled in.** The relationship has no ``order_by``,
+          so the items come back in whatever order the rows are yielded — a
+          different order on different reads, and never the checklist's own.
+          A crew reading a record back is walking the same truck in the same
+          sequence, so the response follows the template's compartment and item
+          sort order, falling back to the snapshot labels for rows whose
+          template item has since been deleted (``template_item_id`` is
+          ``SET NULL``).
+        """
         result = await self.db.execute(
             select(ShiftEquipmentCheck)
             .where(
@@ -1819,7 +1837,46 @@ class EquipmentCheckService:
             )
             .options(selectinload(ShiftEquipmentCheck.items))
         )
-        return result.scalars().first()
+        check = result.scalars().first()
+        if check is None:
+            return check
+
+        if check.checked_by:
+            names = await self._get_user_name_map([check.checked_by])
+            check.checked_by_name = names.get(str(check.checked_by))
+
+        order_result = await self.db.execute(
+            select(
+                CheckTemplateItem.id,
+                CheckTemplateCompartment.sort_order,
+                CheckTemplateItem.sort_order,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
+            )
+            .where(
+                CheckTemplateItem.id.in_(
+                    [i.template_item_id for i in check.items if i.template_item_id]
+                )
+            )
+        )
+        positions = {
+            str(item_id): (compartment_order or 0, item_order or 0)
+            for item_id, compartment_order, item_order in order_result.all()
+        }
+        # Rows with no surviving template item sort last, among themselves by
+        # the labels the check snapshotted -- still deterministic, just not
+        # recoverable to the original sequence.
+        check.items.sort(
+            key=lambda i: (
+                0 if str(i.template_item_id or "") in positions else 1,
+                positions.get(str(i.template_item_id or ""), (0, 0)),
+                i.compartment_name or "",
+                i.item_name or "",
+            )
+        )
+        return check
 
     # ------------------------------------------------------------------
     # My Checklists (Member Page)

@@ -1190,6 +1190,29 @@ export async function openRequestsHistoryPage(page) {
   await page.waitForTimeout(400);
 }
 
+/**
+ * Open one submitted check from the member's own history.
+ *
+ * Reached through the Completed checklists section rather than through the
+ * card grid: opening a completed card reopens the *form* with its saved
+ * answers, which is the working screen, not the record. The history row opens
+ * the read-back view — who signed it, when, and every item as answered.
+ */
+export async function openSubmittedCheck(page) {
+  await page.getByRole("button", { name: /completed checklists/i }).click();
+  const row = page
+    .locator("#check-history-content button")
+    .filter({ hasText: /Passed/ })
+    .first();
+  await row.waitFor({ state: "visible", timeout: 20_000 });
+  await row.click();
+  await page
+    .getByText(/Completed checklist/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(500);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -10706,6 +10729,37 @@ export const SHOTS = [
     route: "/scheduling?tab=requests",
     fullPage: false,
     prepare: openRequestsHistoryPage,
+  },
+  {
+    // The submitted state, not the form. Shot as the member because this is
+    // the member's own record of what they inspected, and the guide's claim --
+    // that a replayed queue resolves to one record -- is about the crew's copy.
+    //
+    // The offline/queued half of the marker is deliberately not staged: the
+    // harness sets no browser-context state in a prepare step, so an "offline"
+    // banner here would be a screenshot of a lie. The caption says so.
+    id: "03-80-submitted-check-phone",
+    doc: "03-scheduling.md",
+    line: 2819,
+    anchor: "a submitted shift equipment check on a 390x844",
+    alt: "One submitted engine check read back on a phone: passed overall, who signed it, when, and every item in the order the checklist walks the truck",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    prepare: openSubmittedCheck,
+    fullPage: true,
+  },
+  {
+    id: "19-14-submitted-check-phone",
+    doc: "19-august-2026-release-changes.md",
+    line: 672,
+    anchor: "a completed shift equipment check on a phone viewport",
+    alt: "A completed check as one record on a phone — the state a replayed queue or a double-tapped Submit resolves to",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    prepare: openSubmittedCheck,
+    fullPage: true,
   },
   {
     id: "03-43-time-off-request-form",

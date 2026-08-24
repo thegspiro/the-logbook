@@ -2818,7 +2818,11 @@ Also changed:
   rewritten.
 - **Timing is recorded by the server**, not supplied by the phone.
 
-> **[SCREENSHOT NEEDED — a submitted shift equipment check on a 390x844
->
-> > viewport. If the harness can simulate the queued/offline state, capture that
-> > too; if it cannot, say so in the caption rather than staging it.]**
+![One submitted engine check read back on a phone: passed overall, who signed it, when, and every item in the order the checklist walks the truck](./images/03-80-submitted-check-phone.png)
+
+_The queued/offline half of that description is not pictured. Simulating a
+dropped connection means setting state on the browser rather than on the
+page, which this capture harness does not do — an "offline" banner staged
+any other way would be a photograph of something the app never rendered.
+What the record above shows is the end state either route arrives at: one
+check, one set of answers._

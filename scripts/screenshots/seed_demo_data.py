@@ -4746,6 +4746,36 @@ class Seeder:
                 },
             )
 
+    @staticmethod
+    def _checkable_rows(detail: dict) -> list[dict]:
+        """The submittable rows of a template, in the order the form shows them.
+
+        `header` and `text` rows are layout, not questions: the server refuses
+        a submission that answers one ("Items do not belong to template", a 400
+        that names the id and nothing else), and it excludes them from the item
+        map by check type rather than by position. Three call sites built this
+        list independently and only one of them filtered — and only `header` —
+        so adding the section header to the demo template took every seeded
+        check with it, leaving the fleet grid, the compliance view and the
+        phone captures with nothing completed to show.
+        """
+        rows = []
+        for compartment in items(detail, "compartments"):
+            for item in items(compartment, "items"):
+                if pick(item, "check_type", "checkType") in ("header", "text"):
+                    continue
+                rows.append(
+                    {
+                        "template_item_id": pick(item, "id"),
+                        "compartment_name": pick(compartment, "name"),
+                        "item_name": pick(item, "name"),
+                        "status": "pass",
+                        "quantity_found": 1,
+                        "required_quantity": 1,
+                    }
+                )
+        return rows
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -4936,19 +4966,7 @@ class Seeder:
         # The template response carries the ids the check has to reference, so
         # the submitted items are read back off it rather than reconstructed.
         detail = self.api.get(f"/equipment-checks/templates/{template_id}")
-        submitted = []
-        for compartment in items(detail, "compartments"):
-            for item in items(compartment, "items"):
-                submitted.append(
-                    {
-                        "template_item_id": pick(item, "id"),
-                        "compartment_name": pick(compartment, "name"),
-                        "item_name": pick(item, "name"),
-                        "status": "pass",
-                        "quantity_found": 1,
-                        "required_quantity": 1,
-                    }
-                )
+        submitted = self._checkable_rows(detail)
         if not submitted:
             return {"templates": templates, "checks": checks}
 
@@ -5012,18 +5030,7 @@ class Seeder:
             if not end_template_id:
                 continue
             end_detail = self.api.get(f"/equipment-checks/templates/{end_template_id}")
-            end_items = [
-                {
-                    "template_item_id": pick(item, "id"),
-                    "compartment_name": pick(compartment, "name"),
-                    "item_name": pick(item, "name"),
-                    "status": "pass",
-                    "quantity_found": 1,
-                    "required_quantity": 1,
-                }
-                for compartment in items(end_detail, "compartments")
-                for item in items(compartment, "items")
-            ]
+            end_items = self._checkable_rows(end_detail)
             end_check = self.api.post(
                 f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
                 {
@@ -5101,22 +5108,7 @@ class Seeder:
             return
 
         detail = self.api.get(f"/equipment-checks/templates/{template_id}")
-        rows = []
-        for compartment in items(detail, "compartments"):
-            for item in items(compartment, "items"):
-                # Headers carry no answer and are not counted by the form.
-                if pick(item, "check_type", "checkType") == "header":
-                    continue
-                rows.append(
-                    {
-                        "template_item_id": pick(item, "id"),
-                        "compartment_name": pick(compartment, "name"),
-                        "item_name": pick(item, "name"),
-                        "status": "pass",
-                        "quantity_found": 1,
-                        "required_quantity": 1,
-                    }
-                )
+        rows = self._checkable_rows(detail)
         if not rows:
             return
 

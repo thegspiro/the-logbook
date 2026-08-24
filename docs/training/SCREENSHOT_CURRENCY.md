@@ -1,5 +1,54 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (fourth) — the seeded checks that never existed, and two defects in reading one back
+
+`03-80` and `19-14`, opened and checked. **467 of 506 filled.**
+
+**No equipment check had been completed in the demo database at all.** The
+seeder step had been failing for some time with `equipment checks: Items do not
+belong to template` — a 400 naming an id and nothing else. The id was the
+**section header** `_add_section_header` adds to the engine template. `header`
+and `text` rows are layout, not questions: the server excludes them from the
+item map by check type and refuses a submission that answers one. Three call
+sites in the seeder built the submitted-item list independently, and exactly one
+of them filtered — and only for `header`, not `text`. So adding the section
+header to the demo template took **every seeded check** with it, and the fleet
+grid, the compliance view and every phone capture of a completed check had
+nothing to show. One `_checkable_rows` helper now serves all three.
+
+**Reading a completed check back was wrong in two ways, both visible in the
+shot.** `GET /equipment-checks/checks/{id}` is what the member's history row
+opens, and it was the only endpoint returning a check that resolved neither of
+the two things the record is read for:
+
+- **It did not say who signed it.** `checked_by_name` is not a column and this
+  endpoint never resolved it, so the detail screen printed **"Checked By:
+  Unknown"** over a compliance record whose entire purpose is to name the
+  inspector. Every sibling endpoint already resolved it; this one was the
+  outlier.
+- **It did not say in what order.** The items relationship carries no
+  `order_by`, so a twelve-item engine check came back in whatever order the
+  rows were yielded — compartments interleaved, and not reliably the same order
+  twice. A crew reading a record back walks the same truck in the same
+  sequence, so the response now follows the template's compartment and item
+  sort order, with rows whose template item has since been deleted
+  (`template_item_id` is SET NULL) sorting last rather than vanishing or
+  landing mid-walk under a stale position.
+
+`test_equipment_check_detail.py` covers both, plus the orphan row and org
+scoping. Its fixture inserts the check items **back to front** so a response
+that merely echoes the stored rows cannot pass, and it flushes the template
+before the check rows — `template_item_id` is a bare foreign key with no ORM
+relationship behind it, so SQLAlchemy has no dependency to order the inserts by
+and emits a MySQL 1452 rather than a test failure.
+
+**The offline half of the marker is not pictured, and the guides say so.**
+Simulating a dropped connection means setting state on the browser context, not
+on the page, which this harness deliberately does not do in a prepare step. A
+staged "offline" banner would be a photograph of something the app never
+rendered. Both guides now carry a paragraph saying that, beside the record the
+two routes actually converge on.
+
 ## Captured 2026-08-24 (third) — separation of duties, a paged tab, and the race that hid it
 
 `03-78`/`03-79` with their guide-19 twins `19-12`/`19-13`, opened and checked.

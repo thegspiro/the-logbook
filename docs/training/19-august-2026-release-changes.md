@@ -666,11 +666,14 @@ submission before sending so a retry lands on the same record.
 The same protection covers a double tap on **Submit** and a dropped connection
 mid-save.
 
-> **[SCREENSHOT NEEDED — a completed shift equipment check on a phone viewport
->
-> > (390x844), showing the submitted state. Pair with a second capture of the
-> > offline/queued state if the harness can simulate it; if it cannot, note the
-> > limitation in the caption rather than staging it.]**
+![A completed check as one record on a phone — the state a replayed queue or a double-tapped Submit resolves to](./images/19-14-submitted-check-phone.png)
+
+_The queued/offline half of that description is not pictured. Simulating a
+dropped connection means setting state on the browser rather than on the
+page, which this capture harness does not do — an "offline" banner staged
+any other way would be a photograph of something the app never rendered.
+What the record above shows is the end state either route arrives at: one
+check, one set of answers._
 
 ### Other equipment-check changes
 
