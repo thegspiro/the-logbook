@@ -355,6 +355,33 @@ caller a trade, so the picker ranks by who is least loaded rather than
 alphabetically. Holding no seat on the shift is a 409, not an empty list —
 "nobody can cover this" is a different and much more alarming answer.
 
+**Accepting an offer** _(2026-08-24)_ — the member an offer was made to
+answers it themselves:
+
+```
+POST   /api/v1/scheduling/swap-requests/{id}/respond   # {accept, note?}
+```
+
+Deliberately distinct from `/review`, which is the manager workflow and
+[refuses participants by design](#). It is limited to a **one-way targeted
+offer** — a member handing their own seat to a named colleague, nothing coming
+back — and grants no authority anybody lacked: accepting is exactly the
+offerer withdrawing and the accepter signing up, in one step, both already
+unprivileged self-service. A two-way exchange moves two rosters and stays with
+manager review.
+
+Without it a targeted offer was a dead end. Manager review reads a set
+`target_user_id` as "there must be an assignment to trade back" and rejects
+the request when there is no requesting shift, so nothing could complete an
+offer of the shape the board creates. The seat being handed over is excluded
+from the accepter's duplicate and capacity checks — it is vacated in the same
+transaction, and counting it would refuse every acceptance on a full crew,
+which is every crew a member is likely to be offered a seat on.
+
+The board shows both sides: the offerer sees "Offered to T. Nguyen — still
+yours until they accept" with a withdraw button, and the recipient sees the
+offer on the day it belongs to with Take/Decline.
+
 **Expiry** _(2026-08-23)_ — a pending offer holds the seat with the member who
 made it, so left alone it survives the shift itself: the offerer believes they
 are covered, the duty officer sees a name that will not turn up, and nobody is
@@ -618,6 +645,20 @@ self-service claim, with the message naming which race was lost. Officer
 assignment is deliberately _not_ capped: adding a fifth body is something an
 officer does on purpose, and refusing it would make the roster disagree with
 who is actually turning up.
+
+**One request per range.** Eligible positions come from
+`GET /scheduling/eligibility/positions/bulk?shift_ids=…` — one call for the
+selected day rather than one per shift. The expensive half of that answer
+(membership type, rank, completed training, the org's open positions) is about
+the _member_ and identical across shifts; asking per shift re-ran all of it
+each time, so a station running six apparatus paid six times for one answer.
+Capped at 50 shifts per call.
+
+**The board re-reads itself while it is on screen** — on focus, and every two
+minutes — because two members working the same day otherwise see each other's
+claims only after navigating. It is a quiet refresh: no spinner, no error
+banner, and it holds off entirely while a claim is in flight or a modal is
+open, so it cannot pull the roster out from under a decision being made on it.
 
 **One request per range.** Every shift response now carries `roster` — the
 occupied seats, with names and positions — so selecting a day costs no network

@@ -124,3 +124,71 @@ describe('ShiftSeatList', () => {
     expect(screen.getByRole('button', { name: /working/i })).toBeDisabled();
   });
 });
+
+describe('a pending offer of this seat', () => {
+  const onAnswerOffer = vi.fn();
+  const onCancelOffer = vi.fn();
+
+  const offer = (overrides = {}) =>
+    ({
+      id: 'sw1',
+      offering_shift_id: 's1',
+      requesting_user_id: 'u2',
+      requesting_user_name: 'Dana Ruiz',
+      target_user_id: ME,
+      target_user_name: 'You',
+      status: 'pending',
+      created_at: '2026-08-20T00:00:00Z',
+      ...overrides,
+    }) as never;
+
+  it('tells the member an offer is waiting on them', () => {
+    renderList({ offerToMe: offer(), onAnswerOffer });
+    expect(screen.getByText(/Dana Ruiz offered you this seat/i)).toBeInTheDocument();
+  });
+
+  it('accepts the offer', async () => {
+    const user = userEvent.setup();
+    renderList({ offerToMe: offer(), onAnswerOffer });
+    await user.click(screen.getByRole('button', { name: /take the shift/i }));
+    expect(onAnswerOffer).toHaveBeenCalledWith(expect.objectContaining({ id: 'sw1' }), true);
+  });
+
+  it('declines the offer', async () => {
+    const user = userEvent.setup();
+    renderList({ offerToMe: offer(), onAnswerOffer });
+    await user.click(screen.getByRole('button', { name: /decline/i }));
+    expect(onAnswerOffer).toHaveBeenCalledWith(expect.objectContaining({ id: 'sw1' }), false);
+  });
+
+  it('says the shift is still yours while your own offer stands', () => {
+    // The whole promise of offering rather than releasing: the seat is never
+    // left empty, so the member has to be able to see that it is still theirs.
+    const mine = shift({ roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    renderList({
+      shift: mine,
+      offerFromMe: offer({ requesting_user_id: ME, target_user_id: 'u9', target_user_name: 'T. Nguyen' }),
+      onCancelOffer,
+    });
+    expect(screen.getByText(/Offered to T\. Nguyen/i)).toBeInTheDocument();
+    expect(screen.getByText(/still yours until they accept/i)).toBeInTheDocument();
+  });
+
+  it('lets the offerer withdraw it', async () => {
+    const user = userEvent.setup();
+    const mine = shift({ roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    renderList({
+      shift: mine,
+      offerFromMe: offer({ requesting_user_id: ME, target_user_id: 'u9' }),
+      onCancelOffer,
+    });
+    await user.click(screen.getByRole('button', { name: /withdraw the offer/i }));
+    expect(onCancelOffer).toHaveBeenCalledWith(expect.objectContaining({ id: 'sw1' }));
+  });
+
+  it('shows no banner when nothing is pending', () => {
+    renderList();
+    expect(screen.queryByText(/offered you this seat/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/offered to/i)).not.toBeInTheDocument();
+  });
+});

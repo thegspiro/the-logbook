@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { schedulingService } from '../../../modules/scheduling';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { SwapRequest } from '../../../types/scheduling';
 import { StandingShiftPeriod } from '../../../modules/scheduling';
 import {
   daySummary,
@@ -34,6 +35,15 @@ import PhoneDaySheet from './PhoneDaySheet';
 import PhoneMonth from './PhoneMonth';
 import StandingShiftModal from './StandingShiftModal';
 import { STATUS_STYLES, legendFor } from './statusStyles';
+
+/**
+ * How often a visible board re-reads its range.
+ *
+ * Two minutes: long enough that a station full of phones is not hammering the
+ * endpoint, short enough that "3 open" on a screen somebody is looking at is
+ * not half an hour stale.
+ */
+const BOARD_REFRESH_MS = 120_000;
 
 /** The Sunday that starts the week containing `date`, as "YYYY-MM-DD". */
 const weekStartKey = (date: Date): string => toDateKey(weekDates(date)[0] ?? date);
@@ -91,6 +101,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [confirmedShift, setConfirmedShift] = useState<ShiftRecord | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [myOffers, setMyOffers] = useState<SwapRequest[]>([]);
 
   const today = useMemo(() => new Date(), []);
 
@@ -118,6 +129,28 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     [shifts, currentUserId]
   );
 
+  // Pending offers, split by which way they point. Keyed by shift so the seat
+  // list can ask "is anything waiting on me here" without scanning.
+  const offersToMe = useMemo(() => {
+    const map: Record<string, SwapRequest> = {};
+    for (const offer of myOffers) {
+      if (String(offer.target_user_id ?? '') === String(currentUserId ?? '')) {
+        map[offer.offering_shift_id] = offer;
+      }
+    }
+    return map;
+  }, [myOffers, currentUserId]);
+
+  const offersFromMe = useMemo(() => {
+    const map: Record<string, SwapRequest> = {};
+    for (const offer of myOffers) {
+      if (String(offer.requesting_user_id ?? '') === String(currentUserId ?? '')) {
+        map[offer.offering_shift_id] = offer;
+      }
+    }
+    return map;
+  }, [myOffers, currentUserId]);
+
   const openSeatsThisMonth = useMemo(
     () => shifts.reduce((total, shift) => total + shiftStatusInfo(shift, currentUserId).openSeats, 0),
     [shifts, currentUserId]
@@ -143,11 +176,16 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
    * optimistic copy it wrote a moment ago.
    */
   const refresh = useCallback(async (): Promise<ShiftRecord[]> => {
-    const data =
+    const [data, offers] = await Promise.all([
       view === 'week'
-        ? await schedulingService.getWeekCalendar(weekStartKey(visibleDate))
-        : await schedulingService.getMonthCalendar(visibleDate.getFullYear(), visibleDate.getMonth() + 1);
+        ? schedulingService.getWeekCalendar(weekStartKey(visibleDate))
+        : schedulingService.getMonthCalendar(visibleDate.getFullYear(), visibleDate.getMonth() + 1),
+      // Non-critical: without it the offer banners simply do not appear, and
+      // the roster below them is still correct.
+      schedulingService.getMySwapRequests('pending').catch(() => [] as SwapRequest[]),
+    ]);
     setShifts(data);
+    setMyOffers(offers);
     return data;
   }, [view, visibleDate]);
 
@@ -167,31 +205,63 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     void fetchShifts();
   }, [fetchShifts, refreshKey]);
 
-  // Eligibility is per shift and only matters for the day on screen, so it is
-  // fetched for the selected day rather than for the whole month — a month of
-  // shifts would be dozens of requests for answers nobody looks at.
+  /**
+   * Re-read while the board is on screen.
+   *
+   * Two members working the same day otherwise see each other's claims only
+   * after navigating: the seat counts on a board left open all morning are
+   * whatever they were at breakfast, which is exactly when somebody claims the
+   * last seat twice. Refreshing on focus covers the common case (tab away,
+   * tab back) and the interval covers a board left visible.
+   *
+   * It is a quiet refresh — no spinner, no error banner — because it is not
+   * something the member asked for, and a failed poll is not news. It also
+   * holds off while anything is in flight or a modal is open, so it cannot
+   * pull the roster out from under a decision being made on it.
+   */
+  const canQuietlyRefresh = pendingShiftId === null && giveUp === null && standingSeed === null;
+  const quietRefreshRef = useRef(canQuietlyRefresh);
+  quietRefreshRef.current = canQuietlyRefresh;
+
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== 'visible' || !quietRefreshRef.current) return;
+      void refresh().catch(() => {
+        /* A failed background poll leaves the last good data on screen. */
+      });
+    };
+    const interval = window.setInterval(tick, BOARD_REFRESH_MS);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [refresh]);
+
+  // Eligibility only matters for the day on screen, so it is fetched for the
+  // selected day rather than the whole month — and in one request rather than
+  // one per shift, because the expensive part of the answer (rank, training,
+  // the org's open positions) is about the member and identical across them.
   const eligibilityRef = useRef<Record<string, string[]>>({});
   useEffect(() => {
     let cancelled = false;
     const missing = selectedShifts.filter((shift) => !(shift.id in eligibilityRef.current));
     if (missing.length === 0) return;
 
-    void Promise.all(
-      missing.map((shift) =>
-        schedulingService
-          .getEligiblePositions(shift.id)
-          // A failed eligibility lookup must not present as "you may take any
-          // seat": an empty list disables the claim and says why.
-          .then((data): [string, string[]] => [shift.id, data.is_excluded ? [] : data.positions])
-          .catch((): [string, string[]] => [shift.id, []])
-      )
-    ).then((entries) => {
-      if (cancelled) return;
-      const next = { ...eligibilityRef.current };
-      for (const [shiftId, positions] of entries) next[shiftId] = positions;
-      eligibilityRef.current = next;
-      setEligibleByShift(next);
-    });
+    void schedulingService
+      .getEligiblePositionsBulk(missing.map((shift) => shift.id))
+      // A failed lookup must not present as "you may take any seat": an empty
+      // list disables the claim and says why.
+      .catch(() => ({}))
+      .then((answers) => {
+        if (cancelled) return;
+        const next = { ...eligibilityRef.current };
+        for (const shift of missing) next[shift.id] = answers[shift.id] ?? [];
+        eligibilityRef.current = next;
+        setEligibleByShift(next);
+      });
 
     return () => {
       cancelled = true;
@@ -271,6 +341,33 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
       // seat. The fallback only covers a request that never got an answer.
       toast.error(getErrorMessage(err, 'The seat could not be claimed. The calendar has been refreshed.'));
       void fetchShifts();
+    } finally {
+      setPendingShiftId(null);
+    }
+  };
+
+  const handleAnswerOffer = async (offer: SwapRequest, accept: boolean) => {
+    setPendingShiftId(offer.offering_shift_id);
+    try {
+      await schedulingService.respondToSwapOffer(offer.id, accept);
+      await refresh();
+      toast.success(accept ? 'The shift is yours.' : 'Offer declined.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not answer that offer.'));
+      void refresh();
+    } finally {
+      setPendingShiftId(null);
+    }
+  };
+
+  const handleCancelOffer = async (offer: SwapRequest) => {
+    setPendingShiftId(offer.offering_shift_id);
+    try {
+      await schedulingService.cancelSwapRequest(offer.id);
+      await refresh();
+      toast.success('Offer withdrawn — the shift is still yours.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not withdraw that offer.'));
     } finally {
       setPendingShiftId(null);
     }
@@ -442,6 +539,10 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                   onClaim={(shift, position) => void handleClaim(shift, position)}
                   onRelease={openGiveUp}
                   onOpenStanding={setStandingSeed}
+                  offersToMe={offersToMe}
+                  offersFromMe={offersFromMe}
+                  onAnswerOffer={(offer, accept) => void handleAnswerOffer(offer, accept)}
+                  onCancelOffer={(offer) => void handleCancelOffer(offer)}
                   onAddToCalendar={() => void handleAddToCalendar()}
                   onDismissConfirmation={() => setConfirmedShift(null)}
                 />
@@ -452,7 +553,10 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
           {/* Desktop: calendar beside the day panel. */}
           <div className="hidden gap-5 md:grid md:grid-cols-[1fr_360px] lg:grid-cols-[1fr_400px]">
             <div className="flex min-h-0 flex-col">
-              <div className="card mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 py-2.5">
+              <div
+                className="card mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 py-2.5"
+                data-testid="board-legend"
+              >
                 {legendFor(hasUnsizedShift).map((status) => (
                   <span key={status} className="flex items-center gap-1.5">
                     <span className={`h-3 w-3 rounded-sm border ${STATUS_STYLES[status].swatch}`} aria-hidden="true" />
@@ -478,6 +582,10 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               onClaim={(shift, position) => void handleClaim(shift, position)}
               onRelease={openGiveUp}
               onOpenStanding={setStandingSeed}
+              offersToMe={offersToMe}
+              offersFromMe={offersFromMe}
+              onAnswerOffer={(offer, accept) => void handleAnswerOffer(offer, accept)}
+              onCancelOffer={(offer) => void handleCancelOffer(offer)}
             />
           </div>
         </>

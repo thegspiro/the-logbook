@@ -884,6 +884,17 @@ class ShiftSwapReview(BaseModel):
     reviewer_notes: Optional[str] = None
 
 
+class ShiftSwapOfferResponseRequest(BaseModel):
+    """A member answering an offer of someone else's seat.
+
+    Distinct from ``ShiftSwapReview``: that carries a manager's verdict on any
+    swap, this one is the answer from the member the offer was made to.
+    """
+
+    accept: bool
+    note: Optional[str] = None
+
+
 class ShiftSwapRequestResponse(UTCResponseBase):
     """Schema for shift swap request response"""
 

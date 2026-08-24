@@ -4113,6 +4113,215 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def respond_to_swap_offer(
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        responder_id: UUID,
+        accept: bool,
+        note: Optional[str] = None,
+    ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
+        """The member an offer was made to accepts or declines it themselves.
+
+        Deliberately distinct from ``review_swap_request``, which is the
+        manager workflow and refuses participants by design. This one is
+        limited to a **one-way targeted offer** — a member handing their own
+        seat to a named colleague, with no shift coming back — and grants no
+        authority anybody lacked: accepting is exactly equivalent to the
+        offerer withdrawing and the accepter signing up, both of which are
+        already unprivileged self-service. A two-way exchange moves two
+        rosters and stays with the manager review that exists for it.
+
+        Without this path a targeted offer is a dead end. Manager review reads
+        a set ``target_user_id`` as "there must be an assignment to trade back"
+        and rejects the request when there is no requesting shift, so nothing
+        could ever complete an offer of this shape.
+        """
+
+        async def reject(message: str):
+            # SELECT ... FOR UPDATE locks live until the transaction ends.
+            await self.db.rollback()
+            return None, message
+
+        try:
+            request_result = await self.db.execute(
+                select(ShiftSwapRequest)
+                .where(
+                    ShiftSwapRequest.id == str(request_id),
+                    ShiftSwapRequest.organization_id == str(organization_id),
+                )
+                .with_for_update()
+            )
+            swap_request = request_result.scalar_one_or_none()
+            if not swap_request:
+                return await reject("Swap request not found")
+            if not swap_request.target_user_id or str(
+                swap_request.target_user_id
+            ) != str(responder_id):
+                return await reject("This offer was not made to you")
+            if swap_request.status != SwapRequestStatus.PENDING:
+                return await reject("This offer is no longer open")
+            if swap_request.requesting_shift_id:
+                return await reject(
+                    "A two-way swap has to be reviewed by a duty officer."
+                )
+
+            if not accept:
+                swap_request.status = SwapRequestStatus.DENIED
+                swap_request.reviewed_by = responder_id
+                swap_request.reviewed_at = datetime.now(timezone.utc)
+                swap_request.reviewer_notes = note or "Declined by the member offered."
+                await self.db.commit()
+                await self.db.refresh(swap_request)
+                await self._notify_offer_answered(
+                    swap_request, organization_id, accepted=False
+                )
+                await self.db.commit()
+                return swap_request, None
+
+            shift_result = await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.id == str(swap_request.offering_shift_id),
+                    Shift.organization_id == str(organization_id),
+                )
+                .with_for_update()
+            )
+            offering_shift = shift_result.scalar_one_or_none()
+            if not offering_shift:
+                return await reject("That shift no longer exists")
+
+            assignment_result = await self.db.execute(
+                select(ShiftAssignment)
+                .where(
+                    ShiftAssignment.shift_id == str(swap_request.offering_shift_id),
+                    ShiftAssignment.organization_id == str(organization_id),
+                    ShiftAssignment.user_id == str(swap_request.requesting_user_id),
+                    ShiftAssignment.assignment_status.notin_(
+                        self.INACTIVE_ASSIGNMENT_STATUSES
+                    ),
+                )
+                .with_for_update()
+            )
+            offered_assignment = assignment_result.scalar_one_or_none()
+            if not offered_assignment:
+                return await reject(
+                    "The member who offered this shift is no longer on it"
+                )
+
+            # The seat being handed over is excluded from the duplicate and
+            # capacity checks: it is being vacated in the same transaction, so
+            # counting it would refuse every acceptance on a full crew — which
+            # is every crew a member is likely to be offered a seat on.
+            error = await self._validate_assignment_candidate(
+                organization_id=organization_id,
+                shift=offering_shift,
+                user_id=swap_request.target_user_id,
+                position=offered_assignment.position,
+                exclude_assignment_ids={str(offered_assignment.id)},
+                require_mutable=True,
+                reject_past=True,
+                enforce_position_eligibility=True,
+                enforce_capacity=True,
+            )
+            if error:
+                return await reject(error)
+
+            offered_assignment.user_id = swap_request.target_user_id
+            swap_request.status = SwapRequestStatus.APPROVED
+            swap_request.reviewed_by = responder_id
+            swap_request.reviewed_at = datetime.now(timezone.utc)
+            swap_request.reviewer_notes = note or "Accepted by the member offered."
+            await self.db.commit()
+            await self.db.refresh(swap_request)
+
+            await self._notify_offer_answered(
+                swap_request, organization_id, accepted=True
+            )
+            await self.db.commit()
+            return swap_request, None
+        except CodedValueError as exc:
+            await self.db.rollback()
+            return None, str(exc)
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def _notify_offer_answered(
+        self,
+        swap_request: ShiftSwapRequest,
+        organization_id: UUID,
+        accepted: bool,
+    ) -> None:
+        """Tell the offerer what happened to the seat they offered.
+
+        They are the one whose roster just changed — or pointedly did not —
+        and until they are told, the honest answer to "am I working Thursday"
+        is that they do not know. Failures are logged, never raised: the seat
+        has already moved, and losing that to an unsent notice would be worse
+        than the notice going missing.
+        """
+        from app.models.notification import NotificationChannel
+
+        try:
+            shift = (
+                await self.db.execute(
+                    select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
+                )
+            ).scalar_one_or_none()
+            when = (
+                shift.shift_date.strftime("%b %d, %Y")
+                if shift and shift.shift_date
+                else "the shift"
+            )
+            names = await self._get_user_name_map([str(swap_request.target_user_id)])
+            who = names.get(str(swap_request.target_user_id)) or "The member you asked"
+
+            subject = (
+                f"{who} took your {when} shift"
+                if accepted
+                else f"{who} turned down your {when} shift"
+            )
+            message = (
+                f"{who} accepted your offer, so {when} is off your roster."
+                if accepted
+                else (
+                    f"{who} declined your offer for {when}. The shift is still "
+                    f"yours — you can offer it to someone else or release it to "
+                    f"the open list."
+                )
+            )
+            self.db.add(
+                NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    recipient_id=str(swap_request.requesting_user_id),
+                    channel=NotificationChannel.IN_APP,
+                    category="shift_swap_answered",
+                    subject=subject,
+                    message=message,
+                    action_url="/scheduling?tab=requests",
+                    notification_metadata={
+                        "shift_id": str(swap_request.offering_shift_id),
+                        "swap_request_id": str(swap_request.id),
+                        "accepted": accepted,
+                    },
+                    delivered=True,
+                )
+            )
+            await self._email_swap_expiry(
+                organization_id,
+                str(swap_request.requesting_user_id),
+                subject,
+                message,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Swap-offer answer notice for {} could not be sent: {}",
+                swap_request.requesting_user_id,
+                exc,
+            )
+
     async def cancel_swap_request(
         self, request_id: UUID, organization_id: UUID, user_id: UUID
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:

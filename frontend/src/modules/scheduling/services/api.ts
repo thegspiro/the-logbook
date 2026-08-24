@@ -681,6 +681,13 @@ export const schedulingService = {
   },
 
   // Swap Requests
+  /** Swaps the caller is a participant in — what is waiting on them. */
+  async getMySwapRequests(status?: 'pending' | 'approved' | 'denied' | 'cancelled'): Promise<SchedulingSwapRequest[]> {
+    const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', {
+      params: { mine: true, ...(status ? { status } : {}) },
+    });
+    return asArray(response.data?.items);
+  },
   async getSwapRequests(params?: SwapRequestFilters): Promise<PaginatedResponse<SchedulingSwapRequest>> {
     const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', { params });
     return response.data;
@@ -691,6 +698,18 @@ export const schedulingService = {
   },
   async reviewSwapRequest(requestId: string, data: SwapRequestReview): Promise<SchedulingSwapRequest> {
     const response = await api.post<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}/review`, data);
+    return response.data;
+  },
+  /**
+   * Answer an offer of someone else's seat. Member self-service — distinct
+   * from `reviewSwapRequest`, which is the officer's verdict and refuses
+   * participants.
+   */
+  async respondToSwapOffer(requestId: string, accept: boolean, note?: string): Promise<SchedulingSwapRequest> {
+    const response = await api.post<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}/respond`, {
+      accept,
+      ...(note ? { note } : {}),
+    });
     return response.data;
   },
   async cancelSwapRequest(requestId: string): Promise<void> {
@@ -884,6 +903,14 @@ export const schedulingService = {
     const params = shiftId ? { shift_id: shiftId } : undefined;
     const response = await api.get<EligiblePositionsResponse>('/scheduling/eligibility/positions', { params });
     return response.data;
+  },
+  /** Eligible positions for several shifts at once, keyed by shift id. */
+  async getEligiblePositionsBulk(shiftIds: string[]): Promise<Record<string, string[]>> {
+    if (shiftIds.length === 0) return {};
+    const response = await api.get<Record<string, string[]>>('/scheduling/eligibility/positions/bulk', {
+      params: { shift_ids: shiftIds.join(',') },
+    });
+    return response.data ?? {};
   },
   async getPositionRoster(position: string): Promise<PositionRosterResponse> {
     const response = await api.get<PositionRosterResponse>('/scheduling/eligibility/roster', {

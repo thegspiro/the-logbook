@@ -2,6 +2,9 @@ const mockGetMonth = vi.fn();
 const mockGetWeek = vi.fn();
 const mockSignup = vi.fn();
 const mockEligible = vi.fn();
+const mockMyOffers = vi.fn();
+const mockRespond = vi.fn();
+const mockCancelSwap = vi.fn();
 
 vi.mock('../../../modules/scheduling', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../../modules/scheduling');
@@ -11,7 +14,10 @@ vi.mock('../../../modules/scheduling', async () => {
       getMonthCalendar: (...args: unknown[]) => mockGetMonth(...args) as unknown,
       getWeekCalendar: (...args: unknown[]) => mockGetWeek(...args) as unknown,
       signupForShift: (...args: unknown[]) => mockSignup(...args) as unknown,
-      getEligiblePositions: (...args: unknown[]) => mockEligible(...args) as unknown,
+      getEligiblePositionsBulk: (...args: unknown[]) => mockEligible(...args) as unknown,
+      getMySwapRequests: (...args: unknown[]) => mockMyOffers(...args) as unknown,
+      respondToSwapOffer: (...args: unknown[]) => mockRespond(...args) as unknown,
+      cancelSwapRequest: (...args: unknown[]) => mockCancelSwap(...args) as unknown,
       getCalendarFeed: () => Promise.resolve({ token: 't', feed_path: '/feed' }),
     },
   };
@@ -90,7 +96,10 @@ beforeEach(() => {
   mockGetMonth.mockResolvedValue([SHORT_DAY, MINE]);
   mockGetWeek.mockResolvedValue([]);
   mockSignup.mockResolvedValue({ id: 'a9' });
-  mockEligible.mockResolvedValue({ positions: ['firefighter', 'driver'], is_excluded: false });
+  mockEligible.mockResolvedValue({ 'day-25': ['firefighter', 'driver'], 'mine-26': ['firefighter'] });
+  mockMyOffers.mockResolvedValue([]);
+  mockRespond.mockResolvedValue({ id: 'sw1' });
+  mockCancelSwap.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -195,5 +204,140 @@ describe('ShiftBoard', () => {
     renderBoard();
     // The reason reaches the member rather than presenting as an empty month.
     expect(await screen.findByText('offline')).toBeInTheDocument();
+  });
+});
+
+describe('offers waiting on the member', () => {
+  const OFFER = {
+    id: 'sw1',
+    offering_shift_id: 'day-25',
+    requesting_user_id: 'u2',
+    requesting_user_name: 'Dana Ruiz',
+    target_user_id: ME,
+    status: 'pending',
+    created_at: '2026-08-20T00:00:00Z',
+  };
+
+  it('surfaces an offer on the day it belongs to', async () => {
+    const user = userEvent.setup();
+    mockMyOffers.mockResolvedValue([OFFER]);
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    expect((await screen.findAllByText(/Dana Ruiz offered you this seat/i)).length).toBeGreaterThan(0);
+  });
+
+  it('accepts through the member path, then re-reads the roster', async () => {
+    const user = userEvent.setup();
+    mockMyOffers.mockResolvedValue([OFFER]);
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    const [accept] = await screen.findAllByRole('button', { name: /take the shift/i });
+    mockMyOffers.mockResolvedValue([]);
+    await user.click(accept as HTMLElement);
+
+    await waitFor(() => expect(mockRespond).toHaveBeenCalledWith('sw1', true));
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledTimes(2));
+  });
+
+  it('declines without touching the roster call', async () => {
+    const user = userEvent.setup();
+    mockMyOffers.mockResolvedValue([OFFER]);
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    const [decline] = await screen.findAllByRole('button', { name: /^decline$/i });
+    await user.click(decline as HTMLElement);
+    await waitFor(() => expect(mockRespond).toHaveBeenCalledWith('sw1', false));
+  });
+
+  it('keeps the board usable when the offer list cannot be loaded', async () => {
+    // Non-critical: the banners just do not appear, and the roster below them
+    // is still correct.
+    mockMyOffers.mockRejectedValue(new Error('offline'));
+    renderBoard();
+    expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
+  });
+});
+
+describe('asking about eligibility', () => {
+  it('asks once for the whole day rather than once per shift', async () => {
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    mockEligible.mockClear();
+
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    await waitFor(() => expect(mockEligible).toHaveBeenCalledWith(['day-25']));
+    expect(mockEligible).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-ask for a day it already answered', async () => {
+    const user = userEvent.setup();
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+    await waitFor(() => expect(mockEligible).toHaveBeenCalled());
+    mockEligible.mockClear();
+
+    await user.click(grid().getByRole('gridcell', { name: /Wednesday, August 26/ }));
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+
+    // Only the newly-seen day is asked about.
+    expect(mockEligible).toHaveBeenCalledTimes(1);
+    expect(mockEligible).toHaveBeenCalledWith(['mine-26']);
+  });
+});
+
+describe('the quiet refresh', () => {
+  it('re-reads when the board regains focus', async () => {
+    // Two members working the same day otherwise see each other's claims only
+    // after navigating: a board left open all morning shows breakfast's counts.
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    mockGetMonth.mockClear();
+
+    window.dispatchEvent(new Event('focus'));
+
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledTimes(1));
+  });
+
+  it('holds off while a claim is in flight', async () => {
+    // Pulling the roster out from under a decision being made on it is worse
+    // than showing it a minute late.
+    const user = userEvent.setup();
+    let release: (() => void) | undefined;
+    mockSignup.mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+
+    renderBoard();
+    await screen.findByText(/open seats this month/i);
+    await user.click(grid().getByRole('gridcell', { name: /Tuesday, August 25/ }));
+    const [claim] = await screen.findAllByRole('button', { name: /take a seat on this shift/i });
+    await user.click(claim as HTMLElement);
+
+    mockGetMonth.mockClear();
+    window.dispatchEvent(new Event('focus'));
+    expect(mockGetMonth).not.toHaveBeenCalled();
+
+    release?.();
+  });
+
+  it('leaves the last good data on screen when a background read fails', async () => {
+    renderBoard();
+    await screen.findByTestId('month-open-seats');
+    mockGetMonth.mockRejectedValue(new Error('offline'));
+
+    window.dispatchEvent(new Event('focus'));
+
+    // No error banner: the member did not ask for this read, and a failed
+    // poll is not news.
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalled());
+    expect(screen.queryByText('offline')).not.toBeInTheDocument();
+    expect(screen.getByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
   });
 });

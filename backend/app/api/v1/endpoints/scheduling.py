@@ -79,6 +79,7 @@ from app.schemas.scheduling import (
     ShiftResponse,
     ShiftSignupRequest,
     ShiftsListResponse,
+    ShiftSwapOfferResponseRequest,
     ShiftSwapRequestCreate,
     ShiftSwapRequestResponse,
     ShiftSwapRequestsPage,
@@ -121,6 +122,10 @@ router = APIRouter()
 # Maximum span for the open-shifts lookup window (about a year), so a caller
 # cannot request an arbitrarily wide date range.
 MAX_OPEN_SHIFTS_DAYS = 366
+
+# The day panel asks about one day's shifts; a very busy station might run a
+# dozen. The cap is what stops a caller asking about a whole year in one go.
+MAX_BULK_ELIGIBILITY_SHIFTS = 50
 
 # Maximum span for a single pattern-generation request. Generation WRITES a
 # shift (+ assignments) per day in one transaction, so an unbounded range is a
@@ -1911,11 +1916,18 @@ async def confirm_assignment(
 @router.get("/swap-requests", response_model=ShiftSwapRequestsPage)
 async def list_swap_requests(
     status_filter: str | None = Query(None, alias="status"),
+    mine: bool = False,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.swap")),
 ):
-    """List shift swap requests"""
+    """List shift swap requests.
+
+    ``mine`` narrows to swaps the caller is a participant in. A member already
+    only sees their own; the flag matters for an officer, whose org-wide page
+    can push their own pending offer past the page limit — the board asks the
+    question "what is waiting on me", not "what is outstanding anywhere".
+    """
     service = SchedulingService(db)
     swap_status = None
     if status_filter:
@@ -1925,7 +1937,7 @@ async def list_swap_requests(
             raise HTTPException(
                 status_code=400, detail=f"Invalid status: {status_filter}"
             )
-    if user_has_permission(current_user, "scheduling.manage"):
+    if user_has_permission(current_user, "scheduling.manage") and not mine:
         requests, total = await service.get_swap_requests(
             current_user.organization_id,
             status=swap_status,
@@ -2019,6 +2031,41 @@ async def review_swap_request(
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review swap request.", error),
+        )
+    enriched = await service.enrich_swap_requests([result])
+    return enriched[0]
+
+
+@router.post(
+    "/swap-requests/{request_id}/respond", response_model=ShiftSwapRequestResponse
+)
+async def respond_to_swap_offer(
+    request_id: UUID,
+    answer: ShiftSwapOfferResponseRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Accept or decline a seat a colleague offered you.
+
+    Member self-service, and deliberately not the manager review above: that
+    one refuses participants by design. Accepting a one-way offer grants no
+    authority anybody lacked — it is the offerer withdrawing and the accepter
+    signing up, in one step, both already unprivileged. Without it a targeted
+    offer cannot complete at all: manager review reads a set target as "there
+    must be a shift coming back" and rejects an offer that has none.
+    """
+    service = SchedulingService(db)
+    result, error = await service.respond_to_swap_offer(
+        request_id,
+        current_user.organization_id,
+        current_user.id,
+        accept=answer.accept,
+        note=answer.note,
+    )
+    if error or result is None:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to answer this offer.", error),
         )
     enriched = await service.enrich_swap_requests([result])
     return enriched[0]

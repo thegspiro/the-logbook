@@ -9,6 +9,7 @@
 import React from 'react';
 import { ArrowLeftRight, CalendarDays, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { SwapRequest } from '../../../types/scheduling';
 import { shiftCrewName, shiftPeriodLetter, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import ShiftSeatList from './ShiftSeatList';
@@ -26,6 +27,11 @@ export interface DayDetailPanelProps {
   onClaim: (shift: ShiftRecord, position: string | null) => void;
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
   onOpenStanding: (shift: ShiftRecord) => void;
+  /** Pending offers on the day's shifts, keyed by shift id. */
+  offersToMe: Record<string, SwapRequest>;
+  offersFromMe: Record<string, SwapRequest>;
+  onAnswerOffer: (offer: SwapRequest, accept: boolean) => void;
+  onCancelOffer: (offer: SwapRequest) => void;
 }
 
 const shiftLocation = (shift: ShiftRecord | null | undefined): string => {
@@ -45,6 +51,10 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
   onClaim,
   onRelease,
   onOpenStanding,
+  offersToMe,
+  offersFromMe,
+  onAnswerOffer,
+  onCancelOffer,
 }) => {
   // A calendar day belongs to no timezone: pushing one through a
   // timezone-aware formatter renders "Aug 26" as "Aug 25" for any viewer west
@@ -124,6 +134,10 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
                   pending={pendingShiftId === shift.id}
                   onClaim={onClaim}
                   onRelease={onRelease}
+                  offerToMe={offersToMe[shift.id] ?? null}
+                  offerFromMe={offersFromMe[shift.id] ?? null}
+                  onAnswerOffer={onAnswerOffer}
+                  onCancelOffer={onCancelOffer}
                 />
                 {/* The shortcut into a standing series. It opens the editor
                     rather than committing on a checkbox: the number of dates

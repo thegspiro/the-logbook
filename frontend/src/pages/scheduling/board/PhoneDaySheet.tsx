@@ -9,6 +9,7 @@
 import React from 'react';
 import { Calendar, Check, ChevronLeft, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { SwapRequest } from '../../../types/scheduling';
 import { buildSeats, memberInitials, shiftCrewName, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import ShiftSeatList from './ShiftSeatList';
@@ -26,6 +27,11 @@ export interface PhoneDaySheetProps {
   onClaim: (shift: ShiftRecord, position: string | null) => void;
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
   onOpenStanding: (shift: ShiftRecord) => void;
+  /** Pending offers on the day's shifts, keyed by shift id. */
+  offersToMe: Record<string, SwapRequest>;
+  offersFromMe: Record<string, SwapRequest>;
+  onAnswerOffer: (offer: SwapRequest, accept: boolean) => void;
+  onCancelOffer: (offer: SwapRequest) => void;
   onAddToCalendar: () => void;
   onDismissConfirmation: () => void;
 }
@@ -42,6 +48,10 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
   onClaim,
   onRelease,
   onOpenStanding,
+  offersToMe,
+  offersFromMe,
+  onAnswerOffer,
+  onCancelOffer,
   onAddToCalendar,
   onDismissConfirmation,
 }) => {
@@ -177,6 +187,10 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
                 pending={pendingShiftId === shift.id}
                 onClaim={onClaim}
                 onRelease={onRelease}
+                offerToMe={offersToMe[shift.id] ?? null}
+                offerFromMe={offersFromMe[shift.id] ?? null}
+                onAnswerOffer={onAnswerOffer}
+                onCancelOffer={onCancelOffer}
                 variant="sheet"
               />
             </section>

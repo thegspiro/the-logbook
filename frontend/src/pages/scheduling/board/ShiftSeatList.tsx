@@ -8,8 +8,9 @@
  */
 
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { ArrowLeftRight, Plus } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import type { SwapRequest } from '../../../types/scheduling';
 import {
   buildSeats,
   canTakeSeat,
@@ -35,6 +36,12 @@ export interface ShiftSeatListProps {
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
   /** Phone sheet: bigger avatars, a full-bleed action at the card's edge. */
   variant?: 'panel' | 'sheet';
+  /** A pending offer of this seat to the current member, if there is one. */
+  offerToMe?: SwapRequest | null;
+  /** A pending offer the current member made of this seat. */
+  offerFromMe?: SwapRequest | null;
+  onAnswerOffer?: (offer: SwapRequest, accept: boolean) => void;
+  onCancelOffer?: (offer: SwapRequest) => void;
 }
 
 export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
@@ -46,6 +53,10 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
   onClaim,
   onRelease,
   variant = 'panel',
+  offerToMe = null,
+  offerFromMe = null,
+  onAnswerOffer,
+  onCancelOffer,
 }) => {
   const info = shiftStatusInfo(shift, currentUserId);
   const seats = buildSeats(shift, currentUserId);
@@ -135,6 +146,57 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
           );
         })}
       </ul>
+
+      {offerToMe && onAnswerOffer && (
+        <div className="alert-info mb-3">
+          <p className="text-theme-text-primary flex items-center gap-1.5 text-sm font-bold">
+            <ArrowLeftRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {offerToMe.requesting_user_name ?? 'A member'} offered you this seat
+          </p>
+          <p className="text-theme-text-secondary mt-0.5 text-xs">
+            They stay on the roster until you answer, so the seat is never left empty.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onAnswerOffer(offerToMe, true)}
+              className="btn-primary btn-sm rounded-lg px-3 font-semibold"
+            >
+              Take the shift
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onAnswerOffer(offerToMe, false)}
+              className="btn-secondary btn-sm rounded-lg px-3 font-semibold"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      {offerFromMe && (
+        <div className="alert-warning mb-3">
+          <p className="text-theme-text-primary text-sm font-bold">
+            Offered to {offerFromMe.target_user_name ?? 'a member'}
+          </p>
+          <p className="text-theme-text-secondary mt-0.5 text-xs">
+            The shift is still yours until they accept. Nobody else can claim the seat while the offer stands.
+          </p>
+          {onCancelOffer && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onCancelOffer(offerFromMe)}
+              className="btn-secondary btn-sm mt-2.5 rounded-lg px-3 font-semibold"
+            >
+              Withdraw the offer
+            </button>
+          )}
+        </div>
+      )}
 
       {info.isMine ? (
         <button
