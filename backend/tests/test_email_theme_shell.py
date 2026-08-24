@@ -719,8 +719,15 @@ class TestTheColourwayMigrationConvertsWhatItClaimsTo:
         assert '<div class="{{content_class}}">' in defn["html"]
 
 
+@pytest.mark.integration
 class TestSavingATemplateWritesWhatWasSent:
     """A PUT has to persist what the editor sent, including a cleared field.
+
+    Marked ``integration``: everything else in this module is pure functions
+    over module-level data, and the backend-unit CI job runs
+    ``-m "not integration"`` with no database at all. Without the marker
+    these four take the whole job down on a connection refused, which says
+    nothing about the code they cover.
 
     Two ways this went wrong at once, and both are silent — the endpoint
     answers 200 either way and the screen shows a success toast, so the only
