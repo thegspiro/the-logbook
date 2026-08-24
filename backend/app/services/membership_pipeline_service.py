@@ -78,6 +78,17 @@ _STATUS_BLOCK_REASON = {
 }
 
 
+# The detailed duplicate-match message names the existing member and their
+# email. /transfer redacts it deliberately (see transfer_prospect); the
+# completion paths must too — /approve-step is reachable by any member holding
+# a stage's approval role, not just members.manage holders.
+DUPLICATE_MEMBER_REFUSAL = (
+    "An existing member matches this applicant, so the final stage cannot "
+    "convert them automatically. Review the existing members list, then "
+    "convert or reactivate from there."
+)
+
+
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
     """Raise unless the prospect's status permits pipeline movement.
 
@@ -1619,6 +1630,42 @@ class MembershipPipelineService:
         if not skip_requirements:
             await self._validate_step_completion(prospect, step, action_result)
 
+        # A skip is a coordinator bypass, not an approval — it must never
+        # convert the prospect to a member, even if a stage flagged
+        # is_final_step ended up mid-pipeline through reordering.
+        will_auto_transfer = (
+            not skip_requirements
+            and step.is_final_step
+            and bool(prospect.pipeline and prospect.pipeline.auto_transfer_on_approval)
+        )
+
+        # Convert first, then record the completion — not the other way round.
+        # _do_transfer reports a refusal (an existing member holds this email,
+        # an archived record to reactivate instead) by *returning*
+        # success=False rather than raising, and it reads nothing the staging
+        # below writes. Running it after the progress row, the activity entry
+        # and the applicant's completion email were staged meant a refusal had
+        # to unwind them — and _try_auto_advance_step swallows this ValueError,
+        # so an event-driven caller's own commit would have persisted a final
+        # stage marked complete with nobody converted, plus an email already
+        # sent saying so. Ordering it first leaves nothing to undo.
+        if will_auto_transfer:
+            transfer = await self._do_transfer(prospect, completed_by)
+            if isinstance(transfer, dict) and not transfer.get("success"):
+                # The detailed message names the matched member and their
+                # email. /transfer redacts it deliberately and so must this:
+                # /approve-step reaches here for any member holding a stage's
+                # approval role, not only members.manage holders.
+                logger.warning(
+                    f"Auto-transfer refused for prospect {prospect_id}: "
+                    f"{transfer.get('message')}"
+                )
+                raise ValueError(
+                    DUPLICATE_MEMBER_REFUSAL
+                    if transfer.get("existing_member_match")
+                    else "The applicant could not be converted to a member."
+                )
+
         # Find or create the progress record
         progress = next(
             (p for p in prospect.step_progress if str(p.step_id) == str(step_id)),
@@ -1680,26 +1727,9 @@ class MembershipPipelineService:
         # on. A skip is a coordinator bypass, not an approval — it must never
         # convert the prospect to a member, even if a stage flagged
         # is_final_step ended up mid-pipeline through reordering.
-        if (
-            not skip_requirements
-            and step.is_final_step
-            and prospect.pipeline.auto_transfer_on_approval
-        ):
-            # _do_transfer reports a refusal (an existing member with this
-            # email, an archived record to reactivate instead) by *returning*
-            # success=False rather than raising. Discarding that answered the
-            # coordinator with 200 and a completed final stage while the
-            # applicant was never converted — the pipeline's last stage stop
-            # silently doing nothing. Rolling it into a ValueError surfaces
-            # the reason as a 400 and unwinds the completion with it.
-            transfer = await self._do_transfer(prospect, completed_by)
-            if isinstance(transfer, dict) and not transfer.get("success"):
-                raise ValueError(
-                    transfer.get("message")
-                    or "The applicant could not be converted to a member."
-                )
-        else:
-            # Advance to next step
+        if not will_auto_transfer:
+            # Advance to next step. The transfer, when there is one, already
+            # ran above and moved the prospect out of the pipeline.
             await self._advance_current_step(prospect, step_id)
 
         # Some explicit operations have a domain-level audit event in addition

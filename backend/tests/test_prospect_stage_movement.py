@@ -10,8 +10,10 @@ Each test names the behaviour a department depends on, not the internals.
 """
 
 import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.membership_pipeline import ProspectStatus, StepProgressStatus
@@ -385,3 +387,170 @@ class TestStageDeletionLeavesAWorkableStage:
         assert landed.status == StepProgressStatus.IN_PROGRESS
         assert landed.completed_at is None
         assert landed.completed_by is None
+
+
+class TestAutoTransferRefusal:
+    """A final stage that cannot convert must refuse before it changes anything.
+
+    The pipeline's last stage stop used to complete silently without creating
+    a member. Making it raise fixed that, but the raise has to happen before
+    the completion is staged and before the applicant is emailed, and it must
+    not echo the matched member's details.
+    """
+
+    async def _pipeline_ready_to_convert(self, svc, org_id, admin_id, email):
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id, name=f"AutoTransfer-{_uid()[:8]}"
+        )
+        pipeline.auto_transfer_on_approval = True
+        step = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {
+                "name": "Final Review",
+                "step_type": "manual_approval",
+                "sort_order": 0,
+                "is_final_step": True,
+                "notify_prospect_on_completion": True,
+            },
+        )
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Dup",
+                "last_name": "Licate",
+                "email": email,
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+        return pipeline, step, prospect
+
+    async def test_refusal_stages_nothing_and_hides_the_matched_member(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        email = f"clash-{_uid()[:10]}@example.com"
+
+        # An existing member already holds this address, so the conversion
+        # cannot go through.
+        await db_session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, organization_id, username, first_name, last_name, "
+                "email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "un": f"existing-{_uid()[:8]}",
+                "fn": "Dup",
+                "ln": "Licate",
+                "em": email,
+                "pw": "hashed",
+            },
+        )
+        await db_session.flush()
+
+        _pipeline, step, prospect = await self._pipeline_ready_to_convert(
+            svc, org_id, admin_id, email
+        )
+
+        sent: list = []
+        with patch.object(
+            svc,
+            "_send_step_completion_notification",
+            new=AsyncMock(side_effect=lambda *a, **k: sent.append(a)),
+        ):
+            with pytest.raises(ValueError, match="existing member") as excinfo:
+                await svc.complete_step(
+                    prospect_id=prospect.id,
+                    organization_id=org_id,
+                    step_id=step.id,
+                    completed_by=admin_id,
+                )
+
+        message = str(excinfo.value)
+        # The reason reaches the coordinator; the matched member does not.
+        assert "existing member" in message.lower()
+        assert email not in message
+        assert "Licate" not in message
+
+        # Nothing was staged on the way to the refusal: no completion email,
+        # and the final stage is not marked done.
+        assert sent == []
+        after = await svc.get_prospect(prospect.id, org_id)
+        landed = next(
+            (p for p in after.step_progress if str(p.step_id) == str(step.id)),
+            None,
+        )
+        if landed is not None:
+            assert _status_of(landed) != "completed"
+            assert landed.completed_at is None
+        assert after.status == ProspectStatus.ACTIVE
+        assert after.transferred_user_id is None
+
+    async def test_a_refused_auto_advance_leaves_nothing_behind_to_commit(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """The event-driven path swallows the refusal — so it must unwind it.
+
+        An endpoint gets its rollback from the request dependency; an
+        integration caller goes on to commit. Without the rollback that commit
+        persisted a final stage marked complete for a conversion that never
+        happened — the very inconsistency the refusal exists to prevent.
+        """
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        email = f"clash2-{_uid()[:10]}@example.com"
+
+        await db_session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, organization_id, username, first_name, last_name, "
+                "email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "un": f"existing2-{_uid()[:8]}",
+                "fn": "Dup",
+                "ln": "Licate",
+                "em": email,
+                "pw": "hashed",
+            },
+        )
+        await db_session.flush()
+
+        pipeline, step, prospect = await self._pipeline_ready_to_convert(
+            svc, org_id, admin_id, email
+        )
+        step.config = {"auto_advance": True}
+        await db_session.commit()
+
+        moved = await svc._try_auto_advance_step(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=step.id,
+            completed_by=admin_id,
+            trigger="test_event",
+        )
+        assert moved is False
+
+        # The rollback is what makes the caller's subsequent commit safe: with
+        # the session unwound there is no staged completion left for it to
+        # persist. (The commit itself is not re-issued here — the test session
+        # is a savepoint-joined transaction, so committing across the service's
+        # rollback fights the fixture rather than the code under test.)
+        after = await svc.get_prospect(prospect.id, org_id)
+        landed = next(
+            (p for p in after.step_progress if str(p.step_id) == str(step.id)),
+            None,
+        )
+        if landed is not None:
+            assert _status_of(landed) != "completed"
+        assert after.status == ProspectStatus.ACTIVE
+        assert after.transferred_user_id is None
