@@ -1090,6 +1090,35 @@ export async function openPublicForm(page, helpers) {
   });
 }
 
+/**
+ * Open the TOTP-enrolled demo member's profile.
+ *
+ * Both halves of the 17-03/17-04 pair must land on the *same* record for the
+ * comparison to mean anything, so the member is chosen by username rather than
+ * by position in the roster, which changes with the seed.
+ */
+export async function openMemberProfile(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users?limit=200", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const users = Array.isArray(body) ? body : body.users || body.items || [];
+    const target = users.find((u) => u.username === "whalloway");
+    return target ? target.id : null;
+  });
+  if (!id)
+    throw new Error("the TOTP-enrolled demo member is not in the roster");
+  await page.goto(`${new URL(page.url()).origin}/members/${id}`, {
+    waitUntil: "domcontentloaded",
+  });
+}
+
+/** The election seeded past its nomination phase with one nominee still pending. */
+export const isPostNominationElection = (election) =>
+  /Lieutenant Election/.test(election.title ?? "");
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -8961,6 +8990,49 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
+    // A manager's candidate list on an election past nominations. Both halves
+    // open the SAME election, which is seeded specifically for this: every
+    // other seeded election either sits in the nomination phase (where pending
+    // nominations are visible to everyone, so there is nothing to compare) or
+    // has nobody pending.
+    id: "14-25-candidates-as-manager",
+    doc: "14-elections.md",
+    line: 212,
+    anchor: "the candidate list for the same election seen from a",
+    alt: "The candidate list on an election past nominations, as an elections manager: the accepted candidate and the nominee who has not yet accepted",
+    route: "/elections",
+    prepare: openElectionTab("candidates", isPostNominationElection),
+    fullPage: true,
+    allowEmptyState:
+      'Matches "No votes cast yet" from the results panel, which is true and ' +
+      "expected on an election still open. The candidate list this shot is " +
+      "about carries both nominees.",
+  },
+  {
+    id: "14-26-candidates-as-member",
+    doc: "14-elections.md",
+    line: 212,
+    anchor: "__paired-with-14-25__",
+    alt: "The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld once nominations have closed",
+    route: "/elections",
+    auth: "member",
+    // No candidates tab is clicked, because a member does not get one: their
+    // view of who is standing is the ballot itself. Opening the election is
+    // the whole prepare -- reaching for #tab-candidates timed out against a
+    // tab strip that only offers Cast Vote.
+    prepare: openFirstFromApi(
+      "/elections?limit=20",
+      (id) => `/elections/${id}`,
+      "elections",
+      isPostNominationElection,
+    ),
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see a shorter list here -- the withheld pending " +
+      "nomination is the subject of the shot, so one name on the ballot is " +
+      "the result rather than missing demo data.",
+  },
+  {
     id: "14-24-ballot-send-skipped",
     doc: "14-elections.md",
     line: 352,
@@ -10437,6 +10509,37 @@ export const SHOTS = [
         .locator("#checkin-window")
         .waitFor({ state: "visible", timeout: 20_000 });
     },
+  },
+  {
+    // Half of a permission pair, both opening the SAME colleague's profile.
+    // The member chosen is the one enrolled in TOTP, per the marker, though
+    // see the caption: no account-security block renders on a colleague's
+    // profile for anybody -- enrolment is shown on your own settings page.
+    // What actually differs is the compliance summary, the training and
+    // certification history, and the emergency contacts.
+    id: "17-03-profile-as-officer",
+    doc: "17-privacy-data-rights.md",
+    line: 137,
+    anchor: "the same member profile viewed with `members.view`",
+    alt: "A colleague's profile as an officer: compliance summary, training and certification history and emergency contacts all present",
+    route: "/members",
+    prepare: openMemberProfile,
+    fullPage: true,
+  },
+  {
+    id: "17-04-profile-as-member",
+    doc: "17-privacy-data-rights.md",
+    line: 137,
+    anchor: "__paired-with-17-03__",
+    alt: "The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered",
+    route: "/members",
+    auth: "member",
+    prepare: openMemberProfile,
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see fewer panels on a colleague's profile -- the " +
+      "missing ones are the subject of the shot, so a thinner page is the " +
+      "result rather than a sign of missing demo data.",
   },
   {
     id: "03-43-time-off-request-form",

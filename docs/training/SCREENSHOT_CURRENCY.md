@@ -1,5 +1,48 @@
 # Screenshot currency
 
+## Captured 2026-08-24 — two permission pairs, and two markers that described the wrong thing
+
+`17-03`/`17-04` and `14-25`/`14-26`, opened and checked. **459 of 505 filled.**
+
+**Guide 17's marker asked for a block that does not exist on that screen.** It
+wanted "the account-security block absent" from a colleague's profile viewed
+with `members.view` only. There is no account-security block on a colleague's
+profile _for anybody_ — MFA enrolment, last sign-in and email verification live
+on your own settings page, so neither account has one to compare. The
+permission difference the paragraph is really about is large and visible
+though, so the pair captures that instead: the officer gets the compliance
+summary, the training and certification history and the emergency contacts, and
+the member gets none of the three. Worth teaching from the picture: the
+member's Contact Information panel renders **empty rather than absent** — the
+panel is there, the values are withheld.
+
+**Guide 14's marker was right about the rule and impossible on the seed.**
+`list_candidates` returns pending nominations to everyone _while_ nominations
+are open — a nominee has to be able to find their own — and to holders of
+`elections.manage` at any time; to an ordinary member after nominations close it
+returns accepted candidates only. Every seeded election either sat in the
+nomination phase or had nobody pending, so the rule had nothing to show. A
+dedicated election is now seeded past its nomination phase with one nominee
+still un-accepted. Deliberately a _new_ election: four captures need one in the
+nomination phase, and advancing that one would empty them.
+
+The member half of that pair also could not be taken as written. A member has
+no Candidates tab — their view of who is standing _is_ the ballot — so reaching
+for `#tab-candidates` timed out against a tab strip offering only Cast Vote.
+Opening the election is the whole prepare, and the withheld nomination shows up
+as a shorter list of options rather than a hidden row.
+
+**The numbering trap bit again, and the manifest caught it this time.**
+`14-20` and `14-21` were already taken, and the new entries also landed after
+`14-24-ballot-send-skipped`, which mutates seed data and must stay last for its
+guide. The import-time guard refused to load rather than letting the pair run
+and quietly spend the fixture. They are `14-25`/`14-26`, ahead of it.
+
+**One near-miss worth recording.** The member's candidate list came back empty
+against a stale session cookie, which looked exactly like the permission rule
+over-filtering. It was a 401. Re-authenticating showed the one accepted
+candidate. Check the HTTP status before reading an empty list as behaviour.
+
 ## Captured 2026-08-24 — legal documents, the recruitment type, and a dashboard pair
 
 Seven captures against a database rebuilt from zero, each opened and checked.

@@ -9600,6 +9600,7 @@ class Seeder:
         self._seed_membership_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
+        self._seed_post_nomination_election(elections)
         return elections
 
     # Named and sized to match the worked example in the elections guide: four
@@ -10236,6 +10237,124 @@ class Seeder:
             if not meeting_id:
                 continue
             self.api.patch(f"/elections/{election_id}", {"event_id": meeting_id})
+
+    POST_NOMINATION_ELECTION = "Lieutenant Election — 2027 Term"
+
+    def _seed_post_nomination_election(self, elections: list[dict]) -> None:
+        """An election past its nomination phase that still holds a pending one.
+
+        This is the only state in which the candidate-list permission rule is
+        visible, and nothing else seeded reaches it. `list_candidates` returns
+        pending nominations to everyone *while* nominations are open — nominees
+        have to see their own — and to holders of `elections.manage` at any
+        time; to an ordinary member after nominations close it returns accepted
+        candidates only. So demonstrating it needs a closed nomination phase
+        with somebody still un-accepted, and every other seeded election either
+        sits in nominations or has none pending.
+
+        A separate election rather than advancing "Annual Officer Elections":
+        four captures need one *in* the nomination phase, and moving it would
+        empty them.
+        """
+        existing = next(
+            (e for e in elections if e.get("title") == self.POST_NOMINATION_ELECTION),
+            None,
+        )
+        if existing:
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{m.get('first_name') or m.get('firstName')} "
+            f"{m.get('last_name') or m.get('lastName')}": pick(m, "id")
+            for m in members
+        }
+        nominees = [
+            (
+                "Amara Osei",
+                "Four years on Ladder 4 and the department's rope-rescue lead.",
+            ),
+            (
+                "Sofia Marchetti",
+                "Two years riding backwards, and I want the seat to keep the "
+                "training calendar honest.",
+            ),
+        ]
+        if not all(by_name.get(name) for name, _ in nominees):
+            return
+
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.POST_NOMINATION_ELECTION,
+                "description": (
+                    "Line lieutenant seat. Nominations closed; one nominee has "
+                    "not yet accepted."
+                ),
+                "election_type": "position",
+                "positions": ["Lieutenant"],
+                "start_date": iso(NOW - timedelta(days=1)),
+                "end_date": iso(NOW + timedelta(days=6)),
+                "voting_method": "simple_majority",
+                "victory_condition": "most_votes",
+                "anonymous_voting": True,
+                "results_visible_immediately": False,
+                "quorum_type": "none",
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        try:
+            self.api.post(f"/elections/{election_id}/open-nominations")
+        except ApiError as exc:
+            self.blocked.append(f"post-nomination election: {exc}")
+            return
+
+        for name, statement in nominees:
+            try:
+                self.api.post(
+                    f"/elections/{election_id}/nominations",
+                    {
+                        "position": "Lieutenant",
+                        "nominee_user_id": by_name[name],
+                        "statement": statement,
+                    },
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"nominate {name}: {exc}")
+
+        # Accept exactly one. The other stays pending, which is the whole point
+        # -- with both accepted the two accounts see an identical list.
+        candidates = items(
+            self.api.get(f"/elections/{election_id}/candidates"), "candidates"
+        )
+        first = next((c for c in candidates if pick(c, "name") == nominees[0][0]), None)
+        if first:
+            try:
+                # PATCH as the manager rather than the /nominations/.../accept
+                # route: that one is restricted to the nominee, deliberately,
+                # so the seeder cannot use it without signing in as them.
+                self.api.patch(
+                    f"/elections/{election_id}/candidates/{pick(first, 'id')}",
+                    {"accepted": True},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"accept nomination: {exc}")
+
+        try:
+            # Back to draft, then open for voting: close_nominations returns the
+            # election to draft by design so the ballot can be finalized first.
+            self.api.post(f"/elections/{election_id}/close-nominations")
+            self.api.post(f"/elections/{election_id}/open")
+        except ApiError as exc:
+            self.blocked.append(f"open post-nomination election: {exc}")
+            return
+
+        elections.append(self.api.get(f"/elections/{election_id}"))
 
     def _seed_nominations(self, elections: list[dict]) -> None:
         """Nominate candidates for the officer election.
