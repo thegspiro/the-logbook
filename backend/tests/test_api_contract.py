@@ -28,6 +28,7 @@ the responses a deployed instance returns, not what an in-process harness
 synthesises.
 """
 
+import logging
 import os
 import socket
 import threading
@@ -48,6 +49,46 @@ pytestmark = [pytest.mark.slow, pytest.mark.integration]
 # waits on MySQL and walks the Alembic chain, which is minutes on a cold
 # database and seconds once it is at head.
 _SERVER_BOOT_TIMEOUT_S = 600
+
+
+# One traceback is worth reading; a boot loop's worth is not, and this string
+# ends up in an assertion message.
+_MAX_CAPTURED_CHARS = 2000
+
+
+class _BootLogCapture(logging.Handler):
+    """Collect what uvicorn logs to its own logger while the server starts.
+
+    uvicorn does not hand the startup failure back to the caller. The
+    application's traceback goes to the ``uvicorn.error`` logger and the
+    process then exits with ``SystemExit(3)``, so the exception says only
+    that it exited, never why. These records are the only place the cause
+    exists, and in CI they otherwise scroll past unattached to the red job
+    they explain.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        # The default formatter appends a formatted traceback when the record
+        # carries exc_info, which is what makes the app's own error readable.
+        self.setFormatter(logging.Formatter("%(message)s"))
+        self._records: List[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._records.append(self.format(record))
+        except Exception:
+            # A logging handler that raises would replace the failure being
+            # diagnosed with one of its own.
+            pass
+
+    def captured(self) -> List[str]:
+        text = "\n".join(self._records).strip()
+        if not text:
+            return []
+        if len(text) > _MAX_CAPTURED_CHARS:
+            text = "..." + text[-_MAX_CAPTURED_CHARS:]
+        return [text]
 
 
 def _free_port() -> int:
@@ -94,53 +135,75 @@ def _start_server() -> str:
             access_log=False,
         )
     )
-    # uvicorn raises inside the thread, where the exception is lost — so the
-    # only symptom is a thread that is no longer alive, and the boot failure
-    # reaches CI as "server unavailable" with no cause attached. Recording it
-    # here is what makes the difference between a runner hiccup and the app
-    # genuinely failing to start visible from the log alone.
-    boot_error: List[Exception] = []
+    # Both of uvicorn's startup failure paths — a lifespan startup that fails
+    # and a socket it cannot bind — end in sys.exit(STARTUP_FAILURE). That is
+    # SystemExit, which derives from BaseException, so `except Exception` would
+    # miss precisely the application-startup failure this diagnostic exists to
+    # explain. It is caught and re-raised; re-raising only ends this thread.
+    boot_error: List[BaseException] = []
 
     def _serve() -> None:
         try:
             server.run()
-        except Exception as exc:
+        except BaseException as exc:
             boot_error.append(exc)
             raise
 
     thread = threading.Thread(target=_serve, daemon=True)
     thread.start()
 
-    base_url = f"http://127.0.0.1:{port}"
-    deadline = time.monotonic() + _SERVER_BOOT_TIMEOUT_S
-    last_state = "no response yet"
-    while time.monotonic() < deadline:
-        if not thread.is_alive():
-            cause = (
-                f": {type(boot_error[0]).__name__}: {boot_error[0]}"
-                if boot_error
-                else " (no exception recorded)"
-            )
-            raise RuntimeError(
-                f"Contract-test server thread exited during startup{cause}"
-            )
-        try:
-            # Wait for `ready`, not merely for a reply. /health answers well
-            # before the connection pool is open, and every database-backed
-            # public endpoint returns 500 "Database not initialized" until it
-            # is — which reads as a contract violation rather than a race.
-            body = httpx.get(f"{base_url}/health", timeout=5.0).json()
-            if body.get("ready"):
-                return base_url
-            last_state = str(body.get("startup") or body.get("status"))
-        except (httpx.HTTPError, ValueError):
-            pass
-        time.sleep(0.5)
+    # SystemExit(3) carries an exit code and nothing else, so the exception
+    # alone cannot say *why*. uvicorn logs the real cause — the application's
+    # traceback, or the bind error — to its own logger and then exits, which
+    # makes those records the only place the answer exists.
+    log_capture = _BootLogCapture()
+    uvicorn_errors = logging.getLogger("uvicorn.error")
+    uvicorn_errors.addHandler(log_capture)
 
-    raise RuntimeError(
-        f"Contract-test server was not ready within {_SERVER_BOOT_TIMEOUT_S}s "
-        f"(last state: {last_state})"
-    )
+    def _cause() -> str:
+        parts = []
+        if boot_error:
+            exc = boot_error[0]
+            text = str(exc)
+            parts.append(
+                f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+            )
+        parts.extend(log_capture.captured())
+        return " | ".join(parts)
+
+    try:
+        base_url = f"http://127.0.0.1:{port}"
+        deadline = time.monotonic() + _SERVER_BOOT_TIMEOUT_S
+        last_state = "no response yet"
+        while time.monotonic() < deadline:
+            if not thread.is_alive():
+                raise RuntimeError(
+                    f"Contract-test server thread exited during startup — "
+                    f"{_cause() or 'no cause recorded'}"
+                )
+            try:
+                # Wait for `ready`, not merely for a reply. /health answers well
+                # before the connection pool is open, and every database-backed
+                # public endpoint returns 500 "Database not initialized" until
+                # it is — which reads as a contract violation rather than a race.
+                body = httpx.get(f"{base_url}/health", timeout=5.0).json()
+                if body.get("ready"):
+                    return base_url
+                last_state = str(body.get("startup") or body.get("status"))
+            except (httpx.HTTPError, ValueError):
+                pass
+            time.sleep(0.5)
+
+        # A timeout with the thread still alive means the server never
+        # finished starting, not that it failed — so there may be nothing to
+        # add, and " — no cause recorded" would only be noise.
+        cause = _cause()
+        raise RuntimeError(
+            f"Contract-test server was not ready within {_SERVER_BOOT_TIMEOUT_S}s "
+            f"(last state: {last_state})" + (f" — {cause}" if cause else "")
+        )
+    finally:
+        uvicorn_errors.removeHandler(log_capture)
 
 
 # Opt-in, because the work below happens at IMPORT time and pytest imports
