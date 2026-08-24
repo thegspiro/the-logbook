@@ -210,6 +210,28 @@ class TestProspectIdNormalization:
 
 
 class TestSelfProspectFiltering:
+    async def test_widget_summary_omits_self(
+        self, db_session, org_and_viewer, monkeypatch
+    ):
+        org_id, viewer = org_and_viewer
+        svc = MembershipPipelineService(db_session)
+        mine = await _make_prospect(svc, org_id, email=viewer.email)
+        theirs = await _make_prospect(svc, org_id)
+
+        hidden = await load_self_prospect_ids(db_session, viewer)
+        monkeypatch.setattr(pipeline_endpoints, "user_has_permission", lambda *_: True)
+        summary = await pipeline_endpoints.pipeline_widget_summary(
+            db=db_session,
+            current_user=viewer,
+            hidden_prospect_ids=hidden,
+        )
+
+        assert mine.id in hidden
+        assert theirs.id not in hidden
+        assert summary.total == 1
+        assert sum(summary.by_status.values()) == 1
+        assert sum(summary.aging.values()) == 1
+        assert [detail["id"] for detail in summary.details] == [theirs.id]
 
     async def test_list_prospects_omits_self_and_adjusts_total(
         self, db_session: AsyncSession, org_and_viewer
