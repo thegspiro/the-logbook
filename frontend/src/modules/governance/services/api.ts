@@ -13,6 +13,7 @@ import type {
   LegalRevisionCreate,
   LegalRevisionUpdate,
 } from '../types/legal';
+import type { OrgChart, OrgChartNodeCreate, OrgChartNodeMove, OrgChartNodeUpdate } from '../types/orgChart';
 
 const api = createApiClient();
 
@@ -43,5 +44,40 @@ export const legalDocumentsService = {
 
   async revertToDefault(documentType: LegalDocumentType): Promise<void> {
     await api.post(`/legal-documents/${documentType}/revert-to-default`);
+  },
+};
+
+/**
+ * Organizational Chart.
+ *
+ * Every mutation returns the whole chart rather than the one seat it touched:
+ * a move renumbers its siblings, and a delete promotes the children of the
+ * removed seat, so the server's answer is the only trustworthy view of what
+ * the tree now looks like.
+ */
+export const orgChartService = {
+  async getChart(): Promise<OrgChart> {
+    const response = await api.get<OrgChart>('/org-chart');
+    return response.data;
+  },
+
+  async createNode(payload: OrgChartNodeCreate): Promise<OrgChart> {
+    const response = await api.post<OrgChart>('/org-chart/nodes', payload);
+    return response.data;
+  },
+
+  async updateNode(nodeId: string, payload: OrgChartNodeUpdate): Promise<OrgChart> {
+    const response = await api.put<OrgChart>(`/org-chart/nodes/${nodeId}`, payload);
+    return response.data;
+  },
+
+  async moveNode(nodeId: string, payload: OrgChartNodeMove): Promise<OrgChart> {
+    const response = await api.post<OrgChart>(`/org-chart/nodes/${nodeId}/move`, payload);
+    return response.data;
+  },
+
+  async deleteNode(nodeId: string): Promise<OrgChart> {
+    const response = await api.delete<OrgChart>(`/org-chart/nodes/${nodeId}`);
+    return response.data;
   },
 };

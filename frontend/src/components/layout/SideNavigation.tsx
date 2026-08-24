@@ -30,6 +30,7 @@ import {
   Megaphone,
   Plug,
   MapPin,
+  Network,
   Rocket,
   ShieldCheck,
   ClipboardCheck,
@@ -290,44 +291,42 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     },
     // When Facilities module is off, show a lightweight Locations page
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations', icon: MapPin } as NavItem]),
-    // Legal Documents is not behind a module flag: every deployment publishes
-    // /privacy and /terms, so the group has to appear for a department that
-    // runs neither elections nor minutes.
-    ...(isModuleOn('elections') || isModuleOn('minutes') || canReviewLegalDocuments
-      ? [
-          {
-            label: 'Governance',
-            path: '#',
-            icon: Vote,
-            subItems: [
-              ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections', icon: Vote }] : []),
-              ...(isModuleOn('minutes')
-                ? [
-                    {
-                      label: 'Minutes',
-                      path: '/minutes',
-                      icon: ClipboardList,
-                    },
-                    {
-                      label: 'Action Items',
-                      path: '/action-items',
-                      icon: AlertTriangle,
-                    },
-                  ]
-                : []),
-              ...(canReviewLegalDocuments
-                ? [
-                    {
-                      label: 'Legal Documents',
-                      path: '/governance/legal',
-                      icon: Scale,
-                    },
-                  ]
-                : []),
-            ],
-          } as NavItem,
-        ]
-      : []),
+    // Neither the org chart nor Legal Documents is behind a module flag: every
+    // deployment publishes /privacy and /terms, and the org chart is the one
+    // governance screen written for the general membership, so the group is
+    // unconditional rather than following elections or minutes.
+    {
+      label: 'Governance',
+      path: '/governance/org-chart',
+      icon: Vote,
+      subItems: [
+        { label: 'Org Chart', path: '/governance/org-chart', icon: Network },
+        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections', icon: Vote }] : []),
+        ...(isModuleOn('minutes')
+          ? [
+              {
+                label: 'Minutes',
+                path: '/minutes',
+                icon: ClipboardList,
+              },
+              {
+                label: 'Action Items',
+                path: '/action-items',
+                icon: AlertTriangle,
+              },
+            ]
+          : []),
+        ...(canReviewLegalDocuments
+          ? [
+              {
+                label: 'Legal Documents',
+                path: '/governance/legal',
+                icon: Scale,
+              },
+            ]
+          : []),
+      ],
+    },
     ...(isModuleOn('notifications')
       ? [{ label: 'Notifications', path: '/notifications?tab=inbox', icon: Bell } as NavItem]
       : []),

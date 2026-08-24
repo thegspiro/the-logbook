@@ -213,6 +213,17 @@ LEGAL_PUBLISH = Permission(
     PermissionCategory.SETTINGS,
 )
 
+# Governance -> Organizational Chart. The chart is the department's real chain
+# of command, not the application's permission tree, so maintaining it is
+# clerical work a secretary or adjutant can hold without also holding
+# settings.manage. Reading the chart needs no permission at all: it exists so
+# any member can find who is in charge of an area.
+ORG_CHART_MANAGE = Permission(
+    "orgchart.manage",
+    "Maintain the department organizational chart",
+    PermissionCategory.ORGANIZATION,
+)
+
 # ============================================
 # Module-Specific Permissions
 # ============================================
@@ -625,6 +636,8 @@ ALL_PERMISSIONS: list[Permission] = [
     # Legal documents (governance)
     LEGAL_PROPOSE,
     LEGAL_PUBLISH,
+    # Organizational chart (governance)
+    ORG_CHART_MANAGE,
     # Modules
     TRAINING_VIEW,
     TRAINING_MANAGE,
@@ -900,6 +913,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE.name,
             LEGAL_PUBLISH.name,
+            ORG_CHART_MANAGE.name,
             SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_MANAGE.name,
@@ -1285,6 +1299,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE.name,
             LEGAL_PUBLISH.name,
+            ORG_CHART_MANAGE.name,
             SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_VIEW.name,

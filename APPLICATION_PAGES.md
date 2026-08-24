@@ -811,6 +811,17 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ---
 
+## Organizational Chart (Governance)
+
+| URL                     | Page                 | Permission                                    |
+| ----------------------- | -------------------- | --------------------------------------------- |
+| `/governance/org-chart` | Organizational Chart | Any signed-in member (read)                   |
+|                         |                      | `orgchart.manage` or `settings.manage` (edit) |
+
+> The department's real chain of command: who holds each position, what area they are in charge of, and who they report to. Deliberately hand-curated rather than generated from positions or permissions — those describe what someone may do in this application, and the two hierarchies genuinely disagree (the IT Manager holds the wildcard grant and sits at the top of the permission tree while reporting to the Chief in real life). Reading is open to every member, because the screen exists so a member can find the right person without asking around. Editing is a separate grant so a secretary or adjutant can maintain the chart without full settings access. A position can be hidden while a reorganisation is built out, which hides everyone reporting to it too. Published contact details belong to the position (`training@department.org`), never copied from the holder's member record — those stay governed by the organization's contact-visibility setting. Not gated on a module flag.
+
+---
+
 ## Legal Documents (Governance)
 
 | URL                 | Page            | Permission                                            |

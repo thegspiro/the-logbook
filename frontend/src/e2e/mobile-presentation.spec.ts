@@ -75,6 +75,7 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
