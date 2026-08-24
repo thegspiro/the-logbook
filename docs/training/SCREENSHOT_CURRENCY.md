@@ -1,5 +1,36 @@
 # Screenshot currency
 
+## Resolved 2026-08-24 — the export field diff that has no screen to picture it
+
+Guide 17's personal-export marker, answered in prose. **4 markers remaining.**
+
+**A download is not a screen.** "Download my data" hands the browser a JSON
+file directly; nothing in the app renders it, so no screenshot of the export
+itself can exist — the same class of marker as the terminal-output one two
+entries back, resolved the same way: call the real endpoint, quote the real
+response, redact what needs redacting.
+
+**Called for real, twice, against the fixture `_ensure_demo_member_report`
+seeds** (previous entry). `GET /users/me/data-export` before and after
+disabling the five trainee-visibility toggles in Training settings
+(`show_officer_narrative`, `show_performance_rating`, `show_areas_of_strength`,
+`show_areas_for_improvement`, `show_skills_observed`), diffed, restored to
+their prior values afterward so no other capture is left running with the
+department's evaluation results hidden from every trainee.
+
+**The diff is field removal, not blanking.** Five keys disappear entirely —
+they are not present with a null or empty value — while every ordinary
+completion fact (date, hours, call count and types, tasks performed, review
+status) is identical in both. That distinction is what the guide's "ordinary
+completion facts remain exportable" edge case claims, and now the guide shows
+it verified rather than asserted.
+
+**Narrative text redacted, structure and counts real.** The seeded record's
+`performance_rating: 4`, its two `skills_observed` entries and one
+`tasks_performed` entry are the actual shapes the endpoint returned; only the
+free-text values inside them read `[redacted]`, per the marker's own
+instruction.
+
 ## Captured 2026-08-24 (twentieth) — a mandatory event's default, a template's own, and who an open house brought in
 
 `04-46`, `04-47`, `04-48`, opened and checked. **5 markers remaining.**

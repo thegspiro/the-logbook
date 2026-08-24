@@ -483,4 +483,68 @@ ordinary completion facts remain exportable even when narrative evaluation is
 hidden; and one organization's setting never controls another organization's
 export.
 
-> **[SCREENSHOT NEEDED — two personal-export summaries for the same seeded shift report, before and after result visibility is disabled; redact actual evaluation text and show only the included-field difference.]**
+**Not a screenshot — the export has no viewer.** "Download my data" hands the
+browser a JSON file; there is no screen that renders it, so a picture of one
+would only ever show a browser's save-file dialog. What follows is the
+`shift_completion_reports` entry from a real export of the same seeded
+report, called through `GET /users/me/data-export` before and after
+disabling `show_officer_narrative`, `show_performance_rating`,
+`show_areas_of_strength`, `show_areas_for_improvement` and
+`show_skills_observed` in Training settings. Narrative text is redacted;
+every other value is the export's own, including the ordinary completion
+facts the edge cases above say survive the toggle.
+
+Before (organization default — every field visible):
+
+```json
+{
+  "shift_date": "2026-08-23",
+  "hours_on_shift": 12.0,
+  "calls_responded": 2,
+  "call_types": ["EMS", "Automatic Fire Alarm"],
+  "performance_rating": 4,
+  "areas_of_strength": "[redacted]",
+  "areas_for_improvement": "[redacted]",
+  "officer_narrative": "[redacted]",
+  "skills_observed": [
+    {
+      "skill_name": "Pump operations",
+      "demonstrated": true,
+      "score": 4,
+      "notes": "[redacted]"
+    },
+    {
+      "skill_name": "SCBA donning",
+      "demonstrated": true,
+      "score": 5,
+      "notes": "[redacted]"
+    }
+  ],
+  "tasks_performed": [
+    { "task": "Apparatus check", "description": "[redacted]" }
+  ],
+  "review_status": "approved"
+}
+```
+
+After (the five settings above switched off):
+
+```json
+{
+  "shift_date": "2026-08-23",
+  "hours_on_shift": 12.0,
+  "calls_responded": 2,
+  "call_types": ["EMS", "Automatic Fire Alarm"],
+  "tasks_performed": [
+    { "task": "Apparatus check", "description": "[redacted]" }
+  ],
+  "review_status": "approved"
+}
+```
+
+Five keys are gone — `performance_rating`, `areas_of_strength`,
+`areas_for_improvement`, `officer_narrative`, `skills_observed` — not merely
+emptied. Everything else on the record — the date, hours, call count and
+types, tasks performed, and the review status itself — is present in both,
+which is the "ordinary completion facts remain exportable" edge case above
+verified rather than paraphrased.
