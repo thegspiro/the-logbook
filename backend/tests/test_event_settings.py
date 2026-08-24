@@ -168,6 +168,7 @@ class TestEventSettingsDefaults:
             "custom_event_categories",
             "visible_custom_categories",
             "outreach_event_types",
+            "outreach_roles",
             "request_pipeline",
             "defaults",
             "qr_code",

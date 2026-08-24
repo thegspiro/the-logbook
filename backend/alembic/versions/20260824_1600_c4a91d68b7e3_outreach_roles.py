@@ -35,19 +35,39 @@ branch_labels = None
 depends_on = None
 
 
+def _has_table(table: str) -> bool:
+    """Whether the table exists yet.
+
+    Not every table in this schema is created by a migration —
+    ``event_requests`` among them is only ever built by ``create_all`` at
+    startup, and CI runs ``alembic upgrade head`` against an empty database
+    before that ever happens. Reflecting a column on a table that is not there
+    raises ``NoSuchTableError`` and takes the whole upgrade down, so the column
+    steps below skip instead: a table created later by ``create_all`` is built
+    from the models, which already declare these columns.
+    """
+    return table in sa.inspect(op.get_bind()).get_table_names()
+
+
 def _has_column(table: str, column: str) -> bool:
+    if not _has_table(table):
+        return False
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     return column in {c["name"] for c in inspector.get_columns(table)}
 
 
 def upgrade() -> None:
-    if not _has_column("event_requests", "staffing_roles"):
+    if _has_table("event_requests") and not _has_column(
+        "event_requests", "staffing_roles"
+    ):
         op.add_column(
             "event_requests",
             sa.Column("staffing_roles", sa.JSON(), nullable=True),
         )
-    if not _has_column("shift_assignments", "outreach_role"):
+    if _has_table("shift_assignments") and not _has_column(
+        "shift_assignments", "outreach_role"
+    ):
         op.add_column(
             "shift_assignments",
             sa.Column("outreach_role", sa.String(length=100), nullable=True),
