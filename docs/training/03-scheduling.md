@@ -420,12 +420,16 @@ them.
 Member credit is a third thing again, and is never the shift's number restated.
 A member who came on at 0300 was not on the 2200 call.
 
-> **[SCREENSHOT NEEDED — Reports → Call Volume for a count-only department,
->
-> > showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
-> > cards and the footnote beneath them. Caption it alongside the same report for
-> > a detailed-mode department so a reader can see the labels differ and
-> > understand why]**
+![Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each](./images/03-82-call-volume-count-only.png)
+
+![The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone](./images/03-83-call-volume-detailed.png)
+
+_One department, one period, two modes. **52** against **18** — and neither
+number is wrong. The first counts what the trucks did and the second counts
+what happened, which is why the labels change with the mode rather than
+staying put. Read the label before you quote the figure; a grant application
+that says "52 calls" when the department ran 18 incidents is a real problem
+that starts as a screenshot._
 
 ### Read the report label before you quote the number
 

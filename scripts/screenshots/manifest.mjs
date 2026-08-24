@@ -1444,6 +1444,47 @@ export async function openApparatusCrewSeats(page) {
   await page.waitForTimeout(500);
 }
 
+/**
+ * Generate the Call Volume report and frame its summary cards.
+ *
+ * The mode is forced by the caller, not inherited: this report renames all
+ * three stat cards on it (Unit Responses vs Total Calls) and shows the
+ * per-unit footnote only in count-only, so a shot that inherited the mode
+ * would still succeed and write the other half's picture under this half's
+ * name.
+ *
+ * Last 90 Days rather than the default: the department's recorded calls sit in
+ * a three-week band, and a year-to-date window divides them across 236 days
+ * and reports an average of 0.2 per day — arithmetic that is correct and reads
+ * as a broken screen.
+ */
+export function openCallVolumeReport(mode) {
+  return async (page) => {
+    await setCallTracking(mode)(page);
+    await page.goto(`${new URL(page.url()).origin}/reports`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByRole("button", { name: /Last 90 Days/i }).click();
+    await page.waitForTimeout(500);
+    const heading = page
+      .getByText("Incident / Call Volume", { exact: true })
+      .first();
+    await heading.waitFor({ state: "visible", timeout: 20_000 });
+    // The card is the nearest ancestor that owns a button; the grid renders one
+    // Generate Report per report, so scoping to the card is what picks this one.
+    await heading
+      .locator("xpath=ancestor::*[.//button][1]")
+      .getByRole("button", { name: /Generate Report/i })
+      .first()
+      .click({ timeout: 15_000 });
+    const label = mode === "count_only" ? /Unit Responses/ : /Total Calls/;
+    const card = page.getByText(label).first();
+    await card.waitFor({ state: "visible", timeout: 20_000 });
+    await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(500);
+  };
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -11318,6 +11359,28 @@ export const SHOTS = [
       await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(500);
     },
+    fullPage: false,
+  },
+  {
+    // Half of a pair, and the marker asks for the pair explicitly: the labels
+    // are the lesson, and one frame cannot show that they differ.
+    id: "03-82-call-volume-count-only",
+    doc: "03-scheduling.md",
+    line: 423,
+    anchor: "Reports → Call Volume for a count-only department",
+    alt: "Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each",
+    route: "/reports",
+    prepare: openCallVolumeReport("count_only"),
+    fullPage: false,
+  },
+  {
+    id: "03-83-call-volume-detailed",
+    doc: "03-scheduling.md",
+    line: 423,
+    anchor: "__paired-with-03-82__",
+    alt: "The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone",
+    route: "/reports",
+    prepare: openCallVolumeReport("detailed"),
     fullPage: false,
   },
   {

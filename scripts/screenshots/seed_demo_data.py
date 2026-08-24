@@ -2908,6 +2908,84 @@ class Seeder:
                 break
         return created
 
+    #: Runs per shift, cycled across the roster, with the type mix a volunteer
+    #: department actually reports: mostly EMS, a scatter of everything else,
+    #: and quiet tours that ran nothing. Kept deliberately uneven so the Call
+    #: Volume report has a busiest day worth naming rather than a flat line.
+    COUNT_ONLY_RUNS = [
+        {"ems": 2},
+        {"ems": 1, "mva": 1},
+        {},
+        {"ems": 3, "fire": 1},
+        {"ems": 1},
+        {"alarm": 1},
+        {},
+        {"ems": 2, "rescue": 1},
+        {"fire": 1, "mutual_aid": 1},
+        {"ems": 1, "service": 1},
+        {},
+        {"ems": 4, "mva": 1, "hazmat": 1},
+        {"ems": 1},
+        {"alarm": 2},
+    ]
+
+    def seed_count_only_calls(self) -> None:
+        """A department-wide call history for the count-only Call Volume report.
+
+        `OrgCall` rows have no endpoint of their own: they are written by step 2
+        of the close-out wizard, through
+        ``PATCH /scheduling/shifts/{id}/closeout/calls``. So a call history can
+        only be built by recording counts against real shifts, which is also
+        exactly how a count-only department's data comes to exist.
+
+        Without it the report is technically correct and useless: four calls,
+        all on one day, and an average of `0.0` per day across the period —
+        which reads as a broken screen rather than as a quiet department.
+
+        Recording counts does **not** finalize anything. Step 2 saves and the
+        shift stays open, so this neither spends the close-out fixture nor
+        changes any shift's finalized state.
+        """
+        shifts = [
+            s
+            for s in items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+            if pick(s, "id")
+            # The close-out fixture is excluded: 03-76 and 03-77 photograph its
+            # call rows at specific values, and writing others over them would
+            # leave two captions describing numbers no longer on screen.
+            and str(pick(s, "notes") or "").strip() != CLOSEOUT_SHIFT_NOTE
+            and not pick(s, "is_finalized", "isFinalized")
+        ]
+        shifts.sort(key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""))
+        if not shifts:
+            self.blocked.append("count-only calls: no open shifts to record against")
+            return
+
+        recorded = 0
+        for index, shift in enumerate(shifts):
+            types = self.COUNT_ONLY_RUNS[index % len(self.COUNT_ONLY_RUNS)]
+            if not types:
+                continue
+            existing = items(
+                self.api.get(f"/scheduling/shifts/{pick(shift, 'id')}/calls"), "calls"
+            )
+            if existing:
+                continue
+            try:
+                self.api.patch(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/closeout/calls",
+                    {
+                        "reported_call_count": sum(types.values()),
+                        "reported_call_types": types,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"count-only calls: {exc}")
+                return
+            recorded += 1
+        if not recorded:
+            self.blocked.append("count-only calls: every shift already had calls")
+
     def seed_shift_calls(self) -> list[dict]:
         """Runs logged against past shifts.
 
@@ -12912,6 +12990,7 @@ class Seeder:
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
         self.step("shift calls", self.seed_shift_calls)
+        self.step("count-only calls", self.seed_count_only_calls)
         self.step("admin hours entries", self.seed_admin_hours_entries)
         self.step("apparatus crew positions", self.seed_apparatus_crew_positions)
         self.step("scheduling requests", self.seed_scheduling_requests)

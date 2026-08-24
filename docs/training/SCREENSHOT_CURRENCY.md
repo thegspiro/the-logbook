@@ -1,5 +1,50 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (thirteenth) — Call Volume in both modes, and the calls that were not there
+
+`03-82`/`03-83`, opened and checked. **487 of 507 filled.**
+
+**The report was correct and useless.** Count-only Call Volume reads `OrgCall`
+rows, and the only ones in the database came from the close-out wizard fixture:
+four calls, all on one day, an average of `0.0` per day. That reads as a broken
+screen rather than as a quiet department.
+
+**`OrgCall` has no endpoint of its own.** The rows are written by step 2 of the
+close-out wizard, through `PATCH /scheduling/shifts/{id}/closeout/calls` — so a
+call history can only be built by recording counts against real shifts, which is
+also exactly how a count-only department's data comes to exist.
+`seed_count_only_calls` records an uneven run pattern across the roster: mostly
+EMS, a scatter of everything else, and quiet tours that ran nothing, so the
+report has a busiest day worth naming. Recording counts does not finalize
+anything, and the close-out fixture is excluded — `03-76` and `03-77` picture
+its call rows at specific values.
+
+**The pair is the lesson, and the numbers make it.** Same department, same
+period: count-only reports **52 unit responses**, detailed reports **18 total
+calls**. Neither is wrong — one counts what the trucks did, the other what
+happened — and all three stat cards rename themselves with the mode, which is
+what the guide's caution is about.
+
+**`Last 90 Days`, not the default.** The recorded calls sit in a three-week
+band; a year-to-date window spreads 52 of them across 236 days and reports
+`0.2/day`. Arithmetic that is right and reads as broken. Written into the
+helper so the next person does not re-derive it.
+
+**Found in passing:** the department was still on `count_only`, left there by an
+earlier capture run. That is the self-healing rule working as designed rather
+than a fault — every mode-dependent shot sets the mode it needs, because manifest
+order is not a contract.
+
+**Both halves went into `audit_baseline.txt`, and that is now the fourth and
+fifth this session.** The report renders inside a dialog, and a scrim is laid
+out against the initial containing block, so it cannot reach the reserved
+scrollbar gutter — the structural case the baseline documents. Two ordinary
+captures of an ordinary screen, flagged purely for having a scrim. The section
+stands at seven entries and will take every future modal shot on a light page.
+The baseline's own recommendation — retire the subtle tier, which after the
+canvas fix reports a constant rather than a regression — is worth someone
+acting on; still not from here.
+
 ## Corrected 2026-08-24 — the white strip I said could not be photographed
 
 CI's image audit caught what a DOM probe had missed, and the finding retracts a

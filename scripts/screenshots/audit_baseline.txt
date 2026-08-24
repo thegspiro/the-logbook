@@ -101,10 +101,16 @@
 # rather than replacing it. Still not enacted here: retiring a tier changes the
 # check's contract for everyone, and this branch is a screenshot pass.
 #
-# The three below are that class, added 2026-08-24: light pages under a dialog
-# scrim, re-captured after the canvas fix and still flagged, as predicted.
+# The five below are that class, added 2026-08-24: light pages under a dialog
+# scrim, re-captured after the canvas fix and still flagged, as predicted. The
+# last two are the Call Volume pair, which renders inside a report dialog — one
+# ordinary capture of an ordinary screen, landing here purely because it has a
+# scrim. That is the growth this section was warned about: seven entries now,
+# and every future modal shot on a light page joins them.
 05-75-setup-item-prefilled.png
 06-26-room-delete-subrooms.png
 19-05-qr-regenerate-warning.png
 19-07-member-payment-method.png
 19-16-legal-revision-editor.png
+03-82-call-volume-count-only.png
+03-83-call-volume-detailed.png
