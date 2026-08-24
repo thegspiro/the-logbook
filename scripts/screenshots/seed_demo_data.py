@@ -2218,9 +2218,7 @@ class Seeder:
             with_codes[0] if with_codes else None,
         )
         if not room:
-            self.blocked.append(
-                "recruitment event: no location has a display code"
-            )
+            self.blocked.append("recruitment event: no location has a display code")
             return None
 
         # Guest check-in enforces the same window a member's self check-in
@@ -10458,6 +10456,15 @@ class Seeder:
             if not form_id:
                 continue
             detail = self.api.get(f"/forms/{form_id}")
+            # A form wired to another module does not merely record an answer.
+            # The generated outreach form carries an `event_request`
+            # integration, so every submission here opens a request in the
+            # events pipeline -- four of them, on a queue the events step seeds
+            # deliberately with one, through the endpoint a member of the
+            # public actually uses. Nothing in the guides accounts for the
+            # other three.
+            if pick(detail, "integration_type", "integrationType"):
+                continue
             if str(pick(detail, "status") or "").lower() != "published":
                 detail = self.api.post(f"/forms/{form_id}/publish")
             if items(self.api.get(f"/forms/{form_id}/submissions"), "submissions"):

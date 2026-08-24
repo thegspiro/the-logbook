@@ -10004,15 +10004,16 @@ export const SHOTS = [
       // A passing one that is *not* full marks: the failed scorecard is 09-19,
       // and a flat 100% demonstrates nothing about how the percentage is made
       // up — no section differs from another and no step carries a note.
-      (test) => {
-        const score = test.overallScore ?? test.overall_score ?? null;
-        return (
-          test.status === "completed" &&
-          test.result === "pass" &&
-          score !== null &&
-          score < 100
-        );
-      },
+      //
+      // Pinned to the 78% fixture (39 of 50, which `seed_scored_test` fixes and
+      // comments) rather than "any pass under 100". Three seeded results now
+      // satisfy the looser test — one awaiting validation at 80%, and the
+      // deduction fixture at 74% that `19-30` is about — so which one this
+      // opened would otherwise be decided by the order the API listed them in.
+      (test) =>
+        test.status === "completed" &&
+        test.result === "pass" &&
+        (test.overallScore ?? test.overall_score) === 78,
     ),
     // Viewport rather than full page: the scorecard's "Back to Tests" bar is
     // sticky, and a full-page shot paints it across the middle of the sheet,
@@ -10809,10 +10810,15 @@ export const SHOTS = [
       // voided, because a rebuilt fixture leaves its predecessor behind -- a
       // validated result cannot be deleted -- and the withdrawn copy carries
       // the same scores as the live one.
+      // Pinned to the 78% fixture. This shot and 09-24 are a pair -- the same
+      // record under two accounts -- and both matched "any validated pass"
+      // until the deduction fixture gave them a second one to choose from,
+      // with nothing making the two halves agree on which.
       (test) =>
         Boolean(test.validated_at ?? test.validatedAt) &&
         !(test.voided_at ?? test.voidedAt) &&
-        test.result === "pass",
+        test.result === "pass" &&
+        (test.overallScore ?? test.overall_score) === 78,
     ),
     fullPage: true,
   },
@@ -10834,10 +10840,15 @@ export const SHOTS = [
       "/training/skills-testing/tests?limit=200",
       (id) => `/training/skills-testing/print/scorecard?id=${id}`,
       "tests",
+      // Pinned to the 78% fixture. This shot and 09-24 are a pair -- the same
+      // record under two accounts -- and both matched "any validated pass"
+      // until the deduction fixture gave them a second one to choose from,
+      // with nothing making the two halves agree on which.
       (test) =>
         Boolean(test.validated_at ?? test.validatedAt) &&
         !(test.voided_at ?? test.voidedAt) &&
-        test.result === "pass",
+        test.result === "pass" &&
+        (test.overallScore ?? test.overall_score) === 78,
     ),
     fullPage: true,
   },
@@ -11613,8 +11624,7 @@ export const SHOTS = [
     id: "19-30-skill-point-deduction",
     doc: "19-august-2026-release-changes.md",
     line: 295,
-    anchor:
-      "skill result illustrating point deduction without automatic whole",
+    anchor: "skill result illustrating point deduction without automatic whole",
     alt: "A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure",
     route: "/training/skills-testing",
     prepare: openFirstFromApi(
