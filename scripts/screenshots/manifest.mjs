@@ -10783,13 +10783,17 @@ export const SHOTS = [
     // Viewport-sized rather than fullPage, because a stitched full-page capture
     // contains no scrollbar at all.
     //
-    // It still cannot show the gutter, and that is not fixable here: the
-    // headless Chromium the harness drives uses overlay scrollbars, so
-    // `window.innerWidth - documentElement.clientWidth` measures 0 even on a
-    // page forced to 4000px. There is no gutter rendered to photograph. What
-    // this does show is the themed gradient carried to the window edge in dark
-    // mode, which is the change; the strip the release removed cannot be
-    // pictured by this harness, and the guide says so rather than staging it.
+    // This comment used to say the gutter could not be photographed, because
+    // `window.innerWidth - documentElement.clientWidth` measures 0 here. That
+    // was the wrong instrument: the captured PNG carried a 15px pure-white
+    // strip down its right edge against dark content, which audit_images.py
+    // found by comparing edge pixels with the content beside them, and which
+    // the DOM measurement never saw. Read the file, not the geometry.
+    //
+    // The cause was a root element carrying the themed gradient as a background
+    // *image* with no background *colour* (the `background:` shorthand resets
+    // it), so the reserved strip fell back to white. Fixed in styles/index.css;
+    // this shot is the evidence and is re-captured against it.
     id: "19-11-dark-scrollbar-gutter",
     doc: "19-august-2026-release-changes.md",
     line: 222,

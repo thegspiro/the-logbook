@@ -1595,7 +1595,32 @@ html {
      rendered outside AppLayout (public forms, ballots, status pages) composites
      those tokens over the browser's default white, producing a white page with
      light-on-light text in dark mode. */
-  background: linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to));
+  background-image: linear-gradient(
+    to bottom right,
+    var(--bg-gradient-from),
+    var(--bg-gradient-via),
+    var(--bg-gradient-to)
+  );
+  /* The colour matters as much as the gradient, and is a separate longhand on
+     purpose: `background:` shorthand resets background-color to transparent,
+     which is what left this unset.
+
+     `scrollbar-gutter: stable` reserves ~15px at the right edge. That reserved
+     strip is painted from the canvas background *colour* — a background-image
+     on the root does not reach it. With no colour, it fell back to the
+     browser's white, so every dark-mode page carried a bright white 15px strip
+     down its right edge. Moving the canvas from `body` to `html` on 2026-08-15
+     fixed the viewport and not this, because it swapped one image for another.
+
+     Both ends of the gradient are the same colour in every theme (only `via`
+     differs), so `from` is exactly what the page shows at its corners — the
+     gutter now continues the page rather than interrupting it.
+
+     A dimmed modal overlay still cannot reach the gutter: it lives inside
+     `body`, and nothing in the page can paint outside the ICB. That residue is
+     a browser constraint rather than a bug, and is recorded in
+     scripts/screenshots/audit_baseline.txt. */
+  background-color: var(--bg-gradient-from);
   background-attachment: fixed;
   scrollbar-gutter: stable;
 }

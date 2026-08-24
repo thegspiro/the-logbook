@@ -1,5 +1,49 @@
 # Screenshot currency
 
+## Corrected 2026-08-24 — the white strip I said could not be photographed
+
+CI's image audit caught what a DOM probe had missed, and the finding retracts a
+published claim.
+
+**The claim.** `19-11-dark-scrollbar-gutter`'s caption said the scrollbar gutter
+"is not in this picture, and cannot be", because
+`window.innerWidth - documentElement.clientWidth` measured `0`. I recorded that
+as one of the markers describing UI the product does not have.
+
+**It was wrong, and the image itself was the evidence.** Every capture of that
+page carried a **pure-white 15px strip** down its right edge against content at
+luma 54. `audit_images.py` found it by comparing edge pixels with the content
+beside them — the comparison the DOM measurement cannot make. Sampled directly:
+`(93, 33, 37)` at `x = w-16`, `(255, 255, 255)` from `x = w-14` to the edge.
+
+**Root cause, and it is a real product bug, not a capture artifact.** `html`
+carried the themed gradient as a background _image_, and the `background:`
+shorthand resets `background-color` to transparent. The reserved strip is
+painted from the canvas _colour_, which an image does not supply, so it fell
+back to the browser's white — on every dark-mode page, everywhere. The August 15
+canvas move did not fix it; it swapped one image for another. `styles/index.css`
+now sets `background-color: var(--bg-gradient-from)` on the root as well.
+Verified live: the strip goes from `(255,255,255)` to `(15,23,42)`.
+
+Guide 19 was documenting a fix that had not landed for this case. Its note is
+rewritten, marked as a correction, and now says what actually happened.
+
+**The residue that stays.** A dialog's scrim is `position: fixed; inset: 0`,
+laid out against the initial containing block, which excludes that strip — so a
+light page under a dark overlay keeps a light gutter beside a dimmed page.
+Nothing in a page can paint outside its own box. Three modal captures are in
+`audit_baseline.txt` for that reason, with the mechanism written beside them.
+
+**Method note worth keeping.** I measured geometry, concluded "nothing to
+photograph", and published it. The pixels said otherwise the whole time. When a
+claim is about what an image looks like, the check has to be the image — the
+same lesson as "open every PNG with Read", one level lower down.
+
+The baseline's own recommendation — retire the subtle light-page-under-scrim
+tier, since it is now a constant rather than a regression signal — is
+strengthened by this fix but deliberately **not** enacted here: changing a
+shared check's contract from a screenshot branch is not mine to do.
+
 ## Resolved 2026-08-24 (twelfth) — nine markers that were never going to be screenshots
 
 `10-20` captured; eight markers answered in prose. **485 of 507 filled, 15

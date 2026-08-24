@@ -245,7 +245,25 @@ out.
 
 ![A public form in dark mode at full window width, the themed gradient reaching the window edges](./images/19-11-dark-scrollbar-gutter.png)
 
-_The gutter itself is not in this picture, and cannot be._ The headless browser these captures are taken with draws overlay scrollbars, so it reserves no gutter at all — measured at 0px even on a page forced long enough to scroll. What the image shows is the themed gradient reaching the window edges; to see the strip this release removed, open a public page in dark mode in your own browser on a desktop, where the scrollbar takes up width.
+_Corrected 2026-08-24._ An earlier version of this note said the strip could not
+be photographed, on the strength of `window.innerWidth -
+documentElement.clientWidth` measuring `0`. That measurement was the wrong
+instrument, and the picture above proves it: until 2026-08-24 this same capture
+carried a **bright white 15px strip** down its right edge, which an image audit
+found by comparing edge pixels against the content beside them.
+
+The August 15 canvas move did not finish the job. It gave `html` the themed
+gradient as a background _image_, and the `background:` shorthand resets
+`background-color` to transparent — so the reserved strip, which is painted from
+the canvas _colour_, still fell back to the browser's white. `html` now carries
+`background-color` as well, and the strip takes the theme colour; that is what
+you are looking at above.
+
+One residue is not fixable and is not a defect: a dialog's scrim is
+`position: fixed; inset: 0`, laid out against the initial containing block,
+which excludes that strip. So on a **light** page under a dark modal overlay the
+gutter stays light beside the dimmed page. Nothing in a page can paint outside
+its own box.
 
 **Two problems this caused, both already fixed** _(2026-08-16)_. Recorded here
 only so nobody re-reports them from an older build:
