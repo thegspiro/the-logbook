@@ -1,5 +1,48 @@
 # Screenshot currency
 
+## Corrected 2026-08-24 — the early-check-in fix, found twice, and what the second copy was good for
+
+Both sessions independently found the same defect within the same hour: the self
+check-in page gated its button on a window it computed itself, so a Flexible
+event's documented one-hour early-arrival grace had no button to reach it
+through, and the notice the marker asks for could not be photographed. The
+committed fix and capture (`04-49-early-checkin-notice`) are the other
+session's.
+
+**Theirs is the better fix, and specifically here.** I replaced `is_valid` with
+the permissive answer; they added `can_check_in` beside it and left `is_valid`
+meaning what it meant, which is what the "Check-in Not Available" panel prints
+its time range from. They also found the public kiosk endpoint computing the
+permissive value under the strict name and fixed that too — a consumer I had not
+looked at. Overwriting a field two screens read is the kind of thing that passes
+its own test and shows up somewhere else a week later.
+
+**Kept from the duplicate: one test and the prose.** Their two regression tests
+cover the grace and the far-before case; neither covers **Strict**, which is the
+asymmetry a reader is most likely to get wrong — the same twenty minutes that a
+Flexible event admits with a notice is refused outright there. Without it, both
+branches of `_validate_check_in_window` are exercised only in the direction that
+says yes. The guide had the image and a caption; it now says what the notice is
+doing: the time is the organization's timezone rather than the reader's device,
+the check-in succeeded, and the grace is exactly an hour.
+
+**Not kept, and recorded rather than pushed:** returning the notice text in the
+QR payload so the page can say it _beside the button_ instead of only in the
+confirmation afterwards. The other session's fix deliberately discards that
+value, and adding a second surface for the same sentence is a design call for
+the owner, not something to slip into a screenshot pass.
+
+**One trap worth writing down, from the copy that lost.** `dev_env.sh` runs
+uvicorn **without `--reload`**. A backend fix is live in the source and not in
+the process, so a probe keeps reporting the old screen and the fix looks wrong.
+Restart the stack after touching backend code before concluding anything from a
+capture.
+
+**And one that looks like a code failure and is not.** Ten event tests failed on
+`Unknown column 'event_rsvps.early_check_in_minutes'`. `conftest.py`'s
+`create_all(checkfirst=True)` adds missing tables but never missing columns, and
+its docstring names the remedy: drop `intranet_test` and let it rebuild.
+
 ## Captured 2026-08-24 — an early check-in the app could not reach, and a product bug fixed to get there
 
 `04-49`, opened and checked. **1 marker remaining.**

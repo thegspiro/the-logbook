@@ -1607,7 +1607,35 @@ window because an unidentified early entry cannot be corrected reliably.
 
 ![Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start](./images/04-45-checkin-flexible-default.png)
 
+### Arriving before the window opens
+
+Flexible does not mean "any time". It means the window the organizer set, plus
+a **one-hour early-arrival grace** in front of it — the member who turns up half
+an hour before check-in opens gets in, and is told when the official window
+starts:
+
 ![A member checking in about 30 minutes before a Flexible event's official window opens: a success screen with an informational notice naming the localized time the window actually starts](./images/04-49-early-checkin-notice.png)
+
+Three things that notice is doing, in order of how often they are misread:
+
+- **The time is the department's, not the phone's.** `03:27 PM EDT` above is the
+  organization's configured timezone, because what is being quoted back is the
+  organizer's setting. A member travelling with their laptop reads the same
+  sentence as the member standing in the bay.
+- **It is a caution, not a refusal.** The check-in succeeded — the record, the
+  training credit and the attendance row all exist. The notice exists so an
+  early arrival knows the window they were told about has not started yet, and
+  is not left wondering whether the tap counted.
+- **The grace is exactly an hour, and Strict has none.** Earlier than an hour
+  before the window, the page says "Check-in is not available yet" with the same
+  opening time — the same fact reported as a refusal. On a **Strict** event
+  there is no grace at any distance: nothing before the window, by design.
+
+_(Fixed in this release: the check-in page computed its own window instead of
+asking the rule the check-in itself applies, so it hid the button on exactly
+these arrivals. A member inside the grace read "Check-in Not Available" on an
+event the server would have admitted them to, and the notice above could not be
+reached from the page written for it.)_
 
 ## August 19–23, 2026 update — the Recruitment event type
 

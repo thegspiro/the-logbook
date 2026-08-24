@@ -549,6 +549,34 @@ class TestCheckInWindowConsistency:
         assert data["is_valid"] is False
         assert data["can_check_in"] is False
 
+    @pytest.mark.asyncio
+    async def test_qr_data_gives_a_strict_event_no_early_grace(self):
+        """STRICT is a hard gate, and the asymmetry is the point.
+
+        The same twenty minutes that a Flexible event admits with a notice is
+        refused outright here, so `can_check_in` must not simply track "within
+        an hour of the window" -- it has to read the window type. Without this
+        the two branches of `_validate_check_in_window` are covered only in the
+        direction that says yes.
+        """
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        event = _make_event(
+            org_id=org_id,
+            start_datetime=now + timedelta(minutes=20),
+            end_datetime=now + timedelta(hours=3),
+            check_in_window_type="strict",
+        )
+        org = _make_org(org_id=org_id)
+
+        service = _make_service(_mock_db_returning(event, org))
+        data, error = await service.get_qr_check_in_data(event.id, org_id)
+
+        assert error is None
+        assert data is not None
+        assert data["is_valid"] is False
+        assert data["can_check_in"] is False
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
