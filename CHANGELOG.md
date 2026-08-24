@@ -349,16 +349,18 @@ tables now carry a note in `printer_status.py` naming where they came from.
 - **A 24-hour shift disappeared from the station at midnight.** A shift is
   filed under the date it _started_, and the station asked only for the
   operator's current local date — so the crew actually on duty vanished from
-  the selector at the turn of the day. It now queries yesterday as well, and
-  drops a yesterday-dated shift that has already ended.
+  the selector at the turn of the day. It now queries yesterday as well.
 - **A finished event could still be armed against.** The event window filtered
   on start time alone, so a drill that ended hours ago stayed in the list — and
   because the list is ordered by start time it could be the _default_, leaving
   an operator armed against an event whose check-in window had shut, with every
-  tap refused. Now bounded by `end_after` as well, set behind the present
-  moment: a `window` event's check-in outlives its scheduled end by
+  tap refused. The list is now cut at each event's `check_in_closes_at`, which
+  the events endpoint already reports — the same boundary the check-in call
+  itself enforces, rather than an approximation of it. Filtering on the
+  scheduled `end_datetime` would hide events whose late-arrival period is still
+  running: a `window` event's check-in outlives its end by
   `check_in_minutes_after`, and a flexible or strict one runs to its
-  `actual_end_time`, none of which reach the client.
+  `actual_end_time`.
 - **A card in a terminal state could be laundered back to active.** The first
   guard rejected only `lost → active`, so two requests — `lost → suspended`,
   then `suspended → active` — restored exactly the credential somebody else may
@@ -368,11 +370,15 @@ tables now carry a note in `printer_status.py` naming where they came from.
   a shift the moment its scheduled end passed was wrong in both directions:
   `member_check_out` has no window at all — it accepts a checkout until an
   officer finalizes — so the filter cut the station off at exactly the moment
-  a crew goes off duty. Shifts now stay offered through a checkout grace.
+  a crew goes off duty. An unfinalized shift now stays offered with no
+  clock-based cutoff beside it, because that is the server's actual rule.
 - **A busy previous day could hide today's shifts entirely.** The widened
   two-day query kept the endpoint's default page size of 100 while it orders by
   `shift_date` ascending, so an organization with a full day of records behind
-  it would receive only those.
+  it would receive only those. Raising the page size only moves that threshold,
+  so the station now makes one request per day and each gets its own page. The
+  event query, ordered by start time with the same default, asks for the
+  endpoint's maximum.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
