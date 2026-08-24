@@ -1,5 +1,61 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (third) — separation of duties, a paged tab, and the race that hid it
+
+`03-78`/`03-79` with their guide-19 twins `19-12`/`19-13`, opened and checked.
+**465 of 506 filled.** Merged `origin/main` (41 commits) first; clean.
+
+**The blocked self-review needed the administrator to be the requester.** The
+rule is about people, not permissions — the chief holds `scheduling.manage` and
+still cannot review their own swap — so the capture can only be made from the
+requesting account. The seeder now raises one swap in the administrator's name
+beside the demo member's, and `reviewOwnSwapBlocked` presses Approve on it and
+waits for the server's refusal. Nothing is mutated: the service rejects before
+it touches the request, so the swap is still pending afterwards and the shot
+needs no `mutatesSeedData` flag. What the two rows actually differ by is worth
+noting, because the marker guessed wrong: both keep Approve and Deny; the
+administrator's own row carries an **extra cancel control** the member's does
+not.
+
+**Two markers asked for a control the product does not have.** Both wanted
+"pagination controls ... at least 60 requests ... rather than a disabled stub".
+There is no numbered pagination and no stub: `REQUESTS_PAGE_SIZE` is **20**, and
+the tab renders a single **Load more time-off requests** button that is absent
+rather than greyed out once everything is loaded. Both guides now say that.
+
+**The harder half of that marker is invisible in the product.** The tab opens
+filtered to **Pending**, and a department's history is resolved by definition —
+so with the default filter a database holding twenty-seven time-off requests
+shows _one row and no control at all_, while the count beside the view's name
+reads 27. That is a real trap for a reader, not a seeding problem, and it is
+now written into both guides above the image.
+
+**Chasing that turned up a live stale-response race.** Switching to the Time
+Off view and widening the filter in quick succession left the list showing the
+_Pending_ results under an _All Statuses_ selector — the twenty rows arrived,
+then the slower superseded fetch overwrote them with one. Two overlapping
+fetches, no sequence guard; whichever resolved last won. Fixed the same way
+`StoreOrdersTab` was: every fetch takes a ticket and only the newest may write
+(`loadData` and `loadMore` share the counter, so an appended page cannot clobber
+a reload either). `RequestsTab.test.tsx` resolves the two out of order and fails
+without the guard.
+
+Worth recording as method: the first probe of this capture looked like a
+seeding failure — twenty-seven rows in the database, one on screen. It was two
+separate causes stacked, a default filter and a race, and only the _timings_ in
+the probe output separated them.
+
+**Seeding notes.** `_seed_time_off_history` raises 26 requests across the ten
+summer weeks behind the roster and resolves each as the administrator. Two
+constraints are load-bearing and are commented in the seeder: approving
+time-off **cancels any shift assignment inside its range**, so the history has
+to sit behind the earliest seeded shift or it would silently unseat members
+from shifts other guides photograph (verified: 125 assignments, none cancelled);
+and the demo member is excluded, because several shots picture her notification
+inbox in a known state. The dates were moved from 2025 to summer 2026 on a
+second pass — the card prints "Jul 5 - Jul 8" with no year, so a 2025 range
+reads as _next_ July.
+
 ## Captured 2026-08-24 (later) — the room picker, an overdue loan, and a history tab that leaked its own column names
 
 `06-27` and `05-82`, opened and checked. **461 of 505 filled.**

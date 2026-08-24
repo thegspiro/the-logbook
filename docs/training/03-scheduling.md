@@ -2774,26 +2774,28 @@ override this — a permission grant is not a second person.
 A blocked attempt changes nothing: the request stays pending for somebody else
 to action.
 
-> **[SCREENSHOT NEEDED — Scheduling → Requests viewed by the member who raised
->
-> > the top request, showing the rejection message "Requesters cannot review
-> > their own swap requests". Seed one request raised by the capturing account
-> > and one raised by another member so the available actions differ visibly
-> > between the two rows.]**
+![The Requests tab refusing the administrator's press of Approve on the swap they raised themselves; their own row carries an extra cancel control the member's row below it does not](./images/03-78-swap-review-blocked.png)
 
 **Plan the second approver.** If exactly one person in your department holds
 `scheduling.manage` and that person also requests swaps, nobody can approve
 their requests. Grant a second person before a Saturday morning discovers it.
 
 **The Requests tab is paged.** Long histories no longer load in one request.
+The tab shows twenty rows and puts a **Load more swap requests** (or **Load
+more time-off requests**) button under them; there are no numbered pages, and
+the button is absent — not greyed out — when there is nothing further to fetch.
+
+**You will not see the history until you widen the filter.** The tab opens on
+**Pending**, and a department's back catalogue is by definition already
+approved or denied. Set the status filter to **All Statuses** before judging
+how much history you have; the count beside each view's name is the full total,
+not the number on screen.
+
 If you have a script or integration reading swap or time-off requests from the
 API, the response shape changed — it is now an object with an `items` list
 rather than a plain list.
 
-> **[SCREENSHOT NEEDED — Scheduling → Requests with the pagination control
->
-> > populated. Seed more than one page of requests (at least 60) so the control
-> > is genuinely active rather than a disabled stub.]**
+![The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row](./images/03-79-requests-load-more.png)
 
 ## August 19–23, 2026 update — equipment checks survive a dead spot
 

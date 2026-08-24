@@ -1144,6 +1144,52 @@ export async function openOverdueItem(page) {
   });
 }
 
+/**
+ * Press Approve on the swap the capturing account raised itself, and wait for
+ * the server's refusal.
+ *
+ * The row is found by the heading the page gives your own request rather than
+ * by position: the list sorts pending first and then newest, so which of the
+ * two pending swaps sits on top depends on the order the seeder created them.
+ *
+ * Nothing is mutated — that is the point of the shot. The request is refused
+ * before the service touches it, so the swap is still pending afterwards and
+ * this needs no `mutatesSeedData` flag.
+ */
+export async function reviewOwnSwapBlocked(page) {
+  const own = page
+    .locator(".card")
+    .filter({ hasText: /Your swap request/ })
+    .first();
+  await own.waitFor({ state: "visible", timeout: 20_000 });
+  await own.getByRole("button", { name: /approve swap/i }).click();
+  await page
+    .getByText(/Requesters cannot review their own swap requests/i)
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Widen the Requests tab to its full time-off history and scroll to the
+ * control that fetches the next page.
+ *
+ * The status filter opens on Pending, and a history long enough to page
+ * through is by definition resolved — so with the default filter the tab shows
+ * a single row and no control at all.
+ */
+export async function openRequestsHistoryPage(page) {
+  await page.getByRole("tab", { name: /Time Off/i }).click();
+  await page
+    .getByLabel(/Filter requests by status/i)
+    .selectOption("", { timeout: 20_000 });
+  const more = page.getByRole("button", {
+    name: /Load more time-off requests/i,
+  });
+  await more.waitFor({ state: "visible", timeout: 20_000 });
+  await more.scrollIntoViewIfNeeded({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -10609,6 +10655,57 @@ export const SHOTS = [
     route: "/inventory/items",
     prepare: openOverdueItem,
     fullPage: true,
+  },
+  {
+    // Separation of duties is about people, not permissions: the chief holds
+    // `scheduling.manage` and still cannot review the swap they raised. Shot as
+    // the administrator for exactly that reason -- the refusal only exists for
+    // the requester, so a capture under any other account shows the control
+    // working and teaches the opposite of the caption. The seeder puts one
+    // swap in the administrator's name beside the demo member's, which is what
+    // makes the two rows differ on screen.
+    id: "03-78-swap-review-blocked",
+    doc: "03-scheduling.md",
+    line: 2777,
+    anchor: "Scheduling → Requests viewed by the member who raised",
+    alt: "The Requests tab refusing the administrator's press of Approve on the swap they raised themselves; their own row carries an extra cancel control the member's row below it does not",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: reviewOwnSwapBlocked,
+  },
+  {
+    // The tab opens filtered to Pending, and a department's long history is by
+    // definition resolved -- so the control the marker asks for is invisible
+    // until the filter is widened. That is the shot: All Statuses, the
+    // twenty-row first page, and the fetch-the-next-page control under it.
+    id: "03-79-requests-load-more",
+    doc: "03-scheduling.md",
+    line: 2793,
+    anchor: "Scheduling → Requests with the pagination control",
+    alt: "The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: openRequestsHistoryPage,
+  },
+  {
+    id: "19-12-swap-review-blocked",
+    doc: "19-august-2026-release-changes.md",
+    line: 625,
+    anchor: "the Requests tab under an account that raised one of",
+    alt: "The release's separation-of-duties rule in force: Approve refused on the administrator's own swap request, with another member's row still reviewable",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: reviewOwnSwapBlocked,
+  },
+  {
+    id: "19-13-requests-load-more",
+    doc: "19-august-2026-release-changes.md",
+    line: 654,
+    anchor: "Scheduling → Requests with pagination controls",
+    alt: "The paged Requests tab: twenty time-off rows and the control that fetches the next page",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: openRequestsHistoryPage,
   },
   {
     id: "03-43-time-off-request-form",

@@ -5563,8 +5563,6 @@ class Seeder:
             self.api.get("/scheduling/swap-requests"), "requests", "swap_requests"
         )
         time_off = items(self.api.get("/scheduling/time-off"), "requests", "time_off")
-        if swaps and time_off:
-            return
         member = Api(self.base_url)
         member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
         if not swaps:
@@ -5648,6 +5646,199 @@ class Seeder:
                 self.blocked.append(
                     "scheduling requests: no near-term seat for the demo member"
                 )
+
+        self._seed_own_swap_request()
+        self._seed_time_off_history()
+
+    def _seed_own_swap_request(self) -> None:
+        """A pending swap raised by the administrator itself.
+
+        Separation of duties is a rule about people, not permissions: the
+        requester cannot review their own swap even holding
+        ``scheduling.manage``. Photographing that refusal needs the capturing
+        account to be the requester, so the Requests tab has to hold one row
+        the administrator raised alongside one somebody else raised — the two
+        rows then differ visibly (the administrator's own carries the cancel
+        control instead of a reviewable state) and pressing Approve on it
+        returns the server's refusal.
+        """
+        me = self.api.get("/auth/me") or {}
+        admin_id = str(pick(me, "id") or pick(me.get("user") or {}, "id") or "")
+        mine = [
+            r
+            for r in items(
+                self.api.get("/scheduling/swap-requests?limit=100"),
+                "requests",
+                "swap_requests",
+            )
+            if str(pick(r, "requesting_user_id", "requestingUserId") or "") == admin_id
+        ]
+        if mine:
+            return
+        upcoming = sorted(
+            (
+                s
+                for s in items(self.api.get("/scheduling/my-shifts?limit=50"), "shifts")
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") > str(TODAY)
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+        )
+        if not upcoming:
+            self.blocked.append(
+                "scheduling requests: administrator has no upcoming shift to offer"
+            )
+            return
+        self.api.post(
+            "/scheduling/swap-requests",
+            {
+                "offering_shift_id": pick(upcoming[-1], "id"),
+                "reason": (
+                    "Chiefs' association meeting runs long that night — "
+                    "looking for cover on the back half."
+                ),
+            },
+        )
+
+    #: Time-off history is dated before this, and every seeded shift falls on
+    #: or after it. Approving time-off cancels any shift assignment inside its
+    #: range, so a history that overlapped the roster would silently unseat
+    #: members from shifts other guides photograph. Keeping the history behind
+    #: the roster is what makes approvals safe to seed at all.
+    TIME_OFF_HISTORY_END = TODAY - timedelta(days=14)
+
+    #: Twenty is the Requests tab's page size (``REQUESTS_PAGE_SIZE`` in
+    #: ``RequestsTab.tsx``). The Load more control renders only while fewer
+    #: rows are loaded than the reported total, so a history shorter than this
+    #: leaves nothing to photograph.
+    TIME_OFF_HISTORY_MIN = 26
+
+    TIME_OFF_HISTORY = [
+        ("Two days for my brother's wedding out of state.", "approved", ""),
+        (
+            "Annual family holiday — booked before the rotation went out.",
+            "approved",
+            "",
+        ),
+        (
+            "Elective surgery with a short recovery; cleared to return after.",
+            "approved",
+            "Get the return-to-duty note to the training office.",
+        ),
+        (
+            "Deer season opener with my father, same week every year.",
+            "denied",
+            "Three others already off that week — coverage would drop below "
+            "minimum staffing.",
+        ),
+        ("Moving house, need the truck and a day either side.", "approved", ""),
+        (
+            "College graduation for my daughter.",
+            "approved",
+            "Enjoy it — congratulations to her.",
+        ),
+        (
+            "Cruise with my wife for our anniversary.",
+            "approved",
+            "",
+        ),
+        (
+            "Long weekend for a wedding I am standing up in.",
+            "denied",
+            "Holiday weekend and we are already one short. Resubmit if "
+            "somebody picks up the Saturday.",
+        ),
+        ("Jury duty summons — county court, unknown length.", "approved", ""),
+        (
+            "Father-in-law's funeral, travelling to Ohio.",
+            "approved",
+            "Take whatever else you need.",
+        ),
+        ("Kids' school break, taking them camping.", "approved", ""),
+        (
+            "Fishing trip that has been on the calendar since January.",
+            "denied",
+            "Same week as the county-wide drill. Any other week is fine.",
+        ),
+        ("Certification course at the state academy.", "approved", ""),
+    ]
+
+    def _seed_time_off_history(self) -> None:
+        """A year of resolved time-off requests behind the two pending ones.
+
+        The Requests tab pages at twenty rows, and the control that fetches the
+        next page appears only when there is one — so the guide's pagination
+        marker cannot be filled from a department with two requests in it. A
+        real department accumulates this history in months; the demo database
+        was simply new.
+
+        Requests are dated behind the roster (see ``TIME_OFF_HISTORY_END``) and
+        raised by members other than the demo member, whose notification inbox
+        several shots photograph in a known state.
+        """
+        existing = self.api.get("/scheduling/time-off?limit=100") or {}
+        if int(pick(existing, "total") or 0) >= self.TIME_OFF_HISTORY_MIN:
+            return
+        members = [
+            m
+            for m in items(self.api.get("/users?limit=200"), "users")
+            if pick(m, "username")
+            not in (
+                DEMO_ADMIN_USERNAME,
+                DEMO_MEMBER_USERNAME,
+                TWO_FACTOR_USERNAME,
+            )
+            and pick(m, "id")
+        ]
+        if not members:
+            self.blocked.append("time-off history: no members to raise requests")
+            return
+        start = self.TIME_OFF_HISTORY_END
+        raised = 0
+        for index in range(self.TIME_OFF_HISTORY_MIN):
+            reason, verdict, note = self.TIME_OFF_HISTORY[
+                index % len(self.TIME_OFF_HISTORY)
+            ]
+            member = members[index % len(members)]
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), str(pick(member, "username"))
+            )
+            # Ten summer weeks, which is both when leave requests actually
+            # pile up and recent enough that the card's year-less "Jun 14 -
+            # Jun 16" reads as this year rather than next.
+            first = start - timedelta(days=3 * index + 3)
+            last = first + timedelta(days=index % 4)
+            try:
+                created = session.post(
+                    "/scheduling/time-off",
+                    {
+                        "start_date": str(first),
+                        "end_date": str(last),
+                        "reason": reason,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"time-off history: create refused ({exc})")
+                return
+            request_id = pick(created or {}, "id")
+            if not request_id:
+                continue
+            raised += 1
+            try:
+                self.api.post(
+                    f"/scheduling/time-off/{request_id}/review",
+                    {
+                        "status": verdict,
+                        **({"reviewer_notes": note} if note else {}),
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"time-off history: review refused ({exc})")
+                return
+        if raised < self.TIME_OFF_HISTORY_MIN:
+            self.blocked.append(
+                f"time-off history: {raised} of {self.TIME_OFF_HISTORY_MIN} raised"
+            )
 
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.

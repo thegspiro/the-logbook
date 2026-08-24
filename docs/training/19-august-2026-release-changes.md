@@ -622,12 +622,7 @@ small combination department the officer asking for Saturday off is very often
 the only person who can approve it. That is precisely the situation the rule
 exists for — a permission grant is not a second person.
 
-> **[SCREENSHOT NEEDED — the Requests tab under an account that raised one of
->
-> > the listed requests, showing the rejection message "Requesters cannot review
-> > their own swap requests". Seed at least one request raised by the
-> > screenshotting account and one raised by somebody else, so the difference in
-> > available actions is visible side by side.]**
+![The release's separation-of-duties rule in force: Approve refused on the administrator's own swap request, with another member's row still reviewable](./images/19-12-swap-review-blocked.png)
 
 ### Edge cases
 
@@ -642,19 +637,21 @@ exists for — a permission grant is not a second person.
 
 ## Scheduling: the Requests tab is now paged
 
-Long swap and time-off histories no longer load in one go. If your department
-tracks a season's worth of requests, expect pagination controls where there
-was previously one long list.
+Long swap and time-off histories no longer load in one go. The tab now renders
+twenty rows at a time with a **Load more** button beneath them — not numbered
+pages — and the button simply is not there once everything is loaded.
+
+One thing to know before you go looking for it: the tab opens filtered to
+**Pending**, and a season's worth of history is resolved by definition. Set the
+status filter to **All Statuses** first, or the list will look like it holds
+three requests when the count beside the view's name says twenty-seven.
 
 **If you have a script or integration reading swap or time-off requests from
 the API, it needs updating** — the response is now an object with an `items`
 list rather than a plain list. See the
 [API Reference](../../wiki/API-Reference.md).
 
-> **[SCREENSHOT NEEDED — Scheduling → Requests with pagination controls
->
-> > visible at the bottom. Seed more requests than one page holds (at least 60)
-> > so the control is genuinely populated rather than a disabled stub.]**
+![The paged Requests tab: twenty time-off rows and the control that fetches the next page](./images/19-13-requests-load-more.png)
 
 ## Equipment checks: safe to finish in a dead spot
 
