@@ -333,7 +333,16 @@ class EventService:
         if not candidates:
             return []
 
-        user = await self.db.get(User, str(user_id))
+        # Org-scoped even though user_id is the caller's own id, so the rule
+        # holds by inspection rather than by tracing where the id came from
+        # (pitfall #14a).
+        user_result = await self.db.execute(
+            select(User).where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
+        )
+        user = user_result.scalar_one_or_none()
         if user is None:
             return []
 

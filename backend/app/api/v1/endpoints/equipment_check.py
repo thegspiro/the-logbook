@@ -1857,6 +1857,7 @@ async def swap_item_lot(
             replaced_deployed_lot_id=data.replaced_deployed_lot_id,
             disposition=data.disposition.value if data.disposition else None,
             allow_first_link=can_link_catalog,
+            enforce_submitter_limits=not can_link_catalog,
         )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=safe_error_detail(e))

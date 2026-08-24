@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -324,6 +325,10 @@ class TrainingRecord(Base):
     scheduled_date = Column(Date)
     completion_date = Column(Date)
     expiration_date = Column(Date)
+    # Time of day the training ran. Nullable: rows predating self-report's
+    # start-time field, and every record entered from a roster rather than a
+    # clock, genuinely do not have one.
+    start_time = Column(Time)
 
     # Hours and Credits
     hours_completed = Column(Float, nullable=False)
@@ -2378,6 +2383,10 @@ class TrainingSubmission(Base):
 
     # Dates and Hours
     completion_date = Column(Date, nullable=False)
+    # The member reports a start time and a length; hours are derived from the
+    # pair. Keeping the start means the officer sees when the class ran, and
+    # an edit does not have to invent one.
+    start_time = Column(Time)
     hours_completed = Column(Float, nullable=False)
     credit_hours = Column(Float)
 

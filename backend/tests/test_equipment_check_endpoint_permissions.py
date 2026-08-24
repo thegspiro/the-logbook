@@ -11,6 +11,7 @@ from app.api.dependencies import get_current_user
 from app.api.v1.endpoints.equipment_check import router
 from app.core.database import get_db
 from app.schemas.equipment_check import (
+    LotSwapRequest,
     ShiftEquipmentCheckCreate,
     StandaloneEquipmentCheckCreate,
 )
@@ -96,6 +97,44 @@ def _permission_dependency(path: str, method: str):
                 if getattr(dependency.call, "required_permissions", None) is not None
             )
     pytest.fail(f"Permission dependency not found for {method} {path}")
+
+
+def _route_endpoint(path: str, method: str):
+    for route in router.routes:
+        if route.path == path and method in route.methods:
+            return route.endpoint
+    pytest.fail(f"Route not found for {method} {path}")
+
+
+@pytest.mark.parametrize(
+    ("permissions", "limited"),
+    [
+        (("equipment_check.submit",), True),
+        (("equipment_check.manage",), False),
+        (("inventory.manage",), False),
+    ],
+)
+async def test_swap_applies_operational_limits_only_to_submitters(permissions, limited):
+    endpoint = _route_endpoint("/items/{template_item_id}/swap", "POST")
+    result = {
+        "template_item_id": "item-1",
+        "remaining_quantity": 3,
+        "lots_aboard": [],
+    }
+
+    with patch(
+        "app.services.equipment_check_service.EquipmentCheckService.swap_item_lot",
+        new_callable=AsyncMock,
+        return_value=result,
+    ) as swap:
+        await endpoint(
+            template_item_id="item-1",
+            data=LotSwapRequest(inventory_lot_id="lot-1"),
+            db=AsyncMock(),
+            current_user=_user_with(*permissions),
+        )
+
+    assert swap.await_args.kwargs["enforce_submitter_limits"] is limited
 
 
 @pytest.mark.parametrize(

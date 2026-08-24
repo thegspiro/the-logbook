@@ -123,7 +123,9 @@ async def get_asset_widgets(
     today = date.today()
     widgets: list[AssetWidget] = []
 
-    if user_has_permission(current_user, "inventory.view"):
+    if user_has_permission(current_user, "inventory.manage") or user_has_permission(
+        current_user, "settings.manage"
+    ):
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
         low_stock = await inventory.get_low_stock_items(org_id)

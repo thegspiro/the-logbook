@@ -7,6 +7,204 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Submit External Training: the certificate travels with the submission (2026-08-23)
+
+**Fixed**
+
+- **The confirmation screen never appeared in a running app.** The refresh
+  after a save went through the page's loading branch, which unmounted the
+  form — and the receipt lives in the form's state. In a test the mocks resolve
+  in the same tick, so the spinner never rendered, the form never unmounted,
+  and the assertion passed against a feature that could not work. Refreshes
+  after a save are silent now, and the regression test drives one that is still
+  in flight.
+- **A certificate could not reach an auto-approved submission.** Such a
+  submission is frozen the moment it exists — the attachment endpoint refuses
+  it, and its training record has already been copied from it — so the upload
+  that followed always failed. `POST /training/submissions/with-attachment`
+  takes the payload and the file together, attaching the evidence inside the
+  same transaction that routes the submission. The three-step client dance
+  (create draft, upload, hand over) is gone.
+- Row actions in Recent Submissions were 28px on a phone, under the project's
+  44px floor; the row now stacks so a course name is not ellipsed to make room
+  for them.
+
+**Added**
+
+- **The reported start time is stored.** `training_submissions.start_time` and
+  `training_records.start_time` (migration `a71c9d4e5b62`, both nullable, no
+  backfill). Editing a submission restored 09:00 because the API kept only a
+  date and a number of hours; an officer reviewing four hours could not tell a
+  morning class from an evening one.
+- **"Does not expire" beside the expiry date.** Whether an expiry is required
+  follows the certification rather than a blanket rule, so a department can ask
+  for the date and still accept a credential that never expires.
+- `attachments` in the officer's self-report settings editor — the submit form
+  already honoured it, but only an API call could change it.
+- A Playwright spec for the member's path: hours derived from a stepper, the
+  certificate travelling with the create, a draft that round-trips on one row,
+  a returned submission opening on the officer's note, and the phone action bar
+  clearing the bottom navigation.
+
+**Changed**
+
+- The screen's presentational pieces (`DurationStepper`, `AttachmentField`,
+  `SubmissionReceipt`, `RevisionNotice`, `Checklist`, the card and label shell)
+  now live in `components/training/submit/`.
+- `docs/KNOWN_LIMITATIONS.md` records where attachment files live, why the
+  submission delete may unlink them, and what is still open: no retention
+  policy and no malware scanning.
+
+### The Department Store errored for admins and was invisible to everyone else (2026-08-24)
+
+**Fixed**
+
+- **The store admin console returned a 500 on load**, for any department that
+  had an order window open. The dashboard renders the open window through the
+  full window payload, which reads its offerings, but `get_open_windows` was
+  the one window query that did not eager-load them — `list_windows` and
+  `get_window` both do. Under async SQLAlchemy that lazy load raises
+  `MissingGreenlet`, so the page failed on its own landing request. A
+  department hit it the moment it opened its first window and never saw the
+  page work again.
+- **The Department Store could not be enabled during setup, so members never
+  saw it.** The wizard's module step renders the frontend registry, and the
+  registry had no storefront entry. Setup therefore saved the store as
+  disabled — alongside the marker that tells the backend the choice was
+  deliberate — and it stayed hidden from every member's navigation until
+  somebody found Settings → Modules. Departments already installed keep that
+  stored `false`: **turn the store on at Settings → Modules → Department
+  Store** to make it appear.
+- **A module with no configuration step could not be enabled at all.** The
+  wizard set a module's status only on its way to a config route, so a card
+  without one fell through every branch: no status, no confirmation, nothing.
+  The button looked like it worked and did not. That was the Department Store,
+  and it is still why Medical Supplies could not be switched on during setup.
+- **The position editor silently revoked the quartermaster's store access.**
+  Saving positions rebuilds each one from two checkboxes per module, and the
+  quartermaster, apparatus officer and facilities manager are seeded with
+  `storefront.manage` but were presented with Manage unticked. The first save
+  took the store console away from the person who runs the store.
+- **Members could reach the checkout and get a 403.** `storefront.order` is a
+  separate permission from `storefront.view`, and the two checkboxes cannot
+  express it, so a position built in the editor could browse the catalogue with
+  no way to place an order. View now grants ordering alongside it — all
+  fourteen seeded positions holding one hold the other.
+
+**Added**
+
+- **A route can now be gated on its organization's module flag**, via
+  `requiredModule` on `ProtectedRoute`. Module flags used to hide navigation
+  and nothing else, so a bookmark or a typed URL still opened the page — which
+  is how a store came to be configured that no member could see. Applied to the
+  three store routes for now. It is a usability gate, not an access control:
+  the API is not module-aware, and the permission checks still do the real
+  gating.
+- The refusal names the module and, for anyone who can fix it, links straight
+  to Settings → Modules rather than reporting a permission problem it is not.
+  It waits for the module lookup instead of rendering optimistically, and falls
+  through to the page if that lookup fails — a flaky request must not lock a
+  department out of a module it has switched on.
+- The Logistics Admin hub's Department Store card is gated on the module and
+  `storefront.manage`, the way every other navigation surface already was. It
+  was the one unguarded door into the console.
+- **Contract tests against this whole class of drift.** Every module setting
+  must now be placed deliberately as core, offered during setup, or
+  Settings-only, with the registry and the Settings screen asserted to agree —
+  a module can no longer ship with a toggle and no way to reach it. A second
+  test asserts no position seeded with a manage grant is shown Manage unticked,
+  since an unticked box is read as an intentional revocation.
+- The setup wizard's module cards name their module on every button. Eight
+  buttons shared six accessible names, so a screen reader heard a page of
+  identical "Enable" controls.
+
+**Notes**
+
+- Turning the module off now makes `/store/admin` and `/store/orders`
+  unreachable, so an administrator cannot wind down a live store and members
+  cannot see orders they have already paid for. Recoverable from the link on
+  the refusal screen, but worth knowing before switching it off mid-window.
+
+### A contract-test server that will not boot now says so (2026-08-24)
+
+**Fixed**
+
+- **`collected 0 items` was all CI reported when the contract suite could not
+  start.** Every generated test in `test_api_contract.py` is defined inside
+  `if SCHEMA_AVAILABLE`, so a server that fails to come up leaves the module
+  with no tests at all — not even skipped ones. pytest exits 5 and the job
+  goes red with nothing else in the log, while `SKIP_REASON`, which names the
+  actual cause, was computed and then discarded. A `skipif` on the class read
+  as though it handled the case; it could not, because there were no tests for
+  it to skip. One test now always exists to carry the reason, and it **fails**
+  rather than skips once `RUN_API_CONTRACT_TESTS=1` has asked for the suite —
+  skipping would let "the application does not start" pass for green.
+- **A dead server thread reported no cause.** uvicorn raises inside the
+  thread, where the exception was lost, so the only symptom was a thread that
+  was no longer alive. The exception is now recorded and named in the failure,
+  which is what separates a runner hiccup from the app genuinely failing to
+  start.
+
+### The events list now shows what it wants from you (2026-08-24)
+
+**Added**
+
+- **A "Needs You" band above `/events`**, holding only events with an
+  outstanding action — check-in open now, mandatory with no RSVP, mandatory and
+  ended with no check-in recorded — each beside the single control that clears
+  it. Capped at five rows, and rendered not at all when there is nothing to do.
+- **Event cards ranked by state.** A coloured left accent and a status strip
+  naming what the event wants; routine events get neither, which is what makes
+  the urgent ones findable. The card gained a footer carrying RSVP / Check In /
+  add-to-calendar, so the common actions no longer need the detail page.
+- **`GET /events/missed-mandatory`** and new `EventListItem` fields
+  (`rsvp_deadline`, `max_attendees`, the derived check-in window,
+  `user_attended`, `credited_hours`, `hour_category_label`) — the list response
+  could not previously support any of the above.
+
+**Fixed**
+
+- **Members are no longer told they missed drills they could not have
+  attended.** A mandatory-and-no-check-in query also catches events held before
+  the member was hired, events during an approved leave of absence, and events
+  mandatory only for a membership type they do not hold. None can be cleared by
+  responding, which is what the band promises. All three are excluded
+  server-side so a client cannot skip the check. This is the first code to read
+  `mandatory_membership_types`, which had been stored and projected and never
+  consulted.
+- **Credited hours are stated as a ceiling, not a fact.** The figure is the
+  event's scheduled length under the org's hour mappings; what reaches a
+  member's record is their attended time, settled at check-out. The row now
+  reads "Credits up to 2.0 drill hours".
+
+### Printer status flags checked against the published command tables (2026-08-24)
+
+**Fixed**
+
+- **"Paper feed stopped" was the wrong name for a real ESC/POS bit.** Bit 5 of
+  `DLE EOT 2` is _printing stops due to paper end_ — the same condition the
+  paper-roll query reports, not a feed jam — so the status panel sent someone
+  looking for a jam that was not there. It now reads "Out of paper", and the
+  two queries' overlapping findings are deduplicated so one empty roll is one
+  fault rather than two.
+- **A cutter jam arrived as "Printer reports an error".** `DLE EOT 2` carries a
+  single undifferentiated error bit and the cause lives in `DLE EOT 3`, which
+  was not being asked, so the most common receipt-printer fault after paper
+  reached the watch desk as text nobody could act on. The query is now sent and
+  its three flags — autocutter, unrecoverable, automatically recoverable — are
+  named. The generic bit only speaks when nothing else identified the cause,
+  which also fixes a printer that was out of paper _and_ jammed dropping the
+  jam.
+- **A Zebra printer whose roll was nearly out said nothing.** `~HQES` warning
+  bit 8 is the paper-near-end sensor and was not decoded. Reported as "Labels
+  nearly out" — a warning, not an error, because the printer will finish the
+  label in front of it and the point is to load a roll before the next shift
+  rather than during it.
+
+The ZPL command syntax and the rest of both flag tables verified as written
+against the ZPL II Programming Guide and Epson's ESC/POS reference; the bit
+tables now carry a note in `printer_status.py` naming where they came from.
+
 ### Submit External Training asked one question with three controls (2026-08-23)
 
 **Changed**
@@ -54,6 +252,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings then in force. Drafts stay out of the officer queue. The `draft`
   status existed on the model and in the edit/delete guards but had no way to
   be reached.
+
+### NFC ID cards: review-round fixes (2026-08-23)
+
+**Fixed**
+
+- **A lost card could be reactivated through the API.** The model documented
+  the state as terminal — whoever picked the card up can still tap it — but
+  only the screen enforced it, by hiding the button. `PATCH /nfc-tags/{id}`
+  accepted `lost → active` and cleared the revocation stamp with it. The
+  transition is now refused server-side for `lost` and `revoked`; `suspended`
+  remains the reversible state, and a lost card can still be relabelled.
+- **An `inactive` member's card went on recording attendance.** The refusal set
+  covered suspended, dropped and archived members but not `inactive`, even
+  though `User.is_active` treats it as not active and the station's own refusal
+  text says "not currently active". Retired and on-leave members keep working
+  cards, which is deliberate — they still attend meetings and banquets.
+- **Admin hours started at a station were recorded as QR scans.** `clock_in`
+  hardcoded `entry_method=qr_scan`, so an export or an audit could not tell a
+  member scanning a category's QR code with their own phone from an officer
+  tapping their card at a station. Added `nfc_station` to the enum and threaded
+  the method through. Historical rows are left alone: a past `qr_scan` really
+  was written by the QR path.
+- **A 24-hour shift disappeared from the station at midnight.** A shift is
+  filed under the date it _started_, and the station asked only for the
+  operator's current local date — so the crew actually on duty vanished from
+  the selector at the turn of the day. It now queries yesterday as well, and
+  drops a yesterday-dated shift that has already ended.
+- **A finished event could still be armed against.** The event window filtered
+  on start time alone, so a drill that ended hours ago stayed in the list — and
+  because the list is ordered by start time it could be the _default_, leaving
+  an operator armed against an event whose check-in window had shut, with every
+  tap refused. Now bounded by `end_after` as well.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
