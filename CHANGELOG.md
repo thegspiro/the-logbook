@@ -47,6 +47,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asserts the baseline Member position holds `inventory.view` but not
   `inventory.manage`, so the fact the guard rests on cannot drift unnoticed.
 
+### Department Store: the member storefront, checkout and My Orders redesigned (2026-08-24)
+
+**Changed**
+
+- **Sizes are chips on the card, not a `<select>`.** A dropdown hid how many
+  sizes a garment came in, hid which were already sold out until you opened
+  it, and on a phone handed the choice to a native picker that covered the
+  price you were choosing against. Every size is now visible at once, with the
+  unavailable ones struck through and unpressable.
+- **The Add button carries the price.** It reads `Add $73.00` — the live total
+  for the size, quantity and embroidery currently selected — so the amount a
+  member is committing to sits on the control they press rather than three
+  lines above it.
+- **Embroidery is a labelled opt-in with a live preview.** The name renders as
+  it will be stitched, uppercased, and the upcharge only applies once there is
+  text to stitch. A required personalization keeps the box ticked and blocks
+  the add until it is filled.
+- **One card answers "is the store open, and how long have I got".** The green
+  "Ordering is open" banner and the separate window card said the same thing
+  twice and still left the deadline as a date the member had to subtract today
+  from. They are now a single card with a countdown that shrinks its unit as
+  the deadline nears (`5 days` → `4h 12m` → `43m`), the closing datetime, and
+  a bar showing how much of the window is gone.
+- **Checkout is a page, not a dialog.** A 512px modal column could not hold
+  four decisions plus a summary without scrolling, which is what made a
+  checkout read as a form to fill in. It now lives at `/store/checkout`.
+- **Checkout names where the money goes.** Each accepted method is a tile
+  showing the department's handle for it, and the "what happens after you
+  submit" line follows the department's own payment policy instead of
+  asserting one behaviour for every configuration.
+- **My Orders shows where an order has got to.** A four-stop stepper —
+  Submitted, Payment due, Ordered, Ready for pickup — replaces two status
+  badges a member had to translate. The balance due leads with the amount and
+  the order number to reference. Settled orders collapse to a single row.
+- **Contrast across the whole app is now WCAG AAA.** Primary buttons move from
+  red-600 to red-800 (white on red-600 measures 4.83:1 — AA for large text
+  only, and a button label is not large text), the light theme's secondary and
+  muted text each move a step darker, and the dark theme drops its grey text
+  tiers for white, taking its hierarchy from size and weight instead. Applied
+  everywhere at once rather than screen by screen: a primary button that is
+  one red on the store and another elsewhere reads as two different actions.
+
+**Added**
+
+- **Search and category filtering on the catalog**, with per-category counts
+  taken against the whole catalog rather than the current filter.
+- **A sticky cart bar on phones**, above the bottom navigation, carrying the
+  item count and running total down the page.
+- The shopper-facing storefront response now carries the window's opening
+  time, the accepted payment methods with their handles, and the department's
+  payment policy — the three things the countdown, the checkout tiles and the
+  post-submit wording need.
+
 ### Nine settings screens, five navigation idioms, one shell (2026-08-23)
 
 **Changed**
@@ -99,6 +152,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Printer support has a reference doc (2026-08-24)
 
+**Fixed**
+
+- **A `~HQES` condition in the high nibble group was silently dropped.**
+  `parse_error_status` captured the high group and decoded only the low one,
+  so a reply naming both — `ERRORS: 1 00000001 00000001` — reported "Out of
+  labels" and lost the other condition. The high group now adds the generic
+  line, gated on the printer's own fault flag so a unit that parks something
+  benign there does not report a fault on every query. Found while writing the
+  reference doc, which had promised the behaviour the parser did not have.
+
 **Added**
 
 - **[`docs/LABEL_PRINTING_MODULE.md`](docs/LABEL_PRINTING_MODULE.md).** Label
@@ -118,6 +181,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The training guide now separates printer errors from warnings.** "Labels
   nearly out" does not stop a print and the old wording did not say so; a
   table now gives each fault, its kind, and what to do about it.
+- **The guide no longer implies a direct print reports unavailable status.**
+  It does not: `status_known` reaches the client and no print screen reads it,
+  so a printer whose firmware cannot answer shows an ordinary success. The
+  guide now scopes that message to **Check status** and says to read a
+  successful print from such a printer as "sent", not "printed".
 
 ### Submit External Training: the certificate travels with the submission (2026-08-23)
 
@@ -256,6 +324,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was no longer alive. The exception is now recorded and named in the failure,
   which is what separates a runner hiccup from the app genuinely failing to
   start.
+- **The schema fetch was losing a coin toss to its own default timeout.**
+  `schemathesis.openapi.from_url` allows 10s, and generating this app's
+  OpenAPI document — 1114 paths, 1364 component schemas — measures 9.6–11.7s
+  cold. A run that landed on the wrong side of that raised, and hit the
+  zero-collection hole above; the same commit could pass on one database
+  matrix and fail on the other purely on runner speed. The fetch now allows
+  120s, and retries a transient connection error rather than taking the
+  module down with it.
 
 ### The events list now shows what it wants from you (2026-08-24)
 

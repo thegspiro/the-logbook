@@ -422,7 +422,12 @@
 
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
-  @apply focus:ring-theme-focus-ring rounded-lg bg-red-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  /* red-800, not red-600. White on red-600 measures 4.83:1 — AA for large
+     text only, and a button label is not large text. red-800 measures
+     8.35:1 and clears AAA. Changed app-wide on 2026-08-23 rather than per
+     screen: a primary button that is one red on the store and another
+     everywhere else reads as two different actions. */
+  @apply focus:ring-theme-focus-ring rounded-lg bg-red-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
   /* Grow to the 44px touch minimum on phones. Applied inside the query so
      desktop button density is untouched; inline-flex centres the label in the
@@ -679,7 +684,7 @@
 }
 
 @utility settings-subnav-item-active {
-  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-600 md:border-l-red-600;
+  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 md:border-l-red-800;
 }
 
 @utility settings-save-pill {
@@ -1005,7 +1010,7 @@
 
 @utility nav-item-active {
   /* #16 Active navigation indicator with left border accent */
-  @apply border-l-3 border-l-red-600 bg-red-600 text-white;
+  @apply border-l-3 border-l-red-800 bg-red-800 text-white;
 }
 
 @utility glass-surface {
@@ -1103,6 +1108,17 @@
   padding-bottom: calc(
     0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px)
   );
+}
+
+@utility sticky-action-bar {
+  /* #29 Bottom-pinned summary + CTA bar (the phone cart/checkout bar). Its
+     shadow points upward — the inverse of --shadow-card — because the surface
+     it lifts off is above it, not below. `action-bar-safe` supplies the
+     paddings, which is what lifts the bar clear of the 56px mobile bottom
+     navigation; a hand-written `bottom-*` does not, and the bar renders first,
+     so the navigation would paint over it and swallow its taps. */
+  @apply bg-theme-surface border-theme-surface-border action-bar-safe sticky bottom-0 z-30 border-t px-4;
+  box-shadow: var(--shadow-sticky-bar);
 }
 
 /* Set on the AppLayout root, so `--bottom-nav-height` is non-zero only where
@@ -1212,8 +1228,11 @@
 
   /* Text */
   --text-primary: #0f172a; /* slate-900 */
-  --text-secondary: #475569; /* slate-600 */
-  --text-muted: #64748b; /* slate-500 — 4.76:1 on white (WCAG AA) */
+  /* AAA uplift (2026-08-23): both tiers moved one step darker so every text
+     node clears 7:1 on the page gradient, not just on pure white. The old
+     values (slate-600 / slate-500) cleared AA only. */
+  --text-secondary: #334155; /* slate-700 — 10.8:1 on white (WCAG AAA) */
+  --text-muted: #475569; /* slate-600 — 7.5:1 on white (WCAG AAA) */
 
   /* Navigation */
   --nav-bg: #ffffff; /* white */
@@ -1239,11 +1258,12 @@
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
   --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.12), 0 4px 10px rgba(0, 0, 0, 0.08);
   --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.2), 0 8px 20px rgba(0, 0, 0, 0.12);
+  --shadow-sticky-bar: 0 -4px 12px rgba(15, 23, 42, 0.08);
 
   /* Accent colors – AA-compliant on light surfaces */
   --accent-red: #b91c1c; /* red-700  – 6.2:1 on #fff */
   --accent-green: #15803d; /* green-700 – 5.9:1 on #fff */
-  --accent-blue: #1d4ed8; /* blue-700 – 6.5:1 on #fff */
+  --accent-blue: #1e3a8a; /* blue-900 – 10.7:1 on #fff (AAA) */
   --accent-orange: #c2410c; /* orange-700 – 5.3:1 on #fff */
   --accent-yellow: #a16207; /* yellow-700 – 4.8:1 on #fff */
   --accent-cyan: #0e7490; /* cyan-700 – 5.2:1 on #fff */
@@ -1290,7 +1310,7 @@
   --alert-warning-border: #fde68a; /* amber-200 */
   --alert-warning-icon: #d97706; /* amber-600 */
   --alert-warning-title: #92400e; /* amber-800 */
-  --alert-warning-text: #b45309; /* amber-700 */
+  --alert-warning-text: #78350f; /* amber-900 — 8.6:1 on #fffbeb (AAA) */
 
   /* Alert: Purple */
   --alert-purple-bg: #faf5ff; /* purple-50 */
@@ -1318,18 +1338,25 @@
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
   --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
   --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4);
+  --shadow-sticky-bar: 0 -4px 12px rgba(0, 0, 0, 0.4);
 
   /* Surfaces */
-  --surface-bg: rgba(255, 255, 255, 0.1); /* white/10 */
+  /* AAA uplift (2026-08-23): 6%/8% rather than 10%/15%. A lighter surface
+     raises the floor every white text node is measured against; at 10% the
+     smallest captions fell under 7:1 on the red-900 band of the gradient. */
+  --surface-bg: rgba(255, 255, 255, 0.06); /* white/6 */
   --surface-secondary: rgba(255, 255, 255, 0.05); /* white/5 */
-  --surface-hover: rgba(255, 255, 255, 0.15); /* white/15 */
+  --surface-hover: rgba(255, 255, 255, 0.08); /* white/8 */
   --surface-border: rgba(255, 255, 255, 0.2); /* white/20 */
   --surface-modal: #1e293b; /* slate-800 — opaque for modals over overlays */
 
   /* Text */
+  /* AAA uplift (2026-08-23): all three tiers are white. No tint of grey
+     clears 7:1 against a 6% surface on this gradient, so hierarchy in dark
+     mode comes from size and weight instead of from colour. */
   --text-primary: #ffffff; /* white */
-  --text-secondary: #cbd5e1; /* slate-300 */
-  --text-muted: #a1b1c7; /* between slate-400 and slate-300 — 5.2:1 on slate-900 for AA small text */
+  --text-secondary: #ffffff; /* white */
+  --text-muted: #ffffff; /* white */
 
   /* Navigation */
   --nav-bg: #0f172a; /* slate-900 */

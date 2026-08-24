@@ -122,7 +122,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
                 <ArrowLeft className="h-5 w-5" />
               </button>
             ) : null}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
               <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">

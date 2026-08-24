@@ -350,7 +350,7 @@ export const GrantApplicationsPage: React.FC = () => {
                 onClick={() => setViewMode('pipeline')}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'pipeline'
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -362,7 +362,7 @@ export const GrantApplicationsPage: React.FC = () => {
                 onClick={() => setViewMode('table')}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'table'
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -374,7 +374,7 @@ export const GrantApplicationsPage: React.FC = () => {
             {/* New Application */}
             <Link
               to="/grants/applications/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
             >
               <Plus className="h-4 w-4" />
               New Application
@@ -455,7 +455,7 @@ export const GrantApplicationsPage: React.FC = () => {
             {!hasFilters && (
               <Link
                 to="/grants/applications/new"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 New Application

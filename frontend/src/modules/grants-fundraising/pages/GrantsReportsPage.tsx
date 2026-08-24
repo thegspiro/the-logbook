@@ -235,7 +235,7 @@ const GrantsReportsPage: React.FC = () => {
             onClick={() => setActiveTab(tab.id)}
             className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === tab.id
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
             }`}
           >

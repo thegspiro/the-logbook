@@ -702,7 +702,7 @@ export const EventsPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -861,7 +861,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setShowPastEvents(false)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   !showPastEvents
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -871,7 +871,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setShowPastEvents(true)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   showPastEvents
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -883,7 +883,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setViewMode('list')}
                 className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
                   viewMode === 'list'
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
                 aria-label="List view"
@@ -895,7 +895,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setViewMode('calendar')}
                 className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
                   viewMode === 'calendar'
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
                 aria-label="Calendar view"
@@ -934,7 +934,7 @@ export const EventsPage: React.FC = () => {
             >
               <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
               {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-800 px-1 text-xs font-semibold text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -950,7 +950,7 @@ export const EventsPage: React.FC = () => {
               onClick={() => setShowMyEventsOnly((prev) => !prev)}
               className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                 showMyEventsOnly
-                  ? 'border-red-600 bg-red-600 text-white shadow-sm'
+                  ? 'border-red-600 bg-red-800 text-white shadow-sm'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
               }`}
             >
@@ -1019,7 +1019,7 @@ export const EventsPage: React.FC = () => {
                         <button
                           onClick={handleSavePreset}
                           disabled={!presetName.trim()}
-                          className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                          className="rounded-md bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
                         >
                           Save
                         </button>
@@ -1268,7 +1268,7 @@ export const EventsPage: React.FC = () => {
                         void handleImportCSV();
                       }}
                       disabled={!importFile || importLoading}
-                      className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
                     >
                       {importLoading ? (
                         <>
@@ -1358,7 +1358,7 @@ export const EventsPage: React.FC = () => {
                 <div className="mt-4 flex justify-end">
                   <button
                     onClick={handleCloseImportModal}
-                    className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                    className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
                   >
                     Done
                   </button>
@@ -1396,7 +1396,7 @@ export const EventsPage: React.FC = () => {
                   void handleCancelSelected();
                 }}
                 disabled={bulkActionLoading}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
               >
                 {bulkActionLoading ? 'Cancelling...' : 'Confirm Cancel'}
               </button>

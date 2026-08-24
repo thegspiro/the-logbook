@@ -76,7 +76,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
                 <div
                   className={`flex items-center space-x-2 rounded-md px-3 py-1.5 transition-all ${
                     isCurrent
-                      ? 'bg-red-600 text-white shadow-lg'
+                      ? 'bg-red-800 text-white shadow-lg'
                       : isCompleted
                         ? 'bg-theme-accent-green-muted text-theme-accent-green'
                         : 'bg-theme-input-bg text-theme-text-muted'

@@ -131,7 +131,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
                 onTouchStart={() => prefetchRoute(tab.path)}
                 aria-current={active ? 'page' : undefined}
                 className={`focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
-                  active ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'
+                  active ? 'text-red-800 dark:text-red-300' : 'text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -146,7 +146,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
             aria-current={moreIsActive ? 'page' : undefined}
             aria-label="Open full navigation menu"
             className={`focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
-              moreIsActive ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'
+              moreIsActive ? 'text-red-800 dark:text-red-300' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             <Menu className="h-5 w-5 shrink-0" aria-hidden="true" />

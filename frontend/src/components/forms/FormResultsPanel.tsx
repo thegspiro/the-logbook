@@ -307,7 +307,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
                     </div>
                     <div className="bg-theme-surface-secondary h-2.5 w-full overflow-hidden rounded-full">
                       <div
-                        className="h-full rounded-full bg-red-600 transition-all duration-500"
+                        className="h-full rounded-full bg-red-800 transition-all duration-500"
                         style={{ width: `${Math.max(choice.percent, choice.count > 0 ? 2 : 0)}%` }}
                       />
                     </div>

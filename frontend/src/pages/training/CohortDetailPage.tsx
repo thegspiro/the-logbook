@@ -436,7 +436,7 @@ export const CohortDetailPage: React.FC = () => {
                         </div>
                         <div className="bg-theme-surface h-1.5 w-full rounded-full">
                           <div
-                            className="h-1.5 rounded-full bg-red-600"
+                            className="h-1.5 rounded-full bg-red-800"
                             style={{
                               width: `${Math.min(100, member.progress_percentage)}%`,
                             }}

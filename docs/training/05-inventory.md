@@ -807,9 +807,15 @@ fault differently.
 
 The same check runs automatically after every direct print, so a job sent to a
 printer that is out of stock reports **out of labels** instead of a success
-message and an empty roll. Older printer firmware does not answer the status
-query; those printers report their identity and say fault reporting is
-unavailable, rather than claiming to be healthy.
+message and an empty roll.
+
+Older printer firmware does not answer the status query at all. **Check
+status** says so — it reports the printer's identity and that fault reporting
+is unavailable, rather than claiming health. After a direct print, though,
+such a printer simply shows the ordinary success message: the job was
+accepted, which is true, but it is not the confirmation a status-capable
+printer gives. If your printer's **Check status** says fault reporting is
+unavailable, treat a successful print as "sent", not as "printed".
 
 **Printing to it:** any label page now shows **Send to Printer** beside the PDF
 and Print buttons. It sends the records currently listed, at the size selected

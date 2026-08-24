@@ -526,9 +526,27 @@ class StorefrontWindowSummary(UTCResponseBase):
     id: str
     name: str
     description: Optional[str] = None
+    # Exposed so the shopper-facing countdown can show how much of the window
+    # has elapsed, not merely when it ends. Null on a window that was opened
+    # by hand rather than on a schedule.
+    opens_at: Optional[datetime] = None
     closes_at: Optional[datetime] = None
     expected_delivery_date: Optional[date] = None
     pickup_instructions: Optional[str] = None
+
+
+class StorefrontPaymentMethodInfo(UTCResponseBase):
+    """One accepted payment method as the checkout screen shows it.
+
+    No payment_url — see build_payment_method_summaries.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    method: str
+    label: str
+    handle: Optional[str] = None
+    instructions: Optional[str] = None
 
 
 class StorefrontResponse(UTCResponseBase):
@@ -549,7 +567,17 @@ class StorefrontResponse(UTCResponseBase):
     shipping_flat_rate: Optional[Decimal] = None
     tax_rate: Decimal
     accepted_payment_methods: List[str] = Field(default_factory=list)
+    # The same methods with their handles, so checkout can name where the money
+    # goes before an order exists to build instructions from.
+    payment_methods: List[StorefrontPaymentMethodInfo] = Field(default_factory=list)
     payment_instructions: Optional[str] = None
+    # Drives the "what happens after I submit" line: whether an unpaid order
+    # still reaches the vendor is the department's policy, not a fixed fact.
+    payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
+    # Checkout promises the payment handle will arrive by email. A department
+    # that turned confirmations off makes that a lie, so the promise is
+    # conditional on the setting rather than baked into the copy.
+    sends_order_confirmation: bool = True
     window: Optional[StorefrontWindowSummary] = None
     # A department can run more than one order period at once (apparel and
     # challenge coins, say); the shopper picks which one they're browsing.

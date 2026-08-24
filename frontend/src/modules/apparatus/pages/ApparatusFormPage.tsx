@@ -342,7 +342,7 @@ export const ApparatusFormPage: React.FC = () => {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div className="flex items-center space-x-3">
-                <div className="rounded-lg bg-red-600 p-2">
+                <div className="rounded-lg bg-red-800 p-2">
                   <Truck className="h-6 w-6 text-white" />
                 </div>
                 <div>

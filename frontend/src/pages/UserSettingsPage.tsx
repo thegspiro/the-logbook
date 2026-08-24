@@ -1248,7 +1248,7 @@ export const UserSettingsPage: React.FC = () => {
                         void (push.subscribed ? push.unsubscribe() : push.subscribe());
                       }}
                       className={`${
-                        push.subscribed ? 'bg-red-600' : 'bg-theme-surface-border'
+                        push.subscribed ? 'bg-red-800' : 'bg-theme-surface-border'
                       } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                       role="switch"
                       aria-checked={push.subscribed}
@@ -1273,7 +1273,7 @@ export const UserSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setEmailNotifications(!emailNotifications)}
                     className={`${
-                      emailNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                      emailNotifications ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={emailNotifications}
@@ -1309,7 +1309,7 @@ export const UserSettingsPage: React.FC = () => {
                       void handleSmsAddOnToggle(!(smsConsentGranted && smsNotifications));
                     }}
                     className={`${
-                      smsConsentGranted && smsNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                      smsConsentGranted && smsNotifications ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md disabled:opacity-50`}
                     role="switch"
                     aria-checked={smsConsentGranted && smsNotifications}
@@ -1334,7 +1334,7 @@ export const UserSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setEventReminders(!eventReminders)}
                     className={`${
-                      eventReminders ? 'bg-red-600' : 'bg-theme-surface-border'
+                      eventReminders ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={eventReminders}
@@ -1357,7 +1357,7 @@ export const UserSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setTrainingReminders(!trainingReminders)}
                     className={`${
-                      trainingReminders ? 'bg-red-600' : 'bg-theme-surface-border'
+                      trainingReminders ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={trainingReminders}

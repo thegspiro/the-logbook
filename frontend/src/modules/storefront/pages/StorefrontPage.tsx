@@ -2,227 +2,97 @@
  * Storefront Page
  *
  * Member-facing store: browse what the open order window offers, build a cart,
- * and check out. Prices shown here are advisory — the server reprices every
- * line at submit, so the confirmation is the authoritative receipt.
+ * and go to checkout. Prices shown here are advisory — the server reprices
+ * every line at submit, so the confirmation is the authoritative receipt.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import {
-  CalendarClock,
-  CheckCircle2,
-  Loader2,
-  Minus,
-  Package,
-  Plus,
-  ShoppingBag,
-  ShoppingCart,
-  Store,
-  Trash2,
-} from 'lucide-react';
+import { CalendarClock, Package, Search, ShoppingBag, Store } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../../../components/ux/EmptyState';
-import { Modal } from '../../../components/Modal';
-import { useTimezone } from '../../../hooks/useTimezone';
-import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
+import { SkeletonPage } from '../../../components/ux/Skeleton';
+import { formatCurrency } from '../../../utils/dateFormatting';
+import { StoreCartPanel } from '../components/StoreCartPanel';
+import { StoreProductCard } from '../components/StoreProductCard';
+import { StoreWindowCard } from '../components/StoreWindowCard';
 import { computeCartTotals, useStorefrontStore } from '../store/storefrontStore';
-import { formatDateOnly } from '../utils/formatting';
-import { PAYMENT_METHOD_LABELS, StoreFulfillmentMethod, type StorefrontProductOffer } from '../types';
+import type { StorefrontProductOffer } from '../types';
 
-const ProductCard: React.FC<{
-  offer: StorefrontProductOffer;
-  onAdd: (variantId: string | undefined, quantity: number, personalizationText: string | undefined) => void;
-}> = ({ offer, onAdd }) => {
-  const [variantId, setVariantId] = useState<string>(offer.variants[0]?.id ?? '');
-  const [quantity, setQuantity] = useState(1);
-  const [personalization, setPersonalization] = useState('');
+const ALL_CATEGORIES = '__all__';
 
-  const selectedVariant = offer.variants.find((v) => v.id === variantId);
-  const price = Number(selectedVariant ? selectedVariant.price : offer.price);
-  const remaining = selectedVariant ? selectedVariant.availableQuantity : offer.availableQuantity;
-  const soldOut = selectedVariant ? !selectedVariant.isAvailable : !offer.isAvailable;
-  const upcharge = Number(offer.personalizationPrice ?? 0);
-  const missingRequiredText = offer.personalizationEnabled && offer.personalizationRequired && !personalization.trim();
+const CHIP_BASE =
+  'focus-visible:ring-theme-focus-ring shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden';
+const CHIP_ACTIVE = 'bg-slate-900 text-white dark:bg-white dark:text-slate-900';
+const CHIP_IDLE =
+  'bg-theme-surface border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border';
 
-  return (
-    <div className="card-secondary flex flex-col gap-3 p-4">
-      {offer.imageUrl ? (
-        <img
-          src={offer.imageUrl}
-          alt={offer.name}
-          className="bg-theme-surface-secondary h-40 w-full rounded-lg object-cover"
-        />
-      ) : (
-        <div className="bg-theme-surface-secondary flex h-40 w-full items-center justify-center rounded-lg">
-          <Package className="text-theme-text-muted h-10 w-10" />
-        </div>
-      )}
-
-      <div className="min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-theme-text-primary text-sm font-semibold">{offer.name}</h3>
-          <span className="text-theme-text-primary text-sm font-semibold whitespace-nowrap">
-            {formatCurrency(price)}
-          </span>
-        </div>
-        {offer.category && <p className="text-theme-text-muted mt-0.5 text-xs">{offer.category}</p>}
-        {offer.description && (
-          <p className="text-theme-text-secondary mt-2 text-xs whitespace-pre-line">{offer.description}</p>
-        )}
-      </div>
-
-      {offer.variants.length > 0 && (
-        <div>
-          <label htmlFor={`variant-${offer.id}`} className="form-label text-xs">
-            Option
-          </label>
-          <select
-            id={`variant-${offer.id}`}
-            value={variantId}
-            onChange={(e) => setVariantId(e.target.value)}
-            className="form-input"
-          >
-            {offer.variants.map((variant) => (
-              <option key={variant.id} value={variant.id} disabled={!variant.isAvailable}>
-                {variant.label}
-                {variant.isAvailable ? '' : ' — sold out'}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {remaining != null && remaining <= 5 && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          {remaining > 0 ? `Only ${remaining} left` : 'Sold out'}
-        </p>
-      )}
-
-      {offer.personalizationEnabled && (
-        <div>
-          <label htmlFor={`personalization-${offer.id}`} className="form-label text-xs">
-            {offer.personalizationLabel || 'Personalization'}
-            {offer.personalizationRequired ? '' : ' (optional)'}
-            {upcharge > 0 ? ` — +${formatCurrency(upcharge)}` : ''}
-          </label>
-          <input
-            id={`personalization-${offer.id}`}
-            type="text"
-            value={personalization}
-            maxLength={offer.personalizationMaxLength}
-            onChange={(e) => setPersonalization(e.target.value)}
-            className="form-input"
-            placeholder="e.g. J. SMITH"
-          />
-          <p className="text-theme-text-muted mt-0.5 text-xs">
-            {personalization.length}/{offer.personalizationMaxLength} characters
-          </p>
-        </div>
-      )}
-
-      <div className="mt-auto flex items-center gap-2">
-        <div className="border-theme-surface-border flex items-center rounded-lg border">
-          <button
-            type="button"
-            aria-label={`Decrease quantity of ${offer.name}`}
-            className="btn-icon"
-            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-          <span className="text-theme-text-primary w-8 text-center text-sm">{quantity}</span>
-          <button
-            type="button"
-            aria-label={`Increase quantity of ${offer.name}`}
-            className="btn-icon"
-            onClick={() => setQuantity((q) => q + 1)}
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-        <button
-          type="button"
-          className="btn-primary btn-md flex-1"
-          disabled={soldOut || (offer.requiresVariant && !variantId) || missingRequiredText}
-          onClick={() => {
-            onAdd(variantId || undefined, quantity, personalization.trim() || undefined);
-            setQuantity(1);
-            setPersonalization('');
-          }}
-        >
-          {soldOut ? 'Sold out' : 'Add to cart'}
-        </button>
-      </div>
-    </div>
-  );
+/** Search matches what the member can actually see on a card. */
+const matchesSearch = (offer: StorefrontProductOffer, term: string): boolean => {
+  if (!term) return true;
+  const needle = term.toLowerCase();
+  return offer.name.toLowerCase().includes(needle) || (offer.description ?? '').toLowerCase().includes(needle);
 };
 
 const StorefrontPage: React.FC = () => {
-  const tz = useTimezone();
   const navigate = useNavigate();
-  const {
-    storefront,
-    cart,
-    isLoading,
-    isSubmitting,
-    error,
-    loadStorefront,
-    addToCart,
-    updateCartQuantity,
-    removeFromCart,
-    placeOrder,
-  } = useStorefrontStore();
+  const { storefront, cart, isLoading, error, loadStorefront, addToCart, updateCartQuantity, removeFromCart } =
+    useStorefrontStore();
 
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('');
-  const [fulfillmentMethod, setFulfillmentMethod] = useState<string>(StoreFulfillmentMethod.PICKUP);
-  const [shippingAddress, setShippingAddress] = useState('');
-  const [memberNotes, setMemberNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>(ALL_CATEGORIES);
 
   useEffect(() => {
     void loadStorefront();
   }, [loadStorefront]);
 
+  // A category chip is only meaningful against the catalog it was drawn from.
+  // Switching windows keeps a stale filter selected, which shows the new
+  // window's catalog as empty — a store that looks unstocked, not filtered.
+  const windowId = storefront?.window?.id;
   useEffect(() => {
-    if (!storefront) return;
-    const methods = storefront.acceptedPaymentMethods;
-    setPaymentMethod((current) => current || methods[0] || '');
-    if (!storefront.allowPickup && storefront.allowShipping) {
-      setFulfillmentMethod(StoreFulfillmentMethod.SHIP);
+    setActiveCategory(ALL_CATEGORIES);
+    setSearchTerm('');
+  }, [windowId]);
+
+  const products = useMemo(() => storefront?.products ?? [], [storefront]);
+
+  /** Category counts are taken before the search filter: a chip reading
+   *  "Apparel 0" because of what is typed in the box is noise, not a count. */
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const offer of products) {
+      if (!offer.category) continue;
+      counts.set(offer.category, (counts.get(offer.category) ?? 0) + 1);
     }
-  }, [storefront]);
+    return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [products]);
 
-  const shipping = fulfillmentMethod === StoreFulfillmentMethod.SHIP ? Number(storefront?.shippingFlatRate ?? 0) : 0;
-
-  const totals = useMemo(
-    () => computeCartTotals(cart, Number(storefront?.taxRate ?? 0), shipping),
-    [cart, storefront?.taxRate, shipping]
+  const visibleProducts = useMemo(
+    () =>
+      products.filter(
+        (offer) =>
+          (activeCategory === ALL_CATEGORIES || offer.category === activeCategory) &&
+          matchesSearch(offer, searchTerm.trim())
+      ),
+    [activeCategory, products, searchTerm]
   );
 
-  const handleCheckout = useCallback(async () => {
-    try {
-      const order = await placeOrder({
-        paymentMethod: paymentMethod || undefined,
-        fulfillmentMethod,
-        shippingAddress: shippingAddress.trim() || undefined,
-        memberNotes: memberNotes.trim() || undefined,
-      });
-      setCheckoutOpen(false);
-      setShippingAddress('');
-      setMemberNotes('');
-      toast.success(`Order ${order.orderNumber} submitted`);
-      void navigate(`/store/orders?highlight=${order.id}`);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to place order');
-    }
-  }, [fulfillmentMethod, memberNotes, navigate, paymentMethod, placeOrder, shippingAddress]);
+  // Shipping is chosen at checkout, so the cart quotes the pickup price. The
+  // summary on the checkout page is where a shipping line can appear.
+  const totals = useMemo(
+    () => computeCartTotals(cart, Number(storefront?.taxRate ?? 0), 0),
+    [cart, storefront?.taxRate]
+  );
+
+  const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+
+  const goToCheckout = useCallback(() => {
+    void navigate('/store/checkout');
+  }, [navigate]);
 
   if (isLoading && !storefront) {
-    return (
-      <div className="flex justify-center py-16" role="status" aria-live="polite">
-        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-      </div>
-    );
+    return <SkeletonPage />;
   }
 
   // Checked before the "store is closed" branch below: a failed load leaves
@@ -271,106 +141,90 @@ const StorefrontPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="motion-safe:animate-page-enter min-h-screen">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-              <Store className="h-5 w-5 text-white" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
+              <Store className="h-5 w-5 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-theme-text-primary truncate text-xl font-bold">{storefront.storeName}</h1>
-              {storefront.tagline && <p className="text-theme-text-muted text-sm">{storefront.tagline}</p>}
+              <h1 className="text-theme-text-primary truncate text-[22px] font-bold">{storefront.storeName}</h1>
+              {storefront.tagline && <p className="text-theme-text-secondary text-sm">{storefront.tagline}</p>}
             </div>
           </div>
           <Link to="/store/orders" className="btn-secondary btn-md btn-auto shrink-0">
-            <ShoppingBag className="h-4 w-4" />
+            <ShoppingBag className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">My orders</span>
             <span className="sm:hidden">Orders</span>
           </Link>
         </div>
 
-        {storefront.showOpenOrderBanner && (
-          <div
-            className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-emerald-800 dark:text-emerald-200"
-            role="status"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="font-semibold">Ordering is open</p>
-              <p className="text-sm">
-                {storefront.window.closesAt
-                  ? `Place your order by ${formatDateTime(storefront.window.closesAt, tz)}.`
-                  : 'Browse the available items and place your order now.'}
-              </p>
+        <StoreWindowCard storefront={storefront} onSelectWindow={(windowId) => void loadStorefront(windowId)} />
+
+        {products.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 sm:flex-1">
+              <Search
+                className="text-theme-text-secondary pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <label htmlFor="catalog-search" className="sr-only">
+                Search the catalog
+              </label>
+              <input
+                id="catalog-search"
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search the catalog"
+                className="form-input pr-4 pl-10 text-sm"
+              />
             </div>
+            {categories.length > 0 && (
+              <div className="hscroll flex gap-2" role="group" aria-label="Filter by category">
+                <button
+                  type="button"
+                  aria-pressed={activeCategory === ALL_CATEGORIES}
+                  onClick={() => setActiveCategory(ALL_CATEGORIES)}
+                  className={`${CHIP_BASE} ${activeCategory === ALL_CATEGORIES ? CHIP_ACTIVE : CHIP_IDLE}`}
+                >
+                  All {products.length}
+                </button>
+                {categories.map(([category, count]) => (
+                  <button
+                    key={category}
+                    type="button"
+                    aria-pressed={activeCategory === category}
+                    onClick={() => setActiveCategory(category)}
+                    className={`${CHIP_BASE} ${activeCategory === category ? CHIP_ACTIVE : CHIP_IDLE}`}
+                  >
+                    {category} {count}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        <div className="card mb-6 p-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div>
-              <p className="text-theme-text-muted text-xs tracking-wide uppercase">Order window</p>
-              {storefront.otherOpenWindows.length > 0 ? (
-                <>
-                  <label htmlFor="active-window" className="sr-only">
-                    Choose an order window
-                  </label>
-                  <select
-                    id="active-window"
-                    value={storefront.window.id}
-                    onChange={(e) => {
-                      void loadStorefront(e.target.value);
-                    }}
-                    className="form-input-sm"
-                  >
-                    {[storefront.window, ...storefront.otherOpenWindows].map((openWindow) => (
-                      <option key={openWindow.id} value={openWindow.id}>
-                        {openWindow.name}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              ) : (
-                <p className="text-theme-text-primary text-sm font-semibold">{storefront.window.name}</p>
-              )}
-            </div>
-            {storefront.window.closesAt && (
-              <div>
-                <p className="text-theme-text-muted text-xs tracking-wide uppercase">Closes</p>
-                <p className="text-theme-text-primary text-sm">{formatDateTime(storefront.window.closesAt, tz)}</p>
-              </div>
-            )}
-            {storefront.window.expectedDeliveryDate && (
-              <div>
-                <p className="text-theme-text-muted text-xs tracking-wide uppercase">Expected delivery</p>
-                <p className="text-theme-text-primary text-sm">
-                  {formatDateOnly(storefront.window.expectedDeliveryDate)}
-                </p>
-              </div>
-            )}
-          </div>
-          {storefront.window.description && (
-            <p className="text-theme-text-secondary mt-3 text-sm whitespace-pre-line">
-              {storefront.window.description}
-            </p>
-          )}
-        </div>
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            {storefront.products.length === 0 ? (
+            {products.length === 0 ? (
               <EmptyState
                 icon={Package}
                 title="Nothing listed yet"
                 description="This order window doesn't have any items posted."
               />
+            ) : visibleProducts.length === 0 ? (
+              <EmptyState
+                icon={Search}
+                title="Nothing matches that"
+                description="Try a different search term, or clear the category filter."
+              />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {storefront.products.map((offer) => (
-                  <ProductCard
+                {visibleProducts.map((offer) => (
+                  <StoreProductCard
                     key={offer.id}
                     offer={offer}
                     onAdd={(variantId, quantity, personalizationText) => {
@@ -383,202 +237,37 @@ const StorefrontPage: React.FC = () => {
             )}
           </div>
 
-          <div className="lg:col-span-1">
-            <div className="card p-4 lg:sticky lg:top-4">
-              <div className="mb-4 flex items-center gap-2">
-                <ShoppingCart className="text-theme-text-muted h-4 w-4" />
-                <h2 className="text-theme-text-primary text-sm font-semibold">Cart ({cart.length})</h2>
-              </div>
-
-              {cart.length === 0 ? (
-                <p className="text-theme-text-muted text-sm">Nothing in your cart yet.</p>
-              ) : (
-                <>
-                  <ul className="mb-4 space-y-3">
-                    {cart.map((line) => (
-                      <li key={`${line.productId}-${line.variantId ?? ''}`} className="flex items-start gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-theme-text-primary truncate text-sm">{line.productName}</p>
-                          {line.variantLabel && <p className="text-theme-text-muted text-xs">{line.variantLabel}</p>}
-                          <div className="mt-1 flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={1}
-                              value={line.quantity}
-                              aria-label={`Quantity for ${line.productName}`}
-                              onChange={(e) =>
-                                updateCartQuantity(line.productId, line.variantId, Number(e.target.value))
-                              }
-                              className="form-input w-16 py-1 text-sm"
-                            />
-                            <span className="text-theme-text-muted text-xs">× {formatCurrency(line.unitPrice)}</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${line.productName}`}
-                          className="btn-icon text-theme-text-muted hover:text-red-500"
-                          onClick={() => removeFromCart(line.productId, line.variantId, line.personalizationText)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <dl className="border-theme-surface-border space-y-1 border-t pt-3 text-sm">
-                    <div className="flex justify-between">
-                      <dt className="text-theme-text-muted">Subtotal</dt>
-                      <dd className="text-theme-text-primary">{formatCurrency(totals.subtotal)}</dd>
-                    </div>
-                    {totals.tax > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-theme-text-muted">Tax</dt>
-                        <dd className="text-theme-text-primary">{formatCurrency(totals.tax)}</dd>
-                      </div>
-                    )}
-                    {totals.shipping > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-theme-text-muted">Shipping</dt>
-                        <dd className="text-theme-text-primary">{formatCurrency(totals.shipping)}</dd>
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-1 font-semibold">
-                      <dt className="text-theme-text-primary">Total</dt>
-                      <dd className="text-theme-text-primary">{formatCurrency(totals.total)}</dd>
-                    </div>
-                  </dl>
-
-                  <button
-                    type="button"
-                    className="btn-primary btn-md mt-4 w-full"
-                    onClick={() => setCheckoutOpen(true)}
-                  >
-                    Check out
-                  </button>
-                </>
-              )}
-            </div>
+          <div className="lg:sticky lg:top-4 lg:col-span-1 lg:self-start">
+            <StoreCartPanel
+              cart={cart}
+              totals={totals}
+              paymentMethods={storefront.paymentMethods ?? []}
+              onUpdateQuantity={(line, quantity) =>
+                updateCartQuantity(line.productId, line.variantId, quantity, line.personalizationText)
+              }
+              onRemove={(line) => removeFromCart(line.productId, line.variantId, line.personalizationText)}
+              onReview={goToCheckout}
+            />
           </div>
         </div>
       </div>
 
-      <Modal
-        isOpen={checkoutOpen}
-        onClose={() => setCheckoutOpen(false)}
-        title="Review your order"
-        size="lg"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary btn-md" onClick={() => setCheckoutOpen(false)}>
-              Back
-            </button>
-            <button
-              type="button"
-              className="btn-primary btn-md"
-              disabled={isSubmitting}
-              onClick={() => {
-                void handleCheckout();
-              }}
-            >
-              {isSubmitting ? 'Submitting…' : 'Submit order'}
-            </button>
-          </div>
-        }
-      >
-        <div className="modal-body space-y-4">
-          <ul className="space-y-2">
-            {cart.map((line) => (
-              <li key={`review-${line.productId}-${line.variantId ?? ''}`} className="flex justify-between text-sm">
-                <span className="text-theme-text-primary">
-                  {line.quantity} × {line.productName}
-                  {line.variantLabel ? ` (${line.variantLabel})` : ''}
-                  {line.personalizationText ? ` — "${line.personalizationText}"` : ''}
-                </span>
-                <span className="text-theme-text-primary">{formatCurrency(line.unitPrice * line.quantity)}</span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="border-theme-surface-border flex justify-between border-t pt-2 text-sm font-semibold">
-            <span className="text-theme-text-primary">Total</span>
-            <span className="text-theme-text-primary">{formatCurrency(totals.total)}</span>
-          </div>
-
-          <div>
-            <label htmlFor="checkout-payment" className="form-label">
-              How will you pay?
-            </label>
-            <select
-              id="checkout-payment"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="form-input"
-            >
-              {storefront.acceptedPaymentMethods.map((method) => (
-                <option key={method} value={method}>
-                  {PAYMENT_METHOD_LABELS[method] ?? method}
-                </option>
-              ))}
-            </select>
-            <p className="text-theme-text-muted mt-1 text-xs">
-              You&apos;ll get payment instructions — including a payment link where available — as soon as the order is
-              submitted.
+      {/* Phone shortcut to checkout. The panel above still carries the full
+          cart; this is the running total following the member down the page,
+          which on a phone is otherwise several screens behind them. */}
+      {cart.length > 0 && (
+        <div className="sticky-action-bar flex items-center gap-3 lg:hidden">
+          <div className="min-w-0 flex-1">
+            <p className="text-theme-text-secondary text-xs">
+              {itemCount} {itemCount === 1 ? 'item' : 'items'} in cart
             </p>
+            <p className="text-theme-text-primary font-mono text-[19px] font-bold">{formatCurrency(totals.total)}</p>
           </div>
-
-          {storefront.allowPickup && storefront.allowShipping && (
-            <div>
-              <label htmlFor="checkout-fulfillment" className="form-label">
-                Delivery
-              </label>
-              <select
-                id="checkout-fulfillment"
-                value={fulfillmentMethod}
-                onChange={(e) => setFulfillmentMethod(e.target.value)}
-                className="form-input"
-              >
-                <option value={StoreFulfillmentMethod.PICKUP}>
-                  Pick up {storefront.pickupLocation ? `— ${storefront.pickupLocation}` : ''}
-                </option>
-                <option value={StoreFulfillmentMethod.SHIP}>Ship to me</option>
-              </select>
-            </div>
-          )}
-
-          {fulfillmentMethod === StoreFulfillmentMethod.SHIP && (
-            <div>
-              <label htmlFor="checkout-address" className="form-label">
-                Shipping address
-              </label>
-              <textarea
-                id="checkout-address"
-                rows={3}
-                value={shippingAddress}
-                onChange={(e) => setShippingAddress(e.target.value)}
-                className="form-input"
-              />
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="checkout-notes" className="form-label">
-              Notes for the quartermaster (optional)
-            </label>
-            <textarea
-              id="checkout-notes"
-              rows={2}
-              value={memberNotes}
-              onChange={(e) => setMemberNotes(e.target.value)}
-              className="form-input"
-            />
-          </div>
-
-          {storefront.termsText && (
-            <p className="text-theme-text-muted text-xs whitespace-pre-line">{storefront.termsText}</p>
-          )}
+          <button type="button" className="btn-primary min-h-[48px] px-6 font-bold" onClick={goToCheckout}>
+            Review
+          </button>
         </div>
-      </Modal>
+      )}
     </div>
   );
 };
