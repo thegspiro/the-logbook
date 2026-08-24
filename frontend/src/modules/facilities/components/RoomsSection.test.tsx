@@ -203,4 +203,39 @@ describe('RoomsSection nesting', () => {
       expect(deleteRoom).toHaveBeenCalledWith('office');
     });
   });
+
+  it('counts only the rooms that actually move up, not the whole subtree', async () => {
+    // The backend re-parents `WHERE parent_room_id = room_id`, so a grandchild
+    // keeps its own parent and rides along inside that subtree. Counting
+    // descendants told the officer "3 sub-rooms will move up a level" when 2
+    // do, on a dialog whose whole job is to state the consequence of something
+    // irreversible -- and disagreed with the row badge directly above it.
+    const lockerCage = {
+      id: 'locker-cage',
+      facilityId: 'facility-1',
+      name: 'Locker Cage',
+      roomType: 'storage',
+      parentRoomId: 'storage',
+      createdAt: '2026-08-16T00:00:00Z',
+      updatedAt: '2026-08-16T00:00:00Z',
+    };
+    const recordsCloset = {
+      id: 'records-closet',
+      facilityId: 'facility-1',
+      name: 'Records Closet',
+      roomType: 'storage',
+      parentRoomId: 'office',
+      createdAt: '2026-08-16T00:00:00Z',
+      updatedAt: '2026-08-16T00:00:00Z',
+    };
+    getRooms.mockResolvedValue([office, storage, lockerCage, recordsCloset]);
+
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete room Volunteer Office' }));
+
+    expect(await screen.findByText(/2 sub-rooms will move up a level/)).toBeInTheDocument();
+    expect(screen.queryByText(/3 sub-rooms will move up a level/)).not.toBeInTheDocument();
+  });
 });

@@ -6,6 +6,7 @@ with type validation and defaults.
 """
 
 from functools import lru_cache
+from urllib.parse import quote
 
 from loguru import logger
 from pydantic import field_validator
@@ -60,14 +61,29 @@ class Settings(BaseSettings):
     )
 
     @property
+    def _db_credentials(self) -> str:
+        """URL-encoded ``user:password`` for the DSN userinfo section.
+
+        Credentials are percent-encoded because the userinfo section ends at
+        the first unescaped ``@``. A password containing ``@`` — common in
+        generated secrets — otherwise truncates the DSN and the driver reports
+        the password remainder as the hostname, which reads as an unreachable
+        server rather than a quoting problem. ``:``, ``/``, ``?`` and ``#``
+        corrupt it the same way. ``quote`` with an empty ``safe`` set escapes
+        every reserved character; a space becomes ``%20`` rather than the ``+``
+        ``quote_plus`` would emit, which is not decoded back to a space here.
+        """
+        return f"{quote(self.DB_USER, safe='')}:{quote(self.DB_PASSWORD, safe='')}"
+
+    @property
     def DATABASE_URL(self) -> str:
         """Construct async MySQL database URL"""
-        return f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
+        return f"mysql+aiomysql://{self._db_credentials}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
 
     @property
     def SYNC_DATABASE_URL(self) -> str:
         """Construct synchronous MySQL database URL (for Alembic)"""
-        return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
+        return f"mysql+pymysql://{self._db_credentials}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
 
     def get_db_connect_args(self) -> dict:
         """Build connect_args dict including SSL context when DB_SSL is enabled.

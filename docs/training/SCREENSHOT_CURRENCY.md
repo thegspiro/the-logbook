@@ -1,5 +1,902 @@
 # Screenshot currency
 
+## Corrected 2026-08-24 — the white strip I said could not be photographed
+
+CI's image audit caught what a DOM probe had missed, and the finding retracts a
+published claim.
+
+**The claim.** `19-11-dark-scrollbar-gutter`'s caption said the scrollbar gutter
+"is not in this picture, and cannot be", because
+`window.innerWidth - documentElement.clientWidth` measured `0`. I recorded that
+as one of the markers describing UI the product does not have.
+
+**It was wrong, and the image itself was the evidence.** Every capture of that
+page carried a **pure-white 15px strip** down its right edge against content at
+luma 54. `audit_images.py` found it by comparing edge pixels with the content
+beside them — the comparison the DOM measurement cannot make. Sampled directly:
+`(93, 33, 37)` at `x = w-16`, `(255, 255, 255)` from `x = w-14` to the edge.
+
+**Root cause, and it is a real product bug, not a capture artifact.** `html`
+carried the themed gradient as a background _image_, and the `background:`
+shorthand resets `background-color` to transparent. The reserved strip is
+painted from the canvas _colour_, which an image does not supply, so it fell
+back to the browser's white — on every dark-mode page, everywhere. The August 15
+canvas move did not fix it; it swapped one image for another. `styles/index.css`
+now sets `background-color: var(--bg-gradient-from)` on the root as well.
+Verified live: the strip goes from `(255,255,255)` to `(15,23,42)`.
+
+Guide 19 was documenting a fix that had not landed for this case. Its note is
+rewritten, marked as a correction, and now says what actually happened.
+
+**The residue that stays.** A dialog's scrim is `position: fixed; inset: 0`,
+laid out against the initial containing block, which excludes that strip — so a
+light page under a dark overlay keeps a light gutter beside a dimmed page.
+Nothing in a page can paint outside its own box. Three modal captures are in
+`audit_baseline.txt` for that reason, with the mechanism written beside them.
+
+**Method note worth keeping.** I measured geometry, concluded "nothing to
+photograph", and published it. The pixels said otherwise the whole time. When a
+claim is about what an image looks like, the check has to be the image — the
+same lesson as "open every PNG with Read", one level lower down.
+
+The baseline's own recommendation — retire the subtle light-page-under-scrim
+tier, since it is now a constant rather than a regression signal — is
+strengthened by this fix but deliberately **not** enacted here: changing a
+shared check's contract from a screenshot branch is not mine to do.
+
+## Resolved 2026-08-24 (twelfth) — nine markers that were never going to be screenshots
+
+`10-20` captured; eight markers answered in prose. **485 of 507 filled, 15
+remaining** — down from 25 at the start of this batch.
+
+**Six NFC markers, closed with one verified mechanism.** Web NFC is
+`window.NDEFReader`, which exists only in Chrome on Android and only in a secure
+context. What matters for the guides is what each control does when it is
+missing, and the three differ:
+
+| Control                                             | Without Web NFC                        |
+| --------------------------------------------------- | -------------------------------------- |
+| `NfcTapButton` (Tap Tag)                            | `if (!supported) return null` — absent |
+| `NfcTagWriteButton` (compact, fleet QR grid)        | `return null` — absent                 |
+| `NfcTagWriter` (full block, event/category QR page) | a line saying which condition fails    |
+
+So a reader on a desktop or an iPhone is not failing to find a greyed-out
+button — for two of the three there is no button. That is now written into
+guides 04, 06, 10 and 19 in place of the markers, which is more useful than a
+staged photograph would have been. The harness itself fails both conditions
+(headless Chromium, `http://localhost`), so it could not have taken them anyway.
+
+**The two onboarding-restart markers are a contradiction, not a limitation.**
+The wizard runs only when no department exists; with one on file `/onboarding`
+redirects to sign-in — verified. Every other image in the library needs a
+department. Both frames would need a database with none, in the same run as a
+library that needs one. The guides now say that and give the one-minute
+reproduction on a scratch install.
+
+**The terminal marker became a code block, and is better for it.** `python -m
+app.preflight` was run twice for real — clean on development, exit 1 as
+production — and both outputs are quoted verbatim in guide 19. Terminal output
+in a code block can be searched, copied and diffed against what your own run
+prints; a picture of it can do none of those.
+
+**The "manual annotation" marker got measurements instead of drawings.** Guide
+10 claimed 44px tap targets on the Submit Training form and said the comparison
+had to be drawn because the "before" state no longer exists. Measured at 375px:
+**50 of 52 interactive controls are 44px or taller**. The two that are not are
+the painted 18×18 checkbox indicator and a 1×1 hidden file input — each inside a
+label that takes the tap (the certification label is **44×317**, the
+attach-certificate label 46px). Numbers a reader can reproduce beat an arrow
+drawn on a screenshot, and the capture now carries them.
+
+**One framing note worth keeping.** The first full-page attempt at that shot
+stitched the sticky submit bar across the middle of the form — the same
+`position: fixed` artifact as the bottom bar in the earlier table pair. Viewport
+shot, scrolled with `block: "center"` rather than `"end"`, because the sticky bar
+occupies the bottom of the frame and an element scrolled to the end lands behind
+it.
+
+## Captured 2026-08-24 (eleventh) — a legacy crew seat, and a roster panel no seeded shift can show
+
+`19-23`, opened and checked. **484 of 507 filled.**
+
+**No apparatus had crew seats at all,** so the form the release note is about
+rendered "No crew seats configured" and there was nothing to photograph.
+`seed_apparatus_crew_positions` gives the rescue four: three configured
+positions and `rescue specialist`, which is deliberately not one of the codes.
+That is the marker's "legacy read-only position" — a value a department typed
+before the picker existed, which the form keeps readable and labels **(legacy
+position)** rather than dropping.
+
+**The rank backing shows in the closed control, which is lucky.** Each option
+is rendered as "Officer — Fire Chief, Deputy Chief, Assistant Chief…", so the
+selected seat carries its eligible ranks without the option list being open —
+and the option list could not have been photographed anyway. Third native
+`<select>` this pass where that is the answer.
+
+The apparatus item route is **PATCH**, not PUT; PUT returns a bare 405.
+
+### Seed gap: no shift carries a platoon
+
+`03-629` — the shift detail page's hold-over roster, as a scheduler beside the
+same shift as a member — **cannot be captured from the current demo data**, and
+the reason is worth recording precisely rather than re-derived next pass.
+
+The panel renders only under `platoonsEnabled && shift.platoon &&
+platoonRoster.length > 0`. Platoons _are_ enabled and the roster is dealt into
+A/B/C (8/7/7 members) — but **0 of 67 seeded shifts carry a `platoon` value**,
+so the panel never renders for anyone, scheduler or member.
+
+It cannot be fixed by stamping one on: `ShiftUpdate` has no `platoon` field and
+neither does `ShiftCreate`. The **only** writer is
+`generate_shifts_from_pattern`, which takes it from the pattern. So seeding this
+means generating shifts from the seeded "A/B/C Platoon Rotation" pattern — whose
+range is 2026-08-17 to 2027-02-19 — and that would lay a second set of shifts
+over the calendar roughly forty verified scheduling captures already read.
+
+Worth doing deliberately, in a pass that re-verifies those captures, rather than
+inside a batch aimed at one marker. Two smaller things are already known and
+would go with it: the permission half of the marker is real
+(`_can_view_platoon_roster` gates the roster on `scheduling.assign`,
+`scheduling.manage`, or being the named shift officer), and the approved-leave
+half needs care, because approving time-off cancels any assignment inside its
+range.
+
+## Captured 2026-08-24 (tenth) — the dashboard's data boundary, under the wrong tab names
+
+`00-24`/`00-25`, opened and checked. **483 of 507 filled.**
+
+**The tabs are not called what the guide calls them.** The prose describes
+"Personal" and "Organization"; the strip reads **My Department** and
+**Organization**. Corrected in the guide, keeping "personal" as the idea rather
+than as a label.
+
+**A single frame cannot hold this marker, and that is the lesson it teaches.**
+It asks for the tabs, the personal equipment panel and an organization
+aggregate card together — but the whole point of the split is that a department
+total and your own gear are never on screen at once. It is a pair.
+
+**The first framing made its own caption false.** Scrolling to My Issued Gear
+put the tab strip off the top, under a caption that said "under a tab strip
+offering Organization beside it". Full-page for both halves instead, which also
+matches them to each other.
+
+**Two numbers in these frames are thin, and are recorded rather than dressed
+up.** The Department pulse money cards read $0 (the finance seed gap already
+logged in an earlier pass), and the Organization tab's **Training Compliance
+reads 0%**. The second is real arithmetic, not a bug: the demo department has
+**26 active requirements** and each member carries three training records, so
+nobody is fully compliant and the honest figure is zero. Making it non-zero
+means seeding a member through all 26 — worth doing, and noted as a seed gap
+rather than fixed inside this batch.
+
+## Captured 2026-08-24 (ninth) — a year of admin hours, and a breakdown that named nothing
+
+`19-22`, opened and checked. **481 of 507 filled.**
+
+**Nothing had ever been logged against the admin-hours categories.** Six
+categories were seeded; the entries were not, so the Summary tab reported 0hrs
+across all three cards and "No completed entries match this reporting period"
+under a heading promising a ranking. `seed_admin_hours_entries` logs twelve
+sessions across the six categories and six members, spread through the calendar
+year, and leaves the three most recent pending so the Needs review card and the
+Pending Review tab are not zero.
+
+Two things about how it does that, both forced by the product and worth
+knowing: entries are raised **by the members themselves**, because
+`POST /admin-hours/entries` credits the caller and an administrator-run loop
+would credit one account with the department's whole year; and they are
+approved afterwards through the review endpoint, because a manual entry
+**always** lands pending on purpose — its times are client-supplied, and
+auto-approval would let a member self-credit backdated time.
+
+**The first fixture pass looked fine and left every entry pending.** The step
+guarded on a total (`total >= len(ENTRIES)`), so the run after the one that
+created all twelve but failed the review call skipped straight past the
+approvals. It now matches per entry on the description and drives the approvals
+off the _current_ pending list rather than off what this run happened to
+create.
+
+**Then the capture showed the real defect: the category breakdown rendered six
+nameless bars.** "hrs · entries · 0%", six times, under correct summary cards.
+`AdminHoursSummary.by_category` was `list[dict]`, and the alias generator that
+gives this module its camelCase responses only rewrites _declared_ fields — so
+the totals arrived as `totalHours` while the rows beneath them arrived as
+`total_hours`, and every key the tab reads (`categoryName`, `totalHours`,
+`entryCount`, `totalMinutes`) was undefined. Typed now, as
+`AdminHoursCategoryTotal`, with a test that walks the exact payload the service
+builds and fails on any snake_case key surviving into a row.
+
+This is Pitfall #5 with a twist worth naming: the mismatch was **one level
+down**. The outer field was declared and aliased correctly, so every top-level
+number on the screen was right — which is precisely why nobody would report it.
+The page reads as "no data", not as broken.
+
+**One more marker/product mismatch:** the marker asks for the summary showing
+"visibly different thresholds". The summary shows hours ranked by category; the
+auto-approve and maximum-session limits are configured on the **Categories**
+tab and are not on this screen at all. Said so beside the image.
+
+## Captured 2026-08-24 (eighth) — the close-out override, and a template that resolves for nothing
+
+`03-81`, opened and checked. **480 of 507 filled.**
+
+**The warning had nothing to warn about.** The wizard's outstanding-checks
+block renders only when the shift carries an end-of-shift checklist nobody has
+completed, and the close-out fixture hangs on the Medic — for which no
+end-of-shift template existed, because the general equipment-check seed builds
+close-out templates only for the apparatus types it happens to iterate.
+
+**Creating one by type looked right and did nothing, which is the finding
+worth keeping.** `_resolve_templates` consults apparatus-_type_ templates
+**only when the unit has no apparatus-specific ones**, and the Medic already
+carries `Medic 3 Supply Check`. So an `ambulance` close-out template was
+created successfully, appeared in the template library, reported itself active
+— and was never resolved for the one shift it existed for. The fixture now
+writes the template against the apparatus itself, and the _product_ behaviour
+is written into guide 03 beside the "assign to a specific apparatus or
+apparatus type" step, because a department hits it the same way: give one truck
+a template of its own and every type-level template silently stops applying to
+that truck.
+
+**`require_end_of_shift_checks` gets the `setCallTracking` treatment.** Two
+shots want opposite answers — `03-81` needs the rule on to photograph the
+override it gates, `03-32` pictures the settings screen at the department's
+default — so both set what they need rather than inheriting whatever ran first.
+`setRequireEndOfShiftChecks` is the setter; the seeder still leaves the rule
+off.
+
+The override box is ticked in the capture because the reason field it demands
+does not exist until it is, and the marker asks for both. Ticking is client
+state: nothing is written until **Close out shift**, which none of the wizard
+shots press — pressing it would finalize the fixture and spend it for every run
+after.
+
+## Captured 2026-08-24 (seventh) — guide 19's back-references, and a 403 no department can reach
+
+`19-18`/`19-19` and `19-20`/`19-21`, opened and checked. **479 of 507 filled.**
+
+Two of guide 19's markers describe the same states guides 17 and 14 already
+picture, so they are the same pairs re-shot for the release note. Guide 17's
+correction travels with them: **there is no account-security block on a
+colleague's profile for anybody**, so "use a demo member with MFA enabled so
+the redaction is visible" cannot be honoured — enrolment is shown on your own
+settings page. Guide 19 now says so beside the pair.
+
+**The hire-date 403 is unreachable in the shipped role catalogue, so it is
+written rather than photographed.** The guard is real: `hire_date`, `rank`,
+`station`, `platoon` and `membership_number` require `members.manage`, and the
+refusal names all five. But no shipped role grants `users.edit` without also
+granting `members.manage` — checked against all 28 — so nothing in the product
+can be put into the state the marker asks for. Staging it would mean inventing
+a role no department has. The guide now quotes the exact refusal and says when
+a department would meet it: after building a custom role that separates the
+two, a records clerk who maintains contact details but does not set rank.
+
+**One `allowEmptyState` reason was wrong and got corrected before it was
+committed.** I wrote that the member's "No address on file." is the withholding
+the pair is about, and that the officer's half shows the address filled in.
+Checked against `/users`: the member has no address recorded at all, so _both_
+halves show that line and it illustrates nothing. The reason now says which
+part is the permission (the three absent panels) and which part is simply
+unseeded — the rule being that a reason beside `allowEmptyState` is a claim,
+and a claim gets verified like any other.
+
+**`TRAINING_MATERIALS_REVIEW.md`'s marker is an example, and is now fenced.**
+`status_report.py` excludes that file by name so the count was never wrong, but
+a plain `grep` over the guides returns it, and it is the one hit in the library
+nobody can act on. Quoted as syntax now rather than demonstrated.
+
+## Captured 2026-08-24 (sixth) — a fourth sign-in, and a Publish control that was never in the editor
+
+`08-77`, `08-78`, `19-16`, `19-17`, opened and checked. **475 of 507 filled.**
+
+**Both editor markers described a control the form does not have.** They ask
+for "the revision editor captured under an account holding only
+`legal.propose`, so the Publish control is visibly absent". Measured: the
+editor offers **Cancel** and **Save draft** — to everybody, publisher included.
+Publishing is an action on the _saved proposal_, so the proposal card is the
+only place the permission is visible at all. The guides now say that, and the
+two shots split accordingly: guide 08, whose marker makes the absence the
+subject, gets the proposal card; guide 19, whose marker asks for the body, the
+filled change note and the free-text "Last updated" field, gets the editor.
+
+**Whose draft it is decides what the card offers, and that took a second
+seeded draft.** `canModify = canPublish || revision.createdBy === currentUser`,
+so a draft the administrator wrote shows the secretary _no_ controls — a true
+screen picturing no rule. `_seed_secretary_draft` now writes one in the
+secretary's own name, and the capture shows both on one card list: their own
+proposal with Edit and Discard and no Publish, the administrator's beneath it
+with nothing.
+
+**This needed a fourth sign-in, `auth: "secretary"`.** No existing demo account
+sits on the middle rung of the guide's three-way table: the administrator
+publishes and an ordinary member cannot reach the screen. The **Secretary**
+role is the department office that actually carries `legal.propose` without
+`legal.publish` or `settings.manage`, which is also the arrangement the guide
+describes in words ("the secretary drafts, an officer approves").
+
+**The role was reaching that member as a side effect and now does not.** It was
+granted while seeding the closed election's ballot attestations — which works,
+and is exactly the dependency that goes quiet when the other step's fixture
+guard short-circuits: the capture would then sign in successfully, land on a
+screen it no longer has, and time out with nothing pointing at why.
+`_ensure_legal_proposer` asserts it from the step that owns the screen.
+
+**The history shots are clipped, and not for framing.** The privacy notice has
+no pending proposals, so the page carries "No proposals yet" — true, unrelated
+to the history below it, and enough for the empty-state guard to hold both
+captures back. Clipping to the history section is also the better shot: the
+caption is about the three revisions, not the page.
+
+A third revision was added to `PRIVACY_REVISIONS` because both markers ask for
+three, and two entries read as a change rather than as a history.
+
+## Captured 2026-08-24 (fifth) — the tall dialog, and a table shown at both widths
+
+`10-17`/`19-15` and the `10-18`/`10-19` pair, opened and checked. **471 of 507
+filled.**
+
+**Finding the tall dialog took measuring, not guessing.** `modal-panel-scroll`
+caps a panel at `100dvh - 2rem`, which on a 390x844 phone is 812px — so a
+dialog only demonstrates the fix if its content exceeds that, and most do not.
+Measured: template picker 301, New Folder 328, Extend Time 375, Merge Write-Ins
+409, Clone Election 445, Request Time Off 508, Record Paper Ballots 661,
+Rollback 709 — all of which fit without scrolling and put their action row
+mid-screen, where nothing was ever painting over it. **Add Course** is 1259px
+inside a 758px panel, which is the one that genuinely scrolls.
+
+**The shot is deliberately not `fullPage`.** `capture.mjs` hides
+`nav[aria-label="Primary"]` for full-page shots, because full-page stitching
+paints a `position: fixed` element at its document offset. A full-page capture
+here would have removed the very thing the caption is about and proved nothing.
+The prepare step also **asserts the bar is present before opening the dialog**:
+without that check, a release that stopped rendering the bar at all would leave
+this capture looking identical and still captioned "the bar is hidden while a
+dialog is open".
+
+**The reflow pair is the training table, not the documents table the marker
+suggested.** `/documents` lists folders until one is opened, and the largest
+seeded folder holds two files — a two-row wide table does not read as a table
+at all, so the comparison would have shown nothing. The guide's own list of
+what reflowed names the training table beside documents, so the pair uses one
+member's training history: same page, same three records, 390px and desktop.
+
+**Both halves are viewport shots rather than element clips, and that is not a
+style choice.** Clipping to `table.rwd-table` is clean at desktop width and
+wrong on a phone: the element is then taller than the screen, and a Playwright
+element screenshot paints the sticky header and the bottom bar at their
+document offsets — stamped across the middle of the table. Same family as the
+full-page rule above; worth remembering as one rule rather than two.
+
+The desktop half is placed in the guide by hand, as the pairing convention
+requires — `apply_placeholders` fills one marker per shot, and the second half
+carries the `__paired-with-10-18__` anchor that deliberately never matches.
+
+## Captured 2026-08-24 (fourth) — the seeded checks that never existed, and two defects in reading one back
+
+`03-80` and `19-14`, opened and checked. **467 of 506 filled.**
+
+**No equipment check had been completed in the demo database at all.** The
+seeder step had been failing for some time with `equipment checks: Items do not
+belong to template` — a 400 naming an id and nothing else. The id was the
+**section header** `_add_section_header` adds to the engine template. `header`
+and `text` rows are layout, not questions: the server excludes them from the
+item map by check type and refuses a submission that answers one. Three call
+sites in the seeder built the submitted-item list independently, and exactly one
+of them filtered — and only for `header`, not `text`. So adding the section
+header to the demo template took **every seeded check** with it, and the fleet
+grid, the compliance view and every phone capture of a completed check had
+nothing to show. One `_checkable_rows` helper now serves all three.
+
+**Reading a completed check back was wrong in two ways, both visible in the
+shot.** `GET /equipment-checks/checks/{id}` is what the member's history row
+opens, and it was the only endpoint returning a check that resolved neither of
+the two things the record is read for:
+
+- **It did not say who signed it.** `checked_by_name` is not a column and this
+  endpoint never resolved it, so the detail screen printed **"Checked By:
+  Unknown"** over a compliance record whose entire purpose is to name the
+  inspector. Every sibling endpoint already resolved it; this one was the
+  outlier.
+- **It did not say in what order.** The items relationship carries no
+  `order_by`, so a twelve-item engine check came back in whatever order the
+  rows were yielded — compartments interleaved, and not reliably the same order
+  twice. A crew reading a record back walks the same truck in the same
+  sequence, so the response now follows the template's compartment and item
+  sort order, with rows whose template item has since been deleted
+  (`template_item_id` is SET NULL) sorting last rather than vanishing or
+  landing mid-walk under a stale position.
+
+`test_equipment_check_detail.py` covers both, plus the orphan row and org
+scoping. Its fixture inserts the check items **back to front** so a response
+that merely echoes the stored rows cannot pass, and it flushes the template
+before the check rows — `template_item_id` is a bare foreign key with no ORM
+relationship behind it, so SQLAlchemy has no dependency to order the inserts by
+and emits a MySQL 1452 rather than a test failure.
+
+**The offline half of the marker is not pictured, and the guides say so.**
+Simulating a dropped connection means setting state on the browser context, not
+on the page, which this harness deliberately does not do in a prepare step. A
+staged "offline" banner would be a photograph of something the app never
+rendered. Both guides now carry a paragraph saying that, beside the record the
+two routes actually converge on.
+
+## Captured 2026-08-24 (third) — separation of duties, a paged tab, and the race that hid it
+
+`03-78`/`03-79` with their guide-19 twins `19-12`/`19-13`, opened and checked.
+**465 of 506 filled.** Merged `origin/main` (41 commits) first; clean.
+
+**The blocked self-review needed the administrator to be the requester.** The
+rule is about people, not permissions — the chief holds `scheduling.manage` and
+still cannot review their own swap — so the capture can only be made from the
+requesting account. The seeder now raises one swap in the administrator's name
+beside the demo member's, and `reviewOwnSwapBlocked` presses Approve on it and
+waits for the server's refusal. Nothing is mutated: the service rejects before
+it touches the request, so the swap is still pending afterwards and the shot
+needs no `mutatesSeedData` flag. What the two rows actually differ by is worth
+noting, because the marker guessed wrong: both keep Approve and Deny; the
+administrator's own row carries an **extra cancel control** the member's does
+not.
+
+**Two markers asked for a control the product does not have.** Both wanted
+"pagination controls ... at least 60 requests ... rather than a disabled stub".
+There is no numbered pagination and no stub: `REQUESTS_PAGE_SIZE` is **20**, and
+the tab renders a single **Load more time-off requests** button that is absent
+rather than greyed out once everything is loaded. Both guides now say that.
+
+**The harder half of that marker is invisible in the product.** The tab opens
+filtered to **Pending**, and a department's history is resolved by definition —
+so with the default filter a database holding twenty-seven time-off requests
+shows _one row and no control at all_, while the count beside the view's name
+reads 27. That is a real trap for a reader, not a seeding problem, and it is
+now written into both guides above the image.
+
+**Chasing that turned up a live stale-response race.** Switching to the Time
+Off view and widening the filter in quick succession left the list showing the
+_Pending_ results under an _All Statuses_ selector — the twenty rows arrived,
+then the slower superseded fetch overwrote them with one. Two overlapping
+fetches, no sequence guard; whichever resolved last won. Fixed the same way
+`StoreOrdersTab` was: every fetch takes a ticket and only the newest may write
+(`loadData` and `loadMore` share the counter, so an appended page cannot clobber
+a reload either). `RequestsTab.test.tsx` resolves the two out of order and fails
+without the guard.
+
+Worth recording as method: the first probe of this capture looked like a
+seeding failure — twenty-seven rows in the database, one on screen. It was two
+separate causes stacked, a default filter and a race, and only the _timings_ in
+the probe output separated them.
+
+**Seeding notes.** `_seed_time_off_history` raises 26 requests across the ten
+summer weeks behind the roster and resolves each as the administrator. Two
+constraints are load-bearing and are commented in the seeder: approving
+time-off **cancels any shift assignment inside its range**, so the history has
+to sit behind the earliest seeded shift or it would silently unseat members
+from shifts other guides photograph (verified: 125 assignments, none cancelled);
+and the demo member is excluded, because several shots picture her notification
+inbox in a known state. The dates were moved from 2025 to summer 2026 on a
+second pass — the card prints "Jul 5 - Jul 8" with no year, so a 2025 range
+reads as _next_ July.
+
+## Captured 2026-08-24 (later) — the room picker, an overdue loan, and a history tab that leaked its own column names
+
+`06-27` and `05-82`, opened and checked. **461 of 505 filled.**
+
+**The item History tab was rendering its raw payload at members.** Every event
+dumped `Object.entries(details)` straight to the page, so an item on loan read
+
+> `user_name: Nadia Belhaj | reason: … | expected_return: 2026-08-20T23:40:15+00:00 | is_returned: false | is_overdue: true`
+
+Three things wrong at once: column names shown as labels, a **raw UTC instant**
+put in front of a member who will read it as their own clock — the one thing
+the date rules forbid outright — and empty values rendering as a bare `notes:`
+with nothing after. Keys are sentence case now, instants go through
+`formatDateTime` with the organization's timezone, booleans read Yes/No, and
+empty values are dropped.
+
+**Writing the test for that found a second bug in the fix.** A plain
+`YYYY-MM-DD` is a calendar date, not an instant, so putting it through
+`formatDate` with a timezone _moves_ it: `2026-08-20` came out as `8/19/2026`
+in New York. `formatCalendarDate` exists for exactly this and is what it uses.
+The test asserts the day does not shift.
+
+**The extracted helper had to leave the component file.** Exporting a function
+beside a component costs fast refresh, which eslint flags — and that eleventh
+warning put the repo over its `--max-warnings 10` gate. It lives in
+`itemHistoryDetails.ts` now, the same split `dateFormatting.ts` documents for
+`daysUntil`.
+
+**Two more markers described screens the product does not have:**
+
+- **Guide 06 wanted indented sub-rooms in the room picker.** The picker is a
+  native `<select>` — its popup is drawn by the OS, so no list can be
+  photographed — and its options are not indented: each carries its whole
+  containment path as text instead. That is the better design for a native
+  control and for a screen reader, and the guide now says so. What the capture
+  shows is the half that is real and useful: a nested room selected, with the
+  full path, building, address, room number and floor confirmed underneath.
+- **Guide 05 wanted a stock ledger with on-hand, issued and available side by
+  side.** No such panel exists, and the three are not three numbers: `quantity`
+  _is_ the on-hand count — issuing decrements it, a return adds it back — so
+  on-hand and available are the same figure, and the total is on-hand **plus**
+  what is out. The items list shows `on-hand / total`; the per-member issued
+  counts are on Gear & Uniforms → Members; deployed lots are the Stock Lots tab
+  already pictured in that lesson. The marker is replaced with a table saying
+  where each number lives and a warning against subtracting the issued count,
+  which counts every issued unit twice.
+
+## Captured 2026-08-24 — two permission pairs, and two markers that described the wrong thing
+
+`17-03`/`17-04` and `14-25`/`14-26`, opened and checked. **459 of 505 filled.**
+
+**Guide 17's marker asked for a block that does not exist on that screen.** It
+wanted "the account-security block absent" from a colleague's profile viewed
+with `members.view` only. There is no account-security block on a colleague's
+profile _for anybody_ — MFA enrolment, last sign-in and email verification live
+on your own settings page, so neither account has one to compare. The
+permission difference the paragraph is really about is large and visible
+though, so the pair captures that instead: the officer gets the compliance
+summary, the training and certification history and the emergency contacts, and
+the member gets none of the three. Worth teaching from the picture: the
+member's Contact Information panel renders **empty rather than absent** — the
+panel is there, the values are withheld.
+
+**Guide 14's marker was right about the rule and impossible on the seed.**
+`list_candidates` returns pending nominations to everyone _while_ nominations
+are open — a nominee has to be able to find their own — and to holders of
+`elections.manage` at any time; to an ordinary member after nominations close it
+returns accepted candidates only. Every seeded election either sat in the
+nomination phase or had nobody pending, so the rule had nothing to show. A
+dedicated election is now seeded past its nomination phase with one nominee
+still un-accepted. Deliberately a _new_ election: four captures need one in the
+nomination phase, and advancing that one would empty them.
+
+The member half of that pair also could not be taken as written. A member has
+no Candidates tab — their view of who is standing _is_ the ballot — so reaching
+for `#tab-candidates` timed out against a tab strip offering only Cast Vote.
+Opening the election is the whole prepare, and the withheld nomination shows up
+as a shorter list of options rather than a hidden row.
+
+**The numbering trap bit again, and the manifest caught it this time.**
+`14-20` and `14-21` were already taken, and the new entries also landed after
+`14-24-ballot-send-skipped`, which mutates seed data and must stay last for its
+guide. The import-time guard refused to load rather than letting the pair run
+and quietly spend the fixture. They are `14-25`/`14-26`, ahead of it.
+
+**One near-miss worth recording.** The member's candidate list came back empty
+against a stale session cookie, which looked exactly like the permission rule
+over-filtering. It was a 401. Re-authenticating showed the one accepted
+candidate. Check the HTTP status before reading an empty list as behaviour.
+
+## Captured 2026-08-24 — legal documents, the recruitment type, and a dashboard pair
+
+Seven captures against a database rebuilt from zero, each opened and checked.
+**455 of 505 filled.** Two of them fill a marker in two guides at once, so the
+same screen is not photographed twice: `19-09` also fills guide 08's Legal
+Documents marker, and `19-10` also fills guide 04's Recruitment marker.
+
+**The database was rebuilt rather than patched.** The scorecard fixture rebuild
+had left three voided records behind — a validated result cannot be deleted —
+and they were showing up on the test-records capture as demo noise rather than
+product behaviour. The rebuild also served as the real test of the fixture guard
+rewritten the day before, and it caught one more defect in it: the seeder was
+resetting the _administrator's_ password because the roster is returned
+admin-first and `members[:3]` reached it, which the API rightly refuses.
+
+**Three markers could not be taken as written, and the prose now says so.**
+
+- **The dark-mode scrollbar gutter cannot be photographed by this harness at
+  all.** The headless browser draws overlay scrollbars and reserves no gutter:
+  `innerWidth - clientWidth` measures 0 even on a page forced to 4000px. The
+  capture shows what it can — the themed gradient reaching the window edges —
+  and the guide now tells the reader to look in their own desktop browser for
+  the strip itself, rather than implying the picture contains it.
+- **"All three reminder choices visible" is not possible** on a native
+  `<select>`: the popup is drawn by the OS, not the page. The guide already
+  tables all three above the image, so the capture shows which one a new
+  optional event defaults to.
+- **Legal Documents is tabs, not cards.** The marker asked for "both document
+  cards"; the screen shows one document at a time behind a tab strip. Captioned
+  for what it is.
+
+**One pair was aimed at the wrong screen first.** The dashboard finance
+comparison was written against `?tab=organization`, and both accounts render
+that tab without any money section — a pair that compares two screens which are
+identical in the one respect the marker is about. The money cards live in
+_Department pulse_ on the default tab. Re-shot there and verified by measuring
+both accounts: the administrator has Department pulse with dues, cash flow and
+budget; the member has none of it, absent rather than empty.
+
+**Empty-state flags on four shots were false positives**, each now carrying its
+reason rather than a bare suppression: "No proposals yet" is the Privacy tab's
+proposals panel (the seeded draft is deliberately on Terms), and "No reminders"
+is an _option inside_ the reminder-audience select.
+
+**New seeding:** the Legal Documents screen had nothing behind it and rendered
+both cards on the platform default, picturing the feature unused. Privacy now
+carries two published revisions — two, so the revision-history markers have a
+superseded entry to show — and Terms an unpublished draft.
+
+**A numbering trap worth knowing:** `--only 04-42` matches `04-42-cast-ballot`
+as well as anything else starting `04-42`. Two new shots were numbered into
+occupied slots and silently re-shot two unrelated ballot captures. They are
+`04-44` and `04-45` now; check the number is free before claiming it.
+
+## Re-captured 2026-08-23 — the phone sweep at 390x844, and what it exposed
+
+**Corrected 2026-08-23 (later).** The amendment that stood here was wrong, and
+the way it was wrong is worth keeping.
+
+It reported that `03-71-set-all-to-par-confirm` was blocked by main's lap
+redesign, and that `03-72` showed a `quantity` item rendering the pass/fail
+control while `03-70` rendered the same type as a stepper — read as a defect in
+the new code. **All four equipment-check captures shoot cleanly, and there is no
+such defect.** What differed was not the item, it was the process: a backend
+left running across the merge was still serving the pre-merge spellings
+(`quantity`, `pass_fail`) to a post-merge frontend. Restarting it made
+`03-71` capture on the first attempt and put the stepper back on the gloves.
+
+Two things follow, and only one of them is a bug.
+
+**`CheckLap`, `CheckItemControls` and `checkLapModel` are not wired to
+anything.** Nothing outside those three files and their tests imports them; the
+live screen is still `EquipmentCheckForm`'s own renderer. So the lap redesign
+could not have broken a capture — it does not run. Worth knowing before anyone
+else reads a check-form symptom as lap behaviour.
+
+**The version skew that caused the false alarm is a real fragility.** The live
+form compares `item.checkType` against the canonical four directly and its
+control switch ends in `default: passFailButtons`, so a response carrying the
+older spellings does not fail — it _degrades_, rendering every count, level and
+expiry item as pass/fail. The crew answers Pass on a row meant to record a
+number, no quantity is stored, and "Set all to par" has nothing to act on.
+`pass_fail` is what hides it: that one lands on the right control by accident,
+so most of the form still looks right. A backend on the previous release is the
+ordinary state of a rolling deploy, which is exactly how this was hit.
+
+`normalizeCheckType` was written for this and its own comment says it belongs at
+the read boundary; nothing called it. `getEquipmentCheckTemplate` and
+`getEquipmentCheckTemplates` now do, alongside the `normalizeShift` /
+`normalizePositions` that already sit there, with tests that fail when the
+normalization is removed. Structural `header` and `text` rows are passed through
+untouched — canonicalizing those to `function` would put answer buttons under a
+section heading.
+
+**A screenshot caught this, and then nearly buried it.** The first diagnosis
+blamed the width, the second blamed a redesign that does not execute. Neither
+was reproduced against a restarted stack before being written down. A capture
+that disagrees with the code is worth a second process, not just a second look.
+
+**Two of main's renames cost a shot each, silently.** The phone menu control
+became "Open full navigation menu" and the quantity stepper became
+"One fewer <item>". Both matchers now carry the older spellings alongside the
+current one — a capture that fails is cheap, a capture that succeeds against
+the wrong element is not.
+
+All 21 phone-width captures re-shot and opened. The trigger was the entry below:
+the mobile bottom bar no longer paints over an open dialog, so every phone
+capture containing one pictured the defect. That is confirmed fixed — `03-71`
+(the set-all-to-par confirmation) and `03-96` (the lots-aboard sheet) now show
+the bar correctly absent, and `10-14` and `10-16`, which have no overlay, still
+show it.
+
+**The viewport is now 390x844, not 414x896.** Five guide markers and the audit
+below already name 390, so 414 was the outlier. The seven shots carrying an
+explicit `{ width: 414, height: N }` moved too, keeping their bespoke heights —
+a mobile set photographed at two widths is worse than either width.
+
+Three defects came out of the sweep, none of them the one it was looking for.
+
+**1. A sticky bar with no background, which read as a layout bug.** The
+equipment check form's Submit bar and page header carried `bg-theme-bg` and
+`bg-theme-background`. Neither token existed at the time — the stylesheet
+defined `--color-theme-surface`, `--color-theme-nav-bg` and three
+`--color-theme-bg-*` gradient stops — so both compiled to nothing and resolved
+to `rgba(0, 0, 0, 0)` in the running app. The item list scrolled visibly
+through the notes field and the Submit button, which looks like overlapping
+content rather than a missing colour, and is why it survived.
+
+Main has since settled this for the whole app: `--color-theme-bg` is now a
+real token, deliberately opaque so a sticky bar occludes what scrolls under it
+(a surface token cannot — in dark mode those are translucent by design), and
+all 26 call sites were repointed. `themeTokenIntegrity.test.ts` walks the
+source and fails on any theme utility naming a token the stylesheet does not
+declare, with an empty allowlist.
+
+> **Superseded 2026-08-24.** `--color-theme-bg` is defined now: main added it
+> as the flat opaque page canvas, for precisely the sticky-bar job described
+> above (a surface token cannot do it — those are translucent white in dark
+> mode). So `bg-theme-bg` is the _right_ answer on that Submit bar, not the
+> wrong one, and the fix recorded here was replaced by main's on merge. The
+> ratchet is empty and the guard is now a plain invariant. Two sessions fixing
+> one bug from opposite ends: worth reading both sides before keeping either.
+
+_This was nearly misdiagnosed._ The overlap appeared when the width changed, so
+it looked like a 390 regression. It reproduces identically at 414 on the same
+code, and the geometry probe found no collision at either width — the DOM was
+never the problem.
+
+**2. A fixed bar stitched into the middle of a full-page image.** The bottom
+navigation is `position: fixed`, so on a full-page capture it is painted into
+the first stitch at its document offset: `10-04-mobile-dashboard` had it lying
+across "Grant deadlines" with 3000px of page below. No position in a 3620px-tall
+picture means "pinned to the bottom of the screen", so `capture.mjs` now hides
+it for full-page shots, exactly as it already does for the skip-to-main link.
+`10-12-mobile-bottom-nav` is not full-page and still shows the bar.
+
+**3. Two shots that were passing while picturing the wrong thing.**
+`10-15-mobile-menu-notifications` opened the drawer and stopped: the control had
+been renamed to "Open full navigation menu", and once that was fixed the
+Notifications badge the caption is about sat below the fold at 390. It now
+scrolls to it, which is what a member does. The matcher keeps the two older
+label spellings so the next rewording does not break it silently.
+
+## Captured 2026-08-23 — the storefront, and three defects behind one placeholder
+
+`19-03-privacy-header`, `19-04-qr-directory-search`, `19-05-qr-regenerate-warning`,
+`19-06-store-admin-orders`, `19-07-member-payment-method` and
+`19-08-store-admin-activity` are captured, opened and checked. 445 of 485 filled.
+
+Guide 19's Store Admin marker could not be photographed at all until three
+defects were fixed, and each was invisible from the previous one.
+
+**1. The Store Admin landing page answered 500 whenever the store was in use.**
+`get_open_windows` did not eager-load `offerings`, and the endpoint serializes
+its result through `_window_payload`, which reads `window.offerings` and each
+`offering.product.name`. Under asyncio a lazy load there raises
+`MissingGreenlet` rather than emitting a query, so the dashboard failed for any
+department with an open order window — the only state in which the page has
+anything to show. `list_windows` and `get_window` already eager-load it.
+
+**2. Opening the Orders tab raised a dialog stuck on "Loading…".**
+`StoreAdminPage` holds `ordersDetailId` as `''` when nothing is deep-linked;
+`StoreOrdersTab` did `useState(initialOrderId ?? null)`, and `'' ?? null` is
+`''`. `OrderDetailModal` opens on `orderId !== null`, while its fetch is guarded
+by `if (!orderId) return` — so an empty string opened a dialog with no order
+behind it, over the list the administrator came to read. Pitfall #1 in its exact
+documented form; `||` was the fix.
+
+**3. The status filter silently showed the wrong rows.** Changing a filter
+starts a fetch without cancelling the one running, and the tab issues more than
+one unfiltered load while mounting. When an unfiltered response landed after the
+filtered one it overwrote it, leaving the control reading "Paid" over a list of
+every order — six rows read as though they were the two that were asked for. A
+request-sequence guard now lets only the newest response write. Both defects
+have tests that fail against the old implementation.
+
+**One placeholder asked for text the product does not have.** The marker wanted
+"the explanatory text that reporting payment is not payment processing" beside
+the payment-method editor. No such text exists anywhere in the member-facing
+storefront: the screen offers the department's handles, a method picker and an
+"I've sent payment" button, which reads as a checkout. Rather than caption a
+note that is not in the frame, the image is captioned for what it shows and the
+guide now states the distinction in prose and says plainly that the screen does
+not.
+
+**One marker needed two images.** The activity cards are on Overview and the
+list they describe is on Orders; no tab shows both. Split into `19-08` and
+`19-06` with a sentence tying them together — the workflow breakdown counts
+**Paid 2** and the filtered list returns those same two orders.
+
+**Seed gaps closed:** the order window is now opened explicitly rather than
+waiting for `autoOpen` to be noticed by a background task (a fresh database
+produced no orders at all, and the second seeding run silently produced them),
+and three member orders are placed and advanced so the list carries four
+distinct states. The administrator's own order is deliberately left unpaid —
+`18-04-my-orders-unpaid` pictures it.
+
+**A capture-harness lesson worth keeping:** the first version of `19-06` waited
+for `Showing 1 – 2 of 2`. That count depends on how many orders the seeder has
+advanced to paid, which moves between runs, so the shot passed or timed out
+according to the demo data rather than the page. It now waits for the filtered
+request itself.
+
+## Captured 2026-08-23 — the room tree, and a fixture that was never written down
+
+`06-24-rooms-nested-tree`, `06-25-room-located-inside` and
+`06-26-room-delete-subrooms` are re-captured, opened, and checked. Two things
+came out of it that outlast the images.
+
+**The room fixture existed only in one database.** The 2026-08-17 entry below
+says these three "are driven from `manifest.mjs` against a seeded demo
+department, so they re-shoot rather than going stale". Half of that was true:
+the manifest drives the capture, but `seed_demo_data.py` never contained the
+word "Volunteer Office". The tree was built by hand during that capture session
+and lived only in whichever database it was using. Dropping that database
+destroyed it, and all three shots failed with a 20-second locator timeout on a
+room nothing had created. The tree is now seeded (`HQ_ROOMS`), hung off the
+facility named in `FACILITIES[0]` rather than off "whichever the API returns
+first" — a tree that moved between runs would point three shots at an empty
+Rooms section without failing anything.
+
+**The delete confirmation misstated what it was about to do.** It counted
+descendants: deleting Volunteer Office — two sub-rooms, one grandchild —
+promised that "3 sub-rooms will move up a level". The backend re-parents
+`WHERE parent_room_id = room_id`, so **2** move; Locker Cage keeps its own
+parent and rides along inside that subtree. The dialog also contradicted the
+row badge directly above it, which has always shown the direct count. On a
+confirmation whose only job is to state the consequence of something
+irreversible, that is worth more than the screenshot. Fixed, with a test that
+fails against the old implementation; `06-26` was re-shot afterwards and now
+reads "Its 2 sub-rooms".
+
+**The stray facility is gone from the pictures.** All three previously showed a
+facility header reading "Oakville Fire Department / Station 1" — the record
+onboarding auto-creates and the seeder then duplicated. They now read
+"Station 1 - Headquarters".
+
+Guide 19's rooms marker asked to reuse this capture rather than take its own
+("shared with lesson 06; capture once, reuse"), so it now references
+`06-24-rooms-nested-tree.png` directly. 439 of 485 filled.
+
+## Captured 2026-08-23 — the close-out wizard, and why it had never shot
+
+`03-74-settings-call-count-toggle`, `03-75-closeout-step1-attendance`,
+`03-76-closeout-step2-calls` and `03-77-closeout-step3-confirm` are captured,
+opened, and checked against their captions. All four had manifest entries since
+2026-08-19 and had never produced an image; four separate faults stood between
+the entry and the picture, and only the first announced itself.
+
+**1. The scheduling seed died on its own feature working.** Seating crew
+tolerated a "conflicting shift" 400 and re-raised everything else, but
+`_require_evoc_on_apparatus` deliberately puts a minimum EVOC level on the
+heavier rigs so the driver-eligibility check fires, and operators are certified
+for only the first four. A driver seat landing on an uncertified member is the
+demonstration, not an error — it raised, and the step died on the first one.
+The demo had **2 shifts instead of 66**, which silently took out the close-out
+fixture, the batch report trainee, the shift reminder inbox and every scheduling
+request. Both refusals now go through `is_expected_seat_refusal`, matching
+`LB-SCHED-001` on the error code rather than on a sentence that names the level
+and the apparatus.
+
+**2. The fixture read the wrong endpoint.** `_closeout_apparatus` asked
+`/scheduling/apparatus` — the scheduling module's own `basic_apparatus` table,
+which this demo never populates — so it answered `[]` and reported "no
+non-engine apparatus to hang it on" against a seven-unit fleet that plainly
+included the Medic its own hint asks for. It now reads
+`/scheduling/apparatus-options` and unwraps the `{"options": [...]}` container
+the rest of the scheduling seed already names.
+
+**3. A predicate cannot close over this file.** `openStaffedShift` ships its
+match function across as source text and rebuilds it with `new Function`, which
+keeps the syntax and drops the scope. The close-out call site referenced
+`CLOSEOUT_SHIFT_NOTE`, so every one of the three wizard shots failed with
+`ReferenceError: CLOSEOUT_SHIFT_NOTE is not defined` — thrown in the browser,
+with nothing in the manifest looking wrong. The constant is now interpolated
+into the source string, and `openStaffedShift` says so.
+
+**4. The step read raced the re-render, and nothing failed.** The walk clicked
+Next and read `aria-current` immediately; the progress nav renders on every
+step, so waiting for the wizard to be "visible" was satisfied instantly and the
+read returned 1 while the body was still swapping to step 2. The `=== 2` guard
+never fired, the call rows were never filled, and the capture **succeeded** —
+writing a screen of ten empty rows under a caption about three EMS and one fire.
+This is the failure mode worth remembering: a shot that captures cleanly and
+pictures the wrong thing. The walk now waits for the step marker itself to move.
+
+**Framing.** All three wizard shots are clipped to the card and shot at
+1440x1300. At the 900px default the card is taller than its drawer, so step 1
+lost the combined-hours figure its marker explicitly asks for and step 2 opened
+already scrolled past the rows it exists to show. Clipping also keeps the
+drawer's Notes card — which carries the seeder's own "Close-out wizard fixture"
+text — out of a published image.
+
+**One prose correction.** The guide's callout asserted that combined hours on a
+four-person 24-hour tour "is 96". It cannot be, on the crew the same marker
+demands: the fixture carries one member who never checked out and one who was
+never checked in, and both contribute zero, so the screen reads **47.8**. The
+callout now states the ideal, then explains why the picture is short of it and
+what a short figure means. Verified arithmetic: 24.0 + 0.0 + 23.8 + 0.0 = 47.8,
+and step 3 reports the same 47.8 against 4 calls (3 EMS + 1 Fire) from step 2.
+
+`03-75` carries `allowEmptyState` with its reason: "no check-out recorded" is
+the flag the shot exists to photograph, so the guard was reading the subject of
+the capture as its absence.
+
+**Still open in this group, unchanged:** close-out with outstanding
+end-of-shift checks, and Reports → Call Volume in count-only mode. Their
+blockers are recorded under the 08-17 → 08-19 entry below and neither is fixed
+by the above.
+
 ## Flagged by the 2026-08-19 → 08-23 changes
 
 Full reason/data-path context in

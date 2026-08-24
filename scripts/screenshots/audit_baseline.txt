@@ -51,7 +51,6 @@
 08-22-screening-record-form.png
 08-57-template-reset-dialog.png
 10-11-public-form-dark.png
-10-14-scan-camera-denied.png
 10-15-mobile-menu-notifications.png
 11-03-budget-categories.png
 13-05-add-requirement.png
@@ -84,5 +83,28 @@
 # reporting the subtle light-page-under-scrim tier, which would retire most of
 # the block above along with these two. Left as-is here because that is a change
 # to the check's contract, not a screenshot fix.
+#
+# UPDATE 2026-08-24 — the STARK tier now has no cause left.
+#
+# `html` carried the themed gradient as a background *image* and, because the
+# `background:` shorthand resets it, no background *colour*. The reserved gutter
+# is painted from the canvas colour, which an image does not supply — so it fell
+# back to the browser's white, and every dark-mode page carried a bright 15px
+# strip. The 2026-08-15 canvas move did not fix that; it swapped one image for
+# another. `styles/index.css` now sets `background-color` on the root as well,
+# and a re-captured dark page paints the gutter in the theme colour
+# (`19-11-dark-scrollbar-gutter` was flagged STARK and is not flagged now).
+#
+# That leaves the subtle tier reporting exactly one thing, forever: a scrim
+# cannot dim a strip that is outside the box it is laid out against. It is a
+# constant, not a regression signal — which strengthens the recommendation above
+# rather than replacing it. Still not enacted here: retiring a tier changes the
+# check's contract for everyone, and this branch is a screenshot pass.
+#
+# The three below are that class, added 2026-08-24: light pages under a dialog
+# scrim, re-captured after the canvas fix and still flagged, as predicted.
 05-75-setup-item-prefilled.png
 06-26-room-delete-subrooms.png
+19-05-qr-regenerate-warning.png
+19-07-member-payment-method.png
+19-16-legal-revision-editor.png

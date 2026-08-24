@@ -5,7 +5,7 @@
  * for the vendor purchase order and the treasurer hand-off.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleDollarSign, Download, Loader2, ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -67,11 +67,26 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
   const [bulkPaymentMethod, setBulkPaymentMethod] = useState('');
   const [bulkReference, setBulkReference] = useState('');
   const [busy, setBusy] = useState(false);
-  const [detailId, setDetailId] = useState<string | null>(initialOrderId ?? null);
+  // `||`, not `??`: StoreAdminPage passes initialOrderId as '' when no order is
+  // being deep-linked, and `'' ?? null` is ''. OrderDetailModal opens on
+  // `orderId !== null`, so an empty string opened it, while its fetch is guarded
+  // by `if (!orderId) return` -- so every visit to the Orders tab raised an
+  // order dialog stuck on "Loading…" over the list, with no order behind it.
+  const [detailId, setDetailId] = useState<string | null>(initialOrderId || null);
 
   const allSelected = orders.length > 0 && orders.every((o) => selected.includes(o.id));
 
+  // Sequence number for in-flight list fetches. Changing a filter starts a new
+  // request without cancelling the one already running, and the two are not
+  // guaranteed to come back in order -- an unfiltered load issued on mount can
+  // land after the filtered one and overwrite it. The result is the worst kind
+  // of wrong: the filter control still reads "Paid" while the list underneath
+  // it is every order, so the officer reads six rows as though they were the
+  // two they asked for. Only the newest request is allowed to write.
+  const loadSequence = useRef(0);
+
   const load = useCallback(async () => {
+    const sequence = (loadSequence.current += 1);
     setLoading(true);
     try {
       const response = await storefrontService.getOrders({
@@ -85,12 +100,16 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         page,
         pageSize: DEFAULT_PAGE_SIZE,
       });
+      if (sequence !== loadSequence.current) return;
       setOrders(response.items);
       setTotal(response.total);
     } catch (err: unknown) {
+      if (sequence !== loadSequence.current) return;
       toast.error(getErrorMessage(err, 'Failed to load orders'));
     } finally {
-      setLoading(false);
+      // The spinner belongs to the newest request too: an older one finishing
+      // last would otherwise clear it while the current fetch is still running.
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [methodFilter, openOnly, page, paymentFilter, search, statusFilter, submittedWithinHours, windowFilter]);
 

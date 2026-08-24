@@ -53,6 +53,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
+import { formatHistoryDetails } from './itemHistoryDetails';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 
@@ -606,20 +607,8 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
               <span className="text-theme-text-primary text-sm font-medium">{evt.summary}</span>
               <span className="text-theme-text-muted text-xs whitespace-nowrap">{formatDate(evt.date, tz)}</span>
             </div>
-            {evt.details && Object.keys(evt.details).length > 0 && (
-              <p className="text-theme-text-muted mt-1 truncate text-xs">
-                {Object.entries(evt.details)
-                  .map(([k, v]) => {
-                    const s =
-                      typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
-                        ? String(v)
-                        : v != null
-                          ? JSON.stringify(v)
-                          : '';
-                    return `${k}: ${s}`;
-                  })
-                  .join(' | ')}
-              </p>
+            {formatHistoryDetails(evt.details, tz) && (
+              <p className="text-theme-text-muted mt-1 truncate text-xs">{formatHistoryDetails(evt.details, tz)}</p>
             )}
           </div>
         </li>

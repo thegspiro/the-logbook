@@ -341,10 +341,7 @@ reports a number when they close the shift out, and nothing else is collected.
 **Scheduling → Settings → General → Shift close-out rules → Record a call count
 at close-out.**
 
-> **[SCREENSHOT NEEDED — Scheduling → Settings → General, scrolled to the
->
-> > _Shift close-out rules_ block, with the "Record a call count at close-out"
-> > toggle switched on and its explanatory paragraph legible]**
+![Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on](./images/03-74-settings-call-count-toggle.png)
 
 It takes effect immediately **in your own browser** — no reload, no restart.
 **Tell your officers before you flip it**, because it changes what they see at
@@ -1085,6 +1082,17 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 1. Set the template name, timing (start or end of shift), and type (equipment, vehicle, or combined)
 2. Optionally assign to a specific apparatus or apparatus type
+
+   **The two do not add up — a named apparatus replaces its type.** A shift
+   resolves its checklists by looking for templates naming its apparatus, and
+   consults the apparatus-type templates _only when it finds none_. So the
+   moment you give one truck a template of its own, every type-level template
+   stops applying to that truck. If Medic 3 has its own supply check and your
+   department also runs an "Ambulance Close-Out" by type, Medic 3's crew are
+   shown the supply check and nothing else — the close-out is still in the
+   template list, still active, and silently never asked for. Give a truck with
+   its own template the full set by name.
+
 3. Optionally restrict to specific positions (e.g., only Driver/Operator sees this checklist)
 4. Add **compartments** — named sections representing physical areas (e.g., "Officer Door Entry", "Pump Panel", "Cab Interior")
 5. Within each compartment, add **items** with one of 7 check types:
@@ -1527,25 +1535,25 @@ checked in is listed too, with empty times for you to fill in**. That is
 deliberate: they used to be invisible, which meant no hours, no credit, and
 nothing on screen to tell the officer somebody had been missed.
 
-> **[SCREENSHOT NEEDED — close-out wizard step 1: the crew list with editable
->
-> > on/off times, the combined-hours figure, and at least one member carrying the
-> > "missing check-out" flag. Use a four-person crew so the combined figure is
-> > visibly several times the shift length]**
+![Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times](./images/03-75-closeout-step1-attendance.png)
 
-> **"Combined hours" is not the shift's length.** Summed across a four-person
-> crew on a 24-hour tour it is 96, which reads as a mistake without the word
-> "combined" in front of it.
+> **"Combined hours" is not the shift's length.** It adds up what every member
+> was on for, so a 24-hour tour with a full four-person crew all present
+> approaches 96 — a number that reads as a mistake without the word "combined"
+> in front of it.
+>
+> The figure above reads 47.8 rather than 96 for the reason the screen is
+> showing you: two of these four have incomplete times. A member who never
+> checked out and one who was never checked in at all contribute nothing to the
+> total until somebody fills their times in. A combined figure well short of
+> crew × hours is the flag that somebody still has to be accounted for.
 
 #### Step 2 — How many calls did the apparatus run?
 
 One row per call type. Enter a number against each type you ran; the **total is
 calculated from those rows and cannot be typed into**.
 
-> **[SCREENSHOT NEEDED — close-out wizard step 2: the per-type rows with a
->
-> > couple filled in, and the derived read-only total beside them. This is the
-> > screen that teaches "the rows are the only source" and it needs the picture]**
+![Close-out wizard step 2 — per-call-type rows with three EMS and one fire entered, and the total derived from them shown read-only above](./images/03-76-closeout-step2-calls.png)
 
 There is exactly one place the number comes from. An earlier design let you type
 a total _and_ a breakdown, and revising a count downward left the old total
@@ -1577,10 +1585,7 @@ report that reads it.
 Every member starts credited with the apparatus's full count. Adjust anyone who
 came on late or left early.
 
-> **[SCREENSHOT NEEDED — close-out wizard step 3: per-member credit seeded from
->
-> > the apparatus count, with one member adjusted downward, plus the pass-down
-> > notes field and the final "Close out shift" button]**
+![Close-out wizard step 3 — every member credited with the apparatus's four calls except the first, lowered to two for a late arrival, with the pass-down notes field below](./images/03-77-closeout-step3-confirm.png)
 
 **A member credited with fewer calls than the apparatus ran gets a count, but
 not call types.** Which of the night's calls they were on is not something the
@@ -1597,9 +1602,7 @@ and its required reason — the same behaviour as the old checklist, because the
 wizard replaces that screen and has to carry everything it could do. The
 override is still logged and still audited.
 
-> **[SCREENSHOT NEEDED — close-out wizard with outstanding end-of-shift checks,
->
-> > showing the warning, the override checkbox, and the reason field it requires]**
+![Close-out wizard step 3 with the rule in force: the outstanding equipment check named in red, the override ticked, and the reason field it requires before the shift can be closed](./images/03-81-closeout-override.png)
 
 #### Wizard edge cases
 
@@ -2780,27 +2783,35 @@ override this — a permission grant is not a second person.
 A blocked attempt changes nothing: the request stays pending for somebody else
 to action.
 
-> **[SCREENSHOT NEEDED — Scheduling → Requests viewed by the member who raised
-> it, clicking **Approve** on their own pending swap, showing the resulting
-> error "Requesters cannot review their own swap requests" with the request
-> still pending. Do **not** attempt a side-by-side of differing controls:
-> Approve and Deny render on every pending request for anyone holding
-> `scheduling.manage`, own requests included, so nothing distinguishes the rows
-> until the button is pressed.]**
+![The Requests tab refusing the administrator's press of Approve on the swap they raised themselves; their own row carries an extra cancel control the member's row below it does not](./images/03-78-swap-review-blocked.png)
+
+_**Approve and Deny are not the tell.** They render on every pending request for
+anyone holding `scheduling.manage`, your own included — so you cannot look at
+the row and know it will refuse you, and the refusal only appears once the
+button is pressed. What does differ is the small **✕** at the end of your own
+row: cancelling is a thing only the requester may do, so that control marks the
+request you raised, and by implication the one you cannot review._
 
 **Plan the second approver.** If exactly one person in your department holds
 `scheduling.manage` and that person also requests swaps, nobody can approve
 their requests. Grant a second person before a Saturday morning discovers it.
 
 **The Requests tab is paged.** Long histories no longer load in one request.
+The tab shows twenty rows and puts a **Load more swap requests** (or **Load
+more time-off requests**) button under them; there are no numbered pages, and
+the button is absent — not greyed out — when there is nothing further to fetch.
+
+**You will not see the history until you widen the filter.** The tab opens on
+**Pending**, and a department's back catalogue is by definition already
+approved or denied. Set the status filter to **All Statuses** before judging
+how much history you have; the count beside each view's name is the full total,
+not the number on screen.
+
 If you have a script or integration reading swap or time-off requests from the
 API, the response shape changed — it is now an object with an `items` list
 rather than a plain list.
 
-> **[SCREENSHOT NEEDED — Scheduling → Requests with the pagination control
->
-> > populated. Seed more than one page of requests (at least 60) so the control
-> > is genuinely active rather than a disabled stub.]**
+![The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row](./images/03-79-requests-load-more.png)
 
 ## August 19–23, 2026 update — equipment checks survive a dead spot
 
@@ -2822,7 +2833,11 @@ Also changed:
   check. A lot expiring later does not retroactively fail an earlier check.
 - **Timing is recorded by the server**, not supplied by the phone.
 
-> **[SCREENSHOT NEEDED — a submitted shift equipment check on a 390x844
->
-> > viewport. If the harness can simulate the queued/offline state, capture that
-> > too; if it cannot, say so in the caption rather than staging it.]**
+![One submitted engine check read back on a phone: passed overall, who signed it, when, and every item in the order the checklist walks the truck](./images/03-80-submitted-check-phone.png)
+
+_The queued/offline half of that description is not pictured. Simulating a
+dropped connection means setting state on the browser rather than on the
+page, which this capture harness does not do — an "offline" banner staged
+any other way would be a photograph of something the app never rendered.
+What the record above shows is the end state either route arrives at: one
+check, one set of answers._

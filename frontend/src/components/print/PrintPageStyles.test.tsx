@@ -26,14 +26,42 @@ const stylesheet = readFileSync(join(__dirname, '../../styles/index.css'), 'utf8
  */
 describe('application canvas contract', () => {
   it('paints the canvas on the root element, not the body', () => {
-    const htmlRule = /\bhtml\s*\{[^}]*background:\s*linear-gradient/.test(stylesheet);
+    // `background:` or `background-image:` — the invariant is that the root
+    // paints the gradient, not which spelling declares it. The rule was moved
+    // to longhands on 2026-08-24 (see the colour assertion below) and this
+    // matcher, pinned to the shorthand, was the only thing that noticed.
+    const htmlRule = /\bhtml\s*\{[^}]*background(?:-image)?:\s*linear-gradient/.test(stylesheet);
     expect(htmlRule).toBe(true);
 
     // The body rule must not re-take the canvas: two painted backgrounds means
     // the body one silently wins nothing and the print routes break again.
     const bodyRule = /\nbody\s*\{([^}]*)\}/.exec(stylesheet);
     expect(bodyRule).not.toBeNull();
-    expect(bodyRule?.[1]).not.toMatch(/background:\s*linear-gradient/);
+    expect(bodyRule?.[1]).not.toMatch(/background(?:-image)?:\s*linear-gradient/);
+  });
+
+  it('gives the root a background colour, so the scrollbar gutter is painted', () => {
+    // `scrollbar-gutter: stable` reserves a strip at the right edge that is
+    // painted from the canvas *colour*. A background-image does not supply one,
+    // and the `background:` shorthand resets the colour to transparent — so
+    // until 2026-08-24 that strip fell back to the browser's white and every
+    // dark-mode page carried a bright 15px band down its right edge.
+    //
+    // Asserted separately from the gradient because the two are easy to
+    // reunite: anyone folding these longhands back into one `background:`
+    // shorthand drops the colour again, and the page still looks right
+    // everywhere except the fifteen pixels nobody photographs.
+    // The block carrying the gradient, not merely the first `html {` in the
+    // file — there is an earlier one (scroll-behavior), and matching it made
+    // this assertion fail against a rule it was never about.
+    const canvasBlock = [...stylesheet.matchAll(/\bhtml\s*\{([^}]*)\}/g)]
+      .map((match) => match[1] ?? '')
+      .find((body) => /background(?:-image)?:\s*linear-gradient/.test(body));
+
+    expect(canvasBlock, 'no html rule paints the gradient').toBeDefined();
+    expect(canvasBlock, 'the root must declare a background-color, not only a gradient image').toMatch(
+      /background-color:\s*var\(--bg-gradient-from\)/
+    );
   });
 
   it('gives print routes a root-level override for their grey desk', () => {

@@ -5,9 +5,21 @@
 Changes from 2026-08-12 through 2026-08-14 are catalogued in the
 [three-day change and connection audit](../CHANGE_AUDIT_2026-08-12_TO_14.md).
 Authors adding the new workflows must place this marker at the exact teaching
-step until a verified image exists:
+step until a verified image exists — as a blockquote, and with the description
+replaced:
 
+```markdown
 > **[SCREENSHOT NEEDED — describe the exact state/control and required demo data]**
+```
+
+It is fenced here on purpose. Both `status_report.py` and
+`apply_placeholders.py` match the marker on any line beginning
+`> **[SCREENSHOT NEEDED`, so a live example reads as an outstanding capture —
+one that can never be closed, because there is no screen behind it.
+`status_report.py` excludes this file by name and so has never counted it, but
+nothing else does: a plain `grep` over the guides finds it, and this file is
+the only place in the library where that search returns something nobody can
+act on. Quote the syntax; do not demonstrate it.
 
 Existing images affected by those workflows must be labeled **REPLACE** in
 [`SCREENSHOT_CURRENCY.md`](./SCREENSHOT_CURRENCY.md), not silently treated as

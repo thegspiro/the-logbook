@@ -1239,9 +1239,9 @@ than an oversight.
 | Pop-up blocker                                              | Both views open with `window.open`; a blocker will silently stop them. If **Print** appears to do nothing, allow pop-ups for the site                                                                                                                   |
 | Printing with "Background graphics" on                      | Browsers do not print page backgrounds by default, and the app forces a white page when they do, so this is safe to leave on. Builds from 2026-08-15 to 08-16 could print the themed background behind the sheet in light mode; if you see that, update |
 
-> **[SCREENSHOT NEEDED — the Templates tab row actions with **Print** visible, and the resulting blank sheet in the browser's print preview. Demo data: one published template with at least two sections and a mix of criterion types (pass/fail, scored, timed), so the differing marking boxes are visible in the same frame.]**
+![A blank skill sheet as it prints: the sections, the criteria, and a marking box beside each step for the examiner to fill in by hand](./images/09-22-template-print-sheet.png)
 
-> **[SCREENSHOT NEEDED — a completed scorecard print preview showing the per-step marks, the score arithmetic, and the validating officer's sign-off block. Demo data: one validated official result with at least one failed step, so the deduction is visible in the arithmetic.]**
+![A validated scorecard as it prints: per-step marks, the section arithmetic behind the 78% total, one failed step, and the examiner's note against it](./images/09-23-scorecard-print-officer.png)
 
 > **[SCREENSHOT NEEDED — the same scorecard as seen by a candidate under `scores` disclosure, with the examiner's notes absent. Demo data: the template's result-disclosure override set to `scores`, viewed as the candidate. Capture beside the officer version above; the pair is the teaching point, either one alone is not.]**
 

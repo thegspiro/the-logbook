@@ -288,4 +288,34 @@ describe('RequestsTab', () => {
     await waitFor(() => expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(2));
     expect(mockGetTimeOffRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 0, limit: 20 });
   });
+
+  it('ignores an in-flight fetch that the filter change superseded', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    // Switching view refetches, and changing the filter immediately after
+    // starts a second fetch. Resolve them out of order — the superseded
+    // Pending fetch last — which is what a slow first response does in the
+    // browser.
+    let releasePending: () => void = () => {};
+    const pendingPage = new Promise<{
+      items: never[];
+      total: number;
+      skip: number;
+      limit: number;
+    }>((resolve) => {
+      releasePending = () => resolve({ items: [], total: 1, skip: 0, limit: 20 });
+    });
+    mockGetTimeOffRequests.mockImplementation((params: { status?: string }) =>
+      params?.status === 'pending' ? pendingPage : Promise.resolve({ items: [], total: 27, skip: 0, limit: 20 })
+    );
+
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+    await user.click(screen.getByRole('tab', { name: /time off/i }));
+    await user.selectOptions(screen.getByLabelText('Filter requests by status'), '');
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /time off/i })).toHaveTextContent('(27)'));
+    releasePending();
+    await waitFor(() => expect(mockGetTimeOffRequests).toHaveBeenCalled());
+    expect(screen.getByRole('tab', { name: /time off/i })).toHaveTextContent('(27)');
+  });
 });

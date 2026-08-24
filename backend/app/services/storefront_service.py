@@ -916,6 +916,13 @@ class StorefrontService:
         # department only saw it once it had a window open.
         result = await self.db.execute(
             select(StoreOrderWindow)
+            # Offerings and their products are eager-loaded for the same reason
+            # list_windows and get_window do it: the endpoint layer serializes a
+            # window through _window_payload, which reads window.offerings and
+            # each offering.product.name. Under asyncio a lazy load there raises
+            # MissingGreenlet rather than emitting a query, so the store
+            # administrator's landing page answered 500 whenever a window was
+            # actually open -- that is, whenever the store was in use.
             .options(
                 selectinload(StoreOrderWindow.offerings).selectinload(
                     StoreWindowProduct.product

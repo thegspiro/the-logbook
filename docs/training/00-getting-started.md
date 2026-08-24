@@ -421,12 +421,13 @@ Back on his laptop, Jake takes his first actions in the system:
 
 ## Personal and Organization dashboard views (August 14, 2026)
 
-The dashboard separates **Personal** information from the leadership
-**Organization** view. Personal keeps the signed-in member's equipment,
-training/activity, and attention items. Authorized leaders can switch to
-Organization for department-wide operational cards and management links. This
-prevents department totals or another member's equipment from being presented
-as the viewer's own data.
+The dashboard separates the signed-in member's own information from the
+leadership view. The two tabs are labelled **My Department** and
+**Organization** — "Personal" is the idea, not the label on screen. My
+Department keeps your equipment, hours, training and attention items;
+authorized leaders can switch to Organization for department-wide operational
+cards and management links. This prevents department totals or another member's
+equipment from being presented as the viewer's own data.
 
 **Edge cases:** members without an organization-level permission do not see the
 Organization tab; conditional cards remain absent when their module or data is
@@ -434,4 +435,10 @@ unavailable; management links require their specific permission even when the
 summary card is visible; switching tabs must not mix cached personal and
 organization responses.
 
-> **[SCREENSHOT NEEDED — leader dashboard with Personal and Organization tabs, the Personal equipment panel, and an Organization aggregate card; use captions to identify the data boundary.]**
+![The dashboard's My Department tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is Organization](./images/00-24-dashboard-my-department.png)
+
+![The same dashboard on its Organization tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen](./images/00-25-dashboard-organization.png)
+
+_The boundary is the tab. Everything in the first frame is Dana's own —
+her gear, her hours, her outstanding items. Everything in the second is the
+department's, and none of it is attributed to her. Nothing appears in both._

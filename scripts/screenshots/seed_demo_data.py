@@ -199,6 +199,39 @@ PHASE_NUMBER_PREFIX = re.compile(r"^\s*Phase\s+\d+\s*[—–-]\s*")
 
 SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 
+# LB-SCHED-001: the member holds no EVOC certification high enough to drive
+# this rig. Matched on the error code rather than the sentence, which names the
+# level and the apparatus and so differs per refusal.
+DRIVER_NOT_QUALIFIED = re.compile(r"LB-SCHED-001")
+
+
+def is_expected_seat_refusal(exc: "ApiError") -> bool:
+    """Whether a refused shift assignment is the application working correctly.
+
+    Two refusals are ordinary and must not fail the seed:
+
+    * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
+      still on duty into the next date and the API declines to double-book
+      them. Rotating the pool reduces this but cannot eliminate it for every
+      roster size.
+    * **Driver not EVOC-qualified.** ``_require_evoc_on_apparatus`` puts a
+      minimum EVOC level on the heavier rigs precisely so this check fires, and
+      operators are certified for only the first four rigs — so a driver seat
+      landing on an uncertified member is the demonstration working, not a
+      seeding error.
+
+    Both leave the shift a seat short, which is what the Open Shifts tab exists
+    to show. Treating the second as fatal aborted the whole scheduling step: a
+    single EVOC refusal left the demo with 2 shifts and no scheduling
+    apparatus, which silently blocked the close-out fixture, the batch report
+    trainee, the shift reminder inbox and every guide-03 capture downstream of
+    them.
+    """
+    return exc.code == 400 and bool(
+        SHIFT_CONFLICT.search(exc.detail) or DRIVER_NOT_QUALIFIED.search(exc.detail)
+    )
+
+
 RSVP_CLOSED = re.compile(
     r"deadline has passed|already ended|no longer accepting" r"|does not require RSVP",
     re.IGNORECASE,
@@ -579,6 +612,109 @@ SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
 #
 # Matched on exactly, so it is a marker rather than prose — edit it and the next
 # seeder run creates a second fixture beside the first instead of reusing it.
+# Identifies the validated scorecard fixture among the several tests seeded on
+# the same weighted template. Changing this text orphans the existing one: the
+# seeder will build a second rather than find the first.
+SCORECARD_TEST_NOTE = "Annual handline evaluation, weighted sheet."
+
+PRIVACY_REVISIONS = [
+    (
+        """\
+Oakville Fire Department operates this member intranet to run department
+operations. The department is the data controller for everything in it.
+
+What we keep: membership records, training and certification history, shift and
+attendance records, and the emergency contact details you give us.
+
+Who sees it: access follows your role.
+
+Questions about your record go to the department secretary, not to the software
+vendor.""",
+        "Replaced the platform boilerplate with the department's own wording.",
+    ),
+    (
+        """\
+Oakville Fire Department operates this member intranet to run department
+operations. The department is the data controller for everything in it.
+
+What we keep: membership records, training and certification history, shift and
+attendance records, and the emergency contact details you give us.
+
+How long: personnel records for the length of membership plus seven years, per
+the department's retention schedule and the Virginia Public Records Act.
+
+Who sees it: access follows your role. Medical and screening records are held
+separately and reached only by the members named in the department's HIPAA
+policy.
+
+Questions about your record go to the department secretary, not to the software
+vendor. The department decides what is collected, who may read it, and when it
+is destroyed.""",
+        "Added the retention schedule and the separate handling of medical "
+        "records, per counsel's note of 21 August.",
+    ),
+    (
+        """\
+Oakville Fire Department operates this member intranet to run department
+operations. The department is the data controller for everything in it.
+
+What we keep: membership records, training and certification history, shift and
+attendance records, and the emergency contact details you give us.
+
+How long: personnel records for the length of membership plus seven years, per
+the department's retention schedule and the Virginia Public Records Act.
+
+Who sees it: access follows your role. Medical and screening records are held
+separately and reached only by the members named in the department's HIPAA
+policy.
+
+Leaving the department: your record is retained under the schedule above rather
+than deleted, because it is a department record and in places a statutory one.
+Ask the secretary for a copy of what is held about you at any time.
+
+Questions about your record go to the department secretary, not to the software
+vendor. The department decides what is collected, who may read it, and when it
+is destroyed.""",
+        "Answered the question members kept asking at orientation: what happens "
+        "to your record after you leave. Adopted at the 19 August business "
+        "meeting.",
+    ),
+]
+
+SECRETARY_DRAFT_NOTE = (
+    "Second pass after the officers' meeting: added the account-suspension "
+    "and equipment-return clauses the bylaws already require."
+)
+
+SECRETARY_DRAFT_BODY = """\
+DRAFT — not yet adopted. Second pass, incorporating the officers' comments.
+
+Using this system: your account is issued by Oakville Fire Department and
+belongs to the department. Use it for department business.
+
+Your account is suspended when your membership is suspended, and closed when
+your membership ends. Department property issued to you — turnout gear, radios,
+keys, station fobs — is returned at the same time, per Article VII of the
+bylaws.
+
+What you post: minutes, reports and messages entered here are department
+records. Write them as such.
+
+Questions go to the department secretary."""
+
+TERMS_DRAFT_BODY = """\
+DRAFT — not yet adopted.
+
+This system is department property provided for department business. Your
+access exists because of your standing as a member and changes or ends with it.
+
+You are responsible for what happens under your account. Do not share your
+sign-in. Report a lost device to a duty officer the same day.
+
+Records created here — training entries, shift reports, incident notes — are
+department records, not personal ones. Treat this as a department system rather
+than a private one."""
+
 CLOSEOUT_SHIFT_NOTE = (
     "Close-out wizard fixture — 24-hour tour, four crew, count-only captures."
 )
@@ -811,6 +947,28 @@ FACILITIES = [
     ("Station 1 - Headquarters", "410 Grand Avenue", 1962, 24000, 4),
     ("Station 2 - Westside", "1820 Prairie Road", 1988, 11500, 2),
     ("Training & Administration Center", "22 Depot Street", 2004, 9200, 1),
+]
+
+# Rooms nested inside rooms, at headquarters.
+#
+# Three guide-06 captures (06-24 nested tree, 06-25 "Located Inside", 06-26 the
+# delete-with-sub-rooms confirmation) and guide 19's rooms marker all photograph
+# this tree, and it needs three levels to show anything: a container reporting
+# how many rooms it holds, a sub-room that is itself a container, and a leaf.
+#
+# It was built by hand during the 2026-08-17 capture run and never written
+# down, so it lived only in whichever database that session happened to be
+# using. Dropping that database destroyed it, and the three shots -- which the
+# currency log described as re-shooting rather than going stale -- failed with
+# a 20s locator timeout on a room nothing had created.
+#
+# ``(name, room_type, floor, capacity, parent name or None)``. Order matters:
+# a parent has to exist before the row naming it.
+HQ_ROOMS = [
+    ("Volunteer Office", "office", 1, 8, None),
+    ("Quartermaster's Storage", "storage", 1, 2, "Volunteer Office"),
+    ("Locker Cage", "storage", 1, None, "Quartermaster's Storage"),
+    ("Records Closet", "storage", 1, None, "Volunteer Office"),
 ]
 
 
@@ -1111,8 +1269,85 @@ class Seeder:
 
     # -- facilities & apparatus --------------------------------------
 
+    def _adopt_headquarters_facility(self, existing: list[dict]) -> list[dict]:
+        """Rename onboarding's auto-created headquarters into Station 1.
+
+        Creating the organization also creates a facility named after it
+        (`OnboardingService._create_headquarters_facility`), and the stations
+        step is documented as adding the stations *beyond* headquarters. This
+        seeder's FACILITIES list names its own "Station 1 - Headquarters", so
+        without this the demo department owns two headquarters and a facility
+        named after the department itself — a row no real department has, which
+        fronted the facility list in two captures.
+
+        Adopting the record rather than deleting it is also what a real
+        administrator does with it, so the seeded state stays a picture of the
+        product rather than of the seeder.
+        """
+        hq_name, hq_address, hq_year, hq_sqft, hq_bays = FACILITIES[0]
+        if any(f.get("name") == hq_name for f in existing):
+            return existing
+
+        org_name = (self.api.get("/organization/profile") or {}).get("name")
+        if not org_name:
+            return existing
+
+        stray = next((f for f in existing if f.get("name") == org_name), None)
+        if not stray:
+            return existing
+
+        facility_id = pick(stray, "id")
+        if not facility_id:
+            return existing
+
+        renamed = self.api.patch(
+            f"/facilities/{facility_id}",
+            {
+                "name": hq_name,
+                "address_line1": hq_address,
+                "city": "Oakville",
+                "state": "VA",
+                "zip_code": "22046",
+                "year_built": hq_year,
+                "square_footage": hq_sqft,
+                "num_bays": hq_bays,
+                "num_floors": 2,
+                "sleeping_quarters": 8 if hq_bays > 2 else 4,
+                "description": (
+                    f"{hq_name} houses front-line apparatus and crew quarters."
+                ),
+            },
+        )
+        self._rename_paired_location(org_name, hq_name, hq_address)
+        return [renamed if f is stray else f for f in existing]
+
+    def _rename_paired_location(
+        self, org_name: str, hq_name: str, hq_address: str
+    ) -> None:
+        """Rename the Location onboarding created alongside the facility.
+
+        ``_create_facility_with_location`` mints both records, and renaming the
+        facility alone leaves the Location still called after the department.
+        That one is the more visible of the two: Locations are what the events
+        picker, the room-display codes and ``/locations/qr-codes`` list, so the
+        stray fronted the Check-In QR Codes directory as
+        "Oakville Fire Department #101" above the three real stations.
+        """
+        for location in items(self.api.get("/locations"), "locations"):
+            if location.get("name") != org_name:
+                continue
+            location_id = pick(location, "id")
+            if not location_id:
+                continue
+            self.api.patch(
+                f"/locations/{location_id}",
+                {"name": hq_name, "address": hq_address},
+            )
+            return
+
     def seed_facilities(self) -> list[dict]:
         existing = items(self.api.get("/facilities"), "facilities")
+        existing = self._adopt_headquarters_facility(existing)
         names = {f.get("name") for f in existing}
         created = list(existing)
         for name, address, year, sqft, bays in FACILITIES:
@@ -1138,6 +1373,58 @@ class Seeder:
                     },
                 )
             )
+        return created
+
+    def seed_rooms(self, facilities: list[dict]) -> list[dict]:
+        """Build the nested room tree at headquarters.
+
+        Hung off the first facility in FACILITIES rather than "whichever the
+        API returns first": the captures open the facility by that name, and a
+        tree that moved between runs would point three shots at an empty Rooms
+        section without failing anything.
+        """
+        hq_name = FACILITIES[0][0]
+        hq = next((f for f in facilities if f.get("name") == hq_name), None)
+        if not hq:
+            self.blocked.append(
+                f"rooms: no facility named {hq_name!r} to hang the tree on"
+            )
+            return []
+
+        facility_id = pick(hq, "id")
+        existing = items(
+            self.api.get(f"/facilities/rooms?facility_id={facility_id}"), "rooms"
+        )
+        by_name = {r.get("name"): r for r in existing}
+
+        created: list[dict] = []
+        for name, room_type, floor, capacity, parent_name in HQ_ROOMS:
+            if name in by_name:
+                continue
+            parent = by_name.get(parent_name) if parent_name else None
+            if parent_name and not parent:
+                # The parent failed to create, so this row would silently land
+                # at the top level and flatten the tree the shots are of.
+                self.blocked.append(
+                    f"rooms: {name!r} needs {parent_name!r}, which is not there"
+                )
+                continue
+            payload = {
+                "facility_id": facility_id,
+                "name": name,
+                "floor": floor,
+                "room_type": room_type,
+                # Cold Zone renders as a badge on every row, which is what the
+                # tree capture shows beside the sub-room counts.
+                "zone_classification": "cold",
+            }
+            if capacity is not None:
+                payload["capacity"] = capacity
+            if parent:
+                payload["parent_room_id"] = pick(parent, "id")
+            room = self.api.post("/facilities/rooms", payload)
+            by_name[name] = room
+            created.append(room)
         return created
 
     def seed_locations(self, facilities: list[dict]) -> list[dict]:
@@ -1277,9 +1564,7 @@ class Seeder:
         # to a 400 that failed the whole step -- which left `by_level` empty and
         # no apparatus with a required EVOC level, so the driver-eligibility
         # feature sat inert and 03-52 had nothing to photograph.
-        numbers = {
-            pick(level, "level_number", "levelNumber") for level in levels
-        }
+        numbers = {pick(level, "level_number", "levelNumber") for level in levels}
         blueprint = [
             (1, "Basic", "EVOC-1", "Emergency vehicle operation, non-transport."),
             (2, "Intermediate", "EVOC-2", "Engine and rescue apparatus."),
@@ -2137,14 +2422,11 @@ class Seeder:
                             {"user_id": user_id, "position": seats[slot]},
                         )
                     except ApiError as exc:
-                        # The night shift runs 19:00-07:00, so its crew is still
-                        # on duty into the next date and the API refuses to
-                        # double-book them. Rotating the pool reduces that but
-                        # cannot eliminate it for every roster size, and the
-                        # rule belongs to the app, not the seeder: a refusal on
-                        # these grounds means the shift is simply short a member,
-                        # which the Open Shifts tab is meant to show anyway.
-                        if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                        # A double-booking or an EVOC refusal is the app's own
+                        # rule, not a seeder fault: the shift is simply short a
+                        # member, which the Open Shifts tab is meant to show
+                        # anyway. See is_expected_seat_refusal.
+                        if not is_expected_seat_refusal(exc):
                             raise
 
                 # Put the demo administrator on today's first shift. Several
@@ -2419,14 +2701,212 @@ class Seeder:
                     {"user_id": user_id, "position": "firefighter"},
                 )
             except ApiError as exc:
-                # Same overlapping-shift refusal the create path tolerates: the
-                # member is already on duty, so the shift stays a seat short.
-                if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                # Same refusals the create path tolerates: the member is
+                # already on duty, or is not cleared to drive this rig, so the
+                # shift stays a seat short.
+                if not is_expected_seat_refusal(exc):
                     raise
             used += 1
         return used
 
     # -- scheduling: logged calls ------------------------------------
+
+    #: One line per entry: category name, hours, and what the member was doing.
+    #: Spread across every seeded category so the Summary's "where the hours
+    #: came from" ranking has something to rank, and sized so Administrative
+    #: Work — the one category that requires approval — carries the longest
+    #: sessions.
+    ADMIN_HOURS_ENTRIES = [
+        (
+            "Community Outreach",
+            3.0,
+            "Open house at Station 1 — tours and car seat checks.",
+        ),
+        (
+            "Community Outreach",
+            2.5,
+            "Fire prevention week visit to Oakville Elementary.",
+        ),
+        ("Fundraising", 4.0, "Pancake breakfast — setup, service and clean-up."),
+        ("Fundraising", 2.0, "Boot drive at the Route 7 intersection."),
+        (
+            "Administrative Work",
+            5.5,
+            "Quarterly NFIRS reconciliation and report filing.",
+        ),
+        (
+            "Administrative Work",
+            3.0,
+            "Grant application narrative for the SCBA replacement.",
+        ),
+        ("Station Maintenance", 4.0, "Bay floor resealing and apparatus bay lighting."),
+        ("Station Maintenance", 2.0, "Generator load test and fuel top-off."),
+        ("Meetings & Governance", 2.0, "Monthly business meeting."),
+        ("Meetings & Governance", 1.5, "Officers' meeting — staffing and budget."),
+        ("Volunteer Hours", 6.0, "County parade detail with Engine 1 and Ladder 4."),
+        ("Volunteer Hours", 3.5, "Standby coverage for the Founders Day 5K."),
+    ]
+
+    #: How many of the generated entries stay pending. The Summary card reports
+    #: approved and needs-review separately, so a fixture with none of the
+    #: latter shows one of its three numbers permanently at zero.
+    ADMIN_HOURS_PENDING = 3
+
+    #: Riding order for the rescue, and the one entry that is deliberately not
+    #: a configured position. Values are lowercased by the API's validator, so
+    #: these are written the way they will be stored.
+    RESCUE_CREW_POSITIONS = [
+        "officer",
+        "driver",
+        "firefighter",
+        "rescue specialist",
+    ]
+
+    def seed_apparatus_crew_positions(self) -> None:
+        """Riding positions on the rescue, one of them a legacy free-text seat.
+
+        Crew seats are a rank-backed picker now, and every apparatus had
+        `crew_positions` null — so the form showed "No crew seats configured"
+        and there was nothing to photograph on the screen the release note is
+        about.
+
+        "rescue specialist" is not one of the configured codes, which is the
+        point: a department that typed seat names before the picker existed
+        still has those values, and the form has to keep them readable rather
+        than silently dropping them. The form marks such a seat "(legacy
+        position)" and offers it as an option only for the seat that already
+        holds it.
+        """
+        rescue = next(
+            (
+                a
+                for a in items(self.api.get("/apparatus?limit=50"), "apparatus")
+                if str(pick(a, "unit_number", "unitNumber") or "").upper() == "R-7"
+            ),
+            None,
+        )
+        if not rescue:
+            self.blocked.append("apparatus crew positions: no R-7 in the fleet")
+            return
+        if [
+            str(p).lower()
+            for p in (pick(rescue, "crew_positions", "crewPositions") or [])
+        ] == self.RESCUE_CREW_POSITIONS:
+            return
+        self.api.patch(
+            f"/apparatus/{pick(rescue, 'id')}",
+            {"crew_positions": self.RESCUE_CREW_POSITIONS},
+        )
+
+    def seed_admin_hours_entries(self) -> list[dict]:
+        """A calendar year of logged administrative hours, mostly approved.
+
+        Every Admin Hours screen reads the same collection, and the demo
+        database had none at all: the Summary tab reported 0hrs against three
+        cards and "No completed entries match this reporting period" under a
+        heading promising a ranking. The categories were seeded; nothing had
+        ever been logged against them.
+
+        Entries are raised by the members themselves rather than by the
+        administrator, because ``POST /admin-hours/entries`` credits the
+        caller — an administrator-created set would credit one account with the
+        department's whole year. They are then reviewed by the administrator,
+        which is also the only way to reach an approved state: a manual entry
+        always lands pending on purpose, since its times are client-supplied
+        and auto-approval would let a member self-credit backdated time.
+        """
+        categories = {
+            str(pick(c, "name")): str(pick(c, "id"))
+            for c in items(self.api.get("/admin-hours/categories"), "categories")
+        }
+        if not categories:
+            self.blocked.append("admin hours: no categories to log against")
+            return []
+        members = [
+            m
+            for m in items(self.api.get("/users?limit=200"), "users")
+            if pick(m, "username") not in (DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME)
+            and pick(m, "id")
+        ]
+        if not members:
+            self.blocked.append("admin hours: no members to log entries for")
+            return []
+
+        # Matched on the description, which is unique per line and is what the
+        # entry carries back. Guarding on a total instead let a run that
+        # created every entry but failed the review pass skip straight past the
+        # approvals on the next run, leaving twelve pending entries and an
+        # Approved card reading zero -- which is exactly what happened.
+        logged = {
+            str(pick(e, "description") or "")
+            for e in items(self.api.get("/admin-hours/entries?limit=200"), "entries")
+        }
+
+        created: list[dict] = []
+        for index, (name, hours, description) in enumerate(self.ADMIN_HOURS_ENTRIES):
+            category_id = categories.get(name)
+            if not category_id or description in logged:
+                continue
+            member = members[index % len(members)]
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), str(pick(member, "username"))
+            )
+            # Walked backwards through the year in three-week steps, all inside
+            # the current calendar year so the Summary's "This calendar year"
+            # preset — the one the guide's marker names — has every entry in
+            # range. Started mid-morning, which keeps a 6-hour session inside
+            # the same day in the organization's timezone.
+            day = TODAY - timedelta(days=21 * index + 4)
+            if day.year != TODAY.year:
+                day = date(TODAY.year, 1, 1) + timedelta(days=index)
+            start = datetime.combine(day, time(hour=9), tzinfo=ORG_TIMEZONE)
+            finish = start + timedelta(hours=hours)
+            try:
+                entry = session.post(
+                    "/admin-hours/entries",
+                    {
+                        "category_id": category_id,
+                        "clock_in_at": iso(start.astimezone(timezone.utc)),
+                        "clock_out_at": iso(finish.astimezone(timezone.utc)),
+                        "description": description,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"admin hours: entry refused ({exc})")
+                continue
+            created.append(entry)
+
+        # Read back rather than reusing `created`, so the approvals happen on a
+        # re-run against entries an earlier run left pending. Newest first, so
+        # the few that stay pending are the recent ones -- which is what a real
+        # review queue looks like.
+        pending = sorted(
+            (
+                e
+                for e in items(
+                    self.api.get("/admin-hours/entries?limit=200"), "entries"
+                )
+                if str(pick(e, "status")) == "pending"
+            ),
+            key=lambda e: str(pick(e, "clock_in_at", "clockInAt") or ""),
+            reverse=True,
+        )
+        for entry in pending[self.ADMIN_HOURS_PENDING :]:
+            entry_id = pick(entry, "id")
+            if not entry_id:
+                continue
+            try:
+                self.api.post(
+                    f"/admin-hours/entries/{entry_id}/review",
+                    # `action`, not `status`: the review schema takes a verb
+                    # ("approve"/"reject"), unlike the scheduling reviews next
+                    # to it in this file, which take the resulting state.
+                    {"action": "approve"},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"admin hours: review refused ({exc})")
+                break
+        return created
 
     def seed_shift_calls(self) -> list[dict]:
         """Runs logged against past shifts.
@@ -4510,6 +4990,36 @@ class Seeder:
                 },
             )
 
+    @staticmethod
+    def _checkable_rows(detail: dict) -> list[dict]:
+        """The submittable rows of a template, in the order the form shows them.
+
+        `header` and `text` rows are layout, not questions: the server refuses
+        a submission that answers one ("Items do not belong to template", a 400
+        that names the id and nothing else), and it excludes them from the item
+        map by check type rather than by position. Three call sites built this
+        list independently and only one of them filtered — and only `header` —
+        so adding the section header to the demo template took every seeded
+        check with it, leaving the fleet grid, the compliance view and the
+        phone captures with nothing completed to show.
+        """
+        rows = []
+        for compartment in items(detail, "compartments"):
+            for item in items(compartment, "items"):
+                if pick(item, "check_type", "checkType") in ("header", "text"):
+                    continue
+                rows.append(
+                    {
+                        "template_item_id": pick(item, "id"),
+                        "compartment_name": pick(compartment, "name"),
+                        "item_name": pick(item, "name"),
+                        "status": "pass",
+                        "quantity_found": 1,
+                        "required_quantity": 1,
+                    }
+                )
+        return rows
+
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
         self._repair_check_types()
@@ -4700,19 +5210,7 @@ class Seeder:
         # The template response carries the ids the check has to reference, so
         # the submitted items are read back off it rather than reconstructed.
         detail = self.api.get(f"/equipment-checks/templates/{template_id}")
-        submitted = []
-        for compartment in items(detail, "compartments"):
-            for item in items(compartment, "items"):
-                submitted.append(
-                    {
-                        "template_item_id": pick(item, "id"),
-                        "compartment_name": pick(compartment, "name"),
-                        "item_name": pick(item, "name"),
-                        "status": "pass",
-                        "quantity_found": 1,
-                        "required_quantity": 1,
-                    }
-                )
+        submitted = self._checkable_rows(detail)
         if not submitted:
             return {"templates": templates, "checks": checks}
 
@@ -4776,18 +5274,7 @@ class Seeder:
             if not end_template_id:
                 continue
             end_detail = self.api.get(f"/equipment-checks/templates/{end_template_id}")
-            end_items = [
-                {
-                    "template_item_id": pick(item, "id"),
-                    "compartment_name": pick(compartment, "name"),
-                    "item_name": pick(item, "name"),
-                    "status": "pass",
-                    "quantity_found": 1,
-                    "required_quantity": 1,
-                }
-                for compartment in items(end_detail, "compartments")
-                for item in items(compartment, "items")
-            ]
+            end_items = self._checkable_rows(end_detail)
             end_check = self.api.post(
                 f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
                 {
@@ -4865,22 +5352,7 @@ class Seeder:
             return
 
         detail = self.api.get(f"/equipment-checks/templates/{template_id}")
-        rows = []
-        for compartment in items(detail, "compartments"):
-            for item in items(compartment, "items"):
-                # Headers carry no answer and are not counted by the form.
-                if pick(item, "check_type", "checkType") == "header":
-                    continue
-                rows.append(
-                    {
-                        "template_item_id": pick(item, "id"),
-                        "compartment_name": pick(compartment, "name"),
-                        "item_name": pick(item, "name"),
-                        "status": "pass",
-                        "quantity_found": 1,
-                        "required_quantity": 1,
-                    }
-                )
+        rows = self._checkable_rows(detail)
         if not rows:
             return
 
@@ -5032,16 +5504,20 @@ class Seeder:
 
     def _seed_closeout_shift(self, members: list[dict]) -> dict | None:
         """Create (or find) the 24-hour four-person shift and stage its crew."""
-        existing = self._find_closeout_shift()
-        if existing:
-            return existing
-
         unit = self._closeout_apparatus()
         if not unit:
             self.blocked.append(
                 "close-out fixture: no non-engine apparatus to hang it on"
             )
             return None
+        # Before the early return, not after it: on a database that already has
+        # the fixture this function stops here, and the template the wizard's
+        # outstanding-checks warning depends on would never be created.
+        self._ensure_closeout_check_template(unit)
+
+        existing = self._find_closeout_shift()
+        if existing:
+            return existing
 
         shift_day = TODAY - timedelta(days=self.CLOSEOUT_DAYS_AGO)
         start_at = datetime.combine(
@@ -5074,6 +5550,71 @@ class Seeder:
             self._stage_closeout_attendance(shift_id, crew, start_at, end_at)
         return shift
 
+    def _ensure_closeout_check_template(self, unit: dict) -> None:
+        """An end-of-shift template for the fixture's own apparatus.
+
+        The wizard's outstanding-checks warning — the override box and the
+        reason it demands — renders only when the shift has an end-of-shift
+        checklist nobody has completed. The general equipment-check seed builds
+        close-out templates by apparatus *type*, and only for the types it
+        happens to iterate; the fixture hangs on the Medic, which had none.
+
+        Written against the apparatus rather than its type, and that is not
+        interchangeable here. `_resolve_templates` falls back to type-level
+        templates **only when the unit has no apparatus-specific ones**, and
+        the Medic already carries `Medic 3 Supply Check`. A type-level
+        `ambulance` close-out is therefore created successfully, listed in the
+        template library, and never resolved for the one shift it exists for —
+        a fixture that looks correct in every place except the screen it was
+        built for.
+        """
+        apparatus_id = str(pick(unit, "id") or "")
+        if not apparatus_id:
+            self.blocked.append("close-out fixture: apparatus carries no id")
+            return
+        templates = items(self.api.get("/equipment-checks/templates"), "templates")
+        if any(
+            pick(t, "check_timing", "checkTiming") == "end_of_shift"
+            and str(pick(t, "apparatus_id", "apparatusId") or "") == apparatus_id
+            for t in templates
+        ):
+            return
+        label = str(pick(unit, "name") or "Unit")
+        self.api.post(
+            "/equipment-checks/templates",
+            {
+                "name": f"{label} Close-Out",
+                "description": (
+                    "End-of-shift verification before the crew is relieved."
+                ),
+                "check_timing": "end_of_shift",
+                "apparatus_id": apparatus_id,
+                "is_active": True,
+                "compartments": [
+                    {
+                        "name": "Patient Compartment",
+                        "sort_order": 0,
+                        "items": [
+                            {
+                                "name": name,
+                                "sort_order": order,
+                                "check_type": "present",
+                                "is_required": True,
+                                "expected_quantity": 1,
+                            }
+                            for order, name in enumerate(
+                                [
+                                    "Monitor / defibrillator",
+                                    "Drug bag seal",
+                                    "Stretcher",
+                                ]
+                            )
+                        ],
+                    }
+                ],
+            },
+        )
+
     def _find_closeout_shift(self) -> dict | None:
         """The fixture from a previous run, if it is still usable.
 
@@ -5097,8 +5638,18 @@ class Seeder:
         return None
 
     def _closeout_apparatus(self) -> dict | None:
-        """Pick a unit that no engine-specific shot is competing for."""
-        fleet = items(self.api.get("/scheduling/apparatus"), "apparatus")
+        """Pick a unit that no engine-specific shot is competing for.
+
+        Reads ``/scheduling/apparatus-options``, the same endpoint the rest of
+        the scheduling seed assigns shifts from. ``/scheduling/apparatus`` is a
+        different resource — the scheduling module's own ``basic_apparatus``
+        table — which this demo never populates, so it answered ``[]`` and the
+        fixture reported "no non-engine apparatus to hang it on" against a
+        seven-unit fleet that plainly included the Medic the hint asks for.
+        """
+        fleet = items(
+            self.api.get("/scheduling/apparatus-options"), "options", "apparatus"
+        )
         preferred = [
             unit
             for unit in fleet
@@ -5131,10 +5682,11 @@ class Seeder:
                     {"user_id": user_id, "position": seats[len(seated)]},
                 )
             except ApiError as exc:
-                # Already rostered elsewhere that day. The ordinary schedule
-                # books most of the department, so this is the common case
-                # rather than an error — move to the next member.
-                if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                # Already rostered elsewhere that day, or not cleared to
+                # drive this rig. The ordinary schedule books most of the
+                # department, so this is the common case rather than an error
+                # — move to the next member.
+                if not is_expected_seat_refusal(exc):
                     raise
                 continue
             seated.append(user_id)
@@ -5316,8 +5868,6 @@ class Seeder:
             self.api.get("/scheduling/swap-requests"), "requests", "swap_requests"
         )
         time_off = items(self.api.get("/scheduling/time-off"), "requests", "time_off")
-        if swaps and time_off:
-            return
         member = Api(self.base_url)
         member.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
         if not swaps:
@@ -5401,6 +5951,199 @@ class Seeder:
                 self.blocked.append(
                     "scheduling requests: no near-term seat for the demo member"
                 )
+
+        self._seed_own_swap_request()
+        self._seed_time_off_history()
+
+    def _seed_own_swap_request(self) -> None:
+        """A pending swap raised by the administrator itself.
+
+        Separation of duties is a rule about people, not permissions: the
+        requester cannot review their own swap even holding
+        ``scheduling.manage``. Photographing that refusal needs the capturing
+        account to be the requester, so the Requests tab has to hold one row
+        the administrator raised alongside one somebody else raised — the two
+        rows then differ visibly (the administrator's own carries the cancel
+        control instead of a reviewable state) and pressing Approve on it
+        returns the server's refusal.
+        """
+        me = self.api.get("/auth/me") or {}
+        admin_id = str(pick(me, "id") or pick(me.get("user") or {}, "id") or "")
+        mine = [
+            r
+            for r in items(
+                self.api.get("/scheduling/swap-requests?limit=100"),
+                "requests",
+                "swap_requests",
+            )
+            if str(pick(r, "requesting_user_id", "requestingUserId") or "") == admin_id
+        ]
+        if mine:
+            return
+        upcoming = sorted(
+            (
+                s
+                for s in items(self.api.get("/scheduling/my-shifts?limit=50"), "shifts")
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") > str(TODAY)
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+        )
+        if not upcoming:
+            self.blocked.append(
+                "scheduling requests: administrator has no upcoming shift to offer"
+            )
+            return
+        self.api.post(
+            "/scheduling/swap-requests",
+            {
+                "offering_shift_id": pick(upcoming[-1], "id"),
+                "reason": (
+                    "Chiefs' association meeting runs long that night — "
+                    "looking for cover on the back half."
+                ),
+            },
+        )
+
+    #: Time-off history is dated before this, and every seeded shift falls on
+    #: or after it. Approving time-off cancels any shift assignment inside its
+    #: range, so a history that overlapped the roster would silently unseat
+    #: members from shifts other guides photograph. Keeping the history behind
+    #: the roster is what makes approvals safe to seed at all.
+    TIME_OFF_HISTORY_END = TODAY - timedelta(days=14)
+
+    #: Twenty is the Requests tab's page size (``REQUESTS_PAGE_SIZE`` in
+    #: ``RequestsTab.tsx``). The Load more control renders only while fewer
+    #: rows are loaded than the reported total, so a history shorter than this
+    #: leaves nothing to photograph.
+    TIME_OFF_HISTORY_MIN = 26
+
+    TIME_OFF_HISTORY = [
+        ("Two days for my brother's wedding out of state.", "approved", ""),
+        (
+            "Annual family holiday — booked before the rotation went out.",
+            "approved",
+            "",
+        ),
+        (
+            "Elective surgery with a short recovery; cleared to return after.",
+            "approved",
+            "Get the return-to-duty note to the training office.",
+        ),
+        (
+            "Deer season opener with my father, same week every year.",
+            "denied",
+            "Three others already off that week — coverage would drop below "
+            "minimum staffing.",
+        ),
+        ("Moving house, need the truck and a day either side.", "approved", ""),
+        (
+            "College graduation for my daughter.",
+            "approved",
+            "Enjoy it — congratulations to her.",
+        ),
+        (
+            "Cruise with my wife for our anniversary.",
+            "approved",
+            "",
+        ),
+        (
+            "Long weekend for a wedding I am standing up in.",
+            "denied",
+            "Holiday weekend and we are already one short. Resubmit if "
+            "somebody picks up the Saturday.",
+        ),
+        ("Jury duty summons — county court, unknown length.", "approved", ""),
+        (
+            "Father-in-law's funeral, travelling to Ohio.",
+            "approved",
+            "Take whatever else you need.",
+        ),
+        ("Kids' school break, taking them camping.", "approved", ""),
+        (
+            "Fishing trip that has been on the calendar since January.",
+            "denied",
+            "Same week as the county-wide drill. Any other week is fine.",
+        ),
+        ("Certification course at the state academy.", "approved", ""),
+    ]
+
+    def _seed_time_off_history(self) -> None:
+        """A year of resolved time-off requests behind the two pending ones.
+
+        The Requests tab pages at twenty rows, and the control that fetches the
+        next page appears only when there is one — so the guide's pagination
+        marker cannot be filled from a department with two requests in it. A
+        real department accumulates this history in months; the demo database
+        was simply new.
+
+        Requests are dated behind the roster (see ``TIME_OFF_HISTORY_END``) and
+        raised by members other than the demo member, whose notification inbox
+        several shots photograph in a known state.
+        """
+        existing = self.api.get("/scheduling/time-off?limit=100") or {}
+        if int(pick(existing, "total") or 0) >= self.TIME_OFF_HISTORY_MIN:
+            return
+        members = [
+            m
+            for m in items(self.api.get("/users?limit=200"), "users")
+            if pick(m, "username")
+            not in (
+                DEMO_ADMIN_USERNAME,
+                DEMO_MEMBER_USERNAME,
+                TWO_FACTOR_USERNAME,
+            )
+            and pick(m, "id")
+        ]
+        if not members:
+            self.blocked.append("time-off history: no members to raise requests")
+            return
+        start = self.TIME_OFF_HISTORY_END
+        raised = 0
+        for index in range(self.TIME_OFF_HISTORY_MIN):
+            reason, verdict, note = self.TIME_OFF_HISTORY[
+                index % len(self.TIME_OFF_HISTORY)
+            ]
+            member = members[index % len(members)]
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), str(pick(member, "username"))
+            )
+            # Ten summer weeks, which is both when leave requests actually
+            # pile up and recent enough that the card's year-less "Jun 14 -
+            # Jun 16" reads as this year rather than next.
+            first = start - timedelta(days=3 * index + 3)
+            last = first + timedelta(days=index % 4)
+            try:
+                created = session.post(
+                    "/scheduling/time-off",
+                    {
+                        "start_date": str(first),
+                        "end_date": str(last),
+                        "reason": reason,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"time-off history: create refused ({exc})")
+                return
+            request_id = pick(created or {}, "id")
+            if not request_id:
+                continue
+            raised += 1
+            try:
+                self.api.post(
+                    f"/scheduling/time-off/{request_id}/review",
+                    {
+                        "status": verdict,
+                        **({"reviewer_notes": note} if note else {}),
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"time-off history: review refused ({exc})")
+                return
+        if raised < self.TIME_OFF_HISTORY_MIN:
+            self.blocked.append(
+                f"time-off history: {raised} of {self.TIME_OFF_HISTORY_MIN} raised"
+            )
 
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.
@@ -6264,6 +7007,183 @@ class Seeder:
         return created
 
     # -- documents ---------------------------------------------------
+
+    def seed_legal_documents(self) -> list[dict]:
+        """One published notice and one draft, so the two states differ on screen.
+
+        Guide 19's Legal Documents captures turn on the difference between a
+        document a department has adopted and one still being written: the
+        landing view shows a published status and a "Last updated" line against
+        one card and a draft against the other. With nothing seeded the screen
+        renders both cards on the platform default, which is a true screen and
+        the wrong one — it shows the feature unused.
+
+        Privacy is published and Terms is left as a draft rather than the other
+        way round, because the published-page capture (`19-03-privacy-header`)
+        reads /privacy: a department that has adopted its own wording is what
+        that shot should show.
+        """
+        overview = self.api.get("/legal-documents") or {}
+        documents = overview.get("documents") or []
+        by_type = {str(pick(d, "document_type", "documentType")): d for d in documents}
+
+        def has_revision(document_type: str) -> bool:
+            doc = by_type.get(document_type) or {}
+            return bool((doc.get("history") or []) or (doc.get("drafts") or []))
+
+        created: list[dict] = []
+
+        # Two published revisions, not one: the revision-history captures need a
+        # superseded entry to show, and a document with a single revision has no
+        # history worth photographing. Each is created only if its own change
+        # note is missing, so re-running adds neither.
+        # Read off the overview: there is no per-document revisions endpoint,
+        # and the overview already carries both `history` and `drafts` for each
+        # document, which is every revision this needs to recognise.
+        privacy = by_type.get("privacy_policy") or {}
+        published_notes = {
+            str(pick(r, "change_note", "changeNote") or "")
+            for r in (privacy.get("history") or []) + (privacy.get("drafts") or [])
+        }
+        for body, note in PRIVACY_REVISIONS:
+            if note in published_notes:
+                continue
+            revision = self.api.post(
+                "/legal-documents/revisions",
+                {
+                    "document_type": "privacy_policy",
+                    "body": body,
+                    "change_note": note,
+                    "effective_date": str(TODAY),
+                },
+            )
+            revision_id = pick(revision, "id")
+            if revision_id:
+                self.api.post(f"/legal-documents/revisions/{revision_id}/publish", {})
+            created.append(revision)
+
+        if not has_revision("terms_of_service"):
+            # Deliberately left unpublished: the draft state is half the shot.
+            created.append(
+                self.api.post(
+                    "/legal-documents/revisions",
+                    {
+                        "document_type": "terms_of_service",
+                        "body": TERMS_DRAFT_BODY,
+                        "change_note": (
+                            "First pass at department terms. Awaiting the "
+                            "chief's review before publishing."
+                        ),
+                    },
+                )
+            )
+
+        self._ensure_legal_proposer()
+        self._seed_secretary_draft()
+        return created
+
+    #: The demo account that may draft a revision but not publish one. The
+    #: Secretary role is the department office that actually holds
+    #: `legal.propose` without `legal.publish` or `settings.manage`, which is
+    #: the middle rung of the guide's three-way table and the one no other demo
+    #: account can photograph.
+    LEGAL_PROPOSER_USERNAME = "okittredge"
+    LEGAL_PROPOSER_ROLE = "Secretary"
+
+    def _seed_secretary_draft(self) -> None:
+        """A draft written by the propose-only account, not by the publisher.
+
+        Who *wrote* a draft decides what its card offers: the page allows
+        editing to the author or to anyone who can publish, and offers Publish
+        only to the latter. A draft the administrator wrote therefore shows the
+        secretary no controls at all, which pictures nothing — the guide's
+        claim is about a secretary looking at their own proposal and finding
+        Edit and Discard but no way to publish it.
+
+        On Terms rather than Privacy: Privacy's card is photographed elsewhere
+        in its published, no-proposals state, and a pending proposal would
+        change what that capture shows.
+        """
+        session = self.member_session(
+            self.base_url,
+            next(
+                (
+                    str(pick(u, "id"))
+                    for u in items(self.api.get("/users?limit=200"), "users")
+                    if pick(u, "username") == self.LEGAL_PROPOSER_USERNAME
+                ),
+                "",
+            ),
+            self.LEGAL_PROPOSER_USERNAME,
+        )
+        overview = session.get("/legal-documents") or {}
+        terms = next(
+            (
+                d
+                for d in (overview.get("documents") or [])
+                if str(pick(d, "document_type", "documentType")) == "terms_of_service"
+            ),
+            {},
+        )
+        notes = {
+            str(pick(r, "change_note", "changeNote") or "")
+            for r in (terms.get("drafts") or [])
+        }
+        if SECRETARY_DRAFT_NOTE in notes:
+            return
+        session.post(
+            "/legal-documents/revisions",
+            {
+                "document_type": "terms_of_service",
+                "body": SECRETARY_DRAFT_BODY,
+                "change_note": SECRETARY_DRAFT_NOTE,
+                "effective_date": str(TODAY + timedelta(days=7)),
+            },
+        )
+
+    def _ensure_legal_proposer(self) -> None:
+        """Guarantee the propose-only account this screen's captures need.
+
+        The role reached this member as a side effect of seeding the closed
+        election's ballot attestations. That worked, and is exactly the kind of
+        dependency that goes quiet when the other step's fixture guard
+        short-circuits: the capture then signs in successfully, lands on a
+        screen it no longer has, and times out with nothing pointing at why.
+        The step that owns the screen asserts its own account.
+        """
+        user_id = next(
+            (
+                str(pick(u, "id"))
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == self.LEGAL_PROPOSER_USERNAME
+            ),
+            "",
+        )
+        if not user_id:
+            self.blocked.append(
+                f"legal documents: {self.LEGAL_PROPOSER_USERNAME} is not on the roster"
+            )
+            return
+        roles = self.api.get("/roles")
+        role_id = next(
+            (
+                str(pick(r, "id"))
+                for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+                if pick(r, "name") == self.LEGAL_PROPOSER_ROLE
+            ),
+            "",
+        )
+        if not role_id:
+            self.blocked.append(
+                f"legal documents: no {self.LEGAL_PROPOSER_ROLE} role to grant"
+            )
+            return
+        try:
+            self.api.post(f"/users/{user_id}/roles/{role_id}", {})
+        except ApiError as exc:
+            # Already held is the common case on a re-run.
+            if exc.code not in (400, 409):
+                raise
 
     def seed_documents(self) -> list[dict]:
         folders = items(self.api.get("/documents/folders"), "folders")
@@ -7999,10 +8919,44 @@ class Seeder:
             return None
         template_id = pick(scored_template, "id")
 
-        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        # Identified by the state that makes it this fixture, not by "any
+        # completed test on the weighted template": five seeded tests share that
+        # template — the pending-validation pair, the failed one, an in-progress
+        # one and this — so the looser guard returned whichever the API listed
+        # first and the scorecard fixture was never rebuilt, silently keeping
+        # whatever numbers an older run had left.
+        #
+        # Deliberately not matched on SCORECARD_TEST_NOTE, which would read
+        # better: the list response has no `notes` field, so that guard can
+        # never match and the seeder builds one more validated result on every
+        # run. It did, twice, before this was caught. The note stays on the
+        # record for whoever opens it; the guard uses what the list actually
+        # carries.
+        #
+        # A validated result cannot be deleted, only voided, so a rebuilt
+        # fixture leaves its predecessor behind — hence the voided check.
+        existing = items(
+            self.api.get("/training/skills-testing/tests?limit=200"), "tests"
+        )
+        candidate_name = None
+        for member in members:
+            if pick(member, "username") == DEMO_MEMBER_USERNAME:
+                candidate_name = (
+                    f"{pick(member, 'first_name', 'firstName') or ''} "
+                    f"{pick(member, 'last_name', 'lastName') or ''}"
+                ).strip()
+                break
         for test in existing:
-            if pick(test, "template_id", "templateId") == template_id and pick(
-                test, "completed_at", "completedAt"
+            if (
+                pick(test, "template_id", "templateId") == template_id
+                and pick(test, "completed_at", "completedAt")
+                and pick(test, "validated_at", "validatedAt")
+                and not pick(test, "voided_at", "voidedAt")
+                and pick(test, "result") == "pass"
+                and (
+                    not candidate_name
+                    or pick(test, "candidate_name", "candidateName") == candidate_name
+                )
             ):
                 return test
 
@@ -8031,7 +8985,7 @@ class Seeder:
             {
                 "template_id": template_id,
                 "candidate_id": pick(candidate, "id"),
-                "notes": "Annual handline evaluation, weighted sheet.",
+                "notes": SCORECARD_TEST_NOTE,
             },
         )
         test_id = pick(test, "id")
@@ -8040,12 +8994,22 @@ class Seeder:
 
         # Deliberately short of full marks on two steps, so the section totals
         # differ from one another and the percentage is not a flat 100.
+        #
+        # One of them is also marked *failed* while the test still passes
+        # overall. That combination is the whole of the "a failed step deducts
+        # points without failing the test" rule, and it is what the scorecard
+        # print captures teach: 9 + 5 + 10 + 15 = 39 of 50, which is 78% and
+        # clears the 70% mark with a failed row visible in the breakdown.
+        # Keep the arithmetic above the pass mark if these numbers are edited —
+        # dropping under it turns the fixture into a second failed test, which
+        # `seed_failed_test` already provides and which teaches the opposite.
         awarded = {
             "Selects and stretches the correct line": 9,
-            "Advances without kinks or snags": 8,
+            "Advances without kinks or snags": 5,
             "Bleeds the line and sets the pattern": 10,
             "Maintains control under flow": 15,
         }
+        FAILED_STEP = "Advances without kinks or snags"
 
         detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
         section_results = []
@@ -8065,11 +9029,11 @@ class Seeder:
                     {
                         "criterion_id": f"criterion-{si}-{ci}",
                         "criterion_label": label,
-                        "passed": True,
+                        "passed": label != FAILED_STEP,
                         "score": score,
                         "notes": (
-                            "Slight kink at the stairwell turn."
-                            if label == "Advances without kinks or snags"
+                            "Kinked at the stairwell turn and had to be reset."
+                            if label == FAILED_STEP
                             else None
                         ),
                     }
@@ -9237,6 +10201,7 @@ class Seeder:
         self._seed_membership_vote_election(elections)
         self._seed_runoff_chain(elections)
         self._seed_saved_ballot_template()
+        self._seed_post_nomination_election(elections)
         return elections
 
     # Named and sized to match the worked example in the elections guide: four
@@ -9873,6 +10838,124 @@ class Seeder:
             if not meeting_id:
                 continue
             self.api.patch(f"/elections/{election_id}", {"event_id": meeting_id})
+
+    POST_NOMINATION_ELECTION = "Lieutenant Election — 2027 Term"
+
+    def _seed_post_nomination_election(self, elections: list[dict]) -> None:
+        """An election past its nomination phase that still holds a pending one.
+
+        This is the only state in which the candidate-list permission rule is
+        visible, and nothing else seeded reaches it. `list_candidates` returns
+        pending nominations to everyone *while* nominations are open — nominees
+        have to see their own — and to holders of `elections.manage` at any
+        time; to an ordinary member after nominations close it returns accepted
+        candidates only. So demonstrating it needs a closed nomination phase
+        with somebody still un-accepted, and every other seeded election either
+        sits in nominations or has none pending.
+
+        A separate election rather than advancing "Annual Officer Elections":
+        four captures need one *in* the nomination phase, and moving it would
+        empty them.
+        """
+        existing = next(
+            (e for e in elections if e.get("title") == self.POST_NOMINATION_ELECTION),
+            None,
+        )
+        if existing:
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{m.get('first_name') or m.get('firstName')} "
+            f"{m.get('last_name') or m.get('lastName')}": pick(m, "id")
+            for m in members
+        }
+        nominees = [
+            (
+                "Amara Osei",
+                "Four years on Ladder 4 and the department's rope-rescue lead.",
+            ),
+            (
+                "Sofia Marchetti",
+                "Two years riding backwards, and I want the seat to keep the "
+                "training calendar honest.",
+            ),
+        ]
+        if not all(by_name.get(name) for name, _ in nominees):
+            return
+
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.POST_NOMINATION_ELECTION,
+                "description": (
+                    "Line lieutenant seat. Nominations closed; one nominee has "
+                    "not yet accepted."
+                ),
+                "election_type": "position",
+                "positions": ["Lieutenant"],
+                "start_date": iso(NOW - timedelta(days=1)),
+                "end_date": iso(NOW + timedelta(days=6)),
+                "voting_method": "simple_majority",
+                "victory_condition": "most_votes",
+                "anonymous_voting": True,
+                "results_visible_immediately": False,
+                "quorum_type": "none",
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        try:
+            self.api.post(f"/elections/{election_id}/open-nominations")
+        except ApiError as exc:
+            self.blocked.append(f"post-nomination election: {exc}")
+            return
+
+        for name, statement in nominees:
+            try:
+                self.api.post(
+                    f"/elections/{election_id}/nominations",
+                    {
+                        "position": "Lieutenant",
+                        "nominee_user_id": by_name[name],
+                        "statement": statement,
+                    },
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"nominate {name}: {exc}")
+
+        # Accept exactly one. The other stays pending, which is the whole point
+        # -- with both accepted the two accounts see an identical list.
+        candidates = items(
+            self.api.get(f"/elections/{election_id}/candidates"), "candidates"
+        )
+        first = next((c for c in candidates if pick(c, "name") == nominees[0][0]), None)
+        if first:
+            try:
+                # PATCH as the manager rather than the /nominations/.../accept
+                # route: that one is restricted to the nominee, deliberately,
+                # so the seeder cannot use it without signing in as them.
+                self.api.patch(
+                    f"/elections/{election_id}/candidates/{pick(first, 'id')}",
+                    {"accepted": True},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"accept nomination: {exc}")
+
+        try:
+            # Back to draft, then open for voting: close_nominations returns the
+            # election to draft by design so the ballot can be finalized first.
+            self.api.post(f"/elections/{election_id}/close-nominations")
+            self.api.post(f"/elections/{election_id}/open")
+        except ApiError as exc:
+            self.blocked.append(f"open post-nomination election: {exc}")
+            return
+
+        elections.append(self.api.get(f"/elections/{election_id}"))
 
     def _seed_nominations(self, elections: list[dict]) -> None:
         """Nominate candidates for the officer election.
@@ -11491,7 +12574,7 @@ class Seeder:
 
     # -- storefront ---------------------------------------------------
 
-    def seed_storefront(self) -> dict[str, Any]:
+    def seed_storefront(self, members: list[dict] | None = None) -> dict[str, Any]:
         products = items(self.api.get("/store/products"), "products")
         names = {p.get("name") for p in products}
         blueprint = [
@@ -11572,9 +12655,40 @@ class Seeder:
                 )
             )
 
+        self._open_store_window(windows, window_name)
         self._seed_store_settings()
-        orders = self._seed_store_orders(products)
+        orders = self._seed_store_orders(products, members or [])
         return {"products": products, "windows": windows, "orders": orders}
+
+    def _open_store_window(self, windows: list[dict], window_name: str) -> None:
+        """Open the order window rather than waiting for autoOpen to notice it.
+
+        A window created with ``autoOpen`` starts ``scheduled`` and is promoted
+        by a background task, which on a fresh database has not run by the time
+        the next line places an order. The order was refused with "There is no
+        open order window" and reported as a store configuration fact, so the
+        first seed of a new database produced no orders at all and the second
+        one silently produced them — the window having opened in between.
+
+        Opening it here makes one seeding run enough. ``notifyMembers`` is off:
+        the announcement is a real email to every member and has nothing to do
+        with what the guides picture.
+        """
+        window = next((w for w in windows if w.get("name") == window_name), None)
+        if not window:
+            return
+        if str(pick(window, "status") or "").lower() == "open":
+            return
+        window_id = pick(window, "id")
+        if not window_id:
+            return
+        try:
+            self.api.post(
+                f"/store/windows/{window_id}/open",
+                {"notifyMembers": False},
+            )
+        except ApiError as exc:
+            self.blocked.append(f"store window open: {exc}")
 
     def _seed_store_settings(self) -> None:
         """Configure how members pay.
@@ -11606,16 +12720,29 @@ class Seeder:
             },
         )
 
-    def _seed_store_orders(self, products: list[dict]) -> list[dict]:
-        """Place an unpaid order for the demo administrator.
+    def _seed_store_orders(
+        self, products: list[dict], members: list[dict]
+    ) -> list[dict]:
+        """Place an unpaid order for the demo administrator, plus two members'.
 
         The My Orders guide pictures an order awaiting payment, and orders are
         first-person — `POST /store/orders` records the *calling* user, so this
         has to be the account the screenshots are captured as.
+
+        The member orders and the state spread run on every pass, not only when
+        the administrator has none. Guarding the whole method on the
+        administrator's own order meant a second seeding run — the ordinary
+        case, since the seeder runs before every capture — skipped both, and
+        Store Admin stayed a one-row list in a single state.
         """
-        existing = items(self.api.get("/store/orders/mine"), "orders")
-        if existing:
-            return existing
+        if not items(self.api.get("/store/orders/mine"), "orders"):
+            self._place_admin_store_order(products)
+        self._seed_member_store_orders(products, members)
+        self._spread_store_order_states()
+        return items(self.api.get("/store/orders/mine"), "orders")
+
+    def _place_admin_store_order(self, products: list[dict]) -> None:
+        """The administrator's own unpaid order, which My Orders pictures."""
         wanted = ("Department Job Shirt", "Ball Cap")
         lines = []
         for product in products:
@@ -11628,7 +12755,7 @@ class Seeder:
                 line["personalizationText"] = "D. RUIZ"
             lines.append(line)
         if not lines:
-            return existing
+            return
         try:
             self.api.post(
                 "/store/orders",
@@ -11645,7 +12772,117 @@ class Seeder:
             if exc.code != 400:
                 raise
             self.blocked.append(f"store order: {exc}")
-        return items(self.api.get("/store/orders/mine"), "orders")
+
+    def _seed_member_store_orders(
+        self, products: list[dict], members: list[dict]
+    ) -> None:
+        """Two more orders, placed by members rather than the administrator.
+
+        Orders are first-person -- ``POST /store/orders`` records the *calling*
+        user and there is no admin "order on behalf of" route -- so a demo whose
+        only order belongs to the administrator gives Store Admin a one-row list
+        and nothing to filter. Guide 19 pictures the activity cards against a
+        matching filtered list, which needs several orders in several states.
+
+        Same mechanism as ``seed_event_rsvps``: sign in as each member. Local
+        demo fixtures in a throwaway database, never real accounts.
+        """
+        existing = items(self.api.get("/store/orders"), "orders")
+        if len(existing) >= 4:
+            return
+
+        line_products = [
+            product
+            for product in products
+            if product.get("name") in ("Department Job Shirt", "Ball Cap")
+        ]
+        if not line_products:
+            return
+
+        # The administrator is excluded, not just skipped by luck of ordering:
+        # member_session clears a forced password change with an admin reset,
+        # and POST /users/{id}/reset-password refuses your own account -- "Use
+        # the change-password endpoint to change your own password". The roster
+        # is returned admin-first, so members[:3] reached it every time.
+        orderers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][:3]
+        for member in orderers:
+            user_id = pick(member, "id")
+            username = member.get("username")
+            if not user_id or not username:
+                continue
+            try:
+                session = self.member_session(self.base_url, user_id, username)
+            except ApiError as exc:
+                self.blocked.append(f"store order for {username}: {exc}")
+                continue
+            product = line_products[len(existing) % len(line_products)]
+            variants = items(product, "variants")
+            line = {"productId": pick(product, "id"), "quantity": 1}
+            if variants:
+                line["variantId"] = pick(variants[0], "id")
+            try:
+                session.post(
+                    "/store/orders",
+                    {
+                        "items": [line],
+                        "paymentMethod": "venmo",
+                        "fulfillmentMethod": "pickup",
+                    },
+                )
+            except ApiError as exc:
+                if exc.code != 400:
+                    raise
+                self.blocked.append(f"store order for {username}: {exc}")
+
+    def _spread_store_order_states(self) -> None:
+        """Leave the order list sitting in more than one state.
+
+        Store Admin's activity cards count orders by status and its list filters
+        on the same values, so a demo where every order is `submitted` gives the
+        cards one non-zero number and the filters nothing to distinguish. Guide
+        19 asks for at least three states on one screen.
+
+        Advanced through the real transition endpoint rather than written
+        directly, so an order that cannot legally reach a status stays where it
+        is instead of the demo asserting a state the product would refuse.
+        Notification is off: these are back-dated fixtures and the member does
+        not need an email per step.
+
+        **The administrator's own order is left where it is.** It is the one
+        `18-04-my-orders-unpaid` pictures — "an unpaid order with its balance
+        and payment options" — and advancing it to `paid` emptied that shot of
+        its subject while every gate stayed green.
+        """
+        mine = {
+            pick(order, "id")
+            for order in items(self.api.get("/store/orders/mine"), "orders")
+        }
+        orders = [
+            order
+            for order in items(self.api.get("/store/orders"), "orders")
+            if pick(order, "id") not in mine
+        ]
+        if len(orders) < 2:
+            return
+
+        # Ordered by how far along they are, so the cards read as a pipeline
+        # rather than as an arbitrary scatter.
+        wanted = ["paid", "ordered", "ready_for_pickup"]
+        for order, status in zip(orders, wanted):
+            if str(pick(order, "status") or "") == status:
+                continue
+            order_id = pick(order, "id")
+            if not order_id:
+                continue
+            try:
+                self.api.post(
+                    f"/store/orders/{order_id}/status",
+                    {"status": status, "notifyMember": False},
+                )
+            except ApiError as exc:
+                if exc.code != 400:
+                    raise
+                self.blocked.append(f"store order -> {status}: {exc}")
 
     # -- run ---------------------------------------------------------
 
@@ -11656,6 +12893,7 @@ class Seeder:
         self.step("member changes", lambda: self.seed_member_changes(members))
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
+        self.step("rooms", lambda: self.seed_rooms(facilities))
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
         evoc_levels = self.step("evoc levels", self.seed_evoc_levels) or []
         self.step(
@@ -11674,6 +12912,8 @@ class Seeder:
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
         self.step("shift calls", self.seed_shift_calls)
+        self.step("admin hours entries", self.seed_admin_hours_entries)
+        self.step("apparatus crew positions", self.seed_apparatus_crew_positions)
         self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))
@@ -11738,6 +12978,7 @@ class Seeder:
         )
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
+        self.step("legal documents", self.seed_legal_documents)
         self.step("notification rules", self.seed_notification_rules)
         # After scheduling (needs upcoming crewed shifts) — the reminder task
         # notifies each rostered member, the administrator among them.
@@ -11785,7 +13026,7 @@ class Seeder:
         self.step("compliance profiles", self.seed_compliance_profiles)
         self.step("external training provider", self.seed_external_provider)
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
-        self.step("storefront", self.seed_storefront)
+        self.step("storefront", lambda: self.seed_storefront(members))
         finance = self.step("finance", self.seed_finance) or {}
         self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))
         self.step("approval chains", self.seed_approval_chains)

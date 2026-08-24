@@ -56,7 +56,16 @@ export const RequestsTab: React.FC = () => {
   // Modal ref for focus management
   const reviewModalRef = useRef<HTMLDivElement>(null);
 
+  // Switching view and changing the status filter each start a fetch, and the
+  // two overlap on a fast pair of clicks. Without this the slower response
+  // wins whichever order it arrives in, so the list can settle on the filter
+  // the user just moved off — a Pending-only list under an All Statuses
+  // selector, which reads as "there are no others" rather than as a stale
+  // response. Every fetch takes a ticket and only the newest may write.
+  const loadSequence = useRef(0);
+
   const loadData = useCallback(async () => {
+    const sequence = (loadSequence.current += 1);
     setLoading(true);
     try {
       const params = {
@@ -68,6 +77,7 @@ export const RequestsTab: React.FC = () => {
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
       ]);
+      if (sequence !== loadSequence.current) return;
       // Swap requests are now enriched server-side with shift dates and start
       // times — no need to fetch individual shifts (fixes N+1 query).
       setSwapRequests(swaps.items);
@@ -75,13 +85,15 @@ export const RequestsTab: React.FC = () => {
       setTimeOffRequests(timeOff.items);
       setTimeOffTotal(timeOff.total);
     } catch {
+      if (sequence !== loadSequence.current) return;
       toast.error('Failed to load requests');
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [statusFilter]);
 
   const loadMore = async () => {
+    const sequence = (loadSequence.current += 1);
     setLoading(true);
     try {
       const common = statusFilter ? { status: statusFilter as RequestStatus } : {};
@@ -91,6 +103,7 @@ export const RequestsTab: React.FC = () => {
           skip: swapRequests.length,
           limit: REQUESTS_PAGE_SIZE,
         });
+        if (sequence !== loadSequence.current) return;
         setSwapRequests((current) => [...current, ...page.items]);
         setSwapTotal(page.total);
       } else {
@@ -99,13 +112,15 @@ export const RequestsTab: React.FC = () => {
           skip: timeOffRequests.length,
           limit: REQUESTS_PAGE_SIZE,
         });
+        if (sequence !== loadSequence.current) return;
         setTimeOffRequests((current) => [...current, ...page.items]);
         setTimeOffTotal(page.total);
       }
     } catch {
+      if (sequence !== loadSequence.current) return;
       toast.error('Failed to load more requests');
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   };
 

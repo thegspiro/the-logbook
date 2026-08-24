@@ -63,6 +63,25 @@ export const DEMO_MEMBER_CREDENTIALS = {
 };
 
 /**
+ * The department secretary: holds `legal.propose`, and neither `legal.publish`
+ * nor `settings.manage`.
+ *
+ * Shots marked `auth: "secretary"` sign in as this account. It exists for the
+ * middle rung of the legal-documents permission table, which no other demo
+ * account can photograph — the administrator can publish and an ordinary
+ * member cannot reach the screen at all, so the state the guide describes
+ * (the editor open, the Publish control absent) is only reachable from here.
+ *
+ * Must match LEGAL_PROPOSER_USERNAME in seed_demo_data.py, whose
+ * `_ensure_legal_proposer` guarantees the role rather than leaving it to
+ * arrive as a side effect of the election seeding.
+ */
+export const DEMO_SECRETARY_CREDENTIALS = {
+  username: "okittredge",
+  password: "DemoMember!2026",
+};
+
+/**
  * The one account enrolled in TOTP, used to photograph the login page's
  * authentication-code step.
  *
@@ -513,6 +532,16 @@ export const hasLoggedCalls = (shift) =>
  * that really is staffed.
  *
  *   extraMatch  optional further condition on the list record (past, future, …)
+ *
+ * **The predicate is serialized and re-created inside the page, so it cannot
+ * close over anything in this file.** It is shipped across as source text and
+ * rebuilt with `new Function`, which keeps the syntax and drops the scope — a
+ * predicate referencing a module constant throws `ReferenceError: <name> is not
+ * defined` in the browser, not here, which is why the close-out shots failed
+ * with nothing in this file looking wrong. Either keep the predicate
+ * self-contained, or pass source text with the value already interpolated:
+ *
+ *   openStaffedShift(`(s) => s.notes === ${JSON.stringify(NOTE)}`)
  */
 export function openStaffedShift(extraMatch) {
   return async (page) => {
@@ -542,6 +571,8 @@ export function openStaffedShift(extraMatch) {
         }
         return null;
       },
+      // A string is already source; a function is converted to it. Both end up
+      // as text because that is all that survives the boundary.
       [extraMatch ? extraMatch.toString() : ""],
     );
     if (!id) throw new Error("openStaffedShift: no shift with a crew found");
@@ -600,6 +631,36 @@ export function setCallTracking(mode) {
 }
 
 /**
+ * Force the organization's "require end-of-shift checks" rule.
+ *
+ * Same self-healing contract as `setCallTracking`: the rule decides whether
+ * close-out shows the outstanding-checks warning at all, and two shots want
+ * opposite answers, so each sets the one it needs rather than inheriting
+ * whatever ran before it. The seeder leaves the department with the rule off.
+ */
+export function setRequireEndOfShiftChecks(wanted) {
+  return async (page) => {
+    await page.evaluate(async (want) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const current = await (
+        await fetch("/api/v1/scheduling/settings", { credentials: "include" })
+      ).json();
+      if (Boolean(current.require_end_of_shift_checks) === want) return;
+      await fetch("/api/v1/scheduling/settings", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: JSON.stringify({ require_end_of_shift_checks: want }),
+      });
+    }, wanted);
+  };
+}
+
+/**
  * The seeder's dedicated close-out fixture: a past 24-hour shift, four crew.
  *
  * Kept in step with CLOSEOUT_SHIFT_NOTE in seed_demo_data.py, which matches on
@@ -627,11 +688,47 @@ const CLOSEOUT_SHIFT_NOTE =
  * will not reopen the wizard — one capture run would spend the fixture for
  * every run after it.
  */
+/**
+ * The close-out wizard card itself.
+ *
+ * These three shots are clipped to it rather than framed by the viewport, for
+ * two reasons the uncropped captures showed plainly:
+ *
+ * 1. **The subject sits below the fold.** The wizard renders inside a
+ *    right-hand drawer that scrolls independently, so a 900px viewport cut off
+ *    step 1's combined-hours figure — which its marker explicitly asks for —
+ *    and opened step 2 already scrolled past the EMS and Fire rows it exists to
+ *    show, leaving nine zeroes on screen.
+ * 2. **The drawer below the wizard carries the fixture's own note.** The card
+ *    reading "Close-out wizard fixture — 24-hour tour, four crew, count-only
+ *    captures" is seeding scaffolding, not something a department would ever
+ *    write, and it has no business in a published guide image.
+ *
+ * Matched on the progress nav's aria-label, which the wizard owns, rather than
+ * on a utility class string that a restyle would silently change.
+ */
+/**
+ * The close-out shots are framed at 1440x1300 rather than the 900px default.
+ *
+ * The wizard card sits in a right-hand drawer with its own scroll, and clipping
+ * to the card captures only what the drawer can show at once. At 900px the
+ * step indicator was cut off the top of every one of the three, so a reader
+ * could not tell which step they were looking at — on a sequence whose whole
+ * point is that it is three steps.
+ */
+const CLOSEOUT_VIEWPORT = { width: 1440, height: 1300 };
+
+const CLOSEOUT_WIZARD_CARD = "div:has(> nav[aria-label='Close-out progress'])";
+
 export function openCloseoutWizard({ step = 1, calls = null, credit = null }) {
   return async (page) => {
     await setCallTracking("count_only")(page);
+    // Passed as source text, not as a closure: the predicate is rebuilt inside
+    // the page, where CLOSEOUT_SHIFT_NOTE does not exist. See openStaffedShift.
     await openStaffedShift(
-      (shift) => (shift.notes || "").trim() === CLOSEOUT_SHIFT_NOTE,
+      `(shift) => (shift.notes || "").trim() === ${JSON.stringify(
+        CLOSEOUT_SHIFT_NOTE,
+      )}`,
     )(page);
     await clickByName(/^Close out shift$/i)(page);
 
@@ -644,19 +741,34 @@ export function openCloseoutWizard({ step = 1, calls = null, credit = null }) {
       return Number(label.match(/Step (\d)/)?.[1] ?? 1);
     };
 
+    // Wait for the step marker itself to move, not for the wizard to be
+    // "visible". The progress nav renders on every step, so waiting on the
+    // wizard is satisfied the instant Next is clicked, and reading the step
+    // straight afterwards races the re-render: it returned 1 while the body
+    // was still swapping to step 2, the `=== 2` guard below never fired, and
+    // the capture wrote a screen of empty call rows under a caption about
+    // three EMS and one fire. Nothing failed — the picture was just wrong.
+    const arriveAt = async (n) => {
+      await page
+        .locator(`[aria-current="step"][aria-label="Step ${n} of 3"]`)
+        .waitFor({ state: "visible", timeout: 15_000 });
+    };
+
     // Bounded: three steps, so two Backs is the most that can be needed. A
     // while(true) here would hang the whole run on an unexpected state.
     for (let guard = 0; guard < 3 && (await currentStep()) > 1; guard += 1) {
       await page.getByRole("button", { name: /^Back$/ }).click();
+      await page.waitForTimeout(250);
     }
+    await arriveAt(1);
 
     // Fill the call rows while step 1 is still on screen? No — they only exist
     // on step 2. Advance first, fill on arrival, and only then move on: step
     // 2's Next reads these rows, and the derived total is computed from them.
     for (let target = 2; target <= step; target += 1) {
       await page.getByRole("button", { name: /^Next$/ }).click();
-      await wizard.waitFor({ state: "visible" });
-      if ((await currentStep()) === 2 && calls) {
+      await arriveAt(target);
+      if (target === 2 && calls) {
         for (const [label, count] of Object.entries(calls)) {
           // `${label} calls` is the input's own aria-label, one per configured
           // call type. Matching the label text alone would also hit the row's
@@ -1002,6 +1114,334 @@ async function runImpactAnalysis(page) {
     .click({ timeout: 15_000 });
   // The analysis is a round trip over the whole roster.
   await page.waitForTimeout(3000);
+}
+
+/**
+ * Navigate a signed-out page to a published public form.
+ *
+ * The slug is minted per seed, and these shots have no session, so the lookup
+ * borrows the administrator's. `/f/{slug}` serves published forms only, which
+ * is what the seeder publishes.
+ */
+export async function openPublicForm(page, helpers) {
+  const admin = await helpers.lookupPage();
+  const slug = await admin.evaluate(async () => {
+    const response = await fetch("/api/v1/forms", { credentials: "include" });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const forms = Array.isArray(body) ? body : body.forms || body.items || [];
+    const target = forms.find((f) => f.is_public && f.public_slug);
+    return target ? target.public_slug : null;
+  });
+  if (!slug) throw new Error("no published public form to capture");
+  await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
+    waitUntil: "domcontentloaded",
+  });
+}
+
+/**
+ * Open the TOTP-enrolled demo member's profile.
+ *
+ * Both halves of the 17-03/17-04 pair must land on the *same* record for the
+ * comparison to mean anything, so the member is chosen by username rather than
+ * by position in the roster, which changes with the seed.
+ */
+export async function openMemberProfile(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users?limit=200", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const users = Array.isArray(body) ? body : body.users || body.items || [];
+    const target = users.find((u) => u.username === "whalloway");
+    return target ? target.id : null;
+  });
+  if (!id)
+    throw new Error("the TOTP-enrolled demo member is not in the roster");
+  await page.goto(`${new URL(page.url()).origin}/members/${id}`, {
+    waitUntil: "domcontentloaded",
+  });
+}
+
+/** The election seeded past its nomination phase with one nominee still pending. */
+export const isPostNominationElection = (election) =>
+  /Lieutenant Election/.test(election.title ?? "");
+
+/**
+ * Open the item that is out on loan past its return date.
+ *
+ * Found through the overdue endpoint rather than by name: which item is late
+ * depends on the seeder's checkout plan, and a shot that hard-codes one goes
+ * quietly wrong the day that plan changes.
+ */
+export async function openOverdueItem(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/inventory/checkout/overdue", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const rows = Array.isArray(body)
+      ? body
+      : body.checkouts || body.items || [];
+    return rows.length ? rows[0].item_id : null;
+  });
+  if (!id) throw new Error("no overdue loan in the demo data");
+  await page.goto(`${new URL(page.url()).origin}/inventory/items/${id}`, {
+    waitUntil: "domcontentloaded",
+  });
+}
+
+/**
+ * Press Approve on the swap the capturing account raised itself, and wait for
+ * the server's refusal.
+ *
+ * The row is found by the heading the page gives your own request rather than
+ * by position: the list sorts pending first and then newest, so which of the
+ * two pending swaps sits on top depends on the order the seeder created them.
+ *
+ * Nothing is mutated — that is the point of the shot. The request is refused
+ * before the service touches it, so the swap is still pending afterwards and
+ * this needs no `mutatesSeedData` flag.
+ */
+export async function reviewOwnSwapBlocked(page) {
+  const own = page
+    .locator(".card")
+    .filter({ hasText: /Your swap request/ })
+    .first();
+  await own.waitFor({ state: "visible", timeout: 20_000 });
+  await own.getByRole("button", { name: /approve swap/i }).click();
+  await page
+    .getByText(/Requesters cannot review their own swap requests/i)
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Widen the Requests tab to its full time-off history and scroll to the
+ * control that fetches the next page.
+ *
+ * The status filter opens on Pending, and a history long enough to page
+ * through is by definition resolved — so with the default filter the tab shows
+ * a single row and no control at all.
+ */
+export async function openRequestsHistoryPage(page) {
+  await page.getByRole("tab", { name: /Time Off/i }).click();
+  await page
+    .getByLabel(/Filter requests by status/i)
+    .selectOption("", { timeout: 20_000 });
+  const more = page.getByRole("button", {
+    name: /Load more time-off requests/i,
+  });
+  await more.waitFor({ state: "visible", timeout: 20_000 });
+  await more.scrollIntoViewIfNeeded({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Open one submitted check from the member's own history.
+ *
+ * Reached through the Completed checklists section rather than through the
+ * card grid: opening a completed card reopens the *form* with its saved
+ * answers, which is the working screen, not the record. The history row opens
+ * the read-back view — who signed it, when, and every item as answered.
+ */
+export async function openSubmittedCheck(page) {
+  await page.getByRole("button", { name: /completed checklists/i }).click();
+  const row = page
+    .locator("#check-history-content button")
+    .filter({ hasText: /Passed/ })
+    .first();
+  await row.waitFor({ state: "visible", timeout: 20_000 });
+  await row.click();
+  await page
+    .getByText(/Completed checklist/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Open a dialog taller than a phone screen and scroll it to its action row.
+ *
+ * "Add Course" because it is the tallest dialog the demo department has --
+ * roughly 1250px of form inside a panel capped at 90dvh -- so on a 390x844
+ * viewport it genuinely scrolls internally, which is what the marker is about.
+ * The shot is NOT `fullPage`: this capture is about what covers the action row,
+ * and `capture.mjs` hides the bottom bar for full-page shots (it would
+ * otherwise be stitched in at a document offset), which would prove the point
+ * by removing the thing being tested.
+ *
+ * The bar is asserted present before the dialog opens. Without that check a
+ * release that stopped rendering it altogether would leave this capture
+ * looking exactly the same and still captioned "the bar is hidden while a
+ * dialog is open".
+ */
+export async function openTallDialogAtActionRow(page) {
+  const bar = page.locator('nav[aria-label="Primary"]');
+  await bar.waitFor({ state: "visible", timeout: 20_000 });
+  await page
+    .getByRole("button", { name: /add course/i })
+    .first()
+    .click();
+  const panel = page.locator(".modal-panel").first();
+  await panel.waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(400);
+  await panel.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Open one member's training history and put its table at the top of the frame.
+ *
+ * The member is chosen by username rather than by roster position, so both
+ * halves of the reflow pair land on the same records — a comparison between
+ * two different members' histories would show a difference that is not the
+ * one being illustrated.
+ *
+ * Both halves are viewport shots rather than element clips. Clipping to the
+ * table works at desktop width and does not on a phone: the element is then
+ * taller than the screen, and a Playwright element screenshot paints the
+ * sticky header and the bottom bar at their document offsets, stamping both
+ * across the middle of the table.
+ */
+export async function openTrainingHistoryTable(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users?limit=200", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const users = Array.isArray(body) ? body : body.users || body.items || [];
+    const target = users.find((u) => u.username === "whalloway");
+    return target ? target.id : null;
+  });
+  if (!id)
+    throw new Error("the demo member whose history this pair uses is missing");
+  await page.goto(`${new URL(page.url()).origin}/members/${id}/training`, {
+    waitUntil: "domcontentloaded",
+  });
+  const table = page.locator("table.rwd-table").first();
+  await table.waitFor({ state: "visible", timeout: 20_000 });
+  await table.evaluate((el) => {
+    el.scrollIntoView({ block: "start" });
+    // Clear of the sticky page header, which `block: "start"` parks the
+    // table's first row underneath.
+    window.scrollBy(0, -120);
+  });
+  await page.waitForTimeout(500);
+}
+
+/** Open the Terms of Service tab of the legal-documents screen. */
+async function openTermsTab(page) {
+  await page.getByRole("tab", { name: /Terms of Service/i }).click();
+  await page
+    .getByText(/Second pass after the officers' meeting/)
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Show the secretary their own proposal, where the permission is visible.
+ *
+ * Publishing is not a control in the revision editor -- that form offers
+ * Cancel and Save draft to everybody, publisher included. It is an action on
+ * the saved proposal, so the proposal card is the only place the difference
+ * between `legal.propose` and `legal.publish` can be photographed.
+ */
+export async function openOwnLegalProposal(page) {
+  await openTermsTab(page);
+  await page
+    .getByText(/Second pass after the officers' meeting/)
+    .first()
+    .evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(400);
+}
+
+/** Reopen that proposal in the editor, with all three fields already filled. */
+export async function openLegalRevisionEditor(page) {
+  await openTermsTab(page);
+  const proposal = page
+    .locator("li.card")
+    .filter({ hasText: /Second pass after the officers' meeting/ })
+    .first();
+  await proposal.getByRole("button", { name: /^Edit$/ }).click();
+  await page
+    .locator("#revision-note")
+    .waitFor({ state: "visible", timeout: 20_000 });
+  // The panel scrolls internally and opens at the top, which puts the
+  // effective-date field -- printed to members as "Last updated", and half of
+  // what the marker asks for -- below the fold. Scrolled to the end so the
+  // change note and that field are both in frame; the body textarea is 24rem
+  // tall, so its tail stays visible above them.
+  await page
+    .locator("#revision-note")
+    .evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(400);
+}
+
+/** The published history of the privacy notice, three revisions deep. */
+export async function openLegalHistory(page) {
+  const history = page.getByText(/Published history/).first();
+  await history.waitFor({ state: "visible", timeout: 20_000 });
+  await history.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(400);
+}
+
+/**
+ * The Admin Hours Summary tab, on its calendar-year preset.
+ *
+ * Both the tab and the reporting period are local component state with no URL
+ * form, so each has to be clicked. "This calendar year" specifically, because
+ * the guide's point is that it is a calendar year rather than a rolling 365
+ * days, and the default preset is All time.
+ */
+export async function openAdminHoursSummary(page) {
+  await clickByName(/^Summary$/)(page);
+  await page
+    .getByRole("combobox")
+    .first()
+    .selectOption("year", { timeout: 20_000 });
+  await page
+    .getByText(/Where the hours came from/i)
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(600);
+}
+
+/**
+ * Open the rescue's edit form at its crew-seat list.
+ *
+ * Found by unit number rather than by position in the fleet, and the rescue
+ * specifically: the seeder puts a legacy free-text seat on that one, which is
+ * the half of the marker no other apparatus can show.
+ */
+export async function openApparatusCrewSeats(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/apparatus?limit=50", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const fleet = Array.isArray(body)
+      ? body
+      : body.apparatus || body.items || [];
+    const target = fleet.find(
+      (unit) =>
+        (unit.unit_number ?? unit.unitNumber ?? "").toUpperCase() === "R-7",
+    );
+    return target ? target.id : null;
+  });
+  if (!id) throw new Error("the rescue this shot uses is not in the fleet");
+  await page.goto(`${new URL(page.url()).origin}/apparatus/${id}/edit`, {
+    waitUntil: "domcontentloaded",
+  });
+  const seats = page.getByText(/Crew Positions \/ Seats/i).first();
+  await seats.waitFor({ state: "visible", timeout: 20_000 });
+  await seats.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(500);
 }
 
 export const SHOTS = [
@@ -4985,14 +5425,24 @@ export const SHOTS = [
     line: 418,
     anchor: 'The Test Records tab filtered to "Awaiting',
     alt: "Officer review queue — completed results awaiting validation, each row with its accept, notify and void controls and a bulk Accept above them",
-    route: "/training/admin?tab=tests",
+    // ?page=skills-testing, like 09-14: the bare ?tab=tests now lands on
+    // the admin hub's default section instead of the test records.
+    route: "/training/admin?page=skills-testing&tab=tests",
     fullPage: true,
     // The queue is a filter on the records tab rather than a page of its own,
     // and it is an option in the status dropdown — not a button or a tab — so
     // the shot has to select it. Without this the capture shows "All Statuses"
     // and pictures the whole history instead of the queue.
     prepare: async (page) => {
-      const status = page.locator("select").first();
+      // Picked by the option it must offer, not by being the first select on
+      // the page -- the admin hub grew a section navigator ("Dashboard /
+      // Records / Setup / ...") which now holds that position, and selecting
+      // pending_validation on it timed out with the status filter untouched a
+      // few hundred pixels away.
+      const status = page
+        .locator("select")
+        .filter({ has: page.locator('option[value="pending_validation"]') })
+        .first();
       await status.waitFor({ state: "visible", timeout: 15_000 });
       await status.selectOption("pending_validation");
       // Waits on the row badge, scoped to a span. The dropdown's own option
@@ -5078,28 +5528,7 @@ export const SHOTS = [
     auth: "anonymous",
     theme: "dark",
     fullPage: true,
-    prepare: async (page, helpers) => {
-      // The slug is minted per seed, and this shot is signed out, so the
-      // lookup borrows the administrator's session. `/f/{slug}` serves
-      // published public forms only — the seeder publishes one.
-      const admin = await helpers.lookupPage();
-      const slug = await admin.evaluate(async () => {
-        const response = await fetch("/api/v1/forms", {
-          credentials: "include",
-        });
-        if (!response.ok) return null;
-        const body = await response.json();
-        const forms = Array.isArray(body)
-          ? body
-          : body.forms || body.items || [];
-        const target = forms.find((f) => f.is_public && f.public_slug);
-        return target ? target.public_slug : null;
-      });
-      if (!slug) throw new Error("no published public form to capture");
-      await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
-        waitUntil: "domcontentloaded",
-      });
-    },
+    prepare: openPublicForm,
   },
   {
     id: "10-13-mobile-header-menu",
@@ -5140,7 +5569,7 @@ export const SHOTS = [
     // tab bar is `position: fixed`, and a full-page shot paints it once at its
     // viewport offset — across the "How to use" card that tells a member what
     // to do next, which is half the point of picturing the failure.
-    viewport: { width: 414, height: 1100 },
+    viewport: { width: 390, height: 1100 },
     prepare: async (page) => {
       // No fake media device is configured, so `getUserMedia` rejects and the
       // page renders its own failure banner. That is the point of the shot:
@@ -5171,10 +5600,26 @@ export const SHOTS = [
       // badge is only reachable with the menu open, and a shot of the bar
       // alone would picture the absence rather than the feature.
       await page
-        .getByRole("button", { name: /Open (main|navigation) menu/ })
+        // "Open full navigation menu" today; the two older labels are kept so
+        // this does not break again the next time it is reworded. The control
+        // moved into the bottom bar, so the phone header carries no hamburger
+        // and matching the old name alone timed out with the button on screen.
+        .getByRole("button", {
+          name: /Open (full navigation|main|navigation) menu/,
+        })
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1_200);
+      // The drawer scrolls, and Notifications sits below the fold on a 390-wide
+      // phone -- the shot came back showing Dashboard through Operations and
+      // then the theme controls, with the badge the caption is about never in
+      // frame. Scrolling to it is what a member does, and it keeps the shot
+      // honest about how far down the entry actually is.
+      await page
+        .getByRole("button", { name: /^Notifications/ })
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 });
+      await page.waitForTimeout(600);
     },
     fullPage: false,
   },
@@ -5212,7 +5657,7 @@ export const SHOTS = [
     // elements painted at their document offset — so on a page this long the
     // nav bar lands across the middle of the image, over real content. One
     // viewport is also the truer picture of a phone.
-    viewport: { width: 414, height: 1000 },
+    viewport: { width: 390, height: 1000 },
   },
   {
     id: "10-05-mobile-inventory",
@@ -5621,7 +6066,7 @@ export const SHOTS = [
       await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    viewport: { width: 414, height: 1050 },
+    viewport: { width: 390, height: 1050 },
   },
   {
     id: "03-72-check-item-controls",
@@ -5666,7 +6111,7 @@ export const SHOTS = [
       });
       await page.waitForTimeout(500);
     },
-    viewport: { width: 414, height: 900 },
+    viewport: { width: 390, height: 900 },
   },
   {
     id: "03-71-set-all-to-par-confirm",
@@ -5682,13 +6127,40 @@ export const SHOTS = [
       await clickByName("Medic 3 Supply Check")(page);
       await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
 
+      // Compartments start collapsed apart from one, and which one is not
+      // fixed, so Trauma Bag's items may or may not be in the DOM: the wait
+      // above passes on the header alone and the stepper lookup below then
+      // timed out against a compartment that was merely closed. Toggling
+      // blindly is worse than not toggling -- it closes an already-open one.
+      // Read aria-expanded and only click when it needs opening.
+      const traumaBag = page
+        .getByRole("button", { name: /^Trauma Bag, / })
+        .first();
+      await traumaBag.waitFor({ state: "visible", timeout: 20_000 });
+      if ((await traumaBag.getAttribute("aria-expanded")) !== "true") {
+        await traumaBag.click({ timeout: 10_000 });
+      }
+      // Wait for the stepper rather than assuming it is painted. When this
+      // once came back as pass/fail buttons the cause was a backend left
+      // running across a deploy, still serving the pre-canonical check-type
+      // spellings; the read boundary normalizes them now, and failing here is
+      // the signal that something upstream is serving the old shape again.
+      await page
+        .getByLabel(/^(One fewer|Decrease) Nitrile Gloves/)
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+
       // Trauma Bag arrives with one item already short (gauze, 18 of 24).
       // Counting the gloves down gives the dialog a second row, which is what
       // it is for — a single-item warning reads as a quirk, two reads as the
       // claim it actually is.
-      const decrease = page.getByLabel(
-        "Decrease Nitrile Gloves — Large quantity",
-      );
+      // "One fewer <item>" since the stepper moved into CheckItemControls;
+      // the older "Decrease <item> quantity" spelling is kept alongside it so a
+      // rename does not silently cost the shot again.
+      const decrease = page
+        .getByLabel("One fewer Nitrile Gloves — Large")
+        .or(page.getByLabel("Decrease Nitrile Gloves — Large quantity"))
+        .first();
       await decrease.scrollIntoViewIfNeeded();
       for (let i = 0; i < 2; i += 1) {
         await decrease.click();
@@ -5705,7 +6177,7 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     selector: '[role="dialog"]',
-    viewport: { width: 414, height: 1000 },
+    viewport: { width: 390, height: 1000 },
   },
   {
     id: "03-70-check-form-carryover",
@@ -5729,7 +6201,7 @@ export const SHOTS = [
     // Not fullPage: the whole checklist is eight items and four screens tall,
     // and the subject is the top of it — the banner, the progress counter and
     // the first compartment's counts.
-    viewport: { width: 414, height: 1000 },
+    viewport: { width: 390, height: 1000 },
   },
   {
     id: "03-69-catalog-quick-add",
@@ -6381,6 +6853,14 @@ export const SHOTS = [
     anchor: "showing the Close-out",
     alt: "Scheduling settings General tab with the close-out rules, overtime cap and shift generation options",
     route: "/scheduling/settings?tab=general",
+    // Pins the end-of-shift-check rule off. 03-81 turns it on to photograph
+    // the override it gates, and either may run first -- this shot's committed
+    // image shows the department's default, so it sets that rather than
+    // inheriting the other shot's leftovers.
+    prepare: async (page) => {
+      await setRequireEndOfShiftChecks(false)(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
     fullPage: true,
   },
   {
@@ -7295,6 +7775,13 @@ export const SHOTS = [
     alt: "Close-out wizard step 1 — each member's on and off times, the combined-hours figure for the crew, one member flagged for a missing check-out and one assigned member with empty times",
     route: "/scheduling",
     prepare: openCloseoutWizard({ step: 1 }),
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
+    // "no check-out recorded" is the flag this shot exists to photograph, so
+    // the empty-state guard reads the subject of the capture as its absence.
+    // The fixture deliberately carries one member who never checked out and
+    // one who never checked in at all.
+    allowEmptyState: "the missing-check-out flag is what the shot is of",
     fullPage: false,
   },
   {
@@ -7308,6 +7795,8 @@ export const SHOTS = [
     // show it is a sum rather than a single field echoed.
     prepare: openCloseoutWizard({ step: 2, calls: { EMS: 3, Fire: 1 } }),
     route: "/scheduling",
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
   },
   {
@@ -7325,6 +7814,8 @@ export const SHOTS = [
       calls: { EMS: 3, Fire: 1 },
       credit: 2,
     }),
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
   },
   {
@@ -8832,6 +9323,49 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
+    // A manager's candidate list on an election past nominations. Both halves
+    // open the SAME election, which is seeded specifically for this: every
+    // other seeded election either sits in the nomination phase (where pending
+    // nominations are visible to everyone, so there is nothing to compare) or
+    // has nobody pending.
+    id: "14-25-candidates-as-manager",
+    doc: "14-elections.md",
+    line: 212,
+    anchor: "the candidate list for the same election seen from a",
+    alt: "The candidate list on an election past nominations, as an elections manager: the accepted candidate and the nominee who has not yet accepted",
+    route: "/elections",
+    prepare: openElectionTab("candidates", isPostNominationElection),
+    fullPage: true,
+    allowEmptyState:
+      'Matches "No votes cast yet" from the results panel, which is true and ' +
+      "expected on an election still open. The candidate list this shot is " +
+      "about carries both nominees.",
+  },
+  {
+    id: "14-26-candidates-as-member",
+    doc: "14-elections.md",
+    line: 212,
+    anchor: "__paired-with-14-25__",
+    alt: "The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld once nominations have closed",
+    route: "/elections",
+    auth: "member",
+    // No candidates tab is clicked, because a member does not get one: their
+    // view of who is standing is the ballot itself. Opening the election is
+    // the whole prepare -- reaching for #tab-candidates timed out against a
+    // tab strip that only offers Cast Vote.
+    prepare: openFirstFromApi(
+      "/elections?limit=20",
+      (id) => `/elections/${id}`,
+      "elections",
+      isPostNominationElection,
+    ),
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see a shorter list here -- the withheld pending " +
+      "nomination is the subject of the shot, so one name on the ballot is " +
+      "the result rather than missing demo data.",
+  },
+  {
     id: "14-24-ballot-send-skipped",
     doc: "14-elections.md",
     line: 352,
@@ -9127,7 +9661,7 @@ export const SHOTS = [
     // viewport offset — across the middle of the list, over the one row whose
     // count ("18 of 24") the surrounding prose quotes. A frame tall enough to
     // hold the three compartments leaves the bar where a phone puts it.
-    viewport: { width: 414, height: 1500 },
+    viewport: { width: 390, height: 1500 },
     prepare: async (page) => {
       // The page opens on "Select an apparatus…", which is an empty state
       // rather than the screen. M-3 is the rig `seed_supply_tracking` stocks.
@@ -9983,6 +10517,808 @@ export const SHOTS = [
     // wrong screen rather than an error.
     route: "/minutes",
     fullPage: true,
+  },
+  {
+    // The rewrite's whole claim is in the first screen: the department, not the
+    // platform, controls the data. Shot signed out because /privacy is reachable
+    // from the sign-in page and that is where a member being onboarded meets it.
+    id: "19-03-privacy-header",
+    doc: "19-august-2026-release-changes.md",
+    line: 493,
+    anchor: "the rewritten `/privacy` page header showing the",
+    alt: "The rewritten Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it",
+    route: "/privacy",
+    auth: "anonymous",
+    fullPage: false,
+  },
+  {
+    // The directory is the page the release added; the search is what makes it
+    // a directory rather than a list. "Station" matches the seeded stations
+    // without naming a room, so nothing sensitive is on screen -- which the
+    // marker asks for explicitly.
+    id: "19-04-qr-directory-search",
+    doc: "19-august-2026-release-changes.md",
+    line: 80,
+    anchor: "Check-In QR Codes directory search results with Download PNG",
+    alt: "The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls",
+    route: "/locations/qr-codes",
+    prepare: async (page) => {
+      const search = page
+        .getByPlaceholder(/search/i)
+        .or(page.getByRole("searchbox"))
+        .first();
+      await search.waitFor({ state: "visible", timeout: 20_000 });
+      await search.fill("Station");
+      // The list filters as you type; give React a frame to settle before the
+      // shutter, or the capture catches the unfiltered list.
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    // The warning is the subject: a regenerated code silently invalidates a
+    // sign already printed and hung on a wall, and that consequence only exists
+    // in this dialog.
+    id: "19-05-qr-regenerate-warning",
+    doc: "19-august-2026-release-changes.md",
+    line: 82,
+    anchor: "regenerate-code confirmation explicitly warning that the",
+    alt: "The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued",
+    route: "/locations/qr-codes",
+    prepare: async (page) => {
+      await clickByName(/^Regenerate$/)(page);
+      await page
+        .getByRole("dialog")
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    // The release added the activity cards and made the list filter on the same
+    // states they count. Shot on the Orders tab with a status filter applied so
+    // the cards and the list the reader is being told they match are both in
+    // frame; the seeder now leaves orders in four distinct states so the
+    // workflow breakdown is not a column of zeroes with one number in it.
+    id: "19-06-store-admin-orders",
+    doc: "19-august-2026-release-changes.md",
+    line: 64,
+    anchor: "Store Admin with activity/status cards and a matching filtered",
+    alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
+    route: "/store/admin",
+    prepare: async (page) => {
+      // Scoped to the tab strip. A bare name match also hits the Overview's
+      // recent-order rows, and clicking one of those opens the order modal over
+      // the list -- which is what the first capture of this shot contained.
+      await page
+        .locator(".tab-scroll button")
+        .filter({ hasText: "Orders" })
+        .first()
+        .click({ timeout: 10_000 });
+      const status = page.locator("#order-status-filter");
+      await status.waitFor({ state: "visible", timeout: 20_000 });
+      // Wait for the filtered fetch itself, not for a row count. The list is
+      // still the unfiltered one until that response lands, and the count
+      // depends on how many orders the seeder has advanced to paid -- which
+      // moves between runs, so waiting for a specific "N of N" made the shot
+      // pass or time out depending on the demo data rather than on the page.
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes("/store/orders?") &&
+            response.url().includes("status=paid"),
+          { timeout: 20_000 },
+        ),
+        status.selectOption({ label: "Paid" }),
+      ]);
+    },
+    fullPage: true,
+  },
+  {
+    // The other half of the same release note. The activity cards and the
+    // order-workflow breakdown are on Overview; the list they describe is on
+    // Orders. One tab cannot show both, so the guide carries both images and
+    // says which is which rather than a caption claiming a screen that is not
+    // in the frame.
+    id: "19-08-store-admin-activity",
+    doc: "19-august-2026-release-changes.md",
+    line: 64,
+    anchor: "__paired-with-19-06__",
+    alt: "Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by",
+    route: "/store/admin",
+    fullPage: true,
+  },
+  {
+    // Shot as the member, not the administrator: this is the member's own
+    // order, and an admin looking at the same order gets the reconciliation
+    // controls instead of the "tell us how you paid" editor the guide means.
+    id: "19-07-member-payment-method",
+    doc: "19-august-2026-release-changes.md",
+    line: 66,
+    anchor: "member order payment-method editor plus the explanatory text",
+    alt: "A member changing the payment method on their own order: a method picker over the department's payment handles and the \"I've sent payment\" report",
+    route: "/store/orders",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName(/Change payment method/i)(page);
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    // The blank sheet, printed from a published template. The route reads the
+    // template from ?id, so it is discovered at capture time like every other
+    // detail shot -- the seeder mints template ids afresh on each run.
+    id: "09-22-template-print-sheet",
+    doc: "09-skills-testing.md",
+    line: 1242,
+    anchor: "the Templates tab row actions with **Print** visible",
+    alt: "A blank skill sheet as it prints: the sections, the criteria, and a marking box beside each step for the examiner to fill in by hand",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/templates?limit=50",
+      (id) => `/training/skills-testing/print/template?id=${id}`,
+      "templates",
+      // The weighted sheet: it is the one carrying more than one section and a
+      // mix of scored and pass/fail criteria, which is what the marker asks to
+      // be visible in a single frame. A pass/fail-throughout template prints
+      // one kind of box and teaches nothing about the difference.
+      (template) =>
+        (template.status ?? "") === "published" &&
+        /Handline Advance/.test(template.name ?? ""),
+    ),
+    fullPage: true,
+  },
+  {
+    // The officer's view of a validated result. Shot as the administrator
+    // because the examiner's written notes are the half that disappears under
+    // a restricted disclosure -- the candidate's view of this same record is
+    // the shot below, and the pair is the teaching point.
+    id: "09-23-scorecard-print-officer",
+    doc: "09-skills-testing.md",
+    line: 1244,
+    anchor: "a completed scorecard print preview showing the per-step marks",
+    alt: "A validated scorecard as it prints: per-step marks, the section arithmetic behind the 78% total, a step marked 5 of 10 with the examiner's note explaining the deduction, and the validating officer's sign-off",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=200",
+      (id) => `/training/skills-testing/print/scorecard?id=${id}`,
+      "tests",
+      // Validated, not merely completed: the print page refuses a result that
+      // is still awaiting an officer, which is the guide's own edge case. Not
+      // voided, because a rebuilt fixture leaves its predecessor behind -- a
+      // validated result cannot be deleted -- and the withdrawn copy carries
+      // the same scores as the live one.
+      (test) =>
+        Boolean(test.validated_at ?? test.validatedAt) &&
+        !(test.voided_at ?? test.voidedAt) &&
+        test.result === "pass",
+    ),
+    fullPage: true,
+  },
+  {
+    // New screen in this release. Seeded with one published notice and one
+    // draft so the two states sit side by side -- with nothing adopted both
+    // cards show the platform default, which pictures the feature unused.
+    id: "19-09-legal-documents",
+    doc: "19-august-2026-release-changes.md",
+    line: 545,
+    anchor: "Governance → Legal Documents landing view, showing",
+    alt: "Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft",
+    route: "/governance/legal",
+    fullPage: true,
+    allowEmptyState:
+      'Matches "No proposals yet" -- the Proposed revisions panel on the ' +
+      "Privacy tab, empty on purpose. The seeded draft sits on Terms of " +
+      "Service so the published and draft states can be told apart. The " +
+      "published text and both history entries are on screen.",
+  },
+  {
+    // Recruitment is create-only for the automatic switches, so this has to be
+    // the new-event form rather than an edit of a seeded event -- changing an
+    // existing event's type deliberately does not flip them, and a capture
+    // taken that way would show the banner absent and teach the opposite.
+    id: "19-10-event-recruitment-type",
+    doc: "19-august-2026-release-changes.md",
+    line: 703,
+    anchor: "the event form with Recruitment selected, showing",
+    alt: "A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline",
+    route: "/events/new",
+    allowEmptyState:
+      'Matches "No reminders", one of the three options inside the ' +
+      "reminder-audience select rather than an empty state. The form is fully " +
+      "rendered with Recruitment chosen and both guest switches on.",
+    prepare: async (page) => {
+      const type = page
+        .locator("select")
+        .filter({ has: page.locator('option[value="recruitment"]') })
+        .first();
+      await type.waitFor({ state: "visible", timeout: 20_000 });
+      await type.selectOption("recruitment");
+      // The switches and the banner are painted from the type change, not with
+      // the form, so shooting immediately catches the pre-selection state.
+      await page.waitForTimeout(900);
+    },
+    fullPage: true,
+  },
+  {
+    // Half of a pair. The dashboard's Organization tab is addressable by
+    // ?tab=organization, so neither of these needs a click that could land on
+    // the wrong control.
+    id: "08-75-org-dashboard-with-finance",
+    doc: "08-admin-reports.md",
+    line: 2141,
+    anchor: "the organization dashboard under two accounts side by",
+    alt: "The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones",
+    // The default tab, not ?tab=organization. Department pulse is where the
+    // money cards live -- the Organization tab carries readiness, exceptions
+    // and asset counts and has no finance section on it for either account, so
+    // a pair shot there compares two screens that are identical in the one
+    // respect the marker is about.
+    route: "/dashboard",
+    fullPage: true,
+  },
+  {
+    // The same tab as an ordinary member. The point is that the finance
+    // sections are *absent* rather than empty -- an empty card would tell a
+    // member the department has finance data and they are not trusted with it,
+    // which is the inference the omission is designed to prevent. Shot as the
+    // member for that reason; an admin capture cannot show an absence.
+    id: "08-76-org-dashboard-without-finance",
+    doc: "08-admin-reports.md",
+    line: 2141,
+    anchor: "__paired-with-08-75__",
+    alt: "The same dashboard as a member without finance.manage: Department pulse is not rendered at all, rather than shown with empty money cards",
+    route: "/dashboard",
+    auth: "member",
+    fullPage: true,
+    allowEmptyState:
+      "A member without the finance, fundraising or outreach permissions is " +
+      "meant to see fewer sections here -- the omission is the subject of the " +
+      "shot, so an empty-state match on the remaining page is expected rather " +
+      "than a sign the demo data is missing.",
+  },
+  {
+    // Viewport-sized rather than fullPage, because a stitched full-page capture
+    // contains no scrollbar at all.
+    //
+    // This comment used to say the gutter could not be photographed, because
+    // `window.innerWidth - documentElement.clientWidth` measures 0 here. That
+    // was the wrong instrument: the captured PNG carried a 15px pure-white
+    // strip down its right edge against dark content, which audit_images.py
+    // found by comparing edge pixels with the content beside them, and which
+    // the DOM measurement never saw. Read the file, not the geometry.
+    //
+    // The cause was a root element carrying the themed gradient as a background
+    // *image* with no background *colour* (the `background:` shorthand resets
+    // it), so the reserved strip fell back to white. Fixed in styles/index.css;
+    // this shot is the evidence and is re-captured against it.
+    id: "19-11-dark-scrollbar-gutter",
+    doc: "19-august-2026-release-changes.md",
+    line: 222,
+    anchor: "a public page (`/f/{slug}` or an application-status link) in dark",
+    alt: "A public form in dark mode at full window width, the themed gradient reaching the window edges",
+    route: "/login",
+    auth: "anonymous",
+    theme: "dark",
+    fullPage: false,
+    prepare: openPublicForm,
+  },
+  {
+    // Clipped to the Notifications panel. The three choices cannot be shown
+    // "visible" as the marker asks: this is a native <select>, and an open
+    // select popup is drawn by the OS rather than the page, so it never appears
+    // in a screenshot. The guide already tables all three above the image; what
+    // the capture can honestly show is which one a new optional event starts
+    // on, which is the other half of that marker.
+    id: "04-44-reminder-audience",
+    doc: "04-events-meetings.md",
+    line: 1539,
+    anchor: "Create Event → Notifications with all three",
+    alt: "The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Notifications'))",
+    allowEmptyState:
+      'Same "No reminders" select option as 19-10. The panel is populated: the ' +
+      "audience reads Members who sign up and the schedule carries a " +
+      "1 day before reminder.",
+    prepare: async (page) => {
+      await page
+        .locator("#reminder-target")
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
+  },
+  {
+    // The panel beside it, clipped the same way. Flexible and 60 minutes are
+    // what a new event starts on, so no interaction is needed -- and shooting
+    // the default is the point, since the guide's caution is that 60 does not
+    // apply to every mode.
+    id: "04-45-checkin-flexible-default",
+    doc: "04-events-meetings.md",
+    line: 1573,
+    anchor: "Check-In Settings showing Flexible and 60 minutes before",
+    alt: "Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Check-In Settings'))",
+    prepare: async (page) => {
+      await page
+        .locator("#checkin-window")
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
+  },
+  {
+    // Half of a permission pair, both opening the SAME colleague's profile.
+    // The member chosen is the one enrolled in TOTP, per the marker, though
+    // see the caption: no account-security block renders on a colleague's
+    // profile for anybody -- enrolment is shown on your own settings page.
+    // What actually differs is the compliance summary, the training and
+    // certification history, and the emergency contacts.
+    id: "17-03-profile-as-officer",
+    doc: "17-privacy-data-rights.md",
+    line: 137,
+    anchor: "the same member profile viewed with `members.view`",
+    alt: "A colleague's profile as an officer: compliance summary, training and certification history and emergency contacts all present",
+    route: "/members",
+    prepare: openMemberProfile,
+    fullPage: true,
+  },
+  {
+    id: "17-04-profile-as-member",
+    doc: "17-privacy-data-rights.md",
+    line: 137,
+    anchor: "__paired-with-17-03__",
+    alt: "The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered",
+    route: "/members",
+    auth: "member",
+    prepare: openMemberProfile,
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see fewer panels on a colleague's profile -- the " +
+      "missing ones are the subject of the shot, so a thinner page is the " +
+      "result rather than a sign of missing demo data.",
+  },
+  {
+    // The deepest seeded room, chosen so the whole containment chain is in the
+    // closed control: Locker Cage inside Quartermaster's Storage inside the
+    // Volunteer Office inside Station 1.
+    //
+    // The marker also asked for indented sub-rooms in the open list. That half
+    // is not capturable and is not what the product does: the picker is a
+    // native <select>, whose popup is drawn by the OS rather than the page, and
+    // its options are flat -- each carries its full path as text instead of
+    // being indented under a parent. The guide says so beside the image.
+    id: "06-27-event-room-picker-path",
+    doc: "06-apparatus-facilities.md",
+    line: 283,
+    anchor: "an event form's room picker with indented sub-rooms",
+    alt: "The event form's location picker with a nested room chosen, the control showing the full containment path from the room up to its station",
+    route: "/events/new",
+    selector: "section:has(> h2:has-text('Location'))",
+    prepare: async (page) => {
+      const picker = page.locator("#location-select");
+      await picker.waitFor({ state: "visible", timeout: 20_000 });
+      const value = await page
+        .locator("#location-select option")
+        .filter({ hasText: "Locker Cage" })
+        .first()
+        .getAttribute("value");
+      if (!value) throw new Error("no nested room in the location picker");
+      await picker.selectOption(value);
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // The overdue loan, on the item that carries it. The Gas Meter is out to a
+    // member past its return date while the Thermal Imaging Camera is out and
+    // not yet due, which is the pair the marker asks to be seeded -- the
+    // caption points at both, and this is the one whose deadline has passed.
+    id: "05-82-item-overdue-loan",
+    doc: "05-inventory.md",
+    line: 2258,
+    anchor: "item issue/detail view with a temporary return deadline",
+    alt: "An item on temporary issue past its return date: the history entry naming the borrower, the reason, the return deadline in the department's timezone, and that it is overdue and not yet returned",
+    route: "/inventory/items",
+    prepare: openOverdueItem,
+    fullPage: true,
+  },
+  {
+    // Separation of duties is about people, not permissions: the chief holds
+    // `scheduling.manage` and still cannot review the swap they raised. Shot as
+    // the administrator for exactly that reason -- the refusal only exists for
+    // the requester, so a capture under any other account shows the control
+    // working and teaches the opposite of the caption. The seeder puts one
+    // swap in the administrator's name beside the demo member's, which is what
+    // makes the two rows differ on screen.
+    id: "03-78-swap-review-blocked",
+    doc: "03-scheduling.md",
+    line: 2777,
+    anchor: "Scheduling → Requests viewed by the member who raised",
+    alt: "The Requests tab refusing the administrator's press of Approve on the swap they raised themselves; their own row carries an extra cancel control the member's row below it does not",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: reviewOwnSwapBlocked,
+  },
+  {
+    // The tab opens filtered to Pending, and a department's long history is by
+    // definition resolved -- so the control the marker asks for is invisible
+    // until the filter is widened. That is the shot: All Statuses, the
+    // twenty-row first page, and the fetch-the-next-page control under it.
+    id: "03-79-requests-load-more",
+    doc: "03-scheduling.md",
+    line: 2793,
+    anchor: "Scheduling → Requests with the pagination control",
+    alt: "The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: openRequestsHistoryPage,
+  },
+  {
+    id: "19-12-swap-review-blocked",
+    doc: "19-august-2026-release-changes.md",
+    line: 625,
+    anchor: "the Requests tab under an account that raised one of",
+    alt: "The release's separation-of-duties rule in force: Approve refused on the administrator's own swap request, with another member's row still reviewable",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: reviewOwnSwapBlocked,
+  },
+  {
+    id: "19-13-requests-load-more",
+    doc: "19-august-2026-release-changes.md",
+    line: 654,
+    anchor: "Scheduling → Requests with pagination controls",
+    alt: "The paged Requests tab: twenty time-off rows and the control that fetches the next page",
+    route: "/scheduling?tab=requests",
+    fullPage: false,
+    prepare: openRequestsHistoryPage,
+  },
+  {
+    // The submitted state, not the form. Shot as the member because this is
+    // the member's own record of what they inspected, and the guide's claim --
+    // that a replayed queue resolves to one record -- is about the crew's copy.
+    //
+    // The offline/queued half of the marker is deliberately not staged: the
+    // harness sets no browser-context state in a prepare step, so an "offline"
+    // banner here would be a screenshot of a lie. The caption says so.
+    id: "03-80-submitted-check-phone",
+    doc: "03-scheduling.md",
+    line: 2819,
+    anchor: "a submitted shift equipment check on a 390x844",
+    alt: "One submitted engine check read back on a phone: passed overall, who signed it, when, and every item in the order the checklist walks the truck",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    prepare: openSubmittedCheck,
+    fullPage: true,
+  },
+  {
+    id: "19-14-submitted-check-phone",
+    doc: "19-august-2026-release-changes.md",
+    line: 672,
+    anchor: "a completed shift equipment check on a phone viewport",
+    alt: "A completed check as one record on a phone — the state a replayed queue or a double-tapped Submit resolves to",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    prepare: openSubmittedCheck,
+    fullPage: true,
+  },
+  {
+    id: "10-17-tall-dialog-action-row",
+    doc: "10-mobile-pwa.md",
+    line: 797,
+    anchor: "a tall dialog on a 390x844 viewport, scrolled to its",
+    alt: "A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable",
+    route: "/training/courses",
+    viewport: { width: 390, height: 844 },
+    fullPage: false,
+    prepare: openTallDialogAtActionRow,
+  },
+  {
+    id: "19-15-tall-dialog-action-row",
+    doc: "19-august-2026-release-changes.md",
+    line: 728,
+    anchor: "a tall dialog on a 390x844 viewport scrolled to its",
+    alt: "The fix in force: a dialog scrolled to its action row on a phone, with no navigation bar painting over the buttons",
+    route: "/training/courses",
+    viewport: { width: 390, height: 844 },
+    fullPage: false,
+    prepare: openTallDialogAtActionRow,
+  },
+  {
+    // Half of a pair, and only meaningful as one: the marker says so, and it
+    // is right -- a stacked list nobody has seen wide reads as an ordinary
+    // card layout rather than as a table that reflowed.
+    //
+    // The training history rather than the documents table the marker
+    // suggests: /documents lists folders until one is opened, and the largest
+    // seeded folder holds two files, so the wide half would be a two-row table
+    // -- too thin to read as a table at all. The guide's own list of what
+    // reflowed names the training table alongside documents.
+    id: "10-18-training-table-phone",
+    doc: "10-mobile-pwa.md",
+    line: 814,
+    anchor: "one of the reflowed tables (documents or check-in) at",
+    alt: "One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways",
+    route: "/members",
+    viewport: { width: 390, height: 844 },
+    prepare: openTrainingHistoryTable,
+  },
+  {
+    id: "10-19-training-table-desktop",
+    doc: "10-mobile-pwa.md",
+    line: 814,
+    anchor: "__paired-with-10-18__",
+    alt: "The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files",
+    route: "/members",
+    prepare: openTrainingHistoryTable,
+  },
+  {
+    // Shot as the secretary, because the *absence* is the subject and an
+    // administrator's capture of the same card shows Publish and teaches the
+    // opposite. Their own draft, not the administrator's: the page allows
+    // editing to the author or to anyone who can publish, so a draft somebody
+    // else wrote offers the secretary nothing at all and pictures no rule.
+    id: "08-77-legal-proposal-as-proposer",
+    doc: "08-admin-reports.md",
+    line: 2121,
+    anchor: "the revision editor captured under an account holding",
+    alt: "The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing",
+    route: "/governance/legal",
+    auth: "secretary",
+    prepare: openOwnLegalProposal,
+    fullPage: true,
+  },
+  {
+    id: "08-78-legal-revision-history",
+    doc: "08-admin-reports.md",
+    line: 2149,
+    anchor: "the revision history for one document showing a",
+    alt: "The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out",
+    route: "/governance/legal",
+    // Clipped to the history section. The whole page also carries the privacy
+    // notice's "No proposals yet" -- true, and nothing to do with this shot,
+    // but enough for the empty-state guard to hold the capture back.
+    selector: "section:has(> h2:has-text('Published history'))",
+    prepare: openLegalHistory,
+  },
+  {
+    id: "19-16-legal-revision-editor",
+    doc: "19-august-2026-release-changes.md",
+    line: 563,
+    anchor: "the revision editor with the body text area, the",
+    alt: "The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated",
+    route: "/governance/legal",
+    auth: "secretary",
+    prepare: openLegalRevisionEditor,
+    fullPage: true,
+  },
+  {
+    id: "19-17-legal-revision-history",
+    doc: "19-august-2026-release-changes.md",
+    line: 602,
+    anchor: "the revision history for one document showing a",
+    alt: "Three revisions of the privacy notice — one live, two replaced — each keeping the reason it was changed and who published it",
+    route: "/governance/legal",
+    // Clipped to the history section. The whole page also carries the privacy
+    // notice's "No proposals yet" -- true, and nothing to do with this shot,
+    // but enough for the empty-state guard to hold the capture back.
+    selector: "section:has(> h2:has-text('Published history'))",
+    prepare: openLegalHistory,
+  },
+  {
+    // The guide-17 pair, re-shot for this release note. See 17-03: there is no
+    // account-security block on a colleague's profile for anybody, so the
+    // marker's "use a demo member with MFA enabled so the redaction is
+    // visible" cannot be honoured -- MFA enrolment is shown on your own
+    // settings page. What the permission actually changes is large and
+    // visible, and is what the pair shows.
+    id: "19-18-profile-as-officer",
+    doc: "19-august-2026-release-changes.md",
+    line: 308,
+    anchor: "the same colleague profile side by side as seen with",
+    alt: "A colleague's profile with the officer's grant: the compliance summary, the training and certification history and the emergency contacts are all rendered",
+    route: "/members",
+    prepare: openMemberProfile,
+    fullPage: true,
+  },
+  {
+    id: "19-19-profile-as-member",
+    doc: "19-august-2026-release-changes.md",
+    line: 308,
+    anchor: "__paired-with-19-18__",
+    alt: "The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered at all",
+    route: "/members",
+    auth: "member",
+    prepare: openMemberProfile,
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see fewer panels on a colleague's profile -- the " +
+      "missing ones are the subject of the shot, so a thinner page is the " +
+      'result rather than a sign of missing demo data. ("No address on file." ' +
+      "is separate and true of both halves: this member has none recorded, " +
+      "verified against /users -- it is not what the permission withholds.)",
+  },
+  {
+    id: "19-20-candidates-as-manager",
+    doc: "19-august-2026-release-changes.md",
+    line: 312,
+    anchor: "member candidate list on an election in nominations phase",
+    alt: "The candidate list as an elections manager: both the accepted candidate and the nominee who has not yet accepted",
+    route: "/elections",
+    prepare: openElectionTab("candidates", isPostNominationElection),
+    fullPage: true,
+    allowEmptyState:
+      'Matches "No votes cast yet" from the results panel, which is true and ' +
+      "expected on an election still open. The candidate list this shot is " +
+      "about carries both nominees.",
+  },
+  {
+    id: "19-21-candidates-as-member",
+    doc: "19-august-2026-release-changes.md",
+    line: 312,
+    anchor: "__paired-with-19-20__",
+    alt: "The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld now that nominations have closed",
+    route: "/elections",
+    auth: "member",
+    prepare: openFirstFromApi(
+      "/elections?limit=20",
+      (id) => `/elections/${id}`,
+      "elections",
+      isPostNominationElection,
+    ),
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see a shorter list here -- the withheld pending " +
+      "nomination is the subject of the shot, so one name on the ballot is " +
+      "the result rather than missing demo data.",
+  },
+  {
+    // Step 3 again, but under the rule that makes outstanding checks blocking.
+    // The Medic the fixture hangs on now carries its own end-of-shift template
+    // (see _ensure_closeout_check_template), so there is a check nobody has
+    // completed for the warning to name.
+    //
+    // The override box is ticked, because the reason field it demands does not
+    // exist until it is -- and the marker asks for both. Ticking is client
+    // state only: nothing is written until "Close out shift", which these
+    // shots never press.
+    id: "03-81-closeout-override",
+    doc: "03-scheduling.md",
+    line: 1594,
+    anchor: "close-out wizard with outstanding end-of-shift checks",
+    alt: "Close-out wizard step 3 with the rule in force: the outstanding equipment check named in red, the override ticked, and the reason field it requires before the shift can be closed",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await setRequireEndOfShiftChecks(true)(page);
+      await openCloseoutWizard({
+        step: 3,
+        calls: { EMS: 3, Fire: 1 },
+        credit: 2,
+      })(page);
+      await page
+        .getByRole("checkbox", { name: /Close out anyway/i })
+        .check({ timeout: 20_000 });
+      await page
+        .getByLabel(/Reason for closing out with checks outstanding/i)
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
+    fullPage: false,
+  },
+  {
+    id: "19-22-admin-hours-summary-year",
+    doc: "19-august-2026-release-changes.md",
+    line: 51,
+    anchor: "Admin Hours Summary on Calendar Year with at least two",
+    alt: "The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against",
+    route: "/admin-hours/manage",
+    prepare: openAdminHoursSummary,
+    fullPage: true,
+  },
+  {
+    // Half of a pair. The dashboard's two tabs are the data boundary the guide
+    // is about, and no single frame holds both -- the whole point is that a
+    // department total and your own gear are never on screen together.
+    //
+    // Full page rather than framed on the gear panel. The marker asks for the
+    // tab strip *and* the personal panel, and they are a screen apart -- a
+    // viewport shot scrolled to one loses the other, and the caption then
+    // claims a tab strip that is not in the frame.
+    id: "00-24-dashboard-my-department",
+    doc: "00-getting-started.md",
+    line: 437,
+    anchor: "leader dashboard with Personal and Organization tabs",
+    alt: "The dashboard's My Department tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is Organization",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await page
+        .getByRole("heading", { name: /My Issued Gear/i })
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "00-25-dashboard-organization",
+    doc: "00-getting-started.md",
+    line: 437,
+    anchor: "__paired-with-00-24__",
+    alt: "The same dashboard on its Organization tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen",
+    route: "/dashboard?tab=organization",
+    prepare: async (page) => {
+      await page
+        .getByRole("heading", { name: /Scheduling Operations/i })
+        .first()
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+    allowEmptyState:
+      '"No critical exceptions" is the answer, not the absence of one: it sits ' +
+      "under the rows reading 0 on a card whose Failed equipment checks row " +
+      "reads 2, so the card is populated and reporting a department with " +
+      "nothing wrong in four of its five checks.",
+  },
+  {
+    // The closed selects, not an open one: these are native <select>s, whose
+    // popups the OS draws rather than the page, so the option list -- with its
+    // "Officer -- Fire Chief, Deputy Chief, ..." rank annotations -- cannot be
+    // photographed. What the frame does carry is the fourth seat reading
+    // "rescue specialist (legacy position)", which is the half of the marker
+    // that matters: a value typed before the picker existed stays readable.
+    id: "19-23-apparatus-crew-seats",
+    doc: "19-august-2026-release-changes.md",
+    line: 111,
+    anchor: "apparatus form crew-position rank picker, including one legacy",
+    alt: "The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)",
+    route: "/apparatus",
+    prepare: openApparatusCrewSeats,
+    fullPage: false,
+    allowEmptyState:
+      '"No EVOC requirement" is the unselected first <option> of the EVOC ' +
+      "select, not a state this rescue is in -- the control beside the seats " +
+      "reads Level 2. Unselected options are in the DOM whatever is chosen.",
+  },
+  {
+    // 375 wide, not the 390 the rest of the mobile shots use: the marker names
+    // 375, and it is the narrower of the two common phone widths -- if the
+    // targets hold here they hold at 390.
+    //
+    // Not annotated, and it does not need to be. The claim is measurable, and
+    // the measurements are in the guide beside this image: 50 of the 52
+    // controls on this screen are already 44px or taller, and the two that are
+    // not are a painted checkbox indicator and a hidden file input, each
+    // sitting inside a 44px+ label that takes the tap.
+    id: "10-20-submit-training-touch-targets",
+    doc: "10-mobile-pwa.md",
+    line: 164,
+    anchor: "manual annotation",
+    alt: "The Submit Training form at 375px — full-width text fields, a certification checkbox whose whole row is the tap target, and the edit and delete icon buttons on the submission below it, all sized for a fingertip",
+    route: "/training/submit",
+    auth: "member",
+    viewport: { width: 375, height: 812 },
+    // Viewport, not full page: this form carries a sticky submit bar, and
+    // full-page stitching paints a `position: fixed` element at its document
+    // offset -- the bar landed across the middle of the form, over the card it
+    // is meant to sit below. Framed on the Details card instead, which is
+    // where the certification checkbox is, with the bar in its real place.
+    prepare: async (page) => {
+      const row = page
+        .getByText(/This training earned a certification/i)
+        .first();
+      await row.waitFor({ state: "visible", timeout: 20_000 });
+      // `center`, not `end`: the sticky submit bar occupies the bottom of the
+      // frame, so an element scrolled to the end of the viewport lands behind
+      // it.
+      await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
   },
   {
     id: "03-43-time-off-request-form",

@@ -77,7 +77,20 @@ Practically: block out an uninterrupted half hour, gather the department's
 address, station list, apparatus list and the first administrator's details
 _before_ you begin, and do not close the browser until you reach the dashboard.
 
-> **[SCREENSHOT NEEDED — the wizard after a browser restart: the form repainted with previously entered answers, and the session-expired error raised by the next step. Demo data: begin an onboarding run through the stations step, close the browser, reopen `/onboarding`, and attempt to continue. Capture both states in sequence so the caption can show that a filled-in form does not mean a live session.]**
+**Not pictured, and it is not a tooling limitation so much as a contradiction
+in what would have to be true.** Every other image in this library is taken
+against a demo department that exists. This wizard only runs when one does
+**not**: with a department on file, `/onboarding` sends you to the sign-in page
+rather than to step one — which is the same "Onboarding has already been
+completed" condition the table above distinguishes from an expired session. So
+the two frames would need a database with no department, and the rest of the
+library needs one with a department, in the same run.
+
+Reproduce it yourself on a scratch install in about a minute: start the wizard,
+fill in the department and stations steps, quit the browser, reopen
+`/onboarding`, and press Next. The form comes back filled in — that is the local
+draft — and the step fails. That failure is the whole lesson: a populated form
+is not evidence of a live session.
 
 ---
 
@@ -2102,10 +2115,9 @@ department actually does with member data.
 Full walkthrough and edge cases:
 [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice).
 
-> **[SCREENSHOT NEEDED — Governance → Legal Documents landing view with both
->
-> > document cards (Privacy Notice, Terms of Service), one showing a published
-> > revision and one showing a draft, so the status difference is visible.]**
+![Governance → Legal Documents: the Privacy Notice published with its last-updated line and published history, beside a Terms of Service tab still carrying an unpublished draft](./images/19-09-legal-documents.png)
+
+_Shared with the [release lesson](./19-august-2026-release-changes.md#governance--legal-documents-your-own-privacy-notice); the two documents are tabs on one screen rather than side-by-side cards._
 
 ### Drafting and publishing are separate permissions
 
@@ -2119,10 +2131,14 @@ This is how a department gets "the secretary drafts, an officer approves"
 without running it as an off-system procedure. A department that does not want
 the ceremony gives one person `settings.manage`.
 
-> **[SCREENSHOT NEEDED — the revision editor captured under an account holding
->
-> > only `legal.propose`, so the Publish control is visibly absent. That absence
-> > is the subject of the shot; caption it explicitly.]**
+![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
+
+_The permission does not show in the editor: **Save draft** and **Cancel** are
+what everyone gets there, publisher included. It shows on the saved proposal —
+above, the secretary's own draft offers Edit and Discard and no **Publish to
+members**, while the administrator's draft beneath it offers them nothing at
+all. Editing is allowed to the member who wrote a draft and to anyone who can
+publish; publishing to the second group only._
 
 ### What gets recorded
 
@@ -2147,11 +2163,7 @@ the ceremony gives one person `settings.manage`.
 - **There is no approval queue.** Saving a draft notifies nobody. Review before
   publishing is a process you run, not a workflow the module enforces.
 
-> **[SCREENSHOT NEEDED — the revision history for one document showing a
->
-> > published revision plus at least one archived revision, each with its change
-> > note and the publishing member. Seed three revisions so it reads as a
-> > history.]**
+![The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out](./images/08-78-legal-revision-history.png)
 
 ## August 19–23, 2026 update — exports and dashboards
 
@@ -2172,8 +2184,4 @@ financial access.** Money totals need `finance.manage`, fundraising needs
 `fundraising.view`, outreach needs `events.manage`. Asset widgets show counts
 and links only — never facility codes, accounts, budgets or leases.
 
-> **[SCREENSHOT NEEDED — the organization dashboard under two accounts side by
->
-> > side: one holding `finance.manage` and one without it, showing the finance
-> > section present in the first and absent (not empty) in the second. The
-> > comparison is the point.]**
+![The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones](./images/08-75-org-dashboard-with-finance.png)

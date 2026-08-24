@@ -2284,6 +2284,25 @@ not silently relabel an asset; oversized UTF-8 CSV input can exceed the byte
 limit before it exceeds the row limit; and a valid login does not make an
 unapproved WebSocket origin valid.
 
-> **[SCREENSHOT NEEDED — item issue/detail view with a temporary return deadline and live overdue state; seed one overdue and one not-yet-due issue.]**
->
-> **[SCREENSHOT NEEDED — item stock ledger showing on-hand, issued/deployed, and available quantities whose arithmetic can be verified from the caption.]**
+![An item on temporary issue past its return date: the history entry naming the borrower, the reason, the return deadline in the department's timezone, and that it is overdue and not yet returned](./images/05-82-item-overdue-loan.png)
+
+**Where those three numbers actually live.** There is no single ledger panel
+showing on-hand, issued and available side by side, so do not go looking for
+one — they are read from two places, and the arithmetic is worth walking
+through once with a class:
+
+| Number                    | Where                                                           | For the Class B Uniform Shirt |
+| ------------------------- | --------------------------------------------------------------- | ----------------------------- |
+| On hand                   | the **Qty** column on the items list, left of the slash         | 11                            |
+| Total the department owns | the same column, right of the slash                             | 12                            |
+| Issued / deployed         | the difference, and per member on **Gear & Uniforms → Members** | 1                             |
+
+**On hand and available are the same number here**, which is the part that
+catches people out: issuing a unit _decrements_ the on-hand count and a return
+adds it back, so what is on the shelf is exactly what can be issued next. The
+total is on-hand **plus** what is currently out — never the other way round.
+Subtracting the issued count from the displayed figure counts every issued unit
+twice.
+
+Lots carried on an apparatus are a separate view again — the **Stock Lots** tab
+pictured earlier in this lesson, which is the one to work a recall from.
