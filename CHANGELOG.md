@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The stock room was in everyone's nav; the page members actually need was in nobody's (2026-08-24)
+
+**Changed**
+
+- **Medical Supplies is now advertised only to the people who stock it.** The
+  Operations entry gated on `inventory.view`, which both rank-and-file seeded
+  roles hold, so every member carried a row to the supply room in their
+  navigation — a screen about lot numbers, expiration dates and incoming
+  deliveries, and a job almost none of them have. It now gates on
+  `inventory.view_medical` / `manage_medical` / `inventory.manage`. **The route
+  and the API are unchanged**: a member who follows a link can still look at
+  what is on hand. What went away is the standing invitation.
+- **Apparatus Inventory has a navigation entry.** The crew half of the same
+  shelf — _"we just used two of these"_, recorded without starting a whole
+  checklist — was reachable only from a secondary button on My Checklists, and
+  nothing in either navigation pointed at it. It now sits in Operations beside
+  Medical Supplies, on the default member grant that its route already used.
+  This is the medical page most members need, and it is the one they could not
+  find.
+- **The Administration section no longer carries a medical row.** It pointed at
+  `/medical-supplies/categories` — a setup screen configured once — and with
+  Medical Supplies now gated to the same people, every user who could see it
+  already had the Operations entry to the same module. Categories keeps its
+  name and is still reached by the tag button on Medical Supplies, the way gear
+  categories are reached through the Gear Admin hub.
+
+Between them these three settle a navigation that had it backwards: the
+officer's page was shown to everyone, and the crew's page to no one.
+
+**Also changed**
+
+- **The gear catalogue is manager-only too.** `/inventory` — the whole
+  department's uniforms and equipment — had no route guard at all and no
+  permission on its navigation row, so every member could browse it. It and its
+  `/inventory/items` alias now require `inventory.manage`. A member keeps My
+  Issued Gear, the request and return they raise from it, and the detail page
+  for an item they hold.
+- **`inventory.view` could not be the gate, and that is the whole difficulty.**
+  Its name says "View gear and uniforms", but the seeded `member` and
+  `firefighter` roles hold it _and need it_: the request picker on My Issued
+  Gear searches `GET /items` to find something to ask for, and item detail
+  reads `GET /items/{id}`. Gating the list on `inventory.view` would have gated
+  nothing, and taking the grant off those roles would have broken requesting —
+  the one thing a member is supposed to be able to do here.
+- **The item-detail breadcrumb no longer leads members somewhere they cannot
+  go.** It pointed at Inventory › Items unconditionally. For a member arriving
+  from their own issued gear, both of those are now closed, so the trail leads
+  back to My Issued Gear instead.
+
+**Fixed in review**
+
+- **Five more ways in, all of them one mistake.** Closing a page closes it for
+  every surface that offers it, and "navigation" turned out to mean more than
+  the two nav components: the item detail page's header **Back** button and its
+  error-state link still pointed at the closed catalogue (the breadcrumb above
+  was only one of three exits), the **command palette** listed Inventory with
+  no permission at all, the **`i` keyboard shortcut** navigated there on a bare
+  keypress with no label to gate, and Medical Supplies' "tracked separately
+  under Gear & Uniforms" aside linked a medical-only officer into a page they
+  cannot open. Each one turned a fixed bug into an Access Denied reached from a
+  control the app itself offered.
+- **The medical navigation gate was a superset of its route's gate.** It
+  advertised `manage_medical` and `inventory.manage`, but `/medical-supplies`
+  accepts only `MEDICAL_VIEW_PERMISSIONS` and `checkPermission` has no
+  manage-implies-view rule, so a supply officer holding management without the
+  read grant was invited to Access Denied. The entry gates on
+  `inventory.view_medical` alone — the one grant in the route's own list that
+  distinguishes a stocker from every member.
+- **`src/navGateIntegrity.test.ts` asserts both invariants**, in the manner of
+  `routeIntegrity.test.ts`: a nav gate must be a subset of its route's gate,
+  and every surface offering the gear catalogue must gate on
+  `inventory.manage`. Each assertion was confirmed to fail against the original
+  defect before being kept.
+- **Two Playwright specs signed in as nobody.** `signIn` sets
+  `permissions: []`, which _overrides_ the fixture user's own list, so the
+  end-to-end user holds no grants at all. The navigation spec clicked a Gear &
+  Uniforms row that no longer renders for a plain member, and the mobile
+  presentation pass — which visits `/inventory` — quietly measured the redirect
+  instead of the page, reporting "rendered little content" for a screen that
+  renders plenty. Both now sign in with `inventory.manage`. The full mobile
+  ratchet still passes every route at zero sub-44px targets, so the wider grant
+  costs nothing it was protecting.
+
 ### Logged hours read on the quarter hour (2026-08-24)
 
 **Changed**
@@ -64,6 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (apparatus engine hours), which are entered as exact figures and must read
   back exactly as entered. Editable hours fields and the manual shift report's
   duration preview likewise show the value actually being submitted.
+
 ### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
 
 **Changed**

@@ -77,11 +77,27 @@ describe('MedicalSuppliesPage', () => {
     expect(await screen.findByRole('heading', { name: /Medical Supplies/i })).toBeInTheDocument();
   });
 
-  it('points at the gear page rather than implying it holds gear too', async () => {
+  it('points a gear manager at the gear page rather than implying it holds gear too', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage');
+
     renderWithRouter(<MedicalSuppliesPage />);
 
     const gearLink = await screen.findByRole('link', { name: /Gear & Uniforms/i });
     expect(gearLink).toHaveAttribute('href', '/inventory');
+  });
+
+  it('states the separation without linking it for someone who cannot open the catalogue', async () => {
+    // The gear catalogue is manage-gated. An EMS supply officer holding only
+    // the medical grants would have been sent to Access Denied by a sentence
+    // that was never more than an aside — so the aside keeps its meaning and
+    // drops its link.
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await screen.findByRole('heading', { name: /Medical Supplies/i });
+
+    expect(screen.getByText(/Gear and uniforms are tracked separately/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Gear & Uniforms/i })).not.toBeInTheDocument();
   });
 
   it('opens on expiring stock, which is what goes wrong quietly', async () => {

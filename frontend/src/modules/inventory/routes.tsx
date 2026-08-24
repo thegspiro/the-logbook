@@ -43,13 +43,25 @@ const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPag
 export const getInventoryRoutes = () => {
   return (
     <React.Fragment>
-      {/* Inventory - Browse all equipment */}
+      {/* Inventory - Browse all equipment.
+
+          Manager-gated, unlike the member pages below it. This is the whole
+          department's gear, and a member's business with the catalogue is
+          their own issued items and the request they raise against one —
+          both of which live on /inventory/my-equipment and stay open.
+
+          `inventory.view` cannot be the gate here: the seeded member and
+          firefighter roles hold it, and they need it, because the request
+          picker on My Issued Gear searches GET /items to find something to
+          ask for. Gating this page on it would have gated nothing. */}
       <Route
         path="/inventory"
         element={
-          <Suspense fallback={null}>
-            <InventoryItemsPage />
-          </Suspense>
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryItemsPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 
@@ -289,13 +301,17 @@ export const getInventoryRoutes = () => {
         }
       />
 
-      {/* Inventory - Items list (breadcrumb target from detail page) */}
+      {/* Inventory - Items list (breadcrumb target from detail page).
+          Same page and same gate as /inventory — leaving this one open would
+          have left the full catalogue one breadcrumb away. */}
       <Route
         path="/inventory/items"
         element={
-          <Suspense fallback={null}>
-            <InventoryItemsPage />
-          </Suspense>
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryItemsPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 
