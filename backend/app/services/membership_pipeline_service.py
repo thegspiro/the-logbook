@@ -60,6 +60,54 @@ class _ActivityEvent:
     details: Optional[Dict[str, Any]] = None
 
 
+# A status other than ACTIVE is a stop: on hold pauses the workflow, and
+# rejected / withdrawn / inactive / approved / transferred are terminal.
+# Every progression path is gated on it so a stop actually stops — an
+# integration webhook, a screening result or an approver's sign-off must not
+# walk a paused or closed applicant forward behind the coordinator's back,
+# and a transferred prospect must never re-enter the transfer path.
+_MOVABLE_STATUS = ProspectStatus.ACTIVE
+
+_STATUS_BLOCK_REASON = {
+    ProspectStatus.ON_HOLD: "on hold",
+    ProspectStatus.APPROVED: "already approved",
+    ProspectStatus.REJECTED: "rejected",
+    ProspectStatus.WITHDRAWN: "withdrawn",
+    ProspectStatus.INACTIVE: "inactive",
+    ProspectStatus.TRANSFERRED: "already a member",
+}
+
+
+# The detailed duplicate-match message names the existing member and their
+# email. /transfer redacts it deliberately (see transfer_prospect); the
+# completion paths must too — /approve-step is reachable by any member holding
+# a stage's approval role, not just members.manage holders.
+DUPLICATE_MEMBER_REFUSAL = (
+    "An existing member matches this applicant, so the final stage cannot "
+    "convert them automatically. Review the existing members list, then "
+    "convert or reactivate from there."
+)
+
+
+def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
+    """Raise unless the prospect's status permits pipeline movement.
+
+    ``action`` is the verb shown to the coordinator ("advanced", "moved
+    back"), so the refusal names both what was attempted and why it was
+    refused rather than failing silently.
+    """
+    status = prospect.status
+    if status == _MOVABLE_STATUS:
+        return
+    reason = _STATUS_BLOCK_REASON.get(
+        status, str(getattr(status, "value", status) or "not active")
+    )
+    raise ValueError(
+        f"This applicant is {reason} and cannot be {action}. "
+        f"Reactivate the application first."
+    )
+
+
 class MembershipPipelineService:
     """Service for membership pipeline management"""
 
@@ -470,8 +518,43 @@ class MembershipPipelineService:
             else:
                 fallback_step = None
 
+            # Prospect ids are needed to repoint their progress rows below.
+            stranded_ids = [str(p.id) for p in stranded]
+            progress_rows: List[ProspectStepProgress] = []
+            if fallback_step is not None and stranded_ids:
+                progress_result = await self.db.execute(
+                    select(ProspectStepProgress).where(
+                        ProspectStepProgress.prospect_id.in_(stranded_ids),
+                        ProspectStepProgress.step_id == fallback_step.id,
+                    )
+                )
+                progress_rows = list(progress_result.scalars().all())
+            progress_by_prospect = {str(r.prospect_id): r for r in progress_rows}
+
             for prospect in stranded:
                 prospect.current_step_id = fallback_step.id if fallback_step else None
+                # Moving the pointer is not enough: the stage the applicant
+                # lands on has to read as the one they are working. Left alone,
+                # a backward fallback put them on a stage still stamped
+                # completed (a green tick on the stage they are sitting in),
+                # and a forward fallback on a stage still pending, which the
+                # drawer filters out of the history entirely — so the progress
+                # track disagreed with the Current Stage panel either way.
+                if fallback_step is not None:
+                    row = progress_by_prospect.get(str(prospect.id))
+                    if row is None:
+                        self.db.add(
+                            ProspectStepProgress(
+                                id=generate_uuid(),
+                                prospect_id=prospect.id,
+                                step_id=fallback_step.id,
+                                status=StepProgressStatus.IN_PROGRESS,
+                            )
+                        )
+                    else:
+                        row.status = StepProgressStatus.IN_PROGRESS
+                        row.completed_at = None
+                        row.completed_by = None
                 await self._log_activity(
                     prospect_id=prospect.id,
                     action="step_deleted_auto_moved",
@@ -1470,6 +1553,14 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # Checked under the row lock, and before any gate or write: every
+        # forward path funnels through here (advance, skip, an approver's
+        # sign-off, an integration auto-advance), so this is the one place a
+        # non-active status has to stop them. Without it a rejected applicant
+        # could be walked to a final stage and — on a pipeline with
+        # auto_transfer_on_approval — converted into a full member.
+        _assert_movable(prospect, "advanced")
+
         # MP-5: reject a step_id that isn't part of this prospect's pipeline
         # so a client can't write a ProspectStepProgress row referencing a
         # foreign or nonexistent step (dangling-FK / integrity).
@@ -1539,6 +1630,42 @@ class MembershipPipelineService:
         if not skip_requirements:
             await self._validate_step_completion(prospect, step, action_result)
 
+        # A skip is a coordinator bypass, not an approval — it must never
+        # convert the prospect to a member, even if a stage flagged
+        # is_final_step ended up mid-pipeline through reordering.
+        will_auto_transfer = (
+            not skip_requirements
+            and step.is_final_step
+            and bool(prospect.pipeline and prospect.pipeline.auto_transfer_on_approval)
+        )
+
+        # Convert first, then record the completion — not the other way round.
+        # _do_transfer reports a refusal (an existing member holds this email,
+        # an archived record to reactivate instead) by *returning*
+        # success=False rather than raising, and it reads nothing the staging
+        # below writes. Running it after the progress row, the activity entry
+        # and the applicant's completion email were staged meant a refusal had
+        # to unwind them — and _try_auto_advance_step swallows this ValueError,
+        # so an event-driven caller's own commit would have persisted a final
+        # stage marked complete with nobody converted, plus an email already
+        # sent saying so. Ordering it first leaves nothing to undo.
+        if will_auto_transfer:
+            transfer = await self._do_transfer(prospect, completed_by)
+            if isinstance(transfer, dict) and not transfer.get("success"):
+                # The detailed message names the matched member and their
+                # email. /transfer redacts it deliberately and so must this:
+                # /approve-step reaches here for any member holding a stage's
+                # approval role, not only members.manage holders.
+                logger.warning(
+                    f"Auto-transfer refused for prospect {prospect_id}: "
+                    f"{transfer.get('message')}"
+                )
+                raise ValueError(
+                    DUPLICATE_MEMBER_REFUSAL
+                    if transfer.get("existing_member_match")
+                    else "The applicant could not be converted to a member."
+                )
+
         # Find or create the progress record
         progress = next(
             (p for p in prospect.step_progress if str(p.step_id) == str(step_id)),
@@ -1600,14 +1727,9 @@ class MembershipPipelineService:
         # on. A skip is a coordinator bypass, not an approval — it must never
         # convert the prospect to a member, even if a stage flagged
         # is_final_step ended up mid-pipeline through reordering.
-        if (
-            not skip_requirements
-            and step.is_final_step
-            and prospect.pipeline.auto_transfer_on_approval
-        ):
-            await self._do_transfer(prospect, completed_by)
-        else:
-            # Advance to next step
+        if not will_auto_transfer:
+            # Advance to next step. The transfer, when there is one, already
+            # ran above and moved the prospect out of the pipeline.
             await self._advance_current_step(prospect, step_id)
 
         # Some explicit operations have a domain-level audit event in addition
@@ -1976,6 +2098,8 @@ class MembershipPipelineService:
         if not prospect or not prospect.pipeline:
             return None
 
+        _assert_movable(prospect, "moved back")
+
         sorted_steps = sorted(prospect.pipeline.steps, key=lambda s: s.sort_order)
         current_idx = next(
             (
@@ -1986,8 +2110,15 @@ class MembershipPipelineService:
             -1,
         )
 
-        if current_idx <= 0:
-            return prospect  # Already at the first step
+        # Report a no-op as a no-op, the same way advance_prospect does.
+        # Returning the untouched prospect made "moved back" indistinguishable
+        # from "did nothing": a 200, a success toast, and a stage pointer that
+        # never moved — and for a stale current_step_id (index -1) the applicant
+        # stayed stuck with no indication of why Back had no effect.
+        if current_idx < 0:
+            raise ValueError("Prospect has no current stage to move back from")
+        if current_idx == 0:
+            raise ValueError("Prospect is already at the first stage")
 
         current_step = sorted_steps[current_idx]
         prev_step = sorted_steps[current_idx - 1]
@@ -3158,6 +3289,14 @@ class MembershipPipelineService:
         """
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect or not prospect.pipeline:
+            return False
+
+        # A hold, a rejection or a withdrawal is a stop the coordinator set;
+        # an event arriving from another module must not step over it. Checked
+        # here as well as in complete_step so a paused applicant is a quiet
+        # "nothing to do" for an event-driven caller rather than a raised
+        # error inside somebody else's screening or attendance write.
+        if prospect.status != _MOVABLE_STATUS:
             return False
 
         step = next(
