@@ -204,14 +204,19 @@ class NfcTagService:
             raise ValueError("Card not found")
 
         new_status = updates.get("status")
-        if new_status == NfcTagStatus.ACTIVE and tag.status in _TERMINAL_CARD_STATUSES:
-            # Enforced here rather than left to the screen that hides the
-            # button. A lost card is terminal because whoever picked it up can
-            # still tap it, and an invariant only the UI knows about is one an
-            # API client silently breaks.
+        # Any move *out* of a terminal state, not just a direct jump back to
+        # active. Rejecting only `lost -> active` left the invariant one hop
+        # wide open: `lost -> suspended` and then `suspended -> active` restores
+        # exactly the credential somebody else may be holding. A card whose
+        # status is unchanged still passes, so relabelling a lost card works.
+        if (
+            new_status is not None
+            and new_status != tag.status
+            and tag.status in _TERMINAL_CARD_STATUSES
+        ):
             raise ValueError(
-                f"A card marked {tag.status.value} cannot be reactivated. "
-                "Issue a replacement card instead."
+                f"A card marked {tag.status.value} cannot be reactivated or "
+                "reclassified. Issue a replacement card instead."
             )
 
         apply_updates(tag, updates, skip={"organization_id", "id", "user_id"})

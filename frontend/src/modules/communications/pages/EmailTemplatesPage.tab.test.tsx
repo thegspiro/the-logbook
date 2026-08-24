@@ -54,11 +54,18 @@ describe('EmailTemplatesPage tab deep links', () => {
     expect(handler).toContain('setSearchParams({ tab })');
   });
 
-  it.each(TABS)('routes the %s button through the handler, not bare state', (tab) => {
-    // A single missed call site is the whole defect: that tab silently stops
-    // round-tripping while the other four look fine.
-    expect(source).toContain(`handleTabChange('${tab}')`);
-    expect(source).not.toContain(`setActiveTab('${tab}')`);
+  // The page now renders its sections through the shared SettingsLayout, which
+  // maps one section list onto the nav and calls one handler. There is no
+  // longer a per-tab call site to miss — the equivalent omission is a tab that
+  // never reaches SECTIONS, so that is what these assert.
+  it.each(TABS)('offers %s as a section the shell can render', (tab) => {
+    const declared = source.slice(source.indexOf('const SECTIONS'), source.indexOf('export const EmailTemplatesPage'));
+    expect(declared).toContain(`key: '${tab}'`);
+  });
+
+  it('routes every section through the handler rather than bare state', () => {
+    expect(source).toContain('onSectionChange={handleTabChange}');
+    expect(source).not.toContain('setActiveTab(');
   });
 
   it('derives the active tab from the URL rather than mirroring it into state', () => {

@@ -324,6 +324,28 @@ class TestCardLifecycleTransitions:
         assert tag.revoked_at is None
         assert tag.revoked_reason is None
 
+    async def test_a_lost_card_cannot_be_laundered_through_suspended(self):
+        """Rejecting only `terminal -> active` left the invariant one hop wide.
+
+        An API client could patch `lost -> suspended`, then `suspended ->
+        active`, and end up with exactly the credential somebody else may be
+        holding.
+        """
+        tag = _tag(status=NfcTagStatus.LOST)
+        service = NfcTagService(_db([_one(tag)]))
+
+        with pytest.raises(ValueError, match="cannot be reactivated"):
+            await service.update_tag("tag-1", ORG, {"status": NfcTagStatus.SUSPENDED})
+        assert tag.status == NfcTagStatus.LOST
+
+    async def test_a_revoked_card_cannot_be_moved_to_lost(self):
+        """No transition out of a terminal state, in any direction."""
+        tag = _tag(status=NfcTagStatus.REVOKED)
+        service = NfcTagService(_db([_one(tag)]))
+
+        with pytest.raises(ValueError, match="cannot be reactivated"):
+            await service.update_tag("tag-1", ORG, {"status": NfcTagStatus.LOST})
+
     async def test_a_lost_card_can_still_be_relabelled(self):
         """The guard is about reactivation, not about freezing the record."""
         tag = _tag(status=NfcTagStatus.LOST)

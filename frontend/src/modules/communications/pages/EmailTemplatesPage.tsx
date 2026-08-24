@@ -4,12 +4,18 @@
  * Admin page for viewing, editing, and previewing email notification
  * templates.
  *
- * Three columns from `lg` up — list, editor, live preview — rather than an
- * editor and a preview behind tabs. Tabs made the preview something you went
- * and looked at after the fact, which is the one thing it is bad at: the
- * question an admin is actually asking is "does this edit look right", and
- * that needs both halves visible at once. Below `lg` the tab strip comes
- * back, because three columns do not fit a phone.
+ * Renders through the shared `SettingsLayout` — its sections, its header, its
+ * section nav — like every other settings screen.
+ *
+ * The Templates section asks the shell for its `wide` column. Three columns
+ * from `lg` up — list, editor, live preview — rather than an editor and a
+ * preview behind tabs. Tabs made the preview something you went and looked at
+ * after the fact, which is the one thing it is bad at: the question an admin
+ * is actually asking is "does this edit look right", and that needs both
+ * halves visible at once. The pair does not fit the shell's standard 960px, so
+ * this one panel widens; the other four sections are lists and do not. Below
+ * `lg` the two panes stack and a strip switches between them, because three
+ * columns do not fit a phone.
  */
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
@@ -30,14 +36,16 @@ import {
   Eye,
   History,
   RotateCcw,
-  PenLine,
   Send,
-  UserCheck,
   Save,
   Undo2,
   Sparkles,
+  AlignLeft,
+  LayoutTemplate,
+  Users,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
+import { SettingsLayout, type SettingsSection } from '../../../components/settings/SettingsLayout';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
 import { useOfficersStore } from '../store/officersStore';
 import { useFootersStore } from '../store/footersStore';
@@ -77,6 +85,19 @@ interface PreviewMember {
  */
 const EMAIL_TEMPLATES_TABS = ['templates', 'footers', 'officers', 'scheduled', 'history'] as const;
 type EmailTemplatesTab = (typeof EMAIL_TEMPLATES_TABS)[number];
+
+const SECTIONS: SettingsSection<EmailTemplatesTab>[] = [
+  {
+    key: 'templates',
+    label: 'Templates',
+    icon: LayoutTemplate,
+    description: 'Message bodies, grouped by the module that sends them',
+  },
+  { key: 'footers', label: 'Footers', icon: AlignLeft, description: 'Signature blocks appended to outgoing mail' },
+  { key: 'officers', label: 'Officers', icon: Users, description: 'Who is addressed by officer-role placeholders' },
+  { key: 'scheduled', label: 'Scheduled', icon: CalendarClock, description: 'Messages queued to send later' },
+  { key: 'history', label: 'History', icon: History, description: 'What has been sent, and to whom' },
+];
 
 /** How long typing has to stop before the preview re-renders. */
 const PREVIEW_DEBOUNCE_MS = 500;
@@ -356,140 +377,85 @@ const EmailTemplatesPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
-        <Breadcrumbs />
+    <SettingsLayout<EmailTemplatesTab>
+      sections={SECTIONS}
+      activeSection={activeTab}
+      onSectionChange={handleTabChange}
+      navLabel="Email settings sections"
+      title="Email Templates"
+      headerAside={<Breadcrumbs />}
+      // Only the Templates panel needs the wide column — it is the one that
+      // puts the editor and the live preview beside each other. The other four
+      // sections are lists and read better at the width every other settings
+      // screen uses.
+      width={activeTab === 'templates' ? 'wide' : 'standard'}
+    >
+      <>
+        {/* Save bar for the Templates section.
 
-        {/* Page Header.
-            Sticky, and it carries Save: with the editor and the preview side
-            by side the button used to scroll out of sight while the fields it
-            saves stayed on screen. `top-0` rather than an offset because this
-            bar is the page's own chrome, not a floating element that has to
-            clear the mobile bottom nav.
-            On bg-theme-bg, the flat opaque page canvas, not a surface token:
-            in dark mode the surface tokens are translucent white by design —
-            they are meant to sit *on* the gradient — so a sticky bar painted
-            with one shows the content sliding underneath it, which is the
-            single thing this bar exists to stop. */}
-        <div className="bg-theme-bg border-theme-surface-border sticky top-0 z-30 -mx-4 mb-6 border-b px-4 py-3 shadow-sm sm:-mx-6 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="rounded-lg bg-red-600 p-2">
-                <Mail className="h-6 w-6 text-white" aria-hidden="true" />
-              </div>
-              <div>
-                <h1 className="text-theme-text-primary text-2xl font-bold">Email Templates</h1>
-                <p className="text-theme-text-muted text-sm">
-                  Customize the email notifications sent by the application
-                </p>
-              </div>
+              Sticky, and it carries Save: with the editor and the preview side
+              by side the button used to scroll out of sight while the fields it
+              saves stayed on screen.
+
+              It lives here rather than in SettingsLayout's headerAside because
+              that header is not sticky — and making it sticky would move every
+              other settings screen's header for the sake of this one. Negative
+              margins so the bar spans the panel's padding instead of floating
+              inside it, and `top-0` because it is the panel's own chrome, not a
+              floating element that has to clear the mobile bottom nav.
+
+              On bg-theme-bg, the flat opaque page canvas, not a surface token:
+              in dark mode the surface tokens are translucent white by design —
+              they are meant to sit *on* the gradient — so a sticky bar painted
+              with one shows the content sliding underneath it, which is the
+              single thing this bar exists to stop. */}
+        {activeTab === 'templates' && selectedTemplate && (
+          <div className="bg-theme-bg border-theme-surface-border sticky top-0 z-30 -mx-4 -mt-4 mb-4 border-b px-4 py-3 sm:-mx-6 sm:-mt-6 sm:px-6">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  void handleSendTest();
+                }}
+                disabled={isSendingTest || draft.isDirty}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                // The endpoint renders the stored row, so with unsaved edits
+                // on screen this would mail the previous version while the
+                // preview beside it shows the new one — and the whole point
+                // of the button is checking what a real inbox does with the
+                // thing you are looking at.
+                title={
+                  draft.isDirty
+                    ? 'Save first — a test email sends the saved template, not your unsaved edits'
+                    : 'Send this template to your own address'
+                }
+              >
+                {isSendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <span>Send Test to Me</span>
+              </button>
+              {draft.isDirty && (
+                <button
+                  onClick={draft.discard}
+                  disabled={isSaving}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                >
+                  <Undo2 className="h-4 w-4" />
+                  <span>Discard</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  void handleSave();
+                }}
+                disabled={!draft.isDirty || isSaving || draft.hasValidationErrors}
+                className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed"
+                title="Save changes (Ctrl+S)"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>Save</span>
+              </button>
             </div>
-            {activeTab === 'templates' && selectedTemplate && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    void handleSendTest();
-                  }}
-                  disabled={isSendingTest || draft.isDirty}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                  // The endpoint renders the stored row, so with unsaved edits
-                  // on screen this would mail the previous version while the
-                  // preview beside it shows the new one — and the whole point
-                  // of the button is checking what a real inbox does with the
-                  // thing you are looking at.
-                  title={
-                    draft.isDirty
-                      ? 'Save first — a test email sends the saved template, not your unsaved edits'
-                      : 'Send this template to your own address'
-                  }
-                >
-                  {isSendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  <span>Send Test to Me</span>
-                </button>
-                {draft.isDirty && (
-                  <button
-                    onClick={draft.discard}
-                    disabled={isSaving}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    <span>Discard</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    void handleSave();
-                  }}
-                  disabled={!draft.isDirty || isSaving || draft.hasValidationErrors}
-                  className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed"
-                  title="Save changes (Ctrl+S)"
-                >
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  <span>Save</span>
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-
-        {/* Tab Bar */}
-        <div className="tab-scroll mb-6">
-          <button
-            onClick={() => handleTabChange('templates')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'templates'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
-            }`}
-          >
-            <Mail className="h-4 w-4" />
-            Templates
-          </button>
-          <button
-            onClick={() => handleTabChange('footers')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'footers'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
-            }`}
-          >
-            <PenLine className="h-4 w-4" />
-            Footers
-          </button>
-          <button
-            onClick={() => handleTabChange('officers')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'officers'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
-            }`}
-          >
-            <UserCheck className="h-4 w-4" />
-            Officers
-          </button>
-          <button
-            onClick={() => handleTabChange('scheduled')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'scheduled'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
-            }`}
-          >
-            <CalendarClock className="h-4 w-4" />
-            Scheduled
-          </button>
-          <button
-            onClick={() => handleTabChange('history')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'history'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
-            }`}
-          >
-            <History className="h-4 w-4" />
-            History
-          </button>
-        </div>
+        )}
 
         {/* Error Banner */}
         {error && (
@@ -536,12 +502,11 @@ const EmailTemplatesPage: React.FC = () => {
 
         {/* History Tab */}
         {activeTab === 'history' && <MessageHistoryList templates={templates} />}
-
         {/* A department that has already edited a notice keeps its wording:
-            ensure_default_templates only ever creates missing rows, so the
-            new design reaches a stored template when — and only when —
-            somebody asks for it. Which nothing in the UI would otherwise
-            say, leaving an admin to conclude the redesign skipped them. */}
+              ensure_default_templates only ever creates missing rows, so the
+              new design reaches a stored template when — and only when —
+              somebody asks for it. Which nothing in the UI would otherwise
+              say, leaving an admin to conclude the redesign skipped them. */}
         {activeTab === 'templates' && (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" />
@@ -552,7 +517,6 @@ const EmailTemplatesPage: React.FC = () => {
             </p>
           </div>
         )}
-
         {/* Templates Tab: list / editor / live preview */}
         {activeTab === 'templates' && (
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[296px_minmax(0,1fr)_468px]">
@@ -564,8 +528,8 @@ const EmailTemplatesPage: React.FC = () => {
             {selectedTemplate ? (
               <>
                 {/* Below `lg` the two panes stack, so they need a way to
-                    swap. From `lg` up both are visible and this strip is
-                    gone — there is nothing left for it to switch. */}
+                      swap. From `lg` up both are visible and this strip is
+                      gone — there is nothing left for it to switch. */}
                 <div className="tab-scroll lg:hidden">
                   <button
                     onClick={() => setEditorView('edit')}
@@ -757,8 +721,8 @@ const EmailTemplatesPage: React.FC = () => {
           confirmLabel="Reset"
           variant="danger"
         />
-      </main>
-    </div>
+      </>
+    </SettingsLayout>
   );
 };
 
