@@ -1,5 +1,5 @@
 import React from 'react';
-import { QUARTER_HOUR, formatHours, roundHoursToQuarter } from '../../utils/hoursFormatting';
+import { QUARTER_HOUR, formatHours, formatHoursExact, roundHoursToQuarter } from '../../utils/hoursFormatting';
 import { Link } from 'react-router';
 import type { AdminHoursSummary } from '../../modules/admin-hours/types';
 import type { AdminHoursComplianceItem } from '../../modules/admin-hours/types';
@@ -56,10 +56,9 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
             // have not met never reads as met, so the shown figure is held an
             // increment below the target rather than rounding up onto it.
             const met = req.loggedHours >= req.requiredHours;
-            const requiredHours = roundHoursToQuarter(req.requiredHours);
             const loggedHours = met
               ? roundHoursToQuarter(req.loggedHours)
-              : Math.min(roundHoursToQuarter(req.loggedHours), requiredHours - QUARTER_HOUR);
+              : Math.max(0, Math.min(roundHoursToQuarter(req.loggedHours), req.requiredHours - QUARTER_HOUR));
             const barColor =
               req.status === 'compliant' ? 'bg-green-500' : req.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500';
             return (
@@ -75,7 +74,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
                     <span className="text-theme-text-secondary">{req.categoryName}</span>
                   </div>
                   <span className="text-theme-text-primary font-medium">
-                    {formatHours(loggedHours)} / {formatHours(requiredHours)} hrs
+                    {formatHours(loggedHours)} / {formatHoursExact(req.requiredHours)} hrs
                   </span>
                 </div>
                 <div className="bg-theme-surface-secondary h-2 w-full overflow-hidden rounded-full">
