@@ -2752,6 +2752,52 @@ class Seeder:
     #: latter shows one of its three numbers permanently at zero.
     ADMIN_HOURS_PENDING = 3
 
+    #: Riding order for the rescue, and the one entry that is deliberately not
+    #: a configured position. Values are lowercased by the API's validator, so
+    #: these are written the way they will be stored.
+    RESCUE_CREW_POSITIONS = [
+        "officer",
+        "driver",
+        "firefighter",
+        "rescue specialist",
+    ]
+
+    def seed_apparatus_crew_positions(self) -> None:
+        """Riding positions on the rescue, one of them a legacy free-text seat.
+
+        Crew seats are a rank-backed picker now, and every apparatus had
+        `crew_positions` null — so the form showed "No crew seats configured"
+        and there was nothing to photograph on the screen the release note is
+        about.
+
+        "rescue specialist" is not one of the configured codes, which is the
+        point: a department that typed seat names before the picker existed
+        still has those values, and the form has to keep them readable rather
+        than silently dropping them. The form marks such a seat "(legacy
+        position)" and offers it as an option only for the seat that already
+        holds it.
+        """
+        rescue = next(
+            (
+                a
+                for a in items(self.api.get("/apparatus?limit=50"), "apparatus")
+                if str(pick(a, "unit_number", "unitNumber") or "").upper() == "R-7"
+            ),
+            None,
+        )
+        if not rescue:
+            self.blocked.append("apparatus crew positions: no R-7 in the fleet")
+            return
+        if [
+            str(p).lower()
+            for p in (pick(rescue, "crew_positions", "crewPositions") or [])
+        ] == self.RESCUE_CREW_POSITIONS:
+            return
+        self.api.patch(
+            f"/apparatus/{pick(rescue, 'id')}",
+            {"crew_positions": self.RESCUE_CREW_POSITIONS},
+        )
+
     def seed_admin_hours_entries(self) -> list[dict]:
         """A calendar year of logged administrative hours, mostly approved.
 
@@ -12867,6 +12913,7 @@ class Seeder:
         )
         self.step("shift calls", self.seed_shift_calls)
         self.step("admin hours entries", self.seed_admin_hours_entries)
+        self.step("apparatus crew positions", self.seed_apparatus_crew_positions)
         self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))

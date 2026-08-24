@@ -114,7 +114,12 @@ when equipment-check template administration is restricted.
 cannot be saved; switching organizations must not reuse the prior organization's
 rank or settings cache; finalization resolves apparatus labels in batches.
 
-> **[SCREENSHOT NEEDED — apparatus form crew-position rank picker, including one legacy read-only position in the demo data.]**
+![The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)](./images/19-23-apparatus-crew-seats.png)
+
+_Each closed control already names the ranks eligible for that seat, which
+is where the rank backing shows. The open option list is not pictured and
+cannot be: these are native `<select>`s, and an open one is drawn by the
+operating system rather than by the page._
 
 ## Events, reminders, check-in, and outreach forms
 

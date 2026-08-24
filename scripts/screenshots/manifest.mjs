@@ -1411,6 +1411,39 @@ export async function openAdminHoursSummary(page) {
   await page.waitForTimeout(600);
 }
 
+/**
+ * Open the rescue's edit form at its crew-seat list.
+ *
+ * Found by unit number rather than by position in the fleet, and the rescue
+ * specifically: the seeder puts a legacy free-text seat on that one, which is
+ * the half of the marker no other apparatus can show.
+ */
+export async function openApparatusCrewSeats(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/apparatus?limit=50", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const fleet = Array.isArray(body)
+      ? body
+      : body.apparatus || body.items || [];
+    const target = fleet.find(
+      (unit) =>
+        (unit.unit_number ?? unit.unitNumber ?? "").toUpperCase() === "R-7",
+    );
+    return target ? target.id : null;
+  });
+  if (!id) throw new Error("the rescue this shot uses is not in the fleet");
+  await page.goto(`${new URL(page.url()).origin}/apparatus/${id}/edit`, {
+    waitUntil: "domcontentloaded",
+  });
+  const seats = page.getByText(/Crew Positions \/ Seats/i).first();
+  await seats.waitFor({ state: "visible", timeout: 20_000 });
+  await seats.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(500);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -11226,6 +11259,26 @@ export const SHOTS = [
       "under the rows reading 0 on a card whose Failed equipment checks row " +
       "reads 2, so the card is populated and reporting a department with " +
       "nothing wrong in four of its five checks.",
+  },
+  {
+    // The closed selects, not an open one: these are native <select>s, whose
+    // popups the OS draws rather than the page, so the option list -- with its
+    // "Officer -- Fire Chief, Deputy Chief, ..." rank annotations -- cannot be
+    // photographed. What the frame does carry is the fourth seat reading
+    // "rescue specialist (legacy position)", which is the half of the marker
+    // that matters: a value typed before the picker existed stays readable.
+    id: "19-23-apparatus-crew-seats",
+    doc: "19-august-2026-release-changes.md",
+    line: 111,
+    anchor: "apparatus form crew-position rank picker, including one legacy",
+    alt: "The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)",
+    route: "/apparatus",
+    prepare: openApparatusCrewSeats,
+    fullPage: false,
+    allowEmptyState:
+      '"No EVOC requirement" is the unselected first <option> of the EVOC ' +
+      "select, not a state this rescue is in -- the control beside the seats " +
+      "reads Level 2. Unselected options are in the DOM whatever is chosen.",
   },
   {
     id: "03-43-time-off-request-form",

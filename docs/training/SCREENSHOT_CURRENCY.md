@@ -1,5 +1,51 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (eleventh) — a legacy crew seat, and a roster panel no seeded shift can show
+
+`19-23`, opened and checked. **484 of 507 filled.**
+
+**No apparatus had crew seats at all,** so the form the release note is about
+rendered "No crew seats configured" and there was nothing to photograph.
+`seed_apparatus_crew_positions` gives the rescue four: three configured
+positions and `rescue specialist`, which is deliberately not one of the codes.
+That is the marker's "legacy read-only position" — a value a department typed
+before the picker existed, which the form keeps readable and labels **(legacy
+position)** rather than dropping.
+
+**The rank backing shows in the closed control, which is lucky.** Each option
+is rendered as "Officer — Fire Chief, Deputy Chief, Assistant Chief…", so the
+selected seat carries its eligible ranks without the option list being open —
+and the option list could not have been photographed anyway. Third native
+`<select>` this pass where that is the answer.
+
+The apparatus item route is **PATCH**, not PUT; PUT returns a bare 405.
+
+### Seed gap: no shift carries a platoon
+
+`03-629` — the shift detail page's hold-over roster, as a scheduler beside the
+same shift as a member — **cannot be captured from the current demo data**, and
+the reason is worth recording precisely rather than re-derived next pass.
+
+The panel renders only under `platoonsEnabled && shift.platoon &&
+platoonRoster.length > 0`. Platoons _are_ enabled and the roster is dealt into
+A/B/C (8/7/7 members) — but **0 of 67 seeded shifts carry a `platoon` value**,
+so the panel never renders for anyone, scheduler or member.
+
+It cannot be fixed by stamping one on: `ShiftUpdate` has no `platoon` field and
+neither does `ShiftCreate`. The **only** writer is
+`generate_shifts_from_pattern`, which takes it from the pattern. So seeding this
+means generating shifts from the seeded "A/B/C Platoon Rotation" pattern — whose
+range is 2026-08-17 to 2027-02-19 — and that would lay a second set of shifts
+over the calendar roughly forty verified scheduling captures already read.
+
+Worth doing deliberately, in a pass that re-verifies those captures, rather than
+inside a batch aimed at one marker. Two smaller things are already known and
+would go with it: the permission half of the marker is real
+(`_can_view_platoon_roster` gates the roster on `scheduling.assign`,
+`scheduling.manage`, or being the named shift officer), and the approved-leave
+half needs care, because approving time-off cancels any assignment inside its
+range.
+
 ## Captured 2026-08-24 (tenth) — the dashboard's data boundary, under the wrong tab names
 
 `00-24`/`00-25`, opened and checked. **483 of 507 filled.**
