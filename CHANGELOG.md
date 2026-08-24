@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member profile showed everyone the gear its member signed for (2026-08-24)
+
+**Security**
+
+- **The Assigned Inventory table rendered on every member profile, for every
+  viewer.** It was gated on "is the inventory module enabled" and nothing else,
+  unlike the training, admin-hours, emergency-contact and ID-card sections
+  beside it, which each gate on self-or-permission. A member profile is a
+  directory card — the contact details a colleague is meant to look up. Which
+  turnout coat, radio or SCBA mask somebody signed for, and what condition it
+  is in, is quartermaster business. The section and its Quick Stats line now
+  require `inventory.manage`, or that the profile is the viewer's own.
+- **`inventory.view` could never have been the gate.** It is part of the
+  baseline Member position — every member holds it, so they can browse the
+  catalog and their own kit — so a check for it says only "this person is a
+  member". The per-member endpoints checked exactly that, which is why the
+  server did not stop the page: `/users/{id}/inventory`, `/assignments`,
+  `/issuances`, `/issuance-history` and `/clearance` all passed for the whole
+  department, and their docstrings claimed quartermasters-only while the code
+  did not implement it. Cross-member reads now go through one shared guard and
+  require `inventory.manage`; a member still reads their own without any
+  inventory permission at all.
+- **`/inventory/members-summary` moves to `inventory.manage` outright.** It
+  names who holds which gear for every member at once, and its only callers are
+  pages already behind `inventory.manage` routes.
+- **Gating the per-member routes alone would not have closed it.** Every route
+  that answers "who has this item" was reachable the same way:
+  `/items?assigned_to={id}` rebuilt a colleague's kit item by item, and the
+  item history, per-item issuances and outstanding-checkout lists all name
+  members. The catalog stays open — members browse it for gear and search it
+  for a replacement — so `/items` and `/items/{id}` strip the holder's id and
+  name for callers without `inventory.manage`, a member still seeing their own
+  name on their own gear, and the filter naming another member is refused. The
+  history, issuance and checkout lists move to `inventory.manage`.
+- The profile fetches nothing it may not show: a viewer without the permission
+  issues no request, rather than being turned away at the server, and items are
+  cleared when navigating to a profile whose gear is not visible. A test
+  asserts the baseline Member position holds `inventory.view` but not
+  `inventory.manage`, so the fact the guard rests on cannot drift unnoticed.
+
 ### Department Store: the member storefront, checkout and My Orders redesigned (2026-08-24)
 
 **Changed**

@@ -167,24 +167,15 @@ export const MemberProfilePage: React.FC = () => {
     }
   }, []);
 
-  const fetchModuleStatus = React.useCallback(
-    async (uid: string) => {
-      try {
-        const response = await organizationService.getEnabledModules();
-        const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
-        setInventoryModuleEnabled(inventoryEnabled);
-
-        // Fetch inventory if module is enabled
-        if (inventoryEnabled) {
-          void fetchInventoryItems(uid);
-        }
-      } catch (_err) {
-        // If we can't fetch module status, default to not showing inventory
-        setInventoryModuleEnabled(false);
-      }
-    },
-    [fetchInventoryItems]
-  );
+  const fetchModuleStatus = React.useCallback(async () => {
+    try {
+      const response = await organizationService.getEnabledModules();
+      setInventoryModuleEnabled((response?.enabled_modules ?? []).includes('inventory'));
+    } catch (_err) {
+      // If we can't fetch module status, default to not showing inventory
+      setInventoryModuleEnabled(false);
+    }
+  }, []);
 
   const fetchUserData = React.useCallback(async (uid: string) => {
     try {
@@ -253,11 +244,16 @@ export const MemberProfilePage: React.FC = () => {
   const isSelf = currentUser?.id === userId;
   const canViewTargetTraining = isSelf || checkPermission('training.manage');
   const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+  // Which gear a colleague signed for is quartermaster business, not part of
+  // the contact card every member may look up. inventory.view is baseline for
+  // every member (it opens the catalog and their own kit), so it cannot be the
+  // gate here — inventory.manage is.
+  const canViewTargetInventory = isSelf || checkPermission('inventory.manage');
 
   useEffect(() => {
     if (userId) {
       void fetchUserData(userId);
-      void fetchModuleStatus(userId);
+      void fetchModuleStatus();
       void fetchLeaves(userId);
       if (canViewTargetAdminHours) {
         void fetchAdminHours(userId);
@@ -279,6 +275,16 @@ export const MemberProfilePage: React.FC = () => {
     fetchTrainingRecords,
     fetchComplianceSummary,
   ]);
+
+  useEffect(() => {
+    if (userId && inventoryModuleEnabled && canViewTargetInventory) {
+      void fetchInventoryItems(userId);
+    } else {
+      // Navigating from a profile we could see gear on to one we cannot must
+      // not leave the previous member's items in state.
+      setInventoryItems([]);
+    }
+  }, [userId, inventoryModuleEnabled, canViewTargetInventory, fetchInventoryItems]);
 
   const canManageMembers = checkPermission('members.manage');
 
@@ -745,8 +751,10 @@ export const MemberProfilePage: React.FC = () => {
               />
             )}
 
-            {/* Assigned Inventory - Only shown if inventory module is enabled */}
-            {inventoryModuleEnabled && (
+            {/* Assigned Inventory - the member's own kit, or a quartermaster's
+                view of it. Hidden from everyone else rather than rendered
+                empty, which would read as "nothing issued". */}
+            {inventoryModuleEnabled && canViewTargetInventory && (
               <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Assigned Inventory</h2>
                 {inventoryLoading ? (
@@ -1071,7 +1079,7 @@ export const MemberProfilePage: React.FC = () => {
                     </div>
                   </>
                 )}
-                {inventoryModuleEnabled && (
+                {inventoryModuleEnabled && canViewTargetInventory && (
                   <div className="flex items-center justify-between">
                     <span className="text-theme-text-secondary text-sm">Assigned Equipment</span>
                     <span className="text-theme-text-primary text-sm font-semibold">{inventoryItems.length}</span>
