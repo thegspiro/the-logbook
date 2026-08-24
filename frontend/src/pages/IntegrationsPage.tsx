@@ -1275,7 +1275,11 @@ const IntegrationsPage: React.FC = () => {
             <p className="text-theme-text-primary mt-1 text-2xl font-bold">{integrations.length}</p>
           </div>
           <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Connected</p>
+            {/* One tile counts both kinds, so it needs a word that covers both:
+                the API stores an activated feature as `connected` like any
+                other entry, and labelling the total "Connected" reported NFC
+                ID Cards as a connection the card itself no longer claims. */}
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Active</p>
             <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">{connectedCount}</p>
           </div>
           <div className="card p-4">

@@ -159,6 +159,17 @@ describe('IntegrationsPage', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('labels the totals with wording that covers activations as well as connections', async () => {
+    renderPage();
+    await screen.findByText('Slack');
+    // An activated feature is stored as `connected` like any other entry and
+    // counted here, so this tile must not call the total a connection.
+    const stats = screen.getByRole('region', { name: 'Integration statistics' });
+    expect(within(stats).getByText('Active')).toBeInTheDocument();
+    expect(within(stats).queryByText('Connected')).not.toBeInTheDocument();
+    expect(within(stats).queryByText('Ready to Connect')).not.toBeInTheDocument();
+  });
+
   it('shows category filter buttons including new categories', async () => {
     renderPage();
     await screen.findByText('Slack');
