@@ -25,6 +25,7 @@ from app.models.event import Event
 from app.models.user import Organization, User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.hours import hours_from_minutes
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
@@ -893,18 +894,18 @@ class AdminHoursService:
                 "category_name": cat_name,
                 "category_color": cat_color,
                 "total_minutes": int(cat_minutes),
-                "total_hours": round(int(cat_minutes) / 60, 2),
+                "total_hours": hours_from_minutes(cat_minutes),
                 "entry_count": cat_count,
             }
             for cat_id, cat_name, cat_color, cat_minutes, cat_count in category_result.all()
         ]
 
         return {
-            "total_hours": round(int(total_minutes) / 60, 2),
+            "total_hours": hours_from_minutes(total_minutes),
             "total_entries": total_entries,
-            "approved_hours": round(approved_minutes / 60, 2),
+            "approved_hours": hours_from_minutes(approved_minutes),
             "approved_entries": approved_entries,
-            "pending_hours": round(pending_minutes / 60, 2),
+            "pending_hours": hours_from_minutes(pending_minutes),
             "pending_entries": pending_entries,
             "by_category": by_category,
             "period_start": start_date,
@@ -1051,8 +1052,13 @@ class AdminHoursService:
             approver_first = row[4]
             approver_last = row[5]
 
+            # The export states the same figure the member read on the screen
+            # it came from, so a hand-off does not have to explain why one says
+            # 2.9 and the other 3.
             duration_hours = (
-                round(entry.duration_minutes / 60, 2) if entry.duration_minutes else ""
+                hours_from_minutes(entry.duration_minutes)
+                if entry.duration_minutes
+                else ""
             )
             clock_in = (
                 entry.clock_in_at.strftime("%Y-%m-%d %H:%M")

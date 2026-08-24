@@ -42,6 +42,7 @@ from app.core.error_codes import ErrorCode, resolve_error_code
 from app.core.error_reporting import build_error_type, persist_error_log
 from app.core.logging import setup_logging, setup_sentry
 from app.core.startup_diagnostics import env_presence_report
+from app.core.utils import sanitize_error_message
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
 # SEC: Use settings.REDIS_URL which respects REDIS_SSL (rediss:// scheme).
@@ -1872,6 +1873,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse as _JSONResponse
 
+# Pydantic v2 prefixes a validator's own text with this before reporting it.
+_PYDANTIC_VALUE_ERROR_PREFIX = "Value error, "
+
 
 @app.exception_handler(RequestValidationError)
 async def _validation_error_handler(request: Request, exc: RequestValidationError):
@@ -1911,6 +1915,25 @@ async def _validation_error_handler(request: Request, exc: RequestValidationErro
             msg = "Expected a number."
         elif "bool" in err_type:
             msg = "Expected true or false."
+        elif err_type == "value_error":
+            # This is one of our own @field_validator / @model_validator
+            # messages, written for the person on the screen and naming what
+            # the field would have accepted. Flattening every one of them to
+            # "Invalid value." is what left the email template editor
+            # reporting "header_accent: Invalid value. layout: Invalid value."
+            # — two fields rejected, and nothing on screen or in the response
+            # saying which values were legal.
+            #
+            # Put through the same filter the service layer's errors go
+            # through: a validator may raise a ValueError carrying whatever a
+            # library put in it, and this response is unauthenticated-reachable
+            # on some routes. An unsafe or overlong message degrades to the
+            # old wording rather than to the generic system error, which would
+            # read as a server fault for what is a bad field.
+            detail = str(err.get("msg", ""))
+            if detail.startswith(_PYDANTIC_VALUE_ERROR_PREFIX):
+                detail = detail[len(_PYDANTIC_VALUE_ERROR_PREFIX) :]
+            msg = sanitize_error_message(detail.strip(), "Invalid value.")
         else:
             msg = "Invalid value."
 

@@ -75,6 +75,14 @@ test.describe('Navigation', () => {
     });
 
     test('should navigate to the Gear & Uniforms section via the Operations menu', async ({ page }) => {
+      // Signs in again with a grant the shared beforeEach does not give: the
+      // fixture user has NO permissions (`signIn` sets `permissions: []`, which
+      // overrides TEST_USER's list), and the gear catalogue is manager-only, so
+      // the row this test clicks does not render for a plain member. That is
+      // the behaviour, not an obstacle to it — the assertion below is about
+      // where the row leads, and someone has to be able to see it first.
+      await gotoDashboard(page, { permissions: ['inventory.manage'] });
+
       // Gear & Uniforms is a child of the collapsible "Operations" group. The
       // label is not "Inventory": that word covers gear and medical supplies
       // both, which are separate pages under separate permissions, so the nav

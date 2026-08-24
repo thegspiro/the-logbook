@@ -150,18 +150,31 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       label: 'Operations',
       path: '/inventory',
       subItems: [
+        // Gates mirror SideNavigation's Operations group — see there.
         ...(isModuleOn('inventory')
           ? [
               { label: 'My Issued Gear', path: '/inventory/my-equipment' },
-              { label: 'Gear & Uniforms', path: '/inventory' },
+              { label: 'Gear & Uniforms', path: '/inventory', permission: 'inventory.manage' },
             ]
           : []),
+        // Gates mirror SideNavigation's Operations group — see the reasoning
+        // there. The stock room is for whoever keeps it stocked; the crew's
+        // "we just used two of these" lives in Apparatus Inventory.
         ...(isModuleOn('medical_supplies')
           ? [
               {
                 label: 'Medical Supplies',
                 path: '/medical-supplies',
-                anyPermission: ['inventory.view_medical', 'inventory.view'],
+                permission: 'inventory.view_medical',
+              },
+            ]
+          : []),
+        ...(isModuleOn('scheduling')
+          ? [
+              {
+                label: 'Apparatus Inventory',
+                path: '/scheduling/apparatus-inventory',
+                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
               },
             ]
           : []),

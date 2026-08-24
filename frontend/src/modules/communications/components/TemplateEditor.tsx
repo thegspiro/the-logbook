@@ -202,7 +202,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 title={option.hint}
                 className={`mobile-touch-target flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                   (layout || 'notice') === option.id
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >

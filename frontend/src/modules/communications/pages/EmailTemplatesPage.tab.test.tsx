@@ -108,6 +108,29 @@ describe('EmailTemplatesPage editor layout', () => {
     expect(source).toContain('html_body: draft.htmlBody');
   });
 
+  it('omits the accent and layout when the draft has none', () => {
+    // A template that has never been recoloured stores neither, and renders
+    // with the colourway its type ships with. The form holds that absence as
+    // an empty string, and '' is not one of the seven accents or three
+    // layouts the API takes — so sending it 422'd, and because the preview is
+    // one request for the whole pane, the failure blanked the preview rather
+    // than marking a field. `|| undefined` omits the key, which is what the
+    // endpoint reads as "use the saved value".
+    expect(source).toContain('header_accent: draft.headerAccent || undefined');
+    expect(source).toContain('layout: draft.layout || undefined');
+  });
+
+  it('still sends the fields whose empty string means "cleared"', () => {
+    // The mirror-image bug: the footer, chip, plain-text body and stylesheet
+    // all have a reachable cleared state, and the endpoint distinguishes those
+    // with `is not None`. Coercing them to undefined would preview the saved
+    // content while the editor showed an empty box.
+    expect(source).toContain('text_body: draft.textBody,');
+    expect(source).toContain('css_styles: draft.cssStyles,');
+    expect(source).toContain('footer_key: draft.footerKey,');
+    expect(source).toContain('status_chip: draft.statusChip,');
+  });
+
   it('debounces the preview instead of firing per keystroke', () => {
     // Each preview is a round trip that inlines the whole stylesheet
     // server-side. Per-keystroke would put a request on the wire for every

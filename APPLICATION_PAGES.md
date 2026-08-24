@@ -78,12 +78,15 @@ Complete reference of all pages in the application, organized by module.
 
 ## Dashboard
 
-| URL          | Page            | Permission    |
-| ------------ | --------------- | ------------- |
-| `/dashboard` | Main Dashboard  | Authenticated |
-| `/learning`  | Learning Center | Authenticated |
+| URL                 | Page            | Permission    |
+| ------------------- | --------------- | ------------- |
+| `/dashboard`        | Main Dashboard  | Authenticated |
+| `/learning`         | Learning Center | Authenticated |
+| `/learning/:pathId` | Learning lesson | Authenticated |
 
 > **Learning Center (`/learning`)** _(added 2026-08-11)_. The in-app guide index, sitting beside the dashboard inside `AppLayout`. Authenticated-only by design — it teaches the application rather than exposing any department record, so gating it on a permission would hide the help from the members most likely to need it.
+
+> **Learning lessons (`/learning/:pathId`)** _(added 2026-08-24)_. The lesson itself, taught in the app: per step, why it matters, how to do it against the current screens, and what proves it is done. The step content lives in `frontend/src/pages/learning/learningPaths.ts` rather than being rendered from `docs/training/*.md` — the frontend image copies only `frontend/`, so the guide library is not in its build context, and precaching ~25,000 lines plus 97MB of screenshots would be the cost of keeping help available offline. The external reference guide stays linked at the foot of each lesson for anyone who wants the full manual. Progress is stored per member in `localStorage` (`logbook.learning-progress.v2.<userId>`); the unnamespaced v1 key was shared by every member of a station browser and is discarded rather than migrated, since nothing records who entered it. Week-one coverage is Getting Started, the phone/PWA lesson, Events, Training, Scheduling and Issued Gear, module-gated where the module can be switched off. A dashboard prompt (`DashboardOrientation`) is the entry point and hides once orientation is complete or dismissed.
 
 > _(2026-05-02)_ The volunteer dashboard "Now" section has been redesigned. The dashboard "Upcoming Events" stat now counts only events in the **next 30 days** (card labeled "Next 30 days") rather than all future events. The top navigation shows an **offline / pending-sync pill** indicating queued training submissions and RSVPs that will sync when connectivity returns.
 
@@ -379,11 +382,22 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 | URL                        | Page                         | Permission         |
 | -------------------------- | ---------------------------- | ------------------ |
-| `/inventory`               | Inventory Items List         | Authenticated      |
-| `/inventory/items`         | Inventory Items List (alias) | Authenticated      |
+| `/inventory`               | Inventory Items List         | `inventory.manage` |
+| `/inventory/items`         | Inventory Items List (alias) | `inventory.manage` |
 | `/inventory/my-equipment`  | My Equipment                 | Authenticated      |
 | `/inventory/items/:id`     | Item Detail                  | Authenticated      |
 | `/inventory/storage-areas` | Storage Areas                | `inventory.manage` |
+
+> **The catalogue is manager-only; a member's own kit is not.** The two items-list
+> routes show the whole department's gear and gate on `inventory.manage`. A member's
+> business with inventory is their own issued items and the request or return they
+> raise against one — all of which live on `/inventory/my-equipment`, which stays
+> open to any authenticated member, as does the detail page for an item they hold.
+>
+> `inventory.view` is deliberately **not** the gate on the list. The seeded `member`
+> and `firefighter` roles hold it and need it: the request picker on My Issued Gear
+> searches `GET /items` to find something to ask for, and item detail reads
+> `GET /items/{id}`. Gating the list on `inventory.view` would have gated nothing.
 
 ### Inventory Admin Hub (`/inventory/admin`)
 

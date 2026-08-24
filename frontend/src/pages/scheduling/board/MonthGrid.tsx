@@ -100,7 +100,7 @@ export const MonthGrid: React.FC<MonthGridProps> = ({
                   <span
                     className={`font-mono text-[13px] font-bold ${
                       isToday
-                        ? 'flex h-[22px] w-[22px] items-center justify-center rounded-full bg-red-600 text-white'
+                        ? 'flex h-[22px] w-[22px] items-center justify-center rounded-full bg-red-800 text-white'
                         : 'text-theme-text-primary'
                     }`}
                   >

@@ -116,7 +116,13 @@ test.describe('mobile presentation', () => {
     // ~30 routes, each with a settle delay and a full render.
     test.setTimeout(400_000);
     await page.setViewportSize(PHONE);
-    await signIn(page);
+    // The fixture user has no permissions by default (`signIn` sets
+    // `permissions: []`, overriding TEST_USER's list), so a manager-gated route
+    // in the list below redirects and this pass silently measures the
+    // dashboard instead of the page it names. `inventory.manage` is granted for
+    // /inventory, which is manager-only — without it the run reported
+    // "rendered little content" for a page that renders plenty.
+    await signIn(page, { permissions: ['inventory.manage'] });
 
     const crashed: string[] = [];
     const overflowed: string[] = [];
