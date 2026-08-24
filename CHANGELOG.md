@@ -101,6 +101,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would file one member's training against another. Approved time off is
   rechecked when an offer is accepted, not only when candidates are picked.
 
+### Nine settings screens, five navigation idioms, one shell (2026-08-23)
+
+**Changed**
+
+- **Every settings screen now renders through the same shell.** Nine screens
+  called themselves "settings" and shared almost nothing: five navigation
+  idioms, four save models, four container widths, and four different page
+  title sizes — 30px on User Settings, 24px on Elections, 20px on Scheduling,
+  and no title at all on Organization or Events settings. They now share one
+  chrome, one 960px column (replacing `max-w-4xl`, `max-w-5xl`, `max-w-6xl` and
+  the `max-w-[1600px]` Email Templates had grown to), and one title that names
+  the page rather than the module.
+- **Sections run across the top; a section's own pages take a left rail.**
+  Sections read as a segmented pill row in blue-muted; sub-pages take the 3px
+  red left marker the navigation already used for a partially-active group.
+  Neither treatment is new to the product. A section with no sub-pages drops
+  the rail entirely rather than showing an empty one, and no screen carries two
+  stacked horizontal strips any more.
+- **Settings save as you change them, and one pill in the header says whether
+  it stuck.** This replaces per-block Save buttons on General, Modules, Members,
+  Ranks, Events and Elections. Election Settings in particular had a single Save
+  button at the top right covering five screens' worth of fields, so changing a
+  value near the bottom gave no indication anything still needed saving.
+- **The per-toggle success toast is gone.** Events Settings fired one on every
+  switch, so flipping four visibility toggles produced four stacked
+  confirmations — and a real failure would have arrived looking like the fourth.
+  Failures still toast, once, and never roll the field back: restoring the
+  stored value is indistinguishable from the keystrokes never registering, and
+  it destroys the only copy of what the member meant to type.
+- **Authentication, Email, Storage and User Settings keep an explicit Save.**
+  These write credentials. A half-typed SSO secret dispatched on a debounce can
+  lock a department out of its own sign-in.
+- **EVOC Levels is no longer a top-level section beside Email and Storage.** It
+  is a second rank ladder, so it is now the Ranks section's second page. Its
+  `apparatus.manage` gate drops that one page rather than the whole section.
+- **Election Settings' seven raw red checkboxes became switches**, and the
+  switch itself is now one shared component instead of two copies.
+
+**Fixed**
+
+- **The MFA and email switches remounted on every render.** `EmailSettingsSection`
+  declared its `Toggle` inside its own component body, making it a fresh
+  component type each render — React unmounted and remounted the switch whenever
+  anything else in the form changed, discarding its focus and cutting its
+  transition short mid-slide.
+- **Violet is gone from the settings surfaces.** `#7c3aed` / `violet-600` /
+  `violet-500/15` are declared in no theme, so they never adapted in dark or
+  high-contrast mode — the same mid-purple rendered against slate-900 as against
+  white. Each usage moved to the token that already carried its meaning.
+
 ### Printer support has a reference doc (2026-08-24)
 
 **Added**
@@ -399,7 +449,24 @@ tables now carry a note in `printer_status.py` naming where they came from.
   on start time alone, so a drill that ended hours ago stayed in the list — and
   because the list is ordered by start time it could be the _default_, leaving
   an operator armed against an event whose check-in window had shut, with every
-  tap refused. Now bounded by `end_after` as well.
+  tap refused. Now bounded by `end_after` as well, set behind the present
+  moment: a `window` event's check-in outlives its scheduled end by
+  `check_in_minutes_after`, and a flexible or strict one runs to its
+  `actual_end_time`, none of which reach the client.
+- **A card in a terminal state could be laundered back to active.** The first
+  guard rejected only `lost → active`, so two requests — `lost → suspended`,
+  then `suspended → active` — restored exactly the credential somebody else may
+  be holding. Any transition out of `lost` or `revoked` is now refused;
+  relabelling still works.
+- **Ending a shift took the station away from the crew tapping out.** Dropping
+  a shift the moment its scheduled end passed was wrong in both directions:
+  `member_check_out` has no window at all — it accepts a checkout until an
+  officer finalizes — so the filter cut the station off at exactly the moment
+  a crew goes off duty. Shifts now stay offered through a checkout grace.
+- **A busy previous day could hide today's shifts entirely.** The widened
+  two-day query kept the endpoint's default page size of 100 while it orders by
+  `shift_date` ascending, so an organization with a full day of records behind
+  it would receive only those.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
