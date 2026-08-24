@@ -34,8 +34,9 @@ verified pass).
 Re-verified the landed fixes hold: DOC-6 `assert_in_org` guards intact
 (`create_folder`/`update_folder` `parent_id` + `owner_user_id`; `update_document`
 `folder_id`); DOC2-1 `attach_document_names` present and wired; DOC-2/DOC-3 access
-+ upload guards in place. `documents_service.py` (the real service — the endpoint
-imports `DocumentsService`) is E712-free.
+
+- upload guards in place. `documents_service.py` (the real service — the endpoint
+  imports `DocumentsService`) is E712-free.
 
 ### Latent-500 lens (the B1 finding) — over-flagged, then cleared
 
@@ -86,7 +87,7 @@ remain owner decisions in `KNOWN_LIMITATIONS.md`. Member personal folders stay
 
 Re-verified pass 1 (DOC-1/2/3 and the DOC-6 write-path FK/enum fixes intact).
 Pass 1 recorded `uploader_name`/`folder_name` on `DocumentResponse` as "never
-populated — always null" and framed the fix as *remove or populate*. The B1
+populated — always null" and framed the fix as _remove or populate_. The B1
 (MS2-4) lesson resolves that ambiguity: the frontend **renders** the field, so
 it's a live silently-dead feature, and the fix is to **populate**, not remove.
 
@@ -233,11 +234,12 @@ on the DOC-5 product decision (fix the code or fix the docstring).
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed**; 33 document tests pass with the schema/service changes. 648 errors, all `db_session` fixture (no MySQL). |
+| Check                | Result                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                       |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                        |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                 |
+| `eslint`             | ✅ clean                                                                                                                               |
+| backend tests        | ✅ **2517 passed, 0 failed**; 33 document tests pass with the schema/service changes. 648 errors, all `db_session` fixture (no MySQL). |
+
 </content>

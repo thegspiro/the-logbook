@@ -170,7 +170,7 @@ eligible-voter-types selector and the attendance toggle.]**
 > is more precise than a paper ballot. **Eligible voter types** map to
 > membership types — not roles. 'Operational' means active members.
 > 'Regular' means active plus life members. 'Life' means life members only.
-> A member who holds the EMT role but is classified administrative is *not*
+> A member who holds the EMT role but is classified administrative is _not_
 > operational — classification controls the ballot, positions control system
 > permissions."
 
@@ -242,6 +242,7 @@ the pending entry absent.]**
 > Eligibility has four layers, checked in order."
 
 **[SCREEN: Diagram callout — four stacked layers:
+
 1. Election voter list (optional explicit list)
 2. Membership tier rules (org settings)
 3. Per-item voter types
@@ -278,7 +279,7 @@ eligible (requires: regular; member has: probationary)"]**
 
 > "Want to see it exactly as one member will? Preview their ballot. Eligible
 > items render normally; ineligible items are grayed out with the reason. And
-> this preview runs the *same* eligibility code as the real ballot — it can't
+> this preview runs the _same_ eligibility code as the real ballot — it can't
 > drift from what the member actually receives."
 
 ### OVERRIDES (16:00 – 17:00)
@@ -303,7 +304,7 @@ eligible (requires: regular; member has: probationary)"]**
 **[SCREEN: Click Send Test Ballot. Open the email. Cast a test vote.]**
 
 > "Never send four hundred ballots untested. Send Test Ballot emails a real
-> ballot to *you* — real email rendering, real voting link, real submission
+> ballot to _you_ — real email rendering, real voting link, real submission
 > flow. And it's safe to actually vote on it: test-ballot votes are flagged
 > internally, excluded from every result, statistic, and roster, and they
 > don't use up your real vote. When the real ballots go out, you vote again
@@ -352,7 +353,7 @@ summary: sent / failed / skipped with reasons.]**
 **[SCREEN: Phone mockup — open the ballot email, tap Vote Now, land on the
 public ballot page]**
 
-> "Members click the link and vote from any device — no login. The token *is*
+> "Members click the link and vote from any device — no login. The token _is_
 > the authentication, and it's a 512-bit random value with rate limiting on
 > every public ballot endpoint. The link carries the token in the URL
 > fragment — the part after the hash mark that browsers never send to any
@@ -380,7 +381,7 @@ confirmation modal. Submit.]**
 > "And this is my favorite detail: the voter gets **receipts**. One code per
 > vote. Save them. Later — even after the election closes — anyone holding a
 > receipt can verify against the system that the vote was recorded, without
-> revealing *what* the vote was. We'll use these in the audit chapter."
+> revealing _what_ the vote was. We'll use these in the audit chapter."
 
 ### IN-APP VOTING (21:00 – 21:45)
 
@@ -395,7 +396,7 @@ confirmation modal. Submit.]**
 **[SCREEN: Simple diagram callout: user ID + per-election secret salt →
 one-way voter hash → stored on the vote. The user ID itself: never stored.]**
 
-> "How can it block double-voting *and* be a secret ballot? Anonymous
+> "How can it block double-voting _and_ be a secret ballot? Anonymous
 > elections never store who you are on the vote. Instead, your ID is run
 > through a one-way hash keyed by a secret salt generated for that election
 > alone. The hash proves 'this voter already voted' without saying which vote
@@ -420,7 +421,7 @@ Proxies tab.]**
 
 **[SCREEN: Cast a proxy vote; point out the recorded proxy metadata]**
 
-> "When the proxy votes, the vote is recorded as the *delegating member's*
+> "When the proxy votes, the vote is recorded as the _delegating member's_
 > vote — their eligibility is what's checked, their one-ballot rule is what
 > applies — with full proxy metadata attached: who physically cast it, and
 > under which authorization. If the absent member shows up and votes first,
@@ -460,7 +461,7 @@ climbing. Then the Non-Voters list.]**
 > downstream works: the tally runs, runoff conditions are evaluated, pipeline
 > results flow, and the anonymity salt is destroyed."
 
-> "One thing to know about early closes: the results *API* stays gated until
+> "One thing to know about early closes: the results _API_ stays gated until
 > the originally scheduled end time passes — a safeguard against premature
 > disclosure. If you want the room to see results now, flip **results
 > visible immediately** on the closed election. It's one toggle on the
@@ -512,7 +513,7 @@ show the Runoff Chain timeline.]**
 > "And the runoff carries the original's full rule set — quorum, position
 > eligibility, the meeting link, your overrides — with a fresh anonymity
 > salt of its own. Running it at the meeting is one click: opening an
-> election *starts* it, even if its scheduled start was later — so open the
+> election _starts_ it, even if its scheduled start was later — so open the
 > runoff and the room can vote immediately. Want a defined window instead?
 > Edit Dates on the draft lets you set, say, a fifteen-minute floor vote.
 > Ballots, votes, close, results. On a meeting night a runoff adds about
@@ -528,12 +529,13 @@ show the Runoff Chain timeline.]**
 ## CHAPTER 13: Auditing — Integrity, Forensics & Disputes (32:00 – 38:00)
 
 > "Here's what separates this from a web poll. Every election carries a
-> tamper-evident audit layer, and you should know how to read it *before*
+> tamper-evident audit layer, and you should know how to read it _before_
 > anyone disputes a result."
 
 ### THE INTEGRITY MODEL IN 90 SECONDS (32:00 – 33:30)
 
 **[SCREEN: Diagram callout, three layers:
+
 1. Signature — every vote HMAC-signed over all its fields
 2. Chain — each vote's hash linked to the previous vote's
 3. Receipt — voter-held proof a vote exists]**
@@ -569,7 +571,7 @@ verified, status PASS"]**
 > IPs with unusual vote counts; and an hour-by-hour voting timeline that
 > makes ballot-stuffing bursts jump out. Three context notes: a shared
 > station computer legitimately produces many votes from one IP — read
-> anomalies with judgment. Anomalies show only a *thresholded* suspicious
+> anomalies with judgment. Anomalies show only a _thresholded_ suspicious
 > list, never a full per-IP vote map — that map could identify voters in a
 > small department. And for anonymous elections, per-vote IP data is erased
 > the moment the election closes — the same moment the anonymity salt is
@@ -591,7 +593,7 @@ position. Then attempt a rollback on the closed election — show the refusal.]*
 > **cannot be reopened** after closing. The salt that made voter hashes
 > comparable was destroyed at close — reopening would let everyone who
 > already voted vote again, undetectably. The system refuses, tells you why,
-> and the answer is a fresh election. A closed election with *zero* votes
+> and the answer is a fresh election. A closed election with _zero_ votes
 > can still be rolled back — that's for the 'opened it by mistake' case.
 > Every rollback requires a written reason and emails all of leadership."
 
@@ -611,13 +613,13 @@ position. Then attempt a rollback on the closed election — show the refusal.]*
 
 ## CHAPTER 14: Nominations — Let the Membership Build the Ballot (38:30 – 43:00)
 
-*(Added 2026-07-29. Chapters 14–16 can also be produced as a standalone
-"Meeting-Night Elections" follow-up video.)*
+_(Added 2026-07-29. Chapters 14–16 can also be produced as a standalone
+"Meeting-Night Elections" follow-up video.)_
 
 **[SCREEN: A draft positional election — the Open Nominations button]**
 
 > "So far, the secretary typed in every candidate. But most bylaws say the
-> *membership* nominates. That's now a first-class phase: on a draft election
+> _membership_ nominates. That's now a first-class phase: on a draft election
 > with positions, open nominations. The election enters the nomination phase —
 > before voting, before the ballot is final — and every active member gets an
 > announcement email."
@@ -625,8 +627,8 @@ position. Then attempt a rollback on the closed election — show the refusal.]*
 **[SCREEN: A member's view — the Nominations tab: position selector, member
 picker, statement box]**
 
-> "Any member can nominate. Nominate *yourself* and you're on the pending
-> ballot immediately. Nominate *someone else* and here's the important part:
+> "Any member can nominate. Nominate _yourself_ and you're on the pending
+> ballot immediately. Nominate _someone else_ and here's the important part:
 > they get an email — 'you've been nominated for Captain, accept or decline' —
 > and they only reach the ballot after they accept. Nobody gets drafted onto a
 > ballot they never agreed to. Declining removes the entry; the audit log
@@ -688,8 +690,8 @@ accept/decline flow on the nominee's screen]**
 attestations"]**
 
 > "Here's the piece that makes paper defensible: attestation. By default, a
-> recorded batch starts *pending* — stored, signed, chained, but **excluded
-> from results** — until two officers *other than the recorder* attest that
+> recorded batch starts _pending_ — stored, signed, chained, but **excluded
+> from results** — until two officers _other than the recorder_ attest that
 > the entered numbers match the physical count. The recorder can never attest
 > their own batch, each officer counts once — the database enforces both —
 > and your department picks the requirement: zero to three, in Election
@@ -731,7 +733,7 @@ Auto-Remind Non-Voters window select]**
 > Auto-close is always on: an open election past its end date closes itself —
 > because closing is what finalizes results, evaluates runoffs, and destroys
 > the anonymity salt. An overdue election left open is a privacy problem, so
-> the system won't leave one. Auto-*open* is opt-in per election: flag a
+> the system won't leave one. Auto-_open_ is opt-in per election: flag a
 > draft and it opens itself at start time — through the real open path, so
 > an invalid draft is skipped and retried, never force-opened."
 
@@ -753,17 +755,17 @@ window setting]**
 **[SCREEN: The tie_policy selector on the election form; then a closed
 election showing a flagged tie, no winner declared]**
 
-> "Decide your tie rule *before* the vote: co-winners — the legacy default —
+> "Decide your tie rule _before_ the vote: co-winners — the legacy default —
 > or runoff, revote, or chair-decides. Under anything but co-winners, a tie
 > declares no winner: it's flagged in the results, audited, and handed to
-> your bylaws process. Arguing about the tie-break rule *after* seeing the
+> your bylaws process. Arguing about the tie-break rule _after_ seeing the
 > tally is exactly the meeting this prevents."
 
 **[SCREEN: Merge Write-Ins modal — "J. Smith", "John Smith" merged into one
 candidate; results re-tally]**
 
 > "And write-ins: three spellings of the same name tally as three candidates
-> until you merge them. The merge is an audited *alias* — the signed vote
+> until you merge them. The merge is an audited _alias_ — the signed vote
 > rows are never touched, so the integrity check still passes — and results
 > count every variant under the real candidate."
 
@@ -793,24 +795,25 @@ signature lines]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Election Settings | 2:00–3:30 | "Election Defaults Every Department Should Set" |
-| Voting Methods Explained | 4:30–5:45 | "Simple Majority vs Ranked Choice vs Approval Voting" |
-| Quorum & Victory Conditions | 5:45–7:30 | "Quorum, Supermajorities & Victory Conditions" |
-| Ballot Builder | 7:30–11:00 | "Building a Department Ballot" |
-| Eligibility Deep Dive | 13:00–17:00 | "Who Can Vote? Eligibility, Rosters & Overrides" |
-| Test Ballot & Send | 17:00–19:30 | "Test Your Ballot Before You Send 400 of Them" |
-| The Voting Experience | 19:30–23:00 | "How Members Vote (And Why It's Actually Secret)" |
-| Proxy Voting | 23:00–25:00 | "Proxy Voting: Setup to Cast" |
-| Closing & Results | 26:30–30:00 | "Closing an Election & Publishing Results" |
-| Runoffs | 30:00–32:00 | "Automatic Runoff Elections" |
-| The Audit Layer | 32:00–38:00 | "Auditing a Department Election (Integrity & Forensics)" |
-| Nominations | 38:30–43:00 | "Member Nominations: Open Phase to Final Ballot" |
-| Paper Ballots & Attestation | 43:00–49:00 | "Paper Ballots With a Digital Audit Trail" |
-| Automation, Ties & Certification | 49:00–55:00 | "Election Autopilot, Tie Policies & Certified Results" |
+| Clip                             | Timecode    | Standalone Title                                         |
+| -------------------------------- | ----------- | -------------------------------------------------------- |
+| Election Settings                | 2:00–3:30   | "Election Defaults Every Department Should Set"          |
+| Voting Methods Explained         | 4:30–5:45   | "Simple Majority vs Ranked Choice vs Approval Voting"    |
+| Quorum & Victory Conditions      | 5:45–7:30   | "Quorum, Supermajorities & Victory Conditions"           |
+| Ballot Builder                   | 7:30–11:00  | "Building a Department Ballot"                           |
+| Eligibility Deep Dive            | 13:00–17:00 | "Who Can Vote? Eligibility, Rosters & Overrides"         |
+| Test Ballot & Send               | 17:00–19:30 | "Test Your Ballot Before You Send 400 of Them"           |
+| The Voting Experience            | 19:30–23:00 | "How Members Vote (And Why It's Actually Secret)"        |
+| Proxy Voting                     | 23:00–25:00 | "Proxy Voting: Setup to Cast"                            |
+| Closing & Results                | 26:30–30:00 | "Closing an Election & Publishing Results"               |
+| Runoffs                          | 30:00–32:00 | "Automatic Runoff Elections"                             |
+| The Audit Layer                  | 32:00–38:00 | "Auditing a Department Election (Integrity & Forensics)" |
+| Nominations                      | 38:30–43:00 | "Member Nominations: Open Phase to Final Ballot"         |
+| Paper Ballots & Attestation      | 43:00–49:00 | "Paper Ballots With a Digital Audit Trail"               |
+| Automation, Ties & Certification | 49:00–55:00 | "Election Autopilot, Tie Policies & Certified Results"   |
 
 ---
+
 ---
 
 # Edge-Case Shorts Pack (12a – 12q)
@@ -845,7 +848,7 @@ same demo org as Script 12 for visual continuity.
 
 **[SCREEN: Grant Override with a reason; row turns blue]**
 
-> "If they *should* be able to vote, grant an override with a reason — it's
+> "If they _should_ be able to vote, grant an override with a reason — it's
 > logged — then re-send their ballot so their new token picks up the change."
 
 **[CALLOUT: "Roster → reason → override → re-send"]**
@@ -888,7 +891,7 @@ same demo org as Script 12 for visual continuity.
 
 **[SCREEN: Highlight the election's scheduled end date, still hours away]**
 
-> "Results stay gated until the election's *scheduled* end time passes, so
+> "Results stay gated until the election's _scheduled_ end time passes, so
 > nobody can peek by closing early. But when the room is waiting:"
 
 **[SCREEN: Publish Results panel — toggle 'results visible immediately']**
@@ -918,7 +921,7 @@ same demo org as Script 12 for visual continuity.
 
 > "Ever wonder if your vote actually counted? Verify the receipt. The system
 > confirms a vote with that receipt exists — when it was cast and for which
-> office — but never *what* you voted. Not to you, not to the officers, not
+> office — but never _what_ you voted. Not to you, not to the officers, not
 > to anyone."
 
 > "Proof it counted. Secret forever. That's the deal."
@@ -945,7 +948,7 @@ same demo org as Script 12 for visual continuity.
 
 **[SCREEN: Proxy holder casting; show the vote recording under the delegator]**
 
-> "The proxy's vote records as the *absent member's* vote — their
+> "The proxy's vote records as the _absent member's_ vote — their
 > eligibility, their one-ballot limit — with metadata showing who physically
 > cast it and under which authorization."
 
@@ -1005,7 +1008,7 @@ same demo org as Script 12 for visual continuity.
 > "— and the system shows the numbers but clears every winner flag and marks
 > the outcome advisory. No accidental certification of a hollow vote."
 
-> "And the denominator is fair: only members *allowed* to vote count toward
+> "And the denominator is fair: only members _allowed_ to vote count toward
 > it. Social members in a non-voting tier can't sink your quorum — and
 > members you granted overrides count in."
 
@@ -1035,7 +1038,7 @@ refusal message]**
 **[SCREEN: Show rollback succeeding on a closed election with zero votes]**
 
 > "So: closed with votes — permanent; run a new election, it takes two
-> minutes. Closed by accident with *no* votes — rollback works fine, with a
+> minutes. Closed by accident with _no_ votes — rollback works fine, with a
 > written reason, and leadership gets notified either way."
 
 **[CALLOUT: "Vote secrecy and reopening can't coexist. Secrecy wins."]**
@@ -1132,7 +1135,7 @@ timeline chart]**
 **[SCREEN: Toggle the full-roster checkbox; show the two PDF variants side by side]**
 
 > "Two versions: members get names and counts. Leadership's version adds who's
-> *not* eligible and why — tier and attendance details that shouldn't go
+> _not_ eligible and why — tier and attendance details that shouldn't go
 > department-wide."
 
 **[SCREEN: The Preview PDF download links]**
@@ -1157,7 +1160,7 @@ timeline chart]**
 
 **[SCREEN: The Paper Batches panel — "1 of 2 attestations"]**
 
-> "A paper batch starts *pending* until enough officers — two by default,
+> "A paper batch starts _pending_ until enough officers — two by default,
 > and never the person who recorded it — attest that the entered numbers
 > match the physical count. Pending votes are stored, signed, and chained;
 > they just don't count yet."
@@ -1185,7 +1188,7 @@ timeline chart]**
 
 **[SCREEN: The accept / decline choice]**
 
-> "Third-party nominations wait for *you*: accept, and you're on the ballot
+> "Third-party nominations wait for _you_: accept, and you're on the ballot
 > when nominations close. Decline, and the entry is removed — no hard
 > feelings, and the audit log keeps the paperwork. Nominate yourself and
 > you've accepted implicitly."
@@ -1235,7 +1238,7 @@ timeline chart]**
 
 > "Set the tie policy when you create the election: co-winners, runoff,
 > revote, or chair-decides. Anything but co-winners means a tie declares
-> *no* winner — it's flagged in the results, logged in the audit trail, and
+> _no_ winner — it's flagged in the results, logged in the audit trail, and
 > routed to the process you chose in advance."
 
 **[CALLOUT: "Pick the tie-break rule before anyone sees a tally"]**
@@ -1256,7 +1259,7 @@ write-in rows]**
 **[SCREEN: Merge Write-Ins — select variants, pick the target, confirm]**
 
 > "Merge Write-Ins consolidates the variants under one candidate. And here's
-> why auditors love it: the merge is an *alias*. The signed vote rows are
+> why auditors love it: the merge is an _alias_. The signed vote rows are
 > never edited — the integrity check still passes — results just re-count
 > every variant under the real name. The merge itself is audit-logged."
 

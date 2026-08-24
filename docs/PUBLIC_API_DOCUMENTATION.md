@@ -36,6 +36,7 @@ When you exceed the rate limit, you'll receive a `429 Too Many Requests` respons
 All responses are in JSON format with appropriate HTTP status codes.
 
 ### Success Response (200 OK)
+
 ```json
 {
   "field1": "value1",
@@ -51,38 +52,36 @@ All responses are in JSON format with appropriate HTTP status codes.
 }
 ```
 
-A single `detail` string. *(Corrected 2026-08-01 — this page previously showed
-an `{error, message, details}` shape that no endpoint has ever returned.)*
+A single `detail` string. _(Corrected 2026-08-01 — this page previously showed
+an `{error, message, details}` shape that no endpoint has ever returned.)_
 
 The one exception is **422**, where `detail` is an array of per-field objects:
 
 ```json
 {
-  "detail": [
-    { "field": "slug", "message": "This field is required." }
-  ]
+  "detail": [{ "field": "slug", "message": "This field is required." }]
 }
 ```
 
 ## Common Error Codes
 
-| Status Code | Description |
-|-------------|-------------|
-| 400 | Malformed, expired, or already-acted-on request |
-| 401 | Invalid or missing API key |
-| 403 | Portal disabled or insufficient permissions |
-| 404 | Unknown token, slug, or display code — or the record is not public |
-| 422 | Request failed validation (see the array form above) |
-| 429 | Rate limit exceeded |
-| 500 | Internal server error |
-| 503 | Public portal is disabled |
+| Status Code | Description                                                        |
+| ----------- | ------------------------------------------------------------------ |
+| 400         | Malformed, expired, or already-acted-on request                    |
+| 401         | Invalid or missing API key                                         |
+| 403         | Portal disabled or insufficient permissions                        |
+| 404         | Unknown token, slug, or display code — or the record is not public |
+| 422         | Request failed validation (see the array form above)               |
+| 429         | Rate limit exceeded                                                |
+| 500         | Internal server error                                              |
+| 503         | Public portal is disabled                                          |
 
 > These are now declared in the OpenAPI schema per route, so a client
 > generated from `/openapi.json` handles them as real responses rather than
 > protocol violations. An automated contract suite (`backend-test-contract`
 > in CI) checks that the schema and the application stay in agreement.
 
-### Token parameters declare their alphabet *(2026-08-17)*
+### Token parameters declare their alphabet _(2026-08-17)_
 
 Path/query parameters that carry an opaque access token — the application-status
 token and the finance approval token — now declare a **base64url pattern**
@@ -114,12 +113,14 @@ Retrieve basic information about the organization.
 **Rate Limit:** 100 requests/hour
 
 **Example Request:**
+
 ```bash
 curl -H "X-API-Key: your-api-key" \
   https://your-logbook-instance.com/api/public/v1/organization/info
 ```
 
 **Example Response:**
+
 ```json
 {
   "name": "Springfield Volunteer Fire Department",
@@ -140,6 +141,7 @@ curl -H "X-API-Key: your-api-key" \
 ```
 
 **Notes:**
+
 - Only whitelisted fields are returned
 - Some fields may be null if not configured
 
@@ -154,12 +156,14 @@ Retrieve aggregate statistics about the organization.
 **Rate Limit:** 100 requests/hour
 
 **Example Request:**
+
 ```bash
 curl -H "X-API-Key: your-api-key" \
   https://your-logbook-instance.com/api/public/v1/organization/stats
 ```
 
 **Example Response:**
+
 ```json
 {
   "total_volunteer_hours": 12500,
@@ -172,6 +176,7 @@ curl -H "X-API-Key: your-api-key" \
 ```
 
 **Notes:**
+
 - Statistics are aggregated for privacy
 - Only enabled fields are returned
 - Some fields may be null if not available
@@ -187,16 +192,19 @@ Retrieve upcoming public events (community events, open houses, etc.).
 **Rate Limit:** 200 requests/hour
 
 **Query Parameters:**
+
 - `limit` (integer, 1-100): Number of events to return (default: 10)
 - `offset` (integer, ≥0): Pagination offset (default: 0)
 
 **Example Request:**
+
 ```bash
 curl -H "X-API-Key: your-api-key" \
   "https://your-logbook-instance.com/api/public/v1/events/public?limit=5"
 ```
 
 **Example Response:**
+
 ```json
 [
   {
@@ -213,6 +221,7 @@ curl -H "X-API-Key: your-api-key" \
 ```
 
 **Notes:**
+
 - Only events marked as public are returned
 - Events are ordered by start_time (ascending)
 - Use pagination for large result sets
@@ -228,11 +237,13 @@ Check if the public API is operational.
 **Authentication:** Not required
 
 **Example Request:**
+
 ```bash
 curl https://your-logbook-instance.com/api/public/v1/health
 ```
 
 **Example Response:**
+
 ```json
 {
   "status": "healthy",
@@ -255,11 +266,13 @@ Retrieve a public form by its URL slug. Returns the form definition with all fie
 **Rate Limit:** 60 requests/minute per IP
 
 **Example Request:**
+
 ```bash
 curl https://your-logbook-instance.com/api/public/v1/forms/a1b2c3d4e5f6
 ```
 
 **Example Response:**
+
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -307,6 +320,7 @@ curl https://your-logbook-instance.com/api/public/v1/forms/a1b2c3d4e5f6
 ```
 
 **Notes:**
+
 - Only published forms with `is_public = true` are accessible
 - `member_lookup` field types are excluded from public responses
 - Slugs are 12-character hex strings (e.g., `a1b2c3d4e5f6`)
@@ -325,6 +339,7 @@ Submit data to a public form. No authentication required.
 **Rate Limit:** 10 submissions/minute per IP (10-minute lockout if exceeded)
 
 **Request Body:**
+
 ```json
 {
   "data": {
@@ -337,13 +352,14 @@ Submit data to a public form. No authentication required.
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `data` | object | Yes | Key-value pairs of field ID to submitted value |
-| `submitter_name` | string | No | Name of the person submitting (max 255 chars) |
-| `submitter_email` | string | No | Email of the person submitting (max 255 chars) |
+| Field             | Type   | Required | Description                                    |
+| ----------------- | ------ | -------- | ---------------------------------------------- |
+| `data`            | object | Yes      | Key-value pairs of field ID to submitted value |
+| `submitter_name`  | string | No       | Name of the person submitting (max 255 chars)  |
+| `submitter_email` | string | No       | Email of the person submitting (max 255 chars) |
 
 **Example Request:**
+
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
@@ -352,6 +368,7 @@ curl -X POST \
 ```
 
 **Example Response (201 Created):**
+
 ```json
 {
   "id": "submission-uuid",
@@ -362,6 +379,7 @@ curl -X POST \
 ```
 
 **Security Notes:**
+
 - All submitted values are HTML-escaped and sanitized before storage
 - Required field validation is enforced server-side
 - Email fields are validated for format and header injection
@@ -371,11 +389,11 @@ curl -X POST \
 
 **Error Responses:**
 
-| Status | Description |
-|--------|-------------|
-| 400 | Validation error (missing required field, invalid format) |
-| 404 | Form not found or not available |
-| 429 | Rate limit exceeded (try again in 10 minutes) |
+| Status | Description                                               |
+| ------ | --------------------------------------------------------- |
+| 400    | Validation error (missing required field, invalid format) |
+| 404    | Form not found or not available                           |
+| 429    | Rate limit exceeded (try again in 10 minutes)             |
 
 ---
 
@@ -388,7 +406,7 @@ per-user token embedded in the URL instead of a login.
 
 **Endpoint:** `GET /calendar/{token}.ics`
 
-**Authentication:** Not required (the token *is* the credential)
+**Authentication:** Not required (the token _is_ the credential)
 
 **Content-Type:** `text/calendar`
 
@@ -398,11 +416,13 @@ The member obtains their personal feed URL from the authenticated app
 `POST /api/v1/scheduling/calendar-feed/rotate` to invalidate an old URL.
 
 **Example Request:**
+
 ```bash
 curl https://your-logbook-instance.com/api/public/v1/calendar/AbC...48charToken.ics
 ```
 
 **Example Response (excerpt):**
+
 ```
 BEGIN:VCALENDAR
 VERSION:2.0
@@ -422,6 +442,7 @@ END:VCALENDAR
 ```
 
 **Notes:**
+
 - The feed covers roughly the last 60 days through the next 365 days of the
   member's active (non-cancelled) shift assignments.
 - Only the member's own shift times/notes are exposed — no other members' data.
@@ -475,15 +496,15 @@ rather than falling back to whatever zone the device is set to.
 
 #### `POST …/guest-check-in` — record attendance
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `first_name` | string | yes | 1–100, must contain a non-whitespace character (`\S`), trimmed |
-| `last_name` | string | yes | Same |
-| `email` | string | no | Required for a prospect to be created |
-| `phone` | string | no | ≤ 50 |
-| `organization_name` | string | no | ≤ 255 |
-| `interest_reason` | string | no | ≤ 2000 |
-| `hp_website` | string | no | **Honeypot** — hidden in the real form |
+| Field               | Type   | Required | Notes                                                          |
+| ------------------- | ------ | -------- | -------------------------------------------------------------- |
+| `first_name`        | string | yes      | 1–100, must contain a non-whitespace character (`\S`), trimmed |
+| `last_name`         | string | yes      | Same                                                           |
+| `email`             | string | no       | Required for a prospect to be created                          |
+| `phone`             | string | no       | ≤ 50                                                           |
+| `organization_name` | string | no       | ≤ 255                                                          |
+| `interest_reason`   | string | no       | ≤ 2000                                                         |
+| `hp_website`        | string | no       | **Honeypot** — hidden in the real form                         |
 
 **`201 Created`:**
 
@@ -500,15 +521,16 @@ rather than falling back to whatever zone the device is set to.
 
 `status` is `checked_in` or `already_checked_in`.
 
-| Condition | Response |
-| --- | --- |
-| Per-IP rate limit exceeded | `429` |
-| Per-event daily cap exceeded (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300; `0` disables) | `429` |
-| Honeypot populated | **`201` with a plausible success body**, nothing written |
-| Outside the check-in window | `400` with the reason |
-| Event not in that room, or guest check-in not enabled | `404` |
+| Condition                                                                              | Response                                                 |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Per-IP rate limit exceeded                                                             | `429`                                                    |
+| Per-event daily cap exceeded (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300; `0` disables) | `429`                                                    |
+| Honeypot populated                                                                     | **`201` with a plausible success body**, nothing written |
+| Outside the check-in window                                                            | `400` with the reason                                    |
+| Event not in that room, or guest check-in not enabled                                  | `404`                                                    |
 
 **Notes:**
+
 - **Guests do not get the member early-arrival grace.** A member checking in early
   is identifiable and correctable; an anonymous early write is neither, so guests
   are held to the window the organizer configured.
@@ -555,16 +577,16 @@ Public form endpoints include multiple layers of protection:
 ### JavaScript / Fetch API
 
 ```javascript
-const API_KEY = 'your-api-key-here';
-const BASE_URL = 'https://your-logbook-instance.com/api/public/v1';
+const API_KEY = "your-api-key-here";
+const BASE_URL = "https://your-logbook-instance.com/api/public/v1";
 
 async function getOrganizationInfo() {
   try {
     const response = await fetch(`${BASE_URL}/organization/info`, {
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json'
-      }
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
     });
 
     if (!response.ok) {
@@ -574,27 +596,27 @@ async function getOrganizationInfo() {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Error fetching organization info:', error);
+    console.error("Error fetching organization info:", error);
     throw error;
   }
 }
 
 // Usage
 getOrganizationInfo()
-  .then(org => {
-    console.log('Organization:', org.name);
-    document.getElementById('org-name').textContent = org.name;
+  .then((org) => {
+    console.log("Organization:", org.name);
+    document.getElementById("org-name").textContent = org.name;
   })
-  .catch(err => console.error(err));
+  .catch((err) => console.error(err));
 ```
 
 ### React Example
 
 ```jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
-const API_KEY = 'your-api-key-here';
-const BASE_URL = 'https://your-logbook-instance.com/api/public/v1';
+const API_KEY = "your-api-key-here";
+const BASE_URL = "https://your-logbook-instance.com/api/public/v1";
 
 function OrganizationInfo() {
   const [org, setOrg] = useState(null);
@@ -604,18 +626,18 @@ function OrganizationInfo() {
   useEffect(() => {
     fetch(`${BASE_URL}/organization/info`, {
       headers: {
-        'X-API-Key': API_KEY
-      }
+        "X-API-Key": API_KEY,
+      },
     })
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch');
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch");
         return res.json();
       })
-      .then(data => {
+      .then((data) => {
         setOrg(data);
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         setError(err.message);
         setLoading(false);
       });
@@ -708,7 +730,9 @@ try {
 ## Best Practices
 
 ### 1. Cache Responses
+
 Cache API responses on your server to reduce requests and improve performance:
+
 ```javascript
 // Cache for 5 minutes
 const CACHE_TTL = 5 * 60 * 1000;
@@ -716,7 +740,7 @@ let cache = { data: null, timestamp: 0 };
 
 async function getCachedOrgInfo() {
   const now = Date.now();
-  if (cache.data && (now - cache.timestamp) < CACHE_TTL) {
+  if (cache.data && now - cache.timestamp < CACHE_TTL) {
     return cache.data;
   }
 
@@ -727,33 +751,37 @@ async function getCachedOrgInfo() {
 ```
 
 ### 2. Handle Rate Limits
+
 Implement exponential backoff for rate limit errors:
+
 ```javascript
 async function fetchWithRetry(url, options, maxRetries = 3) {
   for (let i = 0; i < maxRetries; i++) {
     const response = await fetch(url, options);
 
     if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After') || 60;
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
+      const retryAfter = response.headers.get("Retry-After") || 60;
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
       continue;
     }
 
     return response;
   }
-  throw new Error('Max retries exceeded');
+  throw new Error("Max retries exceeded");
 }
 ```
 
 ### 3. Error Handling
+
 Always handle errors gracefully:
+
 ```javascript
 async function safeAPICall() {
   try {
     return await getOrganizationInfo();
   } catch (error) {
     if (error.response?.status === 503) {
-      return { message: 'Portal temporarily unavailable' };
+      return { message: "Portal temporarily unavailable" };
     }
     // Fallback data or error message
     return null;
@@ -762,17 +790,18 @@ async function safeAPICall() {
 ```
 
 ### 4. Security
+
 - Never expose your API key in client-side code
 - Make API calls from your server, not directly from browsers
 - Use environment variables to store API keys
 
 ```javascript
 // ❌ BAD - API key exposed in browser
-const API_KEY = 'logbook_abc123...';
+const API_KEY = "logbook_abc123...";
 
 // ✅ GOOD - API call from server
 // server.js
-app.get('/api/org-info', async (req, res) => {
+app.get("/api/org-info", async (req, res) => {
   const data = await getOrganizationInfo(process.env.LOGBOOK_API_KEY);
   res.json(data);
 });
@@ -796,16 +825,18 @@ Retrieve current event information for a location kiosk display.
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter      | Type          | Description                                                    |
+| -------------- | ------------- | -------------------------------------------------------------- |
 | `display_code` | string (path) | 8-character alphanumeric display code assigned to the location |
 
 **Example Request:**
+
 ```bash
 curl https://your-logbook-instance.com/api/public/v1/display/x7k9m2p3
 ```
 
 **Example Response (active event):**
+
 ```json
 {
   "location_id": "uuid-string",
@@ -829,6 +860,7 @@ curl https://your-logbook-instance.com/api/public/v1/display/x7k9m2p3
 ```
 
 **Example Response (no active events):**
+
 ```json
 {
   "location_id": "uuid-string",
@@ -840,17 +872,19 @@ curl https://your-logbook-instance.com/api/public/v1/display/x7k9m2p3
 
 **Error Responses:**
 
-| Status | Description |
-|--------|-------------|
-| 404 | Display code not found or location inactive |
+| Status | Description                                 |
+| ------ | ------------------------------------------- |
+| 404    | Display code not found or location inactive |
 
 **Notes:**
+
 - Events appear in `current_events` when they are within the check-in window (1 hour before start until event end)
 - Event descriptions are intentionally excluded from the public response
 - The frontend kiosk page at `/display/{code}` polls this endpoint every 30 seconds
 - Display codes are generated automatically when locations are created and can be found on the Locations management page
 
 **Finding Display Codes:**
+
 - Navigate to **Locations** (or **Facilities**) in the admin interface
 - Each room card shows its display code and kiosk URL
 - Click the URL to copy it to clipboard, then bookmark it on the room's tablet
@@ -860,6 +894,7 @@ curl https://your-logbook-instance.com/api/public/v1/display/x7k9m2p3
 ## Support
 
 For API support:
+
 - Contact your organization administrator
 - Report issues to: [support link]
 - API Status: Check `/health` endpoint
@@ -867,11 +902,13 @@ For API support:
 ## Changelog
 
 ### Version 1.2.0 (2026-02-18)
+
 - Added location kiosk display endpoint (`GET /display/{code}`) — no API key required
 - Returns current events with QR check-in data for tablet displays in rooms
 - Display codes auto-generated for all locations (8-char, non-guessable)
 
 ### Version 1.1.0 (2026-02-12)
+
 - Added public form retrieval endpoint (`GET /forms/{slug}`)
 - Added public form submission endpoint (`POST /forms/{slug}/submit`)
 - Rate limiting for public form endpoints (60 views/min, 10 submits/min per IP)
@@ -879,6 +916,7 @@ For API support:
 - Input sanitization and type validation on all submitted data
 
 ### Version 1.0.0 (2026-02-07)
+
 - Initial release
 - Organization info endpoint
 - Organization stats endpoint

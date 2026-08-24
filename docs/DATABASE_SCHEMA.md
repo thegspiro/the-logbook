@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**253 tables · 4335 columns · 818 foreign keys**
+**253 tables · 4337 columns · 819 foreign keys**
 
 ---
 
@@ -201,7 +201,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 28 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 50 | Event model for managing department events |
+| [`events`](#events) | `Event` | 52 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
 
 ### Facilities
@@ -2638,6 +2638,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `template_id` | VARCHAR(36) | yes | FK |  | → `event_templates.id` |
 | `custom_fields` | JSON | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
+| `attendance_finalized_at` | DATETIME | yes |  |  |  |
+| `attendance_finalized_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `is_draft` | BOOL | yes |  | `0` |  |
 | `is_cancelled` | BOOL | no |  | `0` |  |
 | `cancellation_reason` | TEXT | yes |  |  |  |
@@ -8957,7 +8959,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (305 references)
+### → `users` (306 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9051,6 +9053,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_rsvps` | `user_id` | CASCADE | no |
 | `event_templates` | `created_by` | NO ACTION | yes |
 | `event_templates` | `updated_by` | NO ACTION | yes |
+| `events` | `attendance_finalized_by` | SET NULL | yes |
 | `events` | `created_by` | NO ACTION | yes |
 | `events` | `updated_by` | NO ACTION | yes |
 | `expense_reports` | `approved_by` | SET NULL | yes |

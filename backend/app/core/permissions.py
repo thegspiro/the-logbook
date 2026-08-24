@@ -370,6 +370,18 @@ EVENTS_DELETE = Permission("events.delete", "Delete events", PermissionCategory.
 EVENTS_MANAGE = Permission(
     "events.manage", "Manage all events", PermissionCategory.EVENTS
 )
+# Reopening a finalized event unlocks attendance that already fed admin hours,
+# training records and compliance totals, so it is deliberately NOT part of
+# events.manage. That grant reaches nine default roles — public outreach and
+# communications among them — and the point of the lock is that the organizer
+# who closed the event cannot quietly reopen it to change the numbers. Granted
+# by default to the chief ranks and the president only; an organization that
+# wants it elsewhere adds it in the role editor.
+EVENTS_REOPEN_ATTENDANCE = Permission(
+    "events.reopen_attendance",
+    "Reopen finalized event attendance",
+    PermissionCategory.EVENTS,
+)
 
 # Locations
 LOCATIONS_VIEW = Permission(
@@ -650,6 +662,7 @@ ALL_PERMISSIONS: list[Permission] = [
     EVENTS_EDIT,
     EVENTS_DELETE,
     EVENTS_MANAGE,
+    EVENTS_REOPEN_ATTENDANCE,
     # Locations
     LOCATIONS_VIEW,
     LOCATIONS_CREATE,
@@ -909,6 +922,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
+            EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_DELETE.name,
@@ -973,6 +987,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
+            EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_DELETE.name,
@@ -1030,6 +1045,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
+            EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_MANAGE.name,
@@ -1303,6 +1319,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
+            EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,

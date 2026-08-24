@@ -80,6 +80,7 @@ builder and applicant forms send only valid values, so no valid caller is affect
 **10 tests added.**
 
 **Two lens false positives, cleared by reading (no change):**
+
 - `Interview{Create,Update}.recommendation` — flagged, but `create_interview` derives
   it via `InterviewRecommendation(recommendation)` (a `ValueError` the interview
   endpoints already convert to 400), so it's a clean 400 today, not a 500. Left as-is.
@@ -214,7 +215,7 @@ it.
 **Fix:** for a small allowlist of sensitive fields — `date_of_birth`,
 `address_street`, `address_city`, `address_state`, `address_zip` — the log now
 records `{"changed": True}` instead of `{"from": ..., "to": ...}`. The audit trail
-still shows *that* the field changed, by whom, and when (the accountability the
+still shows _that_ the field changed, by whom, and when (the accountability the
 log exists for) without persisting the PII value. Non-sensitive fields (name,
 status, notes, membership type) keep the full old→new record.
 
@@ -233,6 +234,7 @@ structured `existing_member_match` object plus a `reactivate_url` embedding the
 `user_id` — in the 409 body, contradicting the sibling endpoint's stated intent.
 
 **Two things made this an easy, safe fix rather than a product debate:**
+
 1. The frontend **never consumes** `existing_member_match` or `reactivate_url`
    (confirmed by grep across `modules/prospective-members`). It runs its own
    `check-existing` pre-check and, on the 409, only toasts the message.
@@ -288,10 +290,10 @@ accurate for both endpoints.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (both modified files) | ✅ 0 violations |
-| `black --check` (both modified files) | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| `eslint` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_membership_pipeline_flow` + `test_integrations_webhook_advance`: 5 passed, 12 DB-fixture errors (no MySQL — known sandbox limit). No logic failures. All existing `complete_step` tests pass valid in-pipeline steps, so the MP-5 guards don't affect them. |
+| Check                                 | Result                                                                                                                                                                                                                                                               |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (both modified files)        | ✅ 0 violations                                                                                                                                                                                                                                                      |
+| `black --check` (both modified files) | ✅ unchanged                                                                                                                                                                                                                                                         |
+| `tsc --noEmit`                        | ✅ n/a — no frontend change                                                                                                                                                                                                                                          |
+| `eslint`                              | ✅ n/a — no frontend change                                                                                                                                                                                                                                          |
+| backend tests                         | ✅ `test_membership_pipeline_flow` + `test_integrations_webhook_advance`: 5 passed, 12 DB-fixture errors (no MySQL — known sandbox limit). No logic failures. All existing `complete_step` tests pass valid in-pipeline steps, so the MP-5 guards don't affect them. |

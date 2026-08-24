@@ -46,7 +46,7 @@ Re-verified this HIGH-sensitivity (self-credit / SoD) module's guards all hold:
 
 **Latent-500 lens clean:** the only enum columns (`entry_method`, `status`) are
 properly typed in the request schemas — no free-string→ENUM path. **E712-free.** The
-FIN-7 float-money concern doesn't map here — admin hours are *time*, not currency,
+FIN-7 float-money concern doesn't map here — admin hours are _time_, not currency,
 bounded by AH-1's 24h-per-entry cap.
 
 ### Still flagged (unchanged)
@@ -158,9 +158,9 @@ holder) stands as the accepted ISO 27001 A.5.3 posture.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + endpoint + test) | ✅ 0 violations |
-| `black --check` | ✅ formatted |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_admin_hours_service` **19 passed** (+2 new `TestOrgScopedQueries`). No DB needed for this file. |
+| Check                                | Result                                                                                                   |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `flake8` (service + endpoint + test) | ✅ 0 violations                                                                                          |
+| `black --check`                      | ✅ formatted                                                                                             |
+| `tsc --noEmit`                       | ✅ n/a — no frontend change                                                                              |
+| backend tests                        | ✅ `test_admin_hours_service` **19 passed** (+2 new `TestOrgScopedQueries`). No DB needed for this file. |

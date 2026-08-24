@@ -249,12 +249,13 @@ docker compose up -d backend frontend
 ```
 
 **Recommended EC2 instances:**
-| Instance | vCPUs | RAM | Profile |
-|----------|-------|-----|---------|
-| t3.micro | 2 | 1GB | minimal |
-| t3.small | 2 | 2GB | minimal |
-| t3.medium | 2 | 4GB | standard |
-| t3.large | 2 | 8GB | full |
+
+| Instance  | vCPUs | RAM | Profile  |
+| --------- | ----- | --- | -------- |
+| t3.micro  | 2     | 1GB | minimal  |
+| t3.small  | 2     | 2GB | minimal  |
+| t3.medium | 2     | 4GB | standard |
+| t3.large  | 2     | 8GB | full     |
 
 ### Azure (Virtual Machines)
 
@@ -278,12 +279,13 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 ```
 
 **Recommended Droplet sizes:**
-| Size | RAM | Profile |
-|------|-----|---------|
-| Basic $6 | 1GB | minimal |
-| Basic $12 | 2GB | minimal |
+
+| Size      | RAM | Profile  |
+| --------- | --- | -------- |
+| Basic $6  | 1GB | minimal  |
+| Basic $12 | 2GB | minimal  |
 | Basic $24 | 4GB | standard |
-| Basic $48 | 8GB | full |
+| Basic $48 | 8GB | full     |
 
 ### Kubernetes (Helm)
 

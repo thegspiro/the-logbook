@@ -2225,6 +2225,7 @@ class FormsService:
             try:
                 from app.core.utils import generate_uuid
                 from app.models.event import Event, EventRSVP, RSVPStatus
+                from app.services.event_service import attendance_is_finalized
 
                 # The event_id is submitter-mapped — validate it belongs to the
                 # submission's org before creating an RSVP against it (otherwise
@@ -2236,6 +2237,26 @@ class FormsService:
                     return {
                         "success": False,
                         "error": "Event is not in this organization",
+                    }
+
+                # This writes an EventRSVP directly rather than going through
+                # EventService, so it has to check the attendance lock itself —
+                # otherwise a form submission is a way around the 409 the
+                # ordinary RSVP endpoint returns for a closed event.
+                event_row = await self.db.execute(
+                    select(Event).where(
+                        Event.id == str(event_id),
+                        Event.organization_id == str(submission.organization_id),
+                    )
+                )
+                event_obj = event_row.scalar_one_or_none()
+                if event_obj is not None and attendance_is_finalized(event_obj):
+                    return {
+                        "success": False,
+                        "error": (
+                            "Attendance for this event has been finalized, so "
+                            "registrations are closed."
+                        ),
                     }
 
                 # Check for existing RSVP to avoid duplicates (org-scoped)

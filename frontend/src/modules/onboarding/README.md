@@ -99,7 +99,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* <OnboardingRoutes /> */}  {/* ONBOARDING DISABLED */}
+        {/* <OnboardingRoutes /> */} {/* ONBOARDING DISABLED */}
         {/* Other routes */}
       </Routes>
     </BrowserRouter>
@@ -116,11 +116,7 @@ Displays the department logo and name at the top of each wizard page.
 ```tsx
 import { OnboardingHeader } from './modules/onboarding';
 
-<OnboardingHeader
-  departmentName="Springfield Fire Department"
-  logoPreview="/path/to/logo.png"
-  icon={<CustomIcon />}
-/>
+<OnboardingHeader departmentName="Springfield Fire Department" logoPreview="/path/to/logo.png" icon={<CustomIcon />} />;
 ```
 
 ### OnboardingFooter
@@ -130,7 +126,7 @@ Displays copyright information and branding.
 ```tsx
 import { OnboardingFooter } from './modules/onboarding';
 
-<OnboardingFooter departmentName="Springfield Fire Department" />
+<OnboardingFooter departmentName="Springfield Fire Department" />;
 ```
 
 ### ProgressIndicator
@@ -140,7 +136,7 @@ Shows setup progress through the wizard.
 ```tsx
 import { ProgressIndicator } from './modules/onboarding';
 
-<ProgressIndicator currentStep={3} totalSteps={9} />
+<ProgressIndicator currentStep={3} totalSteps={9} />;
 ```
 
 ### BackButton
@@ -162,10 +158,11 @@ Button that allows users to clear all onboarding data and start fresh.
 ```tsx
 import { ResetProgressButton } from './modules/onboarding';
 
-<ResetProgressButton />
+<ResetProgressButton />;
 ```
 
 When clicked, displays a confirmation modal warning that:
+
 - All onboarding database records will be deleted
 - The action cannot be undone
 - On confirmation, clears localStorage and redirects to start
@@ -182,7 +179,7 @@ import { ErrorAlert } from './modules/onboarding';
   canRetry={true}
   onRetry={() => handleRetry()}
   onDismiss={() => clearError()}
-/>
+/>;
 ```
 
 ### AutoSaveNotification
@@ -192,7 +189,7 @@ Shows when data was last auto-saved.
 ```tsx
 import { AutoSaveNotification } from './modules/onboarding';
 
-<AutoSaveNotification showTimestamp lastSaved={lastSavedTimestamp} />
+<AutoSaveNotification showTimestamp lastSaved={lastSavedTimestamp} />;
 ```
 
 ## Hooks
@@ -230,7 +227,7 @@ function MyForm() {
   // Warn before navigating away with unsaved changes
   useUnsavedChanges({
     hasUnsavedChanges: hasChanges,
-    message: 'You have unsaved changes. Are you sure you want to leave?'
+    message: 'You have unsaved changes. Are you sure you want to leave?',
   });
 
   return <form>...</form>;
@@ -238,6 +235,7 @@ function MyForm() {
 ```
 
 **Features:**
+
 - Warns before browser refresh/close
 - Blocks in-app navigation with confirmation dialog
 - Automatically compares current vs initial data
@@ -264,6 +262,7 @@ function MyForm() {
 ```
 
 **How it works:**
+
 - Deep comparison using JSON.stringify
 - Returns boolean indicating if data has changed
 - Updates when initial data changes (e.g., loaded from API)
@@ -385,7 +384,7 @@ Icons are from Lucide React. To change:
 ```tsx
 import { YourIcon } from 'lucide-react';
 
-<OnboardingHeader icon={<YourIcon className="w-6 h-6 text-white" />} />
+<OnboardingHeader icon={<YourIcon className="h-6 w-6 text-white" />} />;
 ```
 
 ## Security Considerations

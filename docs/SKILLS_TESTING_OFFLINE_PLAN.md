@@ -209,7 +209,7 @@ free-text notes on the test and on every criterion, and the officer reviews
 before validating. A system that annotates its own uncertainty invites an
 officer to trust a badge instead of asking.
 
-This does not change the case for Phases 1–3 — losing a *whole evaluation* to
+This does not change the case for Phases 1–3 — losing a _whole evaluation_ to
 no signal is a different problem from a clock that drifted — but it does set
 the bar: sync the work, do not editorialize about it.
 

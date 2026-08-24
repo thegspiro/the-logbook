@@ -6,27 +6,28 @@
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1: 6/6 endpoints gated + org-scoped; PP-3 display-code regex + no
-PP-1 recurrence intact; LOC-1 (display *rendering* uses canonical
+PP-1 recurrence intact; LOC-1 (display _rendering_ uses canonical
 `_get_check_in_window`) and LOC-2 (kiosk timezone from org) hold; frontend clean (no
 banned date APIs, tz passed to every formatter, no Pitfall #1). Lenses 1–4/6 clean.
 **1 fix.**
 
-### LOC-4 — MED — Kiosk event *selection* still used a hardcoded 1-hour window (LOC-1, one layer down) — ✅ FIXED
+### LOC-4 — MED — Kiosk event _selection_ still used a hardcoded 1-hour window (LOC-1, one layer down) — ✅ FIXED
 
-LOC-1 fixed the display *rendering* to use `EventService._get_check_in_window`, but
+LOC-1 fixed the display _rendering_ to use `EventService._get_check_in_window`, but
 the **selection** query `get_current_events_in_check_in_window` still computed
 `check_in_start_threshold = now + 1h` and selected `start_datetime <= that` — a
 **superset** of the canonical per-event windows (FLEXIBLE opens 30 min before, STRICT
 at `actual_start_time`, WINDOW ±N). The live kiosk frontend renders "Check-In Active"
-+ a scannable QR for **any** returned event (it never reads `is_valid`), so a STRICT
-or early-FLEXIBLE event showed an active check-in QR up to an hour before its window
-opened; the scan was then rejected by `_validate_check_in_window` — confusing, and
-the docstring's "1 hour before start" contradicted the 30-min canonical default.
-**Fix:** keep a generous 1-hour SQL prefilter to bound rows, then narrow in Python to
-exactly the events whose canonical `_get_check_in_window` is open now — the same
-predicate `_validate_check_in_window` enforces. Swept an adjacent E712. 1 DB-free
-regression test (an open FLEXIBLE event is returned, a not-yet-open STRICT event is
-filtered out).
+
+- a scannable QR for **any** returned event (it never reads `is_valid`), so a STRICT
+  or early-FLEXIBLE event showed an active check-in QR up to an hour before its window
+  opened; the scan was then rejected by `_validate_check_in_window` — confusing, and
+  the docstring's "1 hour before start" contradicted the 30-min canonical default.
+  **Fix:** keep a generous 1-hour SQL prefilter to bound rows, then narrow in Python to
+  exactly the events whose canonical `_get_check_in_window` is open now — the same
+  predicate `_validate_check_in_window` enforces. Swept an adjacent E712. 1 DB-free
+  regression test (an open FLEXIBLE event is returned, a not-yet-open STRICT event is
+  filtered out).
 
 **Flagged (LOW, folded into LOC-3):** the authenticated `/locations/{id}/display`
 endpoint (still zero callers) hardcodes `is_valid=True` and omits the new `timezone`
@@ -149,7 +150,7 @@ which is how LOC-1 happened.
 
 **Why not fixed:** deleting an endpoint is an API-surface decision, not a
 correction — nothing documents it as a public integration point, but nothing
-rules it out either. It is now *correct* dead code rather than *wrong* dead
+rules it out either. It is now _correct_ dead code rather than _wrong_ dead
 code, so the decision can be taken calmly. Second instance of this shape in two
 iterations, after DASH-2.
 
@@ -201,17 +202,17 @@ rotating the code is the only revocation.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2514 passed, 0 failed** (was 2512 — 2 tests added). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
-| frontend tests | ✅ **2207 passed** (159 files) |
+| Check                | Result                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors                                                                                                                                 |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                             |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                      |
+| `eslint`             | ✅ clean                                                                                                                                    |
+| backend tests        | ✅ **2514 passed, 0 failed** (was 2512 — 2 tests added). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| frontend tests       | ✅ **2207 passed** (159 files)                                                                                                              |
 
 > Note: LOC-2's extra query broke three existing `test_public_display.py` tests,
 > whose `db` stub was a bare `MagicMock`. The stub was **extended** to serve the
 > new lookup — not loosened, and no assertion was weakened — because the
 > endpoint genuinely acquired a dependency the test had to model.
-</content>
+> </content>

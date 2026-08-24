@@ -20,7 +20,7 @@ dummy-verify, no rate-limit-skipping credential path, no unguarded token-parse �
 oldest org via `order_by(created_at)` without an `active` filter (single-org-benign;
 would only mis-scope if the oldest org were deactivated while a newer active one
 existed) and `forgot_password` constructs `AuthSettings(**org_settings["auth"])`
-with no try/except (a malformed *admin-written* config could 500 a public endpoint,
+with no try/except (a malformed _admin-written_ config could 500 a public endpoint,
 but `extra="ignore"` means extra keys don't raise — availability-only, not
 attacker-controllable). **No code changed** — the verifications are the deliverable.
 
@@ -53,7 +53,7 @@ public forms) belongs to the forms feature, not here.
 ## Verified good ✅
 
 - **Auth coverage: 25/25 endpoints correct.** The 10 unauthenticated routes are
-  unauthenticated *by necessity* (`/branding`, `/oauth-config`, the four OAuth
+  unauthenticated _by necessity_ (`/branding`, `/oauth-config`, the four OAuth
   initiate/callback routes, `/register`, `/login`, `/mfa/login`,
   `/forgot-password`, `/reset-password`, `/validate-reset-token`); every other
   route carries `get_current_user` or `get_current_active_user`.
@@ -72,7 +72,7 @@ public forms) belongs to the forms feature, not here.
   DB read cannot be replayed into an account takeover. SHA-256 is the right
   primitive here — the token is high-entropy random, not a password.
 - **Username enumeration is defended (M3 fix intact)** — a dummy Argon2 verify
-  runs on the unknown-user, no-password-hash, *and* locked-account branches
+  runs on the unknown-user, no-password-hash, _and_ locked-account branches
   (`auth_service.py:167/174/208`), so all three take the same time as a real
   verify. The locked-account branch is the subtle one and it is handled.
 - **MFA hardening is intact (H3 fix)** — consumed TOTP steps are recorded and
@@ -114,7 +114,7 @@ session data, and password-reset forensics — the audit trail looks populated b
 carries no usable attribution.
 
 The giveaway that this was an oversight rather than a decision: `mfa_login`
-already called `get_client_ip(request)` for the *same* `create_user_tokens`
+already called `get_client_ip(request)` for the _same_ `create_user_tokens`
 parameter (`auth.py:766`), and `login` computed `login_ip = get_client_ip(...)`
 at `auth.py:602` for rate limiting and then passed `request.client.host` to
 token creation 50 lines later.
@@ -129,15 +129,15 @@ is never worse than before.
 
 > **Resolved by owner decision.** The blocker below was "enforcing this stops
 > SMS to every member who was never asked". The owner's rule removes it:
-> *messages always go to the member's email, so consent may suppress the text
-> but never the notice.* Implementation at the end of this finding.
+> _messages always go to the member's email, so consent may suppress the text
+> but never the notice._ Implementation at the end of this finding.
 
 **What:** `ConsentService.has_consent` (`consent_service.py:75`) has **zero
 callers** — `grep -rn "has_consent" app/` returns only the definition and the
 docstring line describing the contract. That docstring states the requirement
-explicitly: *"Consumers of a consent (photo publishing, public roster, SMS
+explicitly: _"Consumers of a consent (photo publishing, public roster, SMS
 sending) must call `has_consent` and treat 'never asked' exactly like
-'refused'."* Nothing does.
+'refused'."_ Nothing does.
 
 **Where:** `app/services/consent_service.py:75`; the three unenforced consumers
 are the SMS path (`sms_service.py:41` `send_sms`, and
@@ -149,7 +149,7 @@ listing, and photo use.
 and audit-logged — and then ignored. A member who explicitly refuses photo
 publication still has their photo published; one who refuses SMS still receives
 it. The `SMS_NOTIFICATIONS` case carries the most exposure: the model comment
-notes *"TCPA: text messaging requires express consent in the US"*, and TCPA
+notes _"TCPA: text messaging requires express consent in the US"_, and TCPA
 provides statutory damages per message. This is an ISO 27701 control that is
 inert — arguably worse than not having it, because the UI represents to the
 member that their choice takes effect.
@@ -160,7 +160,7 @@ would immediately stop SMS to every existing member (none of whom have been
 asked). That needed an owner decision on backfill.
 
 **Resolution — email is the channel of record.** The owner's rule makes
-enforcement safe without any backfill: consent may suppress the *text*, but the
+enforcement safe without any backfill: consent may suppress the _text_, but the
 member is always reached by email, so nobody can be left able to say they were
 never told. Implemented as:
 
@@ -171,12 +171,12 @@ never told. Implemented as:
 - **SMS is consent-gated in both send paths** — department-message escalation
   (`message_delivery_service._send_sms`) and the inventory low-stock admin alert
   (`scheduled_tasks.py:3353`, found by grepping every `SMSService` caller). The
-  gate is *in addition to* the existing channel preference, because TCPA
+  gate is _in addition to_ the existing channel preference, because TCPA
   consent and a UI toggle are not the same thing.
 - **Email is now unconditional** (`message_delivery_service.deliver`) — sent for
   every department message, not only urgent/ack-required ones, and **no longer
   filtered by the `email_notifications` preference**. A member must not be able
-  to opt out of the record that they were told something. Email is sent *before*
+  to opt out of the record that they were told something. Email is sent _before_
   the SMS branch so the ordering itself encodes the invariant.
 - **The `email_notifications` preference is not dead** — it still governs the
   seven reminder/alert flows (`scheduled_tasks`, `cert_alert_service`,
@@ -259,23 +259,24 @@ methods surfaced while tracing the endpoint layer.
 3. **Session list has no revoke-other-sessions control.** Sessions are recorded
    with IP/user-agent (now correctly), but a member who sees an unfamiliar
    session cannot terminate it; only a full logout exists. Now that the recorded
-   IP is meaningful, this becomes worth building. *Incomplete feature.*
+   IP is meaningful, this becomes worth building. _Incomplete feature._
 4. **OAuth has no account-linking flow.** A member who signs up with a password
    and later uses Google gets matched by email; there is no explicit link or
-   unlink UI, and no way to see which providers are attached. *Incomplete
-   feature.*
+   unlink UI, and no way to see which providers are attached. _Incomplete
+   feature._
 5. **`REGISTRATION_REQUIRES_APPROVAL` has no admin queue in the UI.** The flag
    is honored server-side but pending self-registrations are reachable only
-   through the members list. *Incomplete feature.*
+   through the members list. _Incomplete feature._
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (repo-wide) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 501 files unchanged |
-| `eslint` | ✅ clean |
-| frontend tests | ✅ unchanged — no frontend files modified this iteration |
-| backend tests | ✅ 118 passed (auth/mfa/oauth/consent) · ⚠️ 3 errored at fixture setup — `test_consent_service.py` needs MySQL, unavailable in this sandbox (verified: 5 "Can't connect to MySQL" lines). Environment limitation, not a regression. |
+| Check                | Result                                                                                                                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (repo-wide)                                                                                                                                                                                                             |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                                                                     |
+| `black --check`      | ✅ 501 files unchanged                                                                                                                                                                                                              |
+| `eslint`             | ✅ clean                                                                                                                                                                                                                            |
+| frontend tests       | ✅ unchanged — no frontend files modified this iteration                                                                                                                                                                            |
+| backend tests        | ✅ 118 passed (auth/mfa/oauth/consent) · ⚠️ 3 errored at fixture setup — `test_consent_service.py` needs MySQL, unavailable in this sandbox (verified: 5 "Can't connect to MySQL" lines). Environment limitation, not a regression. |
+
 </content>

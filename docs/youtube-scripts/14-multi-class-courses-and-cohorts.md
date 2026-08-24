@@ -7,8 +7,8 @@
 **Chapters:** 6 (each designed as a standalone clip)
 **Requires permission:** `training.manage`
 
-> **Companion videos:** Script 11 builds a *pipeline* — what a recruit has to
-> accomplish. This video builds a *schedule* — when the classes actually meet.
+> **Companion videos:** Script 11 builds a _pipeline_ — what a recruit has to
+> accomplish. This video builds a _schedule_ — when the classes actually meet.
 > Most departments running a recruit school want both, and generating a cohort
 > wires them together.
 
@@ -141,7 +141,7 @@ Pause on an amber warning row.]**
 
 > "Now stop. This screen is the reason the wizard exists."
 
-> "Nothing has been created yet. Every date you're looking at is what *would*
+> "Nothing has been created yet. Every date you're looking at is what _would_
 > happen. And it's already telling you about the problems."
 
 **[SCREEN: Zoom on a warning reading "Moved from 2026-09-12 to 2026-09-14 —
@@ -195,7 +195,7 @@ counts on each row.]**
 **[SCREEN: Click the reschedule icon on one class, pick a new date/time, click
 Move class.]**
 
-> "Reschedule moves the class *and* its calendar event together. Everybody who
+> "Reschedule moves the class _and_ its calendar event together. Everybody who
 > signed up stays signed up — you're not rebuilding an attendee list."
 
 **[SCREEN: Click the cancel icon on another class; the confirmation dialog
@@ -244,7 +244,7 @@ but its Day number does not change, and its gap label flips to "2 days
 earlier."]**
 
 > "Number one, and this catches everybody. Moving a class up the list changes
-> the *order*. It does not change the *date*."
+> the _order_. It does not change the _date_."
 
 > "Watch — I move this one up, but its day number stays where it was. See how
 > the label changed to 'two days earlier'? That's the builder telling you the
@@ -265,7 +265,7 @@ class timeline on the other, unchanged.]**
 
 > "That's deliberate, and you want it that way. Imagine a recruit class's
 > schedule silently rearranging itself underneath them because you corrected a
-> typo. Your fix applies to the *next* intake. To change the one in progress,
+> typo. Your fix applies to the _next_ intake. To change the one in progress,
 > edit it here on the cohort page."
 
 **[CALLOUT: "Syllabus = template · Cohort = a copy that's already running"]**
@@ -319,17 +319,17 @@ timeline with attendance counts.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| The Problem | 0:00–1:15 | "Stop Building Fifteen Training Events by Hand" |
-| Building the Syllabus | 1:15–3:30 | "Describe a Multi-Class Course Once, Reuse It Forever" |
-| Fill From Pattern | 3:00–3:30 | "Space Out 15 Classes in One Click" |
-| Credit-Only Classes | 3:30–4:00 | "Hours Without Certificate Credit — When and Why" |
-| Generating a Cohort | 4:00–6:45 | "Schedule a Whole Recruit School in One Screen" |
-| The Preview Screen | 5:15–6:15 | "See Every Date Before You Create Anything" |
-| When Plans Change | 6:45–8:45 | "Reschedule, Cancel, and Shift a Class Series" |
-| Reordering Isn't Rescheduling | 8:45–9:30 | "The #1 Mistake With Course Syllabi" |
-| Cohort or Recurring Session? | 10:15–11:00 | "Cohort vs. Recurring Session — Which Do I Want?" |
+| Clip                          | Timecode    | Standalone Title                                       |
+| ----------------------------- | ----------- | ------------------------------------------------------ |
+| The Problem                   | 0:00–1:15   | "Stop Building Fifteen Training Events by Hand"        |
+| Building the Syllabus         | 1:15–3:30   | "Describe a Multi-Class Course Once, Reuse It Forever" |
+| Fill From Pattern             | 3:00–3:30   | "Space Out 15 Classes in One Click"                    |
+| Credit-Only Classes           | 3:30–4:00   | "Hours Without Certificate Credit — When and Why"      |
+| Generating a Cohort           | 4:00–6:45   | "Schedule a Whole Recruit School in One Screen"        |
+| The Preview Screen            | 5:15–6:15   | "See Every Date Before You Create Anything"            |
+| When Plans Change             | 6:45–8:45   | "Reschedule, Cancel, and Shift a Class Series"         |
+| Reordering Isn't Rescheduling | 8:45–9:30   | "The #1 Mistake With Course Syllabi"                   |
+| Cohort or Recurring Session?  | 10:15–11:00 | "Cohort vs. Recurring Session — Which Do I Want?"      |
 
 ## AUGUST 14 RELEASE INSERT — SESSION LINKAGE
 

@@ -47,12 +47,12 @@ shared `assert_in_org` on both paths." Done. The four integrity-only FKs — non
 projected into any response, so they could only dangle — are now validated in-org
 on **both** the create and update paths, reusing `assert_in_org(..., allow_none=True)`:
 
-| FK | Target model (org-scoped) | Paths hardened |
-|---|---|---|
-| `apparatus.required_evoc_level_id` | `EvocLevel` | `create_apparatus`, `update_apparatus` |
-| `maintenance.component_id` | `ApparatusComponent` | `create_maintenance_record`, `update_maintenance_record` |
-| `maintenance.service_provider_id` | `ApparatusServiceProvider` | `create_maintenance_record`, `update_maintenance_record` |
-| `component_note.service_provider_id` | `ApparatusServiceProvider` | `create_component_note`, `update_component_note` |
+| FK                                   | Target model (org-scoped)  | Paths hardened                                           |
+| ------------------------------------ | -------------------------- | -------------------------------------------------------- |
+| `apparatus.required_evoc_level_id`   | `EvocLevel`                | `create_apparatus`, `update_apparatus`                   |
+| `maintenance.component_id`           | `ApparatusComponent`       | `create_maintenance_record`, `update_maintenance_record` |
+| `maintenance.service_provider_id`    | `ApparatusServiceProvider` | `create_maintenance_record`, `update_maintenance_record` |
+| `component_note.service_provider_id` | `ApparatusServiceProvider` | `create_component_note`, `update_component_note`         |
 
 All six endpoints already convert `ValueError → 400` via `safe_error_detail`, so the
 rejections surface cleanly. `ApparatusComponentNoteUpdate` omits `component_id`, so a
@@ -109,16 +109,17 @@ FK-accepting update method. They can, and several are cross-tenant read leaks.
 
 **What:** the create/change paths validate their client-supplied FKs in-org, but
 the corresponding **update** methods did a blind `model_dump(exclude_unset=True)`
-+ `setattr` loop with no validation. Each of these FKs is **eager-loaded into a
-response relationship**, so a foreign id stored via update is not a dangling
-reference — it is projected back into the caller's response, leaking the other
-org's row (the exact vector `create_operator`'s comment describes and guards):
 
-| Update method | Unvalidated FK(s) | Eager-loaded into | create/change counterpart validates? |
-|---|---|---|---|
-| `update_apparatus` | `apparatus_type_id`, `status_id`, `primary_station_id` | `apparatus_type`, `status_record`, `primary_station` | type/status yes (`create_apparatus`, `change_apparatus_status`); **station no — unvalidated on create too** |
-| `update_operator` | `evoc_level_id` | `evoc_level` | yes (`create_operator`) |
-| `update_maintenance_record` | `maintenance_type_id` | `maintenance_type` | yes (`create_maintenance_record`) |
+- `setattr` loop with no validation. Each of these FKs is **eager-loaded into a
+  response relationship**, so a foreign id stored via update is not a dangling
+  reference — it is projected back into the caller's response, leaking the other
+  org's row (the exact vector `create_operator`'s comment describes and guards):
+
+| Update method               | Unvalidated FK(s)                                      | Eager-loaded into                                    | create/change counterpart validates?                                                                        |
+| --------------------------- | ------------------------------------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `update_apparatus`          | `apparatus_type_id`, `status_id`, `primary_station_id` | `apparatus_type`, `status_record`, `primary_station` | type/status yes (`create_apparatus`, `change_apparatus_status`); **station no — unvalidated on create too** |
+| `update_operator`           | `evoc_level_id`                                        | `evoc_level`                                         | yes (`create_operator`)                                                                                     |
+| `update_maintenance_record` | `maintenance_type_id`                                  | `maintenance_type`                                   | yes (`create_maintenance_record`)                                                                           |
 
 `update_apparatus` additionally copied an unvalidated `status_id` into
 `ApparatusStatusHistory`, so the forgery persisted into the status audit trail.
@@ -131,7 +132,7 @@ reusing the **same validator the create path already uses** — `get_apparatus_t
 / `get_apparatus_status` for apparatus, `get_maintenance_type` for maintenance,
 `assert_in_org(EvocLevel, …, allow_none=True)` for the operator EVOC level — and
 only when the id was actually supplied (`exclude_unset` semantics preserved). The
-**station** FK was the one eager-loaded apparatus FK unvalidated on *both* paths,
+**station** FK was the one eager-loaded apparatus FK unvalidated on _both_ paths,
 so `create_apparatus` and `update_apparatus` both gained
 `assert_in_org(Location, primary_station_id, …, allow_none=True)` (`Location` is
 org-scoped, confirmed in the A8 review). All three update endpoints already
@@ -143,7 +144,7 @@ extra query.
 ### AP2-2 — LOW — Dangling (non-projected) FKs still unvalidated — 🚩 OPEN
 
 The FKs that are **not** eager-loaded into any response — so they can only dangle,
-not leak — remain unvalidated on create *and* update: `apparatus.required_evoc_level_id`
+not leak — remain unvalidated on create _and_ update: `apparatus.required_evoc_level_id`
 (SET NULL, not projected), `maintenance.component_id` / `maintenance.service_provider_id`,
 and `component_note.service_provider_id`. These are the same integrity-only XC-1
 shape pass 1 hardened in other modules (MSG-2, GF-6) as defense-in-depth. Left
@@ -176,7 +177,7 @@ finding, AP-1 (create paths don't validate the referenced parent is in-org).
 
 ## Scope
 
-Tier B: started from AP-1 and the CROSS-CUTTING note that the *operator* create
+Tier B: started from AP-1 and the CROSS-CUTTING note that the _operator_ create
 path was later fixed in the zero-trust pass, and checked whether the rest of
 AP-1 was closed. The security pass had already established auth coverage (83/83),
 tenant isolation on every by-id query, and no SQL injection — re-verified, not
@@ -192,6 +193,7 @@ maintenance creates stored a client-supplied `apparatus_id` without checking it
 belonged to the caller's org.
 
 **Current state, verified path by path:**
+
 - `create_maintenance_record` — **already validated** (org-scoped
   `get_apparatus(apparatus_id, org)` at line 1069, and the maintenance-type id
   too). Not a gap.
@@ -207,7 +209,7 @@ belonged to the caller's org.
   photo/document row org-stamped to the caller but pointing at another org's
   apparatus.
 
-**Impact:** consistent with the AP-1 rating — not a cross-tenant *disclosure*
+**Impact:** consistent with the AP-1 rating — not a cross-tenant _disclosure_
 (the child is org-scoped and `list_*` filters on both `apparatus_id` and org, so
 the foreign-pointed row is an orphan), but a data-integrity gap: a photo or
 document attached to an apparatus id that isn't the org's. LOW→MED because
@@ -269,11 +271,12 @@ churn.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed**; `test_org_scoping.py` (the coverage backing this fix) 7/7. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| Check                | Result                                                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                                                            |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                             |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                                                      |
+| `eslint`             | ✅ clean                                                                                                                                                                    |
+| backend tests        | ✅ **2517 passed, 0 failed**; `test_org_scoping.py` (the coverage backing this fix) 7/7. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+
 </content>

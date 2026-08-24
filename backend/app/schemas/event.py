@@ -371,6 +371,12 @@ class EventResponse(EventBase, UTCResponseBase):
     is_cancelled: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
+    # Attendance lock. The UI reads attendance_finalized_at to decide which
+    # actions to offer at all; the name is resolved for display because rows
+    # backfilled from the pre-column marker have no actor recorded.
+    attendance_finalized_at: Optional[datetime] = None
+    attendance_finalized_by: Optional[UUID] = None
+    attendance_finalized_by_name: Optional[str] = None
     created_by: Optional[UUID] = None
     updated_by: Optional[UUID] = None
     created_at: datetime
@@ -1128,6 +1134,20 @@ class FinalizeAttendanceResponse(BaseModel):
     """Response for finalizing event attendance."""
 
     updated_count: int
+
+
+class ReopenAttendanceRequest(BaseModel):
+    """Request body for reopening a finalized event's attendance."""
+
+    reason: Optional[str] = Field(
+        None,
+        max_length=500,
+        description=(
+            "Why attendance is being reopened. Recorded on the audit entry — "
+            "reopening unlocks numbers that already fed the hours ledger, so "
+            "the trail should say what prompted it."
+        ),
+    )
 
 
 class EndEventResponse(BaseModel):

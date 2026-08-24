@@ -14,6 +14,7 @@ work, ambiguous changes) for owner review rather than auto-implementing.
 > [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md).
 
 ## Rotation (advances each tick)
+
 1. Core auth & security — middleware, dependencies, security.py, CSRF, sessions
 2. Documentation — README, CLAUDE.md, `.env` examples, API docs accuracy
 3. Training module
@@ -59,12 +60,14 @@ work, ambiguous changes) for owner review rather than auto-implementing.
 ## Findings log
 
 ### Tick 1 — Area 1: Core auth & security
+
 Layer is well-hardened overall (Argon2id, JWT alg allowlist, server-side
 session validation + idle timeout, refresh rotation/replay revocation,
 fail-closed rate limiting, pure-ASGI middleware, SameSite=Strict cookies,
 double-submit CSRF, hashed reset tokens). Findings:
 
 **Needs owner decision (verified):**
+
 - **[HIGH] MFA surfaced but not implemented.** `mfa_enabled` is stored and
   returned by `/auth/me`, but there is **no TOTP/MFA verification anywhere**
   in the backend (no `pyotp` usage, no MFA challenge endpoint) — login issues
@@ -82,10 +85,12 @@ double-submit CSRF, hashed reset tokens). Findings:
   the count check; verify against intended semantics. (`security.py:686-719`.)
 
 **Fixed this tick (clearly-correct):**
+
 - `decode_token` docstring now states it does not verify token type or
   server-side session (use AuthService.get_user_from_token). (`security.py`.)
 
 **Reclassified:**
+
 - `validate_url` optional-TLD "SSRF" item → **dead code** (no callers);
   requiring a TLD would break internal hostnames. No change.
 
@@ -96,7 +101,9 @@ attributes (Pitfall #6), pure-ASGI middleware (Pitfall #4), unbounded caches
 permission matching. No TODO/FIXME/stubs.
 
 ### Tick 2 — Area 2: Documentation
+
 **Fixed this tick (verified, clearly-correct):**
+
 - `package.json` `dev:backend` ran `uvicorn app.main:app` but the app is at
   `backend/main.py` → fixed to `main:app` (the primary `npm run dev` backend
   was broken).
@@ -114,6 +121,7 @@ permission matching. No TODO/FIXME/stubs.
   `onboarding/utils/security.ts` but undocumented).
 
 **Needs owner confirmation:**
+
 - README's `openssl rand -hex 32` (32 chars) for `SECRET_KEY` is below the
   documented 64-char recommendation (config.py hard-min is 32). Align guidance.
 - `.env.example` defaults `ENVIRONMENT=production`, but config.py makes
@@ -126,7 +134,9 @@ permission matching. No TODO/FIXME/stubs.
   planned/used by tooling before removing from docs.
 
 ### Tick 3 — Area 3: Training module
+
 **Fixed this tick (verified, clearly-correct):**
+
 - **[HIGH IDOR] `GET /training/submissions/{id}`** returned another member's
   submission (potential PHI) to any same-org member — the access check only
   404'd cross-org. Now: org boundary first, then owner-or-`training.manage`,
@@ -142,6 +152,7 @@ permission matching. No TODO/FIXME/stubs.
   and rejects outsiders. (`training.py` confirm_historical_import.)
 
 **Needs owner decision (logged):**
+
 - `GET /training/records` (list) is gated by auth only — any member can list
   all org training records (others' certs/scores). Decide: require
   `training.manage`, or restrict non-officers to their own records.
@@ -164,21 +175,24 @@ TODO/FIXME stubs; `safe_error_detail()` in import error paths; rolling-period
 proration math (`adjust_required`/`count_waived_months`) verified correct.
 
 ### Tick 4 — Area 4: Events module
+
 Module is well-built; the QR/self-check-in surface is authenticated,
 org-scoped, window-validated, and deduped. Findings:
 
 **Fixed this tick (verified, clearly-correct):**
+
 - **[LOW/MED] Public event-request stored `request.client.host`** (the proxy
   IP behind nginx) → now uses `get_client_ip(request)` (XFF + trusted proxy
   aware), so the abuse-tracking IP is meaningful. (`event_requests.py`.)
 - **[LOW] Recurrence generation** materialized the full series before the
-  >365 cap check → now breaks once it exceeds 365, preserving the rejection
-  but bounding memory. (`event_service.py` `_generate_recurrence_dates`.)
+  > 365 cap check → now breaks once it exceeds 365, preserving the rejection
+  > but bounding memory. (`event_service.py` `_generate_recurrence_dates`.)
 - **[LOW] `_local_time`** called `ZoneInfo(tz_name)` on the org's stored tz
   with no validation → a bad value 500'd the check-in window message; now
   falls back to UTC formatting. (`event_service.py`.)
 
 **Needs owner decision (logged):**
+
 - **[HIGH] `POST /event-requests/public`** is unauthenticated and creates DB
   rows + sends email with **no rate limit / CAPTCHA** (spam/email-amplification
   risk). The `check_rate_limit` dependency exists but keys on
@@ -194,12 +208,14 @@ date/leap-year math; UTC-store/local-display; no banned date patterns; module
 axios uses the authenticated global client; no TODO/FIXME stubs.
 
 ### Scheduling module — lifecycle review & enhancements (2026-07-16)
+
 Multi-session review of the scheduling/shift module on branch
 `claude/scheduling-module-review-ndgvub`. Focused on operational gaps from
 shift start-up through close-out, member conveniences, automation, and the
 still-open audit items.
 
 **Implemented (verified, clearly-correct):**
+
 - Per-shift officer authority; cancel-shift lifecycle; reopen/unfinalize
   (audit-logged); crew pass-down + handoff banner; live readiness panel.
 - Opt-in server-side enforcement of end-of-shift equipment checks at finalize
@@ -218,6 +234,7 @@ still-open audit items.
   `system.run_tasks`; overnight-shift end rolls to next day.
 
 **Needs owner decision (logged in KNOWN_LIMITATIONS.md):**
+
 - "Shifts completed" is counted from three different sources (TrainingRecords
   vs. ShiftAttendance vs. the progress-credit ledger) — reconciling changes
   established compliance numbers, so it needs a decision on the authoritative

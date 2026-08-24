@@ -1,7 +1,7 @@
 """Add volunteer-staffing columns to event requests.
 
 Revision ID: b8f2c05d7a91
-Revises: e7a41b6d09c2
+Revises: b7d1e04f92a3
 
 ``shifts.is_outreach`` marks a shift as a community-outreach signup sheet
 rather than duty coverage, so standing shift claims skip it — "every Saturday
@@ -27,7 +27,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b8f2c05d7a91"
-down_revision = "e7a41b6d09c2"
+down_revision = "b7d1e04f92a3"
 branch_labels = None
 depends_on = None
 

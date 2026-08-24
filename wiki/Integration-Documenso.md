@@ -1,6 +1,6 @@
 # Documenso Integration
 
-*(Added 2026-07-13)*
+_(Added 2026-07-13)_
 
 The Documenso integration lets a department send documents out for electronic
 signature — an open-source [DocuSign](https://documenso.com) alternative. It
@@ -22,8 +22,8 @@ a prospective member's stage.
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
+| URL             | Page                              | Permission            |
+| --------------- | --------------------------------- | --------------------- |
 | `/integrations` | Integrations Hub (Documenso card) | `integrations.manage` |
 
 Documenso is configured from the **Integrations** page. The connect dialog
@@ -63,7 +63,7 @@ are acknowledged and ignored.
 ## How Auto-Advance Works
 
 1. A coordinator sets a **Document Upload** stage's collection method to
-   *Documenso e-signature* and (optionally) enters a template ID.
+   _Documenso e-signature_ and (optionally) enters a template ID.
 2. The applicant signs their document in Documenso using the email they applied
    with.
 3. Documenso posts a `DOCUMENT_COMPLETED` event to the callback URL.
@@ -90,33 +90,33 @@ Configuration is stored in the `integrations` table with
 Secret values (`api_token`, `webhook_secret`) are stored in the encrypted
 `encrypted_config` column, never in plaintext `config`.
 
-| Field | Description |
-|-------|-------------|
-| `api_token` | Documenso API token (**Settings → API**). Sent in the `Authorization` header. Encrypted. |
-| `api_base_url` | Cloud default `https://app.documenso.com/api/v1`; self-hosted uses `https://<host>/api/v1`. SSRF-validated. |
-| `webhook_secret` | Optional shared secret enabling inbound webhook auto-advance. Encrypted. |
+| Field            | Description                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `api_token`      | Documenso API token (**Settings → API**). Sent in the `Authorization` header. Encrypted.                    |
+| `api_base_url`   | Cloud default `https://app.documenso.com/api/v1`; self-hosted uses `https://<host>/api/v1`. SSRF-validated. |
+| `webhook_secret` | Optional shared secret enabling inbound webhook auto-advance. Encrypted.                                    |
 
 ---
 
 ## Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Webhook received with no secret configured | Rejected with 401 — the endpoint never trusts unverified payloads |
-| Signature/secret mismatch | Rejected with 401; logged |
-| `DOCUMENT_COMPLETED` for an email with no matching active prospect | Acknowledged; no stage advanced (normal, non-error) |
-| Matching prospect's current stage isn't a Documenso document stage | Acknowledged; not advanced |
-| Non-completion event (opened, sent, rejected) | Acknowledged and ignored |
-| Self-hosted base URL points at a private/internal address | Rejected at save time by SSRF URL validation |
+| Scenario                                                           | Behavior                                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Webhook received with no secret configured                         | Rejected with 401 — the endpoint never trusts unverified payloads |
+| Signature/secret mismatch                                          | Rejected with 401; logged                                         |
+| `DOCUMENT_COMPLETED` for an email with no matching active prospect | Acknowledged; no stage advanced (normal, non-error)               |
+| Matching prospect's current stage isn't a Documenso document stage | Acknowledged; not advanced                                        |
+| Non-completion event (opened, sent, rejected)                      | Acknowledged and ignored                                          |
+| Self-hosted base URL points at a private/internal address          | Rejected at save time by SSRF URL validation                      |
 
 ---
 
 ## Permissions
 
-| Permission | Required For |
-|------------|-------------|
+| Permission            | Required For                                   |
+| --------------------- | ---------------------------------------------- |
 | `integrations.manage` | Connect/disconnect, configure, test connection |
-| `settings.manage` | Access the Integrations page |
+| `settings.manage`     | Access the Integrations page                   |
 
 ---
 

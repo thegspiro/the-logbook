@@ -42,18 +42,18 @@ frontend/src/modules/medical-screening/
 
 ### Enums
 
-| Enum | Values |
-|------|--------|
-| `ScreeningType` | `PHYSICAL_EXAM`, `MEDICAL_CLEARANCE`, `DRUG_SCREENING`, `VISION_HEARING`, `FITNESS_ASSESSMENT`, `PSYCHOLOGICAL` |
-| `ScreeningStatus` | `SCHEDULED`, `COMPLETED`, `PASSED`, `FAILED`, `PENDING_REVIEW`, `WAIVED`, `EXPIRED` |
+| Enum              | Values                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ScreeningType`   | `PHYSICAL_EXAM`, `MEDICAL_CLEARANCE`, `DRUG_SCREENING`, `VISION_HEARING`, `FITNESS_ASSESSMENT`, `PSYCHOLOGICAL` |
+| `ScreeningStatus` | `SCHEDULED`, `COMPLETED`, `PASSED`, `FAILED`, `PENDING_REVIEW`, `WAIVED`, `EXPIRED`                             |
 
 ### Key Interfaces
 
-| Interface | Description |
-|-----------|-------------|
+| Interface              | Description                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------- |
 | `ScreeningRequirement` | Organization-level requirement definition with frequency and role applicability |
-| `ScreeningRecord` | Individual screening record with dates, results, and review chain |
-| `ComplianceSummary` | Aggregated compliance status for a user or prospect |
+| `ScreeningRecord`      | Individual screening record with dates, results, and review chain               |
+| `ComplianceSummary`    | Aggregated compliance status for a user or prospect                             |
 
 ---
 
@@ -61,40 +61,40 @@ frontend/src/modules/medical-screening/
 
 ### `screening_requirements` Table
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | `String(36)` | UUID primary key |
-| `organization_id` | `String(36)` | FK to organizations |
-| `name` | `String(200)` | Requirement name (e.g., "Annual Physical Exam") |
-| `screening_type` | `ScreeningType` | Type of screening |
-| `description` | `Text` | Detailed description |
-| `frequency_months` | `Integer` | Months between required screenings (NULL = one-time) |
-| `applies_to_roles` | `JSON` | Array of role IDs this requirement applies to |
-| `is_active` | `Boolean` | Whether requirement is currently enforced |
-| `grace_period_days` | `Integer` | Days after expiration before marking non-compliant (default: 30) |
-| `created_at` | `DateTime` | Creation timestamp |
-| `updated_at` | `DateTime` | Last update timestamp |
+| Column              | Type            | Description                                                      |
+| ------------------- | --------------- | ---------------------------------------------------------------- |
+| `id`                | `String(36)`    | UUID primary key                                                 |
+| `organization_id`   | `String(36)`    | FK to organizations                                              |
+| `name`              | `String(200)`   | Requirement name (e.g., "Annual Physical Exam")                  |
+| `screening_type`    | `ScreeningType` | Type of screening                                                |
+| `description`       | `Text`          | Detailed description                                             |
+| `frequency_months`  | `Integer`       | Months between required screenings (NULL = one-time)             |
+| `applies_to_roles`  | `JSON`          | Array of role IDs this requirement applies to                    |
+| `is_active`         | `Boolean`       | Whether requirement is currently enforced                        |
+| `grace_period_days` | `Integer`       | Days after expiration before marking non-compliant (default: 30) |
+| `created_at`        | `DateTime`      | Creation timestamp                                               |
+| `updated_at`        | `DateTime`      | Last update timestamp                                            |
 
 ### `screening_records` Table
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | `String(36)` | UUID primary key |
-| `organization_id` | `String(36)` | FK to organizations |
-| `requirement_id` | `String(36)` | FK to screening_requirements |
-| `user_id` | `String(36)` | FK to users (nullable — NULL if prospect) |
-| `prospect_id` | `String(36)` | FK to prospective_members (nullable — NULL if user) |
-| `screening_type` | `ScreeningType` | Type of screening |
-| `status` | `ScreeningStatus` | Current status |
-| `scheduled_date` | `DateTime` | When screening is scheduled |
-| `completed_date` | `DateTime` | When screening was completed |
-| `expiration_date` | `DateTime` | When this screening expires |
-| `provider_name` | `EncryptedText` 🔒 | Name of medical provider |
-| `result_summary` | `EncryptedText` 🔒 | Brief result description |
-| `result_data` | `EncryptedJSON` 🔒 | Structured result data (scores, measurements) |
-| `reviewed_by` | `String(36)` | FK to users (reviewer) |
-| `reviewed_at` | `DateTime` | When review occurred |
-| `notes` | `EncryptedText` 🔒 | Additional notes |
+| Column            | Type               | Description                                         |
+| ----------------- | ------------------ | --------------------------------------------------- |
+| `id`              | `String(36)`       | UUID primary key                                    |
+| `organization_id` | `String(36)`       | FK to organizations                                 |
+| `requirement_id`  | `String(36)`       | FK to screening_requirements                        |
+| `user_id`         | `String(36)`       | FK to users (nullable — NULL if prospect)           |
+| `prospect_id`     | `String(36)`       | FK to prospective_members (nullable — NULL if user) |
+| `screening_type`  | `ScreeningType`    | Type of screening                                   |
+| `status`          | `ScreeningStatus`  | Current status                                      |
+| `scheduled_date`  | `DateTime`         | When screening is scheduled                         |
+| `completed_date`  | `DateTime`         | When screening was completed                        |
+| `expiration_date` | `DateTime`         | When this screening expires                         |
+| `provider_name`   | `EncryptedText` 🔒 | Name of medical provider                            |
+| `result_summary`  | `EncryptedText` 🔒 | Brief result description                            |
+| `result_data`     | `EncryptedJSON` 🔒 | Structured result data (scores, measurements)       |
+| `reviewed_by`     | `String(36)`       | FK to users (reviewer)                              |
+| `reviewed_at`     | `DateTime`         | When review occurred                                |
+| `notes`           | `EncryptedText` 🔒 | Additional notes                                    |
 
 > 🔒 **Encrypted at rest** _(2026-08-09, app-review MS-1)_. These four columns
 > carry the module's PHI and use the transparent `EncryptedText` /
@@ -105,7 +105,7 @@ frontend/src/modules/medical-screening/
 > **Legacy plaintext rows stay readable.** A stored value without the ciphertext
 > marker is returned as-is, so no backfill is needed for correctness;
 > `backend/scripts/reencrypt_to_aesgcm.py` re-encrypts them as a background task.
-> A value that *is* marked as ciphertext and fails to decrypt **raises** rather
+> A value that _is_ marked as ciphertext and fails to decrypt **raises** rather
 > than being returned as ciphertext or as empty — it fails closed.
 >
 > The remaining columns are deliberately **not** encrypted: dates, status and the
@@ -125,39 +125,39 @@ frontend/src/modules/medical-screening/
 
 ### Requirements
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/medical-screening/requirements` | `medical_screening.view` | List requirements (filter: `is_active`, `screening_type`) |
-| `GET` | `/api/v1/medical-screening/requirements/{id}` | `medical_screening.view` | Get single requirement |
-| `POST` | `/api/v1/medical-screening/requirements` | `medical_screening.manage` | Create requirement |
-| `PUT` | `/api/v1/medical-screening/requirements/{id}` | `medical_screening.manage` | Update requirement |
-| `DELETE` | `/api/v1/medical-screening/requirements/{id}` | `medical_screening.manage` | Delete requirement |
+| Method   | Path                                          | Permission                 | Description                                               |
+| -------- | --------------------------------------------- | -------------------------- | --------------------------------------------------------- |
+| `GET`    | `/api/v1/medical-screening/requirements`      | `medical_screening.view`   | List requirements (filter: `is_active`, `screening_type`) |
+| `GET`    | `/api/v1/medical-screening/requirements/{id}` | `medical_screening.view`   | Get single requirement                                    |
+| `POST`   | `/api/v1/medical-screening/requirements`      | `medical_screening.manage` | Create requirement                                        |
+| `PUT`    | `/api/v1/medical-screening/requirements/{id}` | `medical_screening.manage` | Update requirement                                        |
+| `DELETE` | `/api/v1/medical-screening/requirements/{id}` | `medical_screening.manage` | Delete requirement                                        |
 
 ### Records
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/medical-screening/records` | `medical_screening.view` | List records (filter: `user_id`, `prospect_id`, `screening_type`, `status`) |
-| `GET` | `/api/v1/medical-screening/records/{id}` | `medical_screening.view` | Get single record |
-| `POST` | `/api/v1/medical-screening/records` | `medical_screening.manage` | Create record |
-| `PUT` | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Update record (sets `reviewed_by`, `reviewed_at`) |
-| `DELETE` | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Delete record |
+| Method   | Path                                     | Permission                 | Description                                                                 |
+| -------- | ---------------------------------------- | -------------------------- | --------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/medical-screening/records`      | `medical_screening.view`   | List records (filter: `user_id`, `prospect_id`, `screening_type`, `status`) |
+| `GET`    | `/api/v1/medical-screening/records/{id}` | `medical_screening.view`   | Get single record                                                           |
+| `POST`   | `/api/v1/medical-screening/records`      | `medical_screening.manage` | Create record                                                               |
+| `PUT`    | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Update record (sets `reviewed_by`, `reviewed_at`)                           |
+| `DELETE` | `/api/v1/medical-screening/records/{id}` | `medical_screening.manage` | Delete record                                                               |
 
 ### Compliance
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/medical-screening/compliance/{user_id}` | `medical_screening.view` | User compliance summary |
-| `GET` | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `medical_screening.view` | Prospect compliance summary |
-| `GET` | `/api/v1/medical-screening/expiring` | `medical_screening.view` | Expiring screenings (query: `days=30`, range 1-365) |
+| Method | Path                                                          | Permission               | Description                                         |
+| ------ | ------------------------------------------------------------- | ------------------------ | --------------------------------------------------- |
+| `GET`  | `/api/v1/medical-screening/compliance/{user_id}`              | `medical_screening.view` | User compliance summary                             |
+| `GET`  | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `medical_screening.view` | Prospect compliance summary                         |
+| `GET`  | `/api/v1/medical-screening/expiring`                          | `medical_screening.view` | Expiring screenings (query: `days=30`, range 1-365) |
 
 ---
 
 ## Permissions
 
-| Permission | Description |
-|-----------|-------------|
-| `medical_screening.view` | View requirements, records, and compliance status |
+| Permission                 | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| `medical_screening.view`   | View requirements, records, and compliance status        |
 | `medical_screening.manage` | Full CRUD: create/update/delete requirements and records |
 
 ---
@@ -167,6 +167,7 @@ frontend/src/modules/medical-screening/
 ### MedicalScreeningPage
 
 Main module page with:
+
 - **Compliance Dashboard**: Overview of member screening compliance across all requirement types
 - **Requirements tab**: List and configure screening requirements
 - **Records tab**: View and manage individual screening records
@@ -174,6 +175,7 @@ Main module page with:
 ### ComplianceDashboard
 
 Displays:
+
 - Compliance rate by screening type
 - Members with expiring screenings
 - Overdue screenings requiring attention
@@ -182,6 +184,7 @@ Displays:
 ### ScreeningRequirementForm
 
 Create/edit form with:
+
 - Name, description, screening type
 - Frequency (months) — leave empty for one-time screenings
 - Role applicability selector
@@ -191,6 +194,7 @@ Create/edit form with:
 ### ScreeningRecordForm
 
 Create/edit form with:
+
 - Member or prospect selector
 - Requirement and screening type
 - Scheduled and completed dates
@@ -216,16 +220,17 @@ Requirement Defined
 ### Prospect-to-Member Conversion
 
 When a prospective member is converted to a full member:
+
 - Existing screening records linked via `prospect_id` are preserved
 - Records can be re-linked to the new `user_id` for continuity
 
 ### Cross-Module Integration
 
-| Module | Integration |
-|--------|-------------|
+| Module              | Integration                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
 | Prospective Members | Screening records can be linked to prospects; compliance status visible in pipeline |
-| Compliance | Medical screening compliance feeds into overall compliance calculations |
-| Notifications | Expiring screening alerts can trigger email notifications |
+| Compliance          | Medical screening compliance feeds into overall compliance calculations             |
+| Notifications       | Expiring screening alerts can trigger email notifications                           |
 
 ---
 
@@ -239,26 +244,26 @@ Module availability is controlled per organization at runtime via the organizati
 
 ## Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Record linked to both user_id and prospect_id | Rejected by service validation — must be one or the other |
-| `frequency_months = NULL` | One-time screening that does not recur and has no automatic expiration |
-| Grace period after expiration | Member remains compliant during grace period; becomes non-compliant only after grace period expires |
-| Expiring query with days=0 or >365 | Clamped to valid range (1-365) |
-| Requirement deactivated | Existing records preserved; requirement excluded from future compliance calculations |
-| Screening waived | Status set to `WAIVED`; excluded from compliance calculations |
-| Provider name not provided | Optional field; no provider info displayed in compliance dashboard |
+| Scenario                                      | Behavior                                                                                            |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Record linked to both user_id and prospect_id | Rejected by service validation — must be one or the other                                           |
+| `frequency_months = NULL`                     | One-time screening that does not recur and has no automatic expiration                              |
+| Grace period after expiration                 | Member remains compliant during grace period; becomes non-compliant only after grace period expires |
+| Expiring query with days=0 or >365            | Clamped to valid range (1-365)                                                                      |
+| Requirement deactivated                       | Existing records preserved; requirement excluded from future compliance calculations                |
+| Screening waived                              | Status set to `WAIVED`; excluded from compliance calculations                                       |
+| Provider name not provided                    | Optional field; no provider info displayed in compliance dashboard                                  |
 
 ---
 
 ## Troubleshooting
 
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| Module not visible in navigation | Module not enabled for the organization | Enable Medical Screening in Organization/Admin Settings > Modules (`enabled_modules`) |
-| Compliance shows 0% | No requirements defined | Create at least one active screening requirement |
-| Prospect screening missing after conversion | Records need re-linking | Verify `user_id` is set on the converted member's screening records |
-| Expiration dates not calculating | Missing `frequency_months` or `completed_date` | Ensure both are set for recurring screenings |
+| Issue                                       | Cause                                          | Fix                                                                                   |
+| ------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Module not visible in navigation            | Module not enabled for the organization        | Enable Medical Screening in Organization/Admin Settings > Modules (`enabled_modules`) |
+| Compliance shows 0%                         | No requirements defined                        | Create at least one active screening requirement                                      |
+| Prospect screening missing after conversion | Records need re-linking                        | Verify `user_id` is set on the converted member's screening records                   |
+| Expiration dates not calculating            | Missing `frequency_months` or `completed_date` | Ensure both are set for recurring screenings                                          |
 
 ---
 

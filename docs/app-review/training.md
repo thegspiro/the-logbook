@@ -94,11 +94,12 @@ default), TR-5 (auto-approve SoD), TR-6 (external/enhancement FKs) left open.
 ## Pass 2 (2026-08-08) — six-lens sweep across all 13 services
 
 Re-verified the pass-1 TR-6 fixes hold (`update_category_mapping` in-org validation
-+ org-scoped enrichment; `provider.default_category_id` validated; enhancement
-by-id methods org-scoped) and TR-5 stays correctly flagged. Sweeping the
-projection-read-leak lens across the whole module — its proven weak spot — surfaced
-**two more live cross-org read-leaks the pass-1 external-training focus didn't
-reach**, plus two consistency gaps. **4 fixes.**
+
+- org-scoped enrichment; `provider.default_category_id` validated; enhancement
+  by-id methods org-scoped) and TR-5 stays correctly flagged. Sweeping the
+  projection-read-leak lens across the whole module — its proven weak spot — surfaced
+  **two more live cross-org read-leaks the pass-1 external-training focus didn't
+  reach**, plus two consistency gaps. **4 fixes.**
 
 ### TR-7 — MED — Category-hours breakdown leaked another org's category name/code — ✅ FIXED
 
@@ -193,11 +194,11 @@ backfill — CI-5 — completes). These stay flagged.
 
 ### TR-5 — LOW/MED — Auto-approved submissions bypass separation-of-duties — ✅ RESOLVED (owner decision, 2026-08-09)
 
-The *manual* review path already used the shared `assert_different_person` guard,
+The _manual_ review path already used the shared `assert_different_person` guard,
 but the **auto-approve** branch in `create_submission` (`require_approval=False` or
 `hours_completed <= auto_approve_under_hours`) spawned a COMPLETED record crediting
 the member's self-reported hours **with no reviewer at all**. Owner decision:
-*disable auto-approve when separation of duties applies.* `create_submission` now
+_disable auto-approve when separation of duties applies._ `create_submission` now
 calls `_credits_certification_or_requirement(training_type, kwargs)` and routes any
 submission that would credit a certification/requirement — training_type
 `certification`, any certification credential field
@@ -241,9 +242,9 @@ severity note corrected — the mapping case was a live leak); TR-4/TR-5 stand.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (endpoint + test) | ✅ 0 violations |
-| `black --check` | ✅ formatted |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_training` **84 passed**; `test_external_training_org_scoping` **2 passed** (new, endpoint-level TR-6). No DB needed. |
+| Check                      | Result                                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (endpoint + test) | ✅ 0 violations                                                                                                               |
+| `black --check`            | ✅ formatted                                                                                                                  |
+| `tsc --noEmit`             | ✅ n/a — no frontend change                                                                                                   |
+| backend tests              | ✅ `test_training` **84 passed**; `test_external_training_org_scoping` **2 passed** (new, endpoint-level TR-6). No DB needed. |

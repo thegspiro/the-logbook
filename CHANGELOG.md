@@ -74,6 +74,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   week; members who have turned off email notifications are skipped and
   counted back to the sender.
 
+### Events: finalizing attendance closes the event, and only a leader reopens it (2026-08-24)
+
+**Fixed**
+
+- **Finalizing an event now locks it.** It was a recalculation with no state
+  behind it: the only trace was `custom_fields["attendance_finalized"]`, which
+  exactly one consumer read (the post-event validation reminder) and no
+  mutation checked. Check-in, adding and removing attendees, correcting
+  credited times, re-recording the clock, cancelling and deleting all kept
+  working afterwards, every one of them behind the same `events.manage` that
+  had just finalized the event.
+- **A correction made after finalizing now reaches the hours ledger.**
+  `credit_event_attendance` skips an RSVP it has already credited, so an
+  override applied post-finalize moved the number on the event screen and left
+  the `AdminHoursEntry` holding the finalized one — permanently, behind a
+  success toast. Re-finalizing after a reopen resyncs those entries in place,
+  keeping each entry's id, approval and audit trail across the correction.
+- **Removing an attendee takes their credited hours with them.**
+  `source_rsvp_id` is an `ondelete="SET NULL"` foreign key, so the entry used
+  to outlive the attendance record that justified it.
+- **Training sessions can be reopened.** They had the opposite failure:
+  `is_finalized` refused a second finalize and nothing ever cleared it, so a
+  member left off the roster could never be added and a wrong duration could
+  never be fixed.
+- `DELETE /events/{id}` returned a generic 500 when linked records blocked the
+  cascade — the service raised `ValueError` and the endpoint had no handler.
+- **Attendees who checked out were never credited admin hours at all.**
+  Finalization credited only the rows it derived a duration for — those with no
+  check-out — so a member who tapped out, or whom End Event bulk-checked-out,
+  was filtered out of the very query that feeds the ledger. End Event also left
+  those rows with no duration to credit. Both predate the lock; the lock is
+  what made them unrecoverable without a chief.
+- **The series endpoints were an open door through the lock.**
+  `delete_event_series`, `cancel_series` and `update_future_events` reached the
+  same rows in bulk without checking it, so `events.manage` alone could delete
+  or retime finalized attendance. A batch containing a closed occurrence is now
+  refused whole rather than partially applied.
+- Event-registration **forms** wrote `EventRSVP` rows directly, bypassing the
+  409 the ordinary RSVP path returns for a closed event.
+- A `custom_fields` update replaced the whole column, so a payload without the
+  lifecycle keys stripped `attendance_finalized` while the column kept the
+  event locked — leaving the post-event reminder nagging about an event nobody
+  could edit. Those keys now survive any replacement.
+- Reopening then **deleting or cancelling** an event left its credited hours
+  standing, since the resync that would have reconciled them only happens on a
+  re-finalize that never came.
+- Re-finalizing now refreshes the linked training record and drops admin-hours
+  entries under categories the event no longer maps to, instead of leaving the
+  first finalize's figures behind.
+
+**Added**
+
+- `events.attendance_finalized_at` / `attendance_finalized_by`, the columns the
+  lock is built on. Migration `c3f8a29d54e1` backfills events already carrying
+  the JSON marker from their effective end time; without it every historically
+  finalized event would come back unlocked on upgrade. The marker keeps being
+  written alongside the columns, because the reminder task keys off it.
+- `events.reopen_attendance`, a new permission granted by default to the chief
+  ranks and the president only. Migration `b7d1e04f92a3` backfills it onto
+  those positions in existing organizations — `DEFAULT_POSITIONS` is
+  materialized at onboarding only, so without it an established department
+  would upgrade into a lock no position could open. `events.manage` reaches nine default roles
+  including public outreach and communications, and the point of the lock is
+  that whoever closed the event cannot quietly reopen it and move the numbers.
+- `POST /events/{id}/reopen-attendance` and
+  `POST /training/sessions/{id}/reopen`, both behind that permission, both
+  taking a reason and audit-logged at WARNING. Reopening an event clears the
+  durations finalize _derived_, so a corrected end time actually reflows on the
+  next finalize; reopening a session expires any approval token already emailed
+  to the training officers against attendee data the reopen is about to change.
+- The event page shows the closed state as a banner naming who closed it and
+  when, stops rendering the actions the API now refuses (the roster stays
+  readable and exportable), and asks for confirmation before finalizing.
+
+**Changed**
+
+- Attendance writes on a finalized event answer **409**, not 400 — nothing is
+  wrong with the request, the event is closed.
+- Descriptive edits to a closed event (title, description, location) are still
+  allowed. Only the fields the credited durations were derived from — the
+  clock, the check-in rules, the type that picks the hours category — are
+  locked.
+- Recording an actual end time still auto-finalizes, as it always did, and now
+  says so in the Record Times dialog before you save.
+
 ### The stock room was in everyone's nav; the page members actually need was in nobody's (2026-08-24)
 
 **Changed**
