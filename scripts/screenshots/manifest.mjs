@@ -11606,6 +11606,33 @@ export const SHOTS = [
       "(DRIVER). Unselected options sit in the DOM whatever is chosen.",
   },
   {
+    // The score-breakdown panel is what carries a deduction as a line item
+    // distinct from the point totals -- the officer's own scoring view, not
+    // the print page, which is why this is a fresh template rather than an
+    // addition to the weighted sheet 09-22/09-23 already depend on.
+    id: "19-30-skill-point-deduction",
+    doc: "19-august-2026-release-changes.md",
+    line: 295,
+    anchor:
+      "skill result illustrating point deduction without automatic whole",
+    alt: "A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=200",
+      (id) => `/training/skills-testing/test/${id}/active`,
+      "tests",
+      (test) =>
+        (test.template_name ?? "").includes("Ladder Raise") &&
+        test.result === "pass",
+    ),
+    // Not fullPage: a fixed "Back to Tests" bar sits mid-page below the
+    // fold, and stitching a full-page shot over it duplicates the bar across
+    // the Raise section it is meant to be beneath. Everything the caption
+    // needs -- the calculation line and the deduction row -- is in the first
+    // viewport.
+    fullPage: false,
+  },
+  {
     // The station board's message rail, framed rather than the whole board.
     // The board itself is already pictured twice -- `00-24` for the member's
     // tab and `08-75`/`08-76` for the conditional cards, which is what the

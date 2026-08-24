@@ -292,7 +292,7 @@ Programs** — that is where a session created before a requirement existed, or
 linked to the wrong pipeline, gets corrected. Members already signed off keep
 the credit they were given; the links only steer what happens next.
 
-> **[SCREENSHOT NEEDED — skill result illustrating point deduction without automatic whole-test failure; caption the configured pass rule.]**
+![A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure](./images/19-30-skill-point-deduction.png)
 
 ## Notifications and integrations
 

@@ -9211,6 +9211,220 @@ class Seeder:
             {"result_disclosure": "scores"},
         )
 
+    DEDUCTION_TEMPLATE_NAME = "Ladder Raise — Point Deductions"
+
+    def seed_deduction_test(
+        self, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """A result with a deduct-mode step failed, and the test still passes.
+
+        `score_mode: "deduct"` is a third way a pass/fail-judged criterion can
+        affect the percentage, alongside "points" and the default "none" — a
+        non-critical step whose failure costs a fixed number of points rather
+        than either earning nothing (the old free behavior) or failing the
+        whole sheet (critical). No seeded template used it, so the guide's
+        claim that a failed step can deduct points without an automatic whole-
+        test failure had nothing to point at. Kept off the weighted sheet
+        (`SCORED_TEMPLATE_NAME`) deliberately: that template backs 09-22/09-23
+        and the candidate-disclosure pair above, and a fourth criterion on it
+        would show up, unexplained, in all four.
+        """
+        template = next(
+            (t for t in templates if pick(t, "name") == self.DEDUCTION_TEMPLATE_NAME),
+            None,
+        )
+        if not template:
+            template = self.api.post(
+                "/training/skills-testing/templates",
+                {
+                    "name": self.DEDUCTION_TEMPLATE_NAME,
+                    "description": (
+                        "Ground ladder raise, scored with a point deduction "
+                        "for an unsafe-but-not-disqualifying step."
+                    ),
+                    "category": "Fire Suppression",
+                    "passing_percentage": 70,
+                    "require_all_critical": True,
+                    "visibility": "all_members",
+                    "sections": [
+                        {
+                            "name": "Setup",
+                            "sort_order": 0,
+                            "criteria": [
+                                criterion_payload(
+                                    {
+                                        "label": "Selects correct ladder for the target",
+                                        "type": "score",
+                                        "max_score": 10,
+                                        "passing_score": 7,
+                                        "required": False,
+                                    },
+                                    0,
+                                ),
+                                criterion_payload(
+                                    {
+                                        "label": "Checks ladder condition before use",
+                                        "type": "score",
+                                        "max_score": 10,
+                                        "passing_score": 7,
+                                        "required": False,
+                                    },
+                                    1,
+                                ),
+                            ],
+                        },
+                        {
+                            "name": "Raise",
+                            "sort_order": 1,
+                            "criteria": [
+                                criterion_payload(
+                                    {
+                                        "label": "Raises ladder using proper technique",
+                                        "type": "score",
+                                        "max_score": 20,
+                                        "passing_score": 14,
+                                        "required": False,
+                                    },
+                                    0,
+                                ),
+                                criterion_payload(
+                                    {
+                                        # Non-critical (`required: False`) and
+                                        # in deduct mode: failing it costs
+                                        # points rather than failing the test
+                                        # outright, which is the whole point
+                                        # of this fixture.
+                                        "label": "Footed and secured before climbing",
+                                        "type": "pass_fail",
+                                        "required": False,
+                                        "score_mode": "deduct",
+                                        "deduction_points": 10,
+                                    },
+                                    1,
+                                ),
+                                criterion_payload(
+                                    {
+                                        "label": "Climbs with three points of contact",
+                                        "type": "score",
+                                        "max_score": 10,
+                                        "passing_score": 7,
+                                        "required": False,
+                                    },
+                                    2,
+                                ),
+                            ],
+                        },
+                    ],
+                },
+            )
+            self.api.post(
+                f"/training/skills-testing/templates/{pick(template, 'id')}/publish"
+            )
+
+        existing = items(
+            self.api.get("/training/skills-testing/tests?limit=200"), "tests"
+        )
+        template_id = pick(template, "id")
+        for test in existing:
+            if (
+                pick(test, "template_id", "templateId") == template_id
+                and pick(test, "completed_at", "completedAt")
+                and pick(test, "validated_at", "validatedAt")
+                and not pick(test, "voided_at", "voidedAt")
+                and pick(test, "result") == "pass"
+            ):
+                return test
+
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidate = next(
+            (
+                m
+                for m in members
+                if pick(m, "username") == DEMO_MEMBER_USERNAME
+                and pick(m, "id") != examiner_id
+            ),
+            None,
+        )
+        if not candidate or not template_id:
+            return None
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": pick(candidate, "id"),
+                "notes": "Annual ladders evaluation.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # The three `score` criteria total 50 available points (10+10+20+10 --
+        # the deduct-mode step never enters the denominator, per
+        # `_criterion_point_value`). 10 + 9 + 19 + 9 = 47 earned, minus the
+        # 10-point deduction on the failed step = 37 net, which is 74% --
+        # comfortably above the 70% pass mark. Keep the net above 35 (70% of
+        # 50) if these numbers are ever edited: dropping under it turns this
+        # into a second failed-test fixture, which `seed_failed_test` already
+        # provides and which teaches the opposite of what this one is for.
+        awarded = {
+            "Selects correct ladder for the target": 10,
+            "Checks ladder condition before use": 9,
+            "Raises ladder using proper technique": 19,
+            "Climbs with three points of contact": 9,
+        }
+        DEDUCT_STEP = "Footed and secured before climbing"
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if not isinstance(criterion, dict):
+                    continue
+                label = criterion.get("label", "")
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": label,
+                        "passed": label != DEDUCT_STEP,
+                        "score": awarded.get(label),
+                        "notes": (
+                            "Foot held the rail but did not brace it before "
+                            "the climb started."
+                            if label == DEDUCT_STEP
+                            else None
+                        ),
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 180,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_scored_test(
         self, templates: list[dict], members: list[dict]
     ) -> dict | None:
@@ -13401,6 +13615,10 @@ class Seeder:
         self.step(
             "scored template disclosure",
             lambda: self.seed_scored_template_disclosure(templates),
+        )
+        self.step(
+            "skills test with point deduction",
+            lambda: self.seed_deduction_test(templates, members),
         )
         self.step(
             "skills test that failed",

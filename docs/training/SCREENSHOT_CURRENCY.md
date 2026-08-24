@@ -1,5 +1,43 @@
 # Screenshot currency
 
+## Captured 2026-08-24 — a deduct-mode step, on a sheet built to carry one
+
+`19-30`, opened and checked. **3 markers remaining.**
+
+**No seeded template used `score_mode: "deduct"`.** Of the three modes a
+pass/fail-judged criterion can carry — `none`, `points`, `deduct` — every
+existing sheet used only the first two, so the guide's claim that a failed
+step can cost fixed points without failing the whole test had nothing to
+photograph. Deliberately not added to the weighted sheet
+(`Handline Advance — Weighted Evaluation`): that template backs `09-22`,
+`09-23` and the candidate-disclosure pair two entries back, and a fourth
+criterion appearing there unexplained would raise more questions than the
+caption answers. A new template, `Ladder Raise — Point Deductions`, carries
+exactly one deduct-mode step for exactly this shot.
+
+**Checked against the API's own arithmetic, not paraphrased from the UI.**
+`GET .../tests/{id}` for the seeded result returns
+`earned: 47, available: 50, deducted: 10, percentage: 74, passing_percentage: 70,
+meets_threshold: true, critical_failures: []` — confirming both halves of the
+claim before the screenshot was taken: the deduction lands (net points drop
+by exactly 10) and it does not force a fail (critical_failures is empty, the
+result is `pass`). The score-breakdown panel's own "How this score was
+calculated" line — "47 of 50 points earned, −10 deducted = 74%. Passing mark
+is 70% — met." — states the configured pass rule the marker asks the caption
+to name.
+
+**Officer scoring view, not the print page.** `ScoreBreakdownPanel` renders
+deductions as their own line, itemized under the section they came from — the
+print page shows per-step marks but not this breakdown, so `/test/{id}/active`
+is the only screen that carries the arithmetic.
+
+**A fixed action bar duplicated across the page on the first attempt.** A
+`fullPage` capture of this route repeats a bottom "Back to Tests" bar mid-page,
+overlapping the Raise section it is meant to sit beneath — the same fixed-
+element artifact this pipeline has hit before, just not on this route yet.
+Everything the caption needs sits inside the first viewport, so this shot is
+not `fullPage`, and the bar renders once, correctly anchored at the bottom.
+
 ## Resolved 2026-08-24 — the export field diff that has no screen to picture it
 
 Guide 17's personal-export marker, answered in prose. **4 markers remaining.**
