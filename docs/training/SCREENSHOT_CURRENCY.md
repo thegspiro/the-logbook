@@ -1,5 +1,43 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (fourteenth) — the outreach-form section, and the three forms it does not list
+
+`19-24`, opened and checked. **488 filled, 12 remaining.** Four existing captures in
+guide 07 re-taken because this shot's seed changes what they count.
+
+**The screen is real, and it was empty.** **Events -> Settings -> Public Form**
+lists forms returned by `/event-requests/forms`, which filters on the
+`event_request` integration — directly on `Form.integration_type`, or through a
+`FormIntegration` row for forms wired after the fact. The demo department's
+three hand-built forms have neither, so the section rendered nothing but its
+Generate button. Not a missing screen: a missing row.
+
+**Seeded through the button's own endpoint, not `POST /forms`.**
+`POST /event-requests/generate-form` is what sets the integration type, the
+twenty mapped fields and the public slug. A form posted to `/forms` with the
+same name would appear in the section while being wired to nothing behind it —
+a demo artifact that reads as working software. Generated as a draft, then
+published, because a draft renders only the "must be published before it can
+accept submissions" warning and never the public URL the caption is about.
+
+**The absence is the marker's subject, and no image can carry it.** Written into
+the guide instead: the three forms that are not in the list, named. A caption
+claiming a filter works, over a picture of one row, proves nothing on its own.
+
+**Four collateral re-captures, and the numbers are why.** A fourth published
+public form moves the Forms page cards from `3 / 1` to `4 / 2`, so `07-04`,
+`07-05`, `07-06` and `07-07` were re-taken rather than left reading a fleet size
+that no longer exists. `07-06` now opens the builder on the generated form —
+twenty fields across three section headers instead of five flat ones, which is a
+better picture of the builder than the one it replaces.
+
+**`pngquant` was not installed in this container**, and the first four captures
+went to disk at three times the size of the files they replaced (248 KB against
+84 KB). `capture.mjs` treats a missing pngquant as non-fatal and says so in a
+comment — correct for a capture, silent for a commit. Installed and re-run over
+the five files before staging. Worth knowing that the size regression is the
+only signal: nothing in the run output mentions it.
+
 ## Captured 2026-08-24 (thirteenth) — Call Volume in both modes, and the calls that were not there
 
 `03-82`/`03-83`, opened and checked. **487 of 507 filled.**

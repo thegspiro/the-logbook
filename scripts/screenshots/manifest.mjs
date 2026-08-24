@@ -11326,6 +11326,23 @@ export const SHOTS = [
       "reads Level 2. Unselected options are in the DOM whatever is chosen.",
   },
   {
+    // The section lists forms whose integration type is `event_request` and
+    // nothing else: `/event-requests/forms` filters on that server-side, so
+    // the department's three ordinary forms -- near-miss, gear sizing,
+    // community request -- are absent from a screen an event administrator
+    // reaches without holding `forms.manage` at all. That absence is the
+    // marker's subject, and it is the one thing an image cannot show, so the
+    // caption names the three forms that are not here.
+    id: "19-24-outreach-form-section",
+    doc: "19-august-2026-release-changes.md",
+    line: 143,
+    anchor: "Event Settings outreach-form picker under an event-admin account",
+    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
+    route: "/events/admin?tab=settings",
+    prepare: clickByName(/^Public Form/),
+    fullPage: true,
+  },
+  {
     // 375 wide, not the 390 the rest of the mobile shots use: the marker names
     // 375, and it is the narrower of the two common phone widths -- if the
     // targets hold here they hold at 390.

@@ -10131,6 +10131,32 @@ class Seeder:
             },
         )
 
+    def seed_event_request_form(self) -> None:
+        """The outreach request form itself, published.
+
+        **Events -> Settings -> Public Form** lists only forms whose
+        integration type is `event_request`, and the demo department's three
+        hand-built forms (near-miss, gear sizing, community request) are
+        ordinary forms with no integration — so the section rendered nothing
+        but its Generate button. The list is what guide 19 pictures.
+
+        Generated through the same endpoint the button calls rather than
+        posted to `/forms`, because the integration type, the twenty mapped
+        fields and the public slug all come from that generator; a form
+        created by hand would appear in the section without being wired to
+        the request pipeline behind it.
+        """
+        if items(self.api.get("/event-requests/forms"), "forms"):
+            return
+        created = self.api.post("/event-requests/generate-form")
+        form_id = pick(created, "form_id")
+        if not form_id:
+            return
+        # Generated as a draft. Left that way the section shows only its
+        # "must be published before it can accept submissions" warning, and
+        # the public URL the caption is about never renders.
+        self.api.post(f"/forms/{form_id}/publish")
+
     MINUTES_TITLE = "July Business Meeting"
 
     def seed_minutes(self) -> list[dict]:
@@ -13074,6 +13100,7 @@ class Seeder:
         # minutes record at creation, and it cannot be patched once closed.
         minutes = self.step("meeting minutes", self.seed_minutes) or []
         self.step("meetings", lambda: self.seed_meetings(members))
+        self.step("event request form", self.seed_event_request_form)
         self.step("event request", self.seed_event_request)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
