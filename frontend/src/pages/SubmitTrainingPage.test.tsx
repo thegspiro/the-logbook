@@ -11,12 +11,14 @@ const mockGetRequirementsEnhanced = vi.fn();
 const mockCreateSubmission = vi.fn();
 const mockUploadAttachment = vi.fn();
 const mockSubmitDraft = vi.fn();
+const mockCreateWithAttachment = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
     getConfig: (...args: unknown[]) => mockGetConfig(...args) as unknown,
     getMySubmissions: (...args: unknown[]) => mockGetMySubmissions(...args) as unknown,
     createSubmission: (...args: unknown[]) => mockCreateSubmission(...args) as unknown,
+    createSubmissionWithAttachment: (...args: unknown[]) => mockCreateWithAttachment(...args) as unknown,
     uploadAttachment: (...args: unknown[]) => mockUploadAttachment(...args) as unknown,
     updateSubmission: vi.fn(),
     submitDraft: (...args: unknown[]) => mockSubmitDraft(...args) as unknown,
@@ -112,6 +114,7 @@ describe('SubmitTrainingPage', () => {
       attachments: [{ index: 0, file_name: 'certificate.pdf' }],
     });
     mockSubmitDraft.mockResolvedValue({ id: 'sub-new', status: 'pending_review' });
+    mockCreateWithAttachment.mockResolvedValue({ id: 'sub-new', status: 'pending_review' });
     mockGetRequirementsEnhanced.mockResolvedValue([
       { id: 'requirement-cpr', name: 'CPR Certification', active: true, requirement_type: 'certification' },
       { id: 'requirement-cpr-duplicate', name: 'CPR Certification', active: true, requirement_type: 'certification' },
@@ -232,6 +235,7 @@ describe('SubmitTrainingPage', () => {
         course_name: 'Wildland S130',
         training_type: 'continuing_education',
         completion_date: '2026-03-12',
+        start_time: '09:00',
         hours_completed: 4,
         credit_hours: 4,
         description: 'Ground fire behavior.',
@@ -347,10 +351,10 @@ describe('SubmitTrainingPage', () => {
     expect(await screen.findByText('That file is over 10 MB. Try a smaller scan or photo.')).toBeInTheDocument();
   });
 
-  it('stages a submission with an attachment as a draft so the file lands before routing', async () => {
+  it('sends the certificate with the create, so it lands before routing does', async () => {
     // An auto-approved submission is frozen the moment it exists — the
     // attachment endpoint refuses it and its training record has already been
-    // copied — so the evidence has to be attached before the handoff.
+    // copied — so the evidence has to be part of the create itself.
     const user = userEvent.setup();
     renderWithRouter(<SubmitTrainingPage />);
 
@@ -361,12 +365,75 @@ describe('SubmitTrainingPage', () => {
     await user.click(screen.getByRole('button', { name: /Submit Training/ }));
 
     await waitFor(() => {
-      expect(mockUploadAttachment).toHaveBeenCalledWith('sub-new', file);
+      expect(mockCreateWithAttachment).toHaveBeenCalledWith(
+        expect.objectContaining({ course_name: 'Wildland S130' }),
+        file
+      );
     });
-    expect(mockCreateSubmission).toHaveBeenCalledWith(expect.objectContaining({ save_as_draft: true }));
-    expect(mockSubmitDraft).toHaveBeenCalledWith('sub-new');
+    // No draft round trip and no follow-up upload: one request does it.
+    expect(mockCreateSubmission).not.toHaveBeenCalled();
+    expect(mockSubmitDraft).not.toHaveBeenCalled();
+    expect(mockUploadAttachment).not.toHaveBeenCalled();
     expect(await screen.findByText('Attached')).toBeInTheDocument();
     expect(screen.getByText('certificate.pdf')).toBeInTheDocument();
+  });
+
+  it('requires an expiry only when the certification has one', async () => {
+    mockGetConfig.mockResolvedValue({
+      ...mockConfig,
+      field_config: {
+        ...mockConfig.field_config,
+        expiration_date: { visible: true, required: true, label: 'Expires' },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    await fillRequiredFields(user);
+    await user.click(screen.getByLabelText('This training earned a certification'));
+    await user.type(screen.getByLabelText(/Certificate no\./), 'NREMT-99120');
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    // The department asked for an expiry, so a blank one blocks the submit...
+    expect(mockCreateSubmission).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/Expires/)).toHaveFocus();
+
+    // ...unless the member says this credential does not expire.
+    await user.click(screen.getByLabelText('Does not expire'));
+    expect(screen.getByLabelText(/Expires/)).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    await waitFor(() => {
+      expect(mockCreateSubmission).toHaveBeenCalledWith(expect.objectContaining({ expiration_date: undefined }));
+    });
+  });
+
+  it('keeps the receipt on screen while the lists refresh behind it', async () => {
+    // Caught in a browser, not here: the refresh after a save ran the page's
+    // loading branch, which unmounted the form and took the receipt with it.
+    // A test whose mocks resolve instantly never renders the spinner, so the
+    // confirmation screen passed its test and never appeared in the app.
+    let finishRefresh: (value: unknown) => void = () => {};
+    mockGetMySubmissions.mockResolvedValueOnce([]).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRefresh = resolve;
+        })
+    );
+
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+
+    await screen.findByLabelText(/Course or class name/);
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+    expect(await screen.findByText('Training Submitted')).toBeInTheDocument();
+    // The refresh is still in flight — the page must not swap to the spinner.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    finishRefresh([]);
+    expect(await screen.findByText('Training Submitted')).toBeInTheDocument();
   });
 
   it('files a submission without an attachment directly, with no draft round trip', async () => {

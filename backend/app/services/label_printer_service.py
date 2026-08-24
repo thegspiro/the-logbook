@@ -34,6 +34,7 @@ from app.utils.label_renderer import (
 from app.utils.model_updates import apply_updates
 from app.utils.printer_status import summarize, summarize_escpos
 from app.utils.printer_transport import (
+    ESCPOS_ERROR_QUERY,
     ESCPOS_OFFLINE_QUERY,
     ESCPOS_PAPER_QUERY,
     PrinterUnreachableError,
@@ -462,7 +463,9 @@ class LabelPrinterService:
         validate_language(language)
         if language == LANGUAGE_ESCPOS:
             replies = await query_printer_raw(
-                host, port, [ESCPOS_OFFLINE_QUERY, ESCPOS_PAPER_QUERY]
+                host,
+                port,
+                [ESCPOS_OFFLINE_QUERY, ESCPOS_ERROR_QUERY, ESCPOS_PAPER_QUERY],
             )
             return summarize_escpos(replies)
         return summarize(await query_printer(host, port))
