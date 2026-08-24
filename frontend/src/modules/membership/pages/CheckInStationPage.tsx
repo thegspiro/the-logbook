@@ -76,24 +76,14 @@ const DUPLICATE_TAP_MS = 4000;
 const RESULT_VISIBLE_MS = 7000;
 
 /**
- * How long a shift stays offered after its scheduled end.
- *
- * Matches the backend's default `checkin_closes_hours_after`, which is the
- * window a department is already configured to think of as "still this shift".
- * Checkout itself has no server-side deadline before finalization, so this is
- * about keeping the list short rather than about enforcing anything.
+ * How far back the event query reaches. An event that started longer ago than
+ * this is not something somebody is standing at a station for, whatever its
+ * check-in window says.
  */
-const CHECKOUT_GRACE_MS = 12 * 60 * 60 * 1000;
+const EVENT_LOOKBACK_MS = 12 * 60 * 60 * 1000;
 
-/** Upper bound for the two-day shift query; the endpoint allows up to 1000. */
-const SHIFT_QUERY_LIMIT = 500;
-
-/**
- * How far past an event's scheduled end it stays offered, to cover a check-in
- * window that outlives it. See the call site for why the client cannot compute
- * the exact cutoff.
- */
-const EVENT_CHECKIN_GRACE_MS = 2 * 60 * 60 * 1000;
+/** How far ahead the event query reaches, so the next shift's drill is offered. */
+const EVENT_LOOKAHEAD_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How often an armed station re-checks that its target still exists.
@@ -153,66 +143,74 @@ const CheckInStationPage: React.FC = () => {
       // *started*. A 24-hour tour that began at 06:00 yesterday is still the
       // shift running at 02:00 now, and asking only for today's date made the
       // crew on duty disappear from the station at midnight.
+      //
+      // A day at a time, not a two-day range. The endpoint pages at 100 and
+      // orders by shift_date ascending, so a single widened query lets a busy
+      // yesterday fill the page and hide today's shifts entirely — and raising
+      // the limit only moves that threshold rather than removing it. One
+      // request per day gives each its own page.
       const today = getTodayLocalDate(tz);
-      const { shifts } = await schedulingService.getShifts({
-        start_date: addCalendarDays(today, -1),
-        end_date: today,
-        // The endpoint pages at 100 by default and orders by shift_date
-        // ascending, so widening the query to two days without this would let
-        // a busy yesterday fill the page and hide today's shifts entirely —
-        // the exact opposite of the problem the second day was added to solve.
-        limit: SHIFT_QUERY_LIMIT,
-      });
-      const now = Date.now();
-      return shifts
-        .filter((s) => !s.is_finalized)
-        .filter((s) => {
-          // Not "has it ended" but "is it past the point anyone would still be
-          // tapping out". `member_check_out` has no window at all — it accepts
-          // a checkout until an officer finalizes the shift — so dropping a
-          // shift the moment its scheduled end passed took the station away
-          // from the crew at exactly the moment they go off duty and tap out.
-          if (!s.end_time) return true;
-          return new Date(s.end_time).getTime() + CHECKOUT_GRACE_MS >= now;
-        })
-        .map((s) => ({
-          id: s.id,
-          label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
-          sublabel: `${formatTime(s.start_time, tz)}${s.end_time ? `–${formatTime(s.end_time, tz)}` : ''}`,
-        }));
+      const [yesterdayShifts, todayShifts] = await Promise.all(
+        [addCalendarDays(today, -1), today].map((day) =>
+          schedulingService.getShifts({ start_date: day, end_date: day })
+        )
+      );
+      return (
+        [...(yesterdayShifts?.shifts ?? []), ...(todayShifts?.shifts ?? [])]
+          // `is_finalized` is the whole rule, deliberately with no time cutoff
+          // beside it. `member_check_out` has no deadline — it accepts a
+          // checkout until an officer finalizes the shift — so an unfinalized
+          // shift is by definition one somebody may still need to tap out of.
+          // Any clock-based cutoff here invents a rule the server does not have,
+          // and the first attempt at one took the station away from the crew at
+          // exactly the moment they went off duty.
+          .filter((s) => !s.is_finalized)
+          .map((s) => ({
+            id: s.id,
+            label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
+            sublabel: `${formatTime(s.start_time, tz)}${s.end_time ? `–${formatTime(s.end_time, tz)}` : ''}`,
+          }))
+      );
     }
     if (targetType === NfcCheckInTarget.EVENT) {
       // A window rather than "today": a drill that started last night and
       // a breakfast that starts in three hours are both things somebody
-      // could be standing at a station for.
-      //
-      // `end_after` is what keeps a finished event out of it. Filtering on
-      // start time alone left this morning's drill in the list — and because
-      // the list is ordered by start time it could be the *default*, so an
-      // operator could arm the station against an event whose check-in window
-      // shut hours ago and have every tap refused.
+      // could be standing at a station for. What keeps a finished event out
+      // of the list is the check-in cutoff applied below, not the query —
+      // filtering on start time alone left this morning's drill in it, and
+      // because the list is ordered by start time it could be the *default*,
+      // so an operator could arm the station against an event whose check-in
+      // window shut hours ago and have every tap refused.
       const now = Date.now();
       const events = await eventService.getEvents({
-        start_after: new Date(now - 12 * 60 * 60 * 1000).toISOString(),
-        start_before: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
-        // Deliberately *behind* now. An event's check-in can outlive its
-        // scheduled end — a `window` event stays open for
-        // `check_in_minutes_after`, and a flexible or strict one runs to its
-        // `actual_end_time` — and none of those fields reach this list, so the
-        // client cannot compute the real cutoff. Filtering on the scheduled
-        // end alone hid events whose late-arrival period was still open. The
-        // grace covers the realistic span of that; the server still refuses a
-        // tap outside the true window, so an over-generous list costs a
-        // refusal message rather than a wrong attendance record.
-        end_after: new Date(now - EVENT_CHECKIN_GRACE_MS).toISOString(),
+        start_after: new Date(now - EVENT_LOOKBACK_MS).toISOString(),
+        start_before: new Date(now + EVENT_LOOKAHEAD_MS).toISOString(),
+        // The endpoint's maximum. It pages at 100 by default and orders by
+        // start time, so a department that runs a lot in a day could push the
+        // event somebody is standing at the station for off the first page.
+        limit: 500,
       });
-      return events
-        .filter((e) => !e.is_cancelled && !e.is_draft)
-        .map((e) => ({
-          id: e.id,
-          label: e.title,
-          sublabel: formatTime(e.start_datetime, tz),
-        }));
+      return (
+        events
+          .filter((e) => !e.is_cancelled && !e.is_draft)
+          // The exact cutoff, not an approximation of one. `check_in_closes_at`
+          // is computed server-side from the event's window type — a `window`
+          // event runs `check_in_minutes_after` past its end, a flexible or
+          // strict one to its `actual_end_time` — so it is the same boundary
+          // the check-in call itself enforces. Filtering on the scheduled
+          // `end_datetime` instead hid events whose late-arrival period was
+          // still open, and padding that with a fixed grace offered events
+          // whose window had already shut. An event with no cutoff reported is
+          // kept: the server still refuses a tap outside the true window, so
+          // an over-generous list costs a refusal message rather than a wrong
+          // attendance record.
+          .filter((e) => !e.check_in_closes_at || new Date(e.check_in_closes_at).getTime() >= now)
+          .map((e) => ({
+            id: e.id,
+            label: e.title,
+            sublabel: formatTime(e.start_datetime, tz),
+          }))
+      );
     }
     const categories = await adminHoursCategoryService.list();
     return categories.map((c) => ({ id: c.id, label: c.name }));

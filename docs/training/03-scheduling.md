@@ -2785,6 +2785,13 @@ to action.
 
 ![The Requests tab refusing the administrator's press of Approve on the swap they raised themselves; their own row carries an extra cancel control the member's row below it does not](./images/03-78-swap-review-blocked.png)
 
+_**Approve and Deny are not the tell.** They render on every pending request for
+anyone holding `scheduling.manage`, your own included — so you cannot look at
+the row and know it will refuse you, and the refusal only appears once the
+button is pressed. What does differ is the small **✕** at the end of your own
+row: cancelling is a thing only the requester may do, so that control marks the
+request you raised, and by implication the one you cannot review._
+
 **Plan the second approver.** If exactly one person in your department holds
 `scheduling.manage` and that person also requests swaps, nobody can approve
 their requests. Grant a second person before a Saturday morning discovers it.
@@ -2816,15 +2823,14 @@ same record.
 
 Also changed:
 
-- **Standalone (non-shift) equipment checks now require
-  `equipment_check.manage`.** A member who could previously start an ad-hoc
-  check may find the control gone — that is the permission change, not a
-  fault.
+- **Standalone (non-shift) equipment checks still accept
+  `equipment_check.submit`** as well as `equipment_check.manage`, so ordinary
+  members keep the ad-hoc check they had.
 - **Deep nested storage paths now fit** in a check item's recorded location.
 - **A compartment cannot be made its own parent.**
-- **Expired-equipment failures are worked out when the check is read**, so a
-  lot that expires after submission shows up without the record being
-  rewritten.
+- **Expired-equipment failures are decided from authoritative inventory at
+  submission** rather than from the client's assertion, then stored with the
+  check. A lot expiring later does not retroactively fail an earlier check.
 - **Timing is recorded by the server**, not supplied by the phone.
 
 ![One submitted engine check read back on a phone: passed overall, who signed it, when, and every item in the order the checklist walks the truck](./images/03-80-submitted-check-phone.png)

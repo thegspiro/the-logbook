@@ -703,8 +703,13 @@ Anything. It is free text and is never interpreted — `March 3, 2026`,
 `FY26-Q1`, `Adopted at the 3/3/26 business meeting` all work, and all display
 exactly as typed. Date it the way your records officer dates things.
 
-**Clearing it works.** Empty the box and save, and it is genuinely cleared —
-not silently kept.
+**Clearing it is not the whole story.** Emptying the box does clear the field
+on that revision — but **the public page keeps whatever date it had.** One
+"Last updated" line is shared by both `/privacy` and `/terms` in the
+organization's settings, and publishing only ever _sets_ it, never removes it.
+That is deliberate: reverting your terms must not blank the date shown above a
+privacy notice that is still published. **To change what the public sees, put a
+new date in — clearing the box will not blank it.**
 
 ### Edge cases worth knowing
 
@@ -743,6 +748,13 @@ the only person who can approve it. That is precisely the situation the rule
 exists for — a permission grant is not a second person.
 
 ![The release's separation-of-duties rule in force: Approve refused on the administrator's own swap request, with another member's row still reviewable](./images/19-12-swap-review-blocked.png)
+
+_The error **is** the screenshot. Do not go looking for a difference in the
+buttons: `RequestsTab` renders Approve and Deny on every pending request for
+anyone holding `scheduling.manage`, their own included, so the rows offer the
+same review controls until one is pressed. The only thing that marks your own
+row is the small **✕** — cancelling is the requester's to do, and nobody
+else's._
 
 ### Edge cases
 
@@ -801,12 +813,15 @@ check, one set of answers._
   nested storage tree records its full path.
 - **A compartment cannot be its own parent** — the tree rejects a cycle rather
   than accepting it and failing later.
-- **Standalone (non-shift) checks now require `equipment_check.manage`.** A
-  member who could previously start an ad-hoc check outside a shift may find
-  the control gone; that is a permission change, not a fault.
-- **Expired-equipment failures are worked out when you look at the check**,
-  not frozen at submission. A lot that expires after the check was recorded
-  now shows up, without the record being rewritten.
+- **Standalone (non-shift) checks are unchanged for ordinary members.** The
+  endpoint accepts `equipment_check.submit` **or** `equipment_check.manage`, so
+  a member who could start an ad-hoc check before can still start one. Do not
+  change anybody's role over this.
+- **Expired-equipment failures are decided from inventory at submission**,
+  rather than from whatever the phone claimed. The result is then stored with
+  the check. A lot that expires _after_ the check was recorded does **not**
+  retroactively turn that check into a failure — the record stands as taken,
+  which is what makes it usable as evidence of the state at that time.
 - **Check timing is recorded by the server.** The phone no longer supplies it.
 
 ## Events: a Recruitment type that feeds the pipeline
@@ -881,13 +896,14 @@ neutralized everywhere rather than in some exports and not others.
   renumbered, so a database upgraded in those windows is stamped as having run
   work it never ran. The repairs repeat the work safely — on a healthy
   database they do nothing.
-- **Two migrations do not cleanly reverse.** The seat-list normalization
-  expands a legacy crew count into individual seats (downgrading would cut a
-  three-firefighter template to one, permanently), and the equipment-check
-  de-duplication detaches historical duplicates rather than deleting them, but
-  cannot re-attach them on downgrade. **Item snapshots are kept in both
-  cases** — no safety record is destroyed.
-- **Do not downgrade past both `compartment_path` migrations.** Doing so
+- **Two migrations do not cleanly reverse — and neither loses data.** The
+  seat-list normalization expands a legacy crew count into individual seats,
+  and its downgrade deliberately does nothing: the original count cannot be
+  recovered from the expanded seats, so it leaves them as they are rather than
+  guessing. The equipment-check de-duplication detaches historical duplicates
+  rather than deleting them, and cannot re-attach them on downgrade.
+  **Item snapshots are kept in both cases** — no safety record is destroyed.
+- **Do not downgrade past both `compartment_name` migrations.** Doing so
   narrows the column and truncates deep storage paths.
 - **Two new permissions** to assign if you want the Legal Documents screen used:
   `legal.propose` and `legal.publish`.

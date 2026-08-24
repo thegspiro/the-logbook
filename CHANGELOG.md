@@ -707,16 +707,18 @@ still on the shipped default are upgraded by the migration.
 - **A 24-hour shift disappeared from the station at midnight.** A shift is
   filed under the date it _started_, and the station asked only for the
   operator's current local date — so the crew actually on duty vanished from
-  the selector at the turn of the day. It now queries yesterday as well, and
-  drops a yesterday-dated shift that has already ended.
+  the selector at the turn of the day. It now queries yesterday as well.
 - **A finished event could still be armed against.** The event window filtered
   on start time alone, so a drill that ended hours ago stayed in the list — and
   because the list is ordered by start time it could be the _default_, leaving
   an operator armed against an event whose check-in window had shut, with every
-  tap refused. Now bounded by `end_after` as well, set behind the present
-  moment: a `window` event's check-in outlives its scheduled end by
+  tap refused. The list is now cut at each event's `check_in_closes_at`, which
+  the events endpoint already reports — the same boundary the check-in call
+  itself enforces, rather than an approximation of it. Filtering on the
+  scheduled `end_datetime` would hide events whose late-arrival period is still
+  running: a `window` event's check-in outlives its end by
   `check_in_minutes_after`, and a flexible or strict one runs to its
-  `actual_end_time`, none of which reach the client.
+  `actual_end_time`.
 - **A card in a terminal state could be laundered back to active.** The first
   guard rejected only `lost → active`, so two requests — `lost → suspended`,
   then `suspended → active` — restored exactly the credential somebody else may
@@ -726,11 +728,15 @@ still on the shipped default are upgraded by the migration.
   a shift the moment its scheduled end passed was wrong in both directions:
   `member_check_out` has no window at all — it accepts a checkout until an
   officer finalizes — so the filter cut the station off at exactly the moment
-  a crew goes off duty. Shifts now stay offered through a checkout grace.
+  a crew goes off duty. An unfinalized shift now stays offered with no
+  clock-based cutoff beside it, because that is the server's actual rule.
 - **A busy previous day could hide today's shifts entirely.** The widened
   two-day query kept the endpoint's default page size of 100 while it orders by
   `shift_date` ascending, so an organization with a full day of records behind
-  it would receive only those.
+  it would receive only those. Raising the page size only moves that threshold,
+  so the station now makes one request per day and each gets its own page. The
+  event query, ordered by start time with the same default, asks for the
+  endpoint's maximum.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
@@ -1136,9 +1142,13 @@ still on the shipped default are upgraded by the migration.
   permission.** `GET /dashboard/widgets` (with `period` of `month`,
   `quarter`, `year` or `rolling_30`), `GET /dashboard/operations`, and
   `GET /dashboard/asset-widgets`. Every section is gated independently, and
-  **a section the caller cannot see is omitted rather than emptied** — an
-  absent section is deliberately indistinguishable from one with no data, so
-  the dashboard cannot be used to probe for access.
+  the three endpoints **do not behave identically**, and the difference
+  matters to an integrator: `/dashboard/operations` and `/dashboard/asset-widgets`
+  **omit** sections the caller cannot see, while `/dashboard/widgets`
+  explicitly serializes `finance`, `fundraising` and `community` as **`null`**.
+  Only `/dashboard/operations` checks module **and** permission for every
+  section; `/dashboard/widgets` module-gates only `fundraising` (`grants`), and
+  `/dashboard/asset-widgets` is permission-only.
 - `settings.manage` is **intentionally not financial access**: organization
   monetary totals require `finance.manage`, fundraising totals require
   `fundraising.view` plus the `grants` module, and outreach totals require
@@ -1203,14 +1213,17 @@ still on the shipped default are upgraded by the migration.
   enforced server-side — the client no longer supplies its own timing value.
 - Compartment parents are cycle-checked, so a compartment can no longer be
   made its own ancestor.
-- `check_items.compartment_path` widened from `VARCHAR(200)` to `TEXT`, which
+- `shift_equipment_check_items.compartment_name` widened from `VARCHAR(200)` to `TEXT`, which
   is what allows full nested storage paths in item snapshots.
 
 **Changed**
 
-- Standalone (non-shift) equipment checks now require `equipment_check.manage`.
-- Expired-equipment failures are **derived** rather than stored, so a lot that
-  expires after a check was recorded is reflected without rewriting history.
+- Standalone (non-shift) equipment checks accept `equipment_check.submit` **or**
+  `equipment_check.manage`; submitting is not a manager-only right.
+- Expired-equipment failures are **derived from authoritative inventory at
+  submission** rather than trusting the client's asserted flag, then stored
+  with the check. A lot expiring later does not retroactively fail an earlier
+  check — the record stands as taken.
 - Shift lot details are inventory-owned rather than duplicated onto the check.
 
 **Migration note**
@@ -1244,8 +1257,10 @@ still on the shipped default are upgraded by the migration.
   from procedure.
 - New table `legal_document_revisions` with `document_type`
   (`privacy_policy` | `terms_of_service`) and `status` (`draft` |
-  `published` | `archived`). At most one `published` revision per document
-  type per organization.
+  `published` | `archived`). Publishing archives the previous published row,
+  so in practice one `published` revision per document type per organization —
+  though the index is non-unique, so this is a service convention rather than a
+  database guarantee.
 - `change_note` is **required at the schema layer**. The whole point of
   proposing rather than editing in place is that somebody later can see the
   bylaw, SOP, statute or counsel note behind the wording.
@@ -1435,9 +1450,12 @@ still on the shipped default are upgraded by the migration.
 
 **Notes**
 
-- **`1eeb053d59b7` is not reversible.** It expands a legacy `count` into that
-  many seats, which is the point: collapsing it would cut a three-firefighter
-  template to one, permanently.
+- **`1eeb053d59b7` does not reverse the normalization.** It expands a legacy
+  `count` into that many seats, and its `downgrade()` is a deliberate **no-op**
+  — the original `count` cannot be recovered from the expanded seats, so it
+  leaves the normalized array in place rather than guessing. **Downgrading
+  destroys no data**; it simply does not undo the change, and both old and new
+  readers understand the stored shape.
 - The four normalizers are deliberate and must not be collapsed into one —
   see [pitfall #20](CLAUDE.md). Saving the _display_ normalizer's output
   turns an event template's resources into a flat seat list and loses the
@@ -11184,16 +11202,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario | Behavior |
-| --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
-| Template with bare string positions | Backward-compatible: defaults to `required=true` |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
-| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
-| All positions filled via bulk assign | "Fill All Open" button hidden |
-| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string | Converted to `undefined` via `\|\|` to prevent 422 |
-| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
+| Scenario                                      | Behavior                                                                         |
+| --------------------------------------------- | -------------------------------------------------------------------------------- |
+| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
+| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
+| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
+| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
+| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string                 | Converted to `undefined` via `\|\|` to prevent 422                               |
+| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 

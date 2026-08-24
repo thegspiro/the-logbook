@@ -1913,10 +1913,10 @@ registry, and gets a 404 from an endpoint that was never built.
 Not resolved here because it is a design decision about how far the widget
 layer is meant to go, not a documentation fix.
 
-## SCHEMA-1 — `compartment_path` Is Widened Twice (2026-08-23)
+## SCHEMA-1 — `compartment_name` Is Widened Twice (2026-08-23)
 
 `20260820_1300_d6f4a13c9e20` and `20260821_4c8d7e2a91b3` are the same
-migration authored twice: both widen `check_items.compartment_path` from
+migration authored twice: both widen `shift_equipment_check_items.compartment_name` from
 `VARCHAR(200)` to `TEXT`, on two different parents. Both are reachable —
 `d6f4a13c9e20` through the `9bb38ab9b052` merge, `4c8d7e2a91b3` through the
 chain beneath it.

@@ -64,13 +64,23 @@ table.
 
 ## Statuses
 
-| Status      | Meaning                                                                         |
-| ----------- | ------------------------------------------------------------------------------- |
-| `draft`     | A proposal. Not public                                                          |
-| `published` | What `/privacy` or `/terms` currently serves. **At most one per document type** |
-| `archived`  | Was published and has been replaced, or was a draft that was superseded         |
+| Status      | Meaning                                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `draft`     | A proposal. Not public                                                                                                                                             |
+| `published` | What `/privacy` or `/terms` currently serves. The service archives the previous one as it publishes, so in practice one per document type — but see the note below |
+| `archived`  | Was published and has been replaced, or was a draft that was superseded                                                                                            |
 
 Archived rows are kept permanently.
+
+> **One-live-version is a service convention, not a database constraint.**
+> `publish()` reads the current published rows, archives them, then marks its
+> own draft published — and the migration creates only a **non-unique** index
+> on `(organization_id, document_type, status)`. Two publishers committing at
+> the same moment can therefore both archive the same predecessor and leave two
+> rows in `published`. It has not been seen in practice (publishing is a rare,
+> deliberate act by one person), but do not rely on the invariant when writing
+> code that reads the published row — order the query, or take the most
+> recently published.
 
 ## Edge cases worth knowing
 
@@ -78,9 +88,15 @@ Archived rows are kept permanently.
   date their policies however their records officer does — `March 3, 2026`,
   `FY26-Q1`, `Adopted at the 3/3/26 business meeting`. It is displayed
   verbatim.
-- **Clearing that date works.** Emptying the box persists as a cleared value
-  rather than being silently ignored, which is a real failure mode elsewhere
-  in forms of this shape.
+- **Clearing that date clears the revision, not the public page.** Emptying
+  the box does persist as a cleared value on the revision (rather than being
+  silently dropped from the payload). But the **public** "Last updated" line
+  lives once in the organization's settings and is shared by `/privacy` and
+  `/terms`; `_write_settings` only assigns it when a revision carries a date
+  and never deletes it. So publishing a revision with an empty date leaves the
+  previously shown date in place. This is deliberate — reverting the terms must
+  not blank the date above a privacy notice that is still published — but it
+  means **the only way to change the public date is to publish a new one.**
 - **Deleting the member who drafted or published a revision does not delete
   the revision.** The author reference is cleared and the record stays — the
   wording published on a date is a department record and outlives the account.
