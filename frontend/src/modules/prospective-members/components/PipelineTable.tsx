@@ -56,8 +56,15 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   onToggleAll: externalToggleAll,
 }) => {
   const tz = useTimezone();
-  const { advanceApplicant, holdApplicant, rejectApplicant, withdrawApplicant, isRejecting, isWithdrawing } =
-    useProspectiveMembersStore();
+  const {
+    advanceApplicant,
+    regressApplicant,
+    holdApplicant,
+    rejectApplicant,
+    withdrawApplicant,
+    isRejecting,
+    isWithdrawing,
+  } = useProspectiveMembersStore();
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const selected = externalSelected ?? internalSelected;
   const noop = useCallback(() => {}, []);
@@ -479,6 +486,25 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                   className="hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm text-emerald-700 dark:text-emerald-400"
                                 >
                                   Advance Stage
+                                </button>
+                                {/* The table is the view that pages through
+                                    every applicant, so backwards movement has
+                                    to be reachable from here too — not only
+                                    from the detail drawer. The server refuses
+                                    it at the first stage (409) and the reason
+                                    is surfaced in the toast. */}
+                                <button
+                                  onClick={() => {
+                                    void runRowAction(
+                                      () => regressApplicant(applicant.id),
+                                      'Applicant moved back a stage',
+                                      'Failed to move applicant back'
+                                    );
+                                    setActionMenuId(null);
+                                  }}
+                                  className="text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary w-full px-4 py-2 text-left text-sm"
+                                >
+                                  Move Back a Stage
                                 </button>
                                 <button
                                   onClick={() => {

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.membership_pipeline import PipelineStepType
+from app.models.membership_pipeline import PipelineStepType, ProspectStatus
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 
@@ -430,6 +430,9 @@ class TestCompleteStepActionResult:
         return SimpleNamespace(
             id="p1",
             email=None,
+            # Progression is gated on status; a stub without one is not a
+            # record the service can be handed.
+            status=ProspectStatus.ACTIVE,
             pipeline=SimpleNamespace(steps=[step], auto_transfer_on_approval=False),
             step_progress=progress_rows,
             current_step_id="s1",
@@ -540,6 +543,7 @@ class TestSkipNeverTransfers:
         return SimpleNamespace(
             id="p1",
             email=None,
+            status=ProspectStatus.ACTIVE,
             pipeline=self._pipeline_with_misplaced_final_flag(),
             step_progress=[],
             current_step_id="s1",
@@ -638,3 +642,92 @@ class TestGetProspectEagerLoadsWhatValidationReads:
                 f"_validate_step_completion reads prospect.{name} but "
                 "get_prospect does not eager-load it"
             )
+
+
+class TestStatusStopsProgression:
+    """A status other than active stops every forward path, without a database.
+
+    The DB-backed equivalents live in test_prospect_stage_movement.py; these
+    keep the guard covered where MySQL is not available, and pin it to
+    complete_step specifically — the single funnel that advance, skip, an
+    approver's sign-off and every integration auto-advance pass through.
+    """
+
+    @staticmethod
+    def _prospect(status):
+        step = SimpleNamespace(
+            id="s1",
+            sort_order=0,
+            step_type=PipelineStepType.CHECKBOX,
+            config={},
+            is_final_step=False,
+            notify_prospect_on_completion=False,
+        )
+        return SimpleNamespace(
+            id="p1",
+            email=None,
+            status=status,
+            pipeline=SimpleNamespace(steps=[step], auto_transfer_on_approval=True),
+            step_progress=[],
+            current_step_id="s1",
+        )
+
+    @pytest.mark.parametrize(
+        ("status", "fragment"),
+        [
+            (ProspectStatus.ON_HOLD, "on hold"),
+            (ProspectStatus.REJECTED, "rejected"),
+            (ProspectStatus.WITHDRAWN, "withdrawn"),
+            (ProspectStatus.INACTIVE, "inactive"),
+            (ProspectStatus.TRANSFERRED, "already a member"),
+        ],
+    )
+    async def test_complete_step_refuses_and_names_the_reason(self, status, fragment):
+        prospect = self._prospect(status)
+        db = AsyncMock()
+        db.add = MagicMock()
+        svc = MembershipPipelineService(db)
+
+        with patch.object(
+            svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+        ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
+            svc, "_advance_current_step", new_callable=AsyncMock
+        ) as mock_advance, patch.object(
+            svc, "_do_transfer", new_callable=AsyncMock
+        ) as mock_transfer:
+            with pytest.raises(ValueError, match=fragment):
+                await svc.complete_step(
+                    prospect_id="p1",
+                    organization_id="org1",
+                    step_id="s1",
+                    completed_by="u1",
+                )
+
+        # Nothing was written on the way to the refusal: no progress row, no
+        # advance, and — the one that matters most — no conversion to member.
+        mock_advance.assert_not_called()
+        mock_transfer.assert_not_called()
+        db.add.assert_not_called()
+        db.commit.assert_not_called()
+
+    async def test_an_active_applicant_is_unaffected(self):
+        prospect = self._prospect(ProspectStatus.ACTIVE)
+        db = AsyncMock()
+        db.add = MagicMock()
+        svc = MembershipPipelineService(db)
+
+        with patch.object(
+            svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+        ), patch.object(svc, "_log_activity", new_callable=AsyncMock), patch.object(
+            svc, "_advance_current_step", new_callable=AsyncMock
+        ) as mock_advance, patch.object(
+            svc, "_do_transfer", new_callable=AsyncMock
+        ):
+            await svc.complete_step(
+                prospect_id="p1",
+                organization_id="org1",
+                step_id="s1",
+                completed_by="u1",
+            )
+
+        mock_advance.assert_called_once_with(prospect, "s1")

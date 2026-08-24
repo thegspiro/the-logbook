@@ -403,10 +403,6 @@ class ProspectStepProgress(Base):
     step = relationship("MembershipPipelineStep", back_populates="progress_records")
     completer = relationship("User", foreign_keys=[completed_by])
 
-    __table_args__ = (
-        Index("idx_step_progress_prospect_step", "prospect_id", "step_id", unique=True),
-    )
-
     def __repr__(self):
         return f"<ProspectStepProgress(prospect={self.prospect_id}, step={self.step_id}, status={self.status})>"
 
