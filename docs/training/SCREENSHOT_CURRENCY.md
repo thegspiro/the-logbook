@@ -1,5 +1,40 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (eighth) — the close-out override, and a template that resolves for nothing
+
+`03-81`, opened and checked. **480 of 507 filled.**
+
+**The warning had nothing to warn about.** The wizard's outstanding-checks
+block renders only when the shift carries an end-of-shift checklist nobody has
+completed, and the close-out fixture hangs on the Medic — for which no
+end-of-shift template existed, because the general equipment-check seed builds
+close-out templates only for the apparatus types it happens to iterate.
+
+**Creating one by type looked right and did nothing, which is the finding
+worth keeping.** `_resolve_templates` consults apparatus-_type_ templates
+**only when the unit has no apparatus-specific ones**, and the Medic already
+carries `Medic 3 Supply Check`. So an `ambulance` close-out template was
+created successfully, appeared in the template library, reported itself active
+— and was never resolved for the one shift it existed for. The fixture now
+writes the template against the apparatus itself, and the _product_ behaviour
+is written into guide 03 beside the "assign to a specific apparatus or
+apparatus type" step, because a department hits it the same way: give one truck
+a template of its own and every type-level template silently stops applying to
+that truck.
+
+**`require_end_of_shift_checks` gets the `setCallTracking` treatment.** Two
+shots want opposite answers — `03-81` needs the rule on to photograph the
+override it gates, `03-32` pictures the settings screen at the department's
+default — so both set what they need rather than inheriting whatever ran first.
+`setRequireEndOfShiftChecks` is the setter; the seeder still leaves the rule
+off.
+
+The override box is ticked in the capture because the reason field it demands
+does not exist until it is, and the marker asks for both. Ticking is client
+state: nothing is written until **Close out shift**, which none of the wizard
+shots press — pressing it would finalize the fixture and spend it for every run
+after.
+
 ## Captured 2026-08-24 (seventh) — guide 19's back-references, and a 403 no department can reach
 
 `19-18`/`19-19` and `19-20`/`19-21`, opened and checked. **479 of 507 filled.**

@@ -631,6 +631,36 @@ export function setCallTracking(mode) {
 }
 
 /**
+ * Force the organization's "require end-of-shift checks" rule.
+ *
+ * Same self-healing contract as `setCallTracking`: the rule decides whether
+ * close-out shows the outstanding-checks warning at all, and two shots want
+ * opposite answers, so each sets the one it needs rather than inheriting
+ * whatever ran before it. The seeder leaves the department with the rule off.
+ */
+export function setRequireEndOfShiftChecks(wanted) {
+  return async (page) => {
+    await page.evaluate(async (want) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const current = await (
+        await fetch("/api/v1/scheduling/settings", { credentials: "include" })
+      ).json();
+      if (Boolean(current.require_end_of_shift_checks) === want) return;
+      await fetch("/api/v1/scheduling/settings", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: JSON.stringify({ require_end_of_shift_checks: want }),
+      });
+    }, wanted);
+  };
+}
+
+/**
  * The seeder's dedicated close-out fixture: a past 24-hour shift, four crew.
  *
  * Kept in step with CLOSEOUT_SHIFT_NOTE in seed_demo_data.py, which matches on
@@ -6770,6 +6800,14 @@ export const SHOTS = [
     anchor: "showing the Close-out",
     alt: "Scheduling settings General tab with the close-out rules, overtime cap and shift generation options",
     route: "/scheduling/settings?tab=general",
+    // Pins the end-of-shift-check rule off. 03-81 turns it on to photograph
+    // the override it gates, and either may run first -- this shot's committed
+    // image shows the department's default, so it sets that rather than
+    // inheriting the other shot's leftovers.
+    prepare: async (page) => {
+      await setRequireEndOfShiftChecks(false)(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
     fullPage: true,
   },
   {
@@ -11078,6 +11116,41 @@ export const SHOTS = [
       "A member is meant to see a shorter list here -- the withheld pending " +
       "nomination is the subject of the shot, so one name on the ballot is " +
       "the result rather than missing demo data.",
+  },
+  {
+    // Step 3 again, but under the rule that makes outstanding checks blocking.
+    // The Medic the fixture hangs on now carries its own end-of-shift template
+    // (see _ensure_closeout_check_template), so there is a check nobody has
+    // completed for the warning to name.
+    //
+    // The override box is ticked, because the reason field it demands does not
+    // exist until it is -- and the marker asks for both. Ticking is client
+    // state only: nothing is written until "Close out shift", which these
+    // shots never press.
+    id: "03-81-closeout-override",
+    doc: "03-scheduling.md",
+    line: 1594,
+    anchor: "close-out wizard with outstanding end-of-shift checks",
+    alt: "Close-out wizard step 3 with the rule in force: the outstanding equipment check named in red, the override ticked, and the reason field it requires before the shift can be closed",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await setRequireEndOfShiftChecks(true)(page);
+      await openCloseoutWizard({
+        step: 3,
+        calls: { EMS: 3, Fire: 1 },
+        credit: 2,
+      })(page);
+      await page
+        .getByRole("checkbox", { name: /Close out anyway/i })
+        .check({ timeout: 20_000 });
+      await page
+        .getByLabel(/Reason for closing out with checks outstanding/i)
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    viewport: CLOSEOUT_VIEWPORT,
+    selector: CLOSEOUT_WIZARD_CARD,
+    fullPage: false,
   },
   {
     id: "03-43-time-off-request-form",

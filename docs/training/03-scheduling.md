@@ -1082,6 +1082,17 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 1. Set the template name, timing (start or end of shift), and type (equipment, vehicle, or combined)
 2. Optionally assign to a specific apparatus or apparatus type
+
+   **The two do not add up — a named apparatus replaces its type.** A shift
+   resolves its checklists by looking for templates naming its apparatus, and
+   consults the apparatus-type templates _only when it finds none_. So the
+   moment you give one truck a template of its own, every type-level template
+   stops applying to that truck. If Medic 3 has its own supply check and your
+   department also runs an "Ambulance Close-Out" by type, Medic 3's crew are
+   shown the supply check and nothing else — the close-out is still in the
+   template list, still active, and silently never asked for. Give a truck with
+   its own template the full set by name.
+
 3. Optionally restrict to specific positions (e.g., only Driver/Operator sees this checklist)
 4. Add **compartments** — named sections representing physical areas (e.g., "Officer Door Entry", "Pump Panel", "Cab Interior")
 5. Within each compartment, add **items** with one of 7 check types:
@@ -1591,9 +1602,7 @@ and its required reason — the same behaviour as the old checklist, because the
 wizard replaces that screen and has to carry everything it could do. The
 override is still logged and still audited.
 
-> **[SCREENSHOT NEEDED — close-out wizard with outstanding end-of-shift checks,
->
-> > showing the warning, the override checkbox, and the reason field it requires]**
+![Close-out wizard step 3 with the rule in force: the outstanding equipment check named in red, the override ticked, and the reason field it requires before the shift can be closed](./images/03-81-closeout-override.png)
 
 #### Wizard edge cases
 

@@ -5307,16 +5307,20 @@ class Seeder:
 
     def _seed_closeout_shift(self, members: list[dict]) -> dict | None:
         """Create (or find) the 24-hour four-person shift and stage its crew."""
-        existing = self._find_closeout_shift()
-        if existing:
-            return existing
-
         unit = self._closeout_apparatus()
         if not unit:
             self.blocked.append(
                 "close-out fixture: no non-engine apparatus to hang it on"
             )
             return None
+        # Before the early return, not after it: on a database that already has
+        # the fixture this function stops here, and the template the wizard's
+        # outstanding-checks warning depends on would never be created.
+        self._ensure_closeout_check_template(unit)
+
+        existing = self._find_closeout_shift()
+        if existing:
+            return existing
 
         shift_day = TODAY - timedelta(days=self.CLOSEOUT_DAYS_AGO)
         start_at = datetime.combine(
@@ -5348,6 +5352,71 @@ class Seeder:
         if crew:
             self._stage_closeout_attendance(shift_id, crew, start_at, end_at)
         return shift
+
+    def _ensure_closeout_check_template(self, unit: dict) -> None:
+        """An end-of-shift template for the fixture's own apparatus.
+
+        The wizard's outstanding-checks warning — the override box and the
+        reason it demands — renders only when the shift has an end-of-shift
+        checklist nobody has completed. The general equipment-check seed builds
+        close-out templates by apparatus *type*, and only for the types it
+        happens to iterate; the fixture hangs on the Medic, which had none.
+
+        Written against the apparatus rather than its type, and that is not
+        interchangeable here. `_resolve_templates` falls back to type-level
+        templates **only when the unit has no apparatus-specific ones**, and
+        the Medic already carries `Medic 3 Supply Check`. A type-level
+        `ambulance` close-out is therefore created successfully, listed in the
+        template library, and never resolved for the one shift it exists for —
+        a fixture that looks correct in every place except the screen it was
+        built for.
+        """
+        apparatus_id = str(pick(unit, "id") or "")
+        if not apparatus_id:
+            self.blocked.append("close-out fixture: apparatus carries no id")
+            return
+        templates = items(self.api.get("/equipment-checks/templates"), "templates")
+        if any(
+            pick(t, "check_timing", "checkTiming") == "end_of_shift"
+            and str(pick(t, "apparatus_id", "apparatusId") or "") == apparatus_id
+            for t in templates
+        ):
+            return
+        label = str(pick(unit, "name") or "Unit")
+        self.api.post(
+            "/equipment-checks/templates",
+            {
+                "name": f"{label} Close-Out",
+                "description": (
+                    "End-of-shift verification before the crew is relieved."
+                ),
+                "check_timing": "end_of_shift",
+                "apparatus_id": apparatus_id,
+                "is_active": True,
+                "compartments": [
+                    {
+                        "name": "Patient Compartment",
+                        "sort_order": 0,
+                        "items": [
+                            {
+                                "name": name,
+                                "sort_order": order,
+                                "check_type": "present",
+                                "is_required": True,
+                                "expected_quantity": 1,
+                            }
+                            for order, name in enumerate(
+                                [
+                                    "Monitor / defibrillator",
+                                    "Drug bag seal",
+                                    "Stretcher",
+                                ]
+                            )
+                        ],
+                    }
+                ],
+            },
+        )
 
     def _find_closeout_shift(self) -> dict | None:
         """The fixture from a previous run, if it is still usable.
