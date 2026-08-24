@@ -11281,6 +11281,42 @@ export const SHOTS = [
       "reads Level 2. Unselected options are in the DOM whatever is chosen.",
   },
   {
+    // 375 wide, not the 390 the rest of the mobile shots use: the marker names
+    // 375, and it is the narrower of the two common phone widths -- if the
+    // targets hold here they hold at 390.
+    //
+    // Not annotated, and it does not need to be. The claim is measurable, and
+    // the measurements are in the guide beside this image: 50 of the 52
+    // controls on this screen are already 44px or taller, and the two that are
+    // not are a painted checkbox indicator and a hidden file input, each
+    // sitting inside a 44px+ label that takes the tap.
+    id: "10-20-submit-training-touch-targets",
+    doc: "10-mobile-pwa.md",
+    line: 164,
+    anchor: "manual annotation",
+    alt: "The Submit Training form at 375px — full-width text fields, a certification checkbox whose whole row is the tap target, and the edit and delete icon buttons on the submission below it, all sized for a fingertip",
+    route: "/training/submit",
+    auth: "member",
+    viewport: { width: 375, height: 812 },
+    // Viewport, not full page: this form carries a sticky submit bar, and
+    // full-page stitching paints a `position: fixed` element at its document
+    // offset -- the bar landed across the middle of the form, over the card it
+    // is meant to sit below. Framed on the Details card instead, which is
+    // where the certification checkbox is, with the bar in its real place.
+    prepare: async (page) => {
+      const row = page
+        .getByText(/This training earned a certification/i)
+        .first();
+      await row.waitFor({ state: "visible", timeout: 20_000 });
+      // `center`, not `end`: the sticky submit bar occupies the bottom of the
+      // frame, so an element scrolled to the end of the viewport lands behind
+      // it.
+      await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+  },
+  {
     id: "03-43-time-off-request-form",
     doc: "03-scheduling.md",
     line: 199,

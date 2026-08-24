@@ -190,9 +190,14 @@ sitting. Each apparatus card carries a **Write NFC tag** action alongside Copy
 URL, Download PNG and Regenerate. Tap it, hold a blank tag to the phone, move to
 the next card.
 
-> **[SCREENSHOT NEEDED — `/locations/qr-codes` on a phone, an apparatus card
-> with its action row showing Copy URL / Download PNG / Regenerate / **Write NFC
-> tag**, mid-write]**
+**Not pictured.** Web NFC is Chrome-on-Android over HTTPS only, and the
+compact **Write NFC tag** action in this grid renders **nothing at all** where it
+is unsupported — a card on a desktop browser shows Copy URL, Download PNG and
+Regenerate, and no fourth action. That is deliberate: a full explanatory line per
+card would triple the height of a grid built for printing. The screenshot harness
+runs headless Chromium over `http://localhost`, so it cannot produce the fourth
+button, and staging one would be a picture of a control the reader's browser may
+correctly not have.
 
 **Write the apparatus tag, not a shift tag.** The apparatus code resolves when
 it is used rather than naming a shift, so one sticker on the dashboard serves

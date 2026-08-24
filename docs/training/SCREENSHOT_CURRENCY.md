@@ -1,5 +1,56 @@
 # Screenshot currency
 
+## Resolved 2026-08-24 (twelfth) — nine markers that were never going to be screenshots
+
+`10-20` captured; eight markers answered in prose. **485 of 507 filled, 15
+remaining** — down from 25 at the start of this batch.
+
+**Six NFC markers, closed with one verified mechanism.** Web NFC is
+`window.NDEFReader`, which exists only in Chrome on Android and only in a secure
+context. What matters for the guides is what each control does when it is
+missing, and the three differ:
+
+| Control                                             | Without Web NFC                        |
+| --------------------------------------------------- | -------------------------------------- |
+| `NfcTapButton` (Tap Tag)                            | `if (!supported) return null` — absent |
+| `NfcTagWriteButton` (compact, fleet QR grid)        | `return null` — absent                 |
+| `NfcTagWriter` (full block, event/category QR page) | a line saying which condition fails    |
+
+So a reader on a desktop or an iPhone is not failing to find a greyed-out
+button — for two of the three there is no button. That is now written into
+guides 04, 06, 10 and 19 in place of the markers, which is more useful than a
+staged photograph would have been. The harness itself fails both conditions
+(headless Chromium, `http://localhost`), so it could not have taken them anyway.
+
+**The two onboarding-restart markers are a contradiction, not a limitation.**
+The wizard runs only when no department exists; with one on file `/onboarding`
+redirects to sign-in — verified. Every other image in the library needs a
+department. Both frames would need a database with none, in the same run as a
+library that needs one. The guides now say that and give the one-minute
+reproduction on a scratch install.
+
+**The terminal marker became a code block, and is better for it.** `python -m
+app.preflight` was run twice for real — clean on development, exit 1 as
+production — and both outputs are quoted verbatim in guide 19. Terminal output
+in a code block can be searched, copied and diffed against what your own run
+prints; a picture of it can do none of those.
+
+**The "manual annotation" marker got measurements instead of drawings.** Guide
+10 claimed 44px tap targets on the Submit Training form and said the comparison
+had to be drawn because the "before" state no longer exists. Measured at 375px:
+**50 of 52 interactive controls are 44px or taller**. The two that are not are
+the painted 18×18 checkbox indicator and a 1×1 hidden file input — each inside a
+label that takes the tap (the certification label is **44×317**, the
+attach-certificate label 46px). Numbers a reader can reproduce beat an arrow
+drawn on a screenshot, and the capture now carries them.
+
+**One framing note worth keeping.** The first full-page attempt at that shot
+stitched the sticky submit bar across the middle of the form — the same
+`position: fixed` artifact as the bottom bar in the earlier table pair. Viewport
+shot, scrolled with `block: "center"` rather than `"end"`, because the sticky bar
+occupies the bottom of the frame and an element scrolled to the end lands behind
+it.
+
 ## Captured 2026-08-24 (eleventh) — a legacy crew seat, and a roster panel no seeded shift can show
 
 `19-23`, opened and checked. **484 of 507 filled.**

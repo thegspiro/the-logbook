@@ -77,7 +77,20 @@ Practically: block out an uninterrupted half hour, gather the department's
 address, station list, apparatus list and the first administrator's details
 _before_ you begin, and do not close the browser until you reach the dashboard.
 
-> **[SCREENSHOT NEEDED — the wizard after a browser restart: the form repainted with previously entered answers, and the session-expired error raised by the next step. Demo data: begin an onboarding run through the stations step, close the browser, reopen `/onboarding`, and attempt to continue. Capture both states in sequence so the caption can show that a filled-in form does not mean a live session.]**
+**Not pictured, and it is not a tooling limitation so much as a contradiction
+in what would have to be true.** Every other image in this library is taken
+against a demo department that exists. This wizard only runs when one does
+**not**: with a department on file, `/onboarding` sends you to the sign-in page
+rather than to step one — which is the same "Onboarding has already been
+completed" condition the table above distinguishes from an expired session. So
+the two frames would need a database with no department, and the rest of the
+library needs one with a department, in the same run.
+
+Reproduce it yourself on a scratch install in about a minute: start the wizard,
+fill in the department and stations steps, quit the browser, reopen
+`/onboarding`, and press Next. The form comes back filled in — that is the local
+draft — and the step fails. That failure is the whole lesson: a populated form
+is not evidence of a live session.
 
 ---
 
