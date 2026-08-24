@@ -14,7 +14,7 @@ make the roster disagree with who is actually turning up.
 
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from app.services.scheduling_service import SchedulingService
@@ -122,6 +122,47 @@ class TestUnnamedSeatShiftCapacity:
         shift = _shift(4, positions=[{"position": "firefighter", "required": True}])
         error = await _validate(service, shift, enforce_capacity=True)
         assert error == "Position was filled after this request was submitted"
+
+
+class TestUnnamedSeatShiftEligibility:
+    async def test_a_member_with_no_eligible_positions_is_refused(self):
+        session = _ValidationSession(filled=2)
+        service = SchedulingService(session)
+        service._check_driver_qualification = AsyncMock(return_value=None)
+
+        original_execute = session.execute
+
+        async def execute(statement):
+            if session.calls == 5:  # eligibility loads the active member
+                session.calls += 1
+                return SimpleNamespace(
+                    scalar_one_or_none=lambda: SimpleNamespace(id=str(USER))
+                )
+            return await original_execute(statement)
+
+        session.execute = execute
+        with patch(
+            "app.services.shift_eligibility_service."
+            "ShiftEligibilityService.get_eligible_positions",
+            new=AsyncMock(return_value=[]),
+        ):
+            from app.services.member_leave_service import MemberLeaveService
+
+            with patch.object(
+                MemberLeaveService,
+                "get_active_leaves_for_user",
+                new=AsyncMock(return_value=[]),
+            ):
+                error = await service._validate_assignment_candidate(
+                    organization_id=ORG,
+                    shift=_shift(4),
+                    user_id=USER,
+                    position="firefighter",
+                    enforce_position_eligibility=True,
+                    enforce_capacity=True,
+                )
+
+        assert error == "Member is no longer eligible for this shift"
 
 
 class TestSignupPassesTheGate:

@@ -15,6 +15,7 @@ Covers:
   - Duplicate-guard on pattern generation
 """
 
+import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -40,6 +41,11 @@ from app.schemas.scheduling import ShiftUpdate
 from app.services.scheduling_service import SchedulingService
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
+
+# The positions these tests seat members in. Declared as the org's
+# ``open_positions`` by the fixture below so members are eligible for them.
+OPEN_POSITIONS = ["officer", "captain", "driver", "firefighter"]
 
 
 def _uid() -> str:
@@ -70,8 +76,9 @@ async def setup_org_and_users(db_session: AsyncSession):
 
     await db_session.execute(
         text(
-            "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
-            "VALUES (:id, :name, :otype, :slug, :tz)"
+            "INSERT INTO organizations "
+            "(id, name, organization_type, slug, timezone, settings) "
+            "VALUES (:id, :name, :otype, :slug, :tz, :settings)"
         ),
         {
             "id": org_id,
@@ -79,6 +86,15 @@ async def setup_org_and_users(db_session: AsyncSession):
             "otype": "fire_department",
             "slug": f"test-{org_id[:8]}",
             "tz": "America/New_York",
+            # A department that has configured its scheduling, which is what
+            # these tests are about. Eligibility is the union of rank-based
+            # positions, training unlocks and the org's open positions; with
+            # none of the three set, every member resolves to an empty
+            # eligible set and _validate_assignment_candidate refuses the
+            # assignment outright. Declaring the positions these tests seat
+            # people in is the smallest configuration that makes the fixture
+            # an org somebody could actually run.
+            "settings": json.dumps({"scheduling": {"open_positions": OPEN_POSITIONS}}),
         },
     )
     for uid, uname, fn, ln in [
