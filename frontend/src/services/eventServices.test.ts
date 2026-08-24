@@ -497,20 +497,30 @@ describe('eventRequestService', () => {
     });
   });
 
+  describe('getOutreachRoles', () => {
+    it('should unwrap the department outreach role vocabulary', async () => {
+      const roles = [{ value: 'tour_guide', label: 'Tour Guide' }];
+      mockGet.mockResolvedValueOnce({ data: { roles } });
+
+      const result = await eventRequestService.getOutreachRoles();
+
+      expect(mockGet).toHaveBeenCalledWith('/event-requests/outreach-roles');
+      expect(result).toEqual(roles);
+    });
+  });
+
   describe('openStaffing', () => {
-    it('should POST the requested seat count', async () => {
-      const staffing = { shift_id: 's1', slots_total: 3, slots_filled: 0, volunteers: [] };
+    it('should POST the roles needed, not a bare headcount', async () => {
+      const staffing = { shift_id: 's1', slots_total: 3, slots_filled: 0, roles: [], volunteers: [] };
       mockPost.mockResolvedValueOnce({ data: staffing });
 
-      const result = await eventRequestService.openStaffing('r1', {
-        volunteer_slots: 3,
-        include_officer_slot: true,
-      });
+      const roles = [
+        { role: 'tour_guide', count: 2 },
+        { role: 'educator', count: 1 },
+      ];
+      const result = await eventRequestService.openStaffing('r1', { roles });
 
-      expect(mockPost).toHaveBeenCalledWith('/event-requests/r1/staffing', {
-        volunteer_slots: 3,
-        include_officer_slot: true,
-      });
+      expect(mockPost).toHaveBeenCalledWith('/event-requests/r1/staffing', { roles });
       expect(result).toEqual(staffing);
     });
   });

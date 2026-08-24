@@ -496,6 +496,21 @@ EVENT_SETTINGS_DEFAULTS = {
         {"value": "career_talk", "label": "Career Talk"},
         {"value": "other", "label": "Other"},
     ],
+    # Roles a member fills at a community event. Deliberately a separate
+    # vocabulary from ShiftPosition: nobody rides a seat on an engine at a
+    # school visit, and "Firefighter / Driver / Officer" tells a member
+    # nothing about what they would actually be doing. Configurable because
+    # departments run different programmes — a smoke-trailer operator, a car
+    # seat technician, a puppet show — and a fixed list cannot hold those.
+    "outreach_roles": [
+        {"value": "tour_guide", "label": "Tour Guide"},
+        {"value": "educator", "label": "Educator"},
+        {"value": "facilitator", "label": "Facilitator"},
+        {"value": "demonstrator", "label": "Demonstrator"},
+        {"value": "greeter", "label": "Greeter"},
+        {"value": "apparatus_operator", "label": "Apparatus Operator"},
+        {"value": "setup_teardown", "label": "Setup & Teardown"},
+    ],
     "request_pipeline": {
         "min_lead_time_days": 21,
         "default_assignee_id": None,

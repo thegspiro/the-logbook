@@ -32,7 +32,14 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const [dateFilter, setDateFilter] = useState('');
   const [signupShiftId, setSignupShiftId] = useState<string | null>(null);
   const [signupPosition, setSignupPosition] = useState('');
+  const [signupRole, setSignupRole] = useState('');
   const [signingUp, setSigningUp] = useState(false);
+
+  const signupShift = shifts.find((s) => s.id === signupShiftId);
+  // An outreach signup sheet asks what job you will do, not which seat you
+  // will ride. Only roles with a seat left are offered.
+  const openRoles = (signupShift?.outreach_roles ?? []).filter((r) => r.remaining > 0);
+  const isOutreachSignup = Boolean(signupShift?.is_outreach) && openRoles.length > 0;
 
   // Fetch eligible positions for the currently selected shift
   const {
@@ -44,6 +51,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   useEffect(() => {
     if (!signupShiftId) {
       setSignupPosition('');
+      setSignupRole('');
       return;
     }
 
@@ -52,9 +60,18 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
     }
   }, [signupShiftId, eligiblePositions, eligibilityLoading]);
 
+  useEffect(() => {
+    setSignupRole((current) => (openRoles.some((r) => r.role === current) ? current : (openRoles[0]?.role ?? '')));
+    // openRoles is derived from the selected shift each render; keying the
+    // effect on the shift (not the array identity) avoids resetting the
+    // member's choice on every re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signupShiftId, signupShift?.outreach_roles]);
+
   const closeSignupModal = () => {
     setSignupShiftId(null);
     setSignupPosition('');
+    setSignupRole('');
   };
 
   const loadShifts = useCallback(async () => {
@@ -97,7 +114,10 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const handleSignup = async (shiftId: string) => {
     setSigningUp(true);
     try {
-      const res = await schedulingService.signupForShift(shiftId, { position: signupPosition });
+      const res = await schedulingService.signupForShift(shiftId, {
+        position: signupPosition,
+        ...(isOutreachSignup ? { outreach_role: signupRole } : {}),
+      });
       toast.success('Signed up for shift — a manager will confirm your assignment');
       surfaceWarnings(res);
       closeSignupModal();
@@ -109,6 +129,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           const res = await schedulingService.createAssignment(shiftId, {
             user_id: user.id,
             position: signupPosition,
+            outreach_role: isOutreachSignup ? signupRole : undefined,
           });
           toast.success('Signed up for shift — a manager will confirm your assignment');
           surfaceWarnings(res);
@@ -308,6 +329,28 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
                       </p>
                     </div>
+                  ) : isOutreachSignup ? (
+                    <div>
+                      <label htmlFor="signup-role" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                        What would you like to do?
+                      </label>
+                      <select
+                        id="signup-role"
+                        value={signupRole}
+                        onChange={(e) => setSignupRole(e.target.value)}
+                        className="form-input"
+                      >
+                        {openRoles.map((role) => (
+                          <option key={role.role} value={role.role}>
+                            {role.label} ({role.remaining} needed)
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-theme-text-muted mt-2 text-xs">
+                        This is a community outreach event, so you are signing up for a role rather than a riding
+                        position.
+                      </p>
+                    </div>
                   ) : (
                     <div>
                       <label
@@ -343,7 +386,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       onClick={() => {
                         void handleSignup(signupShiftId);
                       }}
-                      disabled={signingUp || eligibilityLoading || !eligiblePositions.includes(signupPosition)}
+                      disabled={
+                        signingUp ||
+                        eligibilityLoading ||
+                        (isOutreachSignup ? !signupRole : !eligiblePositions.includes(signupPosition))
+                      }
                       className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                     >
                       {signingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

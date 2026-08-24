@@ -99,8 +99,24 @@ class ShiftRosterSeat(UTCResponseBase):
     user_id: UUID
     user_name: Optional[str] = None
     position: Optional[str] = None
+    # What this member is doing at a community outreach event. NULL on a duty
+    # shift, where `position` already says it.
+    outreach_role: Optional[str] = None
+    outreach_role_label: Optional[str] = None
     status: Optional[str] = None
     is_training: bool = False
+
+    model_config = _response_config
+
+
+class OutreachRoleSlot(UTCResponseBase):
+    """One role on a community outreach signup sheet, and how full it is."""
+
+    role: str
+    label: str
+    total: int
+    filled: int
+    remaining: int
 
     model_config = _response_config
 
@@ -133,6 +149,11 @@ class ShiftResponse(UTCResponseBase):
     color: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+    # A community outreach signup sheet rather than duty coverage. Its seats
+    # are named by outreach role, not by crew position, so a member browsing
+    # Open Shifts is offered "Tour Guide" instead of "Firefighter".
+    is_outreach: bool = False
+    outreach_roles: List[OutreachRoleSlot] = Field(default_factory=list)
     attendee_count: Optional[int] = 0
     roster: List[ShiftRosterSeat] = Field(default_factory=list)
     call_count: int = 0
@@ -796,6 +817,9 @@ class ShiftAssignmentCreate(BaseModel):
 
     user_id: UUID
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
+    # Required when the shift is a community-outreach signup sheet, ignored
+    # otherwise. See ShiftAssignment.outreach_role.
+    outreach_role: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
     # Training slot: mark this seat as a supervised training/rider position and
     # optionally link the trainee's program and the evaluating officer.
@@ -842,6 +866,8 @@ class ShiftAssignmentResponse(UTCResponseBase):
     user_id: UUID
     user_name: Optional[str] = None
     position: ShiftPosition
+    outreach_role: Optional[str] = None
+    outreach_role_label: Optional[str] = None
     assignment_status: AssignmentStatus
     assigned_by: Optional[UUID] = None
     confirmed_at: Optional[datetime] = None
@@ -1105,6 +1131,11 @@ class ShiftSignupRequest(BaseModel):
     """Schema for a member signing up for an open shift position"""
 
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
+    # Required on a community-outreach signup sheet and ignored everywhere
+    # else. Its vocabulary is the department's own (tour guide, educator,
+    # facilitator), which is why it is a plain string rather than a
+    # ShiftPosition — see ShiftAssignment.outreach_role.
+    outreach_role: Optional[str] = Field(None, max_length=100)
 
 
 # ============================================

@@ -476,7 +476,39 @@ class SchedulingService:
         user_ids = list({a.user_id for a in assignments if a.user_id})
         name_map = await self._get_user_name_map(user_ids)
         dicts = [self._orm_to_dict(a, name_map) for a in assignments]
+        await self._attach_outreach_role_labels(dicts)
         return await self._attach_training_labels(dicts)
+
+    async def _attach_outreach_role_labels(self, dicts: List[Dict[str, Any]]) -> None:
+        """Stamp the department's label onto any outreach role in the batch.
+
+        Outreach roles are department-configurable, so the stored value
+        (``tour_guide``) is not what a member should read. Skipped entirely
+        when the batch holds no outreach seats, which is every duty roster.
+        """
+        org_ids = {
+            str(d["organization_id"])
+            for d in dicts
+            if d.get("outreach_role") and d.get("organization_id")
+        }
+        if not org_ids:
+            return
+
+        from app.services.event_request_service import get_outreach_roles
+        from app.utils.outreach_roles import role_label
+
+        rows = await self.db.execute(
+            select(Organization).where(Organization.id.in_(org_ids))
+        )
+        configured = {
+            str(org.id): get_outreach_roles(org) for org in rows.scalars().all()
+        }
+        for d in dicts:
+            role = d.get("outreach_role")
+            if role:
+                d["outreach_role_label"] = role_label(
+                    configured.get(str(d.get("organization_id")), []), role
+                )
 
     async def enrich_assignments_with_shifts(
         self, assignments: List[ShiftAssignment], organization_id: UUID
@@ -535,6 +567,7 @@ class SchedulingService:
             d = self._orm_to_dict(a, name_map)
             d["shift"] = shift_map.get(str(a.shift_id))
             result.append(d)
+        await self._attach_outreach_role_labels(result)
         return await self._attach_training_labels(result)
 
     async def enrich_swap_requests(

@@ -57,6 +57,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   event is staffed by whoever can come, not by operational rank — and standing
   shift claims deliberately skip it, so "every Saturday day shift" cannot seat
   a member on a school visit they never volunteered for.
+- **Outreach events have their own roles**, because nobody is riding a seat on
+  an engine at a school visit. A coordinator says what the day needs in jobs —
+  2 × Tour Guide, 1 × Educator — and a member browsing Open Shifts is asked
+  "what would you like to do?" rather than being offered Firefighter, Driver
+  and Officer. Roles are per-department and editable in **Events settings →
+  Outreach** (Tour Guide, Educator, Facilitator, Demonstrator, Greeter,
+  Apparatus Operator, Setup & Teardown out of the box), because departments run
+  programmes a fixed list cannot hold — a smoke trailer, a car seat check, a
+  puppet show. Each role is capped separately, so the last Tour Guide seat
+  closing does not stop anyone signing up as an Educator, and the call for help
+  now names the roles still open instead of a bare headcount.
 - **A call for help to the membership.** One button emails every active member
   the event details, the coordinator's note, and a link to sign up. Email only,
   as the notification policy requires for a routine request acted on during the

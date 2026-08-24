@@ -17,11 +17,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.user import Organization, User
+from app.utils.outreach_roles import (
+    MAX_TOTAL_SEATS,
+    normalize_staffing_roles,
+    role_label,
+)
 
 STATUS_LABELS = {
     "submitted": "Submitted",
@@ -344,15 +349,35 @@ async def send_request_notification(
 # ============================================
 
 # One entry per seat, the canonical stored shape for a positions column
-# (CLAUDE.md pitfall #20). Outreach seats are `volunteer`: an open-to-all shift
-# returns exactly the positions it defines as eligible, so a member signing up
-# is not gated behind an operational rank they do not need to run a station
-# tour.
-_OUTREACH_SEAT = "volunteer"
-_OUTREACH_OFFICER_SEAT = "officer"
+# (CLAUDE.md pitfall #20). Every outreach seat is a plain `volunteer`: an
+# open-to-all shift returns exactly the positions it defines as eligible, so a
+# member signing up is not gated behind an operational rank they do not need to
+# run a station tour, and capacity, coverage and the calendar read the sheet as
+# the ordinary open shift it is.
+#
+# What the seat is *for* — tour guide, educator, facilitator — is not stored
+# here. It lives on `event_requests.staffing_roles` (what the day needs) and
+# `shift_assignments.outreach_role` (what one member took), because
+# `shift_assignments.position` is a MySQL ENUM whose labels are rewritten to
+# the ShiftPosition values at every startup.
+OUTREACH_SEAT_POSITION = "volunteer"
 # Distinguishes an outreach signup sheet from a duty shift at a glance on the
 # calendar. Amber, matching the outreach badge on the requests board.
 _OUTREACH_SHIFT_COLOR = "#b45309"
+
+
+def get_outreach_roles(org: Optional[Organization]) -> list[dict[str, str]]:
+    """Read the department's outreach role vocabulary, falling back to defaults."""
+    defaults = _event_settings_defaults()["outreach_roles"]
+    if org is None:
+        return list(defaults)
+    settings = (org.settings or {}).get("events", {})
+    return settings.get("outreach_roles", defaults)
+
+
+def outreach_role_label(org: Optional[Organization], role: Optional[str]) -> str:
+    """The department's label for a role, or a humanized fallback."""
+    return role_label(get_outreach_roles(org), role)
 
 
 def _org_timezone(org: Optional[Organization]):
@@ -374,23 +399,43 @@ def outreach_type_label(org: Optional[Organization], outreach_type: str) -> str:
     return outreach_type.replace("_", " ").title()
 
 
-def build_staffing_positions(volunteer_slots: int, include_officer: bool) -> list[dict]:
-    """Build the canonical seat list for an outreach signup sheet."""
-    seats: list[dict] = []
-    if include_officer:
-        seats.append({"position": _OUTREACH_OFFICER_SEAT, "required": True})
-    seats.extend(
-        {"position": _OUTREACH_SEAT, "required": True} for _ in range(volunteer_slots)
-    )
-    return seats
+def build_staffing_positions(seat_count: int) -> list[dict]:
+    """Build the canonical seat list backing an outreach signup sheet."""
+    return [
+        {"position": OUTREACH_SEAT_POSITION, "required": True}
+        for _ in range(seat_count)
+    ]
+
+
+def validate_staffing_roles(
+    org: Optional[Organization], roles: Any
+) -> list[dict[str, Any]]:
+    """Normalize requested staffing roles and check them against the department's.
+
+    Raises ``ValueError`` for a role the department has not configured: a
+    sheet asking for a "Puppeteer" nobody can select is a seat that never
+    fills, and silently dropping it would understate what the day needs.
+    """
+    normalized = normalize_staffing_roles(roles)
+    if not normalized:
+        raise ValueError("Name at least one role you need help with.")
+
+    known = {entry["value"] for entry in get_outreach_roles(org) if entry.get("value")}
+    unknown = sorted({entry["role"] for entry in normalized} - known)
+    if unknown:
+        raise ValueError(f"Unknown outreach role(s): {', '.join(unknown)}")
+
+    seats = sum(entry["count"] for entry in normalized)
+    if seats > MAX_TOTAL_SEATS:
+        raise ValueError(f"A signup sheet holds at most {MAX_TOTAL_SEATS} people.")
+    return normalized
 
 
 async def open_staffing_shift(
     db: AsyncSession,
     event_request: EventRequest,
     org: Optional[Organization],
-    volunteer_slots: int,
-    include_officer: bool,
+    staffing_roles: Any,
     actor_id: str,
     notes: Optional[str] = None,
 ):
@@ -400,11 +445,22 @@ async def open_staffing_shift(
     eligibility service returns its seats to every member — an outreach event
     is staffed by whoever can come, not by operational rank — and self-signup
     capacity is what caps it at the number of seats requested.
+
+    ``staffing_roles`` says what the day needs by job ("2 tour guides, 1
+    educator"). It is stored on the request; the shift gets one plain
+    ``volunteer`` seat per person so every operational reader still
+    understands it.
     """
     from app.services.scheduling_service import SchedulingService
 
     if not event_request.event_date:
         return None, "Confirm a date before opening volunteer signups."
+
+    try:
+        roles = validate_staffing_roles(org, staffing_roles)
+    except ValueError as e:
+        return None, str(e)
+    seat_count = sum(entry["count"] for entry in roles)
 
     tz = _org_timezone(org)
     start = event_request.event_date
@@ -417,6 +473,7 @@ async def open_staffing_shift(
     label = outreach_type_label(org, event_request.outreach_type)
     who = event_request.organization_name or event_request.contact_name
     note_lines = [f"Community outreach: {label} for {who}."]
+    note_lines.append("Roles needed: " + describe_roles(org, roles))
     if notes:
         note_lines.append(notes)
     if event_request.venue_address:
@@ -432,8 +489,8 @@ async def open_staffing_shift(
             "shift_date": start.astimezone(tz).date(),
             "start_time": start,
             "end_time": end,
-            "positions": build_staffing_positions(volunteer_slots, include_officer),
-            "min_staffing": volunteer_slots,
+            "positions": build_staffing_positions(seat_count),
+            "min_staffing": seat_count,
             "open_to_all_members": True,
             "is_outreach": True,
             "color": _OUTREACH_SHIFT_COLOR,
@@ -445,18 +502,16 @@ async def open_staffing_shift(
         return None, error or "Unable to create the volunteer signup shift."
 
     event_request.staffing_shift_id = shift.id
+    event_request.staffing_roles = roles
     db.add(
         EventRequestActivity(
             request_id=event_request.id,
             action="staffing_opened",
-            notes=(
-                f"Opened volunteer signups for {volunteer_slots} "
-                f"{'member' if volunteer_slots == 1 else 'members'}"
-            ),
+            notes=f"Opened volunteer signups — {describe_roles(org, roles)}",
             details={
                 "shift_id": shift.id,
-                "volunteer_slots": volunteer_slots,
-                "include_officer": include_officer,
+                "staffing_roles": roles,
+                "seat_count": seat_count,
             },
             performed_by=actor_id,
         )
@@ -464,10 +519,21 @@ async def open_staffing_shift(
     return shift, None
 
 
+def describe_roles(org: Optional[Organization], roles: Any) -> str:
+    """Render staffing needs for a human: "2 x Tour Guide, 1 x Educator"."""
+    labels = get_outreach_roles(org)
+    return ", ".join(
+        f"{entry['count']} x {role_label(labels, entry['role'])}"
+        for entry in normalize_staffing_roles(roles)
+    )
+
+
 async def get_staffing_state(
-    db: AsyncSession, event_request: EventRequest
+    db: AsyncSession,
+    event_request: EventRequest,
+    org: Optional[Organization] = None,
 ) -> dict[str, Any]:
-    """Who has signed up to cover this request, and how many seats remain."""
+    """Who has signed up to cover this request, and which roles are still open."""
     from app.models.training import AssignmentStatus, Shift, ShiftAssignment
 
     empty = {
@@ -475,6 +541,7 @@ async def get_staffing_state(
         "shift_date": None,
         "slots_total": 0,
         "slots_filled": 0,
+        "roles": [],
         "volunteers": [],
         "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
     }
@@ -505,17 +572,52 @@ async def get_staffing_state(
         .order_by(ShiftAssignment.created_at)
     )
 
+    configured = get_outreach_roles(org)
     volunteers = []
+    filled_by_role: dict[str, int] = {}
     for assignment, member in rows.all():
         position = assignment.position
         status_value = assignment.assignment_status
+        role = assignment.outreach_role
+        if role:
+            filled_by_role[role] = filled_by_role.get(role, 0) + 1
         volunteers.append(
             {
                 "user_id": assignment.user_id,
                 "member_name": f"{member.first_name} {member.last_name}".strip(),
                 "position": getattr(position, "value", str(position)),
+                "outreach_role": role,
+                "outreach_role_label": role_label(configured, role),
                 "status": getattr(status_value, "value", str(status_value)),
                 "assigned_at": assignment.created_at,
+            }
+        )
+
+    needed = normalize_staffing_roles(event_request.staffing_roles)
+    roles = [
+        {
+            "role": entry["role"],
+            "label": role_label(configured, entry["role"]),
+            "total": entry["count"],
+            "filled": min(filled_by_role.get(entry["role"], 0), entry["count"]),
+            "remaining": max(entry["count"] - filled_by_role.get(entry["role"], 0), 0),
+        }
+        for entry in needed
+    ]
+    # A role somebody holds that the sheet no longer asks for — the composition
+    # was edited, or the role was dropped from settings after they signed up.
+    # Reported with a total of zero rather than hidden, so the coordinator can
+    # see the person is still coming and doing something.
+    for role_value, count in filled_by_role.items():
+        if any(entry["role"] == role_value for entry in needed):
+            continue
+        roles.append(
+            {
+                "role": role_value,
+                "label": role_label(configured, role_value),
+                "total": 0,
+                "filled": count,
+                "remaining": 0,
             }
         )
 
@@ -525,9 +627,31 @@ async def get_staffing_state(
         "shift_date": shift.start_time,
         "slots_total": len(positions),
         "slots_filled": len(volunteers),
+        "roles": roles,
         "volunteers": volunteers,
         "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
     }
+
+
+async def _roles_still_needed(
+    db: AsyncSession,
+    event_request: EventRequest,
+    org: Optional[Organization],
+) -> str:
+    """The unfilled roles on this request's sheet, rendered for an email.
+
+    Empty when no sheet has been opened, and when every seat is already
+    taken — a call for help that lists nothing still needed reads as a mistake.
+    """
+    if not event_request.staffing_shift_id:
+        return describe_roles(org, event_request.staffing_roles)
+    state = await get_staffing_state(db, event_request, org)
+    labels = get_outreach_roles(org)
+    return ", ".join(
+        f"{entry['remaining']} x {role_label(labels, entry['role'])}"
+        for entry in state["roles"]
+        if entry["remaining"] > 0
+    )
 
 
 async def send_volunteer_call(
@@ -593,6 +717,12 @@ async def send_volunteer_call(
         ("For", who),
         ("When", when),
     ]
+    # What we are asking of them, in the words a member can picture themselves
+    # doing. "We need two people" tells them nothing; "2 x Tour Guide, 1 x
+    # Educator" tells them whether it is a job they can do.
+    still_needed = await _roles_still_needed(db, event_request, org)
+    if still_needed:
+        detail_rows.append(("Roles needed", still_needed))
     if event_request.venue_address:
         detail_rows.append(("Where", event_request.venue_address))
     if event_request.audience_size:
@@ -681,3 +811,70 @@ async def send_volunteer_call(
         "skipped_opted_out": skipped,
         "volunteer_call_sent_at": sent_at,
     }
+
+
+async def resolve_outreach_signup_role(
+    db: AsyncSession,
+    shift: Any,
+    requested_role: Optional[str],
+    organization_id: str,
+) -> str:
+    """Check a member's chosen role against the sheet, or explain why not.
+
+    Raises ``ValueError`` — the caller turns it into a 400. The role is
+    required on an outreach shift and validated against the *request's*
+    staffing needs rather than the department's whole vocabulary: the sheet
+    asked for two tour guides and an educator, and a member taking a fourth
+    seat as something nobody asked for leaves a real role unfilled.
+    """
+    from app.models.training import AssignmentStatus, ShiftAssignment
+
+    event_request = await db.scalar(
+        select(EventRequest).where(
+            EventRequest.staffing_shift_id == str(shift.id),
+            EventRequest.organization_id == str(organization_id),
+        )
+    )
+    needed = normalize_staffing_roles(
+        event_request.staffing_roles if event_request else None
+    )
+    if not needed:
+        # A sheet opened before roles existed, or whose request has since been
+        # unlinked. Those seats are plain volunteer seats and the generic
+        # capacity check already covers them.
+        return ""
+
+    org = await db.scalar(
+        select(Organization).where(Organization.id == str(organization_id))
+    )
+    wanted = {entry["role"]: entry["count"] for entry in needed}
+    labels = get_outreach_roles(org)
+
+    if not requested_role:
+        options = ", ".join(role_label(labels, name) for name in wanted)
+        raise ValueError(f"Choose what you would like to do: {options}.")
+    if requested_role not in wanted:
+        raise ValueError(
+            f"{role_label(labels, requested_role)} is not one of the roles "
+            f"needed for this event."
+        )
+
+    taken = (
+        await db.execute(
+            select(func.count())
+            .select_from(ShiftAssignment)
+            .where(
+                ShiftAssignment.shift_id == str(shift.id),
+                ShiftAssignment.organization_id == str(organization_id),
+                ShiftAssignment.outreach_role == requested_role,
+                ShiftAssignment.assignment_status.notin_(
+                    [AssignmentStatus.CANCELLED, AssignmentStatus.DECLINED]
+                ),
+            )
+        )
+    ).scalar() or 0
+    if taken >= wanted[requested_role]:
+        raise ValueError(
+            f"The last {role_label(labels, requested_role)} seat was just claimed."
+        )
+    return requested_role

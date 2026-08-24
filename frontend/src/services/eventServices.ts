@@ -692,9 +692,15 @@ export const eventRequestService = {
     );
     return response.data;
   },
+  async getOutreachRoles(): Promise<import('../types/event').OutreachRole[]> {
+    const response = await api.get<{ roles: import('../types/event').OutreachRole[] }>(
+      '/event-requests/outreach-roles'
+    );
+    return response.data.roles;
+  },
   async openStaffing(
     requestId: string,
-    data: { volunteer_slots: number; include_officer_slot?: boolean; notes?: string | undefined }
+    data: { roles: import('../types/event').StaffingRoleNeed[]; notes?: string | undefined }
   ): Promise<import('../types/event').EventRequestStaffing> {
     const response = await api.post<import('../types/event').EventRequestStaffing>(
       `/event-requests/${requestId}/staffing`,

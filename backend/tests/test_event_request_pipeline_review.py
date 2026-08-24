@@ -40,15 +40,20 @@ from app.schemas.event_request import (
     EventRequestSchedule,
     EventRequestStaffingCreate,
     SendTemplateEmail,
+    StaffingRoleNeed,
     TaskCompletionUpdate,
 )
 from app.services.event_request_service import (
     build_staffing_positions,
+    describe_roles,
     get_pipeline_settings,
     lead_time_error,
     open_staffing_shift,
+    outreach_role_label,
     outreach_type_label,
+    resolve_outreach_signup_role,
     send_volunteer_call,
+    validate_staffing_roles,
 )
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
@@ -96,6 +101,7 @@ def _request_row(**overrides):
         "event_date": None,
         "event_end_date": None,
         "staffing_shift_id": None,
+        "staffing_roles": None,
         "volunteer_call_sent_at": None,
         "venue_address": None,
         "audience_size": None,
@@ -477,13 +483,20 @@ class TestScheduling:
 class TestStaffing:
     def test_seats_are_the_canonical_stored_shape(self):
         """One entry per seat, ``{"position", "required"}`` (pitfall #20)."""
-        seats = build_staffing_positions(3, include_officer=False)
+        seats = build_staffing_positions(3)
         assert seats == [{"position": "volunteer", "required": True}] * 3
 
-    def test_the_officer_seat_leads_the_list(self):
-        seats = build_staffing_positions(2, include_officer=True)
-        assert seats[0] == {"position": "officer", "required": True}
-        assert len(seats) == 3
+    def test_every_seat_is_a_plain_volunteer_seat(self):
+        """The crew-position vocabulary stays out of an outreach sheet.
+
+        ``shift_assignments.position`` is a MySQL ENUM whose labels are
+        rewritten to the ShiftPosition values at startup, so a role stored
+        there would be rejected or erased. The role lives on its own column;
+        the seat itself is deliberately unremarkable.
+        """
+        assert {seat["position"] for seat in build_staffing_positions(4)} == {
+            "volunteer"
+        }
 
     def test_outreach_labels_come_from_the_department(self):
         org = _org()
@@ -519,6 +532,23 @@ def _scalars_result(rows):
     return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: list(rows)))
 
 
+def _rows_result(rows):
+    """An ``execute`` result exposing ``.all()`` — the (assignment, user) join."""
+    return SimpleNamespace(all=lambda: list(rows))
+
+
+def _shift(positions=None):
+    return SimpleNamespace(
+        id="shift-9",
+        start_time=datetime.now(timezone.utc),
+        positions=(
+            positions
+            if positions is not None
+            else [{"position": "volunteer", "required": True}] * 2
+        ),
+    )
+
+
 def _member(first, email, *, prefs=None, membership_type="active"):
     return SimpleNamespace(
         id=f"user-{first.lower()}",
@@ -539,7 +569,9 @@ class TestStaffingEndpoint:
         with pytest.raises(HTTPException) as exc:
             await open_request_staffing(
                 request_id=REQUEST_ID,
-                data=EventRequestStaffingCreate(volunteer_slots=2),
+                data=EventRequestStaffingCreate(
+                    roles=[StaffingRoleNeed(role="tour_guide", count=2)]
+                ),
                 db=db,
                 current_user=SimpleNamespace(id=USER_ID, organization_id=ORG_ID),
             )
@@ -564,7 +596,9 @@ class TestStaffingEndpoint:
         with pytest.raises(HTTPException) as exc:
             await open_request_staffing(
                 request_id=REQUEST_ID,
-                data=EventRequestStaffingCreate(volunteer_slots=2),
+                data=EventRequestStaffingCreate(
+                    roles=[StaffingRoleNeed(role="tour_guide", count=2)]
+                ),
                 db=db,
                 current_user=SimpleNamespace(id=USER_ID, organization_id=ORG_ID),
             )
@@ -572,7 +606,7 @@ class TestStaffingEndpoint:
         assert exc.value.status_code == 409
 
     @pytest.mark.asyncio
-    async def test_opening_signups_creates_the_shift_and_reports_the_seats(self):
+    async def test_opening_signups_creates_the_shift_and_reports_the_roles(self):
         event_request = _request_row(
             status=EventRequestStatus.SCHEDULED,
             event_date=datetime.now(timezone.utc) + timedelta(days=30),
@@ -593,6 +627,22 @@ class TestStaffingEndpoint:
                         "shift_date": None,
                         "slots_total": 3,
                         "slots_filled": 0,
+                        "roles": [
+                            {
+                                "role": "tour_guide",
+                                "label": "Tour Guide",
+                                "total": 2,
+                                "filled": 0,
+                                "remaining": 2,
+                            },
+                            {
+                                "role": "educator",
+                                "label": "Educator",
+                                "total": 1,
+                                "filled": 0,
+                                "remaining": 1,
+                            },
+                        ],
                         "volunteers": [],
                         "volunteer_call_sent_at": None,
                     }
@@ -602,15 +652,21 @@ class TestStaffingEndpoint:
             response = await open_request_staffing(
                 request_id=REQUEST_ID,
                 data=EventRequestStaffingCreate(
-                    volunteer_slots=3, include_officer_slot=False
+                    roles=[
+                        StaffingRoleNeed(role="tour_guide", count=2),
+                        StaffingRoleNeed(role="educator", count=1),
+                    ]
                 ),
                 db=db,
                 current_user=SimpleNamespace(id=USER_ID, organization_id=ORG_ID),
             )
 
         assert response.shift_id == "shift-9"
-        assert response.slots_total == 3
-        assert opener.await_args.kwargs["volunteer_slots"] == 3
+        assert [r.label for r in response.roles] == ["Tour Guide", "Educator"]
+        assert opener.await_args.kwargs["staffing_roles"] == [
+            {"role": "tour_guide", "count": 2},
+            {"role": "educator", "count": 1},
+        ]
 
 
 class TestVolunteerCall:
@@ -629,7 +685,8 @@ class TestVolunteerCall:
             ),
             _member("Lee", "lee@fire.example.org", prefs={"email_notifications": True}),
         ]
-        db = _seq_db([_scalars_result(members)])
+        db = _seq_db([_scalars_result(members), _rows_result([])])
+        db.scalar = AsyncMock(return_value=_shift())
         email_service = MagicMock()
         email_service.send_email = AsyncMock()
 
@@ -658,11 +715,18 @@ class TestVolunteerCall:
             status=EventRequestStatus.SCHEDULED,
             event_date=datetime.now(timezone.utc) + timedelta(days=14),
             staffing_shift_id="shift-9",
+            staffing_roles=[{"role": "tour_guide", "count": 2}],
             venue_address="12 Maple Street",
             audience_size=60,
             age_group="Grades 2-3",
         )
-        db = _seq_db([_scalars_result([_member("Sam", "sam@fire.example.org")])])
+        db = _seq_db(
+            [
+                _scalars_result([_member("Sam", "sam@fire.example.org")]),
+                _rows_result([]),
+            ]
+        )
+        db.scalar = AsyncMock(return_value=_shift())
         email_service = MagicMock()
         email_service.send_email = AsyncMock()
 
@@ -678,6 +742,9 @@ class TestVolunteerCall:
         assert "12 Maple Street" in body
         assert "60" in body
         assert "tab=open-shifts" in body
+        # The ask, in words a member can picture themselves doing.
+        assert "Roles needed" in body
+        assert "2 x Tour Guide" in body
 
     @pytest.mark.asyncio
     async def test_without_a_signup_sheet_the_email_says_what_to_do_instead(self):
@@ -783,7 +850,11 @@ class TestOutreachShiftIsNotDutyCoverage:
             MagicMock(return_value=scheduling),
         ):
             shift, error = await open_staffing_shift(
-                db, event_request, org, 2, include_officer=True, actor_id=USER_ID
+                db,
+                event_request,
+                org,
+                [{"role": "tour_guide", "count": 2}, {"role": "educator", "count": 1}],
+                actor_id=USER_ID,
             )
 
         assert error is None
@@ -791,16 +862,50 @@ class TestOutreachShiftIsNotDutyCoverage:
         shift_data = scheduling.create_shift.await_args.args[1]
         assert shift_data["is_outreach"] is True
         assert shift_data["open_to_all_members"] is True
-        assert shift_data["positions"] == [
-            {"position": "officer", "required": True},
-            {"position": "volunteer", "required": True},
-            {"position": "volunteer", "required": True},
-        ]
+        # Three people needed, three plain seats. The jobs are on the request.
+        assert (
+            shift_data["positions"] == [{"position": "volunteer", "required": True}] * 3
+        )
+        assert shift_data["min_staffing"] == 3
         # 14:00 UTC is 10am in America/New_York — the same calendar day. The
         # date is taken in the department's timezone so an evening event does
         # not land on the following day for a negative-offset department.
         assert shift_data["shift_date"] == date(2026, 9, 12)
         assert event_request.staffing_shift_id == "shift-9"
+        assert event_request.staffing_roles == [
+            {"role": "tour_guide", "count": 2},
+            {"role": "educator", "count": 1},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_the_shift_notes_name_the_roles(self):
+        """A member reading the shift on the calendar sees what the job is."""
+        org = _org()
+        event_request = _request_row(
+            status=EventRequestStatus.SCHEDULED,
+            event_date=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
+        )
+        scheduling = MagicMock()
+        scheduling.create_shift = AsyncMock(
+            return_value=(SimpleNamespace(id="shift-9"), None)
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        with patch(
+            "app.services.scheduling_service.SchedulingService",
+            MagicMock(return_value=scheduling),
+        ):
+            await open_staffing_shift(
+                db,
+                event_request,
+                org,
+                [{"role": "tour_guide", "count": 2}],
+                actor_id=USER_ID,
+            )
+
+        notes = scheduling.create_shift.await_args.args[1]["notes"]
+        assert "2 x Tour Guide" in notes
 
     @pytest.mark.asyncio
     async def test_an_evening_event_keeps_the_departments_calendar_date(self):
@@ -822,7 +927,11 @@ class TestOutreachShiftIsNotDutyCoverage:
             MagicMock(return_value=scheduling),
         ):
             await open_staffing_shift(
-                db, event_request, org, 1, include_officer=False, actor_id=USER_ID
+                db,
+                event_request,
+                org,
+                [{"role": "educator", "count": 1}],
+                actor_id=USER_ID,
             )
 
         assert scheduling.create_shift.await_args.args[1]["shift_date"] == date(
@@ -832,7 +941,146 @@ class TestOutreachShiftIsNotDutyCoverage:
     @pytest.mark.asyncio
     async def test_a_request_with_no_date_cannot_open_a_sheet(self):
         shift, error = await open_staffing_shift(
-            AsyncMock(), _request_row(), _org(), 2, False, USER_ID
+            AsyncMock(),
+            _request_row(),
+            _org(),
+            [{"role": "educator", "count": 1}],
+            USER_ID,
         )
         assert shift is None
         assert error is not None
+
+
+# ============================================
+# Outreach roles — a vocabulary for people who are not riding a truck
+# ============================================
+
+
+class TestOutreachRoles:
+    """The seats at a school visit are jobs, not crew positions.
+
+    "Firefighter / Driver / Officer" describes who is riding which seat on an
+    apparatus. It tells a member nothing about a station tour, and asking them
+    to sign up as "Driver" for a classroom talk is how a sheet stays empty.
+    """
+
+    def test_the_default_vocabulary_is_outreach_work(self):
+        roles = {r["value"] for r in EVENT_SETTINGS_DEFAULTS["outreach_roles"]}
+        assert {"tour_guide", "educator", "facilitator"} <= roles
+        # And explicitly not the crew positions.
+        assert not roles & {"firefighter", "driver", "officer", "captain"}
+
+    def test_a_department_can_replace_the_vocabulary(self):
+        """Departments run different programmes; a fixed list cannot hold them."""
+        org = _org()
+        org.settings["events"]["outreach_roles"] = [
+            {"value": "smoke_trailer_operator", "label": "Smoke Trailer Operator"}
+        ]
+        assert outreach_role_label(org, "smoke_trailer_operator") == (
+            "Smoke Trailer Operator"
+        )
+
+    def test_a_role_dropped_from_settings_still_renders(self):
+        """Somebody already signed up as it — showing the raw value is worse."""
+        assert outreach_role_label(_org(), "puppet_show") == "Puppet Show"
+
+    def test_a_role_the_department_has_not_configured_is_refused(self):
+        """A seat nobody can select never fills, and silently dropping it
+        would understate what the day needs."""
+        with pytest.raises(ValueError, match="Unknown outreach role"):
+            validate_staffing_roles(_org(), [{"role": "puppeteer", "count": 1}])
+
+    def test_an_empty_sheet_is_refused(self):
+        with pytest.raises(ValueError, match="at least one role"):
+            validate_staffing_roles(_org(), [])
+
+    def test_repeated_roles_are_summed_into_the_seats_meant(self):
+        roles = validate_staffing_roles(
+            _org(),
+            [
+                {"role": "tour_guide", "count": 2},
+                {"role": "tour_guide", "count": 1},
+            ],
+        )
+        assert roles == [{"role": "tour_guide", "count": 3}]
+
+    def test_needs_render_for_a_human(self):
+        assert describe_roles(
+            _org(),
+            [{"role": "tour_guide", "count": 2}, {"role": "educator", "count": 1}],
+        ) == ("2 x Tour Guide, 1 x Educator")
+
+
+class TestOutreachSignupRole:
+    """Signing up for an outreach sheet means choosing a job."""
+
+    @staticmethod
+    def _db(event_request, org, taken=0):
+        db = AsyncMock()
+        db.scalar = AsyncMock(side_effect=[event_request, org])
+        db.execute = AsyncMock(return_value=SimpleNamespace(scalar=lambda: taken))
+        return db
+
+    @pytest.mark.asyncio
+    async def test_a_member_must_say_what_they_will_do(self):
+        request = _request_row(staffing_roles=[{"role": "tour_guide", "count": 2}])
+        db = self._db(request, _org())
+
+        with pytest.raises(ValueError, match="Choose what you would like to do"):
+            await resolve_outreach_signup_role(
+                db, SimpleNamespace(id="shift-9"), None, ORG_ID
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_role_the_event_does_not_need_is_refused(self):
+        """Taking a seat as something nobody asked for leaves a real role open."""
+        request = _request_row(staffing_roles=[{"role": "tour_guide", "count": 2}])
+        db = self._db(request, _org())
+
+        with pytest.raises(ValueError, match="not one of the roles"):
+            await resolve_outreach_signup_role(
+                db, SimpleNamespace(id="shift-9"), "educator", ORG_ID
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_full_role_is_refused_even_with_seats_left_elsewhere(self):
+        request = _request_row(
+            staffing_roles=[
+                {"role": "tour_guide", "count": 1},
+                {"role": "educator", "count": 3},
+            ]
+        )
+        db = self._db(request, _org(), taken=1)
+
+        with pytest.raises(ValueError, match="last Tour Guide seat"):
+            await resolve_outreach_signup_role(
+                db, SimpleNamespace(id="shift-9"), "tour_guide", ORG_ID
+            )
+
+    @pytest.mark.asyncio
+    async def test_an_open_role_is_accepted(self):
+        request = _request_row(staffing_roles=[{"role": "tour_guide", "count": 2}])
+        db = self._db(request, _org(), taken=1)
+
+        assert (
+            await resolve_outreach_signup_role(
+                db, SimpleNamespace(id="shift-9"), "tour_guide", ORG_ID
+            )
+            == "tour_guide"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_sheet_with_no_roles_falls_back_to_plain_seats(self):
+        """A sheet opened before roles existed still has to be signable.
+
+        Its seats are ordinary volunteer seats and the generic capacity check
+        already covers them, so no role is demanded.
+        """
+        db = self._db(_request_row(staffing_roles=None), _org())
+
+        assert (
+            await resolve_outreach_signup_role(
+                db, SimpleNamespace(id="shift-9"), None, ORG_ID
+            )
+            == ""
+        )

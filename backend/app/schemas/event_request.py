@@ -110,18 +110,26 @@ class EventRequestSchedule(BaseModel):
         return self
 
 
-class EventRequestStaffingCreate(BaseModel):
-    """Schema for opening a volunteer signup sheet on a scheduled request."""
+class StaffingRoleNeed(BaseModel):
+    """How many people the department needs in one outreach role."""
 
-    volunteer_slots: int = Field(
-        default=2,
-        ge=1,
-        le=50,
-        description="How many members are needed to cover this event",
-    )
-    include_officer_slot: bool = Field(
-        default=False,
-        description="Add one officer seat alongside the volunteer seats",
+    role: str = Field(..., min_length=1, max_length=100)
+    count: int = Field(default=1, ge=1, le=50)
+
+
+class EventRequestStaffingCreate(BaseModel):
+    """Schema for opening a volunteer signup sheet on a scheduled request.
+
+    Roles, not crew positions: nobody rides a seat on an engine at a school
+    visit, so the sheet asks for tour guides and educators. Role values come
+    from the department's own ``events.outreach_roles`` setting, which is
+    checked server-side — a role nobody can select is a seat that never fills.
+    """
+
+    roles: List[StaffingRoleNeed] = Field(
+        ...,
+        min_length=1,
+        description='Roles needed, e.g. [{"role": "tour_guide", "count": 2}]',
     )
     notes: Optional[str] = Field(None, max_length=500)
 
@@ -132,8 +140,20 @@ class EventRequestVolunteerSignup(UTCResponseBase):
     user_id: str
     member_name: str
     position: str
+    outreach_role: Optional[str] = None
+    outreach_role_label: Optional[str] = None
     status: str
     assigned_at: Optional[datetime] = None
+
+
+class StaffingRoleStatus(BaseModel):
+    """One role on the sheet, and how full it is."""
+
+    role: str
+    label: str
+    total: int
+    filled: int
+    remaining: int
 
 
 class EventRequestStaffingResponse(UTCResponseBase):
@@ -143,6 +163,7 @@ class EventRequestStaffingResponse(UTCResponseBase):
     shift_date: Optional[datetime] = None
     slots_total: int = 0
     slots_filled: int = 0
+    roles: List[StaffingRoleStatus] = []
     volunteers: List[EventRequestVolunteerSignup] = []
     volunteer_call_sent_at: Optional[datetime] = None
 
@@ -306,6 +327,7 @@ class EventRequestResponse(UTCResponseBase):
     event_location_id: Optional[str] = None
     event_location_name: Optional[str] = None
     staffing_shift_id: Optional[str] = None
+    staffing_roles: Optional[List[Dict[str, Any]]] = None
     volunteer_call_sent_at: Optional[datetime] = None
     status_token: Optional[str] = None
     created_at: datetime

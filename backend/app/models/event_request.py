@@ -146,6 +146,14 @@ class EventRequest(Base):
     staffing_shift_id = Column(
         String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
+    # What the department needs on the day, by role rather than by crew seat:
+    # [{"role": "tour_guide", "count": 2}, {"role": "educator", "count": 1}].
+    # Canonical shape, settled on every write by
+    # app/utils/outreach_roles.normalize_staffing_roles (pitfall #20).
+    # The linked shift still carries one plain `volunteer` seat per person, so
+    # coverage, capacity and eligibility read it as the ordinary open shift it
+    # is — this column is what says which of those seats is which job.
+    staffing_roles = Column(JSON, nullable=True)
     # When the department last emailed the membership asking for help. Recorded
     # so a second coordinator can see the call already went out rather than
     # sending the roster a duplicate.

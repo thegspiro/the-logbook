@@ -33,6 +33,8 @@ import {
   Copy,
   UserPlus,
   Megaphone,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService, locationsService } from '../services/api';
@@ -45,6 +47,8 @@ import type {
   DateFlexibility,
   EmailTemplate,
   EventRequestStaffing,
+  OutreachRole,
+  StaffingRoleNeed,
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
@@ -157,8 +161,8 @@ const EventRequestsTab: React.FC = () => {
   // Volunteer staffing (the tie-in to the shift schedule)
   const [staffing, setStaffing] = useState<EventRequestStaffing | null>(null);
   const [staffingLoading, setStaffingLoading] = useState(false);
-  const [volunteerSlots, setVolunteerSlots] = useState(2);
-  const [includeOfficerSlot, setIncludeOfficerSlot] = useState(false);
+  const [outreachRoles, setOutreachRoles] = useState<OutreachRole[]>([]);
+  const [roleNeeds, setRoleNeeds] = useState<StaffingRoleNeed[]>([]);
   const [showVolunteerCall, setShowVolunteerCall] = useState(false);
   const [volunteerCallMessage, setVolunteerCallMessage] = useState('');
 
@@ -187,14 +191,20 @@ const EventRequestsTab: React.FC = () => {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const [labels, settings, memberList, locationList, templates] = await Promise.all([
+        const [labels, settings, memberList, locationList, templates, roles] = await Promise.all([
           eventRequestService.getOutreachTypeLabels(),
           eventService.getModuleSettings(),
           userService.getUsers() as Promise<OrgMember[]>,
           locationsService.getLocations({ is_active: true }) as unknown as Promise<OrgLocation[]>,
           eventRequestService.listEmailTemplates(),
+          eventRequestService.getOutreachRoles(),
         ]);
         setOutreachLabels(labels);
+        setOutreachRoles(roles);
+        // Seed the sheet with one of the first role the department configured,
+        // so a coordinator opening signups for a simple event can just press
+        // the button.
+        setRoleNeeds(roles[0] ? [{ role: roles[0].value, count: 1 }] : []);
         setPipelineTasks(settings.request_pipeline?.tasks || []);
         setMembers(memberList);
         setLocations(locationList);
@@ -264,13 +274,28 @@ const EventRequestsTab: React.FC = () => {
     void fetchRequests();
   };
 
+  const addRoleNeed = () => {
+    const unused = outreachRoles.find((r) => !roleNeeds.some((n) => n.role === r.value));
+    if (!unused) return;
+    setRoleNeeds([...roleNeeds, { role: unused.value, count: 1 }]);
+  };
+
+  const updateRoleNeed = (index: number, patch: Partial<StaffingRoleNeed>) => {
+    setRoleNeeds(roleNeeds.map((need, i) => (i === index ? { ...need, ...patch } : need)));
+  };
+
+  const removeRoleNeed = (index: number) => {
+    setRoleNeeds(roleNeeds.filter((_, i) => i !== index));
+  };
+
   const handleOpenStaffing = async (requestId: string) => {
+    if (roleNeeds.length === 0) {
+      toast.error('Add at least one role you need help with.');
+      return;
+    }
     setActionLoading(true);
     try {
-      const result = await eventRequestService.openStaffing(requestId, {
-        volunteer_slots: volunteerSlots,
-        include_officer_slot: includeOfficerSlot,
-      });
+      const result = await eventRequestService.openStaffing(requestId, { roles: roleNeeds });
       setStaffing(result);
       toast.success('Volunteer signups are open on the schedule.');
       await refreshDetail(requestId);
@@ -1135,44 +1160,70 @@ const EventRequestsTab: React.FC = () => {
                               {!staffingLoading && !staffing?.shift_id && (
                                 <div className="card space-y-3 p-4">
                                   <p className="text-theme-text-muted text-sm">
-                                    Open a signup sheet on the schedule so members can claim a seat for this event. It
-                                    appears under <span className="font-medium">Scheduling → Open Shifts</span> like any
-                                    other open shift.
+                                    Say what help you need and members can claim a role from{' '}
+                                    <span className="font-medium">Scheduling → Open Shifts</span>. These are outreach
+                                    roles, not riding positions — nobody is taking a seat on an engine at a school
+                                    visit. Edit the list in Events settings.
                                   </p>
-                                  <div className="flex flex-wrap items-end gap-3">
-                                    <div>
-                                      <label
-                                        htmlFor="volunteer-slots"
-                                        className="text-theme-text-muted mb-1 block text-xs font-medium"
-                                      >
-                                        Members needed
-                                      </label>
-                                      <input
-                                        id="volunteer-slots"
-                                        type="number"
-                                        min={1}
-                                        max={50}
-                                        value={volunteerSlots}
-                                        onChange={(e) => {
-                                          const val = parseInt(e.target.value, 10);
-                                          if (!isNaN(val) && val >= 1 && val <= 50) setVolunteerSlots(val);
-                                        }}
-                                        className="form-input w-24 text-sm"
-                                      />
-                                    </div>
-                                    <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                                      <input
-                                        type="checkbox"
-                                        checked={includeOfficerSlot}
-                                        onChange={(e) => setIncludeOfficerSlot(e.target.checked)}
-                                        className="form-checkbox"
-                                      />
-                                      Include an officer seat
-                                    </label>
+                                  <div className="space-y-2">
+                                    {roleNeeds.map((need, idx) => (
+                                      <div key={need.role} className="flex flex-wrap items-center gap-2">
+                                        <select
+                                          value={need.role}
+                                          onChange={(e) => updateRoleNeed(idx, { role: e.target.value })}
+                                          aria-label="Role needed"
+                                          className="form-input flex-1 text-sm sm:max-w-xs"
+                                        >
+                                          {outreachRoles
+                                            .filter(
+                                              (r) => r.value === need.role || !roleNeeds.some((n) => n.role === r.value)
+                                            )
+                                            .map((r) => (
+                                              <option key={r.value} value={r.value}>
+                                                {r.label}
+                                              </option>
+                                            ))}
+                                        </select>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          max={50}
+                                          value={need.count}
+                                          aria-label="How many needed"
+                                          onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10);
+                                            if (!isNaN(val) && val >= 1 && val <= 50) {
+                                              updateRoleNeed(idx, { count: val });
+                                            }
+                                          }}
+                                          className="form-input w-20 text-sm"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => removeRoleNeed(idx)}
+                                          disabled={roleNeeds.length === 1}
+                                          title="Remove this role"
+                                          className="text-theme-text-muted p-2 transition-colors hover:text-red-600 disabled:opacity-30 dark:hover:text-red-400"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={addRoleNeed}
+                                      disabled={roleNeeds.length >= outreachRoles.length}
+                                      className="text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1.5 text-sm font-medium transition-colors disabled:opacity-40"
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                      Add another role
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => void handleOpenStaffing(expandedDetail.id)}
-                                      disabled={actionLoading}
+                                      disabled={actionLoading || roleNeeds.length === 0}
                                       className="btn-primary flex items-center gap-1.5 text-sm font-medium"
                                     >
                                       <UserPlus className="h-4 w-4" />
@@ -1185,14 +1236,36 @@ const EventRequestsTab: React.FC = () => {
                               {!staffingLoading && staffing?.shift_id && (
                                 <div className="card space-y-3 p-4">
                                   <p className="text-theme-text-primary text-sm font-medium">
-                                    {staffing.slots_filled} of {staffing.slots_total} seats filled
+                                    {staffing.slots_filled} of {staffing.slots_total} filled
                                   </p>
+                                  {staffing.roles.length > 0 && (
+                                    <ul className="space-y-1">
+                                      {staffing.roles.map((role) => (
+                                        <li
+                                          key={role.role}
+                                          className="text-theme-text-secondary flex items-center justify-between gap-3 text-sm"
+                                        >
+                                          <span className="text-theme-text-primary">{role.label}</span>
+                                          <span
+                                            className={
+                                              role.remaining > 0
+                                                ? 'text-amber-700 dark:text-amber-400'
+                                                : 'text-emerald-700 dark:text-emerald-400'
+                                            }
+                                          >
+                                            {role.filled} of {role.total}
+                                            {role.remaining > 0 ? ` — ${role.remaining} still needed` : ' — covered'}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
                                   {staffing.volunteers.length === 0 ? (
                                     <p className="text-theme-text-muted text-sm">
                                       Nobody has signed up yet. Email the membership below to ask for help.
                                     </p>
                                   ) : (
-                                    <ul className="space-y-1">
+                                    <ul className="border-theme-surface-border space-y-1 border-t pt-3">
                                       {staffing.volunteers.map((v) => (
                                         <li
                                           key={v.user_id}
@@ -1200,8 +1273,8 @@ const EventRequestsTab: React.FC = () => {
                                         >
                                           <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                           <span className="text-theme-text-primary font-medium">{v.member_name}</span>
-                                          <span className="text-theme-text-muted text-xs capitalize">
-                                            {v.position.replace(/_/g, ' ')}
+                                          <span className="text-theme-text-muted text-xs">
+                                            {v.outreach_role_label || v.position.replace(/_/g, ' ')}
                                           </span>
                                         </li>
                                       ))}

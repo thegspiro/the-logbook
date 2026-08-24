@@ -20,7 +20,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import PaginationParams, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+)
 from app.core.captcha import require_captcha
 from app.core.database import get_db
 from app.core.public_portal_security import check_ip_rate_limit
@@ -59,6 +63,7 @@ from app.schemas.forms import FormResponse, FormsListResponse
 from app.services.event_request_service import (
     apply_default_assignee,
     configured_task_ids,
+    get_outreach_roles,
     get_outreach_types,
     get_pipeline_settings,
     get_staffing_state,
@@ -161,6 +166,7 @@ async def _build_response(
         event_location_id=event_request.event_location_id,
         event_location_name=location_name,
         staffing_shift_id=event_request.staffing_shift_id,
+        staffing_roles=event_request.staffing_roles,
         volunteer_call_sent_at=event_request.volunteer_call_sent_at,
         status_token=event_request.status_token,
         created_at=event_request.created_at,
@@ -533,6 +539,23 @@ async def list_event_requests(
         )
 
     return items
+
+
+@router.get("/outreach-roles")
+async def list_outreach_roles(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The department's outreach role vocabulary.
+
+    Any signed-in member, not ``events.manage``: this is what the Open Shifts
+    signup picker reads to label the seats on an outreach sheet, and the member
+    filling one is not an events administrator.
+    """
+    org = await db.scalar(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    return {"roles": get_outreach_roles(org)}
 
 
 # Declared above the catch-all `/{request_id}` on purpose: FastAPI
@@ -1303,7 +1326,12 @@ async def get_request_staffing(
     event_request = await _load_request_for_staffing(
         db, request_id, current_user.organization_id
     )
-    return EventRequestStaffingResponse(**await get_staffing_state(db, event_request))
+    org = await db.scalar(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    return EventRequestStaffingResponse(
+        **await get_staffing_state(db, event_request, org)
+    )
 
 
 @router.post(
@@ -1353,8 +1381,7 @@ async def open_request_staffing(
         db,
         event_request,
         org,
-        volunteer_slots=data.volunteer_slots,
-        include_officer=data.include_officer_slot,
+        staffing_roles=[role.model_dump() for role in data.roles],
         actor_id=current_user.id,
         notes=data.notes,
     )
@@ -1368,7 +1395,9 @@ async def open_request_staffing(
 
     await db.commit()
     await db.refresh(event_request)
-    return EventRequestStaffingResponse(**await get_staffing_state(db, event_request))
+    return EventRequestStaffingResponse(
+        **await get_staffing_state(db, event_request, org)
+    )
 
 
 @router.post(

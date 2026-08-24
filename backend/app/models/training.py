@@ -3319,6 +3319,16 @@ class ShiftAssignment(Base):
         server_default="assigned",
     )
 
+    # The job this member is doing at a community outreach event — tour guide,
+    # educator, facilitator — set only on shifts flagged ``is_outreach`` and
+    # NULL on every duty shift. It is a plain string, not a ShiftPosition:
+    # ``position`` is a MySQL ENUM whose labels are rewritten to the enum's own
+    # values at startup (see utils/enum_normalization), so an outreach role
+    # stored there would be rejected by the column or erased by that pass.
+    # ``position`` therefore stays ``volunteer`` for these seats and this
+    # column carries what the member actually signed up to do.
+    outreach_role = Column(String(100), nullable=True)
+
     # Training slot — when True this seat is a supervised training/rider
     # position. Optionally links the trainee's program and the evaluating
     # officer so shift finalization drafts a completion report against the

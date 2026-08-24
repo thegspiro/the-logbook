@@ -60,6 +60,8 @@ export interface AttendanceUpdate {
 export interface AssignmentCreate {
   user_id: string;
   position?: string;
+  /** Required on a community-outreach signup sheet, ignored on a duty shift. */
+  outreach_role?: string | undefined;
   notes?: string;
   is_training?: boolean;
   training_program_id?: string | undefined;

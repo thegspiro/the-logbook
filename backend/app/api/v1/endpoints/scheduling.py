@@ -24,6 +24,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
+from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
     BasicApparatus,
@@ -35,7 +36,7 @@ from app.models.training import (
     StandingShiftPattern,
     StandingShiftPeriod,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.scheduling import (
     ApparatusOptionsResponse,
     BasicApparatusCreate,
@@ -104,6 +105,11 @@ from app.schemas.scheduling import (
     TimeOffStatus,
     TradeCandidateResponse,
 )
+from app.services.event_request_service import (
+    OUTREACH_SEAT_POSITION,
+    outreach_role_label,
+    resolve_outreach_signup_role,
+)
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
@@ -115,6 +121,7 @@ from app.services.scheduling_widget_service import (
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
+from app.utils.outreach_roles import normalize_staffing_roles
 from app.utils.positions import normalize_stored_positions
 
 router = APIRouter()
@@ -287,6 +294,27 @@ async def _authorize_assignment_management(
 # ============================================
 
 
+def _outreach_role_slots(org, needed: list[dict], roster: list[dict]) -> list[dict]:
+    """How full each role on an outreach signup sheet is."""
+    if not needed:
+        return []
+    filled: dict[str, int] = {}
+    for seat in roster:
+        role = seat.get("outreach_role")
+        if role:
+            filled[role] = filled.get(role, 0) + 1
+    return [
+        {
+            "role": entry["role"],
+            "label": outreach_role_label(org, entry["role"]),
+            "total": entry["count"],
+            "filled": min(filled.get(entry["role"], 0), entry["count"]),
+            "remaining": max(entry["count"] - filled.get(entry["role"], 0), 0),
+        }
+        for entry in needed
+    ]
+
+
 async def _enrich_shifts(
     service: SchedulingService,
     organization_id,
@@ -305,6 +333,28 @@ async def _enrich_shifts(
 
     apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
     apparatus_map = await service._get_apparatus_map(organization_id, apparatus_ids)
+
+    # Outreach signup sheets name their seats by role (tour guide, educator)
+    # rather than by crew position, and the roles live on the event request the
+    # sheet was opened from. Resolved in one pass here, and only when the batch
+    # actually contains one, so an ordinary month of duty shifts costs nothing.
+    outreach_ids = [str(s.id) for s in shifts if getattr(s, "is_outreach", False)]
+    outreach_org = None
+    outreach_needs: dict[str, list[dict]] = {}
+    if outreach_ids:
+        outreach_org = await service.db.scalar(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        need_rows = await service.db.execute(
+            select(EventRequest).where(
+                EventRequest.staffing_shift_id.in_(outreach_ids),
+                EventRequest.organization_id == str(organization_id),
+            )
+        )
+        for req in need_rows.scalars().all():
+            outreach_needs[str(req.staffing_shift_id)] = normalize_staffing_roles(
+                req.staffing_roles
+            )
 
     # Resolve shift officer names
     officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
@@ -343,6 +393,10 @@ async def _enrich_shifts(
                     "user_id": str(seat.user_id),
                     "user_name": seat_name_map.get(str(seat.user_id)),
                     "position": _enum_value(seat.position),
+                    "outreach_role": seat.outreach_role,
+                    "outreach_role_label": outreach_role_label(
+                        outreach_org, seat.outreach_role
+                    ),
                     "status": _enum_value(seat.assignment_status),
                     "is_training": bool(seat.is_training),
                 }
@@ -380,6 +434,11 @@ async def _enrich_shifts(
         service._enrich_shift_dict(d, apparatus_map, user_name_map)
         d["attendee_count"] = attendee_counts.get(str(s.id), 0)
         d["roster"] = rosters.get(str(s.id), [])
+        d["outreach_roles"] = _outreach_role_slots(
+            outreach_org,
+            outreach_needs.get(str(s.id), []),
+            rosters.get(str(s.id), []),
+        )
         d["call_count"] = call_counts.get(str(s.id), 0)
         d["total_hours"] = hours_map.get(str(s.id))
         enriched.append(d)
@@ -1799,10 +1858,30 @@ async def create_assignment(
     **Permissions required:** scheduling.assign, or being the shift's officer.
     """
     service = SchedulingService(db)
-    await _authorize_shift_management(
+    shift = await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.assign"
     )
     assignment_data = assignment.model_dump(exclude_none=True)
+
+    # An officer seating somebody on an outreach sheet chooses the same roles
+    # the member would have. Validated the same way, so a hand-made assignment
+    # cannot overfill a role that self-signup would have refused.
+    if shift is not None and shift.is_outreach:
+        try:
+            role = await resolve_outreach_signup_role(
+                db,
+                shift,
+                assignment_data.get("outreach_role"),
+                current_user.organization_id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+        if role:
+            assignment_data["outreach_role"] = role
+            assignment_data["position"] = OUTREACH_SEAT_POSITION
+    else:
+        assignment_data.pop("outreach_role", None)
+
     try:
         result, error = await service.create_assignment(
             current_user.organization_id, shift_id, assignment_data, current_user.id
@@ -2460,7 +2539,31 @@ async def signup_for_shift(
     Member signs up for an open position on a shift.
     Does not require scheduling.assign permission — any member can sign up.
     Enforces position eligibility based on rank, training, and membership type.
+
+    On a community-outreach signup sheet the member picks an outreach *role*
+    (tour guide, educator, facilitator) instead: nobody is riding a seat on an
+    engine at a school visit, so the crew positions say nothing useful. The
+    underlying seat stays a plain ``volunteer`` so capacity, coverage and the
+    calendar read the sheet as the ordinary open shift it is.
     """
+    service = SchedulingService(db)
+    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    position_value = signup.position.value
+    outreach_role = None
+    if shift.is_outreach:
+        try:
+            outreach_role = await resolve_outreach_signup_role(
+                db, shift, signup.outreach_role, current_user.organization_id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+        # The sheet's seats are all `volunteer`; whatever position the client
+        # sent is not what the member is being asked to choose here.
+        position_value = OUTREACH_SEAT_POSITION
+
     # Eligibility check (self-service only — admin assignments bypass this)
     eligibility = ShiftEligibilityService(db)
     eligible = await eligibility.get_eligible_positions(
@@ -2473,20 +2576,21 @@ async def signup_for_shift(
             status_code=403,
             detail="You are not eligible to sign up for this shift.",
         )
-    if signup.position.value not in eligible:
+    if position_value not in eligible:
         raise HTTPException(
             status_code=403,
             detail=(
-                f"You are not eligible for the '{signup.position.value}' "
+                f"You are not eligible for the '{position_value}' "
                 f"position. Eligible positions: {', '.join(eligible)}."
             ),
         )
 
-    service = SchedulingService(db)
     assignment_data = {
         "user_id": str(current_user.id),
-        "position": signup.position.value,
+        "position": position_value,
     }
+    if outreach_role:
+        assignment_data["outreach_role"] = outreach_role
     try:
         result, error = await service.create_assignment(
             current_user.organization_id,
