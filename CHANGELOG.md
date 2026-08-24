@@ -60,6 +60,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payment policy — the three things the countdown, the checkout tiles and the
   post-submit wording need.
 
+### A contract-test server that will not boot now says so (2026-08-24)
+
+**Fixed**
+
+- **`collected 0 items` was all CI reported when the contract suite could not
+  start.** Every generated test in `test_api_contract.py` is defined inside
+  `if SCHEMA_AVAILABLE`, so a server that fails to come up leaves the module
+  with no tests at all — not even skipped ones. pytest exits 5 and the job
+  goes red with nothing else in the log, while `SKIP_REASON`, which names the
+  actual cause, was computed and then discarded. A `skipif` on the class read
+  as though it handled the case; it could not, because there were no tests for
+  it to skip. One test now always exists to carry the reason, and it **fails**
+  rather than skips once `RUN_API_CONTRACT_TESTS=1` has asked for the suite —
+  skipping would let "the application does not start" pass for green.
+- **A dead server thread reported no cause.** uvicorn raises inside the
+  thread, where the exception was lost, so the only symptom was a thread that
+  was no longer alive. The exception is now recorded and named in the failure,
+  which is what separates a runner hiccup from the app genuinely failing to
+  start.
+- **The schema fetch was losing a coin toss to its own default timeout.**
+  `schemathesis.openapi.from_url` allows 10s, and generating this app's
+  OpenAPI document — 1114 paths, 1364 component schemas — measures 9.6–11.7s
+  cold. A run that landed on the wrong side of that raised, and hit the
+  zero-collection hole above; the same commit could pass on one database
+  matrix and fail on the other purely on runner speed. The fetch now allows
+  120s, and retries a transient connection error rather than taking the
+  module down with it.
+
 ### The events list now shows what it wants from you (2026-08-24)
 
 **Added**
