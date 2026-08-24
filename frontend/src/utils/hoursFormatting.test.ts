@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roundHoursToQuarter, sumHoursToQuarter, formatHours } from './hoursFormatting';
+import { QUARTER_HOUR, roundHoursToQuarter, sumHoursToQuarter, formatHours, formatHoursExact } from './hoursFormatting';
 
 describe('roundHoursToQuarter', () => {
   it('leaves values already on a quarter untouched', () => {
@@ -72,5 +72,34 @@ describe('formatHours', () => {
   it('shows an absent value as zero', () => {
     expect(formatHours(null)).toBe('0');
     expect(formatHours(undefined)).toBe('0');
+  });
+});
+
+describe('formatHoursExact', () => {
+  it('keeps a derived average off the quarter', () => {
+    // 2.5 hours over three shifts. Quarter-rounding would print 0.75 and
+    // misreport the metric by a tenth of an hour.
+    expect(formatHoursExact(2.5 / 3)).toBe('0.83');
+    expect(formatHours(2.5 / 3)).toBe('0.75');
+  });
+
+  it('never rounds a percentage-derived credit ceiling upward', () => {
+    // An hour of attendance mapped at 40% credits 0.4 hours. "Credits up to
+    // 0.5" promises more than check-out will award.
+    expect(formatHoursExact(0.4)).toBe('0.4');
+  });
+
+  it('still strips float drift and trailing zeros', () => {
+    expect(formatHoursExact(0.1 + 0.2)).toBe('0.3');
+    expect(formatHoursExact(2)).toBe('2');
+    expect(formatHoursExact(null)).toBe('0');
+    expect(formatHoursExact(NaN)).toBe('0');
+  });
+});
+
+describe('QUARTER_HOUR', () => {
+  it('is the increment the rounding is built on', () => {
+    expect(QUARTER_HOUR).toBe(0.25);
+    expect(roundHoursToQuarter(QUARTER_HOUR)).toBe(QUARTER_HOUR);
   });
 });

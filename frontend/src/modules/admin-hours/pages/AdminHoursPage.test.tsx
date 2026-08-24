@@ -176,6 +176,53 @@ describe('AdminHoursPage', () => {
     expect(screen.getByText('At risk')).toBeInTheDocument();
   });
 
+  it('does not call a requirement met on the strength of the rounded display', async () => {
+    // 7.9 rounds to the quarter as 8, which against a requirement of 8 would
+    // print "Requirement met" beside a badge still reading behind — and a
+    // member who believes they are done stops logging. The shown figure is
+    // held below the target instead, so the row still subtracts to the gap.
+    getUserCompliance.mockResolvedValue([
+      {
+        categoryId: 'category-1',
+        categoryName: 'Administration',
+        categoryColor: '#2563eb',
+        requiredHours: 8,
+        loggedHours: 7.9,
+        frequency: 'annual',
+        status: 'at_risk',
+        periodStart: '2026-01-01T00:00:00+00:00',
+        periodEnd: '2026-12-31T00:00:00+00:00',
+      },
+    ]);
+
+    renderWithRouter(<AdminHoursPage />);
+
+    expect(await screen.findByText('7.75 / 8 hrs')).toBeInTheDocument();
+    expect(screen.getByText(/0.25 hrs still needed/)).toBeInTheDocument();
+    expect(screen.queryByText(/Requirement met/)).not.toBeInTheDocument();
+  });
+
+  it('calls a requirement met once the raw hours reach it', async () => {
+    getUserCompliance.mockResolvedValue([
+      {
+        categoryId: 'category-1',
+        categoryName: 'Administration',
+        categoryColor: '#2563eb',
+        requiredHours: 8,
+        loggedHours: 8.1,
+        frequency: 'annual',
+        status: 'compliant',
+        periodStart: '2026-01-01T00:00:00+00:00',
+        periodEnd: '2026-12-31T00:00:00+00:00',
+      },
+    ]);
+
+    renderWithRouter(<AdminHoursPage />);
+
+    expect(await screen.findByText('8 / 8 hrs')).toBeInTheDocument();
+    expect(screen.getByText(/Requirement met/)).toBeInTheDocument();
+  });
+
   it('omits the requirements section when the department has set none', async () => {
     renderWithRouter(<AdminHoursPage />);
 

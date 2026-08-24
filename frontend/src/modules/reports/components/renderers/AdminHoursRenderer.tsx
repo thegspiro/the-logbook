@@ -7,7 +7,7 @@ import type { AdminHoursReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
-import { formatHours, roundHoursToQuarter } from '@/utils/hoursFormatting';
+import { formatHours, sumHoursToQuarter } from '@/utils/hoursFormatting';
 
 interface Props {
   data: AdminHoursReport;
@@ -41,7 +41,10 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-        <StatCard label="Total Hours" value={roundHoursToQuarter(summary.total_hours)} />
+        {/* Summed from the rounded entries, not from the raw aggregate: three
+            ten-minute entries each read 0.25 in the table, and a total of 0.5
+            over rows showing 0.75 is arithmetic the reader can see is wrong. */}
+        <StatCard label="Total Hours" value={formatHours(sumHoursToQuarter(data.entries.map((e) => e.hours)))} />
         <StatCard label="Entries" value={summary.total_entries} />
         <StatCard label="Members" value={summary.unique_members} />
       </div>

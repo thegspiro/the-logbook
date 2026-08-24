@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatHours } from '../../utils/hoursFormatting';
+import { QUARTER_HOUR, formatHours, roundHoursToQuarter } from '../../utils/hoursFormatting';
 import { Link } from 'react-router';
 import type { AdminHoursSummary } from '../../modules/admin-hours/types';
 import type { AdminHoursComplianceItem } from '../../modules/admin-hours/types';
@@ -52,6 +52,14 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
           <p className="text-theme-text-muted text-xs font-medium uppercase">Yearly Requirements</p>
           {adminHoursCompliance.map((req) => {
             const pct = req.requiredHours > 0 ? Math.min(100, (req.loggedHours / req.requiredHours) * 100) : 0;
+            // Same rule as the admin-hours screen: a requirement the raw hours
+            // have not met never reads as met, so the shown figure is held an
+            // increment below the target rather than rounding up onto it.
+            const met = req.loggedHours >= req.requiredHours;
+            const requiredHours = roundHoursToQuarter(req.requiredHours);
+            const loggedHours = met
+              ? roundHoursToQuarter(req.loggedHours)
+              : Math.min(roundHoursToQuarter(req.loggedHours), requiredHours - QUARTER_HOUR);
             const barColor =
               req.status === 'compliant' ? 'bg-green-500' : req.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500';
             return (
@@ -67,7 +75,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ adminHoursSummary
                     <span className="text-theme-text-secondary">{req.categoryName}</span>
                   </div>
                   <span className="text-theme-text-primary font-medium">
-                    {formatHours(req.loggedHours)} / {formatHours(req.requiredHours)} hrs
+                    {formatHours(loggedHours)} / {formatHours(requiredHours)} hrs
                   </span>
                 </div>
                 <div className="bg-theme-surface-secondary h-2 w-full overflow-hidden rounded-full">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatHours } from '../../../../utils/hoursFormatting';
+import { formatHours, formatHoursExact } from '../../../../utils/hoursFormatting';
 import { AlertTriangle, Award, Calendar, CheckCircle, Clock, ClipboardCheck, FileText, Users } from 'lucide-react';
 import type { TrainingDashboardSummary } from '../../../../services/trainingServices';
 
@@ -91,7 +91,7 @@ export const TrainingHoursSummaryWidget = ({ data }: { data: TrainingDashboardSu
       {formatHours(data.stats.total_hours_this_year)} hrs
     </div>
     <p className="text-theme-text-muted text-sm">
-      {formatHours(data.stats.average_hours_per_member)} average per tracked member
+      {formatHoursExact(data.stats.average_hours_per_member)} average per tracked member
     </p>
   </Card>
 );
