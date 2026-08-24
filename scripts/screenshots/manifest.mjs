@@ -11633,6 +11633,72 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    // The seeder runs `post_event_validation` against a freshly-ended,
+    // unfinalized event on every seed, so the prompt is already in the inbox
+    // -- this shot only has to read it.
+    id: "19-31-notification-before-action",
+    doc: "19-august-2026-release-changes.md",
+    line: 311,
+    anchor: "same notification before and after completing its related",
+    alt: "The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByText(/Action Required: Validate attendance/)
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
+    fullPage: true,
+  },
+  {
+    // Completes the notification's related action directly against the API
+    // (finalize-attendance), the same call `EventDetailPage`'s End Event
+    // flow makes -- `archive_related_notifications` runs inside that
+    // endpoint, so this is the same code path a chief clicking through would
+    // take, not a shortcut around it.
+    //
+    // Real mutation, deliberately unflagged: `mutatesSeedData` would force
+    // this to be the last shot of guide 19, and `19-26` already holds that
+    // position for unrelated (election) data with its own ordering
+    // dependencies. Placed before `19-25`/`19-26` instead, which is what the
+    // guard actually requires -- nothing later in guide 19 reads event or
+    // notification state, so no later shot can be broken by this one.
+    id: "19-32-notification-after-action",
+    doc: "19-august-2026-release-changes.md",
+    line: 311,
+    anchor: "__paired-with-19-31__",
+    alt: "The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      const eventId = await page.evaluate(async () => {
+        const res = await fetch("/api/v1/notifications/my?limit=100", {
+          credentials: "include",
+        });
+        const body = await res.json();
+        const notif = (body.logs ?? []).find(
+          (log) => log.category === "event_validation",
+        );
+        if (!notif) throw new Error("no event_validation notification found");
+        return notif.metadata?.event_id;
+      });
+      await page.evaluate(async (id) => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        const res = await fetch(`/api/v1/events/${id}/finalize-attendance`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+        });
+        if (!res.ok) throw new Error(`finalize-attendance: ${res.status}`);
+      }, eventId);
+      await page.reload({ waitUntil: "networkidle" });
+      await page
+        .getByText(/New Shift Assignment/)
+        .waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
+  },
+  {
     // The station board's message rail, framed rather than the whole board.
     // The board itself is already pictured twice -- `00-24` for the member's
     // tab and `08-75`/`08-76` for the conditional cards, which is what the

@@ -308,7 +308,11 @@ not invalid credentials; every targeted department message still receives
 best-effort email, and Urgent adds SMS only when its consent/configuration gates
 pass.
 
-> **[SCREENSHOT NEEDED — same notification before and after completing its related action, with an unrelated notification still present.]**
+![The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification](./images/19-31-notification-before-action.png)
+
+![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
+
+**Above: unread count 7. Below: 6.** Completing the event's related action — finalizing attendance — archived exactly the one notification tied to it: `archive_related_notifications` matches on category and the event's own id, so the "New Shift Assignment" notification, which names a different action entirely, is untouched.
 
 **Not pictured — and the property it was meant to show is better checked than
 photographed.** Readiness and preview both `404` unless a Salesforce integration

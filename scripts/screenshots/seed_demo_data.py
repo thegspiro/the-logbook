@@ -2294,6 +2294,61 @@ class Seeder:
                 self.blocked.append(f"recruitment guest sign-in: {exc}")
         return event
 
+    VALIDATION_EVENT_TITLE = "Wednesday Evening Drill — Attendance Pending"
+
+    def seed_event_validation_notification(self) -> dict | None:
+        """A finished, unfinalized event, ready for the post-event-validation task.
+
+        `run_post_event_validation` only notices events that ended within the
+        last two hours and have not already been finalized or notified about
+        — a fixed past date works exactly once, then the window has closed
+        for good. Slid forward like the guest check-in event, and with
+        `custom_fields` reset alongside it: finalizing (the manifest's "after"
+        shot) stamps `attendance_finalized` permanently, so a capture run that
+        already used this fixture needs it un-stamped, not just re-dated, to
+        produce a fresh "before" state.
+        """
+        end = (NOW - timedelta(minutes=45)).replace(second=0, microsecond=0)
+        start = end - timedelta(hours=2)
+        window = {"start_datetime": iso(start), "end_datetime": iso(end)}
+
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.VALIDATION_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            event = self.api.patch(
+                f"/events/{pick(existing, 'id')}",
+                {**window, "custom_fields": {}},
+            )
+        else:
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.VALIDATION_EVENT_TITLE,
+                    "description": (
+                        "Standard company drill. Attendance recorded at the "
+                        "door; not yet reviewed."
+                    ),
+                    "event_type": "training",
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                    **window,
+                },
+            )
+        # Manually triggered rather than waited for: the task runs every 30
+        # minutes on its own schedule, and a capture run cannot wait for a
+        # cron tick. Every organization, not just this one, but the demo
+        # database has exactly one.
+        self.api.post("/scheduled/run-task?task=post_event_validation", {})
+        return event
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -13698,6 +13753,10 @@ class Seeder:
         self.step(
             "recruitment event with prospects",
             lambda: self.seed_recruitment_event_with_prospects(stations),
+        )
+        self.step(
+            "event validation notification",
+            self.seed_event_validation_notification,
         )
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []

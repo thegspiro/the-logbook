@@ -1,5 +1,38 @@
 # Screenshot currency
 
+## Captured 2026-08-24 — a validation prompt, before and after the action that clears it
+
+`19-31`, `19-32`, opened and checked. **2 markers remaining.**
+
+**Triggered for real, not seeded pre-formed.** `event_validation` notifications
+are written only by the `post_event_validation` scheduled task, which looks at
+events that ended in the last two hours. Seeded a training event ending 45
+minutes ago and called `POST /scheduled/run-task?task=post_event_validation`
+directly — the same manual-trigger endpoint the seeder already uses for shift
+reminders — rather than waiting for the cron tick, which a capture run cannot
+do. Slides forward and clears `custom_fields` on every re-seed, the same
+pattern `seed_guest_check_in_event` already uses, so a capture run that
+already finalized this fixture gets a fresh "before" state rather than a
+closed window.
+
+**The pair's second half is a real mutation, and it is deliberately not
+`mutatesSeedData`.** That flag would force `19-32` to be the last shot of
+guide 19, and `19-26` already holds that position for unrelated election
+data with its own ordering dependencies (`openBylawDraft`, the four-item
+ballot). Placed `19-31`/`19-32` earlier in the array instead, which the
+guard's actual rule permits — it only refuses a _later_ entry in the same
+doc once a mutator is found, and nothing after `19-32` (specifically:
+`19-25`, `19-26`, and nothing else in guide 19) reads event or notification
+state. The mutation itself calls `POST /events/{id}/finalize-attendance` —
+the same endpoint the app's own End Event flow uses, and the one that runs
+`archive_related_notifications` — so the capture exercises the real
+completion path, not a shortcut around it.
+
+**Verified the count, not just presence.** `19-31`'s badge reads 7 unread;
+`19-32`'s reads 6. One notification gone, matching what the caption claims —
+checked by comparing the two images side by side rather than assuming the
+archive worked because the API call returned 200.
+
 ## Captured 2026-08-24 — a deduct-mode step, on a sheet built to carry one
 
 `19-30`, opened and checked. **3 markers remaining.**
