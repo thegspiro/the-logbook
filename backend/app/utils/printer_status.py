@@ -95,6 +95,19 @@ def _decode_flags(mask: int, table) -> List[str]:
     return [label for bit, label in table if mask & bit]
 
 
+def _unrecognized(mask: int, table) -> bool:
+    """Whether *mask* sets any bit the table does not name.
+
+    Recognising one bit must not make a partly understood mask look fully
+    decoded: a roll that is nearly out *and* some condition this table has no
+    name for would otherwise be reported as only the first.
+    """
+    known = 0
+    for bit, _label in table:
+        known |= bit
+    return bool(mask & ~known)
+
+
 def parse_error_status(raw: str) -> Optional[Dict[str, List[str]]]:
     """Errors and warnings from a ``~HQES`` reply, or None if absent.
 
@@ -115,16 +128,16 @@ def parse_error_status(raw: str) -> Optional[Dict[str, List[str]]]:
         table = _ERROR_FLAGS if kind == "ERRORS" else _WARNING_FLAGS
         decoded = _decode_flags(mask, table)
 
-        # The flag says something is wrong even when no bit we recognise is
-        # set — report it generically rather than dropping it on the floor.
-        if flag == "1" and not decoded:
-            decoded = [
-                (
-                    "Printer reports an error"
-                    if kind == "ERRORS"
-                    else "Printer reports a warning"
-                )
-            ]
+        # Something is wrong that this table cannot name — either the flag is
+        # set with no recognised bit at all, or recognised bits are mixed with
+        # unrecognised ones. Either way it is reported generically rather than
+        # dropped on the floor.
+        if (flag == "1" and not decoded) or _unrecognized(mask, table):
+            decoded.append(
+                "Printer reports an error"
+                if kind == "ERRORS"
+                else "Printer reports a warning"
+            )
 
         if kind == "ERRORS":
             errors.extend(decoded)
@@ -171,6 +184,8 @@ _ESCPOS_FIXED_VALUE = 0b00010010
 # Offline status (DLE EOT 2). Bit 5 is "printing stops due to paper end" — the
 # same condition the paper-roll query reports, not a separate jam, so it is
 # labelled to match rather than sending someone to look for one.
+# Bit 3 (0x08) is "paper being fed by the FEED button" — a normal transient
+# state, not a fault, so it is deliberately not decoded here.
 _ESCPOS_COVER_OPEN = 0x04
 _ESCPOS_PAPER_STOP = 0x20
 _ESCPOS_ERROR = 0x40
@@ -180,6 +195,20 @@ _ESCPOS_ERROR = 0x40
 _ESCPOS_CUTTER_ERROR = 0x08
 _ESCPOS_UNRECOVERABLE = 0x20
 _ESCPOS_AUTO_RECOVERABLE = 0x40
+
+# Bits 1 and 4 are the fixed pattern and bits 0 and 7 are already rejected by
+# is_escpos_status_byte, so bit 2 is the only one this table cannot name.
+# Epson's n=3 table defines bits 3, 5 and 6 and nothing else; some third-party
+# firmware puts a fault of its own in bit 2. Naming it would be a guess, and a
+# wrong specific diagnosis is worse than a vague true one — but a set bit still
+# means something is wrong, so it is reported generically rather than letting a
+# faulted printer read as healthy.
+_ESCPOS_ERROR_CAUSE_KNOWN = (
+    _ESCPOS_FIXED_VALUE
+    | _ESCPOS_CUTTER_ERROR
+    | _ESCPOS_UNRECOVERABLE
+    | _ESCPOS_AUTO_RECOVERABLE
+)
 
 # Paper roll status (DLE EOT 4). Both bits of each pair are set together; the
 # spec defines the pair, so both are required rather than either.
@@ -243,6 +272,8 @@ def summarize_escpos(replies: Sequence[bytes]) -> Dict[str, object]:
             errors.append("Unrecoverable fault — the printer needs power cycling")
         if value & _ESCPOS_AUTO_RECOVERABLE:
             errors.append("Recoverable fault — clear it and the printer resumes")
+        if value & ~_ESCPOS_ERROR_CAUSE_KNOWN:
+            errors.append("Printer reports an error")
 
     if is_escpos_status_byte(offline):
         known = True

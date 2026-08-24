@@ -302,18 +302,25 @@ async def query_printer_raw(
         )
         # One deadline for the whole exchange, for the same reason as above: a
         # per-read budget multiplies by the number of questions asked.
+        #
+        # Each read is then capped at an equal share of what is left. Without
+        # that cap a printer that implements some real-time queries and ignores
+        # others spends the entire budget waiting on the first silent one, and
+        # every later question comes back empty — so adding a query nothing
+        # answers would silently disable the ones that worked before it.
         deadline = time.monotonic() + timeout
-        for payload in exchanges:
+        for index, payload in enumerate(exchanges):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 replies.append(b"")
                 continue
             writer.write(payload)
             await asyncio.wait_for(writer.drain(), timeout=remaining)
+            share = (deadline - time.monotonic()) / (len(exchanges) - index)
             try:
                 chunk = await asyncio.wait_for(
                     reader.read(min(read_bytes, MAX_STATUS_BYTES)),
-                    timeout=max(0.001, deadline - time.monotonic()),
+                    timeout=max(0.001, share),
                 )
             except asyncio.TimeoutError:
                 chunk = b""

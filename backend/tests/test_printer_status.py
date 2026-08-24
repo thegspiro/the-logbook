@@ -91,6 +91,14 @@ class TestErrorStatus:
         assert result["errors"] == []
         assert result["warnings"] == ["Labels nearly out"]
 
+    def test_a_recognised_bit_does_not_mask_an_unrecognised_one(self):
+        # Bit 8 is the near-end sensor; bit 0x40 is not in the table. Decoding
+        # only the first would report a partly understood mask as if it were
+        # fully understood, and the unnamed condition would vanish.
+        result = parse_error_status(_status(warnings="1 00000000 00000048"))
+        assert result is not None
+        assert result["warnings"] == ["Labels nearly out", "Printer reports a warning"]
+
     def test_a_head_open_is_an_error(self):
         result = parse_error_status(_status(errors="1 00000000 00000004"))
         assert result is not None
@@ -219,6 +227,20 @@ class TestSummarizeEscpos:
         # Reporting both would describe one jam as two faults.
         result = summarize_escpos([_GENERIC_ERROR, _CUTTER_FAULT, _OK])
         assert result["errors"] == ["Cutter fault"]
+
+    def test_an_unnameable_error_cause_bit_is_still_reported(self):
+        # Epson's n=3 table defines bits 3, 5 and 6. Third-party firmware puts
+        # faults of its own in bit 2; naming it would be a guess, but a
+        # faulted printer must not read as healthy.
+        unknown_cause = bytes([0b00010110])
+        result = summarize_escpos([_OK, unknown_cause, _OK])
+        assert result["errors"] == ["Printer reports an error"]
+
+    def test_a_feed_button_press_is_not_a_fault(self):
+        # Bit 3 of the offline byte is "paper being fed by the FEED button" —
+        # a normal transient state somebody caused on purpose.
+        feeding = bytes([0b00011010])
+        assert summarize_escpos([feeding, _OK, _OK])["errors"] == []
 
     def test_an_unexplained_error_bit_is_still_reported(self):
         # A faulted printer must never read as healthy, even when no query
