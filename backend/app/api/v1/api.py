@@ -63,6 +63,7 @@ from app.api.v1.endpoints import (
     security_monitoring,
     shift_completion,
     skills_testing,
+    station_documents,
     storefront,
     training,
     training_enhancements,
@@ -124,6 +125,7 @@ api_router.include_router(
 )
 api_router.include_router(storefront.router, prefix="/store", tags=["storefront"])
 api_router.include_router(labels.router, tags=["labels"])
+api_router.include_router(station_documents.router, tags=["station-documents"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(
     training_submissions.router,

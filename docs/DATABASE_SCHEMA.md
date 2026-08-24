@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**251 tables · 4294 columns · 813 foreign keys**
+**252 tables · 4311 columns · 815 foreign keys**
 
 ---
 
@@ -334,6 +334,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 24 | Tracks reorder requests for inventory items that have dropped below |
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
+
+### Label_Printer
+
+<sub>`app/models/label_printer.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`label_printers`](#label_printers) | `LabelPrinter` | 17 | A ZPL-capable network label printer belonging to an organization. |
 
 ### Legal
 
@@ -5330,6 +5338,42 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Label_Printer
+
+### `label_printers`
+
+**LabelPrinter** · `app/models/label_printer.py`
+
+> A ZPL-capable network label printer belonging to an organization.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `location` | VARCHAR(200) | yes |  |  |  |
+| `language` | VARCHAR(20) | no |  | `'zpl'` |  |
+| `host` | VARCHAR(255) | no |  |  |  |
+| `port` | INTEGER | no |  | `9100` |  |
+| `dpi` | INTEGER | no |  | `203` |  |
+| `label_format` | VARCHAR(50) | no |  | `'zebra_2x1'` |  |
+| `custom_width` | FLOAT | yes |  |  |  |
+| `custom_height` | FLOAT | yes |  |  |  |
+| `darkness` | INTEGER | yes |  |  |  |
+| `is_default` | BOOL | no |  | `False` |  |
+| `is_active` | BOOL | no |  | `True` |  |
+| `created_by_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_label_printers_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_label_printer_org_name` (`organization_id`, `name`)
+
 ## Legal
 
 ### `legal_document_revisions`
@@ -8873,7 +8917,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (303 references)
+### → `users` (304 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9040,6 +9084,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | NO ACTION | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | NO ACTION | yes |
+| `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
 | `locations` | `created_by` | NO ACTION | yes |
@@ -9181,7 +9226,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (199 references)
+### → `organizations` (200 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9294,6 +9339,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `label_printers` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |

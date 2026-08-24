@@ -71,10 +71,7 @@ export const Modal: React.FC<ModalProps> = ({
           </button>
         )}
       </header>
-      <div
-        className="modal-content min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
-        data-testid="modal-content"
-      >
+      <div className="modal-content min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6" data-testid="modal-content">
         {children}
       </div>
       {footer && (
