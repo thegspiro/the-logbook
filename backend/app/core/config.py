@@ -179,6 +179,12 @@ class Settings(BaseSettings):
     # private-resolution check is waived; HTTPS-scheme and cloud-metadata-
     # endpoint checks still apply.
     AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION: bool = False
+    # Comma-separated IP addresses/CIDRs containing operator-approved label
+    # printers. Empty disables direct network printing. This is deliberately a
+    # platform setting rather than tenant-managed configuration: organization
+    # administrators must not be able to turn the print socket into an SSRF
+    # primitive against arbitrary services reachable by the backend.
+    LABEL_PRINTER_ALLOWED_NETWORKS: str = ""
     # Platform-level retention for blocked-access-attempt telemetry (IP +
     # user-agent rows with no org column). Days; 0 disables the purge.
     # Org-scoped record classes are configured per organization instead —

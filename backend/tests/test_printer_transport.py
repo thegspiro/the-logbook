@@ -31,6 +31,16 @@ from app.utils.printer_transport import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _approved_printer_networks(monkeypatch):
+    """Keep normal printer fixtures inside an operator-approved test LAN."""
+    monkeypatch.setattr(
+        pt.settings,
+        "LABEL_PRINTER_ALLOWED_NETWORKS",
+        "192.168.1.0/24,10.0.0.0/8,172.16.0.0/12",
+    )
+
+
 def _writer():
     """A StreamWriter double. `close()` is synchronous on the real class, so it
     is a MagicMock — an AsyncMock there returns an un-awaited coroutine."""
@@ -140,6 +150,38 @@ class TestAllowedAddresses:
         # window between validation and connection.
         with _resolver("192.168.1.50"):
             assert await resolve_printer_host("printer.local") == "192.168.1.50"
+
+    async def test_unapproved_private_address_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(
+            pt.settings, "LABEL_PRINTER_ALLOWED_NETWORKS", "192.168.1.0/24"
+        )
+        with _resolver("10.20.30.40"):
+            with pytest.raises(ValueError, match="operator-approved"):
+                await resolve_printer_host("unapproved.internal")
+
+    async def test_public_address_is_rejected(self):
+        with _resolver("8.8.8.8"):
+            with pytest.raises(ValueError, match="operator-approved"):
+                await resolve_printer_host("attacker.example")
+
+    async def test_empty_allowlist_disables_direct_printing(self, monkeypatch):
+        monkeypatch.setattr(pt.settings, "LABEL_PRINTER_ALLOWED_NETWORKS", "")
+        with _resolver("192.168.1.50"):
+            with pytest.raises(ValueError, match="operator-approved"):
+                await resolve_printer_host("printer.local")
+
+    async def test_exact_public_address_can_be_explicitly_approved(self, monkeypatch):
+        monkeypatch.setattr(pt.settings, "LABEL_PRINTER_ALLOWED_NETWORKS", "8.8.8.8/32")
+        with _resolver("8.8.8.8"):
+            assert await resolve_printer_host("remote-printer.example") == "8.8.8.8"
+
+    async def test_all_dns_answers_must_be_approved(self, monkeypatch):
+        monkeypatch.setattr(
+            pt.settings, "LABEL_PRINTER_ALLOWED_NETWORKS", "192.168.1.0/24"
+        )
+        with _resolver("192.168.1.50", "10.20.30.40"):
+            with pytest.raises(ValueError, match="operator-approved"):
+                await resolve_printer_host("mixed.example")
 
 
 class TestHostValidation:
