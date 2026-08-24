@@ -80,6 +80,15 @@ officer's page was shown to everyone, and the crew's page to no one.
   and every surface offering the gear catalogue must gate on
   `inventory.manage`. Each assertion was confirmed to fail against the original
   defect before being kept.
+- **Two Playwright specs signed in as nobody.** `signIn` sets
+  `permissions: []`, which _overrides_ the fixture user's own list, so the
+  end-to-end user holds no grants at all. The navigation spec clicked a Gear &
+  Uniforms row that no longer renders for a plain member, and the mobile
+  presentation pass — which visits `/inventory` — quietly measured the redirect
+  instead of the page, reporting "rendered little content" for a screen that
+  renders plenty. Both now sign in with `inventory.manage`. The full mobile
+  ratchet still passes every route at zero sub-44px targets, so the wider grant
+  costs nothing it was protecting.
 
 ### Logged hours read on the quarter hour (2026-08-24)
 
