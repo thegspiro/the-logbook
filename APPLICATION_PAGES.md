@@ -78,12 +78,15 @@ Complete reference of all pages in the application, organized by module.
 
 ## Dashboard
 
-| URL          | Page            | Permission    |
-| ------------ | --------------- | ------------- |
-| `/dashboard` | Main Dashboard  | Authenticated |
-| `/learning`  | Learning Center | Authenticated |
+| URL                 | Page            | Permission    |
+| ------------------- | --------------- | ------------- |
+| `/dashboard`        | Main Dashboard  | Authenticated |
+| `/learning`         | Learning Center | Authenticated |
+| `/learning/:pathId` | Learning lesson | Authenticated |
 
 > **Learning Center (`/learning`)** _(added 2026-08-11)_. The in-app guide index, sitting beside the dashboard inside `AppLayout`. Authenticated-only by design — it teaches the application rather than exposing any department record, so gating it on a permission would hide the help from the members most likely to need it.
+
+> **Learning lessons (`/learning/:pathId`)** _(added 2026-08-24)_. The lesson itself, taught in the app: per step, why it matters, how to do it against the current screens, and what proves it is done. The step content lives in `frontend/src/pages/learning/learningPaths.ts` rather than being rendered from `docs/training/*.md` — the frontend image copies only `frontend/`, so the guide library is not in its build context, and precaching ~25,000 lines plus 97MB of screenshots would be the cost of keeping help available offline. The external reference guide stays linked at the foot of each lesson for anyone who wants the full manual. Progress is stored per member in `localStorage` (`logbook.learning-progress.v2.<userId>`); the unnamespaced v1 key was shared by every member of a station browser and is discarded rather than migrated, since nothing records who entered it. Week-one coverage is Getting Started, the phone/PWA lesson, Events, Training, Scheduling and Issued Gear, module-gated where the module can be switched off. A dashboard prompt (`DashboardOrientation`) is the entry point and hides once orientation is complete or dismissed.
 
 > _(2026-05-02)_ The volunteer dashboard "Now" section has been redesigned. The dashboard "Upcoming Events" stat now counts only events in the **next 30 days** (card labeled "Next 30 days") rather than all future events. The top navigation shows an **offline / pending-sync pill** indicating queued training submissions and RSVPs that will sync when connectivity returns.
 
@@ -446,10 +449,10 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 
 ## Medical Supplies _(documented 2026-08-18)_
 
-| URL                            | Page               | Permission                                       |
-| ------------------------------ | ------------------ | ------------------------------------------------ |
-| `/medical-supplies`            | Medical Supplies   | `inventory.view_medical` **OR** `inventory.view` |
-| `/medical-supplies/categories` | Medical Categories | `inventory.view_medical` **OR** `inventory.view` |
+| URL                            | Page                      | Permission                                       |
+| ------------------------------ | ------------------------- | ------------------------------------------------ |
+| `/medical-supplies`            | Medical Supplies          | `inventory.view_medical` **OR** `inventory.view` |
+| `/medical-supplies/categories` | Medical Supply Categories | `inventory.view_medical` **OR** `inventory.view` |
 
 > The EMS side of the department's stock, on its own pages so it can be run by
 > its own officer. Gear and uniforms live under **Inventory** and never appear
