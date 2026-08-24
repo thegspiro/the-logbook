@@ -85,6 +85,21 @@ export interface EventListItem {
   rsvp_count?: number;
   going_count?: number;
   user_rsvp_status?: RSVPStatus;
+
+  /**
+   * Fields the list needs to rank an event by urgency without a per-card
+   * request. `check_in_*` are derived server-side from the event's check-in
+   * window settings; `credited_hours` is what the *scheduled* duration would
+   * credit under the org's active event-hour mappings — the real credit is
+   * the attended duration, settled at check-out.
+   */
+  rsvp_deadline?: string | null;
+  max_attendees?: number | null;
+  check_in_opens_at?: string | null;
+  check_in_closes_at?: string | null;
+  user_attended?: boolean;
+  credited_hours?: number | null;
+  hour_category_label?: string | null;
 }
 
 export interface EventCreate {

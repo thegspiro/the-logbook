@@ -1148,6 +1148,7 @@ export const trainingSessionService = {
 import type {
   SelfReportConfig,
   SelfReportConfigUpdate,
+  SubmissionAttachment,
   TrainingSubmission,
   TrainingSubmissionCreate,
   TrainingSubmissionUpdate,
@@ -1208,6 +1209,45 @@ export const trainingSubmissionService = {
 
   async deleteSubmission(submissionId: string): Promise<void> {
     await api.delete(`/training/submissions/${submissionId}`);
+  },
+
+  /** Hand a saved draft to the department. Routing (review vs auto-approve) is
+   *  decided server-side at this point, not when the draft was saved. */
+  async submitDraft(submissionId: string): Promise<TrainingSubmission> {
+    const response = await api.post<TrainingSubmission>(`/training/submissions/${submissionId}/submit`);
+    return response.data;
+  },
+
+  // Certificate attachments
+  async uploadAttachment(
+    submissionId: string,
+    file: File
+  ): Promise<{ submission_id: string; attachments: SubmissionAttachment[] }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<{ submission_id: string; attachments: SubmissionAttachment[] }>(
+      `/training/submissions/${submissionId}/attachments`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return response.data;
+  },
+
+  async getAttachments(submissionId: string): Promise<SubmissionAttachment[]> {
+    const response = await api.get<{ submission_id: string; attachments: SubmissionAttachment[] }>(
+      `/training/submissions/${submissionId}/attachments`
+    );
+    return asArray(response.data?.attachments);
+  },
+
+  async deleteAttachment(submissionId: string, index: number): Promise<void> {
+    await api.delete(`/training/submissions/${submissionId}/attachments/${index}`);
+  },
+
+  getAttachmentDownloadUrl(submissionId: string, index: number): string {
+    return `/api/v1/training/submissions/${submissionId}/attachments/${index}/download`;
   },
 
   // Officer review
