@@ -27,7 +27,7 @@ const SchedulingHeader: React.FC<SchedulingHeaderProps> = ({
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
       )}
-      <div className="rounded-lg bg-red-600 p-2">
+      <div className="rounded-lg bg-red-800 p-2">
         <Clock className="h-6 w-6 text-white" aria-hidden="true" />
       </div>
       <div>

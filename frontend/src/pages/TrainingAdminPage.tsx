@@ -519,7 +519,7 @@ export const TrainingAdminPage: React.FC = () => {
               aria-current={isActive ? 'page' : undefined}
               className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
                 isActive
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
@@ -538,7 +538,7 @@ export const TrainingAdminPage: React.FC = () => {
             aria-haspopup="menu"
             className={`focus:ring-theme-focus-ring flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
               overflowPages.some(({ id }) => id === activePage)
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >

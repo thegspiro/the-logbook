@@ -598,7 +598,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   onClick={() => onPageChange(p)}
                   className={`h-9 min-w-[36px] rounded text-sm sm:h-10 sm:min-w-[40px] ${
                     p === currentPage
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary'
                   } transition-colors`}
                 >

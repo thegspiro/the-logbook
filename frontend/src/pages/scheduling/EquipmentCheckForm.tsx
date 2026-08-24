@@ -1504,7 +1504,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
           }`}
         >
@@ -2375,7 +2375,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                           onClick={() => setDisposition(value)}
                           className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                             disposition === value
-                              ? 'border-red-500 bg-red-600 text-white'
+                              ? 'border-red-500 bg-red-800 text-white'
                               : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
                           }`}
                         >

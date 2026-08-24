@@ -190,7 +190,7 @@ export const ApparatusDetailPage: React.FC = () => {
               onClick={() => handleTabChange(tab.id)}
               className={`flex flex-1 items-center justify-center space-x-2 rounded-md px-4 py-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary'
               }`}
             >

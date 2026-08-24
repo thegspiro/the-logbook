@@ -121,7 +121,7 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               {submitting ? 'Creating...' : 'Create'}
             </button>
@@ -215,7 +215,7 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
             >
               {submitting ? 'Creating...' : 'Create'}
             </button>
@@ -325,7 +325,7 @@ const FiscalYearSettingsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowCreateFY(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
           >
             <Plus className="h-4 w-4" />
             New Fiscal Year
@@ -403,7 +403,7 @@ const FiscalYearSettingsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowCreateCategory(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
           >
             <Plus className="h-4 w-4" />
             New Category

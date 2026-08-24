@@ -31,7 +31,7 @@ interface DashboardNeedsYouProps {
 const MOBILE_ROWS_SHOWN = 2;
 
 const TONE_CLASSES: Record<NonNullable<NeedsYouItem['tone']>, string> = {
-  primary: 'border border-transparent bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
+  primary: 'border border-transparent bg-red-800 text-white hover:bg-red-900 active:bg-red-900',
   warning:
     'border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-title hover:bg-theme-alert-warning-bg/70 border',
   neutral: 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border',

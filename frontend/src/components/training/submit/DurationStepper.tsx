@@ -45,7 +45,7 @@ export const DurationStepper: React.FC<{
               aria-pressed={active}
               className={`min-h-11 rounded-full border px-3.5 font-mono text-sm transition-colors sm:min-h-9 ${
                 active
-                  ? 'border-red-600 bg-red-600 text-white'
+                  ? 'border-red-800 bg-red-800 text-white'
                   : 'border-theme-input-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >

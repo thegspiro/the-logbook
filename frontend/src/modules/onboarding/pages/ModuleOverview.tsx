@@ -170,7 +170,7 @@ const ModuleOverview: React.FC = () => {
 
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-800">
               <Package aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Choose Your Modules</h1>
@@ -231,7 +231,7 @@ const ModuleOverview: React.FC = () => {
                   >
                     <div className="mb-4 flex items-start justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-800">
                           <Icon className="h-6 w-6 text-white" />
                         </div>
                         {status && getStatusIcon(status)}
