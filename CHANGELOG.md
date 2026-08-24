@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The stock room was in everyone's nav; the page members actually need was in nobody's (2026-08-24)
+
+**Changed**
+
+- **Medical Supplies is now advertised only to the people who stock it.** The
+  Operations entry gated on `inventory.view`, which both rank-and-file seeded
+  roles hold, so every member carried a row to the supply room in their
+  navigation — a screen about lot numbers, expiration dates and incoming
+  deliveries, and a job almost none of them have. It now gates on
+  `inventory.view_medical` / `manage_medical` / `inventory.manage`. **The route
+  and the API are unchanged**: a member who follows a link can still look at
+  what is on hand. What went away is the standing invitation.
+- **Apparatus Inventory has a navigation entry.** The crew half of the same
+  shelf — _"we just used two of these"_, recorded without starting a whole
+  checklist — was reachable only from a secondary button on My Checklists, and
+  nothing in either navigation pointed at it. It now sits in Operations beside
+  Medical Supplies, on the default member grant that its route already used.
+  This is the medical page most members need, and it is the one they could not
+  find.
+- **The Administration section no longer carries a medical row.** It pointed at
+  `/medical-supplies/categories` — a setup screen configured once — and with
+  Medical Supplies now gated to the same people, every user who could see it
+  already had the Operations entry to the same module. Categories keeps its
+  name and is still reached by the tag button on Medical Supplies, the way gear
+  categories are reached through the Gear Admin hub.
+
+Between them these three settle a navigation that had it backwards: the
+officer's page was shown to everyone, and the crew's page to no one.
+
 ### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
 
 **Fixed**

@@ -236,13 +236,36 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         // Its own entry rather than a child of Gear & Uniforms: the two are
         // run by different officers in departments that split the role, and
         // burying one under the other implies a hierarchy that isn't there.
+        //
+        // Deliberately NOT gated on the broad `inventory.view`, which both
+        // rank-and-file seeded roles hold: this is the stock room, and the
+        // people with a task on it are the ones who keep it stocked. A member
+        // restocking a rig from what they used wants Apparatus Inventory
+        // below, not this. The route and the API stay open on `inventory.view`
+        // — a member who follows a link can still look — but an entry every
+        // member carries in their nav implies a job they do not have.
         ...(isModuleOn('medical_supplies')
           ? [
               {
                 label: 'Medical Supplies',
                 path: '/medical-supplies',
                 icon: Stethoscope,
-                anyPermission: ['inventory.view_medical', 'inventory.view'],
+                anyPermission: ['inventory.view_medical', 'inventory.manage_medical', 'inventory.manage'],
+              },
+            ]
+          : []),
+        // The crew half of the same shelf: "we just used two of these",
+        // recorded without starting a whole checklist. Gated on the default
+        // member grant, matching the route's own gate — this is the medical
+        // page most members actually need, and until now nothing in the nav
+        // pointed at it.
+        ...(isModuleOn('scheduling')
+          ? [
+              {
+                label: 'Apparatus Inventory',
+                path: '/scheduling/apparatus-inventory',
+                icon: Truck,
+                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
               },
             ]
           : []),
@@ -417,16 +440,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   path: '/inventory/admin',
                   icon: Package,
                   permission: 'inventory.manage',
-                } as NavItem,
-              ]
-            : []),
-          ...(isModuleOn('medical_supplies')
-            ? [
-                {
-                  label: 'Medical Supply Categories',
-                  path: '/medical-supplies/categories',
-                  icon: Stethoscope,
-                  anyPermission: ['inventory.manage_medical', 'inventory.manage'],
                 } as NavItem,
               ]
             : []),
