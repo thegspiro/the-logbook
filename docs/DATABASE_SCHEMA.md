@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**252 tables · 4313 columns · 815 foreign keys**
+**253 tables · 4327 columns · 817 foreign keys**
 
 ---
 
@@ -547,6 +547,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shifts`](#shifts) | `Shift` | 29 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
+| [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
 | [`training_courses`](#training_courses) | `TrainingCourse` | 19 | Training Course model |
@@ -8126,6 +8127,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_skill_org_category` (`organization_id`, `category`)
 - `ix_skill_evaluations_active` (`active`)
 
+### `standing_shift_claims`
+
+**StandingShiftClaim** · `app/models/training.py`
+
+> A member's recurring claim on a shift — "every Tuesday night". This is a *member's* commitment, not a department schedule: shift patterns (``ShiftPattern``) generate the shifts, and a standing claim seats one member on the ones that match it. Giving up a single date leaves the claim intact, which is the whole point of storing it rather than just writing the assignments once. The claim is read in two places, and both must exist for it to mean anything: creating one seats the member on the matching shifts that already exist, and creating a *shift* seats the members whose active claims match it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `pattern` | ENUM(`weekly`, `biweekly`, `monthly`) | no |  | `weekly` |  |
+| `weekday` | INTEGER | no |  |  |  |
+| `period` | ENUM(`day`, `night`) | no |  | `day` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `apparatus_id` | VARCHAR(36) | yes |  |  |  |
+| `start_date` | DATE | no |  |  |  |
+| `end_date` | DATE | no |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `ended_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_standing_claim_lookup` (`organization_id`, `is_active`, `weekday`)
+- `idx_standing_claim_org` (`organization_id`)
+- `idx_standing_claim_user` (`user_id`)
+
 ### `training_approvals`
 
 **TrainingApproval** · `app/models/training.py`
@@ -8919,7 +8949,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (304 references)
+### → `users` (305 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9190,6 +9220,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `returned_by` | SET NULL | yes |
 | `skill_tests` | `validated_by` | SET NULL | yes |
 | `skill_tests` | `voided_by` | SET NULL | yes |
+| `standing_shift_claims` | `user_id` | CASCADE | no |
 | `storage_areas` | `created_by` | NO ACTION | yes |
 | `store_order_events` | `created_by` | SET NULL | yes |
 | `store_order_windows` | `closed_by` | SET NULL | yes |
@@ -9228,7 +9259,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (200 references)
+### → `organizations` (201 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9405,6 +9436,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_evaluations` | `organization_id` | CASCADE | no |
 | `skill_templates` | `organization_id` | CASCADE | no |
 | `skill_tests` | `organization_id` | CASCADE | no |
+| `standing_shift_claims` | `organization_id` | CASCADE | no |
 | `storage_areas` | `organization_id` | CASCADE | no |
 | `store_order_events` | `organization_id` | CASCADE | no |
 | `store_order_items` | `organization_id` | CASCADE | no |
