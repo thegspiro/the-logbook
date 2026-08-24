@@ -174,7 +174,13 @@ async def _build_member_specs(db, org_id, ids, extra_lines):
 # `permission_matches` does not treat manage as implying view, so both are
 # listed explicitly — mirroring how module endpoints pair view/manage.
 MODULE_LABELS: Dict[str, Tuple[Tuple[str, ...], SpecBuilder]] = {
-    "inventory": (("inventory.view", "inventory.manage"), _build_inventory_specs),
+    # Inventory is manage-only, unlike its neighbours here. The gear catalogue
+    # itself requires inventory.manage, and a label document naming arbitrary
+    # item ids is a read of it — accepting inventory.view (which every seeded
+    # member holds) would leave this generic endpoint as a way around that.
+    # apparatus/facilities/membership stay view-level because their own pages
+    # are view-level; prospective_members.view is not a baseline grant.
+    "inventory": (("inventory.manage",), _build_inventory_specs),
     "apparatus": (("apparatus.view", "apparatus.manage"), _build_apparatus_specs),
     "prospective_members": (
         ("prospective_members.view", "prospective_members.manage"),

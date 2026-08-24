@@ -27,6 +27,15 @@ def _service(position_id, position):
     return svc, db
 
 
+def module_permission_prefix(module: str) -> str:
+    """The permission namespace a label module authorizes against.
+
+    Matches the module key except for ``membership``, whose grants are
+    ``members.*``.
+    """
+    return "members" if module == "membership" else module
+
+
 class TestGetPreset:
     async def test_none_when_member_has_no_position(self):
         svc, _ = _service(None, None)
@@ -108,12 +117,35 @@ class TestModuleRegistry:
         assert not ls.is_known_label_module("nope")
         assert ls.required_permissions_for_module("nope") is None
 
-    def test_every_module_accepts_view_or_manage(self):
-        """A manage-only user must be able to print — permission_matches does
-        not treat manage as implying view, so both must be registered."""
+    #: Modules whose labels are deliberately manage-only. Inventory's gear
+    #: catalogue requires inventory.manage, and a label document naming
+    #: arbitrary item ids is a read of that catalogue — registering
+    #: inventory.view here would leave the generic endpoint as a way around
+    #: the page gate, since every seeded member holds it.
+    MANAGE_ONLY_MODULES = {"inventory"}
+
+    def test_every_module_accepts_its_manage_grant(self):
+        """A manage-only user must be able to print.
+
+        ``permission_matches`` does not treat manage as implying view, so a
+        module registering only its view grant would lock out the very people
+        who run the printer. This is the invariant that matters; whether the
+        view grant is *also* accepted is a per-module policy decision covered
+        by the next test.
+        """
+        for module, (permissions, _) in ls.MODULE_LABELS.items():
+            assert f"{module_permission_prefix(module)}.manage" in permissions, module
+
+    def test_view_grant_is_registered_except_where_deliberately_manage_only(self):
         for module, (permissions, _) in ls.MODULE_LABELS.items():
             actions = {p.split(".")[-1] for p in permissions}
-            assert actions == {"view", "manage"}, module
+            if module in self.MANAGE_ONLY_MODULES:
+                assert actions == {"manage"}, (
+                    f"{module} is manage-only by policy; registering a view "
+                    "grant here reopens the page gate through this endpoint"
+                )
+            else:
+                assert actions == {"view", "manage"}, module
 
 
 class TestAuthorizeModule:
@@ -146,6 +178,26 @@ class TestAuthorizeModule:
         with pytest.raises(HTTPException) as exc:
             _authorize_module(self._user("inventory.manage"), "facilities")
         assert exc.value.status_code == 403
+
+    def test_inventory_view_alone_cannot_print_inventory_labels(self):
+        """The generic endpoint must not be a way around the page gate.
+
+        `/inventory/print-labels` and `POST /inventory/labels/generate` both
+        require `inventory.manage`. This endpoint takes a `module` field, so
+        without the same restriction here a member holding the baseline
+        `inventory.view` could post the same item ids with
+        `module: "inventory"` and get the identical document back.
+        """
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.labels import _authorize_module
+
+        with pytest.raises(HTTPException) as exc:
+            _authorize_module(self._user("inventory.view"), "inventory")
+        assert exc.value.status_code == 403
+
+        # The quartermaster still prints.
+        _authorize_module(self._user("inventory.manage"), "inventory")
 
     def test_unknown_module_is_not_found(self):
         from fastapi import HTTPException

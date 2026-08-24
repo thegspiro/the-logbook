@@ -13,11 +13,16 @@ alternative on two officer-grade checks:
   passing their ``user_id`` — the endpoint's own comment says "Non-admins can
   only see their own compliance", and the seeded grant contradicted it.
 
-Only the **member position** needs rewriting here. The firefighter *rank*
-carried the same grant, but ``operational_ranks`` has no permissions column —
-rank defaults resolve at runtime from ``OPERATIONAL_RANKS`` via
-``get_rank_default_permissions``, so removing it from that config takes effect
-on every install without a data migration.
+Two seeded **positions** need rewriting: ``member`` and ``firefighter``.
+
+The firefighter one is easy to miss. ``operational_ranks`` genuinely has no
+permissions column — rank defaults resolve at runtime from
+``OPERATIONAL_RANKS`` — but ``DEFAULT_POSITIONS["firefighter"]["permissions"]``
+*is* ``OPERATIONAL_RANKS["firefighter"]["default_permissions"]``, so onboarding
+also writes a system position with slug ``firefighter`` carrying a copy of that
+list. ``dependencies.py`` unions every assigned position's stored permissions,
+so an existing member holding the Firefighter position would have kept the
+grant if only ``member`` were rewritten here.
 
 Revision ID: 31e2816df7c3
 Revises: e7a41b6d09c2
@@ -35,7 +40,7 @@ branch_labels = None
 depends_on = None
 
 _PERMISSION = "compliance.view"
-_SLUG = "member"
+_SLUGS = ("member", "firefighter")
 
 
 def _load_permissions(raw):
@@ -50,22 +55,25 @@ def upgrade() -> None:
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 
-    rows = bind.execute(
-        sa.text(
-            "SELECT id, permissions FROM positions "
-            "WHERE slug = :slug AND is_system = :is_system"
-        ),
-        {"slug": _SLUG, "is_system": True},
-    ).fetchall()
-    for row in rows:
-        permissions = _load_permissions(row.permissions)
-        if _PERMISSION not in permissions:
-            continue
-        permissions = [item for item in permissions if item != _PERMISSION]
-        bind.execute(
-            sa.text("UPDATE positions SET permissions = :permissions WHERE id = :id"),
-            {"permissions": json.dumps(permissions), "id": row.id},
-        )
+    for slug in _SLUGS:
+        rows = bind.execute(
+            sa.text(
+                "SELECT id, permissions FROM positions "
+                "WHERE slug = :slug AND is_system = :is_system"
+            ),
+            {"slug": slug, "is_system": True},
+        ).fetchall()
+        for row in rows:
+            permissions = _load_permissions(row.permissions)
+            if _PERMISSION not in permissions:
+                continue
+            permissions = [item for item in permissions if item != _PERMISSION]
+            bind.execute(
+                sa.text(
+                    "UPDATE positions SET permissions = :permissions WHERE id = :id"
+                ),
+                {"permissions": json.dumps(permissions), "id": row.id},
+            )
 
 
 def downgrade() -> None:

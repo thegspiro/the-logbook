@@ -16,13 +16,23 @@ somewhere, and the endpoint behind it is open to the whole department.
 
 from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
 
-#: Grants a plain volunteer holds: the ``member`` position plus the
-#: ``firefighter`` rank, which is what a new sign-up is given. The two
-#: registries spell the field differently — positions store ``permissions``,
-#: ranks store ``default_permissions`` — so each is read by its own key rather
-#: than a shared one.
+#: Grants a plain volunteer holds. Three entries, not two, and the third is the
+#: one that bites: ``DEFAULT_POSITIONS["firefighter"]["permissions"]`` *is*
+#: ``OPERATIONAL_RANKS["firefighter"]["default_permissions"]`` — the same list
+#: object — so onboarding writes a system **position** with slug
+#: ``firefighter`` carrying a copy of the rank's grants, and
+#: ``dependencies.py`` unions every assigned position's stored permissions.
+#:
+#: That indirection is why "ranks resolve at runtime, so no data migration is
+#: needed" was wrong when this file was first written: the rank's grants do
+#: reach the database, by way of a position. Asserted on all three so the
+#: persisted path is covered explicitly even while two of them alias.
+#:
+#: The registries also spell the field differently — positions store
+#: ``permissions``, ranks store ``default_permissions``.
 BASELINE_SOURCES = (
     ("member position", DEFAULT_POSITIONS, "member", "permissions"),
+    ("firefighter position", DEFAULT_POSITIONS, "firefighter", "permissions"),
     ("firefighter rank", OPERATIONAL_RANKS, "firefighter", "default_permissions"),
 )
 

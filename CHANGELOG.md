@@ -24,10 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Non-admins can only see their own compliance"; the seeded grant had been
   quietly contradicting it.
 
-  Removed from the `member` position and the `firefighter` rank. Only the
-  position needed a migration — `operational_ranks` has no permissions column,
-  so rank defaults resolve from config and the rank half fixes itself on
-  deploy. Nothing in the frontend referenced the grant.
+  Removed from the `member` position and the `firefighter` rank, and revoked
+  from both stored system positions by migration. Nothing in the frontend
+  referenced the grant.
+
+  The migration's scope was initially wrong, and the reason is worth keeping:
+  `operational_ranks` really has no permissions column, so it looked as though
+  the rank half needed no data change. But
+  `DEFAULT_POSITIONS["firefighter"]["permissions"]` _is_
+  `OPERATIONAL_RANKS["firefighter"]["default_permissions"]` — the same list
+  object — so onboarding also writes a system **position** with slug
+  `firefighter` carrying a copy, and `dependencies.py` unions every assigned
+  position's stored permissions. On an existing installation, revoking only
+  `member` would have left the grant live for everyone holding the Firefighter
+  position. Caught in review.
 
   The argument for this was already written one line below the removal site,
   where `equipment_check.view` is withheld from members _"because it also opens
@@ -51,6 +61,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detail moved inside the manage gate beside **Edit**, so the member who
   reaches that page from their own issued gear is not shown a button that only
   lands on Access Denied.
+
+  Gating those two was not enough on its own: the generic
+  `POST /labels/generate` authorizes through `MODULE_LABELS`, whose inventory
+  entry still accepted `inventory.view`, so the same ids could be posted with
+  `module: "inventory"` for the identical document. That entry is now
+  manage-only. Its neighbours stay view-level deliberately — apparatus,
+  facilities and membership labels match modules whose own pages are
+  view-level, and `prospective_members.view` is not a baseline grant. Caught in
+  review.
 
 **Not changed, having been checked**
 
