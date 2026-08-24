@@ -38,6 +38,7 @@ import {
   Key,
   Store,
   Stethoscope,
+  Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { HelpLink } from '../components/HelpLink';
@@ -63,6 +64,7 @@ import AuthSettingsSection from '../components/settings/AuthSettingsSection';
 import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import RanksSettingsSection from '../components/settings/RanksSettingsSection';
 import EvocLevelsSettingsSection from '../components/settings/EvocLevelsSettingsSection';
+import LabelPrintersSection from '../components/settings/LabelPrintersSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
@@ -70,7 +72,15 @@ import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 
 // ── Section definitions ──
 
-type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'authentication';
+type SectionKey =
+  | 'general'
+  | 'modules'
+  | 'members'
+  | 'ranks'
+  | 'email'
+  | 'storage'
+  | 'labelPrinters'
+  | 'authentication';
 
 /**
  * Sub-pages across every section. One flat union rather than one per section:
@@ -137,6 +147,12 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
   },
   { key: 'email', label: 'Email', icon: Mail, description: 'Email platform and notification settings' },
   { key: 'storage', label: 'Storage', icon: HardDrive, description: 'File storage platform configuration' },
+  {
+    key: 'labelPrinters',
+    label: 'Label Printers',
+    icon: Printer,
+    description: 'Network barcode label printers',
+  },
   {
     key: 'authentication',
     label: 'Authentication',
@@ -1350,6 +1366,12 @@ export const SettingsPage: React.FC = () => {
             }}
           />
         );
+
+      // ════════════════════════════════════════════
+      // LABEL PRINTERS
+      // ════════════════════════════════════════════
+      case 'labelPrinters':
+        return <LabelPrintersSection />;
 
       // ════════════════════════════════════════════
       // AUTHENTICATION

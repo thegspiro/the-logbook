@@ -58,3 +58,19 @@ export const MEMBER_SEARCH_MIN_CHARS = 2;
 export const MEMBER_SEARCH_MAX_RESULTS = 15;
 /** Long enough that typing a name is one request, not one per keystroke. */
 export const MEMBER_SEARCH_DEBOUNCE_MS = 300;
+
+// ============================================
+// Events list urgency
+// ============================================
+// How the /events list decides an event is close enough to need the member's
+// attention now. Both windows are deliberately the same length so a card can
+// never say "Tomorrow" while the band stays silent about its RSVP deadline.
+
+/** Inside this window an event's time reads as "Tonight" / "Tomorrow". */
+export const EVENT_RELATIVE_LABEL_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
+/** An unanswered RSVP whose deadline falls inside this window is urgent. */
+export const EVENT_RSVP_DEADLINE_SOON_MS = 48 * 60 * 60 * 1000; // 48 hours
+/** How far back the list looks for mandatory events with no check-in. */
+export const EVENT_MISSED_LOOKBACK_DAYS = 30;
+/** Rows the "Needs You" band shows before collapsing the rest into a link. */
+export const NEEDS_YOU_MAX_ROWS = 5;

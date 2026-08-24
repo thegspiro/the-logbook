@@ -41,7 +41,7 @@ describe('SettingsPage autosave reporting', () => {
     for (const section of ['general', 'modules', 'members', 'ranks']) {
       expect(declared).toContain(`'${section}'`);
     }
-    for (const explicit of ['email', 'storage', 'authentication']) {
+    for (const explicit of ['email', 'storage', 'labelPrinters', 'authentication']) {
       expect(declared).not.toContain(`'${explicit}'`);
     }
     expect(source).toContain('saveState={AUTOSAVED_SECTIONS.has(activeSection) ? saveState : undefined}');

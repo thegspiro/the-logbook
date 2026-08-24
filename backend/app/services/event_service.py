@@ -8,7 +8,7 @@ import calendar
 import copy
 import csv
 import io
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -33,7 +33,7 @@ from app.models.event import (
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
-from app.models.user import Organization, User
+from app.models.user import MemberLeaveOfAbsence, Organization, User
 from app.schemas.event import (
     EventCreate,
     EventStats,
@@ -169,13 +169,15 @@ class EventService:
         end_before: Optional[datetime] = None,
         include_cancelled: bool = False,
         include_drafts: bool = False,
+        mandatory_only: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """List events with filtering.
 
         Returns dicts with event fields plus pre-computed rsvp_count,
-        going_count, and user_rsvp_status — avoiding N+1 queries.
+        going_count, user_rsvp_status and user_attended — avoiding N+1
+        queries.
         """
         # Aggregate RSVP counts as correlated subqueries
         rsvp_count_sq = (
@@ -196,7 +198,7 @@ class EventService:
 
         columns = [Event, rsvp_count_sq, going_count_sq]
 
-        # Optionally include current user's RSVP status
+        # Optionally include current user's RSVP status and attendance
         if user_id:
             user_rsvp_sq = (
                 select(EventRSVP.status)
@@ -207,6 +209,31 @@ class EventService:
                 .label("user_rsvp_status")
             )
             columns.append(user_rsvp_sq)
+
+            # An officer recording attendance after the fact writes
+            # override_check_in_at without ever setting `checked_in`, so a
+            # member who was present but never scanned would otherwise read
+            # back as a no-show on the list.
+            user_attended_sq = (
+                select(
+                    case(
+                        (
+                            or_(
+                                EventRSVP.checked_in.is_(True),
+                                EventRSVP.override_check_in_at.isnot(None),
+                            ),
+                            True,
+                        ),
+                        else_=False,
+                    )
+                )
+                .where(EventRSVP.event_id == Event.id)
+                .where(EventRSVP.user_id == str(user_id))
+                .correlate(Event)
+                .scalar_subquery()
+                .label("user_attended")
+            )
+            columns.append(user_attended_sq)
 
         query = (
             select(*columns)
@@ -230,6 +257,9 @@ class EventService:
 
         if not include_cancelled:
             query = query.where(Event.is_cancelled.is_(False))
+
+        if mandatory_only:
+            query = query.where(Event.is_mandatory.is_(True))
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)
@@ -256,6 +286,7 @@ class EventService:
                 "rsvp_count": row[1] or 0,
                 "going_count": row[2] or 0,
                 "user_rsvp_status": None,
+                "user_attended": False,
             }
             if user_id:
                 raw_status = row[3]
@@ -263,9 +294,189 @@ class EventService:
                     item["user_rsvp_status"] = (
                         raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
+                item["user_attended"] = bool(row[4])
             items.append(item)
 
+        await self._annotate_list_items(items, organization_id)
+
         return items
+
+    async def list_missed_mandatory_events(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        since: datetime,
+        until: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """Recent mandatory events this member was expected at and did not attend.
+
+        "Expected at" is the load-bearing part. A plain mandatory-and-no-check-in
+        query tells a member they missed drills held before they were hired,
+        drills held while they were on an approved leave, and drills that were
+        never mandatory for their membership type in the first place. The events
+        list puts each of these in a band headed "clears itself as you respond" —
+        and none of them can be cleared by responding, because the member did
+        nothing wrong. So they are excluded here rather than filtered in the UI:
+        a client that forgets the filter would accuse people.
+        """
+        until = until or datetime.now(dt_timezone.utc)
+
+        items = await self.list_events(
+            organization_id=organization_id,
+            user_id=user_id,
+            start_after=since,
+            end_before=until,
+            mandatory_only=True,
+            limit=500,
+        )
+        candidates = [item for item in items if not item["user_attended"]]
+        if not candidates:
+            return []
+
+        user = await self.db.get(User, str(user_id))
+        if user is None:
+            return []
+
+        leaves = await self._active_leave_periods(organization_id, user_id)
+
+        return [
+            item
+            for item in candidates
+            if self._was_expected_at(item["event"], user, leaves)
+        ]
+
+    async def _active_leave_periods(
+        self, organization_id: UUID, user_id: UUID
+    ) -> List[Tuple[date, Optional[date]]]:
+        """Approved, still-active leave periods for one member.
+
+        An open-ended leave (``end_date`` NULL) is permanent, so it is returned
+        with ``None`` and treated as covering everything from its start.
+        """
+        result = await self.db.execute(
+            select(
+                MemberLeaveOfAbsence.start_date, MemberLeaveOfAbsence.end_date
+            ).where(
+                MemberLeaveOfAbsence.organization_id == str(organization_id),
+                MemberLeaveOfAbsence.user_id == str(user_id),
+                MemberLeaveOfAbsence.active.is_(True),
+            )
+        )
+        return [(row[0], row[1]) for row in result.all() if row[0] is not None]
+
+    @staticmethod
+    def _was_expected_at(
+        event: Event,
+        user: User,
+        leaves: List[Tuple[date, Optional[date]]],
+    ) -> bool:
+        """Whether this member was actually required at this event.
+
+        Errs toward *not* accusing: anything unknown (no hire date recorded, no
+        membership type recorded) is treated as "cannot show they were required",
+        because the cost of a false accusation on someone's attendance record is
+        much higher than the cost of one missing reminder.
+        """
+        start = event.start_datetime
+        if start is None:
+            return False
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=dt_timezone.utc)
+        event_date = start.date()
+
+        # Hired after it happened — they could not have been there.
+        if user.hire_date and event_date < user.hire_date:
+            return False
+
+        for leave_start, leave_end in leaves:
+            if event_date >= leave_start and (
+                leave_end is None or event_date <= leave_end
+            ):
+                return False
+
+        # An event mandatory only for certain membership types is not mandatory
+        # for anybody else. An empty or absent list means "everyone".
+        required_types = event.mandatory_membership_types
+        if isinstance(required_types, list) and required_types:
+            if user.membership_type not in required_types:
+                return False
+
+        return True
+
+    async def _annotate_list_items(
+        self, items: List[Dict[str, Any]], organization_id: UUID
+    ) -> None:
+        """Attach the derived fields the member-facing list renders.
+
+        The check-in window is computed, not stored, and the credited hours
+        come from the org's event-hour mappings — both would otherwise be a
+        query (or a duplicated rule) per card.
+        """
+        if not items:
+            return
+
+        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
+            str(organization_id)
+        )
+
+        for item in items:
+            event: Event = item["event"]
+            check_in_opens_at, check_in_closes_at = self._get_check_in_window(event)
+            item["check_in_opens_at"] = check_in_opens_at
+            item["check_in_closes_at"] = check_in_closes_at
+
+            credited_hours, hour_category_label = self._resolve_credited_hours(
+                event, mappings
+            )
+            item["credited_hours"] = credited_hours
+            item["hour_category_label"] = hour_category_label
+
+    @staticmethod
+    def _resolve_credited_hours(
+        event: Event,
+        mappings: Dict[Tuple[str, str], List[Tuple[int, str]]],
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """Hours this event's scheduled duration would credit, and to what.
+
+        Resolution order mirrors ``AdminHoursService.get_mappings_for_event``
+        exactly — event_type wins, custom_category applies only when the event
+        has no type — so the number on the card is the number
+        ``credit_event_attendance`` will award. It is an estimate in one
+        respect the card must not overstate: the real credit is the *attended*
+        duration settled at check-out, not the scheduled one.
+        """
+        event_type = (
+            event.event_type.value
+            if hasattr(event.event_type, "value")
+            else event.event_type
+        )
+        if event_type:
+            matched = mappings.get(("event_type", event_type))
+        elif event.custom_category:
+            matched = mappings.get(("custom_category", event.custom_category))
+        else:
+            matched = None
+
+        if not matched:
+            return None, None
+        if not event.start_datetime or not event.end_datetime:
+            return None, None
+
+        duration_hours = (
+            event.end_datetime - event.start_datetime
+        ).total_seconds() / 3600
+        if duration_hours <= 0:
+            return None, None
+
+        total_percentage = sum(percentage for percentage, _ in matched)
+        credited = round(duration_hours * total_percentage / 100, 1)
+        if credited <= 0:
+            return None, None
+
+        # A split (70% Training / 30% Professional Development) has no single
+        # honest label, so the card shows the total without naming a category.
+        label = matched[0][1] if len(matched) == 1 else None
+        return credited, label
 
     async def update_event(
         self,
