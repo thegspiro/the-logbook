@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
+
+**Changed**
+
+- **A lesson no longer sends you to GitHub to read it.** The three pilot paths
+  carried no content of their own: each one's "Read full guide" button opened a
+  markdown file on github.com. That reached nothing from a station on a
+  firewalled or offline network, pointed at `main` rather than the build the
+  department runs, and landed on a 2,600–3,000 line file with no anchor to the
+  step just clicked. Each step now states why it matters, how to do it against
+  the current screens, and what proves it is done, at `/learning/:pathId`. The
+  full reference guide stays linked at the foot of each lesson.
+- **Progress is stored per member.** The old key was shared by everyone using a
+  browser, so on a station computer one member saw and overwrote another's
+  checkmarks. Progress is now keyed by member; the old data is discarded rather
+  than adopted, because nothing recorded who entered it. Two tabs open at once
+  no longer delete each other's ticks.
+- **The Learning Center index is a menu, not a checklist.** Ticking a task off
+  happens on the lesson, where the member has just read what the task is.
+
+**Added**
+
+- **A dashboard prompt for anyone with orientation left to do.** The Learning
+  Center sat in all three navigation surfaces and new members still never
+  opened it, because the dashboard is where they land and nothing there said
+  the lessons existed. The prompt hides once orientation is complete or waved
+  off.
+- **Three more lessons for a member's first week** — installing the app on a
+  phone and what still works without signal, RSVPing and checking in to an
+  event, and reviewing the gear signed out to you. Six lessons and nineteen
+  tasks in all, hidden where the department has switched the module off.
+
 ### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
 
 **Fixed**
