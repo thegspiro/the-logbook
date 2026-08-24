@@ -101,6 +101,20 @@ class EmailTemplate(Base):
     # the message with no footer at all — see app/services/email_footers.py.
     footer_key = Column(String(32), nullable=True)
 
+    # The notice's colourway and shape, as data rather than hexes baked into
+    # the body. ``build_shell`` leaves {{header_accent}} / {{chip_tint}} /
+    # {{status_chip}} in the markup and the renderer fills them from here,
+    # which is what lets an officer change a colourway from the screen
+    # instead of it taking a deploy.
+    #
+    # NULL means "this body carries its own colours" — which is every row
+    # written before these columns existed, and stays valid: a body with
+    # literal hexes has no tokens to fill, so it renders exactly as it did.
+    # Absence must mean current behaviour, never "off".
+    header_accent = Column(String(7), nullable=True)
+    status_chip = Column(String(40), nullable=True)
+    layout = Column(String(16), nullable=True)
+
     # Configuration
     is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     allow_attachments = Column(

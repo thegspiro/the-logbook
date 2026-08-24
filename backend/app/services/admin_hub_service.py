@@ -126,6 +126,8 @@ class MetricSpec:
     module_off_reason: Optional[str] = None
     #: Extra data-driven gate — returns a reason string when unavailable.
     availability: Optional[AvailabilityCheck] = None
+    #: Additional permission required because this metric reads protected data.
+    permission: Optional[str] = None
 
 
 @dataclass
@@ -140,6 +142,8 @@ class ModuleSpec:
     default_metrics: tuple[str, str, str] = field(default=("", "", ""))
     #: Module that must be enabled for the page's data to exist at all.
     requires_module: Optional[str] = None
+    #: Additional permission required to resolve this module's attention queue.
+    attention_permission: Optional[str] = None
 
 
 # ── Small helpers ───────────────────────────────────────────────────────────
@@ -1239,6 +1243,7 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
         permission="members.manage",
         default_metrics=("active_members", "probationary_members", "inactive_members"),
         attention=_members_attention,
+        attention_permission="medical_screening.view",
         metrics=(
             MetricSpec(
                 key="active_members",
@@ -1271,6 +1276,7 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
                     "Share of active members with an unexpired medical screening"
                 ),
                 resolve=_members_screening_current,
+                permission="medical_screening.view",
             ),
             MetricSpec(
                 key="prospective_members",
@@ -1487,7 +1493,12 @@ class AdminHubService:
         ctx = await self._context(user)
 
         try:
-            attention = await spec.attention(ctx)
+            attention = (
+                await spec.attention(ctx)
+                if spec.attention_permission is None
+                or user_has_permission(user, spec.attention_permission)
+                else []
+            )
         except Exception as exc:
             # A broken exception query must not take the page down with it —
             # the tab body below is still the admin's work.
@@ -1521,6 +1532,10 @@ class AdminHubService:
         metric = next((m for m in spec.metrics if m.key == key), None)
         if metric is None:
             return AdminMetric(key=key, label=key, value=UNKNOWN_VALUE, context="")
+        if metric.permission and not user_has_permission(ctx.user, metric.permission):
+            return AdminMetric(
+                key=key, label=metric.label, value=UNKNOWN_VALUE, context=""
+            )
         try:
             value, context = await metric.resolve(ctx)
         except Exception as exc:
@@ -1573,6 +1588,10 @@ class AdminHubService:
             metric = by_key.get(key)
             if metric is None or key in resolved:
                 continue
+            if metric.permission and not user_has_permission(
+                ctx.user, metric.permission
+            ):
+                continue
             if (
                 metric.requires_module
                 and metric.requires_module not in ctx.enabled_modules
@@ -1616,6 +1635,10 @@ class AdminHubService:
 
         options: list[AdminMetricOption] = []
         for metric in spec.metrics:
+            # Do not advertise or preview protected data to an administrator
+            # who cannot read the underlying records.
+            if metric.permission and not user_has_permission(user, metric.permission):
+                continue
             reason: Optional[str] = None
             if (
                 metric.requires_module
@@ -1697,6 +1720,8 @@ class AdminHubService:
             metric = by_key.get(key)
             if metric is None:
                 raise ValueError(f"{module_key} has no metric named '{key}'")
+            if metric.permission and not user_has_permission(user, metric.permission):
+                raise ValueError(f"'{metric.label}' is not available")
             if (
                 metric.requires_module
                 and metric.requires_module not in ctx.enabled_modules

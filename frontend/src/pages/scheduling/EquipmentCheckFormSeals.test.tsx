@@ -75,7 +75,7 @@ const sealedTemplate = () => ({
           compartmentId: 'bag-1',
           name: 'Morphine 10mg',
           sortOrder: 0,
-          checkType: 'quantity',
+          checkType: 'count',
           isRequired: true,
           requiredQuantity: 6,
           expectedQuantity: 6,

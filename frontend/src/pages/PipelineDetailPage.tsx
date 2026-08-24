@@ -1662,7 +1662,7 @@ const PipelineDetailPage: React.FC = () => {
                 aria-selected={activeTab === tab.key}
                 className={`flex flex-1 items-center justify-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.key
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >
@@ -1699,7 +1699,7 @@ const PipelineDetailPage: React.FC = () => {
                           onClick={() => togglePhase(phase.id)}
                           aria-expanded={isExpanded}
                         >
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-800 text-sm font-bold text-white">
                             {phase.phase_number}
                           </div>
                           <div className="min-w-0">

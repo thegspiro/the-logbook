@@ -296,7 +296,7 @@ const FieldEditor = ({
                   onClick={() => setFieldType(ft.value)}
                   className={`rounded-lg px-2 py-2 text-center text-xs font-medium transition-colors ${
                     fieldType === ft.value
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary border-theme-surface-border border'
                   }`}
                 >

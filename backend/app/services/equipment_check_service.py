@@ -2916,10 +2916,14 @@ class EquipmentCheckService:
         }
 
     async def _get_item_with_template(
-        self, template_item_id: str, organization_id: str
+        self,
+        template_item_id: str,
+        organization_id: str,
+        *,
+        for_update: bool = False,
     ) -> tuple:
         """Org-scoped item fetch that also yields its template id for the log."""
-        result = await self.db.execute(
+        statement = (
             select(CheckTemplateItem, EquipmentCheckTemplate.id)
             .join(
                 CheckTemplateCompartment,
@@ -2934,6 +2938,9 @@ class EquipmentCheckService:
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
         )
+        if for_update:
+            statement = statement.with_for_update(of=CheckTemplateItem)
+        result = await self.db.execute(statement)
         row = result.first()
         return (None, None) if not row else (row[0], row[1])
 
@@ -3049,6 +3056,7 @@ class EquipmentCheckService:
         replaced_deployed_lot_id: Optional[str] = None,
         disposition: Optional[str] = None,
         allow_first_link: bool = True,
+        enforce_submitter_limits: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Move units from a ready-stock lot onto the apparatus.
 
@@ -3085,10 +3093,69 @@ class EquipmentCheckService:
         if replaced_deployed_lot_id and not disposition:
             raise ValueError("A replaced lot must record what became of it")
         item, template_id = await self._get_item_with_template(
-            template_item_id, organization_id
+            template_item_id, organization_id, for_update=True
         )
         if item is None:
             return None
+
+        # Lock this position's rows aboard before the shelf lot, and always in
+        # that order. Both this swap's increment of the incoming row and the
+        # decrement that retires a replaced one are read-modify-writes on
+        # check_item_deployed_lots, which the shelf lock below does not cover:
+        # two crews replacing from a four-unit row would both read four and
+        # both write three, so one unit is retired while two ready-stock draws
+        # and two deployments commit. Taking the position first also keeps the
+        # lock order the same for every caller, so two swaps drawing on each
+        # other's lots cannot deadlock.
+        await self.db.execute(
+            select(CheckItemDeployedLot.id)
+            .where(
+                CheckItemDeployedLot.template_item_id == item.id,
+                CheckItemDeployedLot.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+
+        if enforce_submitter_limits:
+            if disposition:
+                if replaced_deployed_lot_id:
+                    replaced = next(
+                        (
+                            deployed
+                            for deployed in (item.deployed_lots or [])
+                            if str(deployed.id) == str(replaced_deployed_lot_id)
+                        ),
+                        None,
+                    )
+                    if replaced is None:
+                        raise ValueError(
+                            "The lot being replaced is not aboard this item"
+                        )
+                    replaceable = replaced.quantity
+                else:
+                    replaceable = sum(
+                        deployed.quantity
+                        for deployed in (item.deployed_lots or [])
+                        if deployed.expiration_date
+                        and deployed.expiration_date < date.today()
+                    )
+                    if not item.deployed_lots and (
+                        item.expiration_date and item.expiration_date < date.today()
+                    ):
+                        replaceable = self._on_truck(item)
+                if quantity > replaceable:
+                    raise PermissionError(
+                        "Check submitters may deploy only enough stock to replace "
+                        "the expired units aboard"
+                    )
+            else:
+                target = self._target_quantity(item)
+                shortfall = max(target - self._on_truck(item), 0) if target else 0
+                if quantity > shortfall:
+                    raise PermissionError(
+                        "Check submitters may deploy only enough stock to fill "
+                        "this position's shortfall"
+                    )
 
         # Lock the lot row for the read-check-decrement so two concurrent
         # swaps of the same unit can't both pass the stock guard and
@@ -3215,13 +3282,21 @@ class EquipmentCheckService:
             # row carrying the position's own date. Retiring what is expired is
             # the only reading available, and the crew asked for a replacement
             # by reporting a disposition at all.
-            expired = [
-                deployed
-                for deployed in list(item.deployed_lots or [])
-                if deployed.id != incoming.id
-                and deployed.expiration_date
-                and deployed.expiration_date < today
-            ]
+            # Sorted, not left in relationship order: the database returns
+            # these rows in no defined order, so a one-unit replacement could
+            # retire a box expiring next year and leave last month's aboard —
+            # the reverse of the first-expiring-first-out rule the rest of this
+            # service reads the position by.
+            expired = sorted(
+                (
+                    deployed
+                    for deployed in list(item.deployed_lots or [])
+                    if deployed.id != incoming.id
+                    and deployed.expiration_date
+                    and deployed.expiration_date < today
+                ),
+                key=lambda deployed: deployed.expiration_date,
+            )
             if not expired:
                 raise ValueError("This position carries no expired stock to replace")
             replaced_lot_number = expired[0].lot_number

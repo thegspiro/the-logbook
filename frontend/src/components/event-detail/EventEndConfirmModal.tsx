@@ -23,7 +23,7 @@ const EventEndConfirmModal: React.FC<EventEndConfirmModalProps> = ({ eventTitle,
             type="button"
             disabled={submitting}
             onClick={onConfirm}
-            className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-xs hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-hidden disabled:opacity-50 sm:ml-3 sm:w-auto sm:text-sm"
+            className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-800 px-4 py-2 text-base font-medium text-white shadow-xs hover:bg-red-900 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-hidden disabled:opacity-50 sm:ml-3 sm:w-auto sm:text-sm"
           >
             {submitting ? 'Ending...' : 'End Event Now'}
           </button>

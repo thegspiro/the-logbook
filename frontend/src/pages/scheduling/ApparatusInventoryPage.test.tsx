@@ -61,7 +61,7 @@ import ApparatusInventoryPage from './ApparatusInventoryPage';
 const makeItem = (overrides = {}) => ({
   templateItemId: 'ti-1',
   itemName: '4x4 Gauze',
-  checkType: 'quantity',
+  checkType: 'count',
   isExpired: false,
   restockNeeded: false,
   isShort: false,

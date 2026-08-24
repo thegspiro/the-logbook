@@ -92,7 +92,7 @@ export const AdminAttentionQueue: React.FC<AdminAttentionQueueProps> = ({ items,
               to={item.href}
               className={`focus:ring-theme-focus-ring inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden sm:text-[15px] ${
                 item.severity === 'critical'
-                  ? 'border border-transparent bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+                  ? 'border border-transparent bg-red-800 text-white hover:bg-red-900 active:bg-red-900'
                   : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border'
               }`}
             >

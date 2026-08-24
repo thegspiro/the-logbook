@@ -41,6 +41,7 @@ const UNCACHEABLE_PREFIXES = [
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
+  '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
@@ -71,6 +72,7 @@ const UNCACHEABLE_PREFIXES = [
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
   '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
   '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
+  '/events/missed-mandatory', // caller's own missed mandatory attendance (per-member compliance)
   '/forms/', // form submissions may contain PII
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)

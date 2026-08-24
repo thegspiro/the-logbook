@@ -21,10 +21,11 @@ import {
   Filter,
   Info,
   Edit2,
+  Paperclip,
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
@@ -331,7 +332,7 @@ const ReviewPanel: React.FC<{
           onClick={() => setAction('reject')}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === 'reject'
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
@@ -663,6 +664,16 @@ const SubmissionCard: React.FC<{
                   <span className="text-theme-text-secondary">{submission.course_code}</span>
                 </div>
               )}
+              {/* The member reports a start time; without it a four-hour entry
+                  gives a reviewer no way to tell a morning class from an
+                  evening one. Absent on submissions filed before the field. */}
+              {submission.start_time && (
+                <div className="flex items-center space-x-1">
+                  <Clock className="text-theme-text-muted h-3 w-3" />
+                  <span className="text-theme-text-muted">Started: </span>
+                  <span className="text-theme-text-secondary">{formatTimeOfDay(submission.start_time)}</span>
+                </div>
+              )}
               {submission.instructor && (
                 <div className="flex items-center space-x-1">
                   <User className="text-theme-text-muted h-3 w-3" />
@@ -705,6 +716,28 @@ const SubmissionCard: React.FC<{
               <div className="mt-3">
                 <span className="text-theme-text-muted text-sm">Description: </span>
                 <p className="text-theme-text-secondary mt-1 text-sm">{submission.description}</p>
+              </div>
+            )}
+            {/* The certificate the member attached is the evidence this
+                decision rests on, so it has to be reachable from the queue. */}
+            {submission.attachments && submission.attachments.length > 0 && (
+              <div className="mt-3">
+                <span className="text-theme-text-muted text-sm">Attached: </span>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {submission.attachments.map((attachment) => (
+                    <li key={attachment.index} className="flex items-center space-x-1 text-sm">
+                      <Paperclip className="text-theme-text-muted h-3 w-3 shrink-0" />
+                      <a
+                        href={trainingSubmissionService.getAttachmentDownloadUrl(submission.id, attachment.index)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-theme-text-secondary link-underline truncate"
+                      >
+                        {attachment.file_name || `Attachment ${attachment.index + 1}`}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {submission.reviewer_notes && (
@@ -752,6 +785,11 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   certification_number: { visible: true, required: false, label: 'Certificate / ID Number' },
   issuing_agency: { visible: true, required: false, label: 'Issuing Agency' },
   expiration_date: { visible: true, required: false, label: 'Expiration Date' },
+  // The submit form reads this one to decide whether to offer the certificate
+  // upload at all, and enforces `required` at the draft handoff. It is in the
+  // backend's default config, so leaving it out of this editor left a setting
+  // that only an API call could change.
+  attachments: { visible: true, required: false, label: 'Supporting Documents' },
 };
 
 const ConfigEditor: React.FC<{
@@ -1069,7 +1107,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             onClick={() => setActiveView('pending')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeView === 'pending'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
@@ -1085,7 +1123,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             onClick={() => setActiveView('all')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeView === 'all'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
@@ -1096,7 +1134,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             onClick={() => setActiveView('config')}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeView === 'config'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >

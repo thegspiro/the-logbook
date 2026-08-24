@@ -162,7 +162,7 @@ const DuesManagementPage: React.FC = () => {
               onClick={() => setSelectedScheduleId('')}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 !selectedScheduleId
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
               }`}
             >
@@ -175,7 +175,7 @@ const DuesManagementPage: React.FC = () => {
                 onClick={() => setSelectedScheduleId(schedule.id)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   selectedScheduleId === schedule.id
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
                 }`}
               >
@@ -198,7 +198,7 @@ const DuesManagementPage: React.FC = () => {
             onClick={() => setStatusFilter(tab.value)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === tab.value
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >

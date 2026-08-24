@@ -344,7 +344,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, auto_sync_enabled: !prev.auto_sync_enabled }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    formData.auto_sync_enabled ? 'bg-red-600' : 'bg-theme-surface-border'
+                    formData.auto_sync_enabled ? 'bg-red-800' : 'bg-theme-surface-border'
                   }`}
                   role="switch"
                   aria-checked={formData.auto_sync_enabled}
@@ -567,7 +567,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         </button>
         <button
           onClick={() => onDelete(provider.id)}
-          className="bg-theme-surface text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-red-600"
+          className="bg-theme-surface text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-red-800"
           aria-label="Delete provider"
         >
           <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -783,7 +783,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 type="button"
                 onClick={() => setFormData((prev) => ({ ...prev, auto_sync_enabled: !prev.auto_sync_enabled }))}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  formData.auto_sync_enabled ? 'bg-red-600' : 'bg-theme-surface-border'
+                  formData.auto_sync_enabled ? 'bg-red-800' : 'bg-theme-surface-border'
                 }`}
                 role="switch"
                 aria-checked={formData.auto_sync_enabled}
@@ -1047,7 +1047,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
                         ) : (
-                          <button className="rounded-sm bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700">
+                          <button className="rounded-sm bg-red-800 px-3 py-1 text-sm text-white hover:bg-red-900">
                             Map User
                           </button>
                         )}

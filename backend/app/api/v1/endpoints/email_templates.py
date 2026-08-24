@@ -9,6 +9,7 @@ import asyncio
 import copy
 import os
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from loguru import logger
@@ -149,6 +150,38 @@ async def update_email_footers(
     return await _footer_library_response(db, current_user.organization_id)
 
 
+async def _with_list_metadata(
+    service: EmailTemplateService, template: EmailTemplate
+) -> EmailTemplateResponse:
+    """A response carrying the two fields the list view computes.
+
+    The store replaces the list row with whatever an update returns, so a
+    response built without these lands the schema defaults — False and 0 —
+    on a row that was correctly showing "Edited · sent 210 times". The
+    template appears to revert to Default and drops out of the Edited
+    filter until the next full reload, which is exactly the sort of thing
+    an admin reads as "my change did not save".
+    """
+    counts = await service.sent_counts(template.organization_id)
+    return EmailTemplateResponse.model_validate(template).model_copy(
+        update={
+            "is_customized": service.is_customized(template),
+            "sent_count": counts.get(_type_value(template.template_type), 0),
+        }
+    )
+
+
+def _type_value(template_type: Any) -> str:
+    """The wire value of a template type, whether it arrives as enum or str.
+
+    ``MessageHistory.template_type`` is a plain string column while
+    ``EmailTemplate.template_type`` is an enum, so the two only line up on
+    ``.value``. Accepting both is what stops the count silently reading zero
+    for every row.
+    """
+    return getattr(template_type, "value", template_type)
+
+
 @router.get("", response_model=list[EmailTemplateResponse])
 async def list_email_templates(
     db: AsyncSession = Depends(get_db),
@@ -175,7 +208,21 @@ async def list_email_templates(
         await db.rollback()
 
     templates = await service.list_templates(current_user.organization_id)
-    return templates
+
+    # Computed here rather than stored: both answers change without the
+    # template row being touched — a send bumps the count, and a change to
+    # the shipped default is what makes an untouched template "customised"
+    # relative to it. A stored flag would be stale from the deploy onwards.
+    counts = await service.sent_counts(current_user.organization_id)
+    return [
+        EmailTemplateResponse.model_validate(template).model_copy(
+            update={
+                "is_customized": service.is_customized(template),
+                "sent_count": counts.get(_type_value(template.template_type), 0),
+            }
+        )
+        for template in templates
+    ]
 
 
 @router.get("/scheduled", response_model=list[ScheduledEmailResponse])
@@ -233,7 +280,7 @@ async def get_email_template(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
-    return template
+    return await _with_list_metadata(EmailTemplateService(db), template)
 
 
 @router.put("/{template_id}", response_model=EmailTemplateResponse)
@@ -251,12 +298,22 @@ async def update_email_template(
     Admins use this to customize the welcome email message, styling, etc.
     """
     service = EmailTemplateService(db)
-    template = await service.update_template(
-        template_id=template_id,
-        organization_id=current_user.organization_id,
-        updated_by=current_user.id,
-        **update_data.model_dump(exclude_none=True),
-    )
+    # exclude_unset, not exclude_none: a null here is the client saying
+    # "clear this field", and dropping it strips the clear a layer before
+    # the service can honour it.
+    try:
+        template = await service.update_template(
+            template_id=template_id,
+            organization_id=current_user.organization_id,
+            updated_by=current_user.id,
+            **update_data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        # apply_updates raises rather than letting a null against a NOT NULL
+        # column fail at flush time as a 500.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
@@ -270,7 +327,7 @@ async def update_email_template(
         current_user.organization_id,
         current_user.id,
     )
-    return template
+    return await _with_list_metadata(service, template)
 
 
 @router.post("/{template_id}/reset", response_model=EmailTemplateResponse)
@@ -307,7 +364,7 @@ async def reset_email_template(
         current_user.organization_id,
         current_user.id,
     )
-    return template
+    return await _with_list_metadata(service, template)
 
 
 @router.post("/{template_id}/preview", response_model=EmailTemplatePreviewResponse)
@@ -403,11 +460,28 @@ async def preview_email_template(
                 context["user_email"] = member.email
 
     # Apply overrides for preview if provided
+    # `is not None`, not `or`: an admin who clears the plain-text body or the
+    # custom CSS sends an empty string to say so, and `or` reads that as "not
+    # supplied" and previews the saved content instead. That is the pitfall #1
+    # empty-string trap in preview form, and it is worst in the new plain-text
+    # mode, where the pane would show a body the draft no longer has.
+    #
+    # subject and html_body keep `or` deliberately: an empty body is not
+    # something to preview, and falling back to the stored one is more useful
+    # than rendering a blank card.
     preview_template = EmailTemplate(
         subject=preview_data.subject or template.subject,
         html_body=preview_data.html_body or template.html_body,
-        text_body=preview_data.text_body or template.text_body,
-        css_styles=preview_data.css_styles or template.css_styles,
+        text_body=(
+            preview_data.text_body
+            if preview_data.text_body is not None
+            else template.text_body
+        ),
+        css_styles=(
+            preview_data.css_styles
+            if preview_data.css_styles is not None
+            else template.css_styles
+        ),
         # Carried through so the preview closes with the footer this template
         # is set to use, not the department's default.
         footer_key=(
@@ -415,6 +489,18 @@ async def preview_email_template(
             if preview_data.footer_key is not None
             else template.footer_key
         ),
+        # The colourway too, so the accent swatches and the chip field show
+        # their effect before the admin commits to it.
+        header_accent=preview_data.header_accent or template.header_accent,
+        status_chip=(
+            preview_data.status_chip
+            if preview_data.status_chip is not None
+            else template.status_chip
+        ),
+        layout=preview_data.layout or template.layout,
+        # Carried so build_context can fall back to the type's shipped
+        # colourway for a row that predates those columns.
+        template_type=template.template_type,
     )
 
     subject, html_body, text_body = service.render(

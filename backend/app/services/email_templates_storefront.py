@@ -3,12 +3,18 @@ Default Email Templates — Department Storefront
 
 The ten notices the store sends, as editable templates.
 
-These follow the house structure used by every other default template
-(``container > logo > header > content > footer``) so the storefront's mail
+These render into the same shell as every other default template — the one
+:func:`app.services.email_theme.build_shell` builds — so the storefront's mail
 looks like the rest of the platform's and an admin editing one finds what they
 expect. Each body here reproduces what ``storefront_notification_service``
 composes in code, so a department that has never opened the Email Templates
 screen and one that has just accepted the defaults receive the same email.
+
+The store's own colourway is violet. The four notices that carry a status the
+member has to act on — cancelled, payment reminder, payment received, ordering
+open — keep the accent that says so, because "your order was cancelled" and
+"your order is confirmed" arriving in the same violet is the one place a
+category colour would cost more than it buys.
 
 **Why the ``_html`` variables exist.** The template system substitutes
 ``{{name}}`` and has no loops or conditionals, but a store email is mostly a
@@ -31,25 +37,39 @@ from app.services.email_theme import (
     ACCENT_AMBER,
     ACCENT_GREEN,
     ACCENT_RED,
+    ACCENT_VIOLET,
     TABLE_STYLE,
     TD_STYLE,
     TFOOT_STYLE,
     TH_STYLE,
+    build_shell,
 )
 
 
-def _shell(title: str, content: str, header_color: str = "") -> str:
-    """House layout: logo, coloured header, content, org footer."""
-    style = f' style="background-color: {header_color};"' if header_color else ""
-    return (
-        '<div class="container">\n'
-        '    <div class="logo">{{organization_logo_img}}</div>\n'
-        f'    <div class="header"{style}>\n'
-        f"        <h1>{title}</h1>\n"
-        "    </div>\n"
-        f'    <div class="content">\n{content}\n    </div>\n'
-        "    {{footer_html}}\n"
-        "</div>"
+def _shell(
+    title: str,
+    content: str,
+    accent: str = ACCENT_VIOLET,
+    chip: str = "",
+    subtitle: str = "",
+    layout: str = "notice",
+) -> str:
+    """The house shell, with the store's name in the lockup.
+
+    A thin wrapper rather than a second layout: ``build_shell`` is the only
+    place the chrome is written, and this exists purely to default the accent
+    to the store's colourway and put ``{{store_name}}`` where the department
+    name would otherwise go. A member reading a store receipt is dealing with
+    the store, which may be named something other than the department.
+    """
+    return build_shell(
+        title,
+        content,
+        accent=accent,
+        chip=chip,
+        subtitle=subtitle,
+        brand="{{store_name}}",
+        layout=layout,
     )
 
 
@@ -63,13 +83,16 @@ _FOOTER_TEXT = """
 
 ORDER_CONFIRMATION_SUBJECT = "Order {{order_number}} received"
 ORDER_CONFIRMATION_HTML = _shell(
-    "Order Confirmation",
+    "Order {{order_number}} received",
     """        <p>Hi {{first_name}},</p>
         <p>Thanks for your order from the {{store_name}}. Your order number is
            <strong>{{order_number}}</strong>.</p>
         {{items_table_html}}
         {{payment_block_html}}
         {{receipt_footer_html}}""",
+    chip="Receipt",
+    subtitle="Total {{order_total}}",
+    layout="receipt",
 )
 ORDER_CONFIRMATION_TEXT = """Hi {{first_name}},
 
@@ -84,6 +107,8 @@ NEW_ORDER_ADMIN_HTML = _shell(
            <strong>{{order_number}}</strong>.</p>
         {{items_table_html}}
         {{member_notes_html}}""",
+    chip="New order",
+    subtitle="{{order_total}}",
 )
 NEW_ORDER_ADMIN_TEXT = (
     """{{customer_name}} placed order {{order_number}} for {{order_total}}.
@@ -96,6 +121,8 @@ ORDER_UPDATE_HTML = _shell(
     """        <p>Update on your order <strong>{{order_number}}</strong>{{status_label_suffix}}.</p>
         <p style="white-space:pre-line;">{{update_message}}</p>
         {{payment_block_html}}""",
+    chip="Update",
+    subtitle="{{order_number}}",
 )
 ORDER_UPDATE_TEXT = """Order {{order_number}}: {{update_message}}
 """ + _FOOTER_TEXT
@@ -106,7 +133,9 @@ ORDER_CANCELLED_HTML = _shell(
     """        <p>Your order <strong>{{order_number}}</strong> has been cancelled.</p>
         {{cancellation_reason_html}}
         {{refund_notice_html}}""",
-    header_color=ACCENT_RED,
+    accent=ACCENT_RED,
+    chip="Cancelled",
+    subtitle="{{order_number}}",
 )
 ORDER_CANCELLED_TEXT = """Order {{order_number}} was cancelled.
 """ + _FOOTER_TEXT
@@ -118,7 +147,10 @@ PAYMENT_REMINDER_HTML = _shell(
            <strong>{{balance_due}}</strong>.</p>
         {{items_table_html}}
         {{payment_block_html}}""",
-    header_color=ACCENT_AMBER,
+    accent=ACCENT_AMBER,
+    chip="Payment reminder",
+    subtitle="{{balance_due}} outstanding",
+    layout="receipt",
 )
 PAYMENT_REMINDER_TEXT = """Order {{order_number}} has a balance of {{balance_due}}.
 """ + _FOOTER_TEXT
@@ -128,7 +160,9 @@ PAYMENT_RECEIVED_HTML = _shell(
     "Payment Received",
     """        {{payment_summary_html}}
         {{balance_notice_html}}""",
-    header_color=ACCENT_GREEN,
+    accent=ACCENT_GREEN,
+    chip="Payment received",
+    subtitle="{{order_number}}",
 )
 PAYMENT_RECEIVED_TEXT = """Payment received for order {{order_number}}.
 """ + _FOOTER_TEXT
@@ -155,7 +189,9 @@ WINDOW_OPEN_SUBJECT = "Store orders are open — {{window_name}}"
 WINDOW_OPEN_HTML = _shell(
     "Ordering Is Open",
     _window_body("The department store is now taking orders."),
-    header_color=ACCENT_GREEN,
+    accent=ACCENT_GREEN,
+    chip="Now open",
+    subtitle="{{window_name}}",
 )
 WINDOW_OPEN_TEXT = """Store orders are open for {{window_name}}.
 """ + _FOOTER_TEXT
@@ -164,7 +200,9 @@ WINDOW_CLOSING_SUBJECT = "Last call — {{window_name}} closes soon"
 WINDOW_CLOSING_HTML = _shell(
     "Order Window Closing",
     _window_body("Last call — the store order window closes soon."),
-    header_color=ACCENT_AMBER,
+    accent=ACCENT_AMBER,
+    chip="Last call",
+    subtitle="{{window_name}}",
 )
 WINDOW_CLOSING_TEXT = """The {{window_name}} order window closes soon.
 """ + _FOOTER_TEXT
@@ -173,6 +211,8 @@ WINDOW_CLOSED_SUBJECT = "Ordering closed — {{window_name}}"
 WINDOW_CLOSED_HTML = _shell(
     "Order Window Closed",
     _window_body("Ordering has closed and the department is placing the order."),
+    chip="Closed",
+    subtitle="{{window_name}}",
 )
 WINDOW_CLOSED_TEXT = """The {{window_name}} order window has closed.
 """ + _FOOTER_TEXT
@@ -181,6 +221,8 @@ VENDOR_ORDER_PLACED_SUBJECT = "Order placed with the vendor — {{window_name}}"
 VENDOR_ORDER_PLACED_HTML = _shell(
     "Order Placed",
     _window_body("Your order has been placed with the vendor."),
+    chip="With the vendor",
+    subtitle="{{window_name}}",
 )
 VENDOR_ORDER_PLACED_TEXT = """The {{window_name}} order has been placed with the vendor.
 """ + _FOOTER_TEXT
@@ -323,9 +365,21 @@ _SAMPLE_ITEMS_TABLE = (
     f'<tfoot><tr><td colspan="2" style="{TFOOT_STYLE}text-align:right;">Total</td>'
     f'<td style="{TFOOT_STYLE}text-align:right;">$53.00</td></tr></tfoot></table>'
 )
+# Mirrors what StorefrontNotificationService._payment_block emits, panel and
+# all. A sample that is merely plausible is worse than none: the preview is
+# where an admin decides the layout is right, so a preview that shows loose
+# paragraphs where the real mail shows a panel sends them to fix something
+# that is not broken.
 _SAMPLE_PAYMENT_BLOCK = (
+    f'<div class="details" style="border-left-color: {ACCENT_VIOLET};">'
     "<p><strong>Balance due: $53.00</strong></p>"
     "<p>Send payment on Venmo to <strong>@YourDepartment</strong>.</p>"
+    f'<p><a href="#" style="display:inline-block;background:{ACCENT_VIOLET};'
+    "color:#ffffff;padding:10px 18px;border-radius:6px;text-decoration:none;"
+    'font-weight:600;margin:0 8px 8px 0;">Pay with Venmo</a></p>'
+    '<p class="fineprint" style="white-space:pre-line;">'
+    "Include your order number with the payment.</p>"
+    "</div>"
 )
 
 _SAMPLE_ORDER: Dict[str, str] = {
@@ -347,7 +401,7 @@ _SAMPLE_WINDOW: Dict[str, str] = {
     ),
     "window_extra_html": "<p>Orders close November 01, 2026.</p>",
     "pickup_instructions_html": (
-        '<p style="color:#6b7280;">Collect at the station office after drill.</p>'
+        '<p class="fineprint">Collect at the station office after drill.</p>'
     ),
 }
 

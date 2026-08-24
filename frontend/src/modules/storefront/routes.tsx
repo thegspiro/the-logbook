@@ -10,6 +10,7 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const StorefrontPage = lazyWithRetry(() => import('./pages/StorefrontPage'));
+const CheckoutPage = lazyWithRetry(() => import('./pages/CheckoutPage'));
 const MyOrdersPage = lazyWithRetry(() => import('./pages/MyOrdersPage'));
 const StoreAdminPage = lazyWithRetry(() => import('./pages/StoreAdminPage'));
 
@@ -19,7 +20,11 @@ export const getStorefrontRoutes = () => {
       <Route
         path="/store"
         element={
-          <ProtectedRoute requiredPermission="storefront.view">
+          <ProtectedRoute
+            requiredPermission="storefront.view"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
             <Suspense fallback={null}>
               <StorefrontPage />
             </Suspense>
@@ -28,9 +33,28 @@ export const getStorefrontRoutes = () => {
       />
 
       <Route
+        path="/store/checkout"
+        element={
+          <ProtectedRoute
+            requiredPermission="storefront.view"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
+            <Suspense fallback={null}>
+              <CheckoutPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/store/orders"
         element={
-          <ProtectedRoute requiredPermission="storefront.view">
+          <ProtectedRoute
+            requiredPermission="storefront.view"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
             <Suspense fallback={null}>
               <MyOrdersPage />
             </Suspense>
@@ -41,7 +65,11 @@ export const getStorefrontRoutes = () => {
       <Route
         path="/store/admin"
         element={
-          <ProtectedRoute requiredPermission="storefront.manage">
+          <ProtectedRoute
+            requiredPermission="storefront.manage"
+            requiredModule="storefront"
+            moduleLabel="The Department Store"
+          >
             <Suspense fallback={null}>
               <StoreAdminPage />
             </Suspense>

@@ -958,7 +958,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   onClick={() => setComplianceFilter('all')}
                   className={`rounded-lg border px-3 py-1.5 text-sm ${
                     complianceFilter === 'all'
-                      ? 'border-red-600 bg-red-600 text-white'
+                      ? 'border-red-600 bg-red-800 text-white'
                       : 'bg-theme-surface border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                   }`}
                 >
@@ -968,7 +968,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   onClick={() => setComplianceFilter('non-compliant')}
                   className={`rounded-lg border px-3 py-1.5 text-sm ${
                     complianceFilter === 'non-compliant'
-                      ? 'border-red-600 bg-red-600 text-white'
+                      ? 'border-red-600 bg-red-800 text-white'
                       : 'bg-theme-surface border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                   }`}
                 >

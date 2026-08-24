@@ -13,6 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.utils.check_types import (
+    CANONICAL_CHECK_TYPES,
+    LEGACY_CHECK_TYPES,
+    STRUCTURAL_TYPES,
+    normalize_check_type,
+)
 
 # ============================================
 # Check Template Item Schemas
@@ -23,20 +29,19 @@ from app.schemas.base import UTCResponseBase
 # being stored — and the check form prints the type under each item name, so an
 # unrecognised one reached the crew as a raw token ("presence" under every item,
 # because that is what the value said). Validated on the way in instead.
+#
+# Since 2026-08-23 the stored form is one of the four canonical answer shapes
+# (level / function / count / expiry) plus the two structural rows. The legacy
+# names are still *accepted* — an integration or an older client may send one,
+# and rejecting it would break a caller over a rename it never asked for — but
+# they are normalized before they are stored, so nothing new lands in the old
+# vocabulary. `app/utils/check_types` is the authority; see the notes there for
+# why nine values collapsed to four.
+#
 # Keep in step with CHECK_TYPES in frontend/src/pages/scheduling/
 # equipmentCheckPresets.ts, which is what the template builder offers.
 CHECK_TYPES = frozenset(
-    {
-        "pass_fail",
-        "present",
-        "functional",
-        "quantity",
-        "level",
-        "date_lot",
-        "reading",
-        "text",
-        "header",
-    }
+    set(CANONICAL_CHECK_TYPES) | set(STRUCTURAL_TYPES) | set(LEGACY_CHECK_TYPES)
 )
 
 # These are the only lifecycle phases understood by shift close-out and the
@@ -46,7 +51,15 @@ CheckTiming = Literal["start_of_shift", "end_of_shift"]
 
 
 def _validate_check_type(value: Optional[str]) -> Optional[str]:
-    """Reject a check type the form has no renderer for."""
+    """Reject a check type the form has no renderer for, and canonicalize it.
+
+    Deliberately stricter than ``normalize_check_type``, which answers "what
+    does this stored row mean" and falls back to ``function`` for anything it
+    does not recognise. That fallback is right when reading a column somebody
+    already wrote; it is wrong at a request boundary, where an unknown value is
+    a caller's mistake and should be reported rather than quietly turned into a
+    pass/fail prompt nobody asked for.
+    """
     if value is None:
         return value
     if value not in CHECK_TYPES:
@@ -54,7 +67,7 @@ def _validate_check_type(value: Optional[str]) -> Optional[str]:
             f"Unsupported check type '{value}'. "
             f"Expected one of: {', '.join(sorted(CHECK_TYPES))}"
         )
-    return value
+    return normalize_check_type(value)
 
 
 class CheckTemplateItemCreate(BaseModel):

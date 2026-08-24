@@ -196,8 +196,15 @@ class AdminHoursService:
         category_id: str,
         user_id: str,
         organization_id: str,
+        entry_method: AdminHoursEntryMethod = AdminHoursEntryMethod.QR_SCAN,
     ) -> AdminHoursEntry:
-        """Clock in a user to an admin hours category via QR scan."""
+        """Clock a user in to an admin hours category.
+
+        ``entry_method`` records how the session was started. It defaults to
+        the QR path this was written for; a caller that is something else — the
+        ID card station — must say so, or the entry claims a member scanned a
+        code when an officer tapped their card.
+        """
         category = await self.get_category(category_id, organization_id)
         if not category:
             raise ValueError("Category not found")
@@ -219,7 +226,7 @@ class AdminHoursService:
             user_id=user_id,
             category_id=category_id,
             clock_in_at=datetime.now(timezone.utc),
-            entry_method=AdminHoursEntryMethod.QR_SCAN,
+            entry_method=entry_method,
             status=AdminHoursEntryStatus.ACTIVE,
         )
         self.db.add(entry)
@@ -1426,6 +1433,42 @@ class AdminHoursService:
             (mapping.admin_hours_category_id, mapping.percentage, cat)
             for mapping, cat in result.all()
         ]
+
+    async def get_active_mappings_by_source(
+        self, organization_id: str
+    ) -> Dict[Tuple[str, str], List[Tuple[int, str]]]:
+        """Bulk-load active event-hour mappings, keyed by their source.
+
+        The per-event :meth:`get_mappings_for_event` is one query per event,
+        which the events list cannot afford. Keys are ``("event_type", value)``
+        or ``("custom_category", value)``; values are ``(percentage, category
+        name)`` pairs. Callers must resolve with the same precedence
+        :meth:`get_mappings_for_event` uses — event_type first, custom_category
+        only when the event has no type — so a displayed credit matches what
+        :meth:`credit_event_attendance` will actually award.
+        """
+        result = await self.db.execute(
+            select(EventHourMapping, AdminHoursCategory)
+            .join(
+                AdminHoursCategory,
+                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+                AdminHoursCategory.is_active.is_(True),
+            )
+        )
+        by_source: Dict[Tuple[str, str], List[Tuple[int, str]]] = {}
+        for mapping, cat in result.all():
+            if mapping.event_type:
+                key = ("event_type", mapping.event_type)
+            elif mapping.custom_category:
+                key = ("custom_category", mapping.custom_category)
+            else:
+                continue
+            by_source.setdefault(key, []).append((mapping.percentage, cat.name))
+        return by_source
 
     async def credit_event_attendance(
         self,

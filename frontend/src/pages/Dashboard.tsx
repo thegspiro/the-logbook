@@ -1121,7 +1121,7 @@ const Dashboard: React.FC = () => {
               <div className="order-3 grid grid-cols-2 gap-3 sm:order-1 sm:grid-cols-3">
                 <button
                   onClick={() => void navigate('/training/submit')}
-                  className="focus:ring-theme-focus-ring col-span-2 flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-600 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-700 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-800 sm:col-span-1 sm:min-h-[88px]"
+                  className="focus:ring-theme-focus-ring col-span-2 flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px]"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
                     <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />

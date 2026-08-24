@@ -112,6 +112,49 @@ describe('useNfcScanner', () => {
     expect(result.current.scanning).toBe(true);
   });
 
+  it('reports the serial number of every tag, text or not', async () => {
+    // An ID card's tag ships blank — no NDEF records at all — so its serial
+    // number is the only thing that identifies the member holding it.
+    installReader();
+    const onTag = vi.fn();
+    const onRead = vi.fn();
+    const { result } = renderHook(() => useNfcScanner({ onRead, onTag }));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    act(() => {
+      readers[0]?.onreading?.({
+        serialNumber: '04:a2:24:5b',
+        message: { records: [] },
+      } as unknown as NDEFReadingEvent);
+    });
+
+    expect(onTag).toHaveBeenCalledWith({ serialNumber: '04:a2:24:5b', payload: null });
+    expect(onRead).not.toHaveBeenCalled();
+    expect(result.current.scanning).toBe(true);
+  });
+
+  it('reports both the serial and the payload for a tag carrying text', async () => {
+    installReader();
+    const onTag = vi.fn();
+    const { result } = renderHook(() => useNfcScanner({ onTag }));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    act(() => {
+      readers[0]?.emitUrl('https://logbook.example.org/events/abc/check-in');
+    });
+
+    expect(onTag).toHaveBeenCalledWith({
+      serialNumber: '00:11:22',
+      payload: 'https://logbook.example.org/events/abc/check-in',
+    });
+  });
+
   it('calls the latest onRead without restarting the scan', async () => {
     installReader();
     const first = vi.fn();

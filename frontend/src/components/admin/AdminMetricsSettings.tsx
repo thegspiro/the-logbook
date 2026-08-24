@@ -338,7 +338,7 @@ export const AdminMetricsSettings: React.FC<AdminMetricsSettingsProps> = ({
               role="switch"
               aria-checked={appliesToEveryone}
               onClick={() => setAppliesToEveryone((on) => !on)}
-              className={`toggle-track-sm mt-0.5 ${appliesToEveryone ? 'bg-red-600' : 'bg-theme-surface-border'}`}
+              className={`toggle-track-sm mt-0.5 ${appliesToEveryone ? 'bg-red-800' : 'bg-theme-surface-border'}`}
             >
               <span
                 className={`toggle-knob-sm ${appliesToEveryone ? 'translate-x-6' : 'translate-x-1'}`}

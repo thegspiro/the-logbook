@@ -459,7 +459,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   void handleBulkDecline();
                 }}
                 disabled={bulkActioning}
-                className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-900 disabled:opacity-50"
               >
                 <XCircle className="h-3.5 w-3.5" /> Decline All
               </button>
