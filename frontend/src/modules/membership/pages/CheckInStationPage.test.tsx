@@ -52,6 +52,33 @@ import CheckInStationPage from './CheckInStationPage';
  */
 const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
+const TODAY = getTodayLocalDate();
+const YESTERDAY = addCalendarDays(TODAY, -1);
+
+interface ShiftFixture {
+  id: string;
+  apparatus_unit_number: string;
+  apparatus_name?: string;
+  start_time: string;
+  end_time?: string;
+  is_finalized: boolean;
+}
+
+/**
+ * Files shift fixtures under the date the server would file them under.
+ *
+ * The station asks for yesterday and today as two separate requests, so a mock
+ * that answers every call with the same rows would offer each shift twice —
+ * duplicate options under duplicate React keys, and a fixture artefact rather
+ * than anything the component does.
+ */
+const shiftsByDate = (byDate: Record<string, ShiftFixture[]>) =>
+  mockGetShifts.mockImplementation((params: unknown) => {
+    const day = (params as { start_date?: string } | undefined)?.start_date ?? '';
+    const shifts = byDate[day] ?? [];
+    return Promise.resolve({ shifts, total: shifts.length, skip: 0, limit: 100 });
+  });
+
 /** Types a serial the way a USB keyboard-wedge reader does: a burst, then Enter. */
 async function tapWedgeCard(serial: string) {
   for (const char of serial) {
@@ -64,8 +91,8 @@ async function tapWedgeCard(serial: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockIsConnected.mockReturnValue(true);
-  mockGetShifts.mockResolvedValue({
-    shifts: [
+  shiftsByDate({
+    [TODAY]: [
       {
         id: 'shift-1',
         apparatus_unit_number: 'E4',
@@ -75,9 +102,6 @@ beforeEach(() => {
         is_finalized: false,
       },
     ],
-    total: 1,
-    skip: 0,
-    limit: 50,
   });
   mockGetEvents.mockResolvedValue([]);
   mockListCategories.mockResolvedValue([]);
@@ -100,7 +124,7 @@ describe('CheckInStationPage', () => {
   });
 
   it('will not arm a reader before a target is chosen', async () => {
-    mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 50 });
+    shiftsByDate({});
     renderWithRouter(<CheckInStationPage />);
     await waitFor(() => expect(screen.getByRole('button', { name: /start the reader/i })).toBeDisabled());
   });
@@ -166,14 +190,11 @@ describe('CheckInStationPage', () => {
 
   it('stops the reader when the target changes', async () => {
     const user = userEvent.setup();
-    mockGetShifts.mockResolvedValue({
-      shifts: [
+    shiftsByDate({
+      [TODAY]: [
         { id: 'shift-1', apparatus_unit_number: 'E4', start_time: hoursFromNow(-6), is_finalized: false },
         { id: 'shift-2', apparatus_unit_number: 'L1', start_time: hoursFromNow(-6), is_finalized: false },
       ],
-      total: 2,
-      skip: 0,
-      limit: 50,
     });
     renderWithRouter(<CheckInStationPage />);
     await screen.findByRole('option', { name: /E4/ });
@@ -261,7 +282,7 @@ describe('CheckInStationPage', () => {
     await user.click(screen.getByRole('button', { name: /start the reader/i }));
     expect(screen.getByRole('button', { name: /stop the reader/i })).toBeInTheDocument();
 
-    mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 50 });
+    shiftsByDate({});
     document.dispatchEvent(new Event('visibilitychange'));
 
     expect(await screen.findByText(/has ended, so the reader stopped/i)).toBeInTheDocument();
@@ -272,14 +293,11 @@ describe('CheckInStationPage', () => {
     // Silently moving an armed station onto a different shift would be worse
     // than the staleness this fixes.
     const user = userEvent.setup();
-    mockGetShifts.mockResolvedValue({
-      shifts: [
+    shiftsByDate({
+      [TODAY]: [
         { id: 'shift-1', apparatus_unit_number: 'E4', start_time: hoursFromNow(-6), is_finalized: false },
         { id: 'shift-2', apparatus_unit_number: 'L1', start_time: hoursFromNow(-6), is_finalized: false },
       ],
-      total: 2,
-      skip: 0,
-      limit: 50,
     });
     renderWithRouter(<CheckInStationPage />);
     await screen.findByRole('option', { name: /E4/ });
@@ -313,8 +331,8 @@ describe('CheckInStationPage', () => {
     // 06:00 yesterday is the shift running at 02:00 now, and asking only for
     // today's date made the crew on duty vanish from the station at midnight.
     const stillRunning = hoursFromNow(4);
-    mockGetShifts.mockResolvedValue({
-      shifts: [
+    shiftsByDate({
+      [YESTERDAY]: [
         {
           id: 'shift-overnight',
           apparatus_unit_number: 'E4',
@@ -323,37 +341,32 @@ describe('CheckInStationPage', () => {
           is_finalized: false,
         },
       ],
-      total: 1,
-      skip: 0,
-      limit: 50,
     });
     renderWithRouter(<CheckInStationPage />);
 
     expect(await screen.findByRole('option', { name: /E4/ })).toBeInTheDocument();
     // Computed, not hardcoded: literal dates here would pass today and fail
-    // every day after.
-    const today = getTodayLocalDate();
-    expect(mockGetShifts).toHaveBeenCalledWith(
-      expect.objectContaining({ start_date: addCalendarDays(today, -1), end_date: today })
-    );
+    // every day after. One request per day, not one widened range — the
+    // endpoint pages at 100 and orders by shift_date ascending, so a busy
+    // yesterday would otherwise fill the single page and hide today entirely.
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: YESTERDAY, end_date: YESTERDAY });
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: TODAY, end_date: TODAY });
   });
 
-  it('drops a yesterday-dated shift that has already ended', async () => {
-    // Otherwise widening the query to yesterday would offer every finished
-    // tour from the previous day.
-    mockGetShifts.mockResolvedValue({
-      shifts: [
+  it('drops a shift an officer has already finalized', async () => {
+    // Finalization is the only thing that closes a shift to the station.
+    // A clock-based cutoff beside it would invent a rule the server does not
+    // have — member_check_out accepts a checkout right up to finalization.
+    shiftsByDate({
+      [YESTERDAY]: [
         {
-          id: 'shift-finished',
+          id: 'shift-finalized',
           apparatus_unit_number: 'L1',
           start_time: hoursFromNow(-30),
           end_time: hoursFromNow(-20),
-          is_finalized: false,
+          is_finalized: true,
         },
       ],
-      total: 1,
-      skip: 0,
-      limit: 50,
     });
     renderWithRouter(<CheckInStationPage />);
 
@@ -361,19 +374,30 @@ describe('CheckInStationPage', () => {
     expect(screen.queryByRole('option', { name: /L1/ })).not.toBeInTheDocument();
   });
 
-  it('asks the events API to exclude anything already finished', async () => {
+  it('drops an event whose check-in window has already closed', async () => {
     // Filtering on start time alone left this morning's drill in the list, and
     // since the list is ordered by start time it could be the default — so an
-    // operator could arm against an event whose window shut hours ago.
+    // operator could arm against an event whose window shut hours ago and have
+    // every tap refused.
     const user = userEvent.setup();
+    mockGetEvents.mockResolvedValue([
+      {
+        id: 'event-shut',
+        title: 'Morning Drill',
+        start_datetime: hoursFromNow(-5),
+        end_datetime: hoursFromNow(-3),
+        check_in_closes_at: hoursFromNow(-3),
+        is_cancelled: false,
+        is_draft: false,
+      },
+    ]);
     renderWithRouter(<CheckInStationPage />);
     await screen.findByRole('option', { name: /E4/ });
 
     await user.click(screen.getByRole('button', { name: /event or meeting/i }));
 
     await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
-    const eventParams = mockGetEvents.mock.calls[0]?.[0] as { end_after?: string } | undefined;
-    expect(typeof eventParams?.end_after).toBe('string');
+    expect(screen.queryByRole('option', { name: /Morning Drill/ })).not.toBeInTheDocument();
   });
 
   it('keeps a shift that has just ended so its crew can still tap out', async () => {
@@ -381,8 +405,8 @@ describe('CheckInStationPage', () => {
     // officer finalizes the shift — so dropping a shift the moment its
     // scheduled end passed took the station away from the crew at exactly the
     // moment they go off duty.
-    mockGetShifts.mockResolvedValue({
-      shifts: [
+    shiftsByDate({
+      [TODAY]: [
         {
           id: 'shift-just-ended',
           apparatus_unit_number: 'E4',
@@ -391,29 +415,40 @@ describe('CheckInStationPage', () => {
           is_finalized: false,
         },
       ],
-      total: 1,
-      skip: 0,
-      limit: 500,
     });
     renderWithRouter(<CheckInStationPage />);
 
     expect(await screen.findByRole('option', { name: /E4/ })).toBeInTheDocument();
   });
 
-  it('asks for more than one page of shifts across the two-day window', async () => {
-    // The endpoint pages at 100 and orders by shift_date ascending, so a busy
-    // yesterday would otherwise fill the page and hide today entirely.
+  it('keeps an event the server reports no check-in cutoff for', async () => {
+    // Fail open, deliberately: the check-in call refuses a tap outside the real
+    // window regardless, so a missing cutoff costs a refusal message rather
+    // than hiding the event somebody is standing at the station for.
+    const user = userEvent.setup();
+    mockGetEvents.mockResolvedValue([
+      {
+        id: 'event-no-cutoff',
+        title: 'Company Meeting',
+        start_datetime: hoursFromNow(-2),
+        end_datetime: hoursFromNow(-1),
+        check_in_closes_at: null,
+        is_cancelled: false,
+        is_draft: false,
+      },
+    ]);
     renderWithRouter(<CheckInStationPage />);
     await screen.findByRole('option', { name: /E4/ });
 
-    const params = mockGetShifts.mock.calls[0]?.[0] as { limit?: number } | undefined;
-    expect(params?.limit).toBeGreaterThan(100);
+    await user.click(screen.getByRole('button', { name: /event or meeting/i }));
+
+    expect(await screen.findByRole('option', { name: /Company Meeting/ })).toBeInTheDocument();
   });
 
-  it('leaves room for an event whose check-in window outlives its end', async () => {
-    // A `window` event stays open for check_in_minutes_after, and a flexible
-    // or strict one runs to actual_end_time — none of which reach this list,
-    // so the cutoff has to sit behind now rather than exactly on it.
+  it('asks for more than one page of events', async () => {
+    // The events endpoint pages at 100 and orders by start time, so a busy day
+    // could push the event somebody is standing at the station for off the
+    // first page.
     const user = userEvent.setup();
     renderWithRouter(<CheckInStationPage />);
     await screen.findByRole('option', { name: /E4/ });
@@ -421,7 +456,31 @@ describe('CheckInStationPage', () => {
     await user.click(screen.getByRole('button', { name: /event or meeting/i }));
 
     await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
-    const eventParams = mockGetEvents.mock.calls[0]?.[0] as { end_after?: string } | undefined;
-    expect(new Date(eventParams?.end_after ?? '').getTime()).toBeLessThan(Date.now());
+    const params = mockGetEvents.mock.calls[0]?.[0] as { limit?: number } | undefined;
+    expect(params?.limit).toBeGreaterThan(100);
+  });
+
+  it('keeps an event whose check-in window outlives its scheduled end', async () => {
+    // A `window` event stays open for check_in_minutes_after its end, so
+    // filtering on end_datetime hid events whose late-arrival period was still
+    // running. check_in_closes_at is the boundary the server itself enforces.
+    const user = userEvent.setup();
+    mockGetEvents.mockResolvedValue([
+      {
+        id: 'event-late',
+        title: 'Recruit Drill',
+        start_datetime: hoursFromNow(-3),
+        end_datetime: hoursFromNow(-1),
+        check_in_closes_at: hoursFromNow(1),
+        is_cancelled: false,
+        is_draft: false,
+      },
+    ]);
+    renderWithRouter(<CheckInStationPage />);
+    await screen.findByRole('option', { name: /E4/ });
+
+    await user.click(screen.getByRole('button', { name: /event or meeting/i }));
+
+    expect(await screen.findByRole('option', { name: /Recruit Drill/ })).toBeInTheDocument();
   });
 });
