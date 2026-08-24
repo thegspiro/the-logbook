@@ -78,6 +78,10 @@ const MedicalSuppliesPage: React.FC = () => {
   // Either grant works: a department running one supply line holds the broad
   // one, a department that split the job holds the medical one.
   const canManage = checkPermission('inventory.manage_medical') || checkPermission('inventory.manage');
+  // The cross-reference below points into the gear catalogue, which is
+  // manager-only — a medical-only supply officer would be sent to Access
+  // Denied by a sentence that was only ever an aside.
+  const canManageGear = checkPermission('inventory.manage');
   const tz = useTimezone();
 
   const [tab, setTab] = useState<Tab>('expiring');
@@ -165,10 +169,16 @@ const MedicalSuppliesPage: React.FC = () => {
               Medical Supplies
             </h1>
             <p className="text-theme-text-muted mt-1 text-sm">
-              EMS stock with lot numbers and expiration dates. Gear and uniforms are tracked separately under{' '}
-              <Link to="/inventory" className="underline">
-                Gear &amp; Uniforms
-              </Link>
+              EMS stock with lot numbers and expiration dates. Gear and uniforms are tracked separately
+              {canManageGear && (
+                <>
+                  {' '}
+                  under{' '}
+                  <Link to="/inventory" className="underline">
+                    Gear &amp; Uniforms
+                  </Link>
+                </>
+              )}
               .
             </p>
           </div>
@@ -184,7 +194,11 @@ const MedicalSuppliesPage: React.FC = () => {
             </button>
             {canManage && (
               <>
-                <Link to="/medical-supplies/categories" className="btn-icon" aria-label="Manage medical categories">
+                <Link
+                  to="/medical-supplies/categories"
+                  className="btn-icon"
+                  aria-label="Manage medical supply categories"
+                >
                   <Tag className="h-4 w-4" />
                 </Link>
                 <button

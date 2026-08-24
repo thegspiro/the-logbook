@@ -14,12 +14,12 @@ Added 2026-08-16. **Off by default.**
 The two supply lines answer different questions and are usually owned by
 different people:
 
-| | Gear & Uniforms | Medical Supplies |
-| --- | --- | --- |
-| Tracked by | Individual unit | Quantity and expiration date |
-| Belongs to | A named member | The rig |
-| Ends its life by | NFPA retirement clock | Being used, or expiring |
-| Typical owner | Quartermaster | EMS Supply Officer |
+|                  | Gear & Uniforms       | Medical Supplies             |
+| ---------------- | --------------------- | ---------------------------- |
+| Tracked by       | Individual unit       | Quantity and expiration date |
+| Belongs to       | A named member        | The rig                      |
+| Ends its life by | NFPA retirement clock | Being used, or expiring      |
+| Typical owner    | Quartermaster         | EMS Supply Officer           |
 
 Before the split the quartermaster's catalog filled with items they did not
 order, the EMS officer had no page of their own, and — most importantly — there
@@ -38,9 +38,9 @@ does not run EMS never sees the page.
 
 ## Permissions
 
-| Permission | Grants |
-| --- | --- |
-| `inventory.view_medical` | Read medical items, categories, lots, the expiring list and the summary |
+| Permission                 | Grants                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| `inventory.view_medical`   | Read medical items, categories, lots, the expiring list and the summary                     |
 | `inventory.manage_medical` | Create and edit medical items and categories; add, edit and delete lots; receive deliveries |
 
 **Every medical route accepts either the domain permission or the broad
@@ -69,13 +69,13 @@ gained the `equipment_check.*` set its description had always promised.
 
 ## Pages
 
-| Page | Route | Opens on |
-| --- | --- | --- |
-| Medical Supplies | `/medical-supplies` | **What is expiring** — with an all-supplies tab, an add-supply form and a receive-delivery form |
-| Medical Categories | `/medical-supplies/categories` | Category management |
+| Page                      | Route                          | Opens on                                                                                        |
+| ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Medical Supplies          | `/medical-supplies`            | **What is expiring** — with an all-supplies tab, an add-supply form and a receive-delivery form |
+| Medical Supply Categories | `/medical-supplies/categories` | Category management                                                                             |
 
 The page opens on the expiring tab rather than the catalog because, for a
-consumable with a shelf life, *"what am I about to lose"* is the question that
+consumable with a shelf life, _"what am I about to lose"_ is the question that
 brings someone to the page.
 
 ### Receive delivery
@@ -121,27 +121,27 @@ says so.
 
 So the two are distinguishable in navigation:
 
-| Was | Now |
-| --- | --- |
-| Inventory | **Gear & Uniforms** |
-| My Equipment | **My Issued Gear** |
-| Inventory Admin | **Gear Admin** |
-| Equipment Requests | **Gear Requests** |
-| Equipment Kits | **Gear Kits** |
+| Was                | Now                 |
+| ------------------ | ------------------- |
+| Inventory          | **Gear & Uniforms** |
+| My Equipment       | **My Issued Gear**  |
+| Inventory Admin    | **Gear Admin**      |
+| Equipment Requests | **Gear Requests**   |
+| Equipment Kits     | **Gear Kits**       |
 
 **Routes and table names are unchanged**, so no existing link, bookmark or
 integration breaks.
 
 ## Edge cases
 
-| Scenario | Behavior |
-| --- | --- |
-| EMS officer opens a **gear** item by its id | **404, not 403.** To an officer scoped to medical stock that item does not exist, and a 403 would confirm the id is real |
-| Gear listings | Exclude medical-domain items and categories, and vice versa |
-| Clearing an item's category | Refused. An explicit null used to clear the column and strand the item as uncategorized — invisible to this page's filter, visible in the gear page's uncategorized rows, with no way back _(fixed 2026-08-16)_ |
-| Every lot for an item has expired | On hand reads **zero**, not the item's stale quantity |
-| Module toggled off after data exists | The page becomes unreachable; **no data is deleted**. Items keep their type and reappear when it is turned back on |
-| Department has an EMS officer but no apparatus checklists | Harmless — the role holds the permissions; nothing forces a checklist to exist |
+| Scenario                                                  | Behavior                                                                                                                                                                                                        |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| EMS officer opens a **gear** item by its id               | **404, not 403.** To an officer scoped to medical stock that item does not exist, and a 403 would confirm the id is real                                                                                        |
+| Gear listings                                             | Exclude medical-domain items and categories, and vice versa                                                                                                                                                     |
+| Clearing an item's category                               | Refused. An explicit null used to clear the column and strand the item as uncategorized — invisible to this page's filter, visible in the gear page's uncategorized rows, with no way back _(fixed 2026-08-16)_ |
+| Every lot for an item has expired                         | On hand reads **zero**, not the item's stale quantity                                                                                                                                                           |
+| Module toggled off after data exists                      | The page becomes unreachable; **no data is deleted**. Items keep their type and reappear when it is turned back on                                                                                              |
+| Department has an EMS officer but no apparatus checklists | Harmless — the role holds the permissions; nothing forces a checklist to exist                                                                                                                                  |
 
 ## Upgrading
 

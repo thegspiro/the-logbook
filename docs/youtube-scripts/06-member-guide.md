@@ -215,6 +215,36 @@ works everywhere."]**
 > do it in a browser, and neither can a laptop. If that's you, nothing's broken
 > — scan the QR code, same as always."
 
+**[ADDED 2026-08-24 — ID cards and the check-in station. New material; nothing
+above needs unsaying. Requires the department to have turned on the NFC ID
+Cards integration, so caption it as optional.]**
+
+**[SCREEN: A tablet at a door, a member tapping a plastic ID card against it,
+the screen confirming and clearing for the next person]**
+
+> "Some departments have gone a step further and issued actual ID cards. If
+> yours has, there's a tablet at the door — tap your card and walk in. Nobody
+> touches the screen between people."
+
+> "That works on any device, not just Android, because the tablet is doing the
+> reading, not your phone."
+
+**[CALLOUT: "Your card number isn't stored — The Logbook keeps a one-way hash
+and the last four characters, and that's it"]**
+
+> "If you lose a card, tell an officer. They'll suspend it, and if it doesn't
+> turn up, revoke it — and a revoked card is dead for good. You get a new one,
+> not the old one switched back on."
+
+**[SCREEN: Show a check-in landing well before the event start, flagged as
+early — ADDED 2026-08-24]**
+
+> "One last thing about arriving. If you tap in a long time before the thing
+> actually starts, that gets flagged. Your arrival time is recorded honestly —
+> nobody's rewriting when you showed up — but the credit runs from the
+> scheduled start, and your event manager can see how early it was. So tapping
+> in at five for a seven o'clock drill doesn't buy you two hours."
+
 ### PAST EVENTS & YOUR HISTORY (7:30 – 8:30)
 
 **[SCREEN: Navigate to Past Events tab (PastEventsTab)]**
@@ -354,16 +384,74 @@ empty.]**
 
 ### VIEWING YOUR SCHEDULE (12:30 – 13:15)
 
-**[SCREEN: Navigate to Scheduling (SchedulingPage)]**
+**[REWRITTEN 2026-08-24 — the Schedule tab is a board now, not a calendar of
+cards. The previous take described toggling week/month views and clicking a
+shift to see coverage. Re-shoot; do not cut around it.]**
 
-> "The Scheduling page shows the department's shift calendar. You can see your
-> assignments highlighted — which shifts you're on, which positions you're
-> filling."
+**[SCREEN: Navigate to Scheduling (SchedulingPage), Schedule tab]**
 
-**[SCREEN: Show the calendar with shifts highlighted]**
+> "This is the department's month, and every shift on it tells you the one
+> thing you actually want to know: does it still need people?"
 
-> "Toggle between week and month view. Click on any shift to see who else is
-> assigned and what the coverage looks like."
+**[SCREEN: Show the month grid. Point at each chip in turn.]**
+
+> "Red or amber with a number — that's open seats. Green and it's full. Blue
+> means you're on it."
+
+**[SCREEN: Point at a grey shift]**
+
+> "Grey with just a headcount means nobody ever said how many people this shift
+> wants. It isn't short — it's unspecified. You can still join it."
+
+**[SCREEN: Select a day; show the day panel with the crew and the claim button]**
+
+> "Pick a day and you get the crew down the side, and one button. It claims the
+> first open seat you're cleared for — you don't pick a position out of a
+> dropdown and find out afterwards that you're not qualified for it."
+
+**[SCREEN: Click the claim button; show the seat filled]**
+
+> "That's it. You're on the shift."
+
+**[CALLOUT: "Filters dim, they don't hide — the month keeps its shape"]**
+
+> "A shift that's been cancelled or finalized, or one that's already happened,
+> reads as closed and doesn't offer you anything. And every shift still has a
+> details link if you need the full picture."
+
+### CLAIMING THE SAME SHIFT EVERY WEEK (13:15 – 13:45)
+
+**[NEW CHAPTER 2026-08-24 — standing shifts. Nothing to unsay; this did not
+exist before. Insert before the calendar-subscription beat and shift the
+following timings.]**
+
+**[SCREEN: On a shift, open "Make this a standing shift"]**
+
+> "If you always take Tuesday nights, don't claim fifty-two Tuesdays. Make it a
+> standing shift."
+
+**[SCREEN: Show the pattern and horizon controls]**
+
+> "Weekly, every other week, or a particular Tuesday of the month — and you
+> pick how far out it runs. It defaults to a year from now."
+
+**[CALLOUT: "The pattern counts from the shift you started it on"]**
+
+> "'Every other Tuesday' means every other one of _these_ Tuesdays — it counts
+> from the shift you opened it from, not from today."
+
+**[SCREEN: Save. Show the member seated on matching shifts already on the
+calendar.]**
+
+> "Save it and you're seated on the ones already on the calendar. And when your
+> department schedules next month, you're on those too — you don't have to come
+> back and do it again."
+
+**[SCREEN: Give up one date; show the series still in place]**
+
+> "Give up one Tuesday because something came up, and the rest of the series is
+> still yours. That's the whole reason it's a standing claim and not just a
+> pile of sign-ups."
 
 ### SUBSCRIBE TO YOUR SHIFTS (13:15 – 13:45)
 
@@ -398,15 +486,42 @@ Copy button, and Reset link]**
 
 **[SCREEN: Show the swap request form with options]**
 
-> "If you propose a specific swap with another member, they'll get a
-> notification to accept or decline. Once both parties agree, it goes to the
-> officer for final approval."
+**[REWRITTEN 2026-08-24 — a one-way offer is now completed by the person you
+offered it to, with no officer involved. A two-way trade still goes to an
+officer, and that officer cannot be either of you. The previous take collapsed
+the two into one flow.]**
 
-> "If you post it as open, any eligible member can claim it."
+> "If you're just handing your seat over, name the member. And notice the list
+> — it's already dropped anyone who couldn't take it: people on the shift,
+> people on approved leave, people not cleared for the position, anyone working
+> a tour that runs into this one."
+
+**[SCREEN: Show the candidate list, least-loaded first]**
+
+> "They get Accept or Decline. If they accept, you're off and they're on. No
+> officer, no waiting — because that's the same as you dropping the seat and
+> them picking it up, and neither of those ever needed permission."
+
+> "A real trade is different. Your Tuesday for their Thursday moves two
+> rosters, so that one goes to an officer — and it has to be an officer who
+> isn't in the swap. Not you, not them."
+
+> "Or post it open, and any eligible member can claim it."
 
 **[SCREEN: Submit the swap request. Show the pending status.]**
 
-> "You'll be notified when the swap is approved, declined, or claimed."
+**[CALLOUT: "While your offer is out, you can't release the seat"]**
+
+> "One rule worth knowing: while somebody's holding your offer, you can't
+> release the shift or offer it to anyone else. Withdraw first — otherwise
+> they're sitting on an offer you already gave away."
+
+> "And if nobody answers, the offer closes the day before the shift and you,
+> them and the duty officer all get told. It won't quietly sit there."
+
+> "One thing you can't hand over: a training seat. It carries your program and
+> your evaluating officer, so moving it would file your training against
+> somebody else."
 
 ### MY EQUIPMENT (15:00 – 15:30)
 

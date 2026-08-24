@@ -56,9 +56,9 @@ the navigation entry is absent and the routes are unreachable.
 Two domain-scoped permissions, so a department can appoint an EMS supply
 officer for medical stock while the quartermaster keeps gear:
 
-| Permission | Grants |
-| --- | --- |
-| `inventory.view_medical` | Read medical items, categories, lots, expiring list, summary |
+| Permission                 | Grants                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| `inventory.view_medical`   | Read medical items, categories, lots, expiring list, summary                              |
 | `inventory.manage_medical` | Create/update medical items and categories; add, edit and delete lots; receive deliveries |
 
 **Every medical route accepts either the domain permission or the broad
@@ -76,11 +76,11 @@ one.** The check is `require_permission("inventory.view_medical",
 
 ### Roles
 
-| Role | Change |
-| --- | --- |
+| Role                                                       | Change                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **EMS Supply Officer** (`ems_supply_officer`, priority 55) | **New system role.** Holds the two medical permissions plus the **whole** `equipment_check.*` set — both halves of the shelf-to-truck loop, because stock is only useful if the same officer can put it on the apparatus checklist and see what is expiring out there. Also `apparatus.view`, `locations.view`, and the baseline directory reads. **No access to gear or uniforms.** |
-| **Quartermaster** | Seeds with `inventory.view_medical` / `inventory.manage_medical` alongside the gear permissions. A department that splits the job drops these two from the quartermaster and appoints an EMS Supply Officer. |
-| **Apparatus Officer** | Now **states** the medical permissions explicitly. Nothing is widened — it already reached medical stock through the broad `inventory.manage`; the role editor is simply honest about it now. Also gains the `equipment_check.*` set its description had always promised. |
+| **Quartermaster**                                          | Seeds with `inventory.view_medical` / `inventory.manage_medical` alongside the gear permissions. A department that splits the job drops these two from the quartermaster and appoints an EMS Supply Officer.                                                                                                                                                                         |
+| **Apparatus Officer**                                      | Now **states** the medical permissions explicitly. Nothing is widened — it already reached medical stock through the broad `inventory.manage`; the role editor is simply honest about it now. Also gains the `equipment_check.*` set its description had always promised.                                                                                                            |
 
 A matching **email-signature office** ships with the role.
 
@@ -88,10 +88,10 @@ A matching **email-signature office** ships with the role.
 
 ## Pages
 
-| Route | Page | Permission |
-| --- | --- | --- |
-| `/medical-supplies` | Medical Supplies — opens on **what is expiring**, with an all-supplies tab, an add-supply form and a receive-delivery form | `inventory.view_medical` **or** `inventory.view` |
-| `/medical-supplies/categories` | Medical categories | `inventory.view_medical` **or** `inventory.view` |
+| Route                          | Page                                                                                                                       | Permission                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `/medical-supplies`            | Medical Supplies — opens on **what is expiring**, with an all-supplies tab, an add-supply form and a receive-delivery form | `inventory.view_medical` **or** `inventory.view` |
+| `/medical-supplies/categories` | Medical supply categories                                                                                                  | `inventory.view_medical` **or** `inventory.view` |
 
 Writes on both pages require the corresponding `manage` permission.
 
@@ -198,7 +198,7 @@ Two boundary decisions inside that:
   relationship.
 - **Widening the audience leaked the other domain.** Adding medical-only
   officers to the low-stock and expiring-supply alerts handed them a single
-  rendered table built from *every* row — gear item names, categories and
+  rendered table built from _every_ row — gear item names, categories and
   counts the API refuses them by design. **Mailing the data is the same
   disclosure as serving it**, so the fix that closed one gap opened a smaller
   one. That is what the per-domain grouping above exists to prevent.
@@ -210,22 +210,22 @@ Two boundary decisions inside that:
 All routes under `/api/v1/medical-supplies`. Every one accepts the domain
 permission **or** the broad equivalent.
 
-| Method | Path | Permission |
-| --- | --- | --- |
-| `GET` | `/categories` | view |
-| `POST` | `/categories` | manage |
-| `PATCH` | `/categories/{category_id}` | manage |
-| `GET` | `/items` | view |
-| `GET` | `/items/{item_id}` | view |
-| `POST` | `/items` | manage |
-| `PATCH` | `/items/{item_id}` | manage |
-| `GET` | `/items/{item_id}/lots` | view |
-| `POST` | `/items/{item_id}/lots` | manage |
-| `POST` | `/receive` | manage |
-| `PATCH` | `/lots/{lot_id}` | manage |
-| `DELETE` | `/lots/{lot_id}` | manage |
-| `GET` | `/lots/expiring` | view |
-| `GET` | `/summary` | view |
+| Method   | Path                        | Permission |
+| -------- | --------------------------- | ---------- |
+| `GET`    | `/categories`               | view       |
+| `POST`   | `/categories`               | manage     |
+| `PATCH`  | `/categories/{category_id}` | manage     |
+| `GET`    | `/items`                    | view       |
+| `GET`    | `/items/{item_id}`          | view       |
+| `POST`   | `/items`                    | manage     |
+| `PATCH`  | `/items/{item_id}`          | manage     |
+| `GET`    | `/items/{item_id}/lots`     | view       |
+| `POST`   | `/items/{item_id}/lots`     | manage     |
+| `POST`   | `/receive`                  | manage     |
+| `PATCH`  | `/lots/{lot_id}`            | manage     |
+| `DELETE` | `/lots/{lot_id}`            | manage     |
+| `GET`    | `/lots/expiring`            | view       |
+| `GET`    | `/summary`                  | view       |
 
 `/summary` reports counts for the landing page. **Low stock is judged against
 the item's own reorder point**, not a global threshold — the department's floor
@@ -238,11 +238,11 @@ for gauze is not its floor for epinephrine.
 No new tables. The module is a **domain view** over the existing inventory
 schema:
 
-| Object | Change |
-| --- | --- |
-| `InventoryItem.item_type` | New enum member **`medical`** |
-| `InventoryCategory` | Categories carry the medical item type |
-| `inventory_lots` | Unchanged — reused as-is |
+| Object                    | Change                                 |
+| ------------------------- | -------------------------------------- |
+| `InventoryItem.item_type` | New enum member **`medical`**          |
+| `InventoryCategory`       | Categories carry the medical item type |
+| `inventory_lots`          | Unchanged — reused as-is               |
 
 > **`ItemType.MEDICAL` was appended, never inserted.** MySQL stores an `ENUM` as
 > its ordinal, so a mid-list insert would silently reclassify every existing
@@ -252,9 +252,9 @@ schema:
 
 ## Migrations
 
-| Revision | What it does |
-| --- | --- |
-| `20260816_0004` | Adds `medical` to the `item_type` enum |
+| Revision        | What it does                                                                                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260816_0004` | Adds `medical` to the `item_type` enum                                                                                                                                                                                                                                            |
 | `20260816_0005` | **Backfill for existing organizations.** Seeds only materialize at organization creation, so this idempotently creates the EMS Supply Officer position, adds the medical grants to the positions that seed with them, and gives the Apparatus Officer the `equipment_check.*` set |
 
 The `_0005` upgrade is idempotent by skipping rows that already hold a grant.
@@ -268,18 +268,18 @@ The `_0005` upgrade is idempotent by skipping rows that already hold a grant.
 
 ## Edge cases
 
-| Scenario | Behavior |
-| --- | --- |
-| Department runs one supply line | Unaffected. `inventory.view` / `inventory.manage` reach everything, and `inventory.*` still grants all |
-| EMS officer requests a **gear** item by id | `404` — not `403`. To that officer the item does not exist, and a 403 would confirm the id is real |
-| EMS officer opens a gear listing | Medical-domain items and categories are excluded from gear listings, and vice versa |
-| Update sends `{"category_id": null}` | **Refused.** `exclude_unset` keeps the key and a truthiness check used to read the null as absent, so the update cleared the column and stranded the item as uncategorized — invisible to this page's filter, visible in the gear page's uncategorized rows, with no way back. Now checks key presence _(fixed 2026-08-16)_ |
-| "On hand" edited on a lot-stocked item | The field is not editable; the lot figure is shown with a pointer to **Receive delivery** |
-| An item's lots have all expired | On hand reads **zero**, not the item's stale `quantity` |
-| A lot passes its expiration date | Stops counting toward on hand, is flagged, and the equipment-check swap **refuses** it |
-| One line of a receive-delivery batch fails validation | **Nothing is written.** Fix the line and resubmit the whole delivery |
-| Module toggled off after data exists | The page and routes become unreachable; **no data is deleted**. Items keep their `medical` type and reappear when it is turned back on |
-| Department has an EMS officer but no `equipment_check` usage | Harmless — the role holds the permissions; nothing forces a checklist to exist |
+| Scenario                                                     | Behavior                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Department runs one supply line                              | Unaffected. `inventory.view` / `inventory.manage` reach everything, and `inventory.*` still grants all                                                                                                                                                                                                                      |
+| EMS officer requests a **gear** item by id                   | `404` — not `403`. To that officer the item does not exist, and a 403 would confirm the id is real                                                                                                                                                                                                                          |
+| EMS officer opens a gear listing                             | Medical-domain items and categories are excluded from gear listings, and vice versa                                                                                                                                                                                                                                         |
+| Update sends `{"category_id": null}`                         | **Refused.** `exclude_unset` keeps the key and a truthiness check used to read the null as absent, so the update cleared the column and stranded the item as uncategorized — invisible to this page's filter, visible in the gear page's uncategorized rows, with no way back. Now checks key presence _(fixed 2026-08-16)_ |
+| "On hand" edited on a lot-stocked item                       | The field is not editable; the lot figure is shown with a pointer to **Receive delivery**                                                                                                                                                                                                                                   |
+| An item's lots have all expired                              | On hand reads **zero**, not the item's stale `quantity`                                                                                                                                                                                                                                                                     |
+| A lot passes its expiration date                             | Stops counting toward on hand, is flagged, and the equipment-check swap **refuses** it                                                                                                                                                                                                                                      |
+| One line of a receive-delivery batch fails validation        | **Nothing is written.** Fix the line and resubmit the whole delivery                                                                                                                                                                                                                                                        |
+| Module toggled off after data exists                         | The page and routes become unreachable; **no data is deleted**. Items keep their `medical` type and reappear when it is turned back on                                                                                                                                                                                      |
+| Department has an EMS officer but no `equipment_check` usage | Harmless — the role holds the permissions; nothing forces a checklist to exist                                                                                                                                                                                                                                              |
 
 ---
 

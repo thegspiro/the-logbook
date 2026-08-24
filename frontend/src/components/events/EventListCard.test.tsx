@@ -116,7 +116,7 @@ describe('EventListCard', () => {
       // as fact is how a member ends up short of a requirement they thought
       // they had met.
       renderCard(makeEvent({ credited_hours: 2, hour_category_label: 'drill' }));
-      expect(screen.getByText(/Credits/)).toHaveTextContent('Credits up to 2.0 drill hours');
+      expect(screen.getByText(/Credits/)).toHaveTextContent('Credits up to 2 drill hours');
     });
 
     it('explains what the hours figure is based on', () => {

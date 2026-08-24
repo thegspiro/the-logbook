@@ -33,7 +33,7 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Member Self-Export** — _(2026-05-29)_ Members can export their own training history as CSV or PDF via `GET /training/module-config/my-training/export`, gated by the org `allow_member_report_export` setting (403 when disabled). Omitting `start_date` returns the member's entire lifetime history
 - **Officer Member-Record Exports** — _(2026-05-29)_ `POST /training/reports/export` (permission `training.manage`) gained `member_records` (bulk export of all active members), `hours_summary`, and `certification` CSV report types. Unknown report types now return 400 instead of silently falling through to a compliance report; bulk PDFs are merged with `pypdf` (empty result → placeholder page)
 - **Recertification Tracking** — _(2026-03-05)_ Automated recertification reminders with configurable lead times. Scheduled Celery task sends tiered notifications before certification expiry
-- **Instructor Management** — _(2026-03-05)_ Track instructor qualifications (instructor, evaluator, lead_instructor, mentor), availability, and assignment to training sessions with validation. _(2026-08-11)_ Qualification create/update validate that referenced `user_id`, `course_id`, `skill_evaluation_id`, and `category_id` belong to the caller's organization, and list joins are org-scoped — a colliding id can no longer resolve another tenant's names
+- **Instructor Management** — _(2026-03-05)_ Track instructor qualifications (instructor, evaluator, lead*instructor, mentor), availability, and assignment to training sessions with validation. *(2026-08-11)\_ Qualification create/update validate that referenced `user_id`, `course_id`, `skill_evaluation_id`, and `category_id` belong to the caller's organization, and list joins are org-scoped — a colliding id can no longer resolve another tenant's names
 - **Effectiveness Scoring** — _(2026-03-05)_ Training effectiveness measurement using Kirkpatrick model (reaction, learning, behavior, results)
 - **Multi-Agency Training** — _(2026-03-05)_ Joint training session coordination across departments with shared records and mutual aid tracking
 - **xAPI (Tin Can) Integration** — _(2026-03-05)_ Learning Record Store integration for standardized training activity tracking. Async statement delivery via Celery
@@ -195,7 +195,7 @@ One scheduled run of a multi-class course. Every route is `training.manage`
 except `GET /{cohort_id}` and `/mine`, which a roster member may read for their
 own cohort.
 
-**A roster member's read is peer-safe** *(2026-08-12)*. The detail endpoint
+**A roster member's read is peer-safe** _(2026-08-12)_. The detail endpoint
 previously returned the full officer payload to any student on the roster:
 every classmate's name, email, roster status, withdrawal timestamp, officer
 notes, program progress percentage, and per-class attendance counts. A
@@ -203,7 +203,7 @@ non-officer (no `training.manage` / `training.view_all`) now receives the
 cohort metadata and class timeline only — `members` is empty, `member_count`
 reads `0`, and per-class `rsvp_count` / `checked_in_count` are `null`
 (withheld, distinguishable from a genuine zero). The withheld data is never
-*queried*, not filtered after the fact, so there is no serialization-layer
+_queried_, not filtered after the fact, so there is no serialization-layer
 bypass. `/mine` likewise stopped disclosing roster sizes. Officers see
 everything, org-scoped; a non-member still gets a 404 rather than
 confirmation the cohort exists. The same pass org-scoped every query in the
@@ -511,25 +511,25 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 
 ### Key Enums
 
-| Enum                          | Values                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------ |
-| `TrainingType`                | certification, continuing_education, skills_practice, orientation, refresher, specialty    |
-| `TrainingStatus`              | scheduled, in_progress, completed, cancelled, failed                                       |
-| `RequirementType`             | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test |
-| `RequirementFrequency`        | annual, biannual, quarterly, monthly, one_time                                             |
-| `DueDateType`                 | calendar_period, rolling, certification_period, fixed_date                                 |
-| `ProgramStructureType`        | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible |
-| `EnrollmentStatus`            | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed |
+| Enum                   | Values                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `TrainingType`         | certification, continuing_education, skills_practice, orientation, refresher, specialty          |
+| `TrainingStatus`       | scheduled, in_progress, completed, cancelled, failed                                             |
+| `RequirementType`      | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test       |
+| `RequirementFrequency` | annual, biannual, quarterly, monthly, one_time                                                   |
+| `DueDateType`          | calendar_period, rolling, certification_period, fixed_date                                       |
+| `ProgramStructureType` | sequential _(retired from the pickers 2026-08-09; still a valid stored value)_, phases, flexible |
+| `EnrollmentStatus`     | active, completed, **expired** _(first actually written 2026-08-09)_, on_hold, withdrawn, failed |
 
-| `RequirementProgressStatus`   | not_started, in_progress, completed, verified, waived                                      |
-| `ProgressCreditSource`        | training_session, shift_report, external_import, officer_apply                             |
-| `SubmissionStatus`            | draft, pending_review, approved, rejected, revision_requested                              |
-| `ExternalProviderType`        | vector_solutions, target_solutions, lexipol, i_am_responding, custom_api                   |
-| `SyncStatus`                  | pending, in_progress, completed, failed, partial                                           |
-| `ImportStatus`                | pending, imported, failed, skipped, duplicate                                              |
-| `InstructorQualificationType` | instructor, evaluator, lead_instructor, mentor                                             |
-| `SkillTemplateStatus`         | draft, published, archived                                                                 |
-| `SkillTestStatus`             | not_started, in_progress, completed, cancelled                                             |
+| `RequirementProgressStatus` | not_started, in_progress, completed, verified, waived |
+| `ProgressCreditSource` | training_session, shift_report, external_import, officer_apply |
+| `SubmissionStatus` | draft, pending_review, approved, rejected, revision_requested |
+| `ExternalProviderType` | vector_solutions, target_solutions, lexipol, i_am_responding, custom_api |
+| `SyncStatus` | pending, in_progress, completed, failed, partial |
+| `ImportStatus` | pending, imported, failed, skipped, duplicate |
+| `InstructorQualificationType` | instructor, evaluator, lead_instructor, mentor |
+| `SkillTemplateStatus` | draft, published, archived |
+| `SkillTestStatus` | not_started, in_progress, completed, cancelled |
 
 > **`sequential` was retired from the structure pickers** _(2026-08-09)_ because
 > nothing ever enforced an order — it behaved exactly like `flexible` while
@@ -546,10 +546,10 @@ so a member past their `target_completion_date` stayed `active` indefinitely:
 their page read "42 days overdue" against a status claiming otherwise, and no
 officer view could filter for it.
 
-| Transition | Trigger |
-| --- | --- |
+| Transition           | Trigger                                                                                                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `active` → `expired` | **On read** — the progress endpoint transitions an overdue enrollment the moment anyone opens it (the pattern `auto_reset_if_due` already used) — and in the daily `enrollment_expiry` scheduled task (05:15), which covers records nobody opens |
-| `expired` → `active` | `POST /enrollments/{id}/reopen` (`training.manage`), with an optional new `target_completion_date` |
+| `expired` → `active` | `POST /enrollments/{id}/reopen` (`training.manage`), with an optional new `target_completion_date`                                                                                                                                               |
 
 - Both the member and the training officers are notified on expiry.
 - **Reopen leaves progress rows untouched** — the member keeps everything they
@@ -1422,3 +1422,56 @@ Personal-data exports apply the Training module's result-visibility setting to
 trainee in the application is also omitted from a newly generated export;
 completion history remains available. Previously downloaded exports are not
 recalled when the setting changes.
+
+## Submit External Training, Rebuilt _(2026-08-23 → 08-24)_
+
+`/training/submit` was rebuilt around the four things members named. Two
+changes matter beyond the layout.
+
+### The certificate travels with the submission
+
+Attaching evidence used to be a second step after the submission was created,
+which meant it could be skipped — and frequently was. The form now sends the
+file with the submission as multipart
+(`POST /training/submissions/with-attachment`). PDF, JPG or PNG, up to 10 MB,
+validated by magic bytes and stored under a server-generated name, so a double
+extension cannot survive the trip and nothing is executed server-side.
+
+**Where the bytes live is deliberate.** They land under the _training-record_
+attachment root, not a sibling directory, because approval copies the
+submission's attachment dicts onto the `TrainingRecord` verbatim and the record
+download route confines paths to `TRAINING_ATTACHMENT_DIR`. A sibling directory
+would 404 every approved certificate from the member's own training history.
+
+**Deleting or withdrawing a submission unlinks its file.** That is safe only
+because a submission is deletable in `draft`, `pending_review` and
+`revision_requested` alone — never after approval, the one state where a
+`TrainingRecord` also references the same file. **If that guard is ever
+widened, the delete must stop unlinking.**
+
+Three open items are recorded in
+[`docs/KNOWN_LIMITATIONS.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md):
+no retention policy (approved certificates are kept indefinitely, and expiring
+them needs a records-retention decision from the department before it needs
+code), **no malware scanning** (a file served back to an officer is whatever
+the member uploaded), and voided records keeping their file by design — a
+`DELETE` marks the record `cancelled` rather than removing it, so the
+correction stays auditable and its evidence stays with it.
+
+### The start time is kept
+
+The form asks for a start time and a length and derives the hours from the
+pair, but only the date and the hours were stored. Editing a submission
+therefore had to **invent** a start — it assumed 09:00 — and an officer
+reviewing a four-hour entry could not tell a morning class from an evening one.
+
+`start_time` is now stored on both the submission and the approved record.
+Rows written before this have none, and that reads as blank rather than as
+09:00: guessing would put a number on the record that was never reported.
+
+### Also
+
+- The form asked one question with three controls; it now asks it once
+  (`DurationStepper`).
+- A revision request, a submission checklist and a receipt are distinct
+  surfaces rather than one screen doing all three.

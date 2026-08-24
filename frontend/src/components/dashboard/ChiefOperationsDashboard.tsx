@@ -4,7 +4,10 @@ import type { OperationsDashboard } from '../../services/api';
 export default function ChiefOperationsDashboard({ data }: { data: OperationsDashboard }) {
   const navigate = useNavigate();
   return (
-    <div className="grid gap-4 lg:grid-cols-2" aria-label="Chief operations summary">
+    // items-start, not the grid default of stretch: these panels hold lists of
+    // different lengths, so a stretched one-item card grows to match a
+    // five-item neighbour and renders as a mostly empty box.
+    <div className="grid items-start gap-4 lg:grid-cols-2" aria-label="Chief operations summary">
       {data.sections.map((section) => (
         <section key={section.key} className="card p-4" aria-labelledby={`operations-${section.key}`}>
           <h4 id={`operations-${section.key}`} className="text-theme-text-primary font-semibold">

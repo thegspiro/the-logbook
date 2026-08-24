@@ -34,6 +34,7 @@ import type {
 } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatHours, formatHoursExact, roundHoursToQuarter, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
@@ -424,7 +425,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 />
                 <StatCard
                   label="Hours Worked"
-                  value={memberHoursReport.members.reduce((sum, m) => sum + m.worked_hours, 0).toFixed(1)}
+                  value={formatHours(sumHoursToQuarter(memberHoursReport.members.map((m) => m.worked_hours)))}
                   icon={<BarChart3 className="text-theme-text-muted h-5 w-5" aria-hidden="true" />}
                 />
               </div>
@@ -469,35 +470,41 @@ export const SchedulingReportsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {memberHoursReport.members.map((m) => (
-                        <tr
-                          key={m.user_id}
-                          className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
-                        >
-                          <td className="px-4 py-3">
-                            <div>
-                              <p className="text-theme-text-primary font-medium">
-                                {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.email}
-                              </p>
-                              <p className="text-theme-text-muted text-xs">{m.email}</p>
-                            </div>
-                          </td>
-                          <td className="text-theme-text-primary px-4 py-3 text-right">{m.shifts_attended}</td>
-                          <td className="text-theme-text-primary px-4 py-3 text-right font-medium">
-                            {m.worked_hours.toFixed(1)}
-                          </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-right">
-                            {m.scheduled_hours.toFixed(1)}
-                          </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-right">
-                            {m.worked_hours - m.scheduled_hours >= 0 ? '+' : ''}
-                            {(m.worked_hours - m.scheduled_hours).toFixed(1)}
-                          </td>
-                          <td className="text-theme-text-muted px-4 py-3 text-right">
-                            {m.shifts_attended > 0 ? (m.worked_hours / m.shifts_attended).toFixed(1) : '0'}h
-                          </td>
-                        </tr>
-                      ))}
+                      {memberHoursReport.members.map((m) => {
+                        // The difference of the two figures as shown, so the row
+                        // subtracts for the reader rather than against unrounded
+                        // values they cannot see.
+                        const variance = roundHoursToQuarter(m.worked_hours) - roundHoursToQuarter(m.scheduled_hours);
+                        return (
+                          <tr
+                            key={m.user_id}
+                            className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
+                          >
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="text-theme-text-primary font-medium">
+                                  {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.email}
+                                </p>
+                                <p className="text-theme-text-muted text-xs">{m.email}</p>
+                              </div>
+                            </td>
+                            <td className="text-theme-text-primary px-4 py-3 text-right">{m.shifts_attended}</td>
+                            <td className="text-theme-text-primary px-4 py-3 text-right font-medium">
+                              {formatHours(m.worked_hours)}
+                            </td>
+                            <td className="text-theme-text-secondary px-4 py-3 text-right">
+                              {formatHours(m.scheduled_hours)}
+                            </td>
+                            <td className="text-theme-text-secondary px-4 py-3 text-right">
+                              {variance >= 0 ? '+' : ''}
+                              {formatHours(variance)}
+                            </td>
+                            <td className="text-theme-text-muted px-4 py-3 text-right">
+                              {m.shifts_attended > 0 ? formatHoursExact(m.worked_hours / m.shifts_attended) : '0'}h
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1113,7 +1120,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                       {member.shift_count}
                                     </td>
                                     <td className="text-theme-text-primary px-4 py-2 text-right">
-                                      {member.total_hours}
+                                      {formatHours(member.total_hours)}
                                     </td>
                                     <td className="px-4 py-2 text-right">
                                       <div className="flex items-center justify-end gap-2">

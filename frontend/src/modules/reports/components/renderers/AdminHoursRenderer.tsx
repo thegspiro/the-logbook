@@ -7,6 +7,7 @@ import type { AdminHoursReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { formatHours, sumHoursToQuarter } from '@/utils/hoursFormatting';
 
 interface Props {
   data: AdminHoursReport;
@@ -14,6 +15,17 @@ interface Props {
 
 export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
   const { summary } = data;
+
+  // Both figures come off the same rounded entries the table shows. The
+  // backend derives its total and its category breakdown from two separate
+  // aggregates of raw minutes, so pairing a rounded total with a raw breakdown
+  // put "0.75 total" above a sole category reading "0.5h". The two queries
+  // cover the same rows, so regrouping here loses nothing.
+  const roundedEntryHours = data.entries.map((entry) => entry.hours);
+  const hoursByCategory = data.entries.reduce<Record<string, number[]>>((acc, entry) => {
+    (acc[entry.category_name] ??= []).push(entry.hours);
+    return acc;
+  }, {});
 
   const columns = [
     { key: 'member_name', header: 'Member' },
@@ -23,7 +35,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
       key: 'hours',
       header: 'Hours',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : toStr(v, '0')),
+      render: (v: unknown) => (typeof v === 'number' ? formatHours(v) : toStr(v, '0')),
     },
     {
       key: 'entry_method',
@@ -40,18 +52,22 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-        <StatCard label="Total Hours" value={summary.total_hours} />
+        {/* Summed from the rounded entries, not from the raw aggregate: three
+            ten-minute entries each read 0.25 in the table, and a total of 0.5
+            over rows showing 0.75 is arithmetic the reader can see is wrong. */}
+        <StatCard label="Total Hours" value={formatHours(sumHoursToQuarter(roundedEntryHours))} />
         <StatCard label="Entries" value={summary.total_entries} />
         <StatCard label="Members" value={summary.unique_members} />
       </div>
 
-      {Object.keys(summary.hours_by_category).length > 0 && (
+      {Object.keys(hoursByCategory).length > 0 && (
         <div className="mb-4">
           <p className="text-theme-text-muted mb-1 text-xs">By Category:</p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(summary.hours_by_category).map(([cat, hrs]) => (
+            {Object.entries(hoursByCategory).map(([cat, hrs]) => (
               <span key={cat} className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-1 text-xs">
-                {cat}: <span className="text-theme-text-primary font-semibold">{hrs}h</span>
+                {cat}:{' '}
+                <span className="text-theme-text-primary font-semibold">{formatHours(sumHoursToQuarter(hrs))}h</span>
               </span>
             ))}
           </div>

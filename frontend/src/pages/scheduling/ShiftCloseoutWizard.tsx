@@ -26,6 +26,7 @@ import type { CloseoutState, CloseoutAttendanceEntry, MemberCallCredit } from '.
 import { formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { UNCATEGORISED, deriveCallTotal, hoursBetween, num } from './closeoutMath';
+import { formatHours, sumHoursToQuarter } from '../../utils/hoursFormatting';
 
 interface ShiftCloseoutWizardProps {
   shiftId: string;
@@ -174,7 +175,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
   }, [shiftId, hydrate]);
 
   const combinedHours = useMemo(
-    () => Math.round(members.reduce((sum, m) => sum + hoursBetween(m.inLocal, m.outLocal), 0) * 10) / 10,
+    () => sumHoursToQuarter(members.map((m) => hoursBetween(m.inLocal, m.outLocal))),
     [members]
   );
   const callTotal = useMemo(() => deriveCallTotal(counts), [counts]);
@@ -334,7 +335,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                   onChange={(e) => setMemberField(m.userId, 'outLocal', e.target.value)}
                 />
                 <span className="text-theme-text-secondary w-12 text-right text-xs tabular-nums">
-                  {hoursBetween(m.inLocal, m.outLocal).toFixed(1)}
+                  {formatHours(hoursBetween(m.inLocal, m.outLocal))}
                 </span>
               </div>
             ))}
@@ -345,7 +346,9 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             </span>
             {/* "Combined", not "total": summed across the crew it is several
                 times the length of the shift and reads as an error without it. */}
-            <strong className="text-theme-text-primary tabular-nums">{combinedHours.toFixed(1)} combined hours</strong>
+            <strong className="text-theme-text-primary tabular-nums">
+              {formatHours(combinedHours)} combined hours
+            </strong>
           </div>
         </div>
       )}
@@ -397,7 +400,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
           <h4 className="text-theme-text-primary text-sm font-semibold">Does this look right?</h4>
           <div className="grid grid-cols-2 gap-2">
             <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-2">
-              <p className="text-theme-text-primary text-xl font-semibold tabular-nums">{combinedHours.toFixed(1)}</p>
+              <p className="text-theme-text-primary text-xl font-semibold tabular-nums">{formatHours(combinedHours)}</p>
               <p className="text-theme-text-muted text-[10px] tracking-wider uppercase">Combined hours</p>
             </div>
             <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-2">
@@ -414,7 +417,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                 <div className="min-w-0 flex-1">
                   <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
                   <p className="text-theme-text-muted text-xs tabular-nums">
-                    {hoursBetween(m.inLocal, m.outLocal).toFixed(1)}h
+                    {formatHours(hoursBetween(m.inLocal, m.outLocal))}h
                   </p>
                 </div>
                 <input

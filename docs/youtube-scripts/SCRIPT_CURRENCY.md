@@ -1,5 +1,244 @@
 # Script currency
 
+## Flagged by the 2026-08-23 → 08-24 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-23_TO_24.md`](../CHANGE_AUDIT_2026-08-23_TO_24.md#documentation-and-media-disposition).
+
+This window produced **four Wrong** — all four rewritten in-script — plus five
+new shorts, two new chapters in script 03, and a re-shoot list. Determinations
+below were made by reading the script files, not the change list; where a
+script was suspected and turned out clean, it is recorded as verified rather
+than left as a conditional.
+
+**Rewritten in-script this window** (per the standing rule that no behavioural
+content lives only in SCRIPT_CURRENCY):
+
+| Script | Beat                             | Was                                                                                                                                                                                                                                    |
+| ------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **08** | `SHORT 8C`                       | "They get notified — but they don't approve it, and neither do you." **True when written on 2026-08-23; false a day later.** A one-way offer is now accepted or declined by the person it was made to                                  |
+| **06** | `VIEWING YOUR SCHEDULE`          | Week/month view toggles and "click any shift to see coverage". The Schedule tab is a board with a status chip per shift and a one-button claim                                                                                         |
+| **06** | `REQUESTING A SHIFT SWAP`        | "They'll get a notification to accept or decline. Once both parties agree, it goes to the officer for final approval." Collapsed two now-distinct flows: a one-way offer completes without an officer; a two-way trade still needs one |
+| **04** | `VIEWING THE SCHEDULE`           | "View by week, by month, or by individual" and a colour key that no longer matches                                                                                                                                                     |
+| **07** | `Your emails look different now` | "You're now **tracking** the built-in design, so future improvements reach you without you doing anything." **No longer true** — the August 24 shell is opt-in per template, and the switch is the Reset button                        |
+
+### 08 — Quick Tips & Shorts · **WRONG, then corrected — and the correction is the interesting part**
+
+`SHORT 8C` was rewritten on **2026-08-23** to remove a target-side
+accept/decline control that did not exist. **On 2026-08-24 that control
+shipped**, so yesterday's correction became today's error in the opposite
+direction.
+
+Both versions are recorded rather than one quietly replacing the other, because
+this is the failure mode a currency file exists to catch: a beat can be
+corrected into being wrong. The rule it argues for is that a `SCRIPT_CURRENCY`
+entry naming a control as **non-existent** carries an expiry the moment that
+control is on a roadmap — and "the target can't accept" was a defect report in
+this repository's own tracker at the time the correction was written.
+
+The rewritten beat now distinguishes the three cases, which the original never
+did:
+
+| What the member does                                        | Who completes it                                 |
+| ----------------------------------------------------------- | ------------------------------------------------ |
+| Hands their seat to a named colleague (nothing coming back) | **The colleague**, Accept or Decline. No officer |
+| Trades their Tuesday for somebody's Thursday                | An officer — and **not** either participant      |
+| Posts the seat open                                         | Any eligible member claims it                    |
+
+It also adds two rules a viewer will otherwise hit: you cannot release or
+re-offer a seat while your own offer of it stands, and an unanswered offer is
+closed the day before the shift with both members and the duty officer told.
+
+**Five new shorts written in-script** (8AH–8AL): claim a shift in one tap;
+standing shifts; tap your card, walk in; the seal proves unchanged, not full;
+print the roster at the watch desk. Each carries its own production note —
+three of them need real hardware or a specific demo state and cannot be
+captured in the screenshot harness.
+
+### 06 — Member Guide · **WRONG ×2 — corrected in-script 2026-08-24**
+
+Two beats rewritten, one chapter added, one chapter extended.
+
+- **`VIEWING YOUR SCHEDULE`** described a calendar with view toggles. It is a
+  board. The rewritten take walks the chip states in order and lands on the
+  grey one — a shift that named neither positions nor a minimum staffing level
+  reads as **unspecified, not short**. That is the beat a delivery pass will
+  drop, and dropping it puts the viewer back where the old build left them,
+  reading meaningless red.
+- **`REQUESTING A SHIFT SWAP`** collapsed a one-way offer and a two-way trade
+  into one flow with one approval path. They are now different, and the
+  difference is the reason the one-way case works at all.
+- **New chapter, `CLAIMING THE SAME SHIFT EVERY WEEK`** (standing shifts).
+  Nothing to unsay — this did not exist. The load-bearing beat is that giving
+  up one date leaves the series intact, and that a shift created **later** still
+  seats the member. Without the second half a viewer will assume the claim is
+  just a bulk sign-up and stop using it after the department generates a new
+  month.
+- **`QR CODE CHECK-IN` extended** with ID cards, the check-in station, and the
+  early-tap rule: an arrival well before the start is flagged, the tap time
+  stays honest, and credit runs from the scheduled start. Say the last part —
+  a viewer who thinks tapping early buys hours will test it.
+
+### 04 — Fire Chief / Leadership · **WRONG — corrected in-script 2026-08-24**
+
+`VIEWING THE SCHEDULE` rewritten for the board, with the grey/unspecified state
+given its own beat and its own reason: before this release a shift naming
+neither positions nor a minimum was assumed to want four people and shown in
+critical red, so a department that configures neither opened the page to a wall
+of red that meant nothing.
+
+**Two new sections added in-script:**
+
+- **`THE NUMBERS AT THE TOP OF EVERY ADMIN PAGE`.** Four administration pages
+  now share one frame. The chief-specific beats are the **scope rule**
+  (department default, and whether individual officers may keep their own) and
+  the **medical-screening permission** — the screening tile now reads
+  _unknown_ rather than vanishing for an officer without
+  `medical_screening.view`, and the script says why that choice was made. Do
+  not let a delivery pass cut the "it says unknown rather than disappearing"
+  line; it is the difference between a self-explaining screen and a support
+  ticket.
+- **`THE STAFFING TILES ON YOUR DASHBOARD`.** Seven tiles, each linking into
+  the schedule already filtered to what it counted.
+
+### 07 — Secretary / Administrative · **WRONG — corrected in-script 2026-08-24**
+
+The email-design beat told the viewer that an unedited template was tracking
+the built-in design and that future improvements would arrive on their own.
+**A secretary following that would wait for a redesign that never comes.** The
+August 24 shell is adopted per template by pressing **Reset**.
+
+Two things the rewritten beat adds, both of which cost somebody real work if
+omitted:
+
+- **Reset restores the wording too**, not just the styling — subject, HTML
+  body, text body, styles and footer choice all go back to the shipped
+  defaults. A department that has spent two years refining how it words its
+  dues notice needs to copy that text out first.
+- **A presenter note about the on-screen banner.** The banner reads "Templates
+  you have never edited already use it", which is true of a body byte-identical
+  to the _current_ shipped default — not of a department arriving from the
+  previous release, whose untouched bodies are the _older_ default. Reading the
+  banner aloud as the rule contradicts the script.
+
+**Every email preview in this script needs re-shooting, and every shot needs a
+caption saying which shell it shows** — the pre-08-10 band, the 08-10 rounded
+header (still current for a department that has not pressed Reset), or the
+08-24 accent rule. All three exist in the field simultaneously, so an
+uncaptioned shot of any one of them is a promise about the other two.
+
+### 03 — IT Manager / System Admin · **ADDITION — written in-script 2026-08-24**
+
+Nothing in script 03 needs unsaying. Two chapters added, ~4:30 total:
+
+- **Chapter 7, `NETWORK LABEL PRINTERS`** (~2:00). The load-bearing beat is
+  that **the server opens the socket, not the browser**: a printer reachable
+  from a desk may be unreachable from the container, and nothing validates the
+  address at save time, so registration succeeds and the failure appears at
+  print time. This chapter exists to prevent one specific support call and a
+  delivery pass that reduces it to "enter the IP address" wastes the chapter.
+  Also covers the ZPL/ESC-POS split — including that many non-Zebras ship a ZPL
+  emulation mode and should be registered as ZPL — and why "connected" alone is
+  not good news from a status check.
+- **Chapter 9, `THE AUGUST 24 UPGRADE`** (~2:30). Head `e7a41b6d09c2`. The
+  check-type collapse is **irreversible by design** and the script says why a
+  guessing downgrade would be worse. Seven migrations backfill nothing **on
+  purpose**, and the script names each case — because an operator's first read
+  of an empty column is that the migration failed. Ends with the three
+  post-upgrade actions the upgrade does not perform (turn on NFC ID Cards and
+  grant its two permissions; register printers; check who holds
+  `medical_screening.view`) and a warning that scheduler assignments will start
+  being refused on position eligibility.
+
+**Demo environment:** the printer chapter needs a printer genuinely answering
+on port 9100 **and** a second address reachable from the presenter's desk but
+not from the app, or the load-bearing beat has nothing behind it. Show RFC 5737
+documentation addresses on screen.
+
+### 05 / 16 — Training Officer · **RE-SHOOT + addition, written in-script 2026-08-24**
+
+`MEMBER SELF-SUBMISSION` narrates correctly — the member "uploads their
+certificate", which is still what happens. **Every frame of it is out of date**:
+the Submit Training form was rebuilt.
+
+Added in-script: the certificate now attaches **on the form** rather than as a
+skippable second step (which is why submissions used to arrive with nothing
+behind them), and the start time is kept, so a four-hour entry can be told from
+a morning class or an evening one. Plus a caution that pre-release submissions
+show a **blank** start time rather than 09:00 — the old edit screen assumed
+09:00, which was a guess dressed up as a record.
+
+A presenter note carries the two records facts a chief will ask about:
+approved certificates are kept indefinitely with nothing expiring them, and
+uploads are **not** scanned for malware (they are validated by magic bytes and
+stored under a server-generated name, so nothing runs server-side, but a file
+opened by an officer is whatever the member uploaded).
+
+### 13 — Department Store · **RE-SHOOT — previously "not affected"**
+
+Last window this script was recorded as unaffected. **That is no longer true.**
+The member storefront — catalog, cart, checkout and My Orders — was redesigned
+on 2026-08-23, and checkout is now its own page at `/store/checkout` rather
+than a panel.
+
+Chapters 5 and 6 need a full re-shoot. **Nothing narrated in them is wrong**,
+which is exactly why this is easy to miss on a read-through.
+
+A presenter note was added to Chapter 2: three setup defects were fixed in the
+same release — the store admin dashboard returned an error, onboarding's
+**Enable** button did not enable the store, and the position editor stripped
+store grants on first save. A viewer who tried to turn the store on before
+August 23 and found it did not stick should be told to try again, not that they
+did it wrong.
+
+### 10 / guide-side only — mobile
+
+Not a script defect. The phone Schedule board, the settings tab strip and the
+check-in station at tablet width are all new captures; they are queued in
+[`../training/SCREENSHOT_CURRENCY.md`](../training/SCREENSHOT_CURRENCY.md)
+rather than here.
+
+### Verified clear this window
+
+Checked against the change list and found genuinely unaffected:
+
+- **01 — Installing The Logbook.** Its `alembic upgrade head` beat already
+  carries "Never downgrade just to repair a migration fork", which covers this
+  window's irreversible revision without amendment. The new head number belongs
+  in script 03, which is where the upgrade chapter lives.
+- **02 — First-Time Setup & Onboarding** — clean, but see the gap below. The
+  onboarding fixes in this window are **repairs to behaviour the script already
+  describes correctly**; nothing narrated needs unsaying. `grep -i "department
+store\|storefront"` over the file returns **nothing**, which is both why the
+  script is clean and the gap: the module-selection walkthrough
+  (`CHOOSING YOUR MODULES`, 9:30–11:00) lists five categories and never
+  mentions the Department Store. Until 2026-08-24, **enabling the store made
+  setup impossible to finish** — the final Continue failed with
+  `400 Invalid modules: storefront`. That is fixed, so the module is now safe
+  to demonstrate, and the walkthrough should name it. Queued as an addition,
+  not a correction.
+
+  **Do not**, in that same beat, demonstrate a module's per-module
+  "configure permissions" step. It toasts "permissions configured!" and
+  discards the answer for the fifteen modules that still point at it
+  (**ONBOARD-1** in `KNOWN_LIMITATIONS.md`). Filming a viewer restricting a
+  module there would teach a restriction that is not applied.
+
+- **09 / 10 / 11 — Training Pipelines.** No pipeline surface changed.
+- **12 — Elections Deep Dive.** Election Settings moved onto the shared
+  settings shell, which is a **visual** change: no setting moved and none
+  changed meaning. Narration is clean; any settings frame needs re-shooting.
+- **14 — Multi-Class Courses and Cohorts.** Untouched.
+- **15 — Skills Testing & Evaluations.** Untouched.
+
+### Do not script
+
+**The equipment-check lap** — stops in walking order, finished stops collapsed
+— is built, tested, and **not wired to the live check screen**, which still
+renders the flat compartment list. It appears in the changelog and it is not in
+the product. Verify with `grep` before believing any claim that it shipped:
+`CheckLap.tsx` has no importer outside its own test file.
+
 ## Flagged by the 2026-08-19 → 08-23 changes
 
 Full reason/data-path context in

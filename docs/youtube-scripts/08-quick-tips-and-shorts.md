@@ -97,21 +97,38 @@ the "Attending" list]**
 
 > "Click 'Request Swap.'"
 
-**[SCREEN: Show the swap options — propose a swap with someone or post as open.
-Do NOT stage a target-side accept/decline control; none exists. — CORRECTED
-2026-08-23]**
+**[SCREEN: Show the swap options — hand your seat to a named member, trade two
+shifts, or post as open. The target-side Accept / Decline control DOES now
+exist for a one-way offer — stage it. — REWRITTEN 2026-08-24; the previous
+version said no such control existed, which was true until August 23]**
 
-> "Option one: name the member you want to swap with. They get notified —
-> but they don't approve it, and neither do you."
+> "Option one: hand your seat to somebody. Name them, and the list you pick
+> from has already dropped anyone who couldn't take it anyway — people already
+> on the shift, people on approved leave, people not cleared for the position,
+> and anyone working a tour that runs into this one. Least-loaded first."
 
-> "Option two: post the shift as open for anyone to pick up."
+**[SCREEN: Show the candidate list]**
 
-**[SCREEN: Select a swap partner or post as open. Submit.]**
+> "They get an Accept or Decline. If they accept, that's it — no officer, no
+> waiting. Accepting is just you dropping the seat and them picking it up, and
+> neither of those needed permission in the first place."
 
-> "Either way it goes to an officer, and it has to be an officer who isn't in
-> the swap. Not you, not the person you named. That's deliberate — a swap is
-> signed off by somebody with no stake in it. You'll get a notification when
-> it's finalized."
+> "Option two: a real trade — your Tuesday for their Thursday. That moves two
+> rosters, so it still goes to an officer, and it has to be an officer who
+> isn't in the swap. Not you, not the person you named. A swap is signed off by
+> somebody with no stake in it."
+
+> "Option three: post it open for anyone eligible to pick up."
+
+**[SCREEN: Select an option and submit.]**
+
+> "One thing to know: while your offer is sitting with somebody, you can't
+> release the seat or offer it to anyone else. Withdraw first — otherwise
+> they're holding an offer you've already given away."
+
+> "And an offer nobody answers gets closed the day before the shift, with you,
+> them and the duty officer all told. It won't quietly sit there until the
+> shift starts."
 
 **[SCREEN: Show the pending swap notification]**
 
@@ -1155,3 +1172,206 @@ not taggable — that code is a check-in credential for an unauthenticated
 screen, and a sticker in a public hallway hands it to whoever walks past. The
 button only appears on apparatus cards, and showing a viewer hunting for it on a
 room card teaches the wrong thing.
+
+---
+
+## SHORT 8AH: Claim a Shift in One Tap
+
+**Length:** 60 seconds
+**Extracted From:** Script 6, Chapter 5
+**Added:** 2026-08-24
+
+**[0:00 — SCREEN: The Schedule month board. Chips visible across the month.]**
+
+> "Every shift on your calendar now tells you the one thing you want to know:
+> does it still need people?"
+
+**[0:08 — SCREEN: Point at each chip in turn — red, green, blue, grey.]**
+
+> "Red or amber and a number: that many seats open. Green: full. Blue: you're
+> on it."
+
+**[0:18 — SCREEN: Point at the grey chip.]**
+
+> "Grey with just a headcount means nobody ever said how many this shift wants.
+> It's not short — it's unspecified. You can still join it."
+
+**[0:28 — SCREEN: Select a day. The crew panel opens. Click the single claim
+button. The seat fills.]**
+
+> "Pick a day, and there's one button. It claims the first open seat you're
+> cleared for — no dropdown, no finding out afterwards that you're not
+> qualified for the position you picked."
+
+**[0:48 — CALLOUT: "Filters dim, they don't hide"]**
+
+> "One tap. You're on the shift."
+
+**Production:** Needs a demo month containing **all four** chip states,
+including the grey one. The grey shift is the beat people miss, and it cannot
+be staged after the fact — the shift has to genuinely name neither positions
+nor a minimum staffing level.
+
+---
+
+## SHORT 8AI: Every Tuesday Night, Once
+
+**Length:** 60 seconds
+**Extracted From:** Script 6, Chapter 5
+**Added:** 2026-08-24
+
+**[0:00 — SCREEN: A member scrolling a year of Tuesdays, visibly tedious.]**
+
+> "If you always take Tuesday nights, stop claiming fifty-two Tuesdays."
+
+**[0:08 — SCREEN: On a Tuesday shift, open "Make this a standing shift". Show
+the pattern and horizon controls.]**
+
+> "Make it a standing shift. Weekly, every other week, or a particular Tuesday
+> of the month — and you pick how far out it runs."
+
+**[0:22 — CALLOUT: "'Every other' counts from the shift you started on"]**
+
+> "'Every other Tuesday' counts from the shift you opened it from, not from
+> today. So it takes the one you're looking at."
+
+**[0:32 — SCREEN: Save. Show the member seated across the calendar. Then show
+next month being generated and the member appearing on those too.]**
+
+> "Save it and you're on the ones already scheduled. And when your department
+> builds next month, you're on those too — without coming back."
+
+**[0:48 — SCREEN: Give up one date. The rest of the series stays.]**
+
+> "Something comes up? Give up that one Tuesday. The rest of the series is
+> still yours. That's the whole reason it's a standing claim and not a pile of
+> sign-ups."
+
+**Production:** the last beat is the point of the short and needs the schedule
+generated **after** the claim exists, so the "it seats you on shifts that
+didn't exist yet" half is real rather than implied.
+
+---
+
+## SHORT 8AJ: Tap Your Card, Walk In
+
+**Length:** 45 seconds
+**Extracted From:** Script 6, Chapter 3
+**Added:** 2026-08-24
+
+**[0:00 — SCREEN: A tablet on a stand at a station door. A member taps a
+plastic ID card. The screen confirms and clears for the next person.]**
+
+> "Some departments have gone past QR codes. Tap your card, walk in."
+
+**[0:10 — SCREEN: An officer arming the station: pick the meeting, press arm,
+put the tablet down.]**
+
+> "An officer picks what's being checked into, arms the reader, and puts it
+> down. Nobody touches the screen again."
+
+**[0:22 — CALLOUT: "Your card number isn't stored — a one-way hash and the last
+four characters, that's all"]**
+
+> "The Logbook never stores your card's number. It keeps a one-way hash and the
+> last four characters, so an officer can tell two of your cards apart. Nobody
+> can read the number back out — not an admin, not somebody who walks off with
+> a database backup."
+
+**[0:36 — SCREEN: An officer suspending, then revoking, a card.]**
+
+> "Lose it? An officer suspends it. If it doesn't turn up, they revoke it — and
+> revoked is permanent. You get a new card, not the old one switched back on."
+
+**Production:** **real tablet, real card, real tap.** This cannot be faked and
+anyone who has used a card reader will spot a staged shot. Needs the NFC ID
+Cards integration turned on in the demo department — it ships **off**, so a
+capture run against a fresh install will find no such screen. Use a demo member;
+do not shoot a real member's card record even though only four characters show.
+
+---
+
+## SHORT 8AK: The Seal Says Nothing Was Touched — Not That It's Full
+
+**Length:** 60 seconds
+**Extracted From:** Script 5 / the equipment-check material
+**Added:** 2026-08-24
+
+**[0:00 — SCREEN: A sealed drug bag on a truck, tamper tag visible with its
+number.]**
+
+> "If a bag on your truck is closed with a numbered tamper seal, you don't have
+> to count what's inside it every shift."
+
+**[0:10 — SCREEN: The check form's seal panel. Type the number. It matches. The
+contents clear in one tap.]**
+
+> "Read the number, confirm it's the one from last time, and the count clears.
+> One tap instead of forty items."
+
+**[0:22 — CALLOUT: "A seal proves unchanged. It does not prove full."]**
+
+> "Here's the part to get right. That seal proves nothing was **touched**. It
+> does not prove the bag is **full**."
+
+**[0:32 — SCREEN: The previous check showing the bag three morphine short. The
+new check carries the shortfall forward and files as a failure.]**
+
+> "So if the bag was three short at its last count, it's still three short, and
+> the check still fails. The numbers carry forward — nothing gets topped up
+> because a sticker was intact."
+
+**[0:44 — SCREEN: Expiry dates and a pressure gauge, still asked for.]**
+
+> "And it never clears expiry dates or pressure readings. Those move on their
+> own while the bag sits shut. An out-of-date vial can't hide behind a good
+> tag."
+
+**[0:54 — SCREEN: A broken seal. The button reads "Record seal". Contents
+counted by hand.]**
+
+> "Seal broken, or the number's different? The seal still gets recorded — and
+> you count the bag."
+
+**Production:** shoot **both** states — the matching seal that clears, and the
+mismatched one that doesn't. A single-state take teaches that a seal always
+clears, which is precisely the misreading this feature was designed against.
+The carried-shortfall beat needs a previous check that genuinely recorded a
+short count.
+
+---
+
+## SHORT 8AL: Print the Roster at the Watch Desk
+
+**Length:** 45 seconds
+**Extracted From:** Script 3, Chapter 7
+**Added:** 2026-08-24
+
+**[0:00 — SCREEN: Somebody wrestling with a browser print dialog; a barcode
+comes out slightly too small and the scanner refuses it.]**
+
+> "A print dialog is where barcodes go to die. Somebody leaves scale on 'fit to
+> page', the bars shrink three percent, the label still looks fine, and the
+> scanner won't read it."
+
+**[0:12 — SCREEN: Settings → Label Printers. A registered printer. Press Print
+on the shift roster; paper comes out of the watch-desk printer.]**
+
+> "Register the printer once — address, resolution, label stock — and after
+> that things just print. No dialog to get wrong."
+
+**[0:24 — SCREEN: The shift roster and the apparatus check sheet both printing.]**
+
+> "It's not only labels. The shift roster and the apparatus check sheet go
+> straight to the watch-desk printer too."
+
+**[0:34 — CALLOUT: "The server opens the connection, not your browser"]**
+
+> "One thing for whoever sets it up: **the server** talks to the printer, not
+> your browser. So the address has to be reachable from the machine running The
+> Logbook — you can ping that printer from your desk all day and still have it
+> fail from the app."
+
+**Production:** show **RFC 5737 documentation addresses** (`192.0.2.x`) on
+screen. Never a real department's printer address — that is an internal network
+detail and this video is public.

@@ -348,6 +348,38 @@ a member's perspective]**
 > "You'll see pending submissions in your dashboard. Review the documentation,
 > approve or reject with notes, and the member's record is updated."
 
+**[PRODUCTION: RE-SHOOT this beat. The Submit Training form was rebuilt on
+2026-08-23 — nothing narrated above is wrong, but every frame of the old form
+is. — ADDED 2026-08-24]**
+
+**[SCREEN: The rebuilt form — the certificate field on the form itself, the
+duration stepper, the start-time field]**
+
+> "Two things changed on the member's side that make your review easier."
+
+> "The certificate is attached **on the form** now, not as a second step
+> afterwards. That second step is why so many submissions used to land on your
+> desk with nothing behind them — it was skippable, and people skipped it."
+
+> "And the start time is kept. The form always asked for a start time and a
+> length and worked the hours out from the pair, but only the date and the
+> hours were stored — so a four-hour entry gave you no way to tell a morning
+> class from an evening one. Now it does."
+
+**[CALLOUT: "Entries submitted before this have no start time — blank, not 9am"]**
+
+> "One thing not to misread: submissions from before this release show a blank
+> start time. That's honest. The old edit screen used to assume nine in the
+> morning, which was a guess dressed up as a record."
+
+**[SCREEN: A member's approved record showing its attached certificate]**
+
+**[PRESENTER NOTE — say this once, it is a records question your chief will
+ask: approved certificates are kept indefinitely and nothing expires them, and
+uploaded files are checked to be genuinely the file type they claim but are
+**not scanned for malware**. If your department has a retention policy, that is
+a decision for the department, not a setting in the product.]**
+
 **[CALLOUT: "Member submissions require Training Officer approval"]**
 
 > "One rule worth knowing: you **can't approve your own** self-reported training.

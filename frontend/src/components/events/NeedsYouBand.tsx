@@ -19,6 +19,7 @@ import type { EventListItem } from '../../types/event';
 import type { EventUrgency } from '../../utils/eventHelpers';
 import { formatEventTimeRange, getEventUrgency, isUrgentEventState } from '../../utils/eventHelpers';
 import { formatDateCustom, formatTime } from '../../utils/dateFormatting';
+import { formatHoursExact } from '../../utils/hoursFormatting';
 import { NEEDS_YOU_MAX_ROWS } from '../../constants/config';
 import { BAND_ROW_CLASS } from './eventUrgencyPresentation';
 
@@ -45,7 +46,7 @@ const ROW_BUTTON_CLASS =
 
 /** Numerals in the meta line are monospaced, matching how hours read elsewhere. */
 const Hours: React.FC<{ value: number }> = ({ value }) => (
-  <span className="text-theme-text-primary font-mono">{value.toFixed(1)}</span>
+  <span className="text-theme-text-primary font-mono">{formatHoursExact(value)}</span>
 );
 
 export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({

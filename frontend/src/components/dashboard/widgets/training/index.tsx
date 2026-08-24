@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatHours, formatHoursExact } from '../../../../utils/hoursFormatting';
 import { AlertTriangle, Award, Calendar, CheckCircle, Clock, ClipboardCheck, FileText, Users } from 'lucide-react';
 import type { TrainingDashboardSummary } from '../../../../services/trainingServices';
 
@@ -86,8 +87,12 @@ export const TrainingHoursSummaryWidget = ({ data }: { data: TrainingDashboardSu
     icon={Clock}
     href={`/training/admin?page=records&tab=member-status&year=${new Date().getFullYear()}`}
   >
-    <div className="text-theme-text-primary text-3xl font-bold">{data.stats.total_hours_this_year} hrs</div>
-    <p className="text-theme-text-muted text-sm">{data.stats.average_hours_per_member} average per tracked member</p>
+    <div className="text-theme-text-primary text-3xl font-bold">
+      {formatHours(data.stats.total_hours_this_year)} hrs
+    </div>
+    <p className="text-theme-text-muted text-sm">
+      {formatHoursExact(data.stats.average_hours_per_member)} average per tracked member
+    </p>
   </Card>
 );
 export const RequirementsStatusWidget = ({ data }: { data: TrainingDashboardSummary }) => (

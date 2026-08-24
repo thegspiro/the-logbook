@@ -124,7 +124,7 @@ nine switches, each with a line of description under it.]**
 > action can still skip one send — but it can't send something you've switched
 > off here."
 
-> "What they *say* is yours too. Payment instructions, the receipt footer, a
+> "What they _say_ is yours too. Payment instructions, the receipt footer, a
 > window's pickup instructions, and a free-text message on each announcement.
 > Your logo and colours come from your org's email branding, same as everything
 > else on the platform."
@@ -144,7 +144,7 @@ real email — logo, order table, Venmo button. Toggling to phone width.]**
 
 **[CALLOUT: "Save first — it reads what's stored."]**
 
-> "Two gotchas. It reads *saved* settings, so hit Save before you look. And you
+> "Two gotchas. It reads _saved_ settings, so hit Save before you look. And you
 > can preview something that's switched off — it'll tell you so at the top —
 > which is the whole point, because otherwise you couldn't see what you were
 > deciding about. Nothing gets sent, nothing gets recorded, nobody gets an
@@ -160,7 +160,7 @@ amber banner at the top.]**
 
 **[CALLOUT: "Goes to you. Only you."]**
 
-> "It goes to *your* address. There's no box to type somebody else's in — this
+> "It goes to _your_ address. There's no box to type somebody else's in — this
 > isn't a way to mail the department from the settings screen. And it arrives
 > marked: bracket-TEST in the subject, a banner up top. That matters, because
 > the sample says 'Order ORD-2026-0042 received', and an unmarked copy in your
@@ -208,7 +208,7 @@ it reappear with the default wording.]**
 
 > "Until you touch these, nothing changes — you keep getting the wording the
 > store's always sent. And whichever version's live, that Preview button back in
-> Settings shows you *that* one. So edit here, then go look."
+> Settings shows you _that_ one. So edit here, then go look."
 
 **[TRANSITION: The catalog]**
 
@@ -322,6 +322,19 @@ notification preview appears.]**
 **[SCREEN: Member view at /store. Browsing, picking XL, typing "GARCIA" in the
 personalization box, adding to cart. The cart shows subtotal, tax, total.]**
 
+**[PRODUCTION: RE-SHOOT the whole of Chapter 5 and Chapter 6. The member
+storefront — catalog, cart, checkout and My Orders — was redesigned on
+2026-08-23, and **checkout is now its own page at `/store/checkout`** rather
+than a panel. Nothing narrated in this chapter is wrong; every frame of it is
+out of date. — ADDED 2026-08-24]**
+
+**[PRESENTER NOTE for Chapter 2's setup beat: three setup defects were fixed in
+the same release — the store admin dashboard returned an error, onboarding's
+**Enable** button did not actually enable the store, and the position editor
+stripped store permissions on first save. If a viewer tried to turn the store
+on before August 23 and it did not stick, the answer is "try it again after
+upgrading", not "you did it wrong". Worth one line in Chapter 2.]**
+
 > "From the member's seat this is a normal shop. Pick your size, type your name
 > if it's embroidered, add to cart. Pickup or shipping. Pick how you're going to
 > pay."
@@ -418,7 +431,7 @@ side by side, each showing Vendor order / Pickup and who it suits.]**
 
 **[CALLOUT: "Pick it before you build. Change it whenever."]**
 
-> "It's laid out as a comparison because you're picking this *before* you have
+> "It's laid out as a comparison because you're picking this _before_ you have
 > a catalog to try it on — each card tells you what happens to the vendor order,
 > what happens to pickup, and which kind of department it suits. And it's not a
 > one-way door. Change it whenever your practice changes; it governs what
@@ -439,7 +452,7 @@ with order numbers and balances.]**
 > the unpaid ones come back named with what they owe. Waiving works too — comp
 > somebody a replacement and it clears the gate the same as paying."
 
-### RECORD HOW THEY *ACTUALLY* PAID (15:15 – 15:45)
+### RECORD HOW THEY _ACTUALLY_ PAID (15:15 – 15:45)
 
 **[SCREEN: An order detail with the "Paid by" dropdown open — it reads Venmo,
 being changed to Cash.]**
@@ -629,22 +642,22 @@ station.]**
 
 ## Shorts Extractable From This Script
 
-| # | Title | Source Chapter |
-|---|-------|----------------|
-| 13a | Pay Your Store Order From Your Phone | Chapter 5 |
-| 13b | Why There's No Zelle Button | Chapter 5 |
-| 13c | "I've Sent Payment" Doesn't Mean Paid | Chapter 5 |
-| 13d | Close a Window, Get Your Vendor Order | Chapter 8 |
-| 13e | Let PayPal Mark Your Orders Paid | Chapter 7 |
-| 13f | Paid But Not Ordered — Why Two Statuses | Chapter 6 |
-| 13g | Your Department's Rule on Unpaid Orders | Chapter 6 |
-| 13h | They Said Venmo and Paid Cash — Record It Right | Chapter 6 |
-| 13i | Tell the Vendor, Tell the Members, One Click | Chapter 8 |
-| 13j | The Nine Emails Your Store Sends | Chapter 2 |
-| 13k | Preview Your Store Email Before You Send It | Chapter 2 |
-| 13l | Mail Yourself a Test Before Anyone Else Gets It | Chapter 2 |
-| 13m | Rewrite What Your Store Emails Say | Chapter 2 |
-| 13n | Why Your Reworded Email Never Arrived | Chapter 2 |
+| #   | Title                                           | Source Chapter |
+| --- | ----------------------------------------------- | -------------- |
+| 13a | Pay Your Store Order From Your Phone            | Chapter 5      |
+| 13b | Why There's No Zelle Button                     | Chapter 5      |
+| 13c | "I've Sent Payment" Doesn't Mean Paid           | Chapter 5      |
+| 13d | Close a Window, Get Your Vendor Order           | Chapter 8      |
+| 13e | Let PayPal Mark Your Orders Paid                | Chapter 7      |
+| 13f | Paid But Not Ordered — Why Two Statuses         | Chapter 6      |
+| 13g | Your Department's Rule on Unpaid Orders         | Chapter 6      |
+| 13h | They Said Venmo and Paid Cash — Record It Right | Chapter 6      |
+| 13i | Tell the Vendor, Tell the Members, One Click    | Chapter 8      |
+| 13j | The Nine Emails Your Store Sends                | Chapter 2      |
+| 13k | Preview Your Store Email Before You Send It     | Chapter 2      |
+| 13l | Mail Yourself a Test Before Anyone Else Gets It | Chapter 2      |
+| 13m | Rewrite What Your Store Emails Say              | Chapter 2      |
+| 13n | Why Your Reworded Email Never Arrived           | Chapter 2      |
 
 ## AUGUST 14 RELEASE INSERTS — ADMIN COUNTS, FILTERS, BANNER, AND MEMBER PAYMENT METHOD
 

@@ -73,14 +73,7 @@ import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 // ── Section definitions ──
 
 type SectionKey =
-  | 'general'
-  | 'modules'
-  | 'members'
-  | 'ranks'
-  | 'email'
-  | 'storage'
-  | 'labelPrinters'
-  | 'authentication';
+  'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'labelPrinters' | 'authentication';
 
 /**
  * Sub-pages across every section. One flat union rather than one per section:

@@ -28,6 +28,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
 import { blankToNull } from '../utils/formValues';
 import { formatCalendarDate, formatTimeOfDay, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import type {
   SelfReportConfig,
   SubmissionAttachment,
@@ -914,7 +915,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               {recentSubmissions.map((submission) => {
                 const canEdit = EDITABLE_STATUSES.includes(submission.status);
                 const meta = [
-                  `${submission.hours_completed}h`,
+                  `${formatHours(submission.hours_completed)}h`,
                   formatCalendarDate(submission.completion_date, { month: 'short', day: 'numeric' }),
                   submission.issuing_agency || submission.instructor,
                 ]
@@ -977,7 +978,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           <p className="text-theme-text-primary font-mono text-4xl leading-10 font-bold">
             {formatDuration(durationMinutes)}
           </p>
-          <p className="text-theme-text-muted text-sm">{hours.toFixed(2)} hours toward your requirements</p>
+          <p className="text-theme-text-muted text-sm">{formatHours(hours)} hours toward your requirements</p>
         </div>
         <div className="divider" />
         <Checklist rows={checklist} />

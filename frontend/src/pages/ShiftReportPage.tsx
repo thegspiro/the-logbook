@@ -19,6 +19,7 @@ import {
 import { shiftCompletionService, userService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import type { ShiftCompletionReport, TraineeShiftStats } from '../types/training';
 import { StarRating } from '../modules/scheduling/components/StarRating';
 import { ReportContentDisplay } from '../modules/scheduling/components/ReportContentDisplay';
@@ -54,7 +55,7 @@ const ReportCard: React.FC<{
               </span>
               <span className="flex items-center space-x-1">
                 <Clock className="h-3 w-3" />
-                <span>{report.hours_on_shift}h</span>
+                <span>{formatHours(report.hours_on_shift)}h</span>
               </span>
               {report.calls_responded > 0 && (
                 <span className="flex items-center space-x-1">
@@ -185,7 +186,7 @@ const ShiftReportPage: React.FC = () => {
               <div className="text-theme-text-muted text-xs">Reports</div>
             </div>
             <div className="bg-theme-surface rounded-lg p-3 text-center">
-              <div className="text-theme-text-primary text-2xl font-bold">{myStats.total_hours}</div>
+              <div className="text-theme-text-primary text-2xl font-bold">{formatHours(myStats.total_hours)}</div>
               <div className="text-theme-text-muted text-xs">Shift Hours</div>
             </div>
             <div className="bg-theme-surface rounded-lg p-3 text-center">

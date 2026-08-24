@@ -10985,16 +10985,16 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    // Half of a pair. The dashboard's Organization tab is addressable by
-    // ?tab=organization, so neither of these needs a click that could land on
+    // Half of a pair. The dashboard's My Department tab is addressable by
+    // ?tab=department, so neither of these needs a click that could land on
     // the wrong control.
     id: "08-75-org-dashboard-with-finance",
     doc: "08-admin-reports.md",
     line: 2141,
     anchor: "the organization dashboard under two accounts side by",
     alt: "The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones",
-    // The default tab, not ?tab=organization. Department pulse is where the
-    // money cards live -- the Organization tab carries readiness, exceptions
+    // The default tab, not ?tab=department. Department pulse is where the
+    // money cards live -- the My Department tab carries readiness, exceptions
     // and asset counts and has no finance section on it for either account, so
     // a pair shot there compares two screens that are identical in the one
     // respect the marker is about.
@@ -11598,7 +11598,7 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 437,
     anchor: "leader dashboard with Personal and Organization tabs",
-    alt: "The dashboard's My Department tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is Organization",
+    alt: "The dashboard's personal tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is the leadership view",
     route: "/dashboard",
     prepare: async (page) => {
       await page
@@ -11614,8 +11614,8 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 437,
     anchor: "__paired-with-00-24__",
-    alt: "The same dashboard on its Organization tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen",
-    route: "/dashboard?tab=organization",
+    alt: "The same dashboard on its department-wide tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen",
+    route: "/dashboard?tab=department",
     prepare: async (page) => {
       await page
         .getByRole("heading", { name: /Scheduling Operations/i })

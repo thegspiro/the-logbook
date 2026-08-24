@@ -22,6 +22,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
+  {
+    path: '/learning/:pathId',
+    source: 'src/App.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized lesson view; every lesson renders one layout from learningPaths data, so /learning is the representative route and its controls come from the shared 44px form and button utilities',
+  },
   { path: '/login', source: 'src/App.tsx', coverage: 'workflow', detail: 'login and MFA workflow' },
   {
     path: '/auth/callback',

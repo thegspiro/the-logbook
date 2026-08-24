@@ -124,7 +124,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({ cate
         <div className="modal-body space-y-4">
           {categories.length === 0 && (
             <div className="alert-warning">
-              No medical categories exist yet. Create one first — a supply is filed as medical by its category.
+              No medical supply categories exist yet. Create one first — a supply is filed as medical by its category.
             </div>
           )}
 
