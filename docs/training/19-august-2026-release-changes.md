@@ -259,8 +259,39 @@ program does not delete a requirement it does not own; undated training cannot
 satisfy recency; members cannot read officer-only checklist/sign-off state; a
 resume conflict is scoped to the current test and is not blindly retried.
 
-> **[SCREENSHOT NEEDED — training-session edit flow with requirement, course, and program linkage populated from one organization.]**
->
+### Linking a session to what it counts toward
+
+Step 2 of the training-session wizard is where a session is connected to the
+records it should feed: the **course** it teaches, the **category** its hours
+land in, the **requirement** attendance credits directly, and the **program**
+whose enrolled members it advances.
+
+![Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance](./images/19-29-training-session-linkage.png)
+
+The blue line under the pickers is the whole feature in one sentence — it
+restates the combination you have chosen in the terms the officer cares about
+("attendance will advance _this_ for members enrolled in _that_"), and it
+changes as you change the links. Choosing a course also pre-fills whatever that
+course already declares — the category and program above were filled by picking
+**PUMP - Pump Operations** — without overriding a choice already made.
+
+Two things worth knowing about the lists:
+
+- **Everything offered is this department's.** The pickers are loaded from the
+  organization's own categories, requirements and programs, and the server
+  checks every id again on save — a link to another department's record is
+  refused with a flat "Invalid training program" that does not reveal whether
+  the record exists. **Program Phase** has no organization of its own and is
+  scoped through the program it belongs to.
+- **A phase is not required to match the program above it.** Sessions generated
+  from a course cohort can carry a class-level phase from a different program,
+  so that combination is deliberately allowed rather than rejected.
+
+The same pickers appear on the event page afterwards, as **Requirements &
+Programs** — that is where a session created before a requirement existed, or
+linked to the wrong pipeline, gets corrected. Members already signed off keep
+the credit they were given; the links only steer what happens next.
+
 > **[SCREENSHOT NEEDED — skill result illustrating point deduction without automatic whole-test failure; caption the configured pass rule.]**
 
 ## Notifications and integrations

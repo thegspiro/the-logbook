@@ -1,5 +1,44 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (eighteenth) — where a training session is wired to what it counts toward
+
+`19-29`, opened and checked. **8 markers remaining.**
+
+**The create wizard, not the edit card.** The marker names "requirement, course
+and program linkage", and the event-detail card that corrects those links
+afterwards (**Requirements & Programs**) never shows the course — it edits four
+ids and nothing else. Step 2 of the wizard carries all three in one frame, so
+that is what this is; the guide says where the same pickers reappear afterwards.
+
+**Nothing is written.** The wizard creates on step 4, and this stops at step 2 —
+no `mutatesSeedData` flag, and no training session added to a department that
+has none.
+
+**Framed on the wizard, not the page.** The wizard renders inside the training
+admin frame, whose headline cards would have put **"COMPLIANCE — could not be
+calculated"** across the top of a caption about linking a session. That reading
+is true of this database (the seeded members hold three records against 26
+requirements — the training-compliance seed gap already recorded here) and has
+nothing to do with the marker.
+
+**Three capture facts worth keeping:**
+
+- The **Select Course** label carries no `htmlFor` and the select no `id`, so
+  `getByLabel` cannot reach it. Located by its own placeholder option instead.
+  That file has **26 labels with no `htmlFor`** — a control with no accessible
+  name is a real accessibility defect, but it is a file-wide pattern rather than
+  a one-off, so it is recorded here for the owner rather than swept up inside a
+  screenshot change. Lint does not flag it: no jsx-a11y label rule is enabled.
+- Option labels carry codes — `PUMP - Pump Operations`,
+  `Driver / Operator Pipeline (DRV-OP)` — and `selectOption({ label })` matches
+  exactly. Each pick resolves its value by substring instead.
+- `main:has(h1:text-is('…'))` does not match a heading that also holds an icon.
+  Matched on the heading's inner `<span>`.
+
+**Order matters in the prepare, and the comment says so:** picking the course
+pre-fills the category and program from what the course declares, so the
+explicit picks are made after it. Reversed, the course selection overwrites them.
+
 ## Captured 2026-08-24 (seventeenth) — the station board's feed, and a pin that did not pin
 
 `19-28`, opened and checked. **9 markers remaining.** One product defect found

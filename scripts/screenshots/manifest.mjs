@@ -11421,6 +11421,76 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Step 2 of the create wizard, which is where all three links the marker
+    // names sit together: the course above, and the category / requirement /
+    // program pickers below it. The event-detail card corrects these links
+    // afterwards but never shows the course, so it cannot carry the caption.
+    //
+    // Nothing is submitted -- the wizard creates on step 4 -- so this writes
+    // nothing and needs no `mutatesSeedData` flag.
+    id: "19-29-training-session-linkage",
+    doc: "19-august-2026-release-changes.md",
+    line: 237,
+    anchor: "training-session edit flow with requirement, course, and program",
+    alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
+    route: "/training/sessions/new",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Next$/ })
+        .click({ timeout: 20_000 });
+      await page.getByText(/Use existing course template/).click();
+      // Located by its own placeholder option, not by label: the "Select
+      // Course" label on this wizard carries no `htmlFor` and the select no
+      // `id`, so it has no accessible name to match on.
+      const course = page.locator(
+        'select:has(option:text-is("Select a course..."))',
+      );
+      await course.waitFor({ timeout: 10_000 });
+      // Option labels carry the record's code -- "PUMP - Pump Operations",
+      // "Driver / Operator Pipeline (DRV-OP)" -- and `selectOption({ label })`
+      // matches exactly, so each pick is resolved to a value by substring.
+      const pickByText = async (select, text) => {
+        const value = await select.evaluate(
+          (el, wanted) =>
+            Array.from(el.options).find((option) =>
+              option.text.includes(wanted),
+            )?.value ?? "",
+          text,
+        );
+        if (!value) throw new Error(`no option matching "${text}"`);
+        await select.selectOption(value);
+      };
+      await pickByText(course, "Pump Operations");
+      // Selecting a course pre-fills whatever it declares, so the picks below
+      // are set afterwards rather than before -- the reverse order loses them.
+      await pickByText(
+        page.getByLabel(/^Training Program$/),
+        "Driver / Operator Pipeline",
+      );
+      await pickByText(
+        page.getByLabel(/^Requirement$/),
+        "Pump Panel Evolutions",
+      );
+      await pickByText(
+        page.getByLabel(/^Training Category$/),
+        "Driver/Operator",
+      );
+      await page.waitForTimeout(500);
+    },
+    // Framed on the wizard, not the page. The wizard renders inside the
+    // training admin frame, whose headline cards would put "COMPLIANCE --
+    // could not be calculated" above a caption about linking a session: true
+    // of this database (the seeded members hold three records against 26
+    // requirements) and nothing to do with the marker.
+    // Matched on the h1's inner <span>: the heading also holds an icon, and a
+    // `text-is` on the h1 itself does not match through it.
+    selector: "main:has(h1 > span:text-is('Create Training Session'))",
+    allowEmptyState:
+      '"No category" is the unselected first <option> of the category select, ' +
+      "not a state this form is in -- the control reads Driver/Operator " +
+      "(DRIVER). Unselected options sit in the DOM whatever is chosen.",
+  },
+  {
     // The station board's message rail, framed rather than the whole board.
     // The board itself is already pictured twice -- `00-24` for the member's
     // tab and `08-75`/`08-76` for the conditional cards, which is what the
