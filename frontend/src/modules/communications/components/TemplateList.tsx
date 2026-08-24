@@ -21,8 +21,6 @@ import {
   UserMinus,
   Package,
   FileText,
-  CheckCircle2,
-  XCircle,
   ShieldAlert,
   ClipboardCheck,
   Clock,
@@ -49,6 +47,7 @@ import {
   Ban,
   Store,
 } from 'lucide-react';
+import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
 
 /** Maps template_type to a display-friendly icon and label */
@@ -194,14 +193,43 @@ interface TemplateListProps {
   onSelect: (template: EmailTemplate) => void;
 }
 
+type ListFilter = 'all' | 'active' | 'edited' | 'off';
+
+const LIST_FILTERS: { id: ListFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
+  { id: 'edited', label: 'Edited' },
+  { id: 'off', label: 'Off' },
+];
+
+/**
+ * The line under a template's name: whether the department has reworded it,
+ * and how much use it actually gets.
+ *
+ * "Off" alone, with no send count, because a notice nobody sends has no
+ * count worth reading and the fact that it is switched off is the whole
+ * answer.
+ */
+function rowSubtitle(template: EmailTemplate): string {
+  if (!template.is_active) return 'Off';
+  const state = template.is_customized ? 'Edited' : 'Default';
+  const sent = template.sent_count ?? 0;
+  if (sent === 0) return `${state} · never sent`;
+  return `${state} · sent ${formatNumber(sent)} time${sent === 1 ? '' : 's'}`;
+}
+
 export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedId, onSelect }) => {
   const [search, setSearch] = useState('');
+  const [listFilter, setListFilter] = useState<ListFilter>('all');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return templates;
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     return templates.filter((t) => {
+      if (listFilter === 'active' && !t.is_active) return false;
+      if (listFilter === 'off' && t.is_active) return false;
+      if (listFilter === 'edited' && !t.is_customized) return false;
+      if (!q) return true;
       const display = getTemplateDisplay(t.template_type);
       return (
         display.label.toLowerCase().includes(q) ||
@@ -209,7 +237,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
         (t.name ?? '').toLowerCase().includes(q)
       );
     });
-  }, [templates, search]);
+  }, [templates, search, listFilter]);
 
   const groups = useMemo(() => {
     const byCategory = new Map<string, EmailTemplate[]>();
@@ -264,6 +292,26 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
         </div>
       )}
 
+      {/* "Which notices have we actually changed?" was previously only
+          answerable by opening every one of three dozen in turn. */}
+      <div className="hscroll mb-2 flex gap-1.5 px-3">
+        {LIST_FILTERS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setListFilter(id)}
+            aria-pressed={listFilter === id}
+            className={`badge shrink-0 transition-colors ${
+              listFilter === id
+                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                : 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {groups.map((group) => {
         // An active search expands everything — a hit hidden behind a
         // collapsed header reads as "no results".
@@ -294,9 +342,13 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                   <button
                     key={template.id}
                     onClick={() => onSelect(template)}
+                    // The subtitle is the state line now, so the type label
+                    // moves here rather than disappearing: it is the only
+                    // thing that says what a renamed template actually is.
+                    title={display.label}
                     className={`flex w-full items-center space-x-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
                       isSelected
-                        ? 'border border-orange-500/30 bg-orange-500/10'
+                        ? 'border border-red-500/30 bg-red-500/10'
                         : 'hover:bg-theme-surface-hover border border-transparent'
                     }`}
                   >
@@ -304,22 +356,22 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected ? 'text-orange-600 dark:text-orange-400' : 'text-theme-text-primary'
+                          isSelected ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}
                       </p>
-                      <p className="text-theme-text-muted truncate text-xs">{display.label}</p>
+                      <p className="text-theme-text-muted truncate text-xs">{rowSubtitle(template)}</p>
                     </div>
-                    {template.is_active ? (
-                      <span title="Active" className="shrink-0">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      </span>
-                    ) : (
-                      <span title="Inactive" className="shrink-0">
-                        <XCircle className="text-theme-text-muted h-4 w-4" />
-                      </span>
-                    )}
+                    {/* A dot rather than a tick/cross pair: at 16px those two
+                        icons are hard to tell apart at a glance, and the row
+                        already carries a subtitle saying which it is. */}
+                    <span
+                      title={template.is_active ? 'Active' : 'Off'}
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        template.is_active ? 'bg-green-600' : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
+                    />
                   </button>
                 );
               })}

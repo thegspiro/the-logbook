@@ -28,11 +28,13 @@ the responses a deployed instance returns, not what an in-process harness
 synthesises.
 """
 
+import logging
 import os
 import socket
 import threading
 import time
 from contextlib import closing
+from typing import List
 
 import httpx
 import pytest
@@ -47,6 +49,49 @@ pytestmark = [pytest.mark.slow, pytest.mark.integration]
 # waits on MySQL and walks the Alembic chain, which is minutes on a cold
 # database and seconds once it is at head.
 _SERVER_BOOT_TIMEOUT_S = 600
+
+# How long to wait for /openapi.json. Generous on purpose — see the call site.
+_SCHEMA_FETCH_TIMEOUT_S = 120
+
+
+# One traceback is worth reading; a boot loop's worth is not, and this string
+# ends up in an assertion message.
+_MAX_CAPTURED_CHARS = 2000
+
+
+class _BootLogCapture(logging.Handler):
+    """Collect what uvicorn logs to its own logger while the server starts.
+
+    uvicorn does not hand the startup failure back to the caller. The
+    application's traceback goes to the ``uvicorn.error`` logger and the
+    process then exits with ``SystemExit(3)``, so the exception says only
+    that it exited, never why. These records are the only place the cause
+    exists, and in CI they otherwise scroll past unattached to the red job
+    they explain.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        # The default formatter appends a formatted traceback when the record
+        # carries exc_info, which is what makes the app's own error readable.
+        self.setFormatter(logging.Formatter("%(message)s"))
+        self._records: List[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._records.append(self.format(record))
+        except Exception:
+            # A logging handler that raises would replace the failure being
+            # diagnosed with one of its own.
+            pass
+
+    def captured(self) -> List[str]:
+        text = "\n".join(self._records).strip()
+        if not text:
+            return []
+        if len(text) > _MAX_CAPTURED_CHARS:
+            text = "..." + text[-_MAX_CAPTURED_CHARS:]
+        return [text]
 
 
 def _free_port() -> int:
@@ -93,32 +138,75 @@ def _start_server() -> str:
             access_log=False,
         )
     )
-    thread = threading.Thread(target=server.run, daemon=True)
+    # Both of uvicorn's startup failure paths — a lifespan startup that fails
+    # and a socket it cannot bind — end in sys.exit(STARTUP_FAILURE). That is
+    # SystemExit, which derives from BaseException, so `except Exception` would
+    # miss precisely the application-startup failure this diagnostic exists to
+    # explain. It is caught and re-raised; re-raising only ends this thread.
+    boot_error: List[BaseException] = []
+
+    def _serve() -> None:
+        try:
+            server.run()
+        except BaseException as exc:
+            boot_error.append(exc)
+            raise
+
+    thread = threading.Thread(target=_serve, daemon=True)
     thread.start()
 
-    base_url = f"http://127.0.0.1:{port}"
-    deadline = time.monotonic() + _SERVER_BOOT_TIMEOUT_S
-    last_state = "no response yet"
-    while time.monotonic() < deadline:
-        if not thread.is_alive():
-            raise RuntimeError("Contract-test server thread exited during startup")
-        try:
-            # Wait for `ready`, not merely for a reply. /health answers well
-            # before the connection pool is open, and every database-backed
-            # public endpoint returns 500 "Database not initialized" until it
-            # is — which reads as a contract violation rather than a race.
-            body = httpx.get(f"{base_url}/health", timeout=5.0).json()
-            if body.get("ready"):
-                return base_url
-            last_state = str(body.get("startup") or body.get("status"))
-        except (httpx.HTTPError, ValueError):
-            pass
-        time.sleep(0.5)
+    # SystemExit(3) carries an exit code and nothing else, so the exception
+    # alone cannot say *why*. uvicorn logs the real cause — the application's
+    # traceback, or the bind error — to its own logger and then exits, which
+    # makes those records the only place the answer exists.
+    log_capture = _BootLogCapture()
+    uvicorn_errors = logging.getLogger("uvicorn.error")
+    uvicorn_errors.addHandler(log_capture)
 
-    raise RuntimeError(
-        f"Contract-test server was not ready within {_SERVER_BOOT_TIMEOUT_S}s "
-        f"(last state: {last_state})"
-    )
+    def _cause() -> str:
+        parts = []
+        if boot_error:
+            exc = boot_error[0]
+            text = str(exc)
+            parts.append(
+                f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+            )
+        parts.extend(log_capture.captured())
+        return " | ".join(parts)
+
+    try:
+        base_url = f"http://127.0.0.1:{port}"
+        deadline = time.monotonic() + _SERVER_BOOT_TIMEOUT_S
+        last_state = "no response yet"
+        while time.monotonic() < deadline:
+            if not thread.is_alive():
+                raise RuntimeError(
+                    f"Contract-test server thread exited during startup — "
+                    f"{_cause() or 'no cause recorded'}"
+                )
+            try:
+                # Wait for `ready`, not merely for a reply. /health answers well
+                # before the connection pool is open, and every database-backed
+                # public endpoint returns 500 "Database not initialized" until
+                # it is — which reads as a contract violation rather than a race.
+                body = httpx.get(f"{base_url}/health", timeout=5.0).json()
+                if body.get("ready"):
+                    return base_url
+                last_state = str(body.get("startup") or body.get("status"))
+            except (httpx.HTTPError, ValueError):
+                pass
+            time.sleep(0.5)
+
+        # A timeout with the thread still alive means the server never
+        # finished starting, not that it failed — so there may be nothing to
+        # add, and " — no cause recorded" would only be noise.
+        cause = _cause()
+        raise RuntimeError(
+            f"Contract-test server was not ready within {_SERVER_BOOT_TIMEOUT_S}s "
+            f"(last state: {last_state})" + (f" — {cause}" if cause else "")
+        )
+    finally:
+        uvicorn_errors.removeHandler(log_capture)
 
 
 # Opt-in, because the work below happens at IMPORT time and pytest imports
@@ -146,17 +234,54 @@ else:
     # collection for every other suite.
     try:
         BASE_URL = _start_server()
-        schema = schemathesis.openapi.from_url(f"{BASE_URL}/openapi.json")
+        # Explicit timeout. schemathesis defaults to 10s, and generating this
+        # app's OpenAPI document is right on that line: 1114 paths and 1364
+        # component schemas measure 9.6-11.7s cold, so which side of the
+        # default a run lands on is decided by runner speed, not by the code.
+        # A run that lost the coin toss raised here, left SCHEMA_AVAILABLE
+        # False, and the class below then defined no test methods at all —
+        # pytest collected 0 items and exited 5. FastAPI caches the document
+        # after the first call, so this cost is paid once.
+        schema = schemathesis.openapi.from_url(
+            f"{BASE_URL}/openapi.json",
+            timeout=_SCHEMA_FETCH_TIMEOUT_S,
+            wait_for_schema=_SCHEMA_FETCH_TIMEOUT_S,
+        )
         SCHEMA_AVAILABLE = True
         SKIP_REASON = ""
     except Exception as exc:  # pragma: no cover - environment-dependent
         BASE_URL = ""
         schema = None
         SCHEMA_AVAILABLE = False
-        SKIP_REASON = f"Contract-test server unavailable: {exc}"
+        SKIP_REASON = f"Contract-test server unavailable: {type(exc).__name__}: {exc}"
 
 
-@pytest.mark.skipif(not SCHEMA_AVAILABLE, reason=SKIP_REASON or "server unavailable")
+def test_contract_suite_can_run():
+    """Report why the suite could not start, instead of collecting nothing.
+
+    Every generated test below is defined inside ``if SCHEMA_AVAILABLE``, so
+    when the server does not come up this module contains no tests at all —
+    not even skipped ones. ``pytest tests/test_api_contract.py`` then exits 5
+    ("no tests collected") and the job goes red showing ``collected 0 items``
+    and nothing else: ``SKIP_REASON``, which names the actual cause, is
+    computed and then never surfaced anywhere.
+
+    This test always exists, so the reason always has somewhere to be
+    reported. It **fails** rather than skips once the suite has been asked
+    for, because a server that will not boot is a real failure — skipping it
+    would let "the application does not start" pass for green, which is the
+    one thing a contract suite must never do.
+    """
+    if not _ENABLED:
+        pytest.skip(SKIP_REASON)
+    assert SCHEMA_AVAILABLE, SKIP_REASON
+    assert schema is not None
+
+
+# No skipif on the class: when the schema is unavailable these tests are never
+# defined, so there is nothing for a marker to skip. One used to sit here and
+# read as though it handled that case, which is why the missing report went
+# unnoticed — the test above is what actually covers it.
 class TestAPIContract:
     """
     Auto-generated API contract tests.

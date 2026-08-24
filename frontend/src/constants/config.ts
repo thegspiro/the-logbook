@@ -21,6 +21,21 @@ export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 // ============================================
 export const AUTO_SAVE_INTERVAL_MS = 30_000; // 30 seconds
 
+/**
+ * How long a settings field waits after the last keystroke before it writes.
+ * Long enough that typing a department name is one save rather than twenty,
+ * short enough that a member who types and immediately navigates away has
+ * still had the write dispatched.
+ */
+export const SETTINGS_AUTOSAVE_DEBOUNCE_MS = 600;
+
+/**
+ * Minimum time the settings autosave pill stays on "Saving…". A write that
+ * resolves in 40ms would otherwise flash the pill through two states too fast
+ * to read, which looks like a glitch rather than a save.
+ */
+export const SETTINGS_SAVE_MIN_VISIBLE_MS = 700;
+
 // ============================================
 // File uploads
 // ============================================
@@ -43,3 +58,19 @@ export const MEMBER_SEARCH_MIN_CHARS = 2;
 export const MEMBER_SEARCH_MAX_RESULTS = 15;
 /** Long enough that typing a name is one request, not one per keystroke. */
 export const MEMBER_SEARCH_DEBOUNCE_MS = 300;
+
+// ============================================
+// Events list urgency
+// ============================================
+// How the /events list decides an event is close enough to need the member's
+// attention now. Both windows are deliberately the same length so a card can
+// never say "Tomorrow" while the band stays silent about its RSVP deadline.
+
+/** Inside this window an event's time reads as "Tonight" / "Tomorrow". */
+export const EVENT_RELATIVE_LABEL_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
+/** An unanswered RSVP whose deadline falls inside this window is urgent. */
+export const EVENT_RSVP_DEADLINE_SOON_MS = 48 * 60 * 60 * 1000; // 48 hours
+/** How far back the list looks for mandatory events with no check-in. */
+export const EVENT_MISSED_LOOKBACK_DAYS = 30;
+/** Rows the "Needs You" band shows before collapsing the rest into a link. */
+export const NEEDS_YOU_MAX_ROWS = 5;

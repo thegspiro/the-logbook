@@ -16,16 +16,12 @@ import {
   Download,
   Upload,
   Search,
-  Repeat,
   SlidersHorizontal,
   User,
   Check,
   X,
-  Users,
   CheckSquare,
-  Square,
   XCircle,
-  Copy,
   FileText,
   Bookmark,
   BookmarkPlus,
@@ -34,18 +30,14 @@ import {
   BarChart3,
   MoreHorizontal,
   Settings,
-  Pencil,
 } from 'lucide-react';
 import { eventService } from '../services/api';
 import { eventService as eventServiceDirect } from '../services/eventServices';
 import type { CSVImportRowError } from '../services/eventServices';
 import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate, EventTemplate } from '../types/event';
-import {
-  getEventTypeLabel,
-  getEventTypeBadgeColor,
-  getRSVPStatusLabel,
-  getRSVPStatusColor,
-} from '../utils/eventHelpers';
+import { getEventTypeLabel, getEventUrgency, isUrgentEventState } from '../utils/eventHelpers';
+import { EventListCard } from '../components/events/EventListCard';
+import { NeedsYouBand } from '../components/events/NeedsYouBand';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
@@ -53,9 +45,8 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
-import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
-import { DEFAULT_PAGE_SIZE } from '../constants/config';
+import { DEFAULT_PAGE_SIZE, EVENT_MISSED_LOOKBACK_DAYS } from '../constants/config';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { CalendarView } from '../components/CalendarView';
 
@@ -100,6 +91,11 @@ const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.OTHER,
 ];
 
+/* How often the page re-evaluates event urgency. A minute is fine: the only
+   boundary that matters mid-session is a check-in window opening, and a member
+   watching for it will not notice up to 60s of lag. */
+const URGENCY_TICK_MS = 60_000;
+
 /* One row of the overflow menu. `max-md` grows it to the 44px touch minimum
    without inflating the same menu on a desktop pointer. */
 const MENU_ITEM_CLASS =
@@ -131,6 +127,27 @@ export const EventsPage: React.FC = () => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+
+  /**
+   * Recently-ended mandatory events the member has no check-in against, for
+   * the band's "missed" rows. Fetched separately because the grid only holds
+   * past events while the Past toggle is on, and the band must work either way.
+   */
+  const [pastMandatoryEvents, setPastMandatoryEvents] = useState<EventListItem[]>([]);
+
+  /**
+   * Shared clock for every urgency decision on the page, so a card and the
+   * band row pointing at it can never straddle a boundary. It ticks because a
+   * check-in window opening is the one state change that must appear without a
+   * reload — that is what the band's aria-live is there to announce.
+   */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), URGENCY_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const gridRef = React.useRef<HTMLDivElement>(null);
 
   // Templates offered inside the overflow menu (quick-create)
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
@@ -259,6 +276,27 @@ export const EventsPage: React.FC = () => {
     };
   }, [canManage]);
 
+  /**
+   * Non-critical: the band simply renders without "missed" rows if this fails,
+   * exactly as the templates fetch above degrades. It deliberately does not
+   * touch `error`, which is the grid's own state.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const fetchPastMandatory = async () => {
+      try {
+        const data = await eventService.getMissedMandatoryEvents(EVENT_MISSED_LOOKBACK_DAYS);
+        if (!cancelled) setPastMandatoryEvents(data);
+      } catch {
+        // Silently fail — the "missed" rows are an enhancement.
+      }
+    };
+    void fetchPastMandatory();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const tzAbbr = useMemo(() => {
     try {
       return (
@@ -320,6 +358,29 @@ export const EventsPage: React.FC = () => {
     }
   }, []);
 
+  const handleStartChangeRsvp = useCallback((eventId: string) => {
+    setRsvpChanging((prev) => ({ ...prev, [eventId]: true }));
+  }, []);
+
+  const handleCancelChangeRsvp = useCallback((eventId: string) => {
+    setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
+  }, []);
+
+  /** The band's overflow link: narrow the grid to what needs a response. */
+  const handleShowAllNeedsYou = useCallback(() => {
+    setShowMyEventsOnly(true);
+    setCurrentPage(1);
+    gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  /** Card and band buttons are plain handlers; the page owns the promise. */
+  const handleQuickRSVPAction = useCallback(
+    (eventId: string, status: 'going' | 'not_going') => {
+      void handleQuickRSVP(eventId, status);
+    },
+    [handleQuickRSVP]
+  );
+
   useEffect(() => {
     void fetchEvents();
     eventService
@@ -371,7 +432,11 @@ export const EventsPage: React.FC = () => {
   const searchFilteredEvents = useMemo(() => {
     let filtered = typeFilteredEvents;
     if (showMyEventsOnly) {
-      filtered = filtered.filter((e) => e.user_rsvp_status);
+      // "Mine" is not only what I have already answered. A mandatory event with
+      // no RSVP is the most mine of all, and it is what the band's
+      // "+N more need a response" link narrows the grid to — filtering on
+      // user_rsvp_status alone would hide the very events that link promises.
+      filtered = filtered.filter((e) => e.user_rsvp_status || isUrgentEventState(getEventUrgency(e, now)));
     }
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -384,7 +449,7 @@ export const EventsPage: React.FC = () => {
       );
     }
     return filtered;
-  }, [typeFilteredEvents, searchQuery, showMyEventsOnly]);
+  }, [typeFilteredEvents, searchQuery, showMyEventsOnly, now]);
 
   const sortedEvents = useMemo(() => {
     const sorted = [...searchFilteredEvents];
@@ -406,6 +471,24 @@ export const EventsPage: React.FC = () => {
     }
     return sorted;
   }, [searchFilteredEvents, sortBy, showPastEvents]);
+
+  /**
+   * What a screen reader should hear when a check-in window opens while the
+   * page is already sitting open.
+   *
+   * This has to live here, not on the band's row. An `aria-live` attribute on
+   * an element that enters the DOM together with its text is not reliably
+   * announced — assistive tech watches for changes *inside* a region that
+   * already existed. The band itself renders nothing when it has no rows, so
+   * it cannot host the region either: the whole band appears at the same
+   * moment as the row. A region that is always mounted, and whose text changes,
+   * is the shape that actually announces.
+   */
+  const liveEventAnnouncement = useMemo(() => {
+    const live = events.filter((e) => getEventUrgency(e, now) === 'live');
+    if (live.length === 0) return '';
+    return live.map((e) => `${e.title} is happening now. Check-in is open.`).join(' ');
+  }, [events, now]);
 
   const paginatedEvents = useMemo(() => {
     const start = (currentPage - 1) * DEFAULT_PAGE_SIZE;
@@ -464,6 +547,14 @@ export const EventsPage: React.FC = () => {
       }
     },
     [navigate]
+  );
+
+  /** The card owns no promises; the page decides how a duplicate is awaited. */
+  const handleDuplicateEvent = useCallback(
+    (eventId: string) => {
+      void handleDuplicate(eventId);
+    },
+    [handleDuplicate]
   );
 
   const toggleEventSelection = useCallback((eventId: string) => {
@@ -611,7 +702,7 @@ export const EventsPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -741,6 +832,25 @@ export const EventsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Always mounted, so a check-in window opening mid-session is a text
+            change inside an existing live region rather than a new region
+            nobody is listening to. */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {liveEventAnnouncement}
+        </div>
+
+        {/* Only the events with something outstanding, each beside the control
+            that clears it. Renders nothing when there is nothing to do. */}
+        <NeedsYouBand
+          events={events}
+          pastMandatoryEvents={pastMandatoryEvents}
+          timezone={tz}
+          now={now}
+          rsvpLoading={rsvpLoading}
+          onQuickRSVP={handleQuickRSVPAction}
+          onShowAll={handleShowAllNeedsYou}
+        />
+
         {/* Mode + view + search stay on screen; the filters nobody changes on
             every visit sit behind a disclosure on phones, where each one cost
             a full-width row above the first event. */}
@@ -751,7 +861,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setShowPastEvents(false)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   !showPastEvents
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -761,7 +871,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setShowPastEvents(true)}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   showPastEvents
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -773,7 +883,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setViewMode('list')}
                 className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
                   viewMode === 'list'
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
                 aria-label="List view"
@@ -785,7 +895,7 @@ export const EventsPage: React.FC = () => {
                 onClick={() => setViewMode('calendar')}
                 className={`rounded-md p-1.5 transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center ${
                   viewMode === 'calendar'
-                    ? 'bg-red-600 text-white shadow-sm'
+                    ? 'bg-red-800 text-white shadow-sm'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
                 aria-label="Calendar view"
@@ -824,7 +934,7 @@ export const EventsPage: React.FC = () => {
             >
               <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
               {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-800 px-1 text-xs font-semibold text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -840,7 +950,7 @@ export const EventsPage: React.FC = () => {
               onClick={() => setShowMyEventsOnly((prev) => !prev)}
               className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                 showMyEventsOnly
-                  ? 'border-red-600 bg-red-600 text-white shadow-sm'
+                  ? 'border-red-600 bg-red-800 text-white shadow-sm'
                   : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
               }`}
             >
@@ -909,7 +1019,7 @@ export const EventsPage: React.FC = () => {
                         <button
                           onClick={handleSavePreset}
                           disabled={!presetName.trim()}
-                          className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                          className="rounded-md bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
                         >
                           Save
                         </button>
@@ -1010,240 +1120,30 @@ export const EventsPage: React.FC = () => {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              ref={gridRef}
+              data-testid="events-grid"
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
               {paginatedEvents.map((event) => (
-                <div
+                <EventListCard
                   key={event.id}
-                  className={`card relative flex flex-col transition-all hover:border-red-300 hover:shadow-md ${
-                    selectedEvents.has(event.id) ? 'border-red-300 ring-2 ring-red-500/50' : ''
-                  }`}
-                >
-                  {selectionMode && canManage && (
-                    <button
-                      onClick={() => toggleEventSelection(event.id)}
-                      className={`absolute top-3 left-3 z-10 rounded p-0.5 transition-colors ${
-                        selectedEvents.has(event.id)
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-theme-text-muted hover:text-theme-text-primary'
-                      }`}
-                      aria-label={selectedEvents.has(event.id) ? `Deselect ${event.title}` : `Select ${event.title}`}
-                    >
-                      {selectedEvents.has(event.id) ? (
-                        <CheckSquare className="h-5 w-5" />
-                      ) : (
-                        <Square className="h-5 w-5" />
-                      )}
-                    </button>
-                  )}
-                  {/* Manager actions: a footer strip on a phone, the card corner
-                      from md up. In the corner at every width they overlapped the
-                      title, and the 96px of clearance they needed cut most titles
-                      on a single-column phone layout to "Monthly Traini…".
-                      `order-last` puts the strip below the card body while
-                      keeping it out of the anchor below. */}
-                  {canManage && (
-                    <div className="border-theme-surface-border order-last flex items-center justify-end gap-1 border-t px-4 py-2 md:absolute md:top-3 md:right-3 md:z-10 md:order-none md:border-0 md:p-0">
-                      <Link
-                        to={`/events/${event.id}/edit`}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 max-md:min-h-[44px] max-md:px-4 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30"
-                        aria-label={`Edit ${event.title}`}
-                      >
-                        <Pencil className="h-3 w-3" aria-hidden="true" />
-                        Edit
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleDuplicate(event.id);
-                        }}
-                        className="bg-theme-surface-modal text-theme-text-muted hover:bg-theme-surface-hover rounded-full p-1.5 shadow-sm transition-colors hover:text-blue-600 max-md:min-h-[44px] max-md:min-w-[44px] max-md:items-center max-md:justify-center dark:hover:text-blue-400"
-                        title="Duplicate event"
-                        aria-label={`Duplicate ${event.title}`}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                  <Link to={`/events/${event.id}`} className="block">
-                    <div className={`p-5 ${selectionMode && canManage ? 'pl-10' : ''} ${canManage ? 'md:pr-24' : ''}`}>
-                      <div className="flex items-start justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            {event.event_type === EventTypeEnum.TRAINING && (
-                              <svg
-                                className="h-5 w-5 shrink-0 text-purple-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                />
-                              </svg>
-                            )}
-                            {/* Two lines rather than one truncated one: on a phone the card is a
-     single column and the manager chips claim the right quarter of it,
-     which cut most titles to "Monthly Traini…". */}
-                            <h3 className="text-theme-text-primary line-clamp-2 text-lg font-medium">{event.title}</h3>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventTypeBadgeColor(event.event_type)}`}
-                            >
-                              {getEventTypeLabel(event.event_type)}
-                            </span>
-                            {event.is_draft && (
-                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-500/20 dark:text-gray-300">
-                                Draft
-                              </span>
-                            )}
-                            {event.is_mandatory && (
-                              <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
-                                Mandatory
-                              </span>
-                            )}
-                            {(event.is_recurring || event.recurrence_parent_id) && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-                                <Repeat className="h-3 w-3" />
-                                Recurring
-                              </span>
-                            )}
-                            {event.user_rsvp_status && (
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getRSVPStatusColor(event.user_rsvp_status)}`}
-                              >
-                                {getRSVPStatusLabel(event.user_rsvp_status)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="ml-2 flex shrink-0 items-center gap-1">
-                          {event.is_cancelled && (
-                            <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                              Cancelled
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 space-y-2">
-                        <div className="text-theme-text-muted flex items-center text-sm">
-                          <svg
-                            className="text-theme-text-muted mr-1.5 h-5 w-5 shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span title={formatAbsoluteDate(event.start_datetime, tz)}>
-                            {formatShortDateTime(event.start_datetime, tz)}
-                            {tzAbbr ? ` ${tzAbbr}` : ''}
-                            <span className="text-theme-text-muted ml-1">
-                              ({formatRelativeTime(event.start_datetime)})
-                            </span>
-                          </span>
-                        </div>
-
-                        {(event.location_name || event.location) && (
-                          <div className="text-theme-text-muted flex items-center text-sm">
-                            <svg
-                              className="text-theme-text-muted mr-1.5 h-5 w-5 shrink-0"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                              />
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                              />
-                            </svg>
-                            <span className="truncate">{event.location_name || event.location}</span>
-                          </div>
-                        )}
-
-                        {event.requires_rsvp && (
-                          <div className="flex items-center text-sm">
-                            <Users className="text-theme-text-muted mr-1.5 h-5 w-5 shrink-0" aria-hidden="true" />
-                            <span className="font-medium text-green-600 dark:text-green-400">
-                              {event.going_count ?? 0} going
-                            </span>
-                            {(event.rsvp_count ?? 0) > (event.going_count ?? 0) && (
-                              <span className="text-theme-text-muted ml-1">/ {event.rsvp_count ?? 0} RSVP'd</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                  {/* Inline Quick RSVP */}
-                  {event.requires_rsvp && !event.is_cancelled && (
-                    <div className="flex items-center gap-2 px-5 pb-4" role="group" aria-label="Quick RSVP">
-                      {!event.user_rsvp_status || rsvpChanging[event.id] ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              void handleQuickRSVP(event.id, 'going');
-                            }}
-                            disabled={!!rsvpLoading[event.id]}
-                            className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-200 disabled:opacity-50 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30"
-                          >
-                            <Check className="h-3 w-3" aria-hidden="true" />
-                            Going
-                          </button>
-                          <button
-                            onClick={() => {
-                              void handleQuickRSVP(event.id, 'not_going');
-                            }}
-                            disabled={!!rsvpLoading[event.id]}
-                            className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
-                          >
-                            <X className="h-3 w-3" aria-hidden="true" />
-                            Not Going
-                          </button>
-                          {event.user_rsvp_status && (
-                            <button
-                              onClick={() => {
-                                setRsvpChanging((prev) => ({ ...prev, [event.id]: false }));
-                              }}
-                              className="text-theme-text-muted hover:text-theme-text-primary text-xs"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setRsvpChanging((prev) => ({ ...prev, [event.id]: true }));
-                          }}
-                          className="text-theme-text-muted hover:text-theme-text-primary text-xs underline"
-                        >
-                          Change RSVP
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                  event={event}
+                  urgency={getEventUrgency(event, now)}
+                  timezone={tz}
+                  timezoneAbbr={tzAbbr}
+                  now={now}
+                  canManage={canManage}
+                  selectionMode={selectionMode}
+                  isSelected={selectedEvents.has(event.id)}
+                  onToggleSelect={toggleEventSelection}
+                  onDuplicate={handleDuplicateEvent}
+                  rsvpLoading={!!rsvpLoading[event.id]}
+                  isChangingRsvp={!!rsvpChanging[event.id]}
+                  onQuickRSVP={handleQuickRSVPAction}
+                  onStartChangeRsvp={handleStartChangeRsvp}
+                  onCancelChangeRsvp={handleCancelChangeRsvp}
+                />
               ))}
             </div>
 
@@ -1313,7 +1213,10 @@ export const EventsPage: React.FC = () => {
           aria-label="Import Events from CSV"
         >
           <div className="modal-overlay" onClick={handleCloseImportModal} aria-hidden="true" />
-          <DialogPanel onClose={handleCloseImportModal} className="modal-panel-scroll relative mx-4 w-full max-w-lg p-6">
+          <DialogPanel
+            onClose={handleCloseImportModal}
+            className="modal-panel-scroll relative mx-4 w-full max-w-lg p-6"
+          >
             <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Import Events from CSV</h3>
 
             {!importResult ? (
@@ -1365,7 +1268,7 @@ export const EventsPage: React.FC = () => {
                         void handleImportCSV();
                       }}
                       disabled={!importFile || importLoading}
-                      className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
                     >
                       {importLoading ? (
                         <>
@@ -1455,7 +1358,7 @@ export const EventsPage: React.FC = () => {
                 <div className="mt-4 flex justify-end">
                   <button
                     onClick={handleCloseImportModal}
-                    className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                    className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
                   >
                     Done
                   </button>
@@ -1470,7 +1373,10 @@ export const EventsPage: React.FC = () => {
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
           <div className="modal-overlay" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
-          <DialogPanel onClose={() => setShowCancelConfirm(false)} className="modal-panel-scroll relative mx-4 w-full max-w-md p-6">
+          <DialogPanel
+            onClose={() => setShowCancelConfirm(false)}
+            className="modal-panel-scroll relative mx-4 w-full max-w-md p-6"
+          >
             <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
             </h3>
@@ -1490,7 +1396,7 @@ export const EventsPage: React.FC = () => {
                   void handleCancelSelected();
                 }}
                 disabled={bulkActionLoading}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                className="rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
               >
                 {bulkActionLoading ? 'Cancelling...' : 'Confirm Cancel'}
               </button>

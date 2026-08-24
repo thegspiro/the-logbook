@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
     admin_hours,
+    admin_hub,
     analytics,
     apparatus,
     audit_logs,
@@ -47,6 +48,7 @@ from app.api.v1.endpoints import (
     message_history,
     messages,
     minutes,
+    nfc_tags,
     notifications,
     officers,
     operational_ranks,
@@ -61,6 +63,7 @@ from app.api.v1.endpoints import (
     security_monitoring,
     shift_completion,
     skills_testing,
+    station_documents,
     storefront,
     training,
     training_enhancements,
@@ -82,6 +85,7 @@ api_router.include_router(event_requests.router, tags=["event-requests"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(nfc_tags.router, prefix="/nfc-tags", tags=["nfc-tags"])
 api_router.include_router(
     organizations.router, prefix="/organization", tags=["organization"]
 )
@@ -95,6 +99,7 @@ api_router.include_router(
 )
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hub"])
 api_router.include_router(training.router, prefix="/training", tags=["training"])
 api_router.include_router(
     training_programs.router, prefix="/training/programs", tags=["training-programs"]
@@ -120,6 +125,7 @@ api_router.include_router(
 )
 api_router.include_router(storefront.router, prefix="/store", tags=["storefront"])
 api_router.include_router(labels.router, tags=["labels"])
+api_router.include_router(station_documents.router, tags=["station-documents"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(
     training_submissions.router,

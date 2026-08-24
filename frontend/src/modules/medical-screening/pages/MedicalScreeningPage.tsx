@@ -163,7 +163,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRequirement(null);
               setShowRequirementForm(true);
             }}
-            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:self-auto"
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Requirement
@@ -175,7 +175,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRecord(null);
               setShowRecordForm(true);
             }}
-            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:self-auto"
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Record

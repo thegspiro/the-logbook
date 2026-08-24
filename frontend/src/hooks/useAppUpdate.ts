@@ -21,12 +21,21 @@
  * "Reload now" on the banner, or automatically on the next route change —
  * a natural boundary where page state is discarded anyway. Dismissing the
  * banner suppresses both until the next deployment.
+ *
+ * Applying goes through `applyAppUpdate`, which escalates when a reload does
+ * not actually land on the new build. Some devices cannot be fixed by a
+ * reload at all — a service worker still serving an old precached shell will
+ * serve it again on the next load — and this hook used to retry that reload
+ * forever. Once the ladder is out of remedies `updateBlocked` goes true and
+ * the automatic retries stop, so the banner can ask for Force refresh instead
+ * of reloading the member's page on every navigation to no effect.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useLocation } from 'react-router';
-import { nudgeServiceWorkerUpdate, reloadForNewVersion } from '../utils/serviceWorkerUpdate';
+import { nudgeServiceWorkerUpdate } from '../utils/serviceWorkerUpdate';
 import { fetchServerBuildId, getCurrentBuildId } from '../utils/appVersion';
+import { applyAppUpdate, clearUpdateAttempts, nextRemedy } from '../utils/updateRecovery';
 
 /** Minimum time between two consecutive version checks (60 seconds). */
 const MIN_CHECK_INTERVAL_MS = 60_000;
@@ -40,6 +49,12 @@ const UPDATE_REMINDER_MS = 60 * 60_000; // 1 hour
 export interface AppUpdateState {
   /** True once a newer build has been detected on the server. */
   updateAvailable: boolean;
+  /**
+   * True when automatic recovery has been exhausted: this device has already
+   * failed to apply the detected build more than once, so reloading again
+   * would not help. The member needs Force refresh.
+   */
+  updateBlocked: boolean;
   /** Reload the page to apply the new version. */
   applyUpdate: () => void;
   /** Defer the notification for one hour. */
@@ -48,6 +63,7 @@ export interface AppUpdateState {
 
 export function useAppUpdate(): AppUpdateState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateBlocked, setUpdateBlocked] = useState(false);
   const lastCheckRef = useRef(0);
   const deferredBuildRef = useRef<{ buildId: string; until: number } | null>(null);
   const detectedBuildRef = useRef<string | null>(null);
@@ -70,13 +86,37 @@ export function useAppUpdate(): AppUpdateState {
     const serverBuildId = await fetchServerBuildId();
     if (serverBuildId === null) return; // offline, or the check itself failed
 
+    if (serverBuildId === getCurrentBuildId()) {
+      // The running build matches what is deployed, which is the only proof an
+      // update actually took. Anything the escalation ladder was tracking is
+      // resolved, so the next deployment starts from a plain reload again.
+      clearUpdateAttempts();
+      setUpdateBlocked(false);
+      return;
+    }
+
     const deferred = deferredBuildRef.current;
     const isStillDeferred = deferred?.buildId === serverBuildId && Date.now() < deferred.until;
-    if (serverBuildId !== getCurrentBuildId() && !isStillDeferred) {
+    if (!isStillDeferred) {
       detectedBuildRef.current = serverBuildId;
       setUpdateAvailable(true);
+      setUpdateBlocked(nextRemedy(serverBuildId) === 'exhausted');
     }
   }, []);
+
+  const applyUpdate = useCallback(async (): Promise<void> => {
+    // Not a bare reload: on an installed PWA the old service worker would
+    // serve its old precached index.html, making the reload a visible no-op.
+    // applyAppUpdate escalates past that when a previous attempt at this same
+    // build already came back on the old one.
+    const remedy = await applyAppUpdate(detectedBuildRef.current ?? undefined);
+    if (remedy === 'exhausted') setUpdateBlocked(true);
+  }, []);
+
+  /** Fire-and-forget form for the banner's onClick. */
+  const applyUpdateNow = useCallback((): void => {
+    void applyUpdate();
+  }, [applyUpdate]);
 
   // Check on route change
   useEffect(() => {
@@ -94,10 +134,10 @@ export function useAppUpdate(): AppUpdateState {
   useEffect(() => {
     if (location.pathname === prevPathRef.current) return;
     prevPathRef.current = location.pathname;
-    if (updateAvailable) {
-      void reloadForNewVersion();
+    if (updateAvailable && !updateBlocked) {
+      void applyUpdate();
     }
-  }, [location.pathname, updateAvailable]);
+  }, [location.pathname, updateAvailable, updateBlocked, applyUpdate]);
 
   // Check on tab focus
   useEffect(() => {
@@ -129,12 +169,6 @@ export function useAppUpdate(): AppUpdateState {
     return () => clearInterval(id);
   }, [checkForUpdate]);
 
-  const applyUpdate = useCallback(() => {
-    // Not a bare reload: on an installed PWA the old service worker would
-    // serve its old precached index.html, making the reload a visible no-op.
-    void reloadForNewVersion();
-  }, []);
-
   const dismiss = useCallback(() => {
     setUpdateAvailable(false);
     const buildId = detectedBuildRef.current;
@@ -143,5 +177,5 @@ export function useAppUpdate(): AppUpdateState {
     }
   }, []);
 
-  return { updateAvailable, applyUpdate, dismiss };
+  return { updateAvailable, updateBlocked, applyUpdate: applyUpdateNow, dismiss };
 }

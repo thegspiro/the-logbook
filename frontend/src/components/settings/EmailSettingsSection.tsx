@@ -1,4 +1,5 @@
 import React from 'react';
+import { SettingsToggle as Toggle } from './SettingsToggle';
 import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff } from 'lucide-react';
 import type { EmailServiceSettings } from '../../types/user';
 
@@ -21,24 +22,6 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
   onSave,
   profileName,
 }) => {
-  const Toggle: React.FC<{
-    checked: boolean;
-    onChange: () => void;
-  }> = ({ checked, onChange }) => {
-    const bg = checked ? 'bg-theme-accent-blue' : 'bg-theme-surface-hover';
-    return (
-      <button
-        type="button"
-        onClick={onChange}
-        className={`${bg} focus:ring-theme-focus-ring toggle-track-md`}
-        role="switch"
-        aria-checked={checked}
-      >
-        <span className={`${checked ? 'translate-x-5' : 'translate-x-0'} toggle-knob-md`} />
-      </button>
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div>

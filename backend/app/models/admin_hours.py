@@ -22,6 +22,11 @@ class AdminHoursEntryMethod(str, Enum):
     """How the hours entry was created"""
 
     QR_SCAN = "qr_scan"
+    # An officer-operated ID card station, distinct from a member scanning the
+    # category's QR code with their own phone. Kept apart because an export or
+    # an audit that cannot tell the two apart is claiming something untrue
+    # about who was standing there.
+    NFC_STATION = "nfc_station"
     MANUAL = "manual"
     EVENT_ATTENDANCE = "event_attendance"
 

@@ -350,6 +350,11 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 33. **[training-compliance-calculations.md](./training-compliance-calculations.md)**
     - Every calculation used to determine training compliance: requirement evaluation, waiver adjustments, certification expiration handling
 
+34. **[LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md)**
+    - Barcode labels and station paperwork sent straight to a network printer, in ZPL or ESC/POS, with no print dialog to rescale a barcode
+    - Printer registration, status read-back, and the published flag tables both parsers decode
+    - The SSRF boundary: port allowlist, blocked address classes, and resolve-once-connect-to-literal
+
 ---
 
 ### 🗄️ Database Schema
@@ -526,74 +531,77 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 
 ### By Topic
 
-| Topic                                        | Document                                                                                                                                                 |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Can't complete onboarding                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#onboarding-issues)                                                                                             |
-| Email/SMTP not working                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#email--smtp-configuration)                                                                                     |
-| Logo upload fails                            | [ERROR_MESSAGES_LOGO_UPLOAD.md](./ERROR_MESSAGES_LOGO_UPLOAD.md)                                                                                         |
-| Database errors                              | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#database--migration-issues)                                                                                    |
-| Network/connection issues                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems)                                                                                  |
-| Enum case mismatch                           | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md)                                                                                                             |
-| Custom forms / public forms                  | [FORMS_MODULE.md](./FORMS_MODULE.md)                                                                                                                     |
-| Documents / file management                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#documents-module)                                                                                              |
-| Meeting minutes / action items               | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meetings--minutes-module)                                                                                      |
-| Shift scheduling / calendar                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module)                                                                                             |
-| Shift templates / patterns                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-template-not-appearing-in-template-list)                                                                 |
-| Shift assignments / duty roster              | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-assignment-member-cant-confirm)                                                                          |
-| Shift swap requests                          | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-swap-request-denied-unexpectedly)                                                                        |
-| Time-off / availability                      | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#time-off-request-not-showing-in-availability)                                                                  |
-| Facilities / building management             | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#facilities-module)                                                                                             |
-| Facility maintenance                         | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#maintenance-scheduling-no-default-types)                                                                       |
-| Facility compliance / ADA                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#compliance-checklist-items-not-saving)                                                                         |
-| Reports / data export                        | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module)                                                                                                |
-| Notification rules / alerts                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module)                                                                                          |
-| Membership tiers / life member               | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing)                                                                     |
-| Voter override (secretary)                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote)                                                                  |
-| Proxy voting setup                           | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-setting-up-proxy-voting)                                                                                |
-| Secretary attendance dashboard               | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-secretary-attendance-dashboard)                                                                        |
-| Meeting attendance waivers                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-granting-an-attendance-waiver)                                                                         |
-| Auto-enrollment on conversion                | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-auto-enrollment-on-member-conversion)                                                                 |
-| Incident-based requirements                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-incident-based-requirements-calls-shifts-hours)                                                       |
-| Scheduled tasks / cron setup                 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduled-tasks-setting-up-the-cron)                                                                           |
-| Membership tier config editor                | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-editing-tier-requirements)                                                                          |
-| Bulk voter overrides                         | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-bulk-voter-overrides)                                                                                   |
-| Meeting quorum config                        | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum)                                                                                    |
-| Peer skill eval sign-offs                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs)                                                          |
-| Skills testing / evaluations                 | [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) and [Skills Testing Guide](./training/09-skills-testing.md)                                     |
-| Skills testing without signal                | [SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md) (scoping — not yet implemented)                                                       |
-| Cert expiration alerts                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline)                                                              |
-| Competency matrix dashboard                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard)                                                                |
-| Training calendar / booking                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention)                                                      |
-| Recruit school / multi-class course          | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#multi-class-courses--cohorts) and [Training Guide](./training/02-training.md#multi-class-courses--cohorts) |
-| Cohort vs. recurring session                 | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people)                                                                   |
-| Voting attendance requirements               | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance)                                                               |
-| Training exemptions by tier                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements)                                                       |
-| Drop notifications / CC config               | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md)                                                                                                         |
-| Email templates / customization              | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management)                                                                               |
-| Personal email / post-separation             | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email)                                                                                          |
-| Prospective members pipeline                 | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md)                                                                                         |
-| Inactivity timeouts / purging                | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system)                                                               |
-| Meeting minutes / templates                  | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md)                                                                                                 |
-| Document management / folders                | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module)                                                                                |
-| Department messages / announcements          | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md)                                                                                                   |
-| Department store / merch orders              | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md)                                                                                                           |
-| Store payment buttons (Venmo/Cash App/Zelle) | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#payments)                                                                                                  |
-| Store emails: switches, previews, test sends | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#notifications)                                                                                             |
-| Rewording a store email                      | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#wording-and-templates)                                                                                     |
-| PayPal store reconciliation                  | [STOREFRONT_PAYPAL.md](./STOREFRONT_PAYPAL.md)                                                                                                           |
-| Public API (forms, events)                   | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)                                                                                             |
-| Election security                            | [module-audit/elections.md](./module-audit/elections.md), [BALLOT_FORENSICS_GUIDE.md](../BALLOT_FORENSICS_GUIDE.md)                                      |
-| Events / recurring events / RSVP             | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues)                                                                                          |
-| Public outreach requests                     | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#public-outreach-request-pipeline-issues)                                                                       |
-| Public programs how-to                       | [wiki/Public-Programs.md](../wiki/Public-Programs.md)                                                                                                    |
-| TypeScript build errors                      | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#typescript-build-issues)                                                                                       |
-| TypeScript safeguards / `as any`             | [TYPESCRIPT_SAFEGUARDS.md](./TYPESCRIPT_SAFEGUARDS.md)                                                                                                   |
-| Async SQLAlchemy issues                      | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md), [backend/](./backend/)                                                                                       |
-| Security questions                           | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md)                                                                                                |
-| Multi-factor authentication (MFA / TOTP)     | [MFA.md](./MFA.md)                                                                                                                                       |
-| Shift scheduling / platoon rotations         | [SCHEDULING_MODULE.md](./SCHEDULING_MODULE.md)                                                                                                           |
-| Platoon scheduling — admin setup             | [PLATOON_SETUP.md](./PLATOON_SETUP.md)                                                                                                                   |
-| Known limitations / open decisions           | [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)                                                                                                           |
+| Topic                                         | Document                                                                                                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Can't complete onboarding                     | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#onboarding-issues)                                                                                             |
+| Email/SMTP not working                        | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#email--smtp-configuration)                                                                                     |
+| Logo upload fails                             | [ERROR_MESSAGES_LOGO_UPLOAD.md](./ERROR_MESSAGES_LOGO_UPLOAD.md)                                                                                         |
+| Database errors                               | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#database--migration-issues)                                                                                    |
+| Network/connection issues                     | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems)                                                                                  |
+| Enum case mismatch                            | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md)                                                                                                             |
+| Custom forms / public forms                   | [FORMS_MODULE.md](./FORMS_MODULE.md)                                                                                                                     |
+| Documents / file management                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#documents-module)                                                                                              |
+| Meeting minutes / action items                | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meetings--minutes-module)                                                                                      |
+| Shift scheduling / calendar                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module)                                                                                             |
+| Shift templates / patterns                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-template-not-appearing-in-template-list)                                                                 |
+| Shift assignments / duty roster               | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-assignment-member-cant-confirm)                                                                          |
+| Shift swap requests                           | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-swap-request-denied-unexpectedly)                                                                        |
+| Time-off / availability                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#time-off-request-not-showing-in-availability)                                                                  |
+| Facilities / building management              | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#facilities-module)                                                                                             |
+| Facility maintenance                          | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#maintenance-scheduling-no-default-types)                                                                       |
+| Facility compliance / ADA                     | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#compliance-checklist-items-not-saving)                                                                         |
+| Reports / data export                         | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module)                                                                                                |
+| Notification rules / alerts                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module)                                                                                          |
+| Membership tiers / life member                | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing)                                                                     |
+| Voter override (secretary)                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote)                                                                  |
+| Proxy voting setup                            | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-setting-up-proxy-voting)                                                                                |
+| Secretary attendance dashboard                | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-secretary-attendance-dashboard)                                                                        |
+| Meeting attendance waivers                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-granting-an-attendance-waiver)                                                                         |
+| Auto-enrollment on conversion                 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-auto-enrollment-on-member-conversion)                                                                 |
+| Incident-based requirements                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-incident-based-requirements-calls-shifts-hours)                                                       |
+| Scheduled tasks / cron setup                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduled-tasks-setting-up-the-cron)                                                                           |
+| Membership tier config editor                 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-editing-tier-requirements)                                                                          |
+| Bulk voter overrides                          | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-bulk-voter-overrides)                                                                                   |
+| Meeting quorum config                         | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum)                                                                                    |
+| Peer skill eval sign-offs                     | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs)                                                          |
+| Skills testing / evaluations                  | [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) and [Skills Testing Guide](./training/09-skills-testing.md)                                     |
+| Skills testing without signal                 | [SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md) (scoping — not yet implemented)                                                       |
+| Cert expiration alerts                        | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline)                                                              |
+| Competency matrix dashboard                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard)                                                                |
+| Training calendar / booking                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention)                                                      |
+| Recruit school / multi-class course           | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#multi-class-courses--cohorts) and [Training Guide](./training/02-training.md#multi-class-courses--cohorts) |
+| Cohort vs. recurring session                  | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people)                                                                   |
+| Voting attendance requirements                | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance)                                                               |
+| Training exemptions by tier                   | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements)                                                       |
+| Drop notifications / CC config                | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md)                                                                                                         |
+| Email templates / customization               | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management)                                                                               |
+| Personal email / post-separation              | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email)                                                                                          |
+| Prospective members pipeline                  | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md)                                                                                         |
+| Inactivity timeouts / purging                 | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system)                                                               |
+| Meeting minutes / templates                   | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md)                                                                                                 |
+| Document management / folders                 | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module)                                                                                |
+| Department messages / announcements           | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md)                                                                                                   |
+| Department store / merch orders               | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md)                                                                                                           |
+| Store payment buttons (Venmo/Cash App/Zelle)  | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#payments)                                                                                                  |
+| Store emails: switches, previews, test sends  | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#notifications)                                                                                             |
+| Rewording a store email                       | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#wording-and-templates)                                                                                     |
+| PayPal store reconciliation                   | [STOREFRONT_PAYPAL.md](./STOREFRONT_PAYPAL.md)                                                                                                           |
+| Public API (forms, events)                    | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)                                                                                             |
+| Election security                             | [module-audit/elections.md](./module-audit/elections.md), [BALLOT_FORENSICS_GUIDE.md](../BALLOT_FORENSICS_GUIDE.md)                                      |
+| Events / recurring events / RSVP              | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues)                                                                                          |
+| Public outreach requests                      | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#public-outreach-request-pipeline-issues)                                                                       |
+| Public programs how-to                        | [wiki/Public-Programs.md](../wiki/Public-Programs.md)                                                                                                    |
+| TypeScript build errors                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#typescript-build-issues)                                                                                       |
+| TypeScript safeguards / `as any`              | [TYPESCRIPT_SAFEGUARDS.md](./TYPESCRIPT_SAFEGUARDS.md)                                                                                                   |
+| Async SQLAlchemy issues                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md), [backend/](./backend/)                                                                                       |
+| Security questions                            | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md)                                                                                                |
+| Multi-factor authentication (MFA / TOTP)      | [MFA.md](./MFA.md)                                                                                                                                       |
+| Shift scheduling / platoon rotations          | [SCHEDULING_MODULE.md](./SCHEDULING_MODULE.md)                                                                                                           |
+| Barcode label printing / network printers     | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md)                                                                                                   |
+| Printer faults / status read-back             | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md#status-flag-tables)                                                                                |
+| Shift roster / apparatus check sheet printing | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md#what-prints)                                                                                       |
+| Platoon scheduling — admin setup              | [PLATOON_SETUP.md](./PLATOON_SETUP.md)                                                                                                                   |
+| Known limitations / open decisions            | [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)                                                                                                           |
 
 ### By Error Message
 
@@ -688,6 +696,7 @@ docker-compose ps
 | ONBOARDING_FLOW.md             | 1.3     | 2026-06-25   | Current — login page guards against unconfigured installs, EMT operational rank, optional-module enabled-state visibility          |
 | DROP_NOTIFICATIONS.md          | 1.0     | 2026-02-14   | Current                                                                                                                            |
 | TYPESCRIPT_SAFEGUARDS.md       | 1.1     | 2026-02-14   | Current                                                                                                                            |
+| LABEL_PRINTING_MODULE.md       | 1.0     | 2026-08-24   | Current — flag tables verified against the ZPL II Programming Guide and Epson's ESC/POS reference                                  |
 
 ---
 

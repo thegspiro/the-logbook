@@ -8,7 +8,7 @@ import asyncio
 import copy
 import os
 import uuid as uuid_lib
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Optional
 from uuid import UUID
@@ -88,6 +88,7 @@ from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
+from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
 from app.utils.mime_validation import detect_mime_type
 
@@ -205,6 +206,7 @@ def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
         checked_in_at=rsvp.checked_in_at,
         checked_out_at=rsvp.checked_out_at,
         attendance_duration_minutes=rsvp.attendance_duration_minutes,
+        early_check_in_minutes=rsvp.early_check_in_minutes,
         override_check_in_at=rsvp.override_check_in_at,
         override_check_out_at=rsvp.override_check_out_at,
         override_duration_minutes=rsvp.override_duration_minutes,
@@ -220,6 +222,48 @@ def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
 # ============================================
 
 
+def _to_list_item(row: dict) -> EventListItem:
+    """Project one ``EventService.list_events`` row onto the list schema."""
+    event = row["event"]
+    return EventListItem(
+        id=event.id,
+        title=event.title,
+        description=event.description,
+        event_type=(
+            (
+                event.event_type.value
+                if hasattr(event.event_type, "value")
+                else event.event_type
+            )
+            if event.event_type
+            else "other"
+        ),
+        custom_category=event.custom_category,
+        start_datetime=event.start_datetime,
+        end_datetime=event.end_datetime,
+        location_id=event.location_id,
+        location=event.location,
+        location_name=event.location_obj.name if event.location_obj else None,
+        requires_rsvp=event.requires_rsvp,
+        is_mandatory=event.is_mandatory,
+        mandatory_membership_types=event.mandatory_membership_types,
+        is_draft=event.is_draft or False,
+        is_cancelled=event.is_cancelled,
+        is_recurring=event.is_recurring or False,
+        recurrence_parent_id=event.recurrence_parent_id,
+        rsvp_count=row["rsvp_count"],
+        going_count=row["going_count"],
+        user_rsvp_status=row["user_rsvp_status"],
+        rsvp_deadline=event.rsvp_deadline,
+        max_attendees=event.max_attendees,
+        check_in_opens_at=row["check_in_opens_at"],
+        check_in_closes_at=row["check_in_closes_at"],
+        user_attended=row["user_attended"],
+        credited_hours=row["credited_hours"],
+        hour_category_label=row["hour_category_label"],
+    )
+
+
 @router.get("", response_model=list[EventListItem])
 async def list_events(
     event_type: str | None = None,
@@ -231,6 +275,7 @@ async def list_events(
     end_before: datetime | None = None,
     include_cancelled: bool = False,
     include_drafts: bool = False,
+    mandatory_only: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -245,6 +290,9 @@ async def list_events(
 
     Use `end_after` to filter events that end on or after a given time
     (useful for showing only current and future events).
+
+    Use `mandatory_only` to narrow to mandatory events — the events list uses
+    it to find recent mandatory events the member never checked in to.
 
     **Authentication required**
     """
@@ -266,51 +314,42 @@ async def list_events(
         end_before=end_before,
         include_cancelled=include_cancelled,
         include_drafts=include_drafts,
+        mandatory_only=mandatory_only,
         skip=skip,
         limit=limit,
     )
 
-    event_list = []
-    for row in rows:
-        event = row["event"]
-        location_name = None
-        if event.location_obj:
-            location_name = event.location_obj.name
+    return [_to_list_item(row) for row in rows]
 
-        event_list.append(
-            EventListItem(
-                id=event.id,
-                title=event.title,
-                description=event.description,
-                event_type=(
-                    (
-                        event.event_type.value
-                        if hasattr(event.event_type, "value")
-                        else event.event_type
-                    )
-                    if event.event_type
-                    else "other"
-                ),
-                custom_category=event.custom_category,
-                start_datetime=event.start_datetime,
-                end_datetime=event.end_datetime,
-                location_id=event.location_id,
-                location=event.location,
-                location_name=location_name,
-                requires_rsvp=event.requires_rsvp,
-                is_mandatory=event.is_mandatory,
-                mandatory_membership_types=event.mandatory_membership_types,
-                is_draft=event.is_draft or False,
-                is_cancelled=event.is_cancelled,
-                is_recurring=event.is_recurring or False,
-                recurrence_parent_id=event.recurrence_parent_id,
-                rsvp_count=row["rsvp_count"],
-                going_count=row["going_count"],
-                user_rsvp_status=row["user_rsvp_status"],
-            )
-        )
 
-    return event_list
+@router.get("/missed-mandatory", response_model=list[EventListItem])
+async def list_missed_mandatory_events(
+    since_days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Recent mandatory events the caller was expected at and has no check-in for.
+
+    Narrower than `GET /events?mandatory_only=true&end_before=…` on purpose:
+    that one would also return events held before the member was hired, events
+    held during an approved leave of absence, and events mandatory only for a
+    membership type the member does not hold. The events list shows these under
+    a heading promising they "clear as you respond", and none of those three can
+    be cleared by responding — so the exclusion belongs on the server, where a
+    forgetful client cannot skip it.
+
+    **Authentication required**
+    """
+    now = datetime.now(dt_timezone.utc)
+    service = EventService(db)
+    rows = await service.list_missed_mandatory_events(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        since=now - timedelta(days=since_days),
+        until=now,
+    )
+    return [_to_list_item(row) for row in rows]
 
 
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
@@ -2781,23 +2820,45 @@ async def check_in_external_attendee(
 
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
+
+    # Resolved in the caller's organization rather than trusted from the path
+    # id. Both the link and the pipeline hook below need it.
+    event_result = await db.execute(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == current_user.organization_id,
+        )
+    )
+    event = event_result.scalar_one_or_none()
+
+    # A staff-entered attendee is never given a prospect_id when it is created,
+    # so without this the pipeline branch below could only ever fire for kiosk
+    # guests — and the kiosk already runs the hook itself. Resolving it here
+    # rather than at creation also covers rows staff entered earlier. Only an
+    # existing active prospect is linked: opening a new one is the kiosk's
+    # behaviour, gated on the event's guest_check_in_creates_prospect setting.
+    if not attendee.prospect_id and attendee.email:
+        prospect = await MembershipPipelineService(db).find_active_prospect_by_email(
+            current_user.organization_id, attendee.email
+        )
+        if prospect is not None:
+            attendee.prospect_id = prospect.id
+            # The same link the kiosk writes, for the same attendance. Setting
+            # prospect_id alone advanced the pipeline off a meeting that the
+            # applicant's linked-events section and the by-event applicant
+            # filter — both of which read prospect_event_links — went on
+            # reporting as never attended.
+            if event is not None:
+                await GuestCheckInService(db).link_prospect_to_event(prospect, event)
+
     await db.commit()
 
-    # Attendance is already durable before pipeline automation runs. Resolve
-    # the event in the caller's organization rather than trusting the path id
-    # alone, then let the shared attendance hook apply its type/category rules.
-    if attendee.prospect_id:
-        event_result = await db.execute(
-            select(Event).where(
-                Event.id == str(event_id),
-                Event.organization_id == current_user.organization_id,
-            )
+    # Attendance is already durable before pipeline automation runs; the hook
+    # applies its own type/category rules.
+    if attendee.prospect_id and event is not None:
+        await GuestCheckInService(db).try_advance_attendance_pipeline(
+            str(attendee.prospect_id), event
         )
-        event = event_result.scalar_one_or_none()
-        if event is not None:
-            await GuestCheckInService(db).try_advance_attendance_pipeline(
-                str(attendee.prospect_id), event
-            )
     return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
 
 

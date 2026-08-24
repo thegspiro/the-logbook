@@ -29,7 +29,7 @@ import InventoryMatchModal from './InventoryMatchModal';
 const match = (over: Record<string, unknown> = {}) => ({
   templateItemId: 'ti-1',
   itemName: '4x4 Gauze',
-  checkType: 'quantity',
+  checkType: 'count',
   suggestions: [{ id: 'inv-1', name: '4x4 Gauze', score: 1, confidence: 'exact' }],
   ...over,
 });

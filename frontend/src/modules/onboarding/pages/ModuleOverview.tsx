@@ -52,10 +52,17 @@ const ModuleOverview: React.FC = () => {
   const handleModuleAction = (moduleId: string, action: 'start' | 'skip' | 'ignore') => {
     const module = modules.find((m) => m.id === moduleId);
 
-    if (action === 'start' && module?.configRoute) {
-      // Save current state and navigate to module config
+    if (action === 'start') {
+      // Enable first, navigate second. A module with no config route used to
+      // fall through every branch here, so its Enable button did nothing at
+      // all: no status, no toast, and onboarding saved the module disabled
+      // while the administrator believed they had turned it on.
       setModuleStatus(moduleId, 'enabled');
-      void navigate(module.configRoute);
+      if (module?.configRoute) {
+        void navigate(module.configRoute);
+      } else {
+        toast.success(`${module?.name} enabled`);
+      }
     } else if (action === 'skip') {
       setModuleStatus(moduleId, 'skipped');
       toast.success(`${module?.name} marked as "Configure Later"`);
@@ -163,7 +170,7 @@ const ModuleOverview: React.FC = () => {
 
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-800">
               <Package aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Choose Your Modules</h1>
@@ -224,7 +231,7 @@ const ModuleOverview: React.FC = () => {
                   >
                     <div className="mb-4 flex items-start justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-800">
                           <Icon className="h-6 w-6 text-white" />
                         </div>
                         {status && getStatusIcon(status)}
@@ -240,6 +247,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
+                        aria-label={`Configure Now ${module.name}`}
                         className="btn-primary w-full font-medium"
                       >
                         Configure Now
@@ -247,12 +255,14 @@ const ModuleOverview: React.FC = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
+                          aria-label={`Later ${module.name}`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
+                          aria-label={`Disable ${module.name}`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Disable
@@ -299,6 +309,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
+                        aria-label={`Configure Now ${module.name}`}
                         className="btn-info w-full font-medium"
                       >
                         Configure Now
@@ -306,12 +317,14 @@ const ModuleOverview: React.FC = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
+                          aria-label={`Skip For Now ${module.name}`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Skip For Now
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
+                          aria-label={`Ignore ${module.name}`}
                           className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Ignore
@@ -358,6 +371,7 @@ const ModuleOverview: React.FC = () => {
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
                         aria-pressed={isEnabled}
+                        aria-label={`${isEnabled ? 'Enabled' : 'Enable'} ${module.name}`}
                         className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           isEnabled
                             ? 'bg-green-600 text-white hover:bg-green-700'
@@ -375,6 +389,7 @@ const ModuleOverview: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleModuleAction(module.id, 'ignore')}
+                        aria-label={`Skip ${module.name}`}
                         className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted w-full rounded-lg px-3 py-2 text-xs transition-colors"
                       >
                         Skip

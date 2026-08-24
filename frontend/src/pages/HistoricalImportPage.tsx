@@ -86,7 +86,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
                   isComplete
                     ? 'bg-green-600 text-white'
                     : isCurrent
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'bg-theme-surface-hover text-theme-text-muted'
                 }`}
                 aria-current={isCurrent ? 'step' : undefined}

@@ -10,6 +10,7 @@ import type { EventListItem } from '../types/event';
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
+    getMissedMandatoryEvents: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi
       .fn()
       .mockResolvedValue([
@@ -152,6 +153,49 @@ describe('EventsPage', () => {
     });
   });
 
+  describe('Live event announcement', () => {
+    it('mounts the live region even when nothing is happening', async () => {
+      // The region has to exist *before* a check-in window opens, or the text
+      // that appears in it is never announced.
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+
+      const region = screen.getByRole('status');
+      expect(region).toHaveAttribute('aria-live', 'polite');
+      expect(region).toBeEmptyDOMElement();
+    });
+
+    it('announces an event whose check-in window is open', async () => {
+      const now = Date.now();
+      const live: EventListItem = {
+        id: 'evt-live',
+        title: 'Ladder Company Drill',
+        event_type: 'training',
+        start_datetime: new Date(now - 3_600_000).toISOString(),
+        end_datetime: new Date(now + 3_600_000).toISOString(),
+        check_in_opens_at: new Date(now - 7_200_000).toISOString(),
+        check_in_closes_at: new Date(now + 3_600_000).toISOString(),
+        requires_rsvp: true,
+        is_mandatory: false,
+        is_cancelled: false,
+      };
+      vi.mocked(eventService.getEvents).mockResolvedValue([live]);
+
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Ladder Company Drill is happening now. Check-in is open.'
+        );
+      });
+    });
+  });
+
   describe('Events List', () => {
     it('should display all events', async () => {
       vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
@@ -242,9 +286,11 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /all events/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /business meeting/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /training/i })).toBeInTheDocument();
+        // Anchored: an event card's "Add <title> to calendar" button also
+        // carries the type name, so a loose matcher now finds two elements.
+        expect(screen.getByRole('button', { name: /^all events$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^business meeting$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^training$/i })).toBeInTheDocument();
       });
     });
 

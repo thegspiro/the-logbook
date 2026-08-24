@@ -83,7 +83,7 @@ const ExpenseReportsPage: React.FC = () => {
         </div>
         <Link
           to="/finance/expenses/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
         >
           <Plus className="h-4 w-4" />
           New Expense Report
@@ -107,7 +107,7 @@ const ExpenseReportsPage: React.FC = () => {
             onClick={() => setStatusFilter(tab.value)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === tab.value
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >

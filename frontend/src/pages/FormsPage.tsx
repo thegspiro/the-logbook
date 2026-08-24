@@ -366,7 +366,7 @@ const FormsPage: React.FC = () => {
         {/* Page Header */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <FormInput className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -453,7 +453,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'forms'}
             className={`min-h-11 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'forms' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'forms' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             My Forms
@@ -464,7 +464,7 @@ const FormsPage: React.FC = () => {
             aria-selected={activeTab === 'templates'}
             className={`min-h-11 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'templates'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
@@ -476,7 +476,7 @@ const FormsPage: React.FC = () => {
             aria-selected={activeTab === 'submissions'}
             className={`min-h-11 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'submissions'
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-800 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
@@ -849,7 +849,7 @@ const FormsPage: React.FC = () => {
                     onClick={() => setSubmissionsView('list')}
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       submissionsView === 'list'
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-red-800 text-white'
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
@@ -859,7 +859,7 @@ const FormsPage: React.FC = () => {
                     onClick={() => setSubmissionsView('results')}
                     className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       submissionsView === 'results'
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-red-800 text-white'
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
@@ -938,7 +938,7 @@ const FormsPage: React.FC = () => {
                   aria-selected={detailTab === 'builder'}
                   className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                     detailTab === 'builder'
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -950,7 +950,7 @@ const FormsPage: React.FC = () => {
                   aria-selected={detailTab === 'preview'}
                   className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                     detailTab === 'preview'
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -962,7 +962,7 @@ const FormsPage: React.FC = () => {
                   aria-selected={detailTab === 'submissions'}
                   className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                     detailTab === 'submissions'
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -974,7 +974,7 @@ const FormsPage: React.FC = () => {
                   aria-selected={detailTab === 'results'}
                   className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                     detailTab === 'results'
-                      ? 'bg-red-600 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >

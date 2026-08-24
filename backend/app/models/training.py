@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -324,6 +325,10 @@ class TrainingRecord(Base):
     scheduled_date = Column(Date)
     completion_date = Column(Date)
     expiration_date = Column(Date)
+    # Time of day the training ran. Nullable: rows predating self-report's
+    # start-time field, and every record entered from a roster rather than a
+    # clock, genuinely do not have one.
+    start_time = Column(Time)
 
     # Hours and Credits
     hours_completed = Column(Float, nullable=False)
@@ -2378,6 +2383,10 @@ class TrainingSubmission(Base):
 
     # Dates and Hours
     completion_date = Column(Date, nullable=False)
+    # The member reports a start time and a length; hours are derived from the
+    # pair. Keeping the start means the officer sees when the class ran, and
+    # an edit does not have to invent one.
+    start_time = Column(Time)
     hours_completed = Column(Float, nullable=False)
     credit_hours = Column(Float)
 
@@ -3471,6 +3480,111 @@ class ShiftTimeOff(Base):
 
 
 # ============================================
+# Standing Shift Claim (recurring member self-signup)
+# ============================================
+
+
+class StandingShiftPattern(str, enum.Enum):
+    """How often a standing shift claim repeats."""
+
+    WEEKLY = "weekly"
+    BIWEEKLY = "biweekly"
+    MONTHLY = "monthly"
+
+
+class StandingShiftPeriod(str, enum.Enum):
+    """Which half of the day a standing claim targets.
+
+    Departments define their own templates and times, so a claim cannot name
+    one; it names the half of the day it wants and the series matches whatever
+    shift starts in that window. ``DAY`` is a local start time before noon,
+    ``NIGHT`` is noon or later.
+    """
+
+    DAY = "day"
+    NIGHT = "night"
+
+
+class StandingShiftClaim(Base):
+    """A member's recurring claim on a shift — "every Tuesday night".
+
+    This is a *member's* commitment, not a department schedule: shift patterns
+    (``ShiftPattern``) generate the shifts, and a standing claim seats one
+    member on the ones that match it. Giving up a single date leaves the claim
+    intact, which is the whole point of storing it rather than just writing
+    the assignments once.
+
+    The claim is read in two places, and both must exist for it to mean
+    anything: creating one seats the member on the matching shifts that
+    already exist, and creating a *shift* seats the members whose active
+    claims match it.
+    """
+
+    __tablename__ = "standing_shift_claims"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    pattern = Column(
+        Enum(StandingShiftPattern, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=StandingShiftPattern.WEEKLY,
+        server_default="weekly",
+    )
+    # 0 = Sunday … 6 = Saturday, matching the weekday picker the member sees
+    # (S M T W T F S) rather than Python's Monday-first convention.
+    weekday = Column(Integer, nullable=False)
+    period = Column(
+        Enum(StandingShiftPeriod, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=StandingShiftPeriod.DAY,
+        server_default="day",
+    )
+    position = Column(
+        Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ShiftPosition.FIREFIGHTER,
+        server_default="firefighter",
+    )
+    # Optional narrowing to one unit. NULL means "whichever shift runs in that
+    # window", which is the right default for a single-apparatus department.
+    apparatus_id = Column(String(36), nullable=True)
+
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_standing_claim_org", "organization_id"),
+        Index("idx_standing_claim_user", "user_id"),
+        # The shift-creation reader looks up active claims by org and weekday.
+        Index("idx_standing_claim_lookup", "organization_id", "is_active", "weekday"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<StandingShiftClaim(user={self.user_id}, {self.pattern} "
+            f"weekday={self.weekday} {self.period})>"
+        )
+
+
+# ============================================
 # Basic Apparatus (Lightweight, for non-module departments)
 # ============================================
 
@@ -4350,6 +4464,11 @@ class ShiftEquipmentCheck(Base):
         back_populates="check",
         cascade="all, delete-orphan",
     )
+    seals = relationship(
+        "ShiftEquipmentCheckSeal",
+        back_populates="check",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -4443,3 +4562,56 @@ class ShiftEquipmentCheckItem(Base):
         Index("idx_shift_equip_check_item_check", "check_id"),
         Index("idx_shift_equip_check_item_tmpl", "template_item_id"),
     )
+
+
+class ShiftEquipmentCheckSeal(Base):
+    """
+    The tamper seal a crew read on one sealed container during a check.
+
+    A seal that still carries the number from the last count is proof nobody
+    opened the bag, which is why confirming it clears the contents count in a
+    tap. The record is what makes that claim auditable afterwards: the number
+    read, whether it was intact, and how many positions the crew therefore did
+    not count by hand. Without those, a cleared bag is indistinguishable from
+    one nobody looked at.
+
+    The compartment name is snapshotted for the same reason item results are:
+    the template may be renamed or restructured, and the record has to keep
+    saying which bag was sealed.
+    """
+
+    __tablename__ = "shift_equipment_check_seals"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    check_id = Column(
+        String(36),
+        ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    template_compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Full nested storage paths may exceed the per-compartment name limit.
+    compartment_name = Column(Text, nullable=False)
+    seal_number = Column(String(100), nullable=True)
+    intact = Column(Boolean, default=True, nullable=False, server_default="1")
+    #: Positions the seal cleared rather than the crew counting them.
+    cleared_item_count = Column(Integer, nullable=False, default=0, server_default="0")
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    check = relationship("ShiftEquipmentCheck", back_populates="seals")
+
+    __table_args__ = (
+        Index("idx_shift_equip_check_seal_check", "check_id"),
+        Index("idx_shift_equip_check_seal_compartment", "template_compartment_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ShiftEquipmentCheckSeal(compartment={self.compartment_name}, "
+            f"intact={self.intact})>"
+        )

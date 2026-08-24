@@ -9,18 +9,101 @@
 // Check Type & Template Type Enums
 // ============================================================================
 
+/**
+ * The four answer shapes a check item can have, plus the two structural rows.
+ *
+ * A check stores exactly one of four things: a number, a pass/fail, a
+ * quantity, or a date. The type decides the control, the pass rule, and what
+ * the record keeps — so an admin building a checklist picks a type, not a
+ * layout.
+ *
+ * `HEADER` and `TEXT` are deliberately outside the four. They are not checks;
+ * they *are* the layout, which is the thing a type is no longer allowed to be.
+ *
+ * Mirrors `backend/app/utils/check_types.py`, which is the write-side
+ * authority. Legacy values are normalized there before storage, so a stored
+ * row reaching this file is already canonical — `normalizeCheckType` exists
+ * for the read boundary, where a response may still be served from a client
+ * that has not been redeployed.
+ */
 export const CheckType = {
-  PASS_FAIL: 'pass_fail',
-  PRESENT: 'present',
-  FUNCTIONAL: 'functional',
-  QUANTITY: 'quantity',
+  /** A reading against a threshold. Stores a number, and keeps it, so the
+   *  trend over shifts stays visible. O2, fuel, coolant, battery volts. */
   LEVEL: 'level',
-  DATE_LOT: 'date_lot',
-  READING: 'reading',
-  TEXT: 'text',
+  /** Something switched on and watched. Stores pass/fail. Suction, lights and
+   *  siren, radio, monitor, powered cot. */
+  FUNCTION: 'function',
+  /** A par level to match. Stores a quantity. Short of par is a restock line,
+   *  not a failure. */
+  COUNT: 'count',
+  /** A date on record, confirmed rather than retyped. Medications, IV fluids,
+   *  AED pads, extinguisher inspection. */
+  EXPIRY: 'expiry',
+  /** Structural: a section heading. Not a check. */
   HEADER: 'header',
+  /** Structural: a statement the crew reads. Not a check. */
+  TEXT: 'text',
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
+
+/** The four that actually store an answer, in walking order of the design. */
+export const CANONICAL_CHECK_TYPES = [CheckType.LEVEL, CheckType.FUNCTION, CheckType.COUNT, CheckType.EXPIRY] as const;
+export type CanonicalCheckType = (typeof CANONICAL_CHECK_TYPES)[number];
+
+/** Rows that are layout rather than a question. */
+export const STRUCTURAL_CHECK_TYPES = [CheckType.HEADER, CheckType.TEXT] as const;
+
+/**
+ * Pre-2026-08-23 values, which stored the same four answers under nine names.
+ * `present` and `functional` both stored pass/fail and differed only in what
+ * the crew was asked to do — a sentence on the item, not a column.
+ */
+const LEGACY_CHECK_TYPES: Record<string, CheckType> = {
+  pass_fail: CheckType.FUNCTION,
+  present: CheckType.FUNCTION,
+  functional: CheckType.FUNCTION,
+  reading: CheckType.LEVEL,
+  level: CheckType.LEVEL,
+  quantity: CheckType.COUNT,
+  date_lot: CheckType.EXPIRY,
+};
+
+const CANONICAL_SET = new Set<string>([...CANONICAL_CHECK_TYPES, ...STRUCTURAL_CHECK_TYPES]);
+
+/**
+ * Resolve any stored or received value to a canonical type.
+ *
+ * An unrecognised value reads as `function`: it asks the crew to look at the
+ * thing and say whether it is right, which is answerable for any item.
+ * `count` or `expiry` would invent a par level or a date nobody set, and
+ * `level` would draw a threshold control with no threshold behind it.
+ */
+export function normalizeCheckType(value?: string | null): CheckType {
+  const key = (value ?? '').trim().toLowerCase();
+  if (CANONICAL_SET.has(key)) return key as CheckType;
+  return LEGACY_CHECK_TYPES[key] ?? CheckType.FUNCTION;
+}
+
+/**
+ * Whole days from `today` to `date`, or null when there is no usable date.
+ *
+ * Lives here rather than beside the expiry control because a file that exports
+ * both components and functions loses fast refresh, and because "how many days
+ * until this expires" is a question the reports and the badges ask too.
+ */
+export function daysUntil(date: string | null | undefined, today: Date): number | null {
+  if (!date) return null;
+  const target = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return null;
+  const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((target.getTime() - midnight.getTime()) / 86_400_000);
+}
+
+/** True when the row is an actual check rather than layout. */
+export function isCheckType(value?: string | null): boolean {
+  const normalized = normalizeCheckType(value);
+  return (CANONICAL_CHECK_TYPES as readonly string[]).includes(normalized);
+}
 
 export const TemplateType = {
   EQUIPMENT: 'equipment',
@@ -30,15 +113,20 @@ export const TemplateType = {
 export type TemplateType = (typeof TemplateType)[keyof typeof TemplateType];
 
 export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
-  pass_fail: 'Pass / Fail',
-  present: 'Present',
-  functional: 'Functional',
-  quantity: 'Quantity',
   level: 'Level',
-  date_lot: 'Date / Lot',
-  reading: 'Reading',
+  function: 'Function',
+  count: 'Count',
+  expiry: 'Expiry',
   text: 'Statement',
   header: 'Section Header',
+};
+
+/** What each type stores — shown beside the name so the choice is legible. */
+export const CHECK_TYPE_STORES: Record<CanonicalCheckType, string> = {
+  level: 'stores a number',
+  function: 'stores pass / fail',
+  count: 'stores a quantity',
+  expiry: 'stores a date',
 };
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
@@ -230,6 +318,14 @@ export interface CheckTemplateCompartment {
   imageUrl?: string;
   isHeader?: boolean;
   containerType?: string;
+  /**
+   * This container is closed with a numbered tamper seal — a drug bag, a
+   * trauma kit. A seal matching the last count is proof nothing inside was
+   * touched, so on the check form it clears the contents count in one tap and
+   * leaves only what a seal cannot vouch for: expiry dates and readings, which
+   * move on their own while the bag sits shut.
+   */
+  isSealed?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -243,6 +339,7 @@ export interface CheckTemplateCompartmentCreate {
   image_url?: string | undefined;
   is_header?: boolean | undefined;
   container_type?: string | undefined;
+  is_sealed?: boolean | undefined;
   parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
@@ -254,6 +351,7 @@ export interface CheckTemplateCompartmentUpdate {
   image_url?: string | undefined;
   is_header?: boolean | undefined;
   container_type?: string | undefined;
+  is_sealed?: boolean | undefined;
   parent_compartment_id?: string | undefined;
 }
 
@@ -353,11 +451,28 @@ export interface CheckItemResultSubmit {
   notes?: string | undefined;
 }
 
+/**
+ * The tamper seal a crew read on one sealed container.
+ *
+ * Submitted whether or not the seal cleared anything: a broken seal is the
+ * more important of the two records, because it is what says the contents were
+ * counted by hand and why.
+ */
+export interface CheckSealSubmit {
+  template_compartment_id: string;
+  compartment_name: string;
+  seal_number?: string | undefined;
+  intact: boolean;
+  cleared_item_count: number;
+  notes?: string | undefined;
+}
+
 export interface ShiftEquipmentCheckCreate {
   template_id: string;
   check_timing: string;
   client_submission_id?: string | undefined;
   items: CheckItemResultSubmit[];
+  seals?: CheckSealSubmit[] | undefined;
   notes?: string | undefined;
   signature_data?: string | undefined;
 }
@@ -367,6 +482,7 @@ export interface StandaloneEquipmentCheckCreate {
   apparatus_id?: string | undefined;
   check_timing: string;
   items: CheckItemResultSubmit[];
+  seals?: CheckSealSubmit[] | undefined;
   notes?: string | undefined;
   signature_data?: string | undefined;
 }
@@ -464,6 +580,18 @@ export interface LastCheckItemResult {
   lot_number?: string;
   expiration_date?: string;
   notes?: string;
+}
+
+/**
+ * What the previous crew read on one sealed container.
+ *
+ * The form compares the number in front of the crew against this one: equal
+ * means nothing was opened since, which is what the shortcut rests on.
+ */
+export interface LastSealRecord {
+  sealNumber?: string | null;
+  intact: boolean;
+  checkedAt?: string | null;
 }
 
 // ─── Report Types ────────────────────────────────────────────────────────────
@@ -674,6 +802,20 @@ export interface ItemDeployment {
   isExpired: boolean;
 }
 
+/**
+ * What became of a unit taken off the apparatus for being expired.
+ *
+ * Departments differ — destroyed on the spot, handed straight back to the
+ * supplying pharmacy, or pulled off the truck for somebody to exchange days
+ * later — so the crew reports it rather than the application assuming it.
+ */
+export const ExpiredStockDisposition = {
+  DISCARDED: 'discarded',
+  RETURNED_FOR_EXCHANGE: 'returned_for_exchange',
+  AWAITING_EXCHANGE: 'awaiting_exchange',
+} as const;
+export type ExpiredStockDisposition = (typeof ExpiredStockDisposition)[keyof typeof ExpiredStockDisposition];
+
 export interface LotSwapResult {
   templateItemId: string;
   lotNumber?: string;
@@ -682,6 +824,14 @@ export interface LotSwapResult {
   /** A full restock settles the report; a partial one leaves it standing. */
   restockNeeded?: boolean;
   quantityOnTruck?: number;
+  /**
+   * The position's lots after the swap. A position holding several lots is
+   * exposed by the earliest of them, so this — not the scalar expirationDate,
+   * which describes only the incoming unit — is what settles its verdict.
+   */
+  lotsAboard?: DeployedLot[];
+  replacedLotNumber?: string;
+  disposition?: ExpiredStockDisposition;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────

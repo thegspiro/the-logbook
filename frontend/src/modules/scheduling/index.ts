@@ -24,6 +24,7 @@ export type {
   MemberComplianceRecord,
   RequirementComplianceSummary,
   ActiveChecklistRecord,
+  ShiftRosterSeat,
 } from './services/api';
 
 // Request/Input Types
@@ -55,7 +56,18 @@ export type {
   CallVolumeReportEntry,
   AvailabilityRecord,
   ShiftSignupResponse,
+  TradeCandidate,
+  StandingShiftClaim,
+  StandingShiftCreate,
+  StandingShiftCreateResult,
+  StandingShiftPreview,
+  StandingShiftPreviewDate,
+  StandingShiftPreviewParams,
+  StandingShiftDateStatus,
 } from './types';
+
+// Standing shift enums (value objects, not types)
+export { StandingShiftPattern, StandingShiftPeriod } from './types';
 
 // Equipment Check Types
 export type {

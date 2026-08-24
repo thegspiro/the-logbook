@@ -35,7 +35,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({ steps, currentStep
                     isComplete
                       ? 'bg-green-600 text-white'
                       : isCurrent
-                        ? 'bg-red-600 text-white ring-2 ring-red-600 ring-offset-2 ring-offset-(--surface-bg)'
+                        ? 'bg-red-800 text-white ring-2 ring-red-600 ring-offset-2 ring-offset-(--surface-bg)'
                         : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border'
                   }`}
                   aria-current={isCurrent ? 'step' : undefined}
@@ -72,7 +72,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({ steps, currentStep
         </div>
         <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
           <div
-            className="h-2 rounded-full bg-red-600 transition-all"
+            className="h-2 rounded-full bg-red-800 transition-all"
             style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
           />
         </div>

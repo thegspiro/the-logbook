@@ -114,7 +114,7 @@ export const ApparatusListPage: React.FC = () => {
         <div className="mx-auto max-w-7xl">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center space-x-3">
-              <div className="shrink-0 rounded-lg bg-red-600 p-2">
+              <div className="shrink-0 rounded-lg bg-red-800 p-2">
                 <Truck className="h-6 w-6 text-white" />
               </div>
               <div className="min-w-0">
@@ -220,7 +220,7 @@ export const ApparatusListPage: React.FC = () => {
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors max-md:min-h-[44px] ${
                 showFilters
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
@@ -413,7 +413,7 @@ export const ApparatusListPage: React.FC = () => {
                         >
                           <td className="px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="flex items-center">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600 font-bold text-white">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800 font-bold text-white">
                                 {/* Unit numbers are hyphenated ("E-1", "B-5"), so a
                                     blind two-character prefix renders "E-", "B-" —
                                     the separator, not the number. Drop the
@@ -553,7 +553,7 @@ export const ApparatusListPage: React.FC = () => {
                         onClick={() => handlePageChange(pageNum)}
                         className={`h-10 min-w-[40px] rounded-lg text-sm font-medium transition-colors ${
                           currentPage === pageNum
-                            ? 'bg-red-600 text-white'
+                            ? 'bg-red-800 text-white'
                             : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                         }`}
                       >

@@ -180,7 +180,7 @@ const IPSecurityAdminPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-800 p-2">
               <Shield className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -373,7 +373,7 @@ const IPSecurityAdminPage: React.FC = () => {
                   void handleReject();
                 }}
                 disabled={isSaving || !rejectionReason.trim()}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
               >
                 {isSaving ? 'Rejecting...' : 'Reject'}
               </button>

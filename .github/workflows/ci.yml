@@ -14,19 +14,30 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Superseded PR pushes are cancelled; a main run that has started is never
-  # cancelled, so two merges in quick succession both keep their record of
-  # whether that commit was green.
+  # PR pushes share a group per ref, so a superseded push is cancelled. Every
+  # commit on main gets a group of its own, so every main commit ends up with
+  # a CI record. Matches secret-scan and supply-chain.
   #
-  # Precisely: GitHub keeps at most one running and one *pending* run per
-  # group, so with three or more main runs overlapping, the middle one can
-  # still be evicted from the pending slot before it starts. secret-scan and
-  # supply-chain key main runs on the SHA to close that gap, because an audit
-  # record has to exist for every commit. It is left open here on purpose —
-  # per-commit groups would run the full 12-job matrix concurrently for every
-  # commit of a merge train, and on this repository CI throughput is the
-  # constraint being managed, not the audit trail.
+  # `cancel-in-progress: false` is NOT enough on its own, which is what this
+  # used to rely on. GitHub keeps at most one running and one *pending* run
+  # per group, so when three or more main runs overlap each new arrival evicts
+  # the pending one and that commit is never built. That is not theoretical:
+  # on 2026-08-23, 8c61c948 (#1709) merged to main and its run was evicted by
+  # the next merge 17 seconds later, leaving that commit with no CI record at
+  # all. Keying on the SHA gives each commit its own group, where there is
+  # nothing to evict it from.
+  #
+  # The cost is real and was accepted deliberately: a merge train of N commits
+  # now runs N full 13-job matrices concurrently instead of collapsing to two.
+  # That competes with PR runs for the same runner pool, so PR latency is the
+  # thing to watch. If it degrades, the fix is to make main's run cheaper (a
+  # reduced job set whose only purpose is the record) rather than to go back
+  # to a shared group — a gap in the record is not recoverable after the fact,
+  # and the 2026-08-23 incident is what it costs.
+  #
+  # `cancel-in-progress` still governs PR refs; for main it is now moot, since
+  # a per-commit group only ever holds one run.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
@@ -280,7 +291,9 @@ jobs:
           pytest tests/ \
             -m "not integration and not slow and not docker" \
             -v --tb=short \
-            --cov=app --cov-fail-under=51
+            --junitxml=reports/junit-unit.xml \
+            --cov=app --cov-report=term --cov-report=xml:reports/coverage.xml \
+            --cov-fail-under=51
 
       # The whole-app number above is structurally optimistic. app/models and
       # app/schemas are 25.8% of the denominator and sit at ~97%, but they are
@@ -301,6 +314,24 @@ jobs:
           coverage report \
             --include="app/api/*,app/services/*,app/core/*,app/utils/*" \
             --fail-under=35
+
+      # `!cancelled()` rather than `always()`: a cancelled run has nothing worth
+      # summarizing, but a FAILED one is exactly when this matters most.
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Backend Unit Tests" \
+            reports/junit-unit.xml
+
+      - name: Upload test reports
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-unit-reports
+          path: backend/reports/
+          retention-days: 7
+          if-no-files-found: warn
 
       # docs/DATABASE_SCHEMA.md is GENERATED from app/models/, and on a fresh
       # install those models *are* the schema — main.py's _fast_path_init()
@@ -371,8 +402,10 @@ jobs:
         db:
           - name: MySQL 8.0
             image: mysql:8.0
+            slug: mysql-8-0
           - name: MariaDB 10.11
             image: mariadb:10.11
+            slug: mariadb-10-11
     services:
       mysql:
         image: ${{ matrix.db.image }}
@@ -493,7 +526,24 @@ jobs:
           pytest tests/ \
             -m "integration and not docker and not slow" \
             -v --tb=short \
+            --junitxml=reports/junit-integration.xml \
             --cov=app
+
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Backend Integration Tests (${{ matrix.db.name }})" \
+            reports/junit-integration.xml
+
+      - name: Upload test reports
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-integration-reports-${{ matrix.db.slug }}
+          path: backend/reports/
+          retention-days: 7
+          if-no-files-found: warn
 
   backend-test-contract:
     name: Backend API Contract Tests (${{ matrix.db.name }})
@@ -531,8 +581,10 @@ jobs:
         db:
           - name: MySQL 8.0
             image: mysql:8.0
+            slug: mysql-8-0
           - name: MariaDB 10.11
             image: mariadb:10.11
+            slug: mariadb-10-11
     services:
       mysql:
         image: ${{ matrix.db.image }}
@@ -595,7 +647,24 @@ jobs:
         run: |
           pytest tests/test_api_contract.py \
             -v --tb=short \
+            --junitxml=reports/junit-contract.xml \
             --timeout=300
+
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Backend API Contract Tests (${{ matrix.db.name }})" \
+            reports/junit-contract.xml
+
+      - name: Upload test reports
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-contract-reports-${{ matrix.db.slug }}
+          path: backend/reports/
+          retention-days: 7
+          if-no-files-found: warn
 
   # ──────────────────────────────────────────────
   # Containers
@@ -653,7 +722,24 @@ jobs:
           pytest tests/test_docker_integration.py \
             -m docker \
             -v --tb=short \
+            --junitxml=reports/junit-docker.xml \
             --timeout=1800
+
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Container Integration Tests" \
+            reports/junit-docker.xml
+
+      - name: Upload test reports
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-test-reports
+          path: backend/reports/
+          retention-days: 7
+          if-no-files-found: warn
 
   # ──────────────────────────────────────────────
   # Frontend
@@ -732,8 +818,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # `--outputFile.junit=` (not `--outputFile=`) is required once more than
+      # one reporter is configured; with the bare form vitest has no idea which
+      # reporter the path belongs to.
       - name: Run tests with coverage
-        run: npx vitest run --coverage
+        run: |
+          npx vitest run --coverage \
+            --reporter=default --reporter=junit \
+            --outputFile.junit=reports/junit-frontend.xml
+
+      - name: Summarize test results
+        if: "!cancelled()"
+        run: |
+          python3 "$GITHUB_WORKSPACE/scripts/junit_summary.py" \
+            --title "Frontend Tests" \
+            reports/junit-frontend.xml
+
+      - name: Upload test reports
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-reports
+          # lcov.info only, not the whole coverage/ directory: that is 107 MB,
+          # 90 MB of which is a browsable HTML report and a copy of the sources,
+          # regenerable from this file and uploaded on every single run. lcov is
+          # what a diff-coverage tool reads, which is the point of keeping it.
+          path: |
+            frontend/reports/
+            frontend/coverage/lcov.info
+          retention-days: 7
+          if-no-files-found: warn
 
   frontend-e2e:
     name: Frontend E2E (Playwright)

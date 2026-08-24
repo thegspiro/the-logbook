@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**248 tables · 4259 columns · 806 foreign keys**
+**253 tables · 4330 columns · 817 foreign keys**
 
 ---
 
@@ -42,6 +42,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 ---
 
 ## Table index
+
+### Admin_Hub
+
+<sub>`app/models/admin_hub.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`admin_hub_metric_preferences`](#admin_hub_metric_preferences) | `AdminHubMetricPreference` | 9 | Which three metrics a module's admin page shows, per scope. |
 
 ### Administrative Hours
 
@@ -87,7 +95,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_statuses`](#apparatus_statuses) | `ApparatusStatus` | 17 | Apparatus Status model for tracking vehicle availability |
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
 | [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
-| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 11 | A named section/area within a checklist template. |
+| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 12 | A named section/area within a checklist template. |
 | [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 27 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_requests`](#equipment_check_bulk_requests) | `EquipmentCheckBulkRequest` | 7 | Durable idempotency ledger for atomic template-item batches. |
@@ -162,7 +170,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`email_attachments`](#email_attachments) | `EmailAttachment` | 8 | Stored attachment that can be included with email templates. |
-| [`email_templates`](#email_templates) | `EmailTemplate` | 19 | Configurable email template stored in the database. |
+| [`email_templates`](#email_templates) | `EmailTemplate` | 22 | Configurable email template stored in the database. |
 | [`message_history`](#message_history) | `MessageHistory` | 12 | Log of every email sent by the application. |
 | [`scheduled_emails`](#scheduled_emails) | `ScheduledEmail` | 15 | An email scheduled to be sent at a future date/time. |
 
@@ -191,7 +199,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
-| [`event_rsvps`](#event_rsvps) | `EventRSVP` | 20 | Event RSVP model for tracking attendance |
+| [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 28 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 50 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
@@ -327,6 +335,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
+### Label_Printer
+
+<sub>`app/models/label_printer.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`label_printers`](#label_printers) | `LabelPrinter` | 17 | A ZPL-capable network label printer belonging to an organization. |
+
 ### Legal
 
 <sub>`app/models/legal.py`</sub>
@@ -388,6 +404,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
 | [`prospective_members`](#prospective_members) | `ProspectiveMember` | 29 | Prospective member record, kept separate from the users table. |
+
+### Nfc_Tag
+
+<sub>`app/models/nfc_tag.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`nfc_tags`](#nfc_tags) | `NfcTag` | 15 | An NFC credential (ID card) issued to a member. |
 
 ### Notifications
 
@@ -514,6 +538,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
 | [`shift_completion_reports`](#shift_completion_reports) | `ShiftCompletionReport` | 28 | Shift Completion Report model |
 | [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 23 | Individual item result within a completed equipment check. |
+| [`shift_equipment_check_seals`](#shift_equipment_check_seals) | `ShiftEquipmentCheckSeal` | 9 | The tamper seal a crew read on one sealed container during a check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
@@ -522,16 +547,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shifts`](#shifts) | `Shift` | 29 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
+| [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
 | [`training_courses`](#training_courses) | `TrainingCourse` | 19 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
-| [`training_records`](#training_records) | `TrainingRecord` | 37 | Training Record model |
+| [`training_records`](#training_records) | `TrainingRecord` | 38 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 42 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
-| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 24 | Training Submission model |
+| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
 | [`xapi_statements`](#xapi_statements) | `XAPIStatement` | 27 | xAPI (Experience API / Tin Can) Statement model |
 
@@ -553,6 +579,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 ---
 
 ## Tables
+
+## Admin_Hub
+
+### `admin_hub_metric_preferences`
+
+**AdminHubMetricPreference** · `app/models/admin_hub.py`
+
+> Which three metrics a module's admin page shows, per scope.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `module_key` | VARCHAR(50) | no |  |  |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE CASCADE |
+| `scope_key` | VARCHAR(36) | no |  | `__department__` |  |
+| `metric_keys` | JSON | no |  |  |  |
+| `applies_to_everyone` | BOOL | no |  | `1` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_admin_hub_metric_pref_org_module` (`organization_id`, `module_key`)
+- `ix_admin_hub_metric_preferences_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_admin_hub_metric_pref_scope` (`organization_id`, `module_key`, `scope_key`)
 
 ## Administrative Hours
 
@@ -599,7 +654,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `clock_out_at` | DATETIME | yes |  |  |  |
 | `duration_minutes` | INTEGER | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `entry_method` | ENUM(`qr_scan`, `manual`, `event_attendance`) | no |  | `'manual'` |  |
+| `entry_method` | ENUM(`qr_scan`, `nfc_station`, `manual`, `event_attendance`) | no |  | `'manual'` |  |
 | `source_event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `source_rsvp_id` | VARCHAR(36) | yes | FK, IDX |  | → `event_rsvps.id` ON DELETE SET NULL |
 | `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `active` |  |
@@ -1433,6 +1488,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_header` | BOOL | no |  | `0` |  |
 | `container_type` | VARCHAR(50) | no |  | `compartment` |  |
 | `parent_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE SET NULL |
+| `is_sealed` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -2222,6 +2278,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `text_body` | TEXT | yes |  |  |  |
 | `css_styles` | TEXT | yes |  |  |  |
 | `footer_key` | VARCHAR(32) | yes |  |  |  |
+| `header_accent` | VARCHAR(7) | yes |  |  |  |
+| `status_chip` | VARCHAR(40) | yes |  |  |  |
+| `layout` | VARCHAR(16) | yes |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `allow_attachments` | BOOL | no |  | `0` |  |
 | `default_cc` | JSON | yes |  |  |  |
@@ -2472,6 +2531,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `checked_in_at` | DATETIME | yes |  |  |  |
 | `checked_out_at` | DATETIME | yes |  |  |  |
 | `attendance_duration_minutes` | INTEGER | yes |  |  |  |
+| `early_check_in_minutes` | INTEGER | yes |  |  |  |
 | `override_check_in_at` | DATETIME | yes |  |  |  |
 | `override_check_out_at` | DATETIME | yes |  |  |  |
 | `override_duration_minutes` | INTEGER | yes |  |  |  |
@@ -5282,6 +5342,42 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Label_Printer
+
+### `label_printers`
+
+**LabelPrinter** · `app/models/label_printer.py`
+
+> A ZPL-capable network label printer belonging to an organization.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `location` | VARCHAR(200) | yes |  |  |  |
+| `language` | VARCHAR(20) | no |  | `'zpl'` |  |
+| `host` | VARCHAR(255) | no |  |  |  |
+| `port` | INTEGER | no |  | `9100` |  |
+| `dpi` | INTEGER | no |  | `203` |  |
+| `label_format` | VARCHAR(50) | no |  | `'zebra_2x1'` |  |
+| `custom_width` | FLOAT | yes |  |  |  |
+| `custom_height` | FLOAT | yes |  |  |  |
+| `darkness` | INTEGER | yes |  |  |  |
+| `is_default` | BOOL | no |  | `False` |  |
+| `is_active` | BOOL | no |  | `True` |  |
+| `created_by_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_label_printers_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_label_printer_org_name` (`organization_id`, `name`)
+
 ## Legal
 
 ### `legal_document_revisions`
@@ -5893,6 +5989,43 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_prospective_members_status` (`status`)
 - UNIQUE `ix_prospective_members_status_token` (`status_token`)
 - UNIQUE `uq_prospect_org_active_email` (`organization_id`, `active_email`)
+
+## Nfc_Tag
+
+### `nfc_tags`
+
+**NfcTag** · `app/models/nfc_tag.py`
+
+> An NFC credential (ID card) issued to a member. SECURITY — the UID is stored **hashed**, never in clear text. A card UID is the whole of the secret: anything holding one can be cloned onto a writable tag, so a leaked database dump would otherwise be a stack of working ID cards. Lookups are by hash of the normalized UID, which is why ``uid_hash`` carries the unique constraint and there is no column holding the UID itself. ``uid_preview`` keeps the last four characters so an officer can tell two cards apart on screen and match one against the number printed on the card.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `uid_hash` | VARCHAR(64) | no |  |  |  |
+| `uid_preview` | VARCHAR(8) | no |  |  |  |
+| `credential_type` | ENUM(`serial`, `written`) | no |  | `serial` |  |
+| `label` | VARCHAR(100) | yes |  |  |  |
+| `status` | ENUM(`active`, `suspended`, `lost`, `revoked`) | no | IDX | `active` |  |
+| `issued_at` | DATETIME | no |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_reason` | TEXT | yes |  |  |  |
+| `issued_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_nfc_tag_org_user` (`organization_id`, `user_id`)
+- `ix_nfc_tags_organization_id` (`organization_id`)
+- `ix_nfc_tags_status` (`status`)
+- `ix_nfc_tags_user_id` (`user_id`)
+
+**Constraints**
+
+- UNIQUE `uq_nfc_tag_org_uid` (`organization_id`, `uid_hash`)
 
 ## Notifications
 
@@ -7716,6 +7849,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_shift_equip_check_item_check` (`check_id`)
 - `idx_shift_equip_check_item_tmpl` (`template_item_id`)
 
+### `shift_equipment_check_seals`
+
+**ShiftEquipmentCheckSeal** · `app/models/training.py`
+
+> The tamper seal a crew read on one sealed container during a check. A seal that still carries the number from the last count is proof nobody opened the bag, which is why confirming it clears the contents count in a tap. The record is what makes that claim auditable afterwards: the number read, whether it was intact, and how many positions the crew therefore did not count by hand. Without those, a cleared bag is indistinguishable from one nobody looked at. The compartment name is snapshotted for the same reason item results are: the template may be renamed or restructured, and the record has to keep saying which bag was sealed.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `check_id` | VARCHAR(36) | no | FK, IDX |  | → `shift_equipment_checks.id` ON DELETE CASCADE |
+| `template_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE SET NULL |
+| `compartment_name` | TEXT | no |  |  |  |
+| `seal_number` | VARCHAR(100) | yes |  |  |  |
+| `intact` | BOOL | no |  | `1` |  |
+| `cleared_item_count` | INTEGER | no |  | `0` |  |
+| `notes` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_shift_equip_check_seal_check` (`check_id`)
+- `idx_shift_equip_check_seal_compartment` (`template_compartment_id`)
+
 ### `shift_equipment_checks`
 
 **ShiftEquipmentCheck** · `app/models/training.py`
@@ -7974,6 +8130,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_skill_org_category` (`organization_id`, `category`)
 - `ix_skill_evaluations_active` (`active`)
 
+### `standing_shift_claims`
+
+**StandingShiftClaim** · `app/models/training.py`
+
+> A member's recurring claim on a shift — "every Tuesday night". This is a *member's* commitment, not a department schedule: shift patterns (``ShiftPattern``) generate the shifts, and a standing claim seats one member on the ones that match it. Giving up a single date leaves the claim intact, which is the whole point of storing it rather than just writing the assignments once. The claim is read in two places, and both must exist for it to mean anything: creating one seats the member on the matching shifts that already exist, and creating a *shift* seats the members whose active claims match it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `pattern` | ENUM(`weekly`, `biweekly`, `monthly`) | no |  | `weekly` |  |
+| `weekday` | INTEGER | no |  |  |  |
+| `period` | ENUM(`day`, `night`) | no |  | `day` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `apparatus_id` | VARCHAR(36) | yes |  |  |  |
+| `start_date` | DATE | no |  |  |  |
+| `end_date` | DATE | no |  |  |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `ended_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_standing_claim_lookup` (`organization_id`, `is_active`, `weekday`)
+- `idx_standing_claim_org` (`organization_id`)
+- `idx_standing_claim_user` (`user_id`)
+
 ### `training_approvals`
 
 **TrainingApproval** · `app/models/training.py`
@@ -8221,6 +8406,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completion_date` | DATE | yes | IDX |  |  |
 | `expiration_date` | DATE | yes | IDX |  |  |
+| `start_time` | TIME | yes |  |  |  |
 | `hours_completed` | FLOAT | no |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `certification_number` | VARCHAR(100) | yes |  |  |  |
@@ -8384,6 +8570,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `completion_date` | DATE | no | IDX |  |  |
+| `start_time` | TIME | yes |  |  |  |
 | `hours_completed` | FLOAT | no |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
@@ -8765,7 +8952,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (300 references)
+### → `users` (305 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8773,6 +8960,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `admin_hours_categories` | `updated_by` | NO ACTION | yes |
 | `admin_hours_entries` | `approved_by` | NO ACTION | yes |
 | `admin_hours_entries` | `user_id` | CASCADE | no |
+| `admin_hub_metric_preferences` | `user_id` | CASCADE | yes |
 | `apparatus` | `archived_by` | SET NULL | yes |
 | `apparatus` | `created_by` | SET NULL | yes |
 | `apparatus` | `status_changed_by` | SET NULL | yes |
@@ -8931,6 +9119,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | NO ACTION | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | NO ACTION | yes |
+| `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
 | `locations` | `created_by` | NO ACTION | yes |
@@ -8959,6 +9148,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_action_items` | `assignee_id` | NO ACTION | yes |
 | `minutes_templates` | `created_by` | NO ACTION | yes |
 | `multi_agency_trainings` | `created_by` | SET NULL | yes |
+| `nfc_tags` | `issued_by` | SET NULL | yes |
+| `nfc_tags` | `user_id` | CASCADE | no |
 | `nfpa_exposure_records` | `created_by` | NO ACTION | yes |
 | `nfpa_exposure_records` | `user_id` | SET NULL | yes |
 | `nfpa_item_compliance` | `created_by` | NO ACTION | yes |
@@ -9032,6 +9223,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `returned_by` | SET NULL | yes |
 | `skill_tests` | `validated_by` | SET NULL | yes |
 | `skill_tests` | `voided_by` | SET NULL | yes |
+| `standing_shift_claims` | `user_id` | CASCADE | no |
 | `storage_areas` | `created_by` | NO ACTION | yes |
 | `store_order_events` | `created_by` | SET NULL | yes |
 | `store_order_windows` | `closed_by` | SET NULL | yes |
@@ -9070,12 +9262,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (197 references)
+### → `organizations` (201 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `admin_hours_categories` | `organization_id` | CASCADE | no |
 | `admin_hours_entries` | `organization_id` | CASCADE | no |
+| `admin_hub_metric_preferences` | `organization_id` | CASCADE | no |
 | `apparatus` | `organization_id` | CASCADE | no |
 | `apparatus_component_notes` | `organization_id` | CASCADE | no |
 | `apparatus_components` | `organization_id` | CASCADE | no |
@@ -9182,6 +9375,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `label_printers` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
@@ -9199,6 +9393,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `message_history` | `organization_id` | CASCADE | yes |
 | `minutes_templates` | `organization_id` | CASCADE | no |
 | `multi_agency_trainings` | `organization_id` | CASCADE | no |
+| `nfc_tags` | `organization_id` | CASCADE | no |
 | `nfpa_exposure_records` | `organization_id` | CASCADE | no |
 | `nfpa_inspection_details` | `organization_id` | CASCADE | no |
 | `nfpa_item_compliance` | `organization_id` | CASCADE | no |
@@ -9244,6 +9439,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_evaluations` | `organization_id` | CASCADE | no |
 | `skill_templates` | `organization_id` | CASCADE | no |
 | `skill_tests` | `organization_id` | CASCADE | no |
+| `standing_shift_claims` | `organization_id` | CASCADE | no |
 | `storage_areas` | `organization_id` | CASCADE | no |
 | `store_order_events` | `organization_id` | CASCADE | no |
 | `store_order_items` | `organization_id` | CASCADE | no |
@@ -9542,6 +9738,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_approvals` | `training_session_id` | CASCADE | no |
 | `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
 
+### → `check_template_compartments` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
+| `check_template_items` | `compartment_id` | CASCADE | no |
+| `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
+| `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
+
 ### → `email_templates` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -9611,14 +9816,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_requests` | `budget_id` | SET NULL | yes |
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
-
-### → `check_template_compartments` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
-| `check_template_items` | `compartment_id` | CASCADE | no |
-| `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
 
 ### → `equipment_check_templates` (3 references)
 
@@ -9787,6 +9984,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `issuance_allowances` | `role_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
+
+### → `shift_equipment_checks` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_equipment_check_items` | `check_id` | CASCADE | no |
+| `shift_equipment_check_seals` | `check_id` | CASCADE | no |
 
 ### → `storage_areas` (2 references)
 
@@ -10036,12 +10240,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `screening_records` | `requirement_id` | SET NULL | yes |
 
-### → `shift_equipment_checks` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `shift_equipment_check_items` | `check_id` | CASCADE | no |
-
 ### → `shift_templates` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -10117,6 +10315,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `sessions` | `users` |
 | `shift_attendance` | `shifts`, `users` |
 | `shift_equipment_check_items` | `check_template_items`, `shift_equipment_checks` |
+| `shift_equipment_check_seals` | `check_template_compartments`, `shift_equipment_checks` |
 | `skill_test_viewers` | `skill_tests`, `users` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |

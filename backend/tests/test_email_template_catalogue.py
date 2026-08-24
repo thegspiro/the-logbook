@@ -27,7 +27,11 @@ from app.services.email_template_service import (
     EmailTemplateService,
     get_variables_for_type,
 )
-from app.services.email_theme import DEFAULT_CSS, build_email_document
+from app.services.email_theme import (
+    CHIP_TINTS,
+    DEFAULT_CSS,
+    build_email_document,
+)
 
 _DEFS = EmailTemplateService._DEFAULT_TEMPLATE_DEFS
 _REGISTERED = {d["type"] for d in _DEFS}
@@ -273,35 +277,100 @@ class TestInlinerScopesToTheWholeBlock:
         assert inline_email_css(html).count("margin: 0;") == 2
 
 
-class TestHeaderAccentsAreReadable:
-    """White header text on a coloured band, WCAG 2.1 AA (4.5:1)."""
+class TestAccentsAreReadable:
+    """WCAG 2.1 AA (4.5:1) everywhere an accent carries text.
+
+    1b moved the accent off the header band, so the old check — white on a
+    solid header — no longer describes anything the design does. The accent
+    now appears as a 5px rule (no text on it, nothing to check), as the
+    button's background under white text, and as the chip's text on its own
+    tint. The last one is the easy pair to get wrong: both halves are light,
+    and a tint picked to look right beside a hex is not the same as a tint
+    that reads under it.
+    """
 
     @staticmethod
-    def _contrast_with_white(hex_colour: str) -> float:
+    def _luminance(hex_colour: str) -> float:
         def channel(value: int) -> float:
             srgb = value / 255
             return srgb / 12.92 if srgb <= 0.04045 else ((srgb + 0.055) / 1.055) ** 2.4
 
         r, g, b = (int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
-        luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-        return 1.05 / (luminance + 0.05)
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 
-    def test_default_header_passes(self):
-        default = re.search(
+    @classmethod
+    def _contrast(cls, fg: str, bg: str) -> float:
+        a, b = cls._luminance(fg), cls._luminance(bg)
+        lighter, darker = max(a, b), min(a, b)
+        return (lighter + 0.05) / (darker + 0.05)
+
+    def _contrast_with_white(self, hex_colour: str) -> float:
+        return self._contrast("#ffffff", hex_colour)
+
+    def test_the_header_title_reads_on_the_white_card(self):
+        header_bg = re.search(
             r"\.header \{[^}]*background-color: (#[0-9a-f]{6})", DEFAULT_CSS
         )
-        assert default is not None
-        assert self._contrast_with_white(default.group(1)) >= 4.5
+        title_fg = re.search(r"\.header h1 \{[^}]*color: (#[0-9a-f]{6})", DEFAULT_CSS)
+        assert header_bg is not None
+        assert title_fg is not None
+        ratio = self._contrast(title_fg.group(1), header_bg.group(1))
+        assert ratio >= 4.5, f"header title is {ratio:.2f}:1"
+
+    def test_the_default_button_carries_white_text(self):
+        button = re.search(
+            r"\.button \{[^}]*background-color: (#[0-9a-f]{6})", DEFAULT_CSS
+        )
+        assert button is not None
+        assert self._contrast_with_white(button.group(1)) >= 4.5
+
+    @pytest.mark.parametrize(("accent", "tint"), sorted(CHIP_TINTS.items()))
+    def test_every_chip_reads_on_its_own_tint(self, accent, tint):
+        ratio = self._contrast(accent, tint)
+        assert ratio >= 4.5, f"chip {accent} on {tint} is {ratio:.2f}:1"
+
+    @pytest.mark.parametrize("accent", sorted(CHIP_TINTS))
+    def test_every_accent_carries_white_button_text(self, accent):
+        ratio = self._contrast_with_white(accent)
+        assert ratio >= 4.5, f"button {accent} is {ratio:.2f}:1"
 
     @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
-    def test_every_header_override_passes(self, defn):
-        for colour in re.findall(
-            r'class="header" style="background-color: (#[0-9a-f]{6});"', defn["html"]
-        ):
-            ratio = self._contrast_with_white(colour)
-            assert (
-                ratio >= 4.5
-            ), f"{defn['type'].value} header {colour} is {ratio:.2f}:1"
+    def test_every_body_only_uses_accents_from_the_map(self, defn):
+        """A hex typed into a body is a colourway nobody checked.
+
+        The accent has to come from the map, because that is the only set the
+        contrast tests above cover — and because a header rule and its chip
+        drifting onto two different reds is exactly what the map exists to
+        stop.
+        """
+        used = set(re.findall(r"border-top-color: (#[0-9a-f]{6})", defn["html"])) | set(
+            re.findall(r"border-left-color: (#[0-9a-f]{6})", defn["html"])
+        )
+        stray = used - set(CHIP_TINTS)
+        assert not stray, (
+            f"{defn['type'].value} uses {sorted(stray)}, which is not an "
+            "ACCENT_* constant"
+        )
+
+    @pytest.mark.parametrize("defn", _DEFS, ids=lambda d: d["type"].value)
+    def test_chip_and_header_agree_on_the_colourway(self, defn):
+        header = re.search(r"border-top-color: (#[0-9a-f]{6})", defn["html"])
+        chip = re.search(
+            r'class="chip" style="background-color: (#[0-9a-f]{6}); '
+            r"color: (#[0-9a-f]{6});\"",
+            defn["html"],
+        )
+        if not header or not chip:
+            return
+        tint, text = chip.groups()
+        assert text == header.group(1), (
+            f"{defn['type'].value}: chip text {text} does not match the "
+            f"header accent {header.group(1)}"
+        )
+        assert tint == CHIP_TINTS[text], (
+            f"{defn['type'].value}: chip tint {tint} is not the tint mapped "
+            f"to {text}"
+        )
 
 
 class TestTheCodeDefaultsFillInTheOrganization:
