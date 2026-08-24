@@ -1,5 +1,57 @@
 # Screenshot currency
 
+## Corrected 2026-08-24 — four review findings on #1794, all real
+
+An automated reviewer read the PR and filed four. Every one held up; three were
+mine, one was in the committed early-check-in work.
+
+**P1 — the authenticated display endpoint was raising, not answering.**
+`can_check_in` was added to `QRCheckInData` as a *required* field. The public
+kiosk (`api/public/display.py`) was updated to pass it; the authenticated
+`/locations/{id}/display` (`api/v1/endpoints/locations.py`) constructs the same
+model field by field and was not — so it raised a `ValidationError` for any
+location with an event in its check-in window, which is the only state that
+endpoint exists to report. Reproduced by constructing the schema without the
+field before touching anything.
+
+Nothing caught it: `test_kiosk_check_in_window.py` covers the *query* that feeds
+the loop and stops there, and `test_public_display.py` covers the other
+endpoint. `tests/test_location_display_endpoint.py` is new and closes that gap —
+3 of its 4 cases fail with the fix reverted. The value is hardcoded `True` for
+the same reason `is_valid` is: the service filters on the strict window before
+this loop sees an event, and the permissive rule admits everything the strict
+one does.
+
+**P2 — `03-84` opened whichever platoon the rotation happened to put first.**
+The seeder prepared `existing[0]` of the generated three-day window and the
+manifest opened the first shift carrying any platoon; the shot then waits for a
+**"Platoon A Roster"** heading. Which platoon lands on day 35 depends on the
+rotation offset and therefore on today's date — green on the day it was written
+and a timeout on most others, and the two halves could disagree with each other
+besides. Both now select platoon A by name.
+
+**P2 — `_open_two_platoon_seats` was subtracting two members per re-seed.** It
+freed the last two assignments unconditionally, so six on shift became four,
+then two, and each pass raised another leave request. A database meant to be
+repairable by re-seeding drifted further from the capture every time. Now
+guarded on the roster's own statuses — one `available` and one `on_leave` is the
+state the shot needs, so that is what it checks for. Verified by re-seeding and
+confirming 6/1/1 holds.
+
+**P2 — `04-49` could be captured exactly once.** The fixture slides its event
+back into the early-arrival band on every run but never reset the member's RSVP,
+and a second check-in takes the ALREADY_CHECKED_IN path, which returns no notice
+at all. The reviewer's mechanism was slightly off — the shot waits on the notice
+itself (`role="status"` appears once on that page), so it would have timed out
+rather than captured the wrong screen — but the fixture was one-shot either way.
+The RSVP is now cleared each run. Verified the hard way: checked the member in
+through the API, re-seeded, checked in again, and the notice came back.
+
+**`04-49` is re-committed at a third of its size.** Re-capturing it was how the
+fix was proved, and `pngquant` was available here where it was not for the run
+that first captured it: 276 KB to 76 KB, same screen. `03-84`/`03-85` were
+re-captured too and their content did not change, so the committed bytes stand.
+
 ## Captured 2026-08-24 (twenty-first) — the platoon roster, and the last marker closed
 
 `03-84`/`03-85`, opened and checked. **504 filled, 0 remaining** — every

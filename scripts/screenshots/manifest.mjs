@@ -1060,10 +1060,10 @@ function openPartStaffedShift(shotId) {
 /**
  * Open the seeded platoon shift's detail drawer.
  *
- * `Shift.platoon` is written only by the recurring-pattern generator, so this
- * is the one shift in the department that carries one — the seeder generates it
- * five weeks out, deliberately clear of every board, dashboard and open-shift
- * count the guides already picture.
+ * `Shift.platoon` is written only by the recurring-pattern generator, so these
+ * are the only shifts in the department that carry one — the seeder generates
+ * three, five weeks out, deliberately clear of every board, dashboard and
+ * open-shift count the guides already picture. A is the one it prepares.
  *
  * Same `?shift=` entry the other shift shots use; the drawer is state on the
  * scheduling page rather than a route of its own.
@@ -1076,9 +1076,14 @@ async function openPlatoonShift(page) {
     if (!response.ok) return null;
     const body = await response.json();
     const rows = Array.isArray(body) ? body : body.shifts || body.items || [];
-    return rows.find((shift) => shift.platoon)?.id ?? null;
+    // Platoon A by name, not "the first shift carrying any platoon". The
+    // generator writes one occurrence each for A, B and C, the seeder prepares
+    // A's roster, and the shots below match on a "Platoon A Roster" heading --
+    // so opening whichever the API listed first was a timeout waiting to
+    // happen on any date where A is not the first of the three.
+    return rows.find((shift) => shift.platoon === "A")?.id ?? null;
   });
-  if (!id) throw new Error("no shift carries a platoon");
+  if (!id) throw new Error("no shift carries Platoon A");
   const url = new URL(page.url());
   url.searchParams.set("shift", id);
   await page.goto(url.toString(), { waitUntil: "domcontentloaded" });

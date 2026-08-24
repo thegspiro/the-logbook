@@ -2375,7 +2375,9 @@ class Seeder:
             None,
         )
         if existing and pick(existing, "id"):
-            return self.api.patch(f"/events/{pick(existing, 'id')}", window)
+            event = self.api.patch(f"/events/{pick(existing, 'id')}", window)
+            self._clear_early_checkin_rsvp(pick(existing, "id"))
+            return event
         return self.api.post(
             "/events",
             {
@@ -2392,6 +2394,38 @@ class Seeder:
                 **window,
             },
         )
+
+    def _clear_early_checkin_rsvp(self, event_id: str) -> None:
+        """Un-check-in the member `04-49` signs in as, before the next capture.
+
+        The capture is a real check-in: `self_check_in` creates the RSVP and
+        stamps it. Sliding the window forward on a re-seed is not enough on its
+        own — a second capture takes the ALREADY_CHECKED_IN path, which returns
+        no early-arrival notice at all, and the shot waits on the notice and
+        times out. Removing the RSVP puts the member back to never having
+        responded, which is the state the shot starts from.
+        """
+        member_id = next(
+            (
+                pick(u, "id")
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == DEMO_MEMBER_USERNAME
+            ),
+            None,
+        )
+        if not member_id:
+            return
+        try:
+            self.api.delete(f"/events/{event_id}/rsvps/{member_id}")
+        except ApiError as exc:
+            # "RSVP not found" is the ordinary case — she has not responded to
+            # this event, which is exactly the state wanted. Reported as a 400
+            # rather than a 404, so the message is what this matches on.
+            if not (
+                exc.code == 404
+                or (exc.code == 400 and "RSVP not found" in str(exc.detail))
+            ):
+                raise
 
     # -- scheduling --------------------------------------------------
 
@@ -9064,6 +9098,10 @@ class Seeder:
     #: members taken off its shift so the roster has something to say: one
     #: booked off, one free to be held over.
     PLATOON_NAMES = ("A", "B", "C")
+    #: The one whose roster `03-84` photographs, named in the shot's own
+    #: heading match — so the fixture has to prepare this platoon and not
+    #: whichever happens to be on duty first in the generated window.
+    ROSTER_PLATOON = "A"
     PLATOON_PATTERN_NAME = "A/B/C Platoon Rotation"
     #: Far enough out that no board, dashboard or open-shift count the guides
     #: already picture reaches these shifts. The roster shot opens its shift by
@@ -9121,45 +9159,72 @@ class Seeder:
             {"schedule_config": {"platoons": list(self.PLATOON_NAMES)}},
         )
 
+        # Three days, one platoon on duty per day under a 1-on/2-off rotation,
+        # so the window always contains exactly one occurrence of each.
         first = TODAY + timedelta(days=self.PLATOON_SHIFT_DAYS_AHEAD)
         last = first + timedelta(days=2)
-        existing = [
-            sh
-            for sh in items(
-                self.api.get(
-                    f"/scheduling/shifts?start_date={first}&end_date={last}&limit=50"
+
+        def _target_shift() -> dict | None:
+            """The A occurrence, by name rather than by position.
+
+            Which platoon lands on the first day of the window depends on the
+            rotation offset and therefore on today's date. Taking the first
+            generated shift prepared whichever platoon happened to be on that
+            day while `03-84` waits for the "Platoon A Roster" heading — green
+            on the date it was written and a timeout on most others.
+            """
+            return next(
+                (
+                    sh
+                    for sh in items(
+                        self.api.get(
+                            f"/scheduling/shifts?start_date={first}"
+                            f"&end_date={last}&limit=50"
+                        ),
+                        "shifts",
+                    )
+                    if pick(sh, "platoon") == self.ROSTER_PLATOON
                 ),
-                "shifts",
+                None,
             )
-            if pick(sh, "platoon")
-        ]
-        if not existing:
+
+        shift = _target_shift()
+        if not shift:
             self.api.post(
                 f"/scheduling/patterns/{pick(pattern, 'id')}/generate",
                 {"start_date": str(first), "end_date": str(last)},
             )
-            existing = [
-                sh
-                for sh in items(
-                    self.api.get(
-                        f"/scheduling/shifts?start_date={first}"
-                        f"&end_date={last}&limit=50"
-                    ),
-                    "shifts",
-                )
-                if pick(sh, "platoon")
-            ]
-        shift = existing[0] if existing else None
+            shift = _target_shift()
         if not shift:
-            self.blocked.append("platoon roster: the pattern generated no shift")
+            self.blocked.append(
+                f"platoon roster: no Platoon {self.ROSTER_PLATOON} shift in "
+                f"{first}..{last}"
+            )
             return None
 
         self._open_two_platoon_seats(shift)
         return shift
 
     def _open_two_platoon_seats(self, shift: dict) -> None:
-        """Take two of the platoon off this shift, one of them on leave."""
+        """Take two of the platoon off this shift, one of them on leave.
+
+        Guarded on the roster's own statuses rather than on "have I run
+        before". Freeing the last two assignments unconditionally cost the
+        shift two more members on every re-seed — six on shift became four,
+        then two — so a database that was meant to be repairable by re-seeding
+        instead drifted further from the capture each time, and each pass also
+        raised another leave request.
+
+        The states the shot needs are one `available` and one `on_leave`, so
+        that is what this checks for.
+        """
         shift_id = pick(shift, "id")
+        detail = self.api.get(f"/scheduling/shifts/{shift_id}")
+        roster = detail.get("platoon_roster") or []
+        have = {str(entry.get("status")) for entry in roster}
+        if {"available", "on_leave"} <= have:
+            return
+
         assignments = items(
             self.api.get(f"/scheduling/shifts/{shift_id}/assignments"), "assignments"
         )
