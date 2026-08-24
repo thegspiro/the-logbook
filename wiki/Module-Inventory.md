@@ -63,7 +63,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | URL                               | Page                      | Permission         |
 | --------------------------------- | ------------------------- | ------------------ |
 | `/inventory`                      | Inventory Items List      | Authenticated      |
-| `/inventory/my-equipment`         | My Issued Gear              | Authenticated      |
+| `/inventory/my-equipment`         | My Issued Gear            | Authenticated      |
 | `/inventory/items/:id`            | Item Detail               | Authenticated      |
 | `/inventory/storage-areas`        | Storage Areas             | Authenticated      |
 | `/inventory/admin`                | Admin Dashboard           | `inventory.manage` |
@@ -74,17 +74,17 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
 | `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
 | `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
-| `/inventory/admin/requests`       | Gear Requests        | `inventory.manage` |
+| `/inventory/admin/requests`       | Gear Requests             | `inventory.manage` |
 | `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
 | `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
 | `/inventory/admin/vendors`        | Vendors                   | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
-| `/inventory/admin/kits`           | Gear Kits Management | `inventory.manage` |
+| `/inventory/admin/kits`           | Gear Kits Management      | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts`            | Active Checkouts          | `inventory.manage` |
 | `/inventory/import`               | CSV Import                | `inventory.manage` |
-| `/inventory/admin/kits`           | Gear Kits Management | `inventory.manage` |
+| `/inventory/admin/kits`           | Gear Kits Management      | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
 | `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
@@ -685,3 +685,79 @@ POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF sum
 ---
 
 **See also:** [Apparatus Module](Module-Apparatus) | [Training Module](Module-Training)
+
+## Network Label Printers _(2026-08-23 → 08-24)_
+
+Barcode labels print **straight to the printer**, with no browser print dialog
+to get wrong. A department registers each physical printer once — name,
+location, host, port, resolution, loaded label stock, darkness, and the command
+language it speaks — instead of typing the host at every print.
+
+### Two command languages
+
+| Language | Printers                                                                    | Note                                                                                                                                   |
+| -------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `zpl`    | Zebra, and the many printers with ZPL emulation                             | The default for rows that predate the column — a statement of fact, since it was the only language that existed when they were written |
+| `escpos` | Receipt-class thermal printers, several of which take linerless label media | —                                                                                                                                      |
+
+**The choice changes more than the bytes**: the renderer, the stock sizes
+offered, and the status query all branch on it. A ZPL-emulating printer should
+be registered as ZPL.
+
+### The server opens the socket
+
+This is the single most useful thing to know when a print fails. The backend
+connects to the printer's host and port itself, so **reachability is the
+backend container's, not the operator's browser's**. A printer an operator can
+ping from their laptop may be unreachable from the server. Registration
+succeeds regardless — nothing validates the address at save time — and the
+failure surfaces at print or status time.
+
+### Status
+
+`GET /label-printers/{id}/status` asks the printer whether it actually printed.
+Status is **best-effort and per printer**: one printer failing to answer no
+longer suppresses the answers from the others. The status flag meanings were
+corrected against the published command tables in the same window.
+
+### What else prints
+
+Beyond inventory labels, `POST /station-documents/print` renders the **shift
+roster** and the **equipment check sheet** to the watch-desk printer. The check
+sheet is gated on the same permission as the check itself, and a pass-down
+stays with its own crew. A label can also carry a QR code.
+
+Reference:
+[`docs/LABEL_PRINTING_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/LABEL_PRINTING_MODULE.md).
+
+## Who Can See a Member's Assigned Gear _(2026-08-24)_
+
+**The Assigned Inventory table used to render on every member profile, for
+every viewer.** It was gated on "is the inventory module enabled" and nothing
+else, unlike the training, admin-hours, emergency-contact and ID-card sections
+beside it, which each gate on self-or-permission.
+
+A member profile is a directory card — the contact details a colleague is meant
+to look up. Which turnout coat, radio or SCBA mask somebody signed for, and
+what condition it is in, is quartermaster business.
+
+The section and its Quick Stats line now require **`inventory.manage`**, or
+that the profile is the viewer's own. The catalog-side reads were closed to the
+same disclosure in the same change.
+
+> **`inventory.view` could never have been the gate.** It is part of the
+> baseline Member position — every member holds it so they can browse the
+> catalog and their own kit — so a check for it says only "this person is a
+> member". The per-member endpoints checked exactly that, which is why the
+> server did not stop the page.
+
+The profile now **fetches nothing it may not show**: a viewer without the
+permission issues no request, rather than being turned away at the server, and
+items are cleared when navigating to a profile whose gear is not visible. A
+test asserts the baseline Member position holds `inventory.view` but not
+`inventory.manage`, so the fact the guard rests on cannot drift unnoticed.
+
+**The same mistake was live on the dashboard.** `GET /dashboard/asset-widgets`
+gated its inventory section on `inventory.view`, handing every member
+department-wide item counts, low-stock lines and overdue-checkout totals. It
+now requires `inventory.manage` or `settings.manage`.

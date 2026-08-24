@@ -2177,3 +2177,116 @@ and links only — never facility codes, accounts, budgets or leases.
 > > side: one holding `finance.manage` and one without it, showing the finance
 > > section present in the first and absent (not empty) in the second. The
 > > comparison is the point.]**
+
+---
+
+## Every Administration Page Opens the Same Way _(2026-08-23)_
+
+The **Members**, **Training**, **Inventory** and **Events** administration
+pages now share one frame:
+
+1. A header naming the module.
+2. A row of **four headline metrics**.
+3. A **Needs attention** queue — the things somebody has to act on.
+4. The module's existing tabs, unchanged, underneath.
+
+**The tabs and their contents did not change.** This replaced what sat above
+them.
+
+### Choosing the metrics
+
+Three of the four slots are the department's to choose. **The fourth is always
+the count the attention queue is about**, so a page cannot be configured to
+hide the number its own queue is measuring.
+
+| Page      | Built-in default three                           |
+| --------- | ------------------------------------------------ |
+| Members   | Active, Probationary, Inactive                   |
+| Training  | Compliance, Hours this quarter, Active programs  |
+| Inventory | Items tracked, Issued to members, Out for repair |
+| Events    | Upcoming, RSVPs this week, Check-ins logged      |
+
+**A department that changes nothing keeps these.** The upgrade does not blank
+anybody's page.
+
+Two scopes exist: a **department default** everyone sees, and optionally a
+**personal** selection. The department decides whether personal selections are
+permitted at all — turn that off and every administrator looks at the same four
+numbers.
+
+### Who can see the queue
+
+The queue lists work and **its rows name people**, so access is the module's
+own manage permission rather than a general administrator flag:
+
+| Page      | Permission         | Also needs                                                          |
+| --------- | ------------------ | ------------------------------------------------------------------- |
+| Members   | `members.manage`   | **`medical_screening.view`** for the queue and the screening metric |
+| Training  | `training.manage`  | The Training module enabled                                         |
+| Inventory | `inventory.manage` | The Inventory module enabled                                        |
+| Events    | `events.manage`    | —                                                                   |
+
+**Medical screening is health information.** Until this release, "screening
+current" and the members attention queue were readable by anyone holding
+`members.manage`. An officer without `medical_screening.view` now sees that
+tile read **unknown** rather than disappear — a missing tile makes people hunt
+for it, a stated unknown does not — and an empty queue.
+
+**Check who holds `medical_screening.view`** before officers report the number
+as broken.
+
+### Two smaller fixes an administrator will notice
+
+- **A member who renewed is no longer both current and lapsed at once.** The
+  screening queue counted every historical expired record; it now counts a
+  member and screening type only where nothing unexpired covers it.
+- **One broken number does not take the page down.** A metric that fails to
+  resolve renders as unknown, and the tabs below it still work.
+
+## My Admin Hours _(2026-08-23)_
+
+> **If you hold `admin_hours.manage`, the numbers on this page were the whole
+> department's.** The personal page fetched its totals without scoping them to
+> the signed-in member — the summary endpoint returns organization-wide figures
+> when no user is named. It is now always your own hours.
+
+The six-tile grid is replaced by:
+
+- **A reporting period** — this month, last 30 days, this year, all time —
+  driving both the totals **and** the entry list, so the two always describe
+  the same window.
+- **Three fixed stats**: approved, awaiting review, logged this period, with
+  entry counts as sublines rather than tiles of their own.
+- **Requirement progress**, where the department has configured requirements
+  for the member's profile. The personal page never showed this, despite it
+  being the question members actually have.
+- **A ranked category breakdown** with share bars, plus one line naming the
+  categories with nothing in the period — instead of a tile reading zero for
+  each.
+- **An empty state that says what to do**, in place of a row of zeros.
+
+**The period defaults to all time.** A calendar-year default hid older entries
+behind a control the member has to notice first, and "no hours logged in this
+year" reads as an empty account rather than as an active filter.
+
+## Scheduling Staffing Tiles on the Dashboard _(2026-08-23)_
+
+Seven tiles — Today's Staffing, Future Coverage Gaps, Open Slots, Pending
+Changes, Incomplete Closeouts, Workload Balance, Special Operations. Each links
+into the schedule **already filtered to what it counted**, so a number is
+somewhere to start rather than a fact to go and find. Each keeps its own
+horizon and filters, per person. Requires `scheduling.view`.
+
+## Settings: Nine Screens, One Shell _(2026-08-23)_
+
+Organization, Events, Scheduling, Elections, User Settings, Email Templates and
+three more carried five different navigation idioms between them. They all use
+one now:
+
+- A **section list** on desktop, a **scrollable tab strip** on a phone.
+- The section you are in is reflected in the **URL**, so a link opens where you
+  meant it to.
+- **Save/Reset appears only on sections it actually writes.**
+
+**No setting moved and no setting changed meaning.** If a member of staff says
+a screen "looks different", that is the whole of it.

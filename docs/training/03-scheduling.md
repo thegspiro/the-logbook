@@ -71,6 +71,8 @@ attendance or readiness information.
 16. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
 17. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
 18. [Troubleshooting](#troubleshooting)
+19. [The Schedule Board and Standing Shifts](#the-schedule-board-and-standing-shifts-2026-08-23--08-24)
+20. [Equipment Checks: Four Item Types and Sealed Containers](#equipment-checks-four-item-types-and-sealed-containers-2026-08-23)
 
 ---
 
@@ -2826,3 +2828,178 @@ Also changed:
 >
 > > viewport. If the harness can simulate the queued/offline state, capture that
 > > too; if it cannot, say so in the caption rather than staging it.]**
+
+---
+
+## The Schedule Board and Standing Shifts _(2026-08-23 → 08-24)_
+
+The Schedule tab is a **board**, not a grid of cards. Full operator walkthrough
+and screenshot states are in the
+[release lesson](./19-august-2026-release-changes.md#scheduling-the-calendar-says-which-shifts-need-people-and-claiming-one-is-a-tap);
+what follows is what a trainer needs in the flow of this guide.
+
+### Reading the month
+
+Each shift carries a status chip.
+
+| Chip                  | Colour      | Meaning                                 |
+| --------------------- | ----------- | --------------------------------------- |
+| `2 open`              | red / amber | Seats still to fill; red is urgent      |
+| `Full 4/4`            | green       | Staffed                                 |
+| `You + 2/4`           | blue        | You are on it                           |
+| A headcount, no ratio | **grey**    | **This shift never stated a crew size** |
+
+Select a day and the panel beside the grid shows the crew, plus **one button
+that claims the first open seat you are cleared for**. There is no position
+dropdown to find. Filters dim rather than hide, so the month keeps its shape.
+On a phone: a bar grid, a day sheet, a confirmation screen.
+
+**Teach the grey chip explicitly.** A shift naming neither positions nor a
+minimum staffing level used to be assumed to want four people, so it showed
+"4 open" in critical red — a department that configures neither opened the page
+to a wall of meaningless red. Grey means "nobody said how many"; the shift can
+still be joined and it stays out of the open-seat count and the urgent flag.
+
+Cancelled, finalized and past shifts read as **closed** and offer nothing. Each
+shift still carries a **details link** — editing, attendance and finalization
+live in the detail panel, which a fully staffed shift an officer is not
+assigned to had no other route into.
+
+### Standing shifts
+
+From a shift, a member can make it a **standing shift** — a recurring claim on
+that seat, "every Tuesday night".
+
+**Giving up one Tuesday does not end the series.** The claim is stored as a
+claim, not written out as a pile of assignments, so releasing one date leaves
+the rest intact.
+
+It reads in both directions: creating a claim seats you on matching shifts
+**already scheduled**, and a shift created later seats everyone whose active
+claim matches it. Without the second, a series would go quiet the month the
+department generated its next block of schedule.
+
+Four edge cases worth teaching:
+
+- **The series is anchored on the shift you started it from**, not on today —
+  "every other Tuesday" means every other one of _those_.
+- **You choose the horizon**, defaulting to a year out rather than to
+  December 31, which quietly shrinks as the year goes on.
+- **A series can cover only dates nobody has scheduled yet.** That is the case
+  standing shifts exist for.
+- A standing claim goes through **the same checks as claiming a shift by hand**
+  — eligibility, seat capacity, whether the shift is open, whether the date has
+  passed. It previously bypassed all of them.
+
+### Trades somebody can actually accept
+
+The trade candidate list arrives with everyone who could not accept **already
+removed**: on the shift, on approved leave, not cleared for the position, or
+working a tour that abuts this one. Least-loaded first.
+
+**The member you offered a seat to can now accept it.** Until this release a
+one-way offer could not be completed by anyone — manager review reads a named
+target as "there must be a shift to trade back", and rejects the request when
+there isn't one, which is the shape every one-way offer has.
+
+- **You cannot give up a seat while your own offer of it stands.** Withdraw
+  first — releasing or re-offering it would leave the first recipient holding
+  an offer that can no longer be honoured.
+- **An offer left pending is closed the day before the shift**, and both
+  members and the duty officer are told.
+- **A training seat cannot be traded.** It carries the trainee's program and
+  evaluating officer; moving only the member would file one member's training
+  against another. Approved time off is rechecked at acceptance, not only when
+  candidates were listed.
+
+### Seat capacity and eligibility
+
+Seat capacity was half-enforced — a shift with named positions was capped seat
+by seat, while a shift with only a minimum staffing level had nothing reading
+it, so the calendar could show "Full 4/4" while the server accepted a fifth.
+Officer assignment stays uncapped deliberately.
+
+**Position eligibility now applies to schedulers.** If your department has
+configured which ranks may run a position, that is enforced when a **scheduler
+assigns somebody**, not only when a member claims their own seat. Expect
+assignments that used to go through to be refused; the refusal names the
+missing qualification.
+
+Backfilling a past or closed shift is still allowed for a scheduler — that is
+records work. Being cleared for a position is a safety question that does not
+expire with the shift, which is why that rule still applies.
+
+### On the dashboard
+
+Seven staffing tiles — Today's Staffing, Future Coverage Gaps, Open Slots,
+Pending Changes, Incomplete Closeouts, Workload Balance, Special Operations —
+each linking into the schedule already filtered to what it counted. Each keeps
+its own horizon and filters, per person. Requires `scheduling.view`.
+
+### Also fixed
+
+**Calendar day labels shifted a day for any viewer west of the department.**
+They went through a timezone-aware formatter, and a calendar date belongs to no
+timezone — so a cell showing 26 announced itself as "Tuesday, August 25". The
+phone month grid also got its 44px touch targets back.
+
+---
+
+## Equipment Checks: Four Item Types and Sealed Containers _(2026-08-23)_
+
+### Four item types
+
+A template author used to choose between near-synonyms — `present` and
+`functional` both stored pass/fail and differed only in what the crew was asked
+to do. There are now four:
+
+| Type         | Stores            | Passing means                                                                                                                                                                           |
+| ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Level**    | The number itself | Compared to a threshold. The reading is kept, because the trend is the useful part. An empty box means "not read yet", not zero                                                         |
+| **Function** | Pass / fail       | A fail opens a note and a photo, and **neither blocks the walk** — a crew held at a text box at 07:00 abandons the check, so an unwritten note is flagged on the finished check instead |
+| **Count**    | A quantity        | Short of par is a **restock line, not a failure**                                                                                                                                       |
+| **Expiry**   | A date            | Confirms the date already on record. Amber on every shift inside the pull window                                                                                                        |
+
+Headings and free text are untouched — they are layout, not checks. The builder
+names what each type stores beside its label.
+
+**Existing templates were converted on upgrade.** An item with no description
+was given the instruction its old type implied ("Confirm the item is in place."
+/ "Switch it on and confirm it works."). **An item whose author wrote a
+description keeps their own words.**
+
+### Sealed containers
+
+A compartment — a drug bag, a trauma kit, a sealed pack — can be marked in the
+template builder as **closed with a numbered tamper seal**. On the check, the
+crew reads the number, confirms it matches the last check, and **the counting
+inside is cleared in one tap**.
+
+Three rules, each of which is the reason the shortcut is safe:
+
+1. **A seal clears counting only.** Expiry dates and pressure readings are
+   never cleared — they move on their own while the bag sits shut, so an
+   out-of-date vial cannot hide behind an intact tag.
+2. **A seal proves unchanged, not full.** Confirming carries the previous
+   counts forward; it does **not** fill the bag to par. A bag that was three
+   morphine short at its last count is still three short, and that files as a
+   failure.
+3. **The shortcut has to be earned.** With no earlier intact seal whose number
+   matches, the button reads **Record seal** — the seal is filed for the record
+   and the contents are counted by hand.
+
+A sealed bag inside a sealed bag gets **its own card**: a broken outer seal
+says nothing about an intact inner one.
+
+### What is not here yet
+
+**Walking a check as a lap** — stop by stop in walking order, finished stops
+collapsed to a line — is built and tested but **not connected to the check
+screen**, which still shows the flat compartment list. Do not teach it,
+screenshot it, or promise it in this release.
+
+### Swapping stock during a check
+
+A crew member without `inventory.manage` could move **any** quantity from ready
+stock onto the truck, and dispose of lots that were never aboard it. A swap is
+now bounded by the lot it replaces, and that lot has to actually be on the item.

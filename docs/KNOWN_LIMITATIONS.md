@@ -67,6 +67,40 @@ here.
 | **No knowledge-test engine (officer-entered scores only)**             | Open (feature)       | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Skills-test completion does not enforce requirement `max_attempts`** | ✅ Resolved          | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
 
+## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step Is Inert (2026-08-24)
+
+Fifteen of the setup wizard's module cards point at a per-module
+"configure permissions" step. **That step reports success and discards the
+answer.** `modulePermissionConfigs` is written to the Zustand store and read
+back by nothing: no API client method submits it and no backend field
+corresponds to it. `handleSave` sets it, toasts "permissions configured!", and
+navigates on.
+
+This is CLAUDE.md **Pitfall #19** — a config switch with a UI and no reader —
+in its worst form, because the toast actively asserts that something was saved.
+An administrator who uses that step to restrict a module during setup will
+believe the restriction is in place.
+
+**The Department Store's route was removed rather than repaired**, and that was
+the deliberate call: the previous change had _added_ a `configRoute` for
+storefront "for parity with its peers", and parity with a screen that changes
+nothing is a liability, not a feature. The store now enables directly.
+
+**Why the rest were not removed with it.** Wiring the step up means deciding
+whether it edits the positions saved on the previous step or submits
+separately — that is its own change, with its own data model question, and
+doing it under a storefront bug fix would have been the wrong place. Removing
+all fifteen routes without deciding that question would delete the only place
+the intent is expressed.
+
+**Whichever way it is resolved, the toast must go first.** A step that silently
+does nothing is recoverable; a step that says it succeeded is not.
+
+**Related, and also open:** three module ids offered by checkbox
+(`medical_supplies`, `mobile`, `integrations`) grant permissions that **do not
+exist**. That predates this window and is not caused by the module-list
+reconciliation above.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

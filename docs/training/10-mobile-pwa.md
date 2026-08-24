@@ -470,6 +470,7 @@ Tags exist for three things today: **event check-in**, **admin hours clock-in**,
 and **shift check-in** on an apparatus.
 
 > **[SCREENSHOT NEEDED — a phone holding against a mounted NFC tag on an
+>
 > > apparatus, and the resulting shift check-in page naming the unit, date and
 > > hours. Two frames or one composite]**
 
@@ -812,6 +813,7 @@ when it closes.
 - Toast notifications are positioned and announced correctly on a phone.
 
 > **[SCREENSHOT NEEDED — one of the reflowed tables (documents or check-in) at
+>
 > > 390x844 showing the stacked-card layout, beside the same table on desktop.
 > > The pair is the point; a single shot does not show the reflow.]**
 
@@ -819,3 +821,44 @@ when it closes.
 
 Each tab now carries the page name rather than a generic app title, so several
 Logbook tabs open at once are finally distinguishable. Nothing to configure.
+
+## August 23–24, 2026 update
+
+### The app now updates in Brave
+
+**The app never picked up a new version in Brave until the browser cache was
+cleared by hand.** If you have been telling Brave users to clear their cache
+after every release, you can stop.
+
+### The schedule on a phone
+
+The Schedule tab is a **board** on a phone too: a bar grid of the month, a day
+sheet you pull up, and a confirmation screen for claiming a seat. A shift's
+chip says whether it still needs people, and one button claims the first open
+seat you are cleared for.
+
+**The month grid's touch targets are back to 44px.**
+
+Full walkthrough:
+[the release workflow lesson](./19-august-2026-release-changes.md#scheduling-the-calendar-says-which-shifts-need-people-and-claiming-one-is-a-tap).
+
+### Settings on a phone
+
+The nine settings screens that moved onto the shared shell show their section
+list as a **scrollable tab strip** on a phone rather than a sidebar. No setting
+moved; the navigation is the same on all of them now.
+
+**[SCREENSHOT — REPLACE any phone capture of a settings screen.** The idiom
+they show no longer exists.**]**
+
+### The check-in station on a tablet
+
+`/members/check-in-station` is meant to be left running on a tablet at a door.
+On Chrome for Android over HTTPS it reads cards itself (Web NFC); with a USB
+reader it captures keystrokes **page-wide** rather than into a focused box,
+because a kiosk loses focus to the first stray tap on the screen and a station
+that has silently stopped reading is worse than one that was never armed.
+
+> **[SCREENSHOT NEEDED — the check-in station on a tablet-width viewport, armed,
+>
+> > with one successful tap in the recent list.]**

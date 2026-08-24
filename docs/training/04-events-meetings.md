@@ -1639,3 +1639,61 @@ pipeline board can be filtered by the event applicants came from.
 - **Recruitment is last in the type list on purpose.** The database stores the
   type by position, so inserting it mid-list would silently change the type of
   every event already saved.
+
+---
+
+## The Events List Says What It Wants From You _(2026-08-23 → 08-24)_
+
+`/events` is ranked by what each event needs from the viewing member, with a
+**Needs you** band at the top.
+
+Two corrections members will notice:
+
+- **The page no longer accuses people who could not have attended.** A member
+  who joined after an event ran, or who was not in its audience, is not counted
+  as having missed it.
+- Credited hours read **"up to"**, because what a member is credited depends on
+  their recorded attendance, not on the event's nominal length.
+
+## Early Check-In Is Flagged, Never Credited _(2026-08-23)_
+
+An NFC tap or a QR scan can land inside the check-in window but well before the
+event starts. **That is flagged and never credited as attendance.**
+
+- The **tap time stays the honest record** of when the member arrived.
+- The event's manager is shown **how early it was**, rather than having to
+  compare timestamps by eye.
+- **Attendance credit runs from the scheduled start.**
+
+**Check-ins recorded before this release carry no early figure.** Working one
+out after the fact would mean deciding what each event's start time was at the
+moment somebody tapped — and an event whose start was edited since would be
+given a number that was never true. Blank means "not recorded", which is what
+it is.
+
+## Checking Members In With an ID Card _(2026-08-23)_
+
+Alongside the QR sign-in already documented above, an officer can leave a
+**check-in station** running at the door of a meeting or drill night and have
+members tap a physical ID card.
+
+The station lives at `/members/check-in-station` and needs `members.check_in`;
+issuing the cards needs `members.manage_id_cards`; and the whole feature is off
+until Settings → Integrations → **NFC ID Cards** is turned on. The full
+walkthrough is in
+[Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).
+
+**What matters for events:** a station is armed against a specific event or
+meeting, retired and on-leave members are accepted (they attend meetings and
+banquets), and suspended, dropped, archived and deleted members are not. A tap
+from an unregistered card, or a member already checked in, is shown on screen
+and the station stays armed for the next person.
+
+## The Events Administration Page Has a New Top _(2026-08-23)_
+
+The Events administration page now opens with the shared frame: a header, four
+headline metrics, a **Needs attention** queue, then its existing tabs. Its
+built-in three metrics are **Upcoming**, **RSVPs this week** and **Check-ins
+logged**; the fourth slot is always the count the queue is about. Access is
+`events.manage`. See the
+[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).

@@ -508,23 +508,71 @@ into a template; show the preview rendering "FDID 12345"]**
 > official notice reads 'FDID 12345' and is actually right about which number
 > that is."
 
-#### Your emails look different now
+#### Your emails look different now — but only when you say so
 
-**[SCREEN: Show the preview pane — white card on a grey page, rounded header
-band, a details table.]**
+**[REWRITTEN 2026-08-24. The previous take said an unedited template was
+"tracking the built-in design, so future improvements reach you without you
+doing anything." **That is no longer true**, and following it would have a
+secretary waiting for a change that never arrives. The August 24 shell is
+opt-in per template, and the switch is the Reset button.]**
 
-> "You'll notice the design changed. White card on a grey page, cleaner tables,
-> consistent spacing — one look shared across your templates, the store's
-> receipts and election results."
+**[SCREEN: Show the preview pane — the 5px accent rule down the header, the
+status chip, the details table.]**
 
-> "If you never edited a template's CSS, you're now **tracking** the built-in
-> design, so future improvements reach you without you doing anything. If you
-> did customise one, it's untouched — exactly as you left it."
+> "The design changed again in August, and this time the change is a choice
+> rather than something that happens to you."
 
-**[PRODUCTION NOTE: Re-shoot every email preview in this script. Anything
-captured before 2026-08-10 shows the retired full-bleed red band over a grey
-slab. The Footers tab is at `/communications/email-templates?tab=footers` — it
-became linkable on 2026-08-11, so a shot of it no longer needs a click.]**
+> "There's a 5-pixel accent rule at the top instead of a solid band, and a
+> status chip that tells the reader at a glance what kind of notice this is —
+> approved, overdue, action needed."
+
+**[SCREEN: The Templates tab, with the banner explaining the new design]**
+
+> "Here is the part to get right, because it is the one that generates the
+> support ticket. **If you upgraded from the previous release, none of your
+> existing templates changed.** Every notice you have goes out looking exactly
+> as it did yesterday."
+
+**[PRESENTER NOTE: the on-screen banner reads "Templates you have never edited
+already use it." That is true of a body byte-identical to the *current* shipped
+default — which a department coming from the previous release does not have,
+because its untouched bodies are the *older* default. Do not read the banner
+aloud as the rule; say what is above, then point at Reset.]**
+
+**[SCREEN: Press Reset on one template; show the before and after side by side]**
+
+> "The new design arrives on a template when you press **Reset** on it — or
+> when you create a new one. That's per template, so you can move the dues
+> notice across, look at it for a week, and leave everything else alone."
+
+**[CALLOUT: "Reset replaces your wording too — read it before you press it"]**
+
+> "And read the warning on that button. Reset does not just restyle the
+> template, it puts the shipped wording back. If somebody has spent two years
+> refining how your department words its dues notice, that goes with it. Copy
+> the text out first."
+
+**[SCREEN: The Templates tab list, showing which templates the department has
+changed and how often each is used]**
+
+> "The list also tells you two things it never did: which of these your
+> department has actually changed, and how heavily each one gets used. Between
+> them that's your priority order — the heavily-used ones you've never touched
+> are the ones worth moving first."
+
+**[SCREEN: The editor and preview side by side]**
+
+> "And the editor and the preview sit side by side now, so you're not switching
+> tabs to see what you just typed."
+
+**[PRODUCTION NOTE: Re-shoot every email preview in this script — twice.
+Anything captured before 2026-08-10 shows the retired full-bleed red band.
+Anything captured between 2026-08-10 and 2026-08-23 shows the rounded header
+band, which is still what a department sees until it presses Reset. **Both are
+current, depending on the department**, so every email shot in this script
+needs a caption saying which state it is. An uncaptioned shot of either one
+reads as a promise about the other. The Footers tab is at
+`/communications/email-templates?tab=footers` — linkable since 2026-08-11.]**
 
 ### PUBLIC PORTAL (17:20 – 17:35)
 

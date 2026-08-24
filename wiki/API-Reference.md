@@ -353,6 +353,267 @@ deliberately not reachable through this endpoint.
 
 ---
 
+## Administration Page Frame _(2026-08-23)_
+
+One shape serves every module's administration page: four headline metrics and
+a **Needs attention** queue, plus the settings that choose which three metrics
+fill the open slots.
+
+```
+GET  /api/v1/admin-hub/{module_key}/summary
+GET  /api/v1/admin-hub/{module_key}/metrics
+PUT  /api/v1/admin-hub/{module_key}/metrics
+```
+
+`module_key` is one of `members`, `training`, `inventory`, `events`, and is
+pattern-constrained to `^[a-z_]{1,50}$` at the path.
+
+**Authorization is the module's own manage permission** — `members.manage`,
+`training.manage`, `inventory.manage`, `events.manage` — never a blanket admin
+gate. The attention queue rows name people, so an inventory officer who cannot
+manage members must not read the member queue.
+
+**An unknown module and a forbidden one both answer `404`.** This is
+deliberate: a caller who may not administer Training should not be able to
+learn from this endpoint whether the department runs Training at all. Do not
+"fix" it into a `403`.
+
+Two rules an integrator will otherwise get wrong:
+
+- **Only three metric keys are stored.** The fourth slot is always the count
+  that feeds the attention queue and is not part of the settings payload. A
+  `PUT` naming four keys is rejected.
+- **No stored preference means the module's built-in default four, never an
+  empty row.** Absence is "current behaviour", not "off".
+
+Preferences have two scopes in one table. The department-wide record carries a
+null user and the scope key `__department__`; its `applies_to_everyone` flag
+decides whether an individual administrator may keep a personal selection.
+
+Some metrics carry a **second** permission beyond the module's. On `members`,
+the screening-currency metric and the whole attention queue additionally
+require `medical_screening.view`; without it the metric is returned with an
+`unknown` value rather than omitted, and the queue is empty.
+
+---
+
+## Scheduling — Board, Standing Shifts & Trades _(2026-08-23 → 08-24)_
+
+```
+GET    /api/v1/scheduling/shifts/{shift_id}/trade-candidates
+POST   /api/v1/scheduling/swap-requests/{request_id}/respond
+GET    /api/v1/scheduling/standing-shifts
+GET    /api/v1/scheduling/standing-shifts/preview
+POST   /api/v1/scheduling/standing-shifts
+DELETE /api/v1/scheduling/standing-shifts/{claim_id}
+GET    /api/v1/scheduling/eligibility/positions/bulk
+```
+
+**Every shift response now carries its `roster`.** A month of shifts arrives
+with its seat occupants in one request, so a client does not need a call per
+day to colour a cell.
+
+`trade-candidates` returns only members who could actually accept — anyone on
+the shift, on approved leave, not cleared for the position, or working an
+abutting tour is already excluded — ranked least-loaded first.
+
+`respond` is **participant acceptance**, deliberately distinct from manager
+review (which refuses participants by design). It is limited to a one-way
+targeted offer: accepting is the offerer withdrawing and the accepter signing
+up, in one step, both already unprivileged. Approved time off is rechecked at
+acceptance, not only when candidates were listed.
+
+`eligibility/positions/bulk` answers one call per day rather than one per
+shift — the expensive half of the answer is about the member and is identical
+across the day's shifts.
+
+**Standing shifts** are a stored recurring claim, not a batch of assignments.
+They have two readers and only work because both exist: creating a claim seats
+the member on matching shifts already on record, and creating a _shift_ seats
+every member whose active claim matches it. A claim's `apparatus_id` is
+verified in-org before it is stored, and claims go through the same
+self-service validation as any other sign-up — eligibility, seat capacity,
+shift mutability and past dates all apply.
+
+---
+
+## Scheduling — Dashboard Staffing Widgets _(2026-08-23)_
+
+```
+GET /api/v1/scheduling/dashboard/widgets?start_date=&end_date=&station_id=&platoon=&shift_type=&position=
+GET /api/v1/scheduling/dashboard/widget-preferences
+PUT /api/v1/scheduling/dashboard/widget-preferences
+```
+
+Requires `scheduling.view`.
+
+**The window is bounded at the server.** A range that is inverted, or 93 days
+or longer, is a `422` — not a query that walks the whole schedule.
+
+**`station_id` and `platoon` are validated against the organization's own
+lists.** An unknown value is a `422`, deliberately, rather than an empty result
+that a caller would read as "nothing scheduled".
+
+Preferences are per member and per widget: each of the seven tiles keeps its
+own horizon and filters, so an officer watching one station and a chief
+watching the department can share a dashboard without sharing a lens.
+
+---
+
+## NFC ID Cards & Station Check-In _(2026-08-23)_
+
+```
+GET    /api/v1/nfc-tags
+POST   /api/v1/nfc-tags
+PATCH  /api/v1/nfc-tags/{tag_id}
+DELETE /api/v1/nfc-tags/{tag_id}
+POST   /api/v1/nfc-tags/check-in
+```
+
+The whole feature is gated by the `nfc-id-cards` integration row, which starts
+**off**. Every one of these endpoints depends on that check **server-side** —
+hiding the screen would leave the credential surface reachable. The guard fails
+**closed**: an organization whose catalog row has never been seeded counts as
+not having turned it on.
+
+**The credential is never stored or returned in plaintext.** A card's serial
+is the whole of the credential, so the table holds a peppered SHA-256 hash;
+`uid_preview` carries the last four characters purely so an officer can tell
+two of a member's cards apart. There is no endpoint that reads a card number
+back out, and none should be added.
+
+`POST /nfc-tags/check-in` is what a station calls. It will not attach to a
+shift that has already ended. Retired and on-leave members are accepted —
+they attend meetings and banquets, which is what a station records — while
+suspended, dropped, archived and deleted members are refused. A revoked card
+is never reactivated; a replacement is a fresh registration.
+
+An ID card tapped at an officer-operated station is recorded with entry method
+**`nfc_station`**, not `qr_scan`. The two are different acts by different
+people and exports must be able to tell them apart.
+
+---
+
+## Label Printers & Station Documents _(2026-08-23 → 08-24)_
+
+```
+GET    /api/v1/label-printers
+POST   /api/v1/label-printers
+PUT    /api/v1/label-printers/{printer_id}
+DELETE /api/v1/label-printers/{printer_id}
+POST   /api/v1/label-printers/{printer_id}/test
+GET    /api/v1/label-printers/{printer_id}/status
+POST   /api/v1/label-printers/probe
+POST   /api/v1/labels/print
+POST   /api/v1/station-documents/preview
+POST   /api/v1/station-documents/print
+```
+
+**The server opens the socket to the printer**, using the registered host and
+port. Reachability is therefore the backend container's, not the operator's
+browser's — a printer an operator can ping from their laptop may be
+unreachable from the server, and registration will still succeed because
+nothing validates the address at save time.
+
+Each printer records the **command language** it speaks: `zpl` (Zebra and the
+many printers with ZPL emulation) or `escpos` (receipt-class thermal, some
+with linerless label media). The renderer, the stock sizes offered and the
+status query all branch on it. Rows that predate the column are `zpl`, which
+is a statement of fact rather than a guess — that was the only language that
+existed when they were written.
+
+Status is **best-effort and per printer**: one printer failing to answer no
+longer suppresses the answers from the others.
+
+`station-documents` renders the shift roster and the equipment check sheet to
+the watch-desk printer. The check sheet is gated on the same permission as the
+check itself, and a pass-down stays with its own crew.
+
+---
+
+## Equipment Checks — Sealed Containers _(2026-08-23)_
+
+```
+GET /api/v1/equipment-check/templates/{template_id}/last-seals
+```
+
+A template compartment marked `is_sealed` carries a numbered tamper seal. On a
+check, the crew records the number they read; if it is **intact and matches the
+last recorded seal**, the contents count inside is cleared.
+
+Three rules that are load-bearing:
+
+- **A seal clears counting only.** Expiry dates and pressure readings move on
+  their own while the bag sits shut and are never cleared by a seal.
+- **A seal proves unchanged, not full.** Confirming carries the previous counts
+  forward; it does **not** write quantities up to par. A bag that was three
+  short at its last count is still three short, and that files as a failure.
+- **Clearing requires an earned shortcut.** Without a prior intact seal whose
+  normalized number matches, the seal is still recorded but the contents must
+  be counted by hand.
+
+`check_template_items.check_type` now stores four values — `level`,
+`function`, `count`, `expiry` (`header` and `text` are layout, not checks).
+The request schema still **accepts** the legacy names and normalizes before
+storing, so an older client does not break over a rename it never asked for;
+it is deliberately stricter than the reader, because an unknown value arriving
+at a request boundary is the caller's mistake.
+
+---
+
+## Self-Reported Training — Attachment With Submission _(2026-08-23 → 08-24)_
+
+```
+POST /api/v1/training-submissions/with-attachment      (multipart)
+POST /api/v1/training-submissions/{id}/submit
+POST /api/v1/training-submissions/{id}/attachments
+GET  /api/v1/training-submissions/{id}/attachments
+GET  /api/v1/training-submissions/{id}/attachments/{index}/download
+```
+
+The certificate travels **with** the submission rather than as a second step
+that could be skipped. PDF/JPG/PNG, 10 MB, validated by magic bytes and stored
+under a server-generated name.
+
+Files land under the **training-record** attachment root on purpose: approval
+copies the submission's attachment dicts onto the `TrainingRecord` verbatim,
+and the record download route confines paths to `TRAINING_ATTACHMENT_DIR`. A
+sibling directory would `404` every approved certificate from the member's own
+training history.
+
+**Deleting or withdrawing a submission unlinks its file.** That is safe only
+because a submission is deletable in `draft`, `pending_review` and
+`revision_requested` alone — never after approval, the one state where a
+`TrainingRecord` also references the file. **If that guard is ever widened, the
+delete must stop unlinking.**
+
+`start_time` is now stored on both the submission and the approved record.
+Rows written before this have none; that reads as blank, not as 09:00, which
+is what editing previously assumed.
+
+---
+
+## Events — Missed Mandatory _(2026-08-23)_
+
+```
+GET /api/v1/events/missed-mandatory
+```
+
+Mandatory events the calling member did not attend. **Excluded from the
+client-side API cache** — it is per member, and a cached copy on a shared
+device would show one member's misses to the next.
+
+Related: `event_rsvps.early_check_in_minutes` records how far ahead of the
+scheduled start a self check-in landed. **An early check-in is flagged and
+never credited as attendance.** The tap time remains the honest arrival
+record; this column exists so a manager is shown who tapped in early rather
+than having to compare timestamps by eye. Historical rows are null — working
+one out would mean deciding what each event's start time was at the moment
+somebody tapped, and an event edited since would be given a number that was
+never true.
+
+---
+
 ## Scheduling Requests — Pagination _(2026-08-20)_
 
 ```

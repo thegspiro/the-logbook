@@ -576,3 +576,39 @@ leaves the scan armed and says so rather than navigating somewhere unintended.
 and browsers expose it only in a secure context — a LAN deployment on plain
 `http://` cannot use it. The writer panel says which of the two you are hitting
 rather than a bare "unavailable". QR remains the universal path.
+
+## Ranked Events List and Early Check-In _(2026-08-23 → 08-24)_
+
+### The list says what it wants from you
+
+`/events` is ranked by what each event needs from the viewing member, with a
+**Needs you** band at the top. `GET /events/missed-mandatory` supplies the
+mandatory events the caller did not attend.
+
+`missed-mandatory` is **excluded from the client-side API cache**. It is a
+per-member answer, and a cached copy on a shared station device would show one
+member's misses to the next person who signed in.
+
+Two corrections that came with it:
+
+- **The page no longer accuses members who could not have attended.** A member
+  who joined after an event ran, or who was not in its audience, is not counted
+  as having missed it.
+- Credited hours read **"up to"**, because what a member is actually credited
+  depends on their recorded attendance, not on the event's nominal length.
+
+### Early check-in is flagged, never credited
+
+An NFC tap or a QR scan can land inside the check-in window but well before the
+event starts. `event_rsvps.early_check_in_minutes` records how far ahead of the
+scheduled start it was.
+
+- **The tap time stays the honest record of when the member arrived.** The new
+  column does not replace it; it saves the event's manager from comparing
+  timestamps by eye.
+- **An early check-in is never credited as attendance.** Attendance credit runs
+  from the scheduled start.
+- **Historical rows are NULL.** Backfilling would mean deciding, for every past
+  RSVP, what its event's start time was at the moment somebody tapped — and an
+  event whose start was edited afterwards would be given a number that was
+  never true. NULL reads as "not recorded", which is what it is.

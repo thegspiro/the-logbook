@@ -12,6 +12,29 @@ docs/DATABASE_SCHEMA.md
 # Rendered from the training guides by scripts/screenshots/status_report.py
 docs/training/SCREENSHOT_STATUS.md
 
+# Training guides carrying multi-line SCREENSHOT NEEDED markers.
+#
+# The marker convention is `> **[SCREENSHOT NEEDED — …]**` opening a blockquote
+# whose closing `**]**` sits several lines later. Prettier reads the opening
+# `**` as unmatched emphasis and escapes it to `\*\*`, which does not change
+# how the page reads — and silently removes the marker from
+# `scripts/screenshots/status_report.py`, whose pattern anchors on `^>\s*\*\*\[?`.
+#
+# `lint-staged` runs `prettier --write` over `*.md`, so without this the next
+# commit touching one of these files would drop 40 tracked screenshot requests
+# from the tracker with no visible diff in the rendered prose. That is the exact
+# failure recorded in SCREENSHOT_CURRENCY.md under "0 remaining was measuring
+# the wrong thing", and it is why these are ignored rather than reformatted.
+#
+# Verified 2026-08-24 by running `prettier --write` over a copy of every guide:
+# these five are the only ones affected. Re-run that check before adding a file
+# here, and remove a file once its markers are captured.
+docs/training/03-scheduling.md
+docs/training/04-events-meetings.md
+docs/training/08-admin-reports.md
+docs/training/10-mobile-pwa.md
+docs/training/19-august-2026-release-changes.md
+
 # Dependencies and build output
 node_modules/
 frontend/dist/
