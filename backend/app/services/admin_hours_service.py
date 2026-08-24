@@ -25,6 +25,7 @@ from app.models.event import Event
 from app.models.user import Organization, User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.hours import hours_from_minutes
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
@@ -893,18 +894,18 @@ class AdminHoursService:
                 "category_name": cat_name,
                 "category_color": cat_color,
                 "total_minutes": int(cat_minutes),
-                "total_hours": round(int(cat_minutes) / 60, 2),
+                "total_hours": hours_from_minutes(cat_minutes),
                 "entry_count": cat_count,
             }
             for cat_id, cat_name, cat_color, cat_minutes, cat_count in category_result.all()
         ]
 
         return {
-            "total_hours": round(int(total_minutes) / 60, 2),
+            "total_hours": hours_from_minutes(total_minutes),
             "total_entries": total_entries,
-            "approved_hours": round(approved_minutes / 60, 2),
+            "approved_hours": hours_from_minutes(approved_minutes),
             "approved_entries": approved_entries,
-            "pending_hours": round(pending_minutes / 60, 2),
+            "pending_hours": hours_from_minutes(pending_minutes),
             "pending_entries": pending_entries,
             "by_category": by_category,
             "period_start": start_date,
@@ -1051,8 +1052,13 @@ class AdminHoursService:
             approver_first = row[4]
             approver_last = row[5]
 
+            # The export states the same figure the member read on the screen
+            # it came from, so a hand-off does not have to explain why one says
+            # 2.9 and the other 3.
             duration_hours = (
-                round(entry.duration_minutes / 60, 2) if entry.duration_minutes else ""
+                hours_from_minutes(entry.duration_minutes)
+                if entry.duration_minutes
+                else ""
             )
             clock_in = (
                 entry.clock_in_at.strftime("%Y-%m-%d %H:%M")
@@ -1482,12 +1488,22 @@ class AdminHoursService:
         duration_minutes: int,
         event_type: Optional[str],
         custom_category: Optional[str],
+        resync: bool = False,
     ) -> int:
         """Create admin hours entries from event attendance.
 
         Looks up active mappings for the event type/custom category and
         creates one entry per mapping with proportional duration.
-        Returns the number of entries created.
+        Returns the number of entries created or updated.
+
+        ``resync`` re-runs the credit for an attendance record that was already
+        credited, which is what a reopened event needs: the correction a leader
+        made has to reach the ledger, and skipping an existing entry is exactly
+        how the event screen and the hours ledger came to disagree. The entry is
+        updated in place rather than deleted and recreated so its id, its
+        approval and its audit trail survive the correction — only the numbers
+        move. An entry whose method is no longer EVENT_ATTENDANCE was taken over
+        by hand and is left alone.
         """
         mappings = await self.get_mappings_for_event(
             organization_id, event_type, custom_category
@@ -1495,16 +1511,50 @@ class AdminHoursService:
         if not mappings:
             return 0
 
+        # On a resync the event's type or custom category may have been
+        # corrected while it was reopened, which points it at a different set
+        # of categories. Entries under the categories it no longer maps to are
+        # stale derivatives of this RSVP, so they go — otherwise a correction
+        # from category A to B leaves the member credited under both and their
+        # total silently doubles.
+        if resync:
+            keep = {category_id for category_id, _pct, _cat in mappings}
+            stale_result = await self.db.execute(
+                select(AdminHoursEntry).where(
+                    AdminHoursEntry.source_rsvp_id == rsvp_id,
+                    AdminHoursEntry.entry_method
+                    == AdminHoursEntryMethod.EVENT_ATTENDANCE,
+                    AdminHoursEntry.category_id.notin_(keep),
+                )
+            )
+            for stale in stale_result.scalars().all():
+                await self.db.delete(stale)
+
         created_count = 0
         for category_id, percentage, category in mappings:
             # Skip if entry already exists for this RSVP + category (idempotent)
             existing = await self.db.execute(
-                select(AdminHoursEntry.id).where(
+                select(AdminHoursEntry).where(
                     AdminHoursEntry.source_rsvp_id == rsvp_id,
                     AdminHoursEntry.category_id == category_id,
                 )
             )
-            if existing.scalar_one_or_none():
+            existing_entry = existing.scalar_one_or_none()
+            if existing_entry is not None:
+                if not resync:
+                    continue
+                if (
+                    existing_entry.entry_method
+                    != AdminHoursEntryMethod.EVENT_ATTENDANCE
+                ):
+                    continue
+                existing_entry.clock_in_at = _ensure_utc(check_in_at)
+                existing_entry.clock_out_at = _ensure_utc(check_out_at)
+                existing_entry.duration_minutes = max(
+                    1, int(duration_minutes * percentage / 100)
+                )
+                existing_entry.description = f"Event attendance: {event_title}"
+                created_count += 1
                 continue
 
             proportional_minutes = max(1, int(duration_minutes * percentage / 100))
@@ -1535,6 +1585,30 @@ class AdminHoursService:
             await self.db.flush()
 
         return created_count
+
+    async def delete_event_attendance_entries(self, rsvp_id: str) -> int:
+        """Remove the hours credited from one attendance record.
+
+        Called when an attendee is taken off an event. Without it the entry
+        outlives the RSVP it was derived from: ``source_rsvp_id`` is an
+        ``ondelete="SET NULL"`` foreign key, so the row survives with nothing
+        pointing back at the attendance that justified it, and the member keeps
+        credit for an event they are no longer recorded at.
+
+        Only rows this service created from attendance are removed — an entry a
+        member or officer has since taken over by hand is theirs, not a
+        derivative of the RSVP.
+        """
+        result = await self.db.execute(
+            select(AdminHoursEntry).where(
+                AdminHoursEntry.source_rsvp_id == rsvp_id,
+                AdminHoursEntry.entry_method == AdminHoursEntryMethod.EVENT_ATTENDANCE,
+            )
+        )
+        entries = list(result.scalars().all())
+        for entry in entries:
+            await self.db.delete(entry)
+        return len(entries)
 
     # =========================================================================
     # Admin Hours Compliance

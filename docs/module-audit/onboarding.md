@@ -10,6 +10,7 @@ and a HQ facility/location, then latches `is_completed`.
 service (reset/owner/session), (C) org-template services.
 
 ## Verified good ✅
+
 - **The two catastrophic scenarios are correctly blocked.** Post-completion
   `POST /reset` is refused (`is_completed` check) and requires a valid session +
   CSRF, and no new onboarding session can even be minted once an org exists
@@ -34,6 +35,7 @@ service (reset/owner/session), (C) org-template services.
 ## Findings
 
 ### ONB-1 — HIGH (correctness) — Factory reset FK-failed on the HQ location → could never complete — ✅ FIXED
+
 `reset_onboarding` deleted `users` (step 5) before the HQ `Location`/`Facility`
 created during setup, relying on the `organizations` CASCADE (step 7, last). But
 `Location.created_by → users.id` has **no `ondelete`** (RESTRICT), so deleting
@@ -46,6 +48,7 @@ leaving the instance un-resettable after a HQ location was created.
 the reset rather than proceeding to the FK-failing `users` delete.
 
 ### ONB-2 — MED — In-progress window let a leaked session create multiple orgs / owners — ✅ FIXED
+
 `needs_onboarding()` stays `True` while onboarding is in progress even after an
 org and owner exist, and `create_organization` only checked slug uniqueness while
 `create_system_owner` had no "only one owner" check. A leaked/replayed in-progress
@@ -59,6 +62,7 @@ already exists (the owner is definitionally the first user). Both raise
 guard raises the `ValueError` it asserts.)
 
 ### ONB-3 — MED — Mutations replayable after completion (missing completion guard) — ✅ FIXED
+
 `/modules`, `/notifications`, `/complete`, `/session/roles`, and
 `/session/positions` authenticated only via `validate_session` and never checked
 `needs_onboarding()` — unlike their siblings — so within a still-valid session's
@@ -69,17 +73,20 @@ five (`/session/positions` inherits it by delegating to `/session/roles`).
 `/complete` now guards before re-persisting session data.
 
 ### ONB-4 — MED — Unauthenticated provisioning routes lacked rate limiting — ✅ FIXED
+
 `POST /start` (mints an onboarding-session DB row per call — pre-org row-exhaustion
 DoS) and `POST /system-owner` (creates a wildcard account) had no
 `check_rate_limit`.
 **Fix:** added `dependencies=[Depends(check_rate_limit)]` to both.
 
 ### ONB-5 — LOW/MED — `/database-check` echoed the raw DB exception — ✅ FIXED
+
 `verify_database_connection` returned `"error": str(e)`; a driver error can embed
 the DSN / internal host details.
 **Fix:** log the real error server-side, return a generic message.
 
 ### ONB-6 — LOW — Minutes-template seeding shared mutable default sections (pitfall #12) — ✅ FIXED
+
 `template_service.initialize_defaults` assigned the module-level
 `DEFAULT_*_SECTIONS` constants **by reference** into each org's `sections` column,
 so a later in-place edit of one org's template would contaminate the shared
@@ -87,6 +94,7 @@ constant and every other org's rows.
 **Fix:** `copy.deepcopy` each `sections` before constructing the row.
 
 ### ONB-7 — MED/LOW (flagged) — Onboarding role editor accepts client-controlled permissions/priority/system-flag
+
 `save_session_roles` accepts fully client-supplied `permissions`, `priority`, and
 `is_custom` (which sets `is_system`), and keys updates on the client-supplied
 slug — so a session holder can mint a high-priority `is_system` role, rewrite an
@@ -97,6 +105,7 @@ re-mint / allowlisting `module_id` would change what the legitimate onboarding
 role editor can express, so left for a product decision. **Status:** flagged.
 
 ### ONB-8 — MED/LOW (flagged) — Reset trust model + audit durability, `/status` leak
+
 - `/reset` is gated by the onboarding session + CSRF but not the existing owner's
   re-authentication, so a leaked in-progress session can wipe the owner+org before
   `/complete`; blocking reset once an owner exists conflicts with legitimately
@@ -112,13 +121,14 @@ role editor can express, so left for a product decision. **Status:** flagged.
   wizard resumes from) is unchanged. 2 tests added.
 - `template_service` create/update rely on the pydantic schema never exposing
   `organization_id`/`is_system` (mass-assignment fragility). **Still flagged.**
-**Status:** `/status` disclosure fixed; reset re-auth + audit durability + template
-mass-assignment still flagged. See `docs/app-review/onboarding.md`.
+  **Status:** `/status` disclosure fixed; reset re-auth + audit durability + template
+  mass-assignment still flagged. See `docs/app-review/onboarding.md`.
 
 ## Notes
+
 - Scope correction: `org_template_service.py` is **export-only** (Phase 1, no
   writes) and `org_template_registry.py`'s import fields are declared but unused —
-  there is no template *import/apply* path yet, so the "validate a client-supplied
+  there is no template _import/apply_ path yet, so the "validate a client-supplied
   template_id" control belongs to Phase 2 when import lands (the export path is
   correctly org-scoped from auth context today).
 - Large-file caveat: `onboarding.py` (1,961 L) and the service (1,319 L) were

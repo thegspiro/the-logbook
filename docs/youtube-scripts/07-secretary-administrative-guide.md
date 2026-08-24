@@ -534,9 +534,9 @@ status chip, the details table.]**
 > as it did yesterday."
 
 **[PRESENTER NOTE: the on-screen banner reads "Templates you have never edited
-already use it." That is true of a body byte-identical to the *current* shipped
+already use it." That is true of a body byte-identical to the _current_ shipped
 default — which a department coming from the previous release does not have,
-because its untouched bodies are the *older* default. Do not read the banner
+because its untouched bodies are the _older_ default. Do not read the banner
 aloud as the rule; say what is above, then point at Reset.]**
 
 **[SCREEN: Press Reset on one template; show the before and after side by side]**

@@ -34,7 +34,7 @@ import type {
 } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
-import { formatHours, roundHoursToQuarter, sumHoursToQuarter } from '../utils/hoursFormatting';
+import { formatHours, formatHoursExact, roundHoursToQuarter, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
@@ -500,7 +500,7 @@ export const SchedulingReportsPage: React.FC = () => {
                               {formatHours(variance)}
                             </td>
                             <td className="text-theme-text-muted px-4 py-3 text-right">
-                              {m.shifts_attended > 0 ? formatHours(m.worked_hours / m.shifts_attended) : '0'}h
+                              {m.shifts_attended > 0 ? formatHoursExact(m.worked_hours / m.shifts_attended) : '0'}h
                             </td>
                           </tr>
                         );

@@ -1130,6 +1130,18 @@ export const trainingSessionService = {
     return response.data;
   },
 
+  /**
+   * Reopen a finalized session for corrections. Requires
+   * `events.reopen_attendance`; any approval still outstanding has its emailed
+   * token expired, so re-finalizing issues a fresh one.
+   */
+  async reopenSession(sessionId: string, reason?: string): Promise<TrainingSessionResponse> {
+    const response = await api.post<TrainingSessionResponse>(`/training/sessions/${sessionId}/reopen`, {
+      reason: reason?.trim() || undefined,
+    });
+    return response.data;
+  },
+
   async getApprovalData(token: string): Promise<Record<string, unknown>> {
     const response = await api.get<Record<string, unknown>>(`/training/sessions/approve/${token}`);
     return response.data;

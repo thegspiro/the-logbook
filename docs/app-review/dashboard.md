@@ -8,7 +8,7 @@
 Re-verified pass-1: `minutes_visibility_filter` mirrors `MinuteService`'s
 `restricted` branch and is applied to the minutes half; every aggregate filters
 `organization_id` (RPT-1 clean); the dashboard is read-only (no cross-org write).
-But the XC-2 lens found the DASH-1 fix closed only the *inner* split. **1 fix.**
+But the XC-2 lens found the DASH-1 fix closed only the _inner_ split. **1 fix.**
 
 ### DASH-3 — HIGH — `/dashboard/action-items` had no permission gate (XC-2 re-exposure) — ✅ FIXED
 
@@ -17,8 +17,8 @@ permission**. The **meeting half** filtered only `organization_id`, so **any**
 authenticated member (e.g. a probationary member with neither `meetings.view` nor
 `minutes.view`) could read **every meeting action item's `description`** org-wide;
 the minutes half applied `minutes_visibility_filter` but that only reproduces the
-*inner* manage/non-manage restricted split (it presupposes the caller already holds
-`minutes.view`) — it did **not** reproduce the *outer* view gate the sibling modules
+_inner_ manage/non-manage restricted split (it presupposes the caller already holds
+`minutes.view`) — it did **not** reproduce the _outer_ view gate the sibling modules
 enforce (`meetings.py` requires `meetings.view` OR `minutes.view`; `minutes.py`
 requires `minutes.view`). The frontend `/action-items` route has no `ProtectedRoute`
 either, so the endpoint was the only gate. Action-item descriptions carry the
@@ -65,10 +65,10 @@ and an aggregate that re-exposes data a sibling module deliberately restricted
 - **All 4 endpoints authenticated.** `/stats` and `/action-items` use
   `get_current_active_user`; `/admin-summary` requires `settings.manage`;
   `/community-engagement` requires `events.manage`.
-  *(Note for future iterations: an AST scan looking only for `require_permission`
+  _(Note for future iterations: an AST scan looking only for `require_permission`
   or `get_current_user` reports these first two as ungated —
   `get_current_active_user` is a third spelling. Worth widening the detector
-  rather than trusting a narrow one.)*
+  rather than trusting a narrow one.)_
 - **Every aggregate is org-scoped, including the hard one.** RPT-1's finding was
   that minutes action items have **no `organization_id` column**, so counting
   them requires joining `MeetingMinutes`. Both places this endpoint file touches
@@ -103,8 +103,8 @@ firefighter — could read the `description`, `assignee_name`, `due_date` and
 `priority` of action items belonging to **unapproved drafts and closed
 executive-session minutes**. In a fire department, executive session is where
 personnel discipline, terminations and legal matters are handled, and an action
-item is free text from that record: *"Follow up with counsel re: the Smith
-termination hearing"* is a realistic value. The restriction MM-3 added to the
+item is free text from that record: _"Follow up with counsel re: the Smith
+termination hearing"_ is a realistic value. The restriction MM-3 added to the
 front door was intact; this was a side door into the same content.
 
 Same XC-2 shape as MM-3 itself, reached through a sibling module — which is the
@@ -126,7 +126,7 @@ current_user.id` branch — the tests name this behaviour explicitly, so the
 change is one line and one test.
 
 Locked by `tests/test_dashboard_action_item_visibility.py` (4 tests), which
-asserts against the compiled SQL — the predicate *is* the control, and it can be
+asserts against the compiled SQL — the predicate _is_ the control, and it can be
 verified without MySQL.
 
 ### DASH-2 — LOW — `GET /dashboard/stats` is unused and half-stubbed — 🚩 FLAGGED
@@ -139,7 +139,7 @@ setup_percentage=100,
 pending_tasks_count=0,
 ```
 
-**Impact:** *nothing today* — `dashboardService.getStats` has **zero callers**
+**Impact:** _nothing today_ — `dashboardService.getStats` has **zero callers**
 in the frontend (its two siblings, `getAdminSummary` and `getActionItems`, each
 have one). So no user is currently shown a fabricated figure.
 
@@ -208,11 +208,12 @@ somewhere other than a code comment, because the next cross-module reader of
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2512 passed, 0 failed** (was 2508 — 4 tests added). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| Check                | Result                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                            |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                             |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                      |
+| `eslint`             | ✅ clean                                                                                                                                    |
+| backend tests        | ✅ **2512 passed, 0 failed** (was 2508 — 4 tests added). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+
 </content>

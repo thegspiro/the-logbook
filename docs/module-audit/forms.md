@@ -8,6 +8,7 @@ frontend `modules/forms` + `PublicFormPage`.
 integration processors, tenant isolation).
 
 ## Verified good ✅
+
 - **Public surface is a model implementation:** slug regex-validated (12 hex,
   anti-traversal), rate-limited (60 view / 10 submit per min per IP + lockouts),
   per-form daily cap (`daily_cap_exceeded`), honeypot with fake-success (doesn't
@@ -32,6 +33,7 @@ integration processors, tenant isolation).
 ## Findings
 
 ### FORM-1 — HIGH — Equipment-assignment integration wrote a cross-org member/item — ✅ FIXED
+
 `_process_equipment_assignment` mapped `member_id` and `item_id` from
 submitter-supplied form data (label-based mapping catches plain fields, not just
 `member_lookup`) and called `inventory_service.assign_item_to_user`. That service
@@ -43,6 +45,7 @@ both `member_id` (User) and `item_id` (InventoryItem) belong to the submission's
 org before the write; reject otherwise.
 
 ### FORM-2 — HIGH — Event-registration integration wrote an RSVP against a cross-org event — ✅ FIXED
+
 `_process_event_registration` took `event_id` from submitter-mapped data and
 created/updated an `EventRSVP` (stamped the submission's org) with **no org
 check on `event_id`**, and the duplicate-check query filtered only
@@ -52,12 +55,14 @@ org B's event.
 before the RSVP write, and added `organization_id` to the duplicate-check query.
 
 ### FORM-3 — LOW — `MULTISELECT` option values not validated — ✅ FIXED
+
 Option-membership validation covered `SELECT`/`RADIO`/`CHECKBOX` but not
 `MULTISELECT`, so an arbitrary (escaped) string was accepted for a multiselect
 field. **Fix:** added `MULTISELECT` to the comma-separated option-validation
 branch alongside `CHECKBOX`. Data-integrity, not XSS.
 
 ### FORM-4 — LOW (not exploitable on current UI) — Form-definition text stored unescaped
+
 Field `label`/`placeholder`/`help_text`/option labels are stored raw (set by a
 `forms.manage` user) and returned raw by the public form GET. Verified the React
 renderer uses no `dangerouslySetInnerHTML`, so it renders as escaped text — no
@@ -65,6 +70,7 @@ stored XSS today. **Status:** flagged as defense-in-depth (escape at storage or
 enforce CSP) in case a future renderer changes.
 
 ### FORM-5 — LOW — `require_authentication` / `allow_multiple_submissions` not enforced on public submit
+
 `get_form_by_slug` gates on `is_public` + `PUBLISHED` only. A form marked
 `is_public=True` **and** `require_authentication=True` still accepts anonymous
 submissions, and `allow_multiple_submissions=False` isn't enforced server-side
@@ -73,6 +79,7 @@ submissions, and `allow_multiple_submissions=False` isn't enforced server-side
 "public + require_authentication" before enforcing.
 
 ### FORM-6 — INFO — Required-field check is presence-only — ✅ FIXED (app-review B13)
+
 Both submit paths checked `field.id not in data`; a key present with `""`/
 whitespace/`[]` passed the required check (later coerced to `""`). **Fix (B13):**
 a new `_is_empty_value` helper treats an empty/whitespace string or empty
@@ -81,6 +88,7 @@ applied to both required-field loops. 9 unit tests added. See
 `docs/app-review/forms.md`.
 
 ### FORM-7 — LOW-MED — Raw exception text leaked to the (unauthenticated) submitter — ✅ FIXED (app-review B13)
+
 14 service methods returned `str(e)` on failure, which the endpoints surface as
 `HTTPException(detail=error)`. On the **public unauthenticated** submit path this
 returned raw SQL/column names to anonymous callers (a worse NOTIF-2/SF-2). **Fix
@@ -89,6 +97,7 @@ returned raw SQL/column names to anonymous callers (a worse NOTIF-2/SF-2). **Fix
 processor-result dicts that `_process_integrations` never returns to the client.
 
 ## Notes
+
 - `member_lookup` fields are stripped from the public GET but still accepted on
   the public submit path. The FORM-1 in-org validation closes the actual
   cross-org exploit; additionally excluding `member_lookup`/`file`/`signature`

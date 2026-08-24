@@ -57,6 +57,7 @@ from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidget
 from app.services.inventory_service import InventoryService
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import compute_org_compliance_pct
+from app.utils.hours import hours_from_minutes
 
 router = APIRouter()
 
@@ -1022,7 +1023,7 @@ async def get_admin_summary(
             )
         )
         total_minutes = float(result.scalar() or 0)
-        recent_admin_hours = round(total_minutes / 60.0, 1)
+        recent_admin_hours = hours_from_minutes(total_minutes)
 
         result = await db.execute(
             select(func.count(AdminHoursEntry.id)).where(

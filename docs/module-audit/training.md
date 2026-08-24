@@ -8,9 +8,10 @@ frontend `modules/training`. PHI-adjacent (certifications, scores, medical/
 training waivers, member compliance). (`compliance_*`/`skills_testing` are
 audited separately under #22.)
 **Audited:** iteration 18 — split across two parallel readers: (A) member-facing
-+ compliance/waiver/submission integrity; (B) programs + external-provider +
-enrollment/session isolation. `training_program_service.py` (4,027 L) got
-invariant-focused (not line-by-line) coverage.
+
+- compliance/waiver/submission integrity; (B) programs + external-provider +
+  enrollment/session isolation. `training_program_service.py` (4,027 L) got
+  invariant-focused (not line-by-line) coverage.
 
 > **Coverage note (2026-08-05):** This audit predates the multi-class course
 > feature. `course_syllabus.py` and `course_cohorts.py` (2 endpoint files, 20
@@ -28,6 +29,7 @@ invariant-focused (not line-by-line) coverage.
 > than a permission.
 
 ## Verified good ✅
+
 - **Auth coverage:** all 154 endpoints authed (`training.manage`/`.view_all`/
   `events.manage`/`system.admin`).
 - **Per-member PHI endpoints are self-or-officer gated** via
@@ -55,6 +57,7 @@ invariant-focused (not line-by-line) coverage.
 ## Findings
 
 ### TR-1 — HIGH — Cross-member PHI leak: `GET /training/certifications/expiring` — ✅ FIXED
+
 Member-authenticated (`get_current_user`) but scoped **only by org**, returning
 every member's expiring certification records (course, certification_number,
 issuing_agency, score, instructor) to any authenticated member. A near-duplicate
@@ -65,6 +68,7 @@ this one was the under-gated twin.
 service method.
 
 ### TR-2 — MEDIUM (XC-1) — `POST /training/records` skipped `user_id` org validation — ✅ FIXED
+
 The client-supplied `user_id` was only org-validated inside the "auto-populate
 rank/station" block, so supplying both `rank_at_completion` and
 `station_at_completion` skipped the check and let a record be attributed to an
@@ -74,6 +78,7 @@ compliance math). The course-expiration lookup was also not org-scoped.
 reusing the row for auto-populate; org-scoped the `TrainingCourse` lookup.
 
 ### TR-3 — MEDIUM (XC-1 + cross-org PII leak) — External user-mapping leaked a foreign user's name/email — ✅ FIXED
+
 `update_user_mapping` stored a client-supplied `internal_user_id` with no in-org
 check, and both the list and update-response **enrichment lookups**
 (`select(User.full_name, User.email).where(User.id == internal_user_id)`) had **no
@@ -83,6 +88,7 @@ read back that user's name + email.
 enrichment lookups.
 
 ### TR-4 — LOW (cleanup) — Dead no-op default-year expression — ✅ FIXED (removed) + flagged
+
 `get_all_requirements_progress` had a dead `year or datetime.now().year` statement
 (result discarded). Removed the no-op. **Flagged:** whether `year` should default
 to the current year (vs the current "all years" when omitted) is a
@@ -90,22 +96,25 @@ compliance-semantics decision — not changed unverified, as it would alter whic
 year's requirements members are measured against.
 
 ### TR-5 — LOW/MED (flagged) — Auto-approved submissions bypass separation-of-duties
+
 The manual submission-review path blocks self-approval, but the **auto-approve**
 branch (`require_approval=False` or `hours_completed <= auto_approve_under_hours`)
 immediately spawns a COMPLETED record crediting the member's self-reported hours
 with no reviewer. Config-driven (likely intended), but the only limit on member
 self-credit is the org's auto-approve config. **Status:** flagged (mirror the
 manual path's SoD guard or accept as documented config).
-> **Clarification (app-review A9):** the *manual* path's self-approval block is
+
+> **Clarification (app-review A9):** the _manual_ path's self-approval block is
 > now the shared `assert_different_person` guard
 > (`training_submission_service.review_submission`, line 289) rather than an
 > inline check — belt-and-suspenders consistency with finance/skills/admin-hours.
 > This does **not** close TR-5: the finding is about the **auto-approve** branch
-> in `create_submission` (line 114), which spawns a COMPLETED record with *no
-> reviewer at all*, so an actor≠subject check does not apply. TR-5 remains a
+> in `create_submission` (line 114), which spawns a COMPLETED record with _no
+> reviewer at all_, so an actor≠subject check does not apply. TR-5 remains a
 > config decision (bound the auto-approve threshold, or accept it as documented).
 
 ### TR-6 — MEDIUM (upgraded) — External/enhancement cross-org FK — ⚠️ PARTLY FIXED (app-review B18)
+
 **Live leak found & fixed (B18):** `update_category_mapping` stored a client
 `internal_category_id` unchecked and the list/update enrichment lookups read
 `TrainingCategory.name` by that id with **no org filter** — a `training.manage`
@@ -123,6 +132,7 @@ migration shim — should fail closed once CI-5 field-encryption backfill comple
 See `docs/app-review/training.md`.
 
 ## Notes
+
 - Large-module caveat: `training_program_service.py` (4,027 L) and
   `training_enhancement_service.py` were reviewed for security invariants, not
   line-by-line. The invariants (org-scoping, XC-3, SSRF, credentials) held on

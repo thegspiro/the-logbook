@@ -120,7 +120,7 @@ last id against the newest **non-archival** `AuditLogCheckpoint`. A checkpoint
 cryptographically attests that entries existed up to its `last_log_id`; if the chain
 now ends before that, those attested rows were removed — reported as
 `"Chain tail truncated"`, `verified: False`. Archival checkpoints (`archived_at`
-set) purge the *old head* range, not the tail, so they're excluded — no false
+set) purge the _old head_ range, not the tail, so they're excluded — no false
 positive on the sanctioned retention path, and none for an append-only chain
 (a checkpoint's `last_log_id` is always ≤ the current max in normal operation).
 To truncate the tail undetectably an attacker must now also delete/rewrite the
@@ -151,9 +151,9 @@ resolved (the last residual on this surface).
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (core/audit + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_audit_hash_chain` **10 passed** (+2 new tail-truncation); other non-DB audit tests pass. DB-backed audit tests error on the no-MySQL fixture, unchanged from baseline. |
+| Check                        | Result                                                                                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (core/audit + test) | ✅ 0 violations                                                                                                                                                                 |
+| `black --check`              | ✅ unchanged                                                                                                                                                                    |
+| `tsc --noEmit`               | ✅ n/a — no frontend change                                                                                                                                                     |
+| backend tests                | ✅ `test_audit_hash_chain` **10 passed** (+2 new tail-truncation); other non-DB audit tests pass. DB-backed audit tests error on the no-MySQL fixture, unchanged from baseline. |

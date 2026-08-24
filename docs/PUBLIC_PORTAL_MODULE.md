@@ -1,9 +1,11 @@
 # Public Portal Module - Architecture & Security Design
 
 ## Overview
+
 The Public Portal module enables fire departments to expose selected data to a public-facing website. This module is designed with security as the top priority, as it creates a bridge between internal systems and the public internet.
 
 ## Use Cases
+
 - Display volunteer hours contributed
 - Show upcoming public events (community events, open houses)
 - Display department statistics (calls responded to, stations, apparatus)
@@ -16,9 +18,11 @@ The Public Portal module enables fire departments to expose selected data to a p
 ### Components
 
 #### 1. Public Portal Configuration (Admin UI)
+
 Located in: `/frontend/src/modules/public-portal/`
 
 Allows administrators to:
+
 - Enable/disable the public portal
 - Generate and manage API keys
 - Configure what data is exposed (whitelist approach)
@@ -28,9 +32,11 @@ Allows administrators to:
 - Set cache TTL for different data types
 
 #### 2. Public Portal API (Backend)
+
 Located in: `/backend/app/api/public/portal.py`
 
 Read-only API endpoints that:
+
 - Serve data to authorized public websites
 - Enforce rate limiting per API key
 - Log all access attempts
@@ -38,9 +44,11 @@ Read-only API endpoints that:
 - Use aggressive caching
 
 #### 3. Database Models
+
 Located in: `/backend/app/models/public_portal.py`
 
 Tables:
+
 - `public_portal_config` - Configuration and settings
 - `public_portal_api_keys` - API keys for accessing public data
 - `public_portal_access_log` - Audit log of all API access
@@ -49,24 +57,28 @@ Tables:
 ## Security Requirements
 
 ### 1. Authentication
+
 - **API Key Authentication**: Every request must include a valid API key
 - **No User Sessions**: Public API is completely stateless
 - **Key Rotation**: API keys can be rotated/revoked at any time
 - **Key Expiration**: Optional expiration dates for API keys
 
 ### 2. Rate Limiting
+
 - **Global Limit**: 1000 requests/hour per API key (configurable)
 - **Per-Endpoint Limit**: Stricter limits on expensive queries
 - **IP-based Limit**: Secondary limit per IP address (100 req/min)
 - **Exponential Backoff**: Temporary blocks for repeated violations
 
 ### 3. Data Access Control
+
 - **Whitelist-Only**: Only explicitly enabled data fields are returned
 - **Read-Only**: No write operations allowed on public API
 - **PII Protection**: Personal information is never exposed
 - **Sanitization**: All data is sanitized before returning
 
 ### 4. Traffic Scrutiny
+
 - **Request Logging**: Every request is logged with:
   - Timestamp
   - API key used
@@ -81,6 +93,7 @@ Tables:
 - **Alerting**: Notify admins of suspicious activity
 
 ### 5. Network Security
+
 - **CORS**: Strict CORS policy (only allowed origins)
 - **HTTPS Only**: Enforce TLS 1.2+ for all connections
 - **Request Validation**: Strict input validation
@@ -88,12 +101,14 @@ Tables:
 - **No Debug Info**: Never leak stack traces or internal errors
 
 ### 6. Caching Strategy
+
 - **Aggressive Caching**: Cache responses for 5-60 minutes
 - **CDN-Friendly**: Support Cache-Control headers
 - **Cache Invalidation**: Manual cache clearing when data changes
 - **Reduces Load**: Prevents database hammering
 
 ### 7. Monitoring & Auditing
+
 - **Access Logs**: Permanent audit trail of all access
 - **Usage Dashboard**: Show request volume, popular endpoints
 - **Security Events**: Track and alert on security issues
@@ -163,6 +178,7 @@ GET /api/v1/public-portal/usage-stats
 ## Database Schema
 
 ### public_portal_config
+
 ```sql
 - id: UUID (PK)
 - organization_id: UUID (FK)
@@ -176,6 +192,7 @@ GET /api/v1/public-portal/usage-stats
 ```
 
 ### public_portal_api_keys
+
 ```sql
 - id: UUID (PK)
 - organization_id: UUID (FK)
@@ -191,6 +208,7 @@ GET /api/v1/public-portal/usage-stats
 ```
 
 ### public_portal_access_log
+
 ```sql
 - id: UUID (PK)
 - organization_id: UUID (FK)
@@ -206,6 +224,7 @@ GET /api/v1/public-portal/usage-stats
 ```
 
 ### public_portal_data_whitelist
+
 ```sql
 - id: UUID (PK)
 - organization_id: UUID (FK)
@@ -219,6 +238,7 @@ GET /api/v1/public-portal/usage-stats
 ## Implementation Phases
 
 ### Phase 1: Backend Foundation
+
 1. Create database models
 2. Create API key generation and management
 3. Implement authentication middleware
@@ -226,6 +246,7 @@ GET /api/v1/public-portal/usage-stats
 5. Add request logging
 
 ### Phase 2: Security Layer
+
 1. Implement rate limiting
 2. Add IP-based limits
 3. Create anomaly detection
@@ -233,6 +254,7 @@ GET /api/v1/public-portal/usage-stats
 5. Implement CORS controls
 
 ### Phase 3: Frontend Admin UI
+
 1. Create module configuration page
 2. Build API key management interface
 3. Create access log viewer
@@ -240,6 +262,7 @@ GET /api/v1/public-portal/usage-stats
 5. Build data whitelist configurator
 
 ### Phase 4: Testing & Documentation
+
 1. Security testing (penetration testing)
 2. Load testing (rate limit validation)
 3. Create public API documentation
@@ -249,6 +272,7 @@ GET /api/v1/public-portal/usage-stats
 ## Security Considerations
 
 ### Threat Model
+
 1. **DDoS Attacks**: Mitigated by rate limiting and IP blocking
 2. **Data Scraping**: Mitigated by aggressive rate limits
 3. **API Key Theft**: Keys can be revoked instantly
@@ -258,6 +282,7 @@ GET /api/v1/public-portal/usage-stats
 7. **Unauthorized Access**: Prevented by API key requirement
 
 ### Best Practices
+
 - Never expose PII without explicit opt-in
 - Log everything for forensics
 - Make revocation easy and instant
@@ -272,19 +297,19 @@ Example public website integration:
 
 ```javascript
 // Public website code
-const API_KEY = 'your-api-key-here';
-const BASE_URL = 'https://your-logbook-instance.com/api/public/v1';
+const API_KEY = "your-api-key-here";
+const BASE_URL = "https://your-logbook-instance.com/api/public/v1";
 
 async function fetchOrgInfo() {
   const response = await fetch(`${BASE_URL}/organization/info`, {
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json'
-    }
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
+    },
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch organization info');
+    throw new Error("Failed to fetch organization info");
   }
 
   return response.json();
@@ -293,8 +318,8 @@ async function fetchOrgInfo() {
 async function fetchPublicEvents() {
   const response = await fetch(`${BASE_URL}/events/public?limit=10`, {
     headers: {
-      'X-API-Key': API_KEY
-    }
+      "X-API-Key": API_KEY,
+    },
   });
 
   return response.json();
@@ -302,6 +327,7 @@ async function fetchPublicEvents() {
 ```
 
 ## Future Enhancements
+
 - Webhook support for data updates
 - GraphQL API option
 - OAuth 2.0 support for advanced integrations
@@ -310,6 +336,7 @@ async function fetchPublicEvents() {
 - Analytics for public site traffic
 
 ## Success Metrics
+
 - Zero security incidents
 - < 100ms average response time
 - 99.9% uptime
@@ -327,11 +354,13 @@ async function fetchPublicEvents() {
 ### Implementation Progress (as of 2026-02-15)
 
 #### Completed
+
 - **`/api/public/v1/organization/stats`**: Returns real database-backed statistics (active member count, apparatus count) queried from `User` and `Apparatus` models
 - **`/api/public/v1/events/public`**: Returns future public education events from the `Event` model, filtered by `PUBLIC_EDUCATION` type, future start date, and non-cancelled status
 - **Backend route registration**: Public portal routes registered in the FastAPI application
 
 #### Remaining
+
 - API key authentication middleware
 - Rate limiting per API key
 - Access logging and audit trail

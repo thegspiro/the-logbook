@@ -35,45 +35,6 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
-@pytest.fixture
-async def setup_org_and_admin(db_session: AsyncSession):
-    org_id = _uid()
-    admin_id = _uid()
-    await db_session.execute(
-        text(
-            "INSERT INTO organizations "
-            "(id, name, organization_type, slug, timezone) "
-            "VALUES (:id, :name, :otype, :slug, :tz)"
-        ),
-        {
-            "id": org_id,
-            "name": "Test Dept",
-            "otype": "fire_department",
-            "slug": f"test-{org_id[:8]}",
-            "tz": "UTC",
-        },
-    )
-    await db_session.execute(
-        text(
-            "INSERT INTO users "
-            "(id, organization_id, username, first_name, last_name, "
-            "email, password_hash, status) "
-            "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
-        ),
-        {
-            "id": admin_id,
-            "org": org_id,
-            "un": f"admin-{org_id[:8]}",
-            "fn": "Admin",
-            "ln": "User",
-            "em": f"admin-{org_id[:8]}@test.com",
-            "pw": "hashed",
-        },
-    )
-    await db_session.flush()
-    return org_id, admin_id
-
-
 # =========================================================================
 # 1. Pipeline Management
 # =========================================================================

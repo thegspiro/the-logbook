@@ -60,6 +60,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
+from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions
 
@@ -1969,7 +1970,7 @@ class SchedulingService:
             .where(Shift.shift_date < next_month_first)
         )
         total_minutes = hours_result.scalar() or 0
-        total_hours = round(float(total_minutes) / 60.0, 1)
+        total_hours = hours_from_minutes(total_minutes)
 
         # Field names say which of the two measures each figure is. This one
         # object previously mixed them: three counts of *scheduled* Shift rows
@@ -5353,13 +5354,13 @@ class SchedulingService:
             entry = _entry(row)
             entry["shifts_scheduled"] = row.shift_count
             entry["scheduled_minutes"] = int(row.minutes or 0)
-            entry["scheduled_hours"] = round(float(row.minutes or 0) / 60.0, 1)
+            entry["scheduled_hours"] = hours_from_minutes(row.minutes or 0)
 
         for row in worked_result.all():
             entry = _entry(row)
             entry["shifts_attended"] = row.shift_count
             entry["worked_minutes"] = int(row.minutes or 0)
-            entry["worked_hours"] = round(float(row.minutes or 0) / 60.0, 1)
+            entry["worked_hours"] = hours_from_minutes(row.minutes or 0)
 
         # Ordered by the figure the report is about.
         return sorted(
@@ -5977,7 +5978,7 @@ class SchedulingService:
                 attendance_map[row.user_id] = {
                     "shift_count": row.shift_count,
                     "total_minutes": row.total_minutes,
-                    "total_hours": round(float(row.total_minutes) / 60.0, 1),
+                    "total_hours": hours_from_minutes(row.total_minutes),
                 }
 
             # Pre-load leave months for rolling requirements so we can
@@ -6277,6 +6278,9 @@ class SchedulingService:
                 ).where(ShiftAttendance.shift_id == str(shift_id))
             )
             total_min = hours_result.scalar() or 0
+            # Not rounded: this is a stored snapshot, and the quarter-hour rule
+            # is a reporting rule. A column holding 66.75 against attendance
+            # rows summing to 66.7 is a database that disagrees with itself.
             shift.total_hours = (
                 round(float(total_min) / 60.0, 1) if total_min > 0 else 0.0
             )
@@ -6442,7 +6446,7 @@ class SchedulingService:
                     "user_name": name_map.get(str(att.user_id), ""),
                     "checked_in_at": att.checked_in_at,
                     "checked_out_at": att.checked_out_at,
-                    "hours": round(minutes / 60.0, 2) if minutes else 0.0,
+                    "hours": hours_from_minutes(minutes) if minutes else 0.0,
                     # NULL means "never asked", which the wizard shows as the
                     # apparatus count rather than as a deliberate zero.
                     "call_count": att.call_count,
@@ -6473,7 +6477,7 @@ class SchedulingService:
             # "Combined hours" and not "hours": summed across the crew, it is
             # several times the length of the shift and reads as a mistake
             # without the word.
-            "combined_hours": round(combined_minutes / 60.0, 2),
+            "combined_hours": hours_from_minutes(combined_minutes),
             "reported_call_count": await call_service.shift_response_count(
                 str(shift_id)
             ),
@@ -6781,6 +6785,8 @@ class SchedulingService:
                 att = attendee_by_user.get(user_id)
                 hours = 0.0
                 if att and att.duration_minutes:
+                    # Not rounded: this becomes the report's stored
+                    # `hours_on_shift`, and rounding is a reporting rule.
                     hours = round(float(att.duration_minutes) / 60.0, 2)
 
                 if hours <= 0 and shift.start_time and shift.end_time:

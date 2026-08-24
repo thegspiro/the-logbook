@@ -7,6 +7,232 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: finalizing attendance closes the event, and only a leader reopens it (2026-08-24)
+
+**Fixed**
+
+- **Finalizing an event now locks it.** It was a recalculation with no state
+  behind it: the only trace was `custom_fields["attendance_finalized"]`, which
+  exactly one consumer read (the post-event validation reminder) and no
+  mutation checked. Check-in, adding and removing attendees, correcting
+  credited times, re-recording the clock, cancelling and deleting all kept
+  working afterwards, every one of them behind the same `events.manage` that
+  had just finalized the event.
+- **A correction made after finalizing now reaches the hours ledger.**
+  `credit_event_attendance` skips an RSVP it has already credited, so an
+  override applied post-finalize moved the number on the event screen and left
+  the `AdminHoursEntry` holding the finalized one — permanently, behind a
+  success toast. Re-finalizing after a reopen resyncs those entries in place,
+  keeping each entry's id, approval and audit trail across the correction.
+- **Removing an attendee takes their credited hours with them.**
+  `source_rsvp_id` is an `ondelete="SET NULL"` foreign key, so the entry used
+  to outlive the attendance record that justified it.
+- **Training sessions can be reopened.** They had the opposite failure:
+  `is_finalized` refused a second finalize and nothing ever cleared it, so a
+  member left off the roster could never be added and a wrong duration could
+  never be fixed.
+- `DELETE /events/{id}` returned a generic 500 when linked records blocked the
+  cascade — the service raised `ValueError` and the endpoint had no handler.
+- **Attendees who checked out were never credited admin hours at all.**
+  Finalization credited only the rows it derived a duration for — those with no
+  check-out — so a member who tapped out, or whom End Event bulk-checked-out,
+  was filtered out of the very query that feeds the ledger. End Event also left
+  those rows with no duration to credit. Both predate the lock; the lock is
+  what made them unrecoverable without a chief.
+- **The series endpoints were an open door through the lock.**
+  `delete_event_series`, `cancel_series` and `update_future_events` reached the
+  same rows in bulk without checking it, so `events.manage` alone could delete
+  or retime finalized attendance. A batch containing a closed occurrence is now
+  refused whole rather than partially applied.
+- Event-registration **forms** wrote `EventRSVP` rows directly, bypassing the
+  409 the ordinary RSVP path returns for a closed event.
+- A `custom_fields` update replaced the whole column, so a payload without the
+  lifecycle keys stripped `attendance_finalized` while the column kept the
+  event locked — leaving the post-event reminder nagging about an event nobody
+  could edit. Those keys now survive any replacement.
+- Reopening then **deleting or cancelling** an event left its credited hours
+  standing, since the resync that would have reconciled them only happens on a
+  re-finalize that never came.
+- Re-finalizing now refreshes the linked training record and drops admin-hours
+  entries under categories the event no longer maps to, instead of leaving the
+  first finalize's figures behind.
+
+**Added**
+
+- `events.attendance_finalized_at` / `attendance_finalized_by`, the columns the
+  lock is built on. Migration `c3f8a29d54e1` backfills events already carrying
+  the JSON marker from their effective end time; without it every historically
+  finalized event would come back unlocked on upgrade. The marker keeps being
+  written alongside the columns, because the reminder task keys off it.
+- `events.reopen_attendance`, a new permission granted by default to the chief
+  ranks and the president only. Migration `b7d1e04f92a3` backfills it onto
+  those positions in existing organizations — `DEFAULT_POSITIONS` is
+  materialized at onboarding only, so without it an established department
+  would upgrade into a lock no position could open. `events.manage` reaches nine default roles
+  including public outreach and communications, and the point of the lock is
+  that whoever closed the event cannot quietly reopen it and move the numbers.
+- `POST /events/{id}/reopen-attendance` and
+  `POST /training/sessions/{id}/reopen`, both behind that permission, both
+  taking a reason and audit-logged at WARNING. Reopening an event clears the
+  durations finalize _derived_, so a corrected end time actually reflows on the
+  next finalize; reopening a session expires any approval token already emailed
+  to the training officers against attendee data the reopen is about to change.
+- The event page shows the closed state as a banner naming who closed it and
+  when, stops rendering the actions the API now refuses (the roster stays
+  readable and exportable), and asks for confirmation before finalizing.
+
+**Changed**
+
+- Attendance writes on a finalized event answer **409**, not 400 — nothing is
+  wrong with the request, the event is closed.
+- Descriptive edits to a closed event (title, description, location) are still
+  allowed. Only the fields the credited durations were derived from — the
+  clock, the check-in rules, the type that picks the hours category — are
+  locked.
+- Recording an actual end time still auto-finalizes, as it always did, and now
+  says so in the Record Times dialog before you save.
+
+### The stock room was in everyone's nav; the page members actually need was in nobody's (2026-08-24)
+
+**Changed**
+
+- **Medical Supplies is now advertised only to the people who stock it.** The
+  Operations entry gated on `inventory.view`, which both rank-and-file seeded
+  roles hold, so every member carried a row to the supply room in their
+  navigation — a screen about lot numbers, expiration dates and incoming
+  deliveries, and a job almost none of them have. It now gates on
+  `inventory.view_medical` / `manage_medical` / `inventory.manage`. **The route
+  and the API are unchanged**: a member who follows a link can still look at
+  what is on hand. What went away is the standing invitation.
+- **Apparatus Inventory has a navigation entry.** The crew half of the same
+  shelf — _"we just used two of these"_, recorded without starting a whole
+  checklist — was reachable only from a secondary button on My Checklists, and
+  nothing in either navigation pointed at it. It now sits in Operations beside
+  Medical Supplies, on the default member grant that its route already used.
+  This is the medical page most members need, and it is the one they could not
+  find.
+- **The Administration section no longer carries a medical row.** It pointed at
+  `/medical-supplies/categories` — a setup screen configured once — and with
+  Medical Supplies now gated to the same people, every user who could see it
+  already had the Operations entry to the same module. Categories keeps its
+  name and is still reached by the tag button on Medical Supplies, the way gear
+  categories are reached through the Gear Admin hub.
+
+Between them these three settle a navigation that had it backwards: the
+officer's page was shown to everyone, and the crew's page to no one.
+
+**Also changed**
+
+- **The gear catalogue is manager-only too.** `/inventory` — the whole
+  department's uniforms and equipment — had no route guard at all and no
+  permission on its navigation row, so every member could browse it. It and its
+  `/inventory/items` alias now require `inventory.manage`. A member keeps My
+  Issued Gear, the request and return they raise from it, and the detail page
+  for an item they hold.
+- **`inventory.view` could not be the gate, and that is the whole difficulty.**
+  Its name says "View gear and uniforms", but the seeded `member` and
+  `firefighter` roles hold it _and need it_: the request picker on My Issued
+  Gear searches `GET /items` to find something to ask for, and item detail
+  reads `GET /items/{id}`. Gating the list on `inventory.view` would have gated
+  nothing, and taking the grant off those roles would have broken requesting —
+  the one thing a member is supposed to be able to do here.
+- **The item-detail breadcrumb no longer leads members somewhere they cannot
+  go.** It pointed at Inventory › Items unconditionally. For a member arriving
+  from their own issued gear, both of those are now closed, so the trail leads
+  back to My Issued Gear instead.
+
+**Fixed in review**
+
+- **Five more ways in, all of them one mistake.** Closing a page closes it for
+  every surface that offers it, and "navigation" turned out to mean more than
+  the two nav components: the item detail page's header **Back** button and its
+  error-state link still pointed at the closed catalogue (the breadcrumb above
+  was only one of three exits), the **command palette** listed Inventory with
+  no permission at all, the **`i` keyboard shortcut** navigated there on a bare
+  keypress with no label to gate, and Medical Supplies' "tracked separately
+  under Gear & Uniforms" aside linked a medical-only officer into a page they
+  cannot open. Each one turned a fixed bug into an Access Denied reached from a
+  control the app itself offered.
+- **The medical navigation gate was a superset of its route's gate.** It
+  advertised `manage_medical` and `inventory.manage`, but `/medical-supplies`
+  accepts only `MEDICAL_VIEW_PERMISSIONS` and `checkPermission` has no
+  manage-implies-view rule, so a supply officer holding management without the
+  read grant was invited to Access Denied. The entry gates on
+  `inventory.view_medical` alone — the one grant in the route's own list that
+  distinguishes a stocker from every member.
+- **`src/navGateIntegrity.test.ts` asserts both invariants**, in the manner of
+  `routeIntegrity.test.ts`: a nav gate must be a subset of its route's gate,
+  and every surface offering the gear catalogue must gate on
+  `inventory.manage`. Each assertion was confirmed to fail against the original
+  defect before being kept.
+- **Two Playwright specs signed in as nobody.** `signIn` sets
+  `permissions: []`, which _overrides_ the fixture user's own list, so the
+  end-to-end user holds no grants at all. The navigation spec clicked a Gear &
+  Uniforms row that no longer renders for a plain member, and the mobile
+  presentation pass — which visits `/inventory` — quietly measured the redirect
+  instead of the page, reporting "rendered little content" for a screen that
+  renders plenty. Both now sign in with `inventory.manage`. The full mobile
+  ratchet still passes every route at zero sub-44px targets, so the wider grant
+  costs nothing it was protecting.
+
+### Logged hours read on the quarter hour (2026-08-24)
+
+**Changed**
+
+- **Time a member worked or was credited with is shown to the nearest quarter,
+  halfway values going up.** That is the granularity it is entered at — the
+  external-training duration stepper moves in 15-minute steps — and the
+  granularity a department reports against, so a screen that printed a raw
+  division of stored minutes claimed a precision the record does not have. It
+  also summed as floats: the dashboard read `69.60000000000001 hrs in August`
+  for 66.7 standby plus 2.9 administrative. Applied across the dashboard, admin
+  hours, scheduling, training, member profiles and the report renderers.
+- **A total is the sum of the parts printed beside it**, not a rounding of the
+  raw sum. Rounding 69.6 once gives 69.5 above segments reading 66.75 and 3,
+  which is arithmetic the reader can see is wrong. The same reasoning settles
+  the scheduling report's worked-vs-scheduled variance, the compliance
+  dashboard's "Total Contributed" card and the admin-hours and annual-training
+  report totals.
+- **The backend reports on the quarter too**, so an export matches the screen
+  it came from. `app/utils/hours.py` carries the same rule, tie-breaking the
+  same direction — Python's built-in `round` uses banker's rounding and would
+  disagree with the frontend by an increment on every exact half. Applied to
+  the figures that leave the system: the admin-hours summary and its CSV
+  export, the compliance-officer dashboard, the scheduling summaries and
+  member-hours report, the annual-training and department-overview reports,
+  and the end-of-shift digest a member is emailed.
+- **Stored minutes and stored snapshots are untouched.** `duration_minutes`,
+  a training record's `hours_completed`, a shift report's `hours_on_shift` and
+  the `Shift.total_hours` snapshot all keep what actually happened — a column
+  holding 66.75 against attendance rows summing to 66.7 is a database that
+  disagrees with itself.
+- **Compliance grading still reads raw minutes.** `_get_user_compliance`
+  compares `logged_hours < required_hours` before any rounding, which is the
+  whole point: rounding first is what marked a member compliant while short.
+
+**Fixed**
+
+- **A requirement could read as met while the member was short.** Rounding
+  logged hours before subtracting turned a sub-eighth shortfall into zero, so
+  7.9 of 8 printed "Requirement met" beside a status badge that still read
+  behind — and a member who believes they are done stops logging. Met is now
+  decided on the raw hours, and an unmet requirement is held an increment below
+  its target rather than rounding up onto it, so the row still subtracts to the
+  gap: "7.75 / 8 hrs · 0.25 hrs still needed".
+
+**Not rounded**
+
+- **Derived averages and percentage-derived credit ceilings**, which are not
+  recorded time and are not constrained to the increment. 2.5 hours over three
+  shifts is 0.83, and 0.75 misreports the metric by a tenth; an event mapped at
+  40% credits 0.4 hours for an hour of attendance, and "Credits up to 0.5"
+  promises more than check-out awards. Those use `formatHoursExact`.
+- **Configuration thresholds** (auto-approve ceilings, max hours per session,
+  shift template lengths, reminder lead times) and **meter readings**
+  (apparatus engine hours), which are entered as exact figures and must read
+  back exactly as entered. Editable hours fields and the manual shift report's
+  duration preview likewise show the value actually being submitted.
+
 ### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
 
 **Changed**

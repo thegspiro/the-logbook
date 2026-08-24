@@ -17,19 +17,19 @@ department for real use.
 Measured 2026-08-02 against `main` @ `7c0c1ab`, CI run
 [30752054716](https://github.com/thegspiro/the-logbook/actions/runs/30752054716).
 
-| Signal | State |
-|---|---|
-| CI on `main` | **Red** — 1 job passed, 5 failed, 5 never ran |
-| `npm ci` | **Broken** — lockfile missing `vite@8.2.0` + 37 other entries |
-| `pip install -r requirements.txt` | **Broken** — `isort==8.0.1` vs `pylint==3.3.4` (caps `isort<7`) |
-| Backend tests | **Never ran on `main`** — install failed first |
-| Integration / contract tests, Docker build | **Never ran** — skipped behind the failures |
-| Git tags | **None exist** |
-| Version | `1.0.0` in `package.json`, everything under `[Unreleased]` |
-| Backend lint | ✅ clean (0 flake8 violations, 283 files) |
-| Module audit | ✅ complete — 27/27 modules |
-| npm advisories | ✅ 11 total, all dev-only transitives; `--omit=dev` → 0 |
-| TODO/FIXME markers | ✅ 3 backend, 0 frontend |
+| Signal                                     | State                                                           |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| CI on `main`                               | **Red** — 1 job passed, 5 failed, 5 never ran                   |
+| `npm ci`                                   | **Broken** — lockfile missing `vite@8.2.0` + 37 other entries   |
+| `pip install -r requirements.txt`          | **Broken** — `isort==8.0.1` vs `pylint==3.3.4` (caps `isort<7`) |
+| Backend tests                              | **Never ran on `main`** — install failed first                  |
+| Integration / contract tests, Docker build | **Never ran** — skipped behind the failures                     |
+| Git tags                                   | **None exist**                                                  |
+| Version                                    | `1.0.0` in `package.json`, everything under `[Unreleased]`      |
+| Backend lint                               | ✅ clean (0 flake8 violations, 283 files)                       |
+| Module audit                               | ✅ complete — 27/27 modules                                     |
+| npm advisories                             | ✅ 11 total, all dev-only transitives; `--omit=dev` → 0         |
+| TODO/FIXME markers                         | ✅ 3 backend, 0 frontend                                        |
 
 Both install blockers are fixed on `claude/pr-1132-review-cx6sps`. With those
 landed, nine of eleven CI jobs are verified green; the frontend suite is 2057
@@ -45,14 +45,14 @@ Phase 0 exists to convert unknowns into facts before anyone commits to a date.
 
 Nothing else can be trusted until CI is green end to end.
 
-| # | Item | Status |
-|---|---|---|
-| 0.1 | Regenerate `package-lock.json`; `npm ci` works from a clean checkout | ✅ done (branch) |
-| 0.2 | Resolve `isort`/`pylint` conflict; `pip install -r requirements.txt` works | ✅ done (branch) |
-| 0.3 | Align CI lint pins with `requirements.txt` so CI tests the real toolchain | ✅ done (branch) |
-| 0.4 | Split the branch into two PRs — backend/CI fix first, npm bump second | ⬜ |
-| 0.5 | Land both; confirm a fully green run on `main` | ⬜ |
-| 0.6 | **Read the first green run.** Integration, API-contract and Docker jobs execute for the first time — triage whatever they surface | ⬜ |
+| #   | Item                                                                                                                              | Status           |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.1 | Regenerate `package-lock.json`; `npm ci` works from a clean checkout                                                              | ✅ done (branch) |
+| 0.2 | Resolve `isort`/`pylint` conflict; `pip install -r requirements.txt` works                                                        | ✅ done (branch) |
+| 0.3 | Align CI lint pins with `requirements.txt` so CI tests the real toolchain                                                         | ✅ done (branch) |
+| 0.4 | Split the branch into two PRs — backend/CI fix first, npm bump second                                                             | ⬜               |
+| 0.5 | Land both; confirm a fully green run on `main`                                                                                    | ⬜               |
+| 0.6 | **Read the first green run.** Integration, API-contract and Docker jobs execute for the first time — triage whatever they surface | ⬜               |
 
 **0.6 is the real milestone.** Those three jobs run migrations against a live
 MySQL, exercise the API contract, and build the shipped image. They have been
@@ -60,6 +60,7 @@ dark for an unknown period. Budget for findings here rather than assuming a
 clean pass; do not set a date before this completes.
 
 ### Exit criteria
+
 - [ ] All 11 CI jobs green on `main`
 - [ ] `npm ci` and `pip install -r requirements.txt` both succeed from a clean checkout
 - [ ] `docker compose up` brings the stack to healthy on a clean host
@@ -68,21 +69,22 @@ clean pass; do not set a date before this completes.
 
 ## Phase 1 — Prove the deployment path ⬜
 
-The audit covered application code thoroughly. It did not cover *install and
-upgrade*, which is what a new department actually touches first.
+The audit covered application code thoroughly. It did not cover _install and
+upgrade_, which is what a new department actually touches first.
 
-| # | Item | Notes |
-|---|---|---|
-| 1.1 | Fresh-install rehearsal on a clean host via `install.sh` / `docker-compose.prod.yml` | Follow `docs/DEPLOYMENT.md` verbatim; every correction is a doc bug |
-| 1.2 | Migration rehearsal on a **copy of production data** | `alembic upgrade head` on a restored dump, not an empty CI database |
-| 1.3 | Rollback rehearsal | Confirm downgrade or restore-from-backup actually works; document whichever is supported |
-| 1.4 | Backup/restore rehearsal per `docs/BACKUP.md` | Restore into a fresh stack and verify the app boots against it |
-| 1.5 | Onboarding wizard end to end on a clean database | First-run path a new department hits |
-| 1.6 | Verify published image tags per `docs/DOCKER-BUILD-PUBLISH.md` | Image the RC actually ships as |
-| 1.7 | Seed-data check — every file registered in `SEED_DATA_FILES` applies cleanly | Missing seed data crashes at query time, not migrate time |
+| #   | Item                                                                                                                     | Notes                                                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1 | Fresh-install rehearsal on a clean host via `install.sh` / `docker-compose.prod.yml`                                     | Follow `docs/DEPLOYMENT.md` verbatim; every correction is a doc bug                                                                 |
+| 1.2 | Migration rehearsal on a **copy of production data**                                                                     | `alembic upgrade head` on a restored dump, not an empty CI database                                                                 |
+| 1.3 | Rollback rehearsal                                                                                                       | Confirm downgrade or restore-from-backup actually works; document whichever is supported                                            |
+| 1.4 | Backup/restore rehearsal per `docs/BACKUP.md`                                                                            | Restore into a fresh stack and verify the app boots against it                                                                      |
+| 1.5 | Onboarding wizard end to end on a clean database                                                                         | First-run path a new department hits                                                                                                |
+| 1.6 | Verify published image tags per `docs/DOCKER-BUILD-PUBLISH.md`                                                           | Image the RC actually ships as                                                                                                      |
+| 1.7 | Seed-data check — every file registered in `SEED_DATA_FILES` applies cleanly                                             | Missing seed data crashes at query time, not migrate time                                                                           |
 | 1.8 | Document the supported deployment topology, and that a **remote** database or Redis requires `DB_SSL`/`REDIS_SSL` + a CA | Single-host Compose keeps DB traffic on an internal bridge; a separate DB host puts it on a real wire. See the CI-9 note in Phase 2 |
 
 ### Exit criteria
+
 - [ ] A clean host reaches a working login following only the published docs
 - [ ] Migrations verified forward on production-shaped data
 - [ ] A documented, rehearsed rollback path exists
@@ -98,11 +100,11 @@ categories a department cannot detect on its own.
 
 Verified against the implementation 2026-08-02, not just the audit write-ups.
 
-| ID | Item | Why it blocks | Decision |
-|---|---|---|---|
-| **ORU-8a** | `GET /users/{id}/with-roles` returned the raw ORM user with no visibility filtering while its sibling roster endpoint redacted | The roster's own comment says "redact here too, or the setting is advisory." The detail endpoint was what made it advisory | ✅ **Fixed** — shared `_clear_hidden_contact_fields` / `_load_contact_visibility`, subject and members-managers exempt |
-| **ORU-8b** | `without_infrastructure()` stripped mail host, S3 bucket, SSO issuer and OAuth client IDs but not `it_team` — so every authenticated member got the IT roster and the free-form `backup_access` dict | `backup_access` is unstructured operational text; whatever an admin typed there was readable by any account | ✅ **Fixed** — `it_team` emptied for callers without `settings.manage` |
-| **FIN-6** | `record_dues_payment` accumulated into an aggregate with no record that a payment had happened | Money, silently wrong, with nothing to reconstruct from | ✅ **Fixed** — payments ledger; totals derived, not accumulated |
+| ID         | Item                                                                                                                                                                                                 | Why it blocks                                                                                                              | Decision                                                                                                               |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **ORU-8a** | `GET /users/{id}/with-roles` returned the raw ORM user with no visibility filtering while its sibling roster endpoint redacted                                                                       | The roster's own comment says "redact here too, or the setting is advisory." The detail endpoint was what made it advisory | ✅ **Fixed** — shared `_clear_hidden_contact_fields` / `_load_contact_visibility`, subject and members-managers exempt |
+| **ORU-8b** | `without_infrastructure()` stripped mail host, S3 bucket, SSO issuer and OAuth client IDs but not `it_team` — so every authenticated member got the IT roster and the free-form `backup_access` dict | `backup_access` is unstructured operational text; whatever an admin typed there was readable by any account                | ✅ **Fixed** — `it_team` emptied for callers without `settings.manage`                                                 |
+| **FIN-6**  | `record_dues_payment` accumulated into an aggregate with no record that a payment had happened                                                                                                       | Money, silently wrong, with nothing to reconstruct from                                                                    | ✅ **Fixed** — payments ledger; totals derived, not accumulated                                                        |
 
 **What was wrong (verified against the code 2026-08-02).** Worse than the
 write-up in two respects — three defects in eleven lines:
@@ -123,26 +125,26 @@ write-up in two respects — three defects in eleven lines:
 **Fixed 2026-08-02 — all three, at the root rather than the symptom.** The
 shared cause was that `MemberDues` was the only record of payment: one
 `amount_paid` total plus one set of detail columns, overwritten by whichever
-payment was entered last. Nothing recorded that a payment had *happened*, so a
+payment was entered last. Nothing recorded that a payment had _happened_, so a
 retry was indistinguishable from a second instalment and each payment destroyed
 the previous one's detail.
 
 A `dues_payments` ledger (migration `20260802_0001`) now holds one row per
 payment, and the columns on `MemberDues` became a projection of it:
 
-* `amount_paid` is **re-derived** by `_apply_payment_totals` as the sum of the
+- `amount_paid` is **re-derived** by `_apply_payment_totals` as the sum of the
   ledger, not added to a running figure. A double-credit would require a
   duplicate ledger row, which the uniqueness constraint on
   `(member_dues_id, transaction_reference)` refuses — the bug class stops being
   representable rather than being guarded against.
-* Idempotency is that constraint plus an in-service check: re-submitting a
+- Idempotency is that constraint plus an in-service check: re-submitting a
   reference already on the record returns it untouched instead of raising, so a
   double-clicked form is safe. Payments with no reference — cash at a meeting —
   are never deduplicated, because two identical cash amounts are two payments.
-* `payment_method` / `transaction_reference` / `notes` project the newest
+- `payment_method` / `transaction_reference` / `notes` project the newest
   ledger row, so they can no longer be blanked by an omitted field or drift
   from the ledger.
-* `WAIVED` and `EXEMPT` records refuse payment outright. `EXEMPT` was included
+- `WAIVED` and `EXEMPT` records refuse payment outright. `EXEMPT` was included
   because it is the same shape, though the audit named only `WAIVED`.
 
 The migration **backfills** one ledger row per already-paid record. That is the
@@ -159,7 +161,7 @@ which is pure, so it runs in CI's unit job rather than needing MySQL.
 reverses a waiver and lets the ledger decide what the record becomes — PENDING
 when nothing was paid, PARTIAL or PAID when something was. The waive reason is
 erased, since a waive_reason left on an un-waived record would be the same
-contradictory row FIN-6 was about — and *(revised 2026-08-13)* it is erased
+contradictory row FIN-6 was about — and _(revised 2026-08-13)_ it is erased
 outright rather than carried into the `finance.dues_waiver_reversed` audit
 event: free-text waiver reasons may contain personal information, and the
 immutable log must stay reachable by privacy scrubbing. Requires a reason,
@@ -172,7 +174,7 @@ closed by reusing machinery that exists. Neither needs a policy decision — the
 policy is already expressed in `contact_info_visibility` and in
 `without_infrastructure()`; these are the two call sites that don't consult it.
 
-### Deliberately *not* blocking
+### Deliberately _not_ blocking
 
 Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
 
@@ -180,7 +182,7 @@ Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
   **reassessed 2026-08-02, moved out of the blockers.** Real and open: the
   shared helper exists at `app/utils/org_scoping.py` and fails closed, but only
   two files import it, and just 6 of 79 service modules carry any in-org FK
-  check. What changed my read is *which* instances remain. Per
+  check. What changed my read is _which_ instances remain. Per
   `CROSS-CUTTING.md`, every instance with confirmed cross-tenant impact was
   already fixed in place — the elections `meeting_id`/`event_id` leak, apparatus
   operators' foreign `user_id` PII, the membership-pipeline `form_id` write, the
@@ -202,7 +204,7 @@ Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
   construction so it cannot strand a member signed in, and the discarded count
   is surfaced on the login page rather than the work vanishing silently. The
   product question this item was carrying — do drafts survive re-login — has
-  already been answered *no*, deliberately, with the reasoning recorded in the
+  already been answered _no_, deliberately, with the reasoning recorded in the
   module docstring. Nothing left to decide.
 - **CI-9** (production DB/Redis TLS only warns) — **resolved 2026-08-12.**
   `SECURITY_REQUIRE_TLS` now defaults to `True`, promoting absent database or
@@ -226,6 +228,7 @@ Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
   invalidates stored data; deliberate migrations, not RC work.
 
 ### Exit criteria
+
 - [ ] Every blocker above either fixed or explicitly accepted in writing by the owner
 - [ ] `KNOWN_LIMITATIONS.md` reflects the RC's actual posture
 - [ ] `docs/COMPLIANCE.md` updated with anything accepted that touches PHI
@@ -237,16 +240,17 @@ Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
 Currently missing entirely — there are no tags, so there is no established
 process to follow.
 
-| # | Item |
-|---|---|
-| 3.1 | Decide and document the versioning scheme (`1.0.0-rc.1` → `1.0.0`) |
-| 3.2 | Cut `[Unreleased]` into a dated `1.0.0-rc.1` CHANGELOG section |
-| 3.3 | Align `package.json` / `frontend/package.json` versions with the tag |
-| 3.4 | Tag `v1.0.0-rc.1` and publish matching Docker image tags |
+| #   | Item                                                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 3.1 | Decide and document the versioning scheme (`1.0.0-rc.1` → `1.0.0`)                                                           |
+| 3.2 | Cut `[Unreleased]` into a dated `1.0.0-rc.1` CHANGELOG section                                                               |
+| 3.3 | Align `package.json` / `frontend/package.json` versions with the tag                                                         |
+| 3.4 | Tag `v1.0.0-rc.1` and publish matching Docker image tags                                                                     |
 | 3.5 | Write release notes aimed at a fire chief, not a developer — what's supported, what's known-limited, how to report a problem |
-| 3.6 | Define the RC feedback loop: who runs it, for how long, how bugs come back, what promotes RC → GA |
+| 3.6 | Define the RC feedback loop: who runs it, for how long, how bugs come back, what promotes RC → GA                            |
 
 ### Exit criteria
+
 - [ ] A tagged, installable artifact exists
 - [ ] A named pilot department and a defined soak period
 - [ ] A written rule for what promotes the RC to GA

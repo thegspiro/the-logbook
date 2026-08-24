@@ -37,11 +37,11 @@ forty job shirts a year.
 
 ## Where it lives
 
-| Path | Page | Permission |
-|------|------|------------|
-| `/store` | Member storefront — browse the open window, build a cart, order | `storefront.view` |
-| `/store/orders` | My Orders — status, balance, payment buttons | `storefront.view` |
-| `/store/admin` | Quartermaster console (6 tabs) | `storefront.manage` |
+| Path            | Page                                                            | Permission          |
+| --------------- | --------------------------------------------------------------- | ------------------- |
+| `/store`        | Member storefront — browse the open window, build a cart, order | `storefront.view`   |
+| `/store/orders` | My Orders — status, balance, payment buttons                    | `storefront.view`   |
+| `/store/admin`  | Quartermaster console (6 tabs)                                  | `storefront.manage` |
 
 The admin console's tabs are Overview, Order Windows, Catalog, Orders,
 Payments, and Settings.
@@ -64,10 +64,10 @@ already placed.
 
 ## Permissions
 
-| Permission | Grants |
-|------------|--------|
-| `storefront.view` | Browse the store, see your own orders |
-| `storefront.order` | Place orders |
+| Permission          | Grants                                                      |
+| ------------------- | ----------------------------------------------------------- |
+| `storefront.view`   | Browse the store, see your own orders                       |
+| `storefront.order`  | Place orders                                                |
 | `storefront.manage` | Catalog, windows, other members' orders, payments, settings |
 
 `GET /api/v1/store/permissions` returns all three as booleans so the UI can
@@ -79,18 +79,18 @@ hide what the user cannot do rather than letting them discover it via a 403.
 
 Ten tables, all prefixed `store_`:
 
-| Table | Holds |
-|-------|-------|
-| `store_settings` | One row per organization: identity, payment config, pricing, notification prefs |
-| `store_products` | Catalog items |
+| Table                    | Holds                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `store_settings`         | One row per organization: identity, payment config, pricing, notification prefs        |
+| `store_products`         | Catalog items                                                                          |
 | `store_product_variants` | Sizes/colours (the UI calls them **options**), each with its own price delta and stock |
-| `store_product_images` | Uploaded photos (binary, `MEDIUMBLOB`) |
-| `store_order_windows` | Ordering periods |
-| `store_window_products` | Which products a window offers, when not "all" |
-| `store_orders` | Member orders |
-| `store_order_items` | Line items, with pricing snapshotted at order time |
-| `store_order_events` | Per-order timeline (status changes, payments, messages) |
-| `store_payment_events` | Payments a provider reported, and what we did about each |
+| `store_product_images`   | Uploaded photos (binary, `MEDIUMBLOB`)                                                 |
+| `store_order_windows`    | Ordering periods                                                                       |
+| `store_window_products`  | Which products a window offers, when not "all"                                         |
+| `store_orders`           | Member orders                                                                          |
+| `store_order_items`      | Line items, with pricing snapshotted at order time                                     |
+| `store_order_events`     | Per-order timeline (status changes, payments, messages)                                |
+| `store_payment_events`   | Payments a provider reported, and what we did about each                               |
 
 Every table carries `organization_id` and every by-id query filters on it.
 
@@ -100,8 +100,7 @@ to keep saying what the member actually bought and paid.
 
 Order numbers are `ORD-YYYY-NNNN`, allocated per organization. Allocation
 retries on an `IntegrityError` inside a `SAVEPOINT`, so two members checking
-out in the same second get distinct numbers rather than one of them getting a
-500.
+out in the same second get distinct numbers rather than one of them getting a 500.
 
 ---
 
@@ -154,7 +153,7 @@ been ordered from the vendor yet, and a shirt can be sitting on the shelf ready
 for pickup while the member still owes for it. Collapsing them into one status
 would force a false ordering on two independent things.
 
-`pending_verification` exists because a member can *report* having sent
+`pending_verification` exists because a member can _report_ having sent
 payment. That is a claim, not a receipt — it moves the order into a queue for
 somebody to confirm, and never marks it paid on its own.
 
@@ -165,14 +164,14 @@ somebody to confirm, and never marks it paid on its own.
 A member with a balance due sees a button for every method the department both
 **accepts** and **has configured**.
 
-| Method | What the member gets | Carries the order number? |
-|--------|---------------------|---------------------------|
-| Venmo | Deep link prefilled with amount and the order number in the note | Yes |
-| PayPal | PayPal.Me link with the amount | No — displayed to type |
-| Cash App | `cash.app/$tag/<amount>` | No — Cash App has no note field |
-| Zelle | The registered email or phone, tap to copy | No — displayed to type |
-| Check | Payee and mailing address | No |
-| Cash / payroll deduction / other | Free-text instructions | No |
+| Method                           | What the member gets                                             | Carries the order number?       |
+| -------------------------------- | ---------------------------------------------------------------- | ------------------------------- |
+| Venmo                            | Deep link prefilled with amount and the order number in the note | Yes                             |
+| PayPal                           | PayPal.Me link with the amount                                   | No — displayed to type          |
+| Cash App                         | `cash.app/$tag/<amount>`                                         | No — Cash App has no note field |
+| Zelle                            | The registered email or phone, tap to copy                       | No — displayed to type          |
+| Check                            | Payee and mailing address                                        | No                              |
+| Cash / payroll deduction / other | Free-text instructions                                           | No                              |
 
 A method appears only when it is in `accepted_payment_methods` **and** has
 whatever it needs to work. For Venmo, PayPal, Cash App and Zelle that means a
@@ -219,11 +218,11 @@ Departments genuinely differ here and both directions are defensible, so the
 default is `none` — the behaviour a store already had before the setting
 existed.
 
-| Value | In the vendor order | `ordered` / `ready_for_pickup` | `fulfilled` |
-|-------|--------------------|-------------------------------|-------------|
-| `none` | Yes | Yes | Yes |
-| `before_pickup` | Yes | Yes | **Refused** while a balance is due |
-| `before_vendor_order` | **Held back** | **Refused** | **Refused** |
+| Value                 | In the vendor order | `ordered` / `ready_for_pickup` | `fulfilled`                        |
+| --------------------- | ------------------- | ------------------------------ | ---------------------------------- |
+| `none`                | Yes                 | Yes                            | Yes                                |
+| `before_pickup`       | Yes                 | Yes                            | **Refused** while a balance is due |
+| `before_vendor_order` | **Held back**       | **Refused**                    | **Refused**                        |
 
 `before_vendor_order` blocks `ORDERED` and `READY_FOR_PICKUP` as well as
 `FULFILLED`, because the item was deliberately left off the vendor sheet and so
@@ -269,13 +268,13 @@ discovers at pickup.
 
 ### Recording money
 
-| Action | Endpoint | Effect |
-|--------|----------|--------|
-| Mark paid | `POST /store/orders/{id}/mark-paid` | Settles the whole remaining balance, reading the amount off the order |
-| Record payment | `POST /store/orders/{id}/payments` | Records a specific amount (partial payments) |
-| Waive | `POST /store/orders/{id}/waive` | Clears the balance without money changing hands |
-| Refund | `POST /store/orders/{id}/refund` | Records a refund |
-| Bulk mark paid | `POST /store/orders/bulk-payment` | Several orders at once |
+| Action         | Endpoint                            | Effect                                                                |
+| -------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| Mark paid      | `POST /store/orders/{id}/mark-paid` | Settles the whole remaining balance, reading the amount off the order |
+| Record payment | `POST /store/orders/{id}/payments`  | Records a specific amount (partial payments)                          |
+| Waive          | `POST /store/orders/{id}/waive`     | Clears the balance without money changing hands                       |
+| Refund         | `POST /store/orders/{id}/refund`    | Records a refund                                                      |
+| Bulk mark paid | `POST /store/orders/bulk-payment`   | Several orders at once                                                |
 
 Every one of these takes the **payment method actually used**, which need not
 be the one the member chose at checkout — they picked Venmo and then handed
@@ -354,17 +353,17 @@ Email via `storefront_notification_service.py`. Every notice the module sends
 is switched by exactly one setting, so the Notifications panel is a complete
 list of the store's outbound mail:
 
-| Notice | Goes to | Setting |
-|---|---|---|
-| Order confirmation — receipt and how to pay | The member, on submit | `send_order_confirmation` |
-| Status change — ordered, ready, picked up, cancelled | The member | `send_status_updates` |
-| Payment receipt — payment recorded, waived, or refunded | The member | `send_payment_receipts` |
-| Payment reminder | Members with a balance, after N days | `send_payment_reminders` |
-| New-order alert | Store managers + `notify_emails` | `notify_admins_on_order` |
-| Ordering is open | Every active member | `send_window_opened` |
-| Last call — closing soon | Every active member, N hours before | `send_window_closing_reminder` |
-| Ordering has closed | Everyone who ordered in that window | `send_window_closed` |
-| Order placed with the vendor | Everyone who ordered in that window | `send_vendor_order_updates` |
+| Notice                                                  | Goes to                              | Setting                        |
+| ------------------------------------------------------- | ------------------------------------ | ------------------------------ |
+| Order confirmation — receipt and how to pay             | The member, on submit                | `send_order_confirmation`      |
+| Status change — ordered, ready, picked up, cancelled    | The member                           | `send_status_updates`          |
+| Payment receipt — payment recorded, waived, or refunded | The member                           | `send_payment_receipts`        |
+| Payment reminder                                        | Members with a balance, after N days | `send_payment_reminders`       |
+| New-order alert                                         | Store managers + `notify_emails`     | `notify_admins_on_order`       |
+| Ordering is open                                        | Every active member                  | `send_window_opened`           |
+| Last call — closing soon                                | Every active member, N hours before  | `send_window_closing_reminder` |
+| Ordering has closed                                     | Everyone who ordered in that window  | `send_window_closed`           |
+| Order placed with the vendor                            | Everyone who ordered in that window  | `send_vendor_order_updates`    |
 
 All nine default to on, which is the behaviour the module had before the
 switches existed.
@@ -441,7 +440,7 @@ cannot silently change what a cancelled member reads. (It still rides the
 status-updates switch — one switch, two templates.)
 
 **How a notice is composed.** Each `send_*` builds two things: the message as
-this module has always composed it, and a *context* of variables. If the org
+this module has always composed it, and a _context_ of variables. If the org
 has an active template row for that type, the template is rendered against the
 context and the coded message is unused; otherwise the coded message goes out.
 So a department that never opens the editor receives exactly what it received
@@ -455,14 +454,14 @@ written in a template body. The service renders those parts and injects them
 through `_RAW_HTML_VARIABLES` — the arrangement property return reminders use
 for `items_list_html` and elections use for `ballot_items_html`:
 
-| Variable | What the service puts there |
-|---|---|
-| `items_table_html` | The ordered items, with sizes, embroidery text and prices |
-| `payment_block_html` | Balance due, a pay button per configured method, your payment instructions |
-| `receipt_footer_html` | The receipt footer from store settings |
-| `member_notes_html` | Anything the member typed in the notes box |
-| `payment_summary_html` / `balance_notice_html` | What was received; then either paid-in-full or the remaining balance with pay buttons |
-| `cancellation_reason_html` / `refund_notice_html` | The reason given; a refund note only when money had been paid |
+| Variable                                                                     | What the service puts there                                                                                    |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `items_table_html`                                                           | The ordered items, with sizes, embroidery text and prices                                                      |
+| `payment_block_html`                                                         | Balance due, a pay button per configured method, your payment instructions                                     |
+| `receipt_footer_html`                                                        | The receipt footer from store settings                                                                         |
+| `member_notes_html`                                                          | Anything the member typed in the notes box                                                                     |
+| `payment_summary_html` / `balance_notice_html`                               | What was received; then either paid-in-full or the remaining balance with pay buttons                          |
+| `cancellation_reason_html` / `refund_notice_html`                            | The reason given; a refund note only when money had been paid                                                  |
 | `window_description_html` / `window_extra_html` / `pickup_instructions_html` | The window's description; whatever that notice adds (deadline, vendor, delivery date); its pickup instructions |
 
 Removing one of these from a body does what it looks like: drop
@@ -472,13 +471,13 @@ to pay. **Reset to default** restores the shipped body.
 Settings still carry the wording that is per-department rather than per-notice,
 and reach every template through those variables:
 
-| Text | Where it appears |
-|---|---|
-| `payment_instructions` | Below the pay buttons on every order email |
-| Per-method instructions (`cash_instructions`, `zelle_instructions`, …) | Beside that method wherever it is offered |
-| `receipt_footer` | Foot of the order confirmation |
-| A window's `pickup_instructions` | Every window announcement |
-| The free-text message on open / close / vendor-order | That send only |
+| Text                                                                   | Where it appears                           |
+| ---------------------------------------------------------------------- | ------------------------------------------ |
+| `payment_instructions`                                                 | Below the pay buttons on every order email |
+| Per-method instructions (`cash_instructions`, `zelle_instructions`, …) | Beside that method wherever it is offered  |
+| `receipt_footer`                                                       | Foot of the order confirmation             |
+| A window's `pickup_instructions`                                       | Every window announcement                  |
+| The free-text message on open / close / vendor-order                   | That send only                             |
 
 Header, logo and colours come from the organization's email branding, shared
 with the rest of the platform. Every send is logged to `message_history` under
@@ -495,20 +494,20 @@ to another's members.
 
 ### Edge cases
 
-| Situation | What happens | Why |
-|---|---|---|
-| No template row for a notice | The coded body goes out | The fallback is the original email, not a stub |
-| Template set inactive | Falls back to the coded body | How you undo an edit without losing it |
-| Template row deleted | Falls back — until someone opens Email Templates, where `ensure_default_templates` recreates it from the **shipped default**, not the deleted edit | Deleting means "back to default", not "restore my version" |
-| Subject left blank | Coded subject is used | An email with no subject reads as spam |
-| HTML edited, `text_body` left empty | Coded plain-text alternate is used | Mismatched, but better than a blank email in a text-only client |
-| A variable is misspelled | Renders as empty, not as `{{ordr_number}}` | `_replace_variables` drops unknown names |
-| `{{payment_block_html}}` removed | Members are not told how to pay | Deliberate; the variable *is* the payment instructions |
-| Template edited while its switch is off | Nothing sends | Editing a notice does not switch it on — the switch is still the gate |
-| Storefront types in the Schedule Email picker | Excluded | Each reads entirely from an order that does not exist when scheduled; it would send "Order  received" over an empty table |
-| A template edited mid-run | Applies from the next run | The per-instance cache is read once; a scheduled run holds one instance |
-| Cancellations in Message History | Rows before this change carry `storefront_order_update`; rows after carry `storefront_order_cancelled` | The notice gained its own type when it became separately editable |
-| A member with no first name | `{{first_name}}` renders empty ("Hi ,") | Pre-existing in the coded body too; the store takes the name from the order |
+| Situation                                     | What happens                                                                                                                                       | Why                                                                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| No template row for a notice                  | The coded body goes out                                                                                                                            | The fallback is the original email, not a stub                                                                           |
+| Template set inactive                         | Falls back to the coded body                                                                                                                       | How you undo an edit without losing it                                                                                   |
+| Template row deleted                          | Falls back — until someone opens Email Templates, where `ensure_default_templates` recreates it from the **shipped default**, not the deleted edit | Deleting means "back to default", not "restore my version"                                                               |
+| Subject left blank                            | Coded subject is used                                                                                                                              | An email with no subject reads as spam                                                                                   |
+| HTML edited, `text_body` left empty           | Coded plain-text alternate is used                                                                                                                 | Mismatched, but better than a blank email in a text-only client                                                          |
+| A variable is misspelled                      | Renders as empty, not as `{{ordr_number}}`                                                                                                         | `_replace_variables` drops unknown names                                                                                 |
+| `{{payment_block_html}}` removed              | Members are not told how to pay                                                                                                                    | Deliberate; the variable _is_ the payment instructions                                                                   |
+| Template edited while its switch is off       | Nothing sends                                                                                                                                      | Editing a notice does not switch it on — the switch is still the gate                                                    |
+| Storefront types in the Schedule Email picker | Excluded                                                                                                                                           | Each reads entirely from an order that does not exist when scheduled; it would send "Order received" over an empty table |
+| A template edited mid-run                     | Applies from the next run                                                                                                                          | The per-instance cache is read once; a scheduled run holds one instance                                                  |
+| Cancellations in Message History              | Rows before this change carry `storefront_order_update`; rows after carry `storefront_order_cancelled`                                             | The notice gained its own type when it became separately editable                                                        |
+| A member with no first name                   | `{{first_name}}` renders empty ("Hi ,")                                                                                                            | Pre-existing in the coded body too; the store takes the name from the order                                              |
 
 `storefront_order_update` is used by two things: an order's status change, and
 a note a quartermaster types on an order and sends. Reword it with both in

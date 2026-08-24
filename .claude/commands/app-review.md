@@ -79,5 +79,5 @@ into one run and do not leave a feature half-reviewed.
 - Findings must be verifiable: cite `file.py:line` and state the failure
   scenario concretely enough to reproduce.
 - Do not re-report a finding already recorded and fixed in `docs/module-audit/`.
-  Do re-verify ones left open there.
+Do re-verify ones left open there.
 </content>

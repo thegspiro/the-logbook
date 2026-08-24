@@ -161,19 +161,19 @@ The Logbook supports multiple authentication methods:
 
 ---
 
-## Brute-Force Controls *(2026-08-17)*
+## Brute-Force Controls _(2026-08-17)_
 
 Five controls layer on top of each other. They are not interchangeable — each
 covers a gap the others leave open, so collapsing two of them into one
 reopens whatever sat between them.
 
-| Control | Counts | Keyed on | Default | On provider/Redis failure |
-|---------|--------|----------|---------|---------------------------|
-| Rate limit | All attempts, short window | IP + scope | On | Falls back to in-memory limiter |
-| Account lockout | Consecutive failures | User | On (5 attempts / 30 min) | n/a — database-backed |
-| Suspicious-IP throttle | **Failed** attempts, long window | IP, across **all** accounts | **On** | Falls back to in-memory counter |
-| Breached-password check | Appearances in breach corpora | Password hash prefix | Off | **Fails open** — password accepted |
-| Challenge-response (CAPTCHA) | Human challenge | Request | Off | **Fails closed** — submission refused |
+| Control                      | Counts                           | Keyed on                    | Default                  | On provider/Redis failure             |
+| ---------------------------- | -------------------------------- | --------------------------- | ------------------------ | ------------------------------------- |
+| Rate limit                   | All attempts, short window       | IP + scope                  | On                       | Falls back to in-memory limiter       |
+| Account lockout              | Consecutive failures             | User                        | On (5 attempts / 30 min) | n/a — database-backed                 |
+| Suspicious-IP throttle       | **Failed** attempts, long window | IP, across **all** accounts | **On**                   | Falls back to in-memory counter       |
+| Breached-password check      | Appearances in breach corpora    | Password hash prefix        | Off                      | **Fails open** — password accepted    |
+| Challenge-response (CAPTCHA) | Human challenge                  | Request                     | Off                      | **Fails closed** — submission refused |
 
 **The two failure directions are opposite on purpose.** Breached-password
 detection is supplementary — complexity rules, password history, MFA and
@@ -282,7 +282,7 @@ accept every bot it had already detected.
   matching what the server actually does.
 - **Enabling it widens the Content-Security-Policy** to the configured
   provider's widget origins. Without that the browser blocks the script and
-  the iframe, and the symptom is *"the challenge never appears"* — nothing in
+  the iframe, and the symptom is _"the challenge never appears"_ — nothing in
   it names the CSP. With CAPTCHA off the policy is byte-for-byte unchanged,
   `frame-src` included. Adding a new provider needs an entry in **both** the
   verification-URL map and the widget-origin map in `app/core/captcha.py`.

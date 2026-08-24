@@ -8,6 +8,7 @@ frontend `modules/elections`.
 token security, tenant isolation, tally/quorum correctness).
 
 ## Verified good ✅
+
 - **Voting-token → tenant isolation is sound.** `get_ballot_by_token` loads the
   election from the token's own `election_id`; `cast_vote_with_token` /
   `submit_ballot_with_token` validate `candidate.election_id == election.id` and
@@ -32,6 +33,7 @@ token security, tenant isolation, tally/quorum correctness).
 ## Findings
 
 ### ELEC-1 — HIGH — `cast_vote` ignored `eligibility.is_eligible` (auth voting bypass) — ✅ FIXED
+
 `cast_vote` computed `check_voter_eligibility(...)` but only read
 `positions_voted`/`has_voted` — it **never checked `is_eligible`** and did no
 independent status/date check. Any authenticated org member hitting
@@ -47,6 +49,7 @@ Verified against the test fixtures (open election + eligible members ⇒ gate
 passes, happy path unchanged).
 
 ### ELEC-2 — HIGH/MEDIUM — Cross-tenant IDOR in `update_candidate` / `delete_candidate` — ✅ FIXED
+
 Both endpoints fetched the candidate by `(id, election_id)` — both
 attacker-controlled path params — with **no `organization_id` scoping**.
 `require_permission("elections.manage")` only asserts the permission in the
@@ -58,6 +61,7 @@ ownership check (404 on miss) at the top of both endpoints before the candidate
 fetch.
 
 ### ELEC-3 — MEDIUM — Vote-dedup hash breaks approval / multi-vote-per-position — ✅ FIXED
+
 `_compute_vote_dedup_hash = SHA256(election_id:voter:position)` **excluded
 `candidate_id`** and the column is UNIQUE. For `voting_method="approval"` or
 `max_votes_per_position > 1`, a voter's legitimate second vote for the same
@@ -78,9 +82,10 @@ internally), and `ElectionBallot.tsx` now submits ranked/approval votes through
 it in one call instead of a non-atomic sequential loop.
 
 ### ELEC-4 — MEDIUM — `rollback_election` (CLOSED→OPEN) enables double-voting — ✅ FIXED (guard)
+
 `close_election` destroys `voter_anonymity_salt`, but `rollback_election` could
 reopen a closed election. After reopen the salt is `None`, so `_generate_voter_hash`
-yields a *different* hash than the original votes — a voter who already voted is
+yields a _different_ hash than the original votes — a voter who already voted is
 no longer matched by `has_voted`, and their new `vote_dedup_hash` differs, so
 they could vote **again**.
 **Fix (2026-07 review):** CLOSED→OPEN rollback is now refused for anonymous
@@ -91,6 +96,7 @@ unsafe one. The alternative (retaining the salt post-close) would weaken
 SEC-12 and was rejected.
 
 ### ELEC-5 — MEDIUM — Voting tokens stored/compared in plaintext — ✅ FIXED
+
 `_generate_voting_token` stored the raw `token_urlsafe(64)` and
 `get_ballot_by_token` looked it up with plaintext equality, so anyone with
 read access to `voting_tokens` obtained live ballot credentials.
@@ -103,6 +109,7 @@ hash suffices: 512-bit random tokens have no brute-force/rainbow surface.
 Downgrade is deliberately a no-op (one-way).
 
 ### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close — ✅ FIXED (residual closed forward)
+
 For anonymous elections each `Vote` stored `voter_hash` plus raw `ip_address`
 and `user_agent` forever, and `get_election_forensics` returned a full per-IP
 vote map — enough to correlate votes to voters in a small department.
@@ -121,10 +128,12 @@ audit hash-chain input, so scrubbing them would break `verify_integrity` —
 which is exactly the tamper-evidence the chain exists to provide.
 
 ### ELEC-7 — LOW — `create_candidate` stores client-supplied `user_id` unvalidated (XC-1) — ✅ FIXED (zero-trust review; verified app-review B5, 2026-08-06)
+
 `Candidate(..., **candidate.model_dump())` persists `user_id` with no in-org
 check. Same low-severity pattern tracked in CROSS-CUTTING XC-1.
 
 ### ELEC-8 — LOW — `verify_vote_receipt` is unusable (receipt never returned) — ✅ FIXED
+
 `_compute_receipt_hash` stored a receipt, but no voting response returned it,
 so the public `GET /{election_id}/verify-receipt` could never be satisfied.
 **Fix (2026-07 review):** `submit_ballot_with_token` returns `receipt_hashes`
@@ -133,6 +142,7 @@ includes `receipt_hash`. The frontend receipt block in `BallotVotingPage`
 renders them; verify-receipt is now usable end-to-end.
 
 ### ELEC-9 — LOW / dead code — unreachable max-votes branch in `cast_vote_with_token` — ✅ FIXED
+
 Removed together with the ELEC-3 rework; the same change also fixed the
 `position=None` filter degrading to a no-op (see R-8 below).
 
@@ -181,7 +191,7 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   eligibility. Removed from the create/update schema; check-ins must go
   through the audited `POST /{id}/attendees` / import endpoints.
 - **R-6 — MEDIUM — Turnout/quorum denominator counted non-voting tiers.**
-  Results/stats fell back to *all* active users, so a percentage quorum could
+  Results/stats fell back to _all_ active users, so a percentage quorum could
   fail even when 100 % of actually-eligible members voted. New
   `_count_eligible_voters()` excludes tiers with `voting_eligible: false`
   (adding back secretary-override members). Election-level only — per-item
@@ -195,7 +205,7 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   `_get_eligible_ballot_items_for_user` is derived).
 - **R-8 — MEDIUM — `cast_vote_with_token` no-op filter over-blocked.**
   `.where(Vote.position == position if position else True)` degraded to a
-  no-op for positionless votes, so *any* prior vote blocked submission. Now
+  no-op for positionless votes, so _any_ prior vote blocked submission. Now
   matches `Vote.position IS NULL` for positionless votes.
 - **R-9 — LOW — Missing `is_test` filters.** Runoff advancement tally,
   `get_election_stats`, and `get_non_voters` counted test votes (results/
@@ -230,7 +240,7 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   dates ("Extend Time" is open-status, end-date-only). Opening the runoff at
   the meeting meant an hour of "Election has not started yet". Fixed twice
   over: `open_election` now clamps a future `start_date` to the open time
-  (opening *is* the declaration that voting starts; audited as
+  (opening _is_ the declaration that voting starts; audited as
   `start_adjusted_to_open_time`) and refuses to open an election whose
   `end_date` already passed; and the detail page has an **Edit Dates**
   modal for draft elections (start + end, quarter-hour granularity,
@@ -286,5 +296,6 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   legacy single-choice hashes are unchanged.
 
 ## Notes
+
 - `check_eligibility` and the vote endpoints use bare `get_current_user`; they
   do their own eligibility/self-scoping (and ELEC-1 closed the enforcement hole).

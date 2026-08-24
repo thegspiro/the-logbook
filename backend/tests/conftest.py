@@ -6,9 +6,11 @@ It sets up test database, async sessions, and common test data.
 """
 
 import os
+import uuid
 from collections.abc import AsyncGenerator
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import configure_mappers
 
@@ -169,6 +171,56 @@ async def db_session(_initialize_database) -> AsyncGenerator[AsyncSession]:
             await session.close()
             if outer.is_active:
                 await outer.rollback()
+
+
+@pytest.fixture
+async def setup_org_and_admin(db_session: AsyncSession):
+    """Insert a minimal organization plus one active admin, returning their ids.
+
+    Raw INSERTs rather than the ORM: this only needs the two rows that
+    foreign keys point at, and going through the models would drag in
+    password hashing and the onboarding defaults that the tests using this
+    are not exercising.
+
+    Shared here rather than redefined per module — it started in
+    test_membership_pipeline_flow.py, and a second file that wanted it got
+    "fixture not found" instead of the rows.
+    """
+    org_id = str(uuid.uuid4())
+    admin_id = str(uuid.uuid4())
+    await db_session.execute(
+        text(
+            "INSERT INTO organizations "
+            "(id, name, organization_type, slug, timezone) "
+            "VALUES (:id, :name, :otype, :slug, :tz)"
+        ),
+        {
+            "id": org_id,
+            "name": "Test Dept",
+            "otype": "fire_department",
+            "slug": f"test-{org_id[:8]}",
+            "tz": "UTC",
+        },
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO users "
+            "(id, organization_id, username, first_name, last_name, "
+            "email, password_hash, status) "
+            "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+        ),
+        {
+            "id": admin_id,
+            "org": org_id,
+            "un": f"admin-{org_id[:8]}",
+            "fn": "Admin",
+            "ln": "User",
+            "em": f"admin-{org_id[:8]}@test.com",
+            "pw": "hashed",
+        },
+    )
+    await db_session.flush()
+    return org_id, admin_id
 
 
 @pytest.fixture

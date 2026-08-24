@@ -136,6 +136,12 @@ describe('MemberProfilePage assigned inventory', () => {
     renderWithRouter(<MemberProfilePage />);
 
     expect(await screen.findByText('Assigned Inventory')).toBeInTheDocument();
+    // Wait for an item, not just the heading, before asserting the fetch. The
+    // heading renders on the commit where `inventoryModuleEnabled` flips true;
+    // the effect that calls `getUserInventory` runs after that commit, so
+    // asserting here on the heading alone races the fetch and intermittently
+    // sees zero calls. An item cannot appear until the response has landed.
+    expect(await screen.findByText('Turnout Coat')).toBeInTheDocument();
     expect(getUserInventory).toHaveBeenCalledWith(VIEWER_ID);
   });
 });

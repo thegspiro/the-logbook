@@ -22,7 +22,7 @@ pursued for "the cost of unreturned or damaged items," so it is a legally charge
 liability computed through float. **Fix:** accumulate as `Decimal` (mirroring the
 clearance service), verified safe across all consumers — `:,.2f` formatters, the
 FastAPI response encoder, and the audit path (`json.dumps(..., default=str)`) all
-handle `Decimal`; the valuation *methodology* (flagged separately) was left untouched.
+handle `Decimal`; the valuation _methodology_ (flagged separately) was left untouched.
 Existing 23 property-return tests pass.
 
 **Flagged (unchanged / new):** LIFE-2 (per-unit float division — FIN-7 refactor).
@@ -65,12 +65,12 @@ endpoint) are visibly applied here.
 ## Verified good ✅
 
 - **Anonymization is well-guarded on every axis.** `get_user_for_anonymization`
-  is org-scoped with the comment *"never resolve a target across tenants"*;
+  is org-scoped with the comment _"never resolve a target across tenants"_;
   the endpoint requires `members.manage`, **blocks self-anonymization**, and
   the service enforces preconditions (already-anonymized is rejected as
-  idempotent; only *departed* members qualify).
+  idempotent; only _departed_ members qualify).
 - **The anonymization contract is documented and the code matches it.** The
-  module docstring enumerates what is scrubbed *and what is deliberately kept*
+  module docstring enumerates what is scrubbed _and what is deliberately kept_
   — audit logs (append-only, hash-chained: "rewriting them is tampering"),
   votes/ballots (election-integrity signatures), and operational history now
   pointing at an anonymized shell. Every claimed operation was verified present:
@@ -180,7 +180,7 @@ None found. No TODO/FIXME markers across the six services.
 ## Documentation gaps
 
 - **Fixed:** `KNOWN_LIMITATIONS.md` still listed the `member_status` state
-  machine as *deferred* under ORU-9, although the module-audit file records it
+  machine as _deferred_ under ORU-9, although the module-audit file records it
   as fixed on 2026-07-31 and the code is present. Corrected, with a note that
   nothing deferred remains under ORU-9. This is exactly what the checklist's
   "re-verify findings left open" step is for — a resolved item left marked open
@@ -204,7 +204,7 @@ None found. No TODO/FIXME markers across the six services.
    A structural test in the shape of `test_scheduled_tasks_structure.py` would
    catch it.
 3. **Retention enforcement has no dry run or preview either**, and it deletes
-   unattended on a daily cron. `enforce()` returns counts *after* deleting;
+   unattended on a daily cron. `enforce()` returns counts _after_ deleting;
    there is no "what would this remove" call for an admin about to lower a
    retention setting.
 4. **Retention covers three record classes.** The registry is designed for easy
@@ -218,11 +218,12 @@ None found. No TODO/FIXME markers across the six services.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2508 passed, 0 failed**; the 62 lifecycle-related tests pass. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL (39 matching connection/timeout lines in the lifecycle selection). |
+| Check                | Result                                                                                                                                                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                                                                                                        |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                                                         |
+| `black --check`      | ✅ unchanged                                                                                                                                                                                                            |
+| `eslint`             | ✅ clean                                                                                                                                                                                                                |
+| backend tests        | ✅ **2508 passed, 0 failed**; the 62 lifecycle-related tests pass. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL (39 matching connection/timeout lines in the lifecycle selection). |
+
 </content>

@@ -84,6 +84,10 @@ const COMMANDS: CommandItem[] = [
     path: '/inventory',
     icon: Package,
     section: 'Navigation',
+    // The catalogue is manager-only; without this the palette stays the one
+    // surface that still offers it to every member, and offers an Access
+    // Denied. A member's own kit is reachable under 'My Issued Gear'.
+    permission: 'inventory.manage',
     keywords: ['equipment', 'supplies'],
   },
   {
