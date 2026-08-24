@@ -227,6 +227,15 @@ const EmailTemplatesPage: React.FC = () => {
    * Sent on every preview, saved or not: the endpoint has always accepted
    * these, and passing them is what lets the right-hand pane show the edit
    * rather than the last thing written to the database.
+   *
+   * The accent and layout are omitted when blank rather than sent as ''.
+   * A template is allowed to carry neither — the renderer then uses the
+   * colourway and layout shipped for its type — but the form holds that
+   * absence as an empty string, and '' is not one of the seven accents or
+   * three layouts the API accepts. Sending it 422'd the preview on every
+   * such template, which took the whole live pane down rather than one
+   * field. Every other override keeps '' intact: a cleared footer, chip,
+   * plain-text body or stylesheet means "cleared", not "unchanged".
    */
   const previewOverrides = useCallback(
     () => ({
@@ -235,9 +244,9 @@ const EmailTemplatesPage: React.FC = () => {
       text_body: draft.textBody,
       css_styles: draft.cssStyles,
       footer_key: draft.footerKey,
-      header_accent: draft.headerAccent,
+      header_accent: draft.headerAccent || undefined,
       status_chip: draft.statusChip,
-      layout: draft.layout,
+      layout: draft.layout || undefined,
     }),
     [
       draft.subject,

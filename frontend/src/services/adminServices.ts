@@ -472,10 +472,19 @@ export interface TemplatePreviewOverrides {
   html_body?: string;
   text_body?: string;
   css_styles?: string;
+  /** Empty string is meaningful here: it selects the department's default footer. */
   footer_key?: string;
-  header_accent?: string;
+  /**
+   * One of the seven accents, or omitted. These two are typed `| undefined`
+   * because a template may have neither set — the renderer then falls back to
+   * the colourway shipped for its type — and the API rejects the empty string
+   * an unset form field would otherwise send. See `previewOverrides` in
+   * EmailTemplatesPage.
+   */
+  header_accent?: string | undefined;
   status_chip?: string;
-  layout?: string;
+  /** notice | receipt | digest, or omitted. */
+  layout?: string | undefined;
 }
 
 export interface EmailTemplatePreview {
