@@ -82,3 +82,44 @@ describe('EmailTemplatesPage tab deep links', () => {
     expect(source).not.toMatch(/useState<EmailTemplatesTab>/);
   });
 });
+
+/**
+ * The editor and the preview are side by side, not behind tabs.
+ *
+ * Asserted against the source for the same reason as the tab deep links
+ * above: reaching the layout in a render needs the page's whole store,
+ * permission and fetch surface mocked, and what is being checked here is a
+ * handful of expressions. A render test would pass against a mock that
+ * happened to produce the right pane.
+ */
+describe('EmailTemplatesPage editor layout', () => {
+  it('lays the three columns out at lg', () => {
+    expect(source).toContain('lg:grid-cols-[296px_minmax(0,1fr)_468px]');
+  });
+
+  it('keeps the edit/preview strip only below lg', () => {
+    // Above `lg` both panes are on screen and a switch decides nothing; the
+    // strip is what makes the stacked phone layout usable.
+    expect(source).toContain('tab-scroll lg:hidden');
+  });
+
+  it('previews the unsaved draft rather than the stored template', () => {
+    expect(source).toContain('previewOverrides');
+    expect(source).toContain('html_body: draft.htmlBody');
+  });
+
+  it('debounces the preview instead of firing per keystroke', () => {
+    // Each preview is a round trip that inlines the whole stylesheet
+    // server-side. Per-keystroke would put a request on the wire for every
+    // character of a paragraph and paint them back out of order.
+    expect(source).toContain('PREVIEW_DEBOUNCE_MS');
+    expect(source).toMatch(/const PREVIEW_DEBOUNCE_MS = \d+/);
+  });
+
+  it('binds Ctrl+S once rather than on every render', () => {
+    // The handler previously had no dependency array, so for a textarea it
+    // was a listener added and removed per character typed.
+    const effect = source.slice(source.indexOf("e.key === 's'"));
+    expect(effect.slice(0, 600)).toContain('}, [draft.isDirty');
+  });
+});

@@ -114,7 +114,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="border-theme-text-primary mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
@@ -125,7 +125,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (!currentApparatus) {
     return (
-      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Truck className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Apparatus Not Found</h2>
@@ -151,7 +151,7 @@ export const ApparatusDetailPage: React.FC = () => {
   ];
 
   return (
-    <div className="bg-theme-bg min-h-screen">
+    <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-6 pt-6">
         <Breadcrumbs />
       </div>

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**252 tables · 4313 columns · 815 foreign keys**
+**252 tables · 4316 columns · 815 foreign keys**
 
 ---
 
@@ -170,7 +170,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`email_attachments`](#email_attachments) | `EmailAttachment` | 8 | Stored attachment that can be included with email templates. |
-| [`email_templates`](#email_templates) | `EmailTemplate` | 19 | Configurable email template stored in the database. |
+| [`email_templates`](#email_templates) | `EmailTemplate` | 22 | Configurable email template stored in the database. |
 | [`message_history`](#message_history) | `MessageHistory` | 12 | Log of every email sent by the application. |
 | [`scheduled_emails`](#scheduled_emails) | `ScheduledEmail` | 15 | An email scheduled to be sent at a future date/time. |
 
@@ -2277,6 +2277,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `text_body` | TEXT | yes |  |  |  |
 | `css_styles` | TEXT | yes |  |  |  |
 | `footer_key` | VARCHAR(32) | yes |  |  |  |
+| `header_accent` | VARCHAR(7) | yes |  |  |  |
+| `status_chip` | VARCHAR(40) | yes |  |  |  |
+| `layout` | VARCHAR(16) | yes |  |  |  |
 | `is_active` | BOOL | no |  | `1` |  |
 | `allow_attachments` | BOOL | no |  | `0` |  |
 | `default_cc` | JSON | yes |  |  |  |

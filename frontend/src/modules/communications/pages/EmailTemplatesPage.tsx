@@ -1,18 +1,28 @@
 /**
  * Email Templates Page
  *
- * Admin page for viewing, editing, and previewing email notification templates.
- * Layout: sidebar template list + editor + live preview panel.
+ * Admin page for viewing, editing, and previewing email notification
+ * templates.
+ *
+ * Renders through the shared `SettingsLayout` — its sections, its header, its
+ * section nav — like every other settings screen.
+ *
+ * The Templates section asks the shell for its `wide` column. Three columns
+ * from `lg` up — list, editor, live preview — rather than an editor and a
+ * preview behind tabs. Tabs made the preview something you went and looked at
+ * after the fact, which is the one thing it is bad at: the question an admin
+ * is actually asking is "does this edit look right", and that needs both
+ * halves visible at once. The pair does not fit the shell's standard 960px, so
+ * this one panel widens; the other four sections are lists and do not. Below
+ * `lg` the two panes stack and a strip switches between them, because three
+ * columns do not fit a phone.
  */
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Mail,
   AlertCircle,
-  AlignLeft,
-  LayoutTemplate,
-  Users,
   X,
   ToggleLeft,
   ToggleRight,
@@ -27,6 +37,12 @@ import {
   History,
   RotateCcw,
   Send,
+  Save,
+  Undo2,
+  Sparkles,
+  AlignLeft,
+  LayoutTemplate,
+  Users,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
 import { SettingsLayout, type SettingsSection } from '../../../components/settings/SettingsLayout';
@@ -42,7 +58,8 @@ import ScheduledEmailList from '../components/ScheduledEmailList';
 import MessageHistoryList from '../components/MessageHistoryList';
 import OfficersPanel from '../components/OfficersPanel';
 import FootersPanel from '../components/FootersPanel';
-import type { EmailTemplateUpdate, EmailAttachment } from '../types';
+import { useTemplateDraft } from '../hooks/useTemplateDraft';
+import type { EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
 interface PreviewMember {
@@ -82,6 +99,9 @@ const SECTIONS: SettingsSection<EmailTemplatesTab>[] = [
   { key: 'history', label: 'History', icon: History, description: 'What has been sent, and to whom' },
 ];
 
+/** How long typing has to stop before the preview re-renders. */
+const PREVIEW_DEBOUNCE_MS = 500;
+
 const EmailTemplatesPage: React.FC = () => {
   const {
     templates,
@@ -101,7 +121,7 @@ const EmailTemplatesPage: React.FC = () => {
 
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const [, setIsDirty] = useState(false);
+  const draft = useTemplateDraft(selectedTemplate);
   const officerVariables = useOfficersStore((s) => s.variables);
   const fetchOfficers = useOfficersStore((s) => s.fetchOfficers);
   const footers = useFootersStore((s) => s.footers);
@@ -128,6 +148,8 @@ const EmailTemplatesPage: React.FC = () => {
   const handleTabChange = (tab: EmailTemplatesTab) => {
     setSearchParams({ tab });
   };
+  // Only reachable below `lg`, where the two panes stack. On desktop both
+  // are on screen and this decides nothing.
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
@@ -175,18 +197,58 @@ const EmailTemplatesPage: React.FC = () => {
     }
   }, [templates, selectedTemplate, selectTemplate]);
 
-  const handleSave = useCallback(
-    async (data: EmailTemplateUpdate) => {
-      if (!selectedTemplate) return;
-      try {
-        await updateTemplate(selectedTemplate.id, data);
-        clearPreview();
-        toast.success('Template saved successfully');
-      } catch {
-        toast.error('Failed to save template');
+  const handleSave = useCallback(async () => {
+    if (!selectedTemplate || draft.hasValidationErrors) return;
+    try {
+      await updateTemplate(selectedTemplate.id, draft.buildUpdate());
+      toast.success('Template saved successfully');
+    } catch {
+      toast.error('Failed to save template');
+    }
+  }, [selectedTemplate, updateTemplate, draft]);
+
+  // Ctrl/Cmd+S. The dependency array is the point: without one this rebound
+  // on every render, which for a textarea is every keystroke — a listener
+  // added and removed per character typed.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (draft.isDirty && !isSaving && !draft.hasValidationErrors) void handleSave();
       }
-    },
-    [selectedTemplate, updateTemplate, clearPreview]
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [draft.isDirty, draft.hasValidationErrors, isSaving, handleSave]);
+
+  /**
+   * The unsaved draft, in the shape the preview endpoint takes as overrides.
+   *
+   * Sent on every preview, saved or not: the endpoint has always accepted
+   * these, and passing them is what lets the right-hand pane show the edit
+   * rather than the last thing written to the database.
+   */
+  const previewOverrides = useCallback(
+    () => ({
+      subject: draft.subject,
+      html_body: draft.htmlBody,
+      text_body: draft.textBody,
+      css_styles: draft.cssStyles,
+      footer_key: draft.footerKey,
+      header_accent: draft.headerAccent,
+      status_chip: draft.statusChip,
+      layout: draft.layout,
+    }),
+    [
+      draft.subject,
+      draft.htmlBody,
+      draft.textBody,
+      draft.cssStyles,
+      draft.footerKey,
+      draft.headerAccent,
+      draft.statusChip,
+      draft.layout,
+    ]
   );
 
   const handlePreview = useCallback(
@@ -195,19 +257,30 @@ const EmailTemplatesPage: React.FC = () => {
       const mid = memberId !== undefined ? memberId : previewMemberId;
       if (mid !== undefined) setPreviewMemberId(mid);
       // Empty context — backend merges per-type sample data + live org + member
-      void previewTemplate(selectedTemplate.id, undefined, undefined, mid || undefined);
+      void previewTemplate(selectedTemplate.id, undefined, previewOverrides(), mid || undefined);
     },
-    [selectedTemplate, previewTemplate, previewMemberId]
+    [selectedTemplate, previewTemplate, previewMemberId, previewOverrides]
   );
 
-  // Auto-load preview when selecting a template
+  /**
+   * Re-render the preview from the draft, ~500ms after typing stops.
+   *
+   * Debounced rather than per-keystroke because each render is a round trip
+   * that inlines the whole stylesheet server-side; per-keystroke would put a
+   * request on the wire for every character of a paragraph and paint them
+   * back out of order.
+   */
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (selectedTemplate) {
-      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId || undefined);
-    }
-    // Only trigger on template selection change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTemplate?.id]);
+    if (!selectedTemplate) return;
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    previewTimer.current = setTimeout(() => {
+      void previewTemplate(selectedTemplate.id, undefined, previewOverrides(), previewMemberId || undefined);
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      if (previewTimer.current) clearTimeout(previewTimer.current);
+    };
+  }, [selectedTemplate, previewTemplate, previewOverrides, previewMemberId]);
 
   const handleToggleActive = async () => {
     if (!selectedTemplate) return;
@@ -304,312 +377,352 @@ const EmailTemplatesPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <SettingsLayout<EmailTemplatesTab>
-        sections={SECTIONS}
-        activeSection={activeTab}
-        onSectionChange={handleTabChange}
-        navLabel="Email settings sections"
-        title="Email Templates"
-        headerAside={<Breadcrumbs />}
-      >
-        <>
-          {/* Error Banner */}
-          {error && (
-            <div className="mb-6 flex items-start space-x-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
-              <div className="flex-1">
-                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-              </div>
+    <SettingsLayout<EmailTemplatesTab>
+      sections={SECTIONS}
+      activeSection={activeTab}
+      onSectionChange={handleTabChange}
+      navLabel="Email settings sections"
+      title="Email Templates"
+      headerAside={<Breadcrumbs />}
+      // Only the Templates panel needs the wide column — it is the one that
+      // puts the editor and the live preview beside each other. The other four
+      // sections are lists and read better at the width every other settings
+      // screen uses.
+      width={activeTab === 'templates' ? 'wide' : 'standard'}
+    >
+      <>
+        {/* Save bar for the Templates section.
+
+              Sticky, and it carries Save: with the editor and the preview side
+              by side the button used to scroll out of sight while the fields it
+              saves stayed on screen.
+
+              It lives here rather than in SettingsLayout's headerAside because
+              that header is not sticky — and making it sticky would move every
+              other settings screen's header for the sake of this one. Negative
+              margins so the bar spans the panel's padding instead of floating
+              inside it, and `top-0` because it is the panel's own chrome, not a
+              floating element that has to clear the mobile bottom nav.
+
+              On bg-theme-bg, the flat opaque page canvas, not a surface token:
+              in dark mode the surface tokens are translucent white by design —
+              they are meant to sit *on* the gradient — so a sticky bar painted
+              with one shows the content sliding underneath it, which is the
+              single thing this bar exists to stop. */}
+        {activeTab === 'templates' && selectedTemplate && (
+          <div className="bg-theme-bg border-theme-surface-border sticky top-0 z-30 -mx-4 -mt-4 mb-4 border-b px-4 py-3 sm:-mx-6 sm:-mt-6 sm:px-6">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
-                onClick={clearError}
-                className="text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                aria-label="Dismiss error"
+                onClick={() => {
+                  void handleSendTest();
+                }}
+                disabled={isSendingTest || draft.isDirty}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                // The endpoint renders the stored row, so with unsaved edits
+                // on screen this would mail the previous version while the
+                // preview beside it shows the new one — and the whole point
+                // of the button is checking what a real inbox does with the
+                // thing you are looking at.
+                title={
+                  draft.isDirty
+                    ? 'Save first — a test email sends the saved template, not your unsaved edits'
+                    : 'Send this template to your own address'
+                }
               >
-                <X className="h-4 w-4" />
+                {isSendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <span>Send Test to Me</span>
+              </button>
+              {draft.isDirty && (
+                <button
+                  onClick={draft.discard}
+                  disabled={isSaving}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                >
+                  <Undo2 className="h-4 w-4" />
+                  <span>Discard</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  void handleSave();
+                }}
+                disabled={!draft.isDirty || isSaving || draft.hasValidationErrors}
+                className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed"
+                title="Save changes (Ctrl+S)"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>Save</span>
               </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Footers Tab */}
-          {activeTab === 'footers' && <FootersPanel />}
-
-          {/* Officers Tab */}
-          {activeTab === 'officers' && <OfficersPanel members={members} isLoadingMembers={isLoadingMembers} />}
-
-          {/* Scheduled Emails Tab */}
-          {activeTab === 'scheduled' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-theme-text-primary text-lg font-semibold">Scheduled Emails</h2>
-                <button
-                  onClick={() => setShowScheduleForm(!showScheduleForm)}
-                  className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4" />
-                  Schedule Email
-                </button>
-              </div>
-
-              {showScheduleForm && (
-                <ScheduleEmailForm templates={templates} onClose={() => setShowScheduleForm(false)} />
-              )}
-
-              <ScheduledEmailList />
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-6 flex items-start space-x-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+            <div className="flex-1">
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
-          )}
+            <button
+              onClick={clearError}
+              className="text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+              aria-label="Dismiss error"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
-          {/* History Tab */}
-          {activeTab === 'history' && <MessageHistoryList templates={templates} />}
+        {/* Footers Tab */}
+        {activeTab === 'footers' && <FootersPanel />}
 
-          {/* Templates Tab: Main Layout: Sidebar + Main (tabbed editor/preview) */}
-          {activeTab === 'templates' && (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-              {/* Template list sidebar */}
-              <div className="lg:col-span-3">
-                <div className="card p-4 lg:sticky lg:top-6">
-                  <TemplateList
-                    templates={templates}
-                    selectedId={selectedTemplate?.id ?? null}
-                    onSelect={selectTemplate}
+        {/* Officers Tab */}
+        {activeTab === 'officers' && <OfficersPanel members={members} isLoadingMembers={isLoadingMembers} />}
+
+        {/* Scheduled Emails Tab */}
+        {activeTab === 'scheduled' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-theme-text-primary text-lg font-semibold">Scheduled Emails</h2>
+              <button
+                onClick={() => setShowScheduleForm(!showScheduleForm)}
+                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                Schedule Email
+              </button>
+            </div>
+
+            {showScheduleForm && <ScheduleEmailForm templates={templates} onClose={() => setShowScheduleForm(false)} />}
+
+            <ScheduledEmailList />
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && <MessageHistoryList templates={templates} />}
+        {/* A department that has already edited a notice keeps its wording:
+              ensure_default_templates only ever creates missing rows, so the
+              new design reaches a stored template when — and only when —
+              somebody asks for it. Which nothing in the UI would otherwise
+              say, leaving an admin to conclude the redesign skipped them. */}
+        {activeTab === 'templates' && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+            <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" />
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              A new email design is available. Templates you have never edited already use it — press{' '}
+              <span className="font-semibold">Reset</span> on any you have customised to adopt it. Your CC/BCC settings
+              are kept.
+            </p>
+          </div>
+        )}
+        {/* Templates Tab: list / editor / live preview */}
+        {activeTab === 'templates' && (
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[296px_minmax(0,1fr)_468px]">
+            {/* Column 1 — template list */}
+            <div className="card p-4 lg:sticky lg:top-28">
+              <TemplateList templates={templates} selectedId={selectedTemplate?.id ?? null} onSelect={selectTemplate} />
+            </div>
+
+            {selectedTemplate ? (
+              <>
+                {/* Below `lg` the two panes stack, so they need a way to
+                      swap. From `lg` up both are visible and this strip is
+                      gone — there is nothing left for it to switch. */}
+                <div className="tab-scroll lg:hidden">
+                  <button
+                    onClick={() => setEditorView('edit')}
+                    className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                      editorView === 'edit'
+                        ? 'border-red-500 text-red-600 dark:text-red-400'
+                        : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
+                    }`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setEditorView('preview')}
+                    className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                      editorView === 'preview'
+                        ? 'border-red-500 text-red-600 dark:text-red-400'
+                        : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
+                    }`}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </button>
+                </div>
+
+                {/* Column 2 — editor */}
+                <div
+                  className={`${editorView === 'edit' ? 'block' : 'hidden'} card lg:col-start-2 lg:row-start-1 lg:block`}
+                >
+                  {/* Template meta bar */}
+                  <div className="border-theme-surface-border flex flex-col gap-3 border-b px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-theme-text-primary truncate text-base font-semibold">
+                        {selectedTemplate.name}
+                      </p>
+                      <p className="text-theme-text-muted text-xs">
+                        {selectedTemplate.description || 'No description'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center space-x-3">
+                      <button
+                        onClick={() => setShowResetConfirm(true)}
+                        disabled={isResetting}
+                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
+                        title="Restore default content"
+                      >
+                        {isResetting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        )}
+                        <span>Reset</span>
+                      </button>
+                      <span className="text-theme-text-muted text-xs">
+                        {selectedTemplate.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      <button
+                        onClick={() => {
+                          void handleToggleActive();
+                        }}
+                        disabled={isTogglingActive}
+                        className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
+                        title={selectedTemplate.is_active ? 'Deactivate template' : 'Activate template'}
+                      >
+                        {isTogglingActive ? (
+                          <Loader2 className="h-7 w-7 animate-spin" />
+                        ) : selectedTemplate.is_active ? (
+                          <ToggleRight className="h-7 w-7 text-green-500" />
+                        ) : (
+                          <ToggleLeft className="h-7 w-7" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <TemplateEditor
+                      template={selectedTemplate}
+                      draft={draft}
+                      officerVariables={officerVariables}
+                      footers={footers}
+                      footerDefaultKey={footerDefaultKey}
+                    />
+
+                    {/* Attachments section */}
+                    {selectedTemplate.allow_attachments && (
+                      <div className="border-theme-surface-border mt-6 border-t pt-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                            <Paperclip className="h-4 w-4" />
+                            Attachments
+                          </h4>
+                          <label className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex cursor-pointer items-center space-x-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors">
+                            {uploadingAttachment ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            <span>Upload</span>
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                void handleUploadAttachment(e);
+                              }}
+                              disabled={uploadingAttachment}
+                            />
+                          </label>
+                        </div>
+                        {selectedTemplate.attachments.length > 0 ? (
+                          <div className="space-y-2">
+                            {selectedTemplate.attachments.map((att) => (
+                              <div
+                                key={att.id}
+                                className="bg-theme-surface-secondary flex items-center justify-between rounded-lg px-3 py-2"
+                              >
+                                <div className="flex min-w-0 items-center space-x-2">
+                                  <Paperclip className="text-theme-text-muted h-4 w-4 shrink-0" />
+                                  <span className="text-theme-text-primary truncate text-sm">{att.filename}</span>
+                                  {att.file_size && (
+                                    <span className="text-theme-text-muted shrink-0 text-xs">({att.file_size})</span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => setAttachmentToDelete(att)}
+                                  className="ml-2 shrink-0 text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                  aria-label={`Delete attachment ${att.filename}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-theme-text-muted text-sm">
+                            No attachments. Files uploaded here will be included with every email sent using this
+                            template.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Column 3 — live preview */}
+                <div
+                  className={`${editorView === 'preview' ? 'block' : 'hidden'} lg:sticky lg:top-28 lg:col-start-3 lg:row-start-1 lg:block`}
+                >
+                  <TemplatePreview
+                    preview={preview}
+                    isPreviewing={isPreviewing}
+                    onRefresh={handlePreview}
+                    members={members}
+                    isLoadingMembers={isLoadingMembers}
+                    isDirty={draft.isDirty}
                   />
                 </div>
+              </>
+            ) : (
+              <div className="card p-12 text-center lg:col-span-2">
+                <Mail className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+                <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Select a Template</h3>
+                <p className="text-theme-text-secondary">
+                  Choose a template from the list to edit its content and preview the result.
+                </p>
               </div>
-
-              {/* Main content area: editor / preview via tabs */}
-              <div className="lg:col-span-9">
-                {selectedTemplate ? (
-                  <div className="card">
-                    {/* Template meta bar */}
-                    <div className="border-theme-surface-border flex flex-col gap-3 border-b px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-4">
-                        <p className="text-theme-text-muted text-xs">
-                          {selectedTemplate.description || 'No description'}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => setShowResetConfirm(true)}
-                          disabled={isResetting}
-                          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
-                          title="Restore default content"
-                        >
-                          {isResetting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          )}
-                          <span>Reset</span>
-                        </button>
-                        <span className="text-theme-text-muted text-xs">
-                          {selectedTemplate.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                        <button
-                          onClick={() => {
-                            void handleToggleActive();
-                          }}
-                          disabled={isTogglingActive}
-                          className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
-                          title={selectedTemplate.is_active ? 'Deactivate template' : 'Activate template'}
-                        >
-                          {isTogglingActive ? (
-                            <Loader2 className="h-7 w-7 animate-spin" />
-                          ) : selectedTemplate.is_active ? (
-                            <ToggleRight className="h-7 w-7 text-green-500" />
-                          ) : (
-                            <ToggleLeft className="h-7 w-7" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Edit / Preview toggle. A segmented control rather than a
-                      second underlined tab strip: the page-level sections are
-                      already a nav, and two stacked strips in the same
-                      underlined idiom read as two levels of navigation when
-                      this one only switches how one template is displayed. */}
-                    <div className="px-5 pt-3 pb-0">
-                      <div
-                        className="segmented-group-secondary inline-flex gap-1"
-                        role="group"
-                        aria-label="Editor view"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setEditorView('edit')}
-                          aria-pressed={editorView === 'edit'}
-                          className={`settings-section-tab ${editorView === 'edit' ? 'settings-nav-item-active' : ''}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditorView('preview');
-                            void previewTemplate(
-                              selectedTemplate.id,
-                              undefined,
-                              undefined,
-                              previewMemberId || undefined
-                            );
-                          }}
-                          aria-pressed={editorView === 'preview'}
-                          className={`settings-section-tab ${editorView === 'preview' ? 'settings-nav-item-active' : ''}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                          Preview
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Content area */}
-                    <div className="p-5">
-                      {editorView === 'edit' ? (
-                        <>
-                          <TemplateEditor
-                            template={selectedTemplate}
-                            isSaving={isSaving}
-                            onSave={(data) => {
-                              void handleSave(data);
-                            }}
-                            onDirtyChange={setIsDirty}
-                            officerVariables={officerVariables}
-                            footers={footers}
-                            footerDefaultKey={footerDefaultKey}
-                          />
-
-                          {/* Attachments section */}
-                          {selectedTemplate.allow_attachments && (
-                            <div className="border-theme-surface-border mt-6 border-t pt-4">
-                              <div className="mb-3 flex items-center justify-between">
-                                <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-                                  <Paperclip className="h-4 w-4" />
-                                  Attachments
-                                </h4>
-                                <label className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex cursor-pointer items-center space-x-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors">
-                                  {uploadingAttachment ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <Upload className="h-3.5 w-3.5" />
-                                  )}
-                                  <span>Upload</span>
-                                  <input
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                      void handleUploadAttachment(e);
-                                    }}
-                                    disabled={uploadingAttachment}
-                                  />
-                                </label>
-                              </div>
-                              {selectedTemplate.attachments.length > 0 ? (
-                                <div className="space-y-2">
-                                  {selectedTemplate.attachments.map((att) => (
-                                    <div
-                                      key={att.id}
-                                      className="bg-theme-surface-secondary flex items-center justify-between rounded-lg px-3 py-2"
-                                    >
-                                      <div className="flex min-w-0 items-center space-x-2">
-                                        <Paperclip className="text-theme-text-muted h-4 w-4 shrink-0" />
-                                        <span className="text-theme-text-primary truncate text-sm">{att.filename}</span>
-                                        {att.file_size && (
-                                          <span className="text-theme-text-muted shrink-0 text-xs">
-                                            ({att.file_size})
-                                          </span>
-                                        )}
-                                      </div>
-                                      <button
-                                        onClick={() => setAttachmentToDelete(att)}
-                                        className="ml-2 shrink-0 text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                        aria-label={`Delete attachment ${att.filename}`}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-theme-text-muted text-sm">
-                                  No attachments. Files uploaded here will be included with every email sent using this
-                                  template.
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <TemplatePreview
-                            preview={preview}
-                            isPreviewing={isPreviewing}
-                            onRefresh={handlePreview}
-                            members={members}
-                            isLoadingMembers={isLoadingMembers}
-                          />
-                          {preview && (
-                            <div className="border-theme-surface-border mt-4 border-t pt-4">
-                              <button
-                                onClick={() => {
-                                  void handleSendTest();
-                                }}
-                                disabled={isSendingTest || !preview}
-                                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50"
-                              >
-                                {isSendingTest ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Send className="h-4 w-4" />
-                                )}
-                                <span>Send Test Email to Me</span>
-                              </button>
-                              <p className="text-theme-text-muted mt-1.5 text-xs">
-                                Sends this preview to your email address so you can verify how it looks in a real inbox.
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="card p-12 text-center">
-                    <Mail className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-                    <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Select a Template</h3>
-                    <p className="text-theme-text-secondary">
-                      Choose a template from the list to edit its content and preview the result.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <ConfirmDialog
-            isOpen={attachmentToDelete !== null}
-            onClose={() => setAttachmentToDelete(null)}
-            onConfirm={() => {
-              if (attachmentToDelete) void handleDeleteAttachment(attachmentToDelete);
-            }}
-            title="Delete Attachment"
-            message={`Remove "${attachmentToDelete?.filename ?? ''}" from this template? This attachment will no longer be included in emails.`}
-            confirmLabel="Delete"
-            variant="danger"
-          />
-          <ConfirmDialog
-            isOpen={showResetConfirm}
-            onClose={() => setShowResetConfirm(false)}
-            onConfirm={() => {
-              void handleResetToDefault();
-            }}
-            title="Reset to Default"
-            message="This will restore the template's subject, HTML body, text body, styles, and footer choice to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
-            confirmLabel="Reset"
-            variant="danger"
-          />
-        </>
-      </SettingsLayout>
-    </div>
+            )}
+          </div>
+        )}
+        <ConfirmDialog
+          isOpen={attachmentToDelete !== null}
+          onClose={() => setAttachmentToDelete(null)}
+          onConfirm={() => {
+            if (attachmentToDelete) void handleDeleteAttachment(attachmentToDelete);
+          }}
+          title="Delete Attachment"
+          message={`Remove "${attachmentToDelete?.filename ?? ''}" from this template? This attachment will no longer be included in emails.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
+        <ConfirmDialog
+          isOpen={showResetConfirm}
+          onClose={() => setShowResetConfirm(false)}
+          onConfirm={() => {
+            void handleResetToDefault();
+          }}
+          title="Reset to Default"
+          message="This will restore the template's subject, HTML body, text body, styles, and footer choice to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
+          confirmLabel="Reset"
+          variant="danger"
+        />
+      </>
+    </SettingsLayout>
   );
 };
 

@@ -404,7 +404,7 @@ export const GrantDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-red-500" />
           <p className="text-theme-text-secondary">Loading grant application...</p>
@@ -415,7 +415,7 @@ export const GrantDetailPage: React.FC = () => {
 
   if (!application) {
     return (
-      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Application Not Found</h2>
@@ -463,7 +463,7 @@ export const GrantDetailPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="bg-theme-bg min-h-screen">
+    <div className="min-h-screen">
       {/* ================================================================== */}
       {/* Header                                                             */}
       {/* ================================================================== */}
@@ -510,7 +510,7 @@ export const GrantDetailPage: React.FC = () => {
 
           {/* Key stats */}
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Amount Requested
@@ -519,7 +519,7 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.amountRequested)}
               </p>
             </div>
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Amount Awarded
@@ -528,7 +528,7 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Target className="h-4 w-4" />
                 Match Required
@@ -537,7 +537,7 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.matchAmount)}
               </p>
             </div>
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4" />
                 Grant Period

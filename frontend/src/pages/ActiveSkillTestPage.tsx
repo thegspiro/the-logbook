@@ -938,7 +938,7 @@ const ReviewSection: React.FC<{
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Add notes for this section..."
           rows={2}
-          className="bg-theme-bg border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted/50 focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+          className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted/50 focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
         />
       </div>
     </div>

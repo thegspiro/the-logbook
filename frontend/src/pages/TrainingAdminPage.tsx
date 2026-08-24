@@ -457,7 +457,7 @@ export const TrainingAdminPage: React.FC = () => {
           aria-label="Training admin section"
           value={activePage}
           onChange={(event) => handlePageChange(event.target.value as PageId)}
-          className="border-theme-surface-border bg-theme-surface-primary text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
+          className="border-theme-surface-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
         >
           <optgroup label="Primary">
             {primaryPages.map((page) => (
@@ -482,7 +482,7 @@ export const TrainingAdminPage: React.FC = () => {
           aria-label={`${currentPage.label} destination`}
           value={activeTab}
           onChange={(event) => handleTabChange(event.target.value)}
-          className="border-theme-surface-border bg-theme-surface-primary text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
+          className="border-theme-surface-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring min-h-11 w-full rounded-lg border px-3 focus:ring-2 focus:outline-hidden"
         >
           {currentPage.tabs.map((tab) => (
             <option key={tab.id} value={tab.id}>
@@ -550,7 +550,7 @@ export const TrainingAdminPage: React.FC = () => {
               role="menu"
               aria-label="More training admin sections"
               onKeyDown={handleMoreMenuKeyDown}
-              className="border-theme-surface-border bg-theme-surface-primary absolute right-0 z-20 mt-2 w-64 rounded-lg border p-1 shadow-lg"
+              className="border-theme-surface-border bg-theme-surface absolute right-0 z-20 mt-2 w-64 rounded-lg border p-1 shadow-lg"
             >
               {overflowPages.map((page) => {
                 const Icon = page.icon;

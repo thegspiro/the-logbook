@@ -255,7 +255,7 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
                 void handleSave();
               }}
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-primary flex items-center gap-2 text-sm disabled:cursor-not-allowed"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Save
@@ -341,7 +341,7 @@ const OfficersPanel: React.FC<OfficersPanelProps> = ({ members, isLoadingMembers
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-orange-600 p-2">
+        <div className="rounded-lg bg-red-600 p-2">
           <UserCheck className="h-5 w-5 text-white" aria-hidden="true" />
         </div>
         <div>
@@ -410,7 +410,7 @@ const OfficersPanel: React.FC<OfficersPanelProps> = ({ members, isLoadingMembers
                   void handleCopyVariable(v.name);
                 }}
                 title={v.description}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 font-mono text-xs text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                className="inline-flex items-center gap-1.5 rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
               >
                 {copiedVariable === v.name ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 {`{{${v.name}}}`}

@@ -348,7 +348,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                 <button
                   type="button"
                   onClick={() => void navigate(`/elections/${currentElectionPackage.election_id}`)}
-                  className="text-theme-primary mt-1.5 text-xs hover:underline"
+                  className="text-primary-600 mt-1.5 text-xs hover:underline"
                 >
                   {currentElectionPackage.election_title}
                   {currentElectionPackage.election_status === 'open' && ' — Voting in progress'}
