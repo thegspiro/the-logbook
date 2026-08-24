@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatHours, roundHoursToQuarter, sumHoursToQuarter } from '../../utils/hoursFormatting';
 
 export interface HoursSegment {
   label: string;
@@ -23,7 +24,10 @@ interface DashboardHoursCardProps {
  * without asking the reader to divide the tiles in their head.
  */
 const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, segments, loading }) => {
-  const total = segments.reduce((sum, s) => sum + s.value, 0);
+  // Rounded once, here, so the bar spans, the legend figures and the total are
+  // all the same numbers the reader is being asked to add up.
+  const rounded = segments.map((segment) => ({ ...segment, value: roundHoursToQuarter(segment.value) }));
+  const total = sumHoursToQuarter(rounded.map((segment) => segment.value));
 
   return (
     <section className="card p-4" aria-label={`My hours, ${monthLabel}`}>
@@ -33,7 +37,7 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, seg
           <div className="bg-theme-surface-hover h-7 w-10 animate-pulse rounded-sm" />
         ) : (
           <span className="flex items-baseline gap-1.5">
-            <span className="text-theme-text-primary text-2xl font-bold tabular-nums">{total}</span>
+            <span className="text-theme-text-primary text-2xl font-bold tabular-nums">{formatHours(total)}</span>
             <span className="text-theme-text-muted text-xs">total</span>
           </span>
         )}
@@ -41,7 +45,7 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, seg
 
       <div className="bg-theme-surface-hover mb-3 flex h-2.5 overflow-hidden rounded-full" aria-hidden="true">
         {total > 0 &&
-          segments.map((segment) => (
+          rounded.map((segment) => (
             <div
               key={segment.label}
               className={segment.colorClass}
@@ -51,12 +55,12 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, seg
       </div>
 
       <ul className="flex flex-col gap-1">
-        {segments.map((segment) => {
+        {rounded.map((segment) => {
           const row = (
             <>
               <span className={`h-2 w-2 shrink-0 rounded-full ${segment.colorClass}`} aria-hidden="true" />
               <span className="text-theme-text-secondary flex-1 truncate text-left">{segment.label}</span>
-              <span className="text-theme-text-primary font-bold tabular-nums">{segment.value}</span>
+              <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(segment.value)}</span>
             </>
           );
           return (

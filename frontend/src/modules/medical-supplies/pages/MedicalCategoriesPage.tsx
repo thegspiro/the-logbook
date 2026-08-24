@@ -1,5 +1,5 @@
 /**
- * Medical Categories Page
+ * Medical Supply Categories Page
  *
  * Categories are what file a supply as medical — an item reaches the domain
  * through its category, not through a field of its own. There is no item-type
@@ -43,7 +43,7 @@ const MedicalCategoriesPage: React.FC = () => {
     try {
       setCategories(await medicalSuppliesService.getCategories(true));
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load medical categories'));
+      toast.error(getErrorMessage(err, 'Failed to load medical supply categories'));
     } finally {
       setIsLoading(false);
     }
@@ -120,7 +120,7 @@ const MedicalCategoriesPage: React.FC = () => {
         <div>
           <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-semibold">
             <Tag className="h-6 w-6" />
-            Medical Categories
+            Medical Supply Categories
           </h1>
           <p className="text-theme-text-muted mt-1 text-sm">
             How EMS stock is grouped — airway, trauma, medications. Filing a supply under one of these is what makes it
@@ -146,7 +146,7 @@ const MedicalCategoriesPage: React.FC = () => {
       ) : categories.length === 0 ? (
         <EmptyState
           icon={Tag}
-          title="No medical categories yet"
+          title="No medical supply categories yet"
           description={
             canManage
               ? 'Create one — airway, trauma, medications, whatever matches how your stock is organized.'
@@ -182,7 +182,7 @@ const MedicalCategoriesPage: React.FC = () => {
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title={editing ? 'Edit medical category' : 'New medical category'}
+        title={editing ? 'Edit medical supply category' : 'New medical supply category'}
       >
         <form onSubmit={(e) => void handleSubmit(e)}>
           <div className="modal-body space-y-4">

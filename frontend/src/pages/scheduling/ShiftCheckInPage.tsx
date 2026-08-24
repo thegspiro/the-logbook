@@ -14,6 +14,7 @@ import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { formatHours } from '../../utils/hoursFormatting';
 
 const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -133,7 +134,7 @@ const ShiftCheckInPage: React.FC = () => {
     try {
       const result = await schedulingService.checkOut(resolvedShiftId);
       setAttendance(result);
-      const hrs = Math.round(((result.duration_minutes ?? 0) / 60) * 10) / 10;
+      const hrs = formatHours((result.duration_minutes ?? 0) / 60);
       toast.success(`Checked out - ${hrs} hours recorded`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to check out'));
@@ -201,7 +202,7 @@ const ShiftCheckInPage: React.FC = () => {
     );
   }
 
-  const hrs = attendance?.duration_minutes ? Math.round((attendance.duration_minutes / 60) * 10) / 10 : null;
+  const hrs = attendance?.duration_minutes ? formatHours(attendance.duration_minutes / 60) : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">

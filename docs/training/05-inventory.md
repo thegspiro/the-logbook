@@ -2306,3 +2306,50 @@ twice.
 
 Lots carried on an apparatus are a separate view again — the **Stock Lots** tab
 pictured earlier in this lesson, which is the one to work a recall from.
+
+---
+
+## Who Can See a Member's Assigned Gear _(2026-08-24)_
+
+**The Assigned Inventory table used to render on every member profile, for
+every viewer.** It was gated on "is the inventory module enabled" and nothing
+else. Which turnout coat, radio or SCBA mask somebody signed for, and what
+condition it is in, is quartermaster business — a member profile is a
+directory card.
+
+The section and its Quick Stats line now require **`inventory.manage`**, or
+that the profile is the viewer's own.
+
+> **`inventory.view` could not have been the gate.** It is part of the baseline
+> Member position — every member holds it so they can browse the catalog and
+> their own kit — so checking for it says only "this person is a member". The
+> per-member endpoints checked exactly that, which is why the server did not
+> stop the page.
+
+**The same mistake was live on the dashboard.** The organization dashboard's
+inventory tiles — department-wide item counts, low-stock lines, overdue
+checkouts — were gated on `inventory.view`, so **every member** saw them. They
+now require `inventory.manage` or `settings.manage`.
+
+If a quartermaster reports that inventory numbers "disappeared" from the
+dashboard for most of the department, that is this fix and it is working.
+
+## Swapping Stock During an Equipment Check _(2026-08-24)_
+
+A crew member submitting a check, without `inventory.manage`, could move **any**
+quantity from ready stock onto the truck, and dispose of lots that were never
+aboard it.
+
+A submitter's swap is now bounded by what it replaces: the lot being replaced
+has to actually be on the item, and the quantity is capped at the deployed
+quantity it replaces. Quartermasters holding `inventory.manage` are unaffected.
+
+## The Inventory Administration Page Has a New Top _(2026-08-23)_
+
+The Inventory administration page now opens with the shared frame: a header,
+four headline metrics, a **Needs attention** queue, then its existing tabs.
+Its built-in three metrics are **Items tracked**, **Issued to members** and
+**Out for repair**; the fourth slot is always the count the queue is about, so
+it cannot be configured away. Access is `inventory.manage` plus the Inventory
+module enabled. See the
+[shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).

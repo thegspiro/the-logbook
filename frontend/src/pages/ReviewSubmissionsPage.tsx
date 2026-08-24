@@ -26,6 +26,7 @@ import {
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
@@ -638,7 +639,7 @@ const SubmissionCard: React.FC<{
               </span>
               <span className="flex items-center space-x-1">
                 <Clock className="h-3 w-3" />
-                <span>{submission.hours_completed}h</span>
+                <span>{formatHours(submission.hours_completed)}h</span>
               </span>
               <span className="rounded-sm bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-700 dark:text-blue-400">
                 {TRAINING_TYPE_LABELS[submission.training_type] || submission.training_type}

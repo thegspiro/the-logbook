@@ -19,8 +19,9 @@ The guards, and why each is drawn where it is:
 * **Blocked address classes.** Loopback keeps the target off the application
   host itself; link-local blocks the cloud metadata service at 169.254.169.254;
   multicast, reserved and unspecified addresses have no printer behind them.
-* **Private LAN addresses stay allowed** — that is where a station's printer
-  actually lives, so blocking RFC 1918 would block the entire feature.
+* **Operator-approved destinations only.** The resolved address must belong to
+  ``LABEL_PRINTER_ALLOWED_NETWORKS``. Tenant administrators can select a
+  printer, but cannot extend this platform-level network boundary.
 * **Resolve once, connect to the resolved IP.** Validating a hostname and then
   handing the *name* to the socket layer would re-resolve it, letting a DNS
   entry that answered with a LAN address during validation answer with
@@ -40,6 +41,8 @@ import time
 from typing import List, Sequence, Union
 
 from loguru import logger
+
+from app.core.config import settings
 
 # Raw-print ports. 9100-9109 is the JetDirect range (multi-port print servers
 # expose 9101/9102 for their second and third ports); 6101 is used by some
@@ -107,6 +110,25 @@ def _check_address(ip: ipaddress._BaseAddress, host: str) -> None:
     if ip.is_multicast or ip.is_unspecified or ip.is_reserved:
         raise ValueError(
             f"{host} resolves to a reserved address that cannot host a printer."
+        )
+
+    allowed_networks = []
+    for entry in settings.LABEL_PRINTER_ALLOWED_NETWORKS.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            allowed_networks.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            # A typo in a security boundary must fail closed. Logging the
+            # entry gives operators enough information to correct it.
+            logger.warning(f"Ignoring invalid label-printer network: {entry!r}")
+
+    if not any(
+        ip.version == network.version and ip in network for network in allowed_networks
+    ):
+        raise ValueError(
+            f"{host} does not resolve to an operator-approved label-printer network."
         )
 
 

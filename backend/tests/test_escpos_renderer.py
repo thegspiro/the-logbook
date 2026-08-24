@@ -139,6 +139,20 @@ class TestQr:
         out = render_escpos([_spec(barcode_value="INV-000123")], symbology=SYMBOLOGY_QR)
         assert b"INV-000123" in out.split(b"1P0")[-1]
 
+    def test_control_bytes_cannot_escape_into_the_human_readable_line(self):
+        value = "A\x1b@\x1dVB\x10\x04B"
+        out = render_escpos([_spec(barcode_value=value)], symbology=SYMBOLOGY_QR)
+
+        # The QR payload is length-prefixed and must preserve the identifier,
+        # but its interpretation line is an ESC/POS command-stream context.
+        assert b"1P0" + value.encode("ascii") in out
+        after_qr_print = out.split(_GS + b"(k\x03\x001Q0", 1)[1]
+        human_readable = after_qr_print.split(_GS + b"!\x00", 1)[1].split(b"\n", 1)[0]
+        assert human_readable == b"A@VBB"
+        assert b"\x1b@" not in human_readable
+        assert b"\x1dVB" not in human_readable
+        assert b"\x10\x04" not in human_readable
+
     def test_the_symbol_is_sized_from_the_actual_payload(self):
         # A fixed module estimate under-counted longer values, so the printer
         # rendered a symbol wider than the paper and clipped it into an

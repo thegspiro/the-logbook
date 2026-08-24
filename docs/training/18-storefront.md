@@ -765,3 +765,30 @@ edit the order and message them so the change is on the record.
 ## August 12–14, 2026 update
 
 Dashboard counts, order filters, the open-banner switch, own payment-method updates, and recipient privacy from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#storefront), including two open screenshots.
+
+## August 23–24, 2026 update
+
+**The member storefront was redesigned end to end** — catalog, checkout and My
+Orders, all built around the cart. Checkout is now its own page at
+`/store/checkout`.
+
+Several setup defects were fixed in the same window, and they are worth knowing
+if turning the store on has previously failed for you:
+
+- **The store admin dashboard returned an error** rather than loading.
+- **Onboarding's Enable button did not actually enable the store.** If you
+  pressed it and the store did not appear, press it again after upgrading.
+- **The position editor stripped store permissions on first save**, so grants
+  handed out during setup vanished the next time somebody edited the position.
+- An inert configuration step was removed from onboarding, and the store route
+  is now gated on the organization's storefront module — so a department
+  without the module gets a clean refusal rather than a broken page.
+- **Errors on the admin side are now visible** instead of failing silently.
+
+Full context:
+[the release workflow lesson](./19-august-2026-release-changes.md#department-store-settings-and-email).
+
+**[SCREENSHOT — REPLACE every storefront capture in this guide.** The catalog,
+the cart, checkout and My Orders all changed. _Demo data:_ a cart holding two
+different products, at least one with a size or variant selected, so the cart
+lines and the order stepper are both populated.**]**
