@@ -420,6 +420,13 @@ describe('apiCache', () => {
       expect(isCacheable('/training/programs')).toBe(true);
     });
 
+    it("returns false for the caller's missed-mandatory attendance", () => {
+      // Per-member compliance data: which mandatory drills this member skipped.
+      // The plain /events list stays cacheable, so this needs its own entry.
+      expect(isCacheable('/events/missed-mandatory')).toBe(false);
+      expect(isCacheable('/events/missed-mandatory?since_days=30')).toBe(false);
+    });
+
     it('returns false for /auth/ endpoints', () => {
       expect(isCacheable('/auth/login')).toBe(false);
       expect(isCacheable('/auth/refresh')).toBe(false);
