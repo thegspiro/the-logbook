@@ -107,18 +107,25 @@ opens.
 **Writing one (officers):** open the same **QR Code** page, tap **Write to an
 NFC tag**, and hold a blank tag to the back of the phone.
 
-> **[SCREENSHOT NEEDED — `/events/:id/qr-code` with the "Write to an NFC tag"
->
-> > control visible beneath the QR code, mid-write, showing the "hold a tag to
-> > your phone" state]**
+**There is no screenshot of this, and the reason is the same thing the
+requirements paragraph below says.** Web NFC exists only in Chrome on Android
+over HTTPS. Where it is missing, the QR Code page does not show a disabled
+**Write to an NFC tag** control — it shows a line of text in its place saying
+which of the two conditions you are failing. Every screenshot in this library is
+taken by headless Chromium over `http://localhost`, which fails both, so the
+control cannot be photographed by the tooling that takes the rest of these
+images. What you will see on a supporting phone is a button beneath the QR code
+and, once tapped, a "hold a tag to your phone" state until a tag touches it or
+you cancel.
 
 **Tapping one (members):** with the app closed, Android opens the link by
 itself. With the app already open on screen, Android does _not_ hand the tag
 off — so use **Tap Tag** on the Events page instead.
 
-> **[SCREENSHOT NEEDED — the Events page with Tap Tag pressed and the scan
->
-> > armed, waiting for a tag]**
+**Not pictured, for the same reason, with one extra thing worth knowing:
+where Web NFC is unavailable the **Tap Tag** button is not on the page at all** —
+not greyed out, absent. If you are looking for it on a desktop or an iPhone and
+cannot find it, that is why, and it is not a permission problem.
 
 **Requirements: Chrome on Android, over HTTPS.** Web NFC exists nowhere else —
 not on iPhone, not on a desktop browser — and browsers only expose it on a
@@ -135,10 +142,12 @@ point back at your own Logbook and only to check-in pages it knows. Anything
 else leaves the scan waiting and says so, rather than sending you somewhere you
 did not intend to go.
 
-> **[SCREENSHOT NEEDED — Tap Tag after reading an unrecognized tag: the
->
-> > explanatory message with the scan still armed. This is the security
-> > behaviour and a reader will not believe it without seeing it]**
+**Not pictured** — reaching this state needs a phone that supports Web NFC
+and a tag written with a foreign link, neither of which the screenshot harness
+has. What happens is worth stating precisely even without the picture: the scan
+**stays armed** and reports that the tag was not recognized. It does not
+navigate, it does not close, and it does not ask you whether to trust the link.
+Hold a valid tag to the phone and the same armed scan picks it up.
 
 > **Room kiosk display codes cannot be written to a tag, and that is
 > deliberate.** A kiosk code is a check-in credential for an unauthenticated
@@ -1558,8 +1567,8 @@ value resolve the same way: mandatory → all, optional → going. Copying an ev
 creating recurring children, or extending a series preserves the chosen
 audience without sharing the source record's mutable JSON.
 
-> **[SCREENSHOT NEEDED — Create Event → Notifications with all three “Who should receive reminders?” choices visible; seed an optional event and caption that “Members who sign up” is its default.]**
->
+![The Notifications panel on a new optional event, its reminder audience defaulting to Members who sign up](./images/04-44-reminder-audience.png)
+
 > **[SCREENSHOT NEEDED — mandatory-event form after the Mandatory switch is enabled, showing “All active members”; then show a template with its independently saved audience.]**
 
 ### Check-in lead time
@@ -1592,8 +1601,8 @@ window because an unidentified early entry cannot be corrected reliably.
   check-in mode calls for them; all displayed opening times use the organization
   timezone.
 
-> **[SCREENSHOT NEEDED — Check-In Settings showing Flexible and 60 minutes before; caption Strict and Window differences rather than implying 60 applies to every mode.]**
->
+![Check-In Settings on a new event: the Flexible window with self check-in opening 60 minutes before the start](./images/04-45-checkin-flexible-default.png)
+
 > **[SCREENSHOT NEEDED — early Flexible member notice with the localized official opening time; do not use a guest account for this capture.]**
 
 ## August 19–23, 2026 update — the Recruitment event type
@@ -1610,10 +1619,7 @@ without also matching every fire-safety demo on the calendar.
 "create a prospect from each guest" — because a recruitment event whose
 attendees never reach the pipeline has not recruited anybody.
 
-> **[SCREENSHOT NEEDED — the event form with Recruitment selected, both guest
-> switches on, and the teal banner reading "Guests who sign in at this event
-> will be added to the prospective members pipeline." This **replaces** any
-> existing event type-picker capture, all of which predate the new type.]**
+![A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline](./images/19-10-event-recruitment-type.png)
 
 The event page now also shows the applicants an event brought in, and the
 pipeline board can be filtered by the event applicants came from.

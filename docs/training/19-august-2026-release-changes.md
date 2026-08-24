@@ -48,8 +48,14 @@ persistent notices remain; calendar year is not “last 365 days.” Mobile card
 and breadcrumb/action targets must remain at least 44px.
 
 > **[SCREENSHOT NEEDED — populated station board with one pending message, one persistent notice, and conditional cards identified in the caption.]**
->
-> **[SCREENSHOT NEEDED — Admin Hours Summary on Calendar Year with at least two configured categories and visibly different thresholds.]**
+
+![The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against](./images/19-22-admin-hours-summary-year.png)
+
+_The period really is a calendar year — Jan 1 to today, not a rolling 365
+days — which is what the date range beside the heading states. The
+per-category approval thresholds are not on this screen: auto-approve and
+maximum-session limits are set on the **Categories** tab, and what the
+summary ranks is hours logged, not the limits they were logged under._
 
 ## Storefront
 
@@ -63,9 +69,24 @@ fulfillment remain separate; variant/product locks are canonicalized; notice and
 email results do not reveal other recipients; counts and filters are scoped to
 the active organization.
 
-> **[SCREENSHOT NEEDED — Store Admin with activity/status cards and a matching filtered order list; seed orders in at least three states.]**
->
-> **[SCREENSHOT NEEDED — member order payment-method editor plus the explanatory text that reporting payment is not payment processing.]**
+![Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by](./images/19-08-store-admin-activity.png)
+
+The counts and the list are two tabs, so they are two pictures. Overview holds
+the cards above; Orders holds the list they describe. Read them together — the
+workflow breakdown counts **Paid 2**, and filtering the Orders list to Paid
+returns those same two orders:
+
+![Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches](./images/19-06-store-admin-orders.png)
+
+![A member changing the payment method on their own order: a method picker over the department's payment handles and the "I've sent payment" report](./images/19-07-member-payment-method.png)
+
+**Nothing on that screen says the department is not taking the money, so say it
+in training.** The picker records _how_ a member intends to pay and
+"I've sent payment" records _that they say they have_ — both are claims the
+treasurer then reconciles against the actual account. No card is charged and no
+transfer happens here. The screen offers a handle to pay through and a button to
+report having done so, which reads as a checkout to anyone who has not been told
+otherwise.
 
 ## Room and apparatus QR codes
 
@@ -79,9 +100,9 @@ bound; a stale printed sign stops working after rotation; sensitive facility
 fields require `facilities.view_sensitive`, while editing still requires
 `facilities.edit` or `facilities.manage`.
 
-> **[SCREENSHOT NEEDED — Check-In QR Codes directory search results with Download PNG and Print controls, using non-sensitive demo rooms.]**
->
-> **[SCREENSHOT NEEDED — regenerate-code confirmation explicitly warning that the previously printed code becomes invalid.]**
+![The Check-In QR Codes directory filtered to the stations, each card offering Copy URL, Download PNG and Regenerate above the Print All and Room signs controls](./images/19-04-qr-directory-search.png)
+
+![The regenerate-code confirmation, warning that the code already printed stops working once a new one is issued](./images/19-05-qr-regenerate-warning.png)
 
 ## Apparatus crew seats and scheduling settings
 
@@ -94,7 +115,12 @@ when equipment-check template administration is restricted.
 cannot be saved; switching organizations must not reuse the prior organization's
 rank or settings cache; finalization resolves apparatus labels in batches.
 
-> **[SCREENSHOT NEEDED — apparatus form crew-position rank picker, including one legacy read-only position in the demo data.]**
+![The rescue's crew seats: three chosen from the department's configured positions and a fourth still holding a free-text value, marked (legacy position)](./images/19-23-apparatus-crew-seats.png)
+
+_Each closed control already names the ranks eligible for that seat, which
+is where the rank backing shows. The open option list is not pictured and
+cannot be: these are native `<select>`s, and an open one is drawn by the
+operating system rather than by the page._
 
 ## Events, reminders, check-in, and outreach forms
 
@@ -186,7 +212,20 @@ Practical guidance for an installer: gather the department address, station
 list, apparatus list and first administrator's details before starting, allow an
 uninterrupted half hour, and stay in one tab until the dashboard appears.
 
-> **[SCREENSHOT NEEDED — sequence of two: (1) the wizard reopened after a browser restart, showing the previously typed answers repainted; (2) the session-expired error raised when continuing to the next step. Demo data: start an onboarding run through the stations step, close the browser, reopen `/onboarding`. Both frames are required — a single frame of either one teaches the wrong lesson.]**
+**Not pictured, and it is not a tooling limitation so much as a contradiction
+in what would have to be true.** Every other image in this library is taken
+against a demo department that exists. This wizard only runs when one does
+**not**: with a department on file, `/onboarding` sends you to the sign-in page
+rather than to step one — which is the same "Onboarding has already been
+completed" condition the table above distinguishes from an expired session. So
+the two frames would need a database with no department, and the rest of the
+library needs one with a department, in the same run.
+
+Reproduce it yourself on a scratch install in about a minute: start the wizard,
+fill in the department and stations steps, quit the browser, reopen
+`/onboarding`, and press Next. The form comes back filled in — that is the local
+draft — and the step fails. That failure is the whole lesson: a populated form
+is not evidence of a live session.
 
 ## Dark mode: the strip at the right edge is gone _(August 15)_
 
@@ -205,7 +244,27 @@ dark-mode screenshot, printed handout or recorded video captured before August
 department training material, check the right edge of the image before handing it
 out.
 
-> **[SCREENSHOT NEEDED — a public page (`/f/{slug}` or an application-status link) in dark mode at full window width with the page long enough to scroll, so the gutter is visible and painted. This is the standing proof that pages outside the app shell are covered.]**
+![A public form in dark mode at full window width, the themed gradient reaching the window edges](./images/19-11-dark-scrollbar-gutter.png)
+
+_Corrected 2026-08-24._ An earlier version of this note said the strip could not
+be photographed, on the strength of `window.innerWidth -
+documentElement.clientWidth` measuring `0`. That measurement was the wrong
+instrument, and the picture above proves it: until 2026-08-24 this same capture
+carried a **bright white 15px strip** down its right edge, which an image audit
+found by comparing edge pixels against the content beside them.
+
+The August 15 canvas move did not finish the job. It gave `html` the themed
+gradient as a background _image_, and the `background:` shorthand resets
+`background-color` to transparent — so the reserved strip, which is painted from
+the canvas _colour_, still fell back to the browser's white. `html` now carries
+`background-color` as well, and the strip takes the theme colour; that is what
+you are looking at above.
+
+One residue is not fixable and is not a defect: a dialog's scrim is
+`position: fixed; inset: 0`, laid out against the initial containing block,
+which excludes that strip. So on a **light** page under a dark modal overlay the
+gutter stays light beside the dimmed page. Nothing in a page can paint outside
+its own box.
 
 **Two problems this caused, both already fixed** _(2026-08-16)_. Recorded here
 only so nobody re-reports them from an older build:
@@ -260,7 +319,7 @@ re-syncs Locations; clearing floor/capacity/description now persists on save.
 The full walkthrough with screenshot markers lives in
 [Apparatus & Facilities → Nesting rooms inside rooms](./06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
 
-> **[SCREENSHOT NEEDED — nested Rooms tree with counts and add-a-room-inside action (shared with lesson 06; capture once, reuse).]**
+![The Rooms section as a containment tree: sub-rooms indented under the room holding them, each container reporting how many it holds](./images/06-24-rooms-nested-tree.png)
 
 ## Privacy and access tightening (August 15–16)
 
@@ -289,11 +348,30 @@ list change is per-request permission logic, not stored state, so no data
 migration is involved; the draft purge also removes orphaned draft keys that
 lost their index entry.
 
-> **[SCREENSHOT NEEDED — the same colleague profile side by side as seen with `members.view` only (metadata absent) and with `users.view`; use a demo member with MFA enabled so the redaction is visible.]**
->
-> **[SCREENSHOT NEEDED — profile edit attempting a hire-date change without the coordinator grant, showing the 403 explanation toast.]**
->
-> **[SCREENSHOT NEEDED — member candidate list on an election in nominations phase (pending visible) and the same election after close (accepted only); label which account is which.]**
+![A colleague's profile with the officer's grant: the compliance summary, the training and certification history and the emergency contacts are all rendered](./images/19-18-profile-as-officer.png)
+
+![The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered at all](./images/19-19-profile-as-member.png)
+
+_One thing the marker asked for cannot be shown, because no screen has it: there is no account-security block on a **colleague's** profile for anybody. MFA enrolment, last sign-in and email verification are on your own settings page, so neither account has one to compare. What the permission does change is the three panels above._
+
+**No shipped role can reach that 403, so there is no screenshot of it.** The
+guard is real — `hire_date`, `rank`, `station`, `platoon` and
+`membership_number` all require `members.manage`, and an attempt without it is
+refused with:
+
+> Only leadership, the secretary, or the membership coordinator can update hire
+> date, rank, station, platoon, or membership number
+
+But every role in the shipped catalogue that grants `users.edit` also grants
+`members.manage`, so the refusal is unreachable until a department builds a
+custom role that separates them — a records clerk who maintains contact details
+but does not set rank or hire date, say. That is the situation to keep in mind
+when you build one; it is not a state the product can be put into out of the
+box, and staging it would mean photographing a role no department has.
+
+![The candidate list as an elections manager: both the accepted candidate and the nominee who has not yet accepted](./images/19-20-candidates-as-manager.png)
+
+![The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld now that nominations have closed](./images/19-21-candidates-as-member.png)
 
 ## Reliability changes members may notice (August 15–16)
 
@@ -421,9 +499,11 @@ screen, with **Tap Tag** on the Events page, My Admin Hours, or the scheduling
 calendar. Android only hands a tag to the browser when the app is _not_ in the
 foreground, which is the gap Tap Tag fills.
 
-> **[SCREENSHOT NEEDED — the admin hours category QR page with the NFC tag
->
-> > writer beside the QR code]**
+**Not pictured, and the paragraph below is why.** The screenshot harness
+runs headless Chromium over `http://localhost`, which fails both of Web NFC's
+conditions, so the writer beside the QR code is replaced there by the line
+explaining which condition is missing. Photographing that would put a picture of
+an unavailable feature under a caption about using it.
 
 **Requirements: Chrome on Android, over HTTPS.** Not iPhone, not desktop, not a
 plain-`http://` LAN deployment. Where it is unavailable the controls are absent
@@ -467,10 +547,69 @@ values sitting in `.env` that never reach the container. Those used to become
 defaults silently, which is how production ends up running a development
 setting with nothing on screen to say so.
 
-> **[SCREENSHOT NEEDED — two terminal captures side by side: `python -m
-app.preflight` exiting 0 on a good configuration, and exiting 1 on a broken
->
-> > one with the blocking items listed]**
+**This one is text, not a screenshot** — and deliberately so. Terminal output
+belongs in a code block, where it can be searched, copied and diffed against
+what your own run prints. A picture of it can do none of those things.
+
+A development configuration, which is not checked because the blocking rules
+apply only to production and staging:
+
+```console
+$ python -m app.preflight
+Environment: development
+
+RESULT: this configuration starts.
+
+NOTE: no blocking checks run for 'development' — they apply only to production
+and staging. To test a production configuration, re-run with: --as production
+$ echo $?
+0
+```
+
+The same process re-run as production, which is the check worth doing before a
+deploy:
+
+```console
+$ python -m app.preflight --as production
+Environment: production  (forced via --as)
+
+BLOCKING (5):
+  - CRITICAL: REDIS_PASSWORD must be set in production
+  - CRITICAL: DB_SSL should be enabled in production to encrypt database
+    traffic ...
+  - CRITICAL: REDIS_SSL should be enabled in production to encrypt Redis
+    traffic ...
+  - CRITICAL: API documentation (ENABLE_DOCS) must be disabled in production —
+    /docs, /redoc, and /openapi.json expose the full API surface for
+    enumeration
+  - CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production. ...
+
+Advisory, does not prevent startup (1):
+  - WARNING: VOTE_SIGNING_KEY should be set for any organization using the
+    elections module. ...
+
+CONFIGURATION SOURCE CHECK — did these values reach this process?
+  COOKIE_SECURE           NOT PRESENT — using built-in default None
+  DB_SSL                  NOT PRESENT — using built-in default False
+  ENABLE_DOCS             NOT PRESENT — using built-in default True
+  REDIS_PASSWORD          NOT PRESENT — using built-in default None
+  SECURITY_ENFORCE_HTTPS  NOT PRESENT — using built-in default False
+  ...
+
+9 blocking setting(s) are absent from this process's environment. If you set
+them in a .env file, the value is NOT reaching the container.
+
+RESULT: this configuration will NOT start. Fix the blocking items.
+$ echo $?
+1
+```
+
+The **configuration source check** is the part to read first when something
+surprises you. It answers a different question from the blocking list above it:
+not "is this setting right" but "did this setting arrive at all". A value in
+`.env` that a Compose `environment:` block never lists cannot reach the
+container, and before this existed it simply became the built-in default with
+nothing on screen to say so.
 
 ## Sign-in hardening
 
@@ -494,9 +633,7 @@ Both pages were rewritten to state up front that **the department, not the
 platform, controls member data**. The print layouts were rebuilt and both pages
 went through an accessibility pass.
 
-> **[SCREENSHOT NEEDED — the rewritten `/privacy` page header showing the
->
-> > department-control statement above the fold]**
+![The rewritten Privacy Policy above the fold, opening with who controls the system and the department's ownership of every account on it](./images/19-03-privacy-header.png)
 
 ## Upgrade notes for administrators (August 17–19)
 
@@ -530,11 +667,7 @@ rules, volunteer/career status and state law all differ, and boilerplate
 written for the platform does not describe what your department actually does
 with member data.
 
-> **[SCREENSHOT NEEDED — Governance → Legal Documents landing view, showing
->
-> > both document cards (Privacy Notice and Terms of Service) with their current
-> > published status and "Last updated" line. Seed one published revision and one
-> > draft so the status difference is visible. Use a demo department name.]**
+![Governance → Legal Documents: the Privacy Notice card published with its last-updated line, beside a Terms of Service card still carrying an unpublished draft](./images/19-09-legal-documents.png)
 
 ### Drafting and publishing are two different jobs
 
@@ -550,11 +683,13 @@ A department that wants the secretary to draft and an officer to approve gets
 that from the permissions. A department that does not want the ceremony gives
 one person `settings.manage`.
 
-> **[SCREENSHOT NEEDED — the revision editor with the body text area, the
->
-> > required "change note" field visibly filled in, and the "Last updated" free
-> > text field. Capture under an account holding only `legal.propose`, so the
-> > Publish control is absent — that absence is the point of the shot.]**
+![The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated](./images/19-16-legal-revision-editor.png)
+
+_Publishing is not a control on this form. **Save draft** and **Cancel** are
+what it offers everyone, including a member who can publish — publishing is an
+action on the saved proposal afterwards, and that is where the permission shows
+(the proposal card offers **Publish to members** only to `legal.publish` or
+`settings.manage`)._
 
 ### Every change needs a reason
 
@@ -594,11 +729,7 @@ new date in — clearing the box will not blank it.**
   review before publishing, that is a process you run — the module does not
   chase anyone.
 
-> **[SCREENSHOT NEEDED — the revision history for one document showing a
->
-> > published revision and at least one archived revision with its change note
-> > and the member who published it. Seed three revisions so the archive is
-> > visibly a history rather than a single row.]**
+![Three revisions of the privacy notice — one live, two replaced — each keeping the reason it was changed and who published it](./images/19-17-legal-revision-history.png)
 
 ## Scheduling: you can no longer approve your own swap
 
@@ -617,14 +748,14 @@ small combination department the officer asking for Saturday off is very often
 the only person who can approve it. That is precisely the situation the rule
 exists for — a permission grant is not a second person.
 
-> **[SCREENSHOT NEEDED — the error state after a self-review attempt. Sign in
-> as the member who raised a pending swap, click **Approve** on their own
-> request, and capture the resulting error ("Requesters cannot review their own
-> swap requests") with the request still showing as pending behind it.
-> *Important:* do **not** try to capture a difference in available controls —
-> `RequestsTab` renders Approve/Deny on every pending request whenever the
-> viewer has `scheduling.manage`, including their own, so the rows look
-> identical until the button is pressed. The error **is** the screenshot.]**
+![The release's separation-of-duties rule in force: Approve refused on the administrator's own swap request, with another member's row still reviewable](./images/19-12-swap-review-blocked.png)
+
+_The error **is** the screenshot. Do not go looking for a difference in the
+buttons: `RequestsTab` renders Approve and Deny on every pending request for
+anyone holding `scheduling.manage`, their own included, so the rows offer the
+same review controls until one is pressed. The only thing that marks your own
+row is the small **✕** — cancelling is the requester's to do, and nobody
+else's._
 
 ### Edge cases
 
@@ -639,19 +770,21 @@ exists for — a permission grant is not a second person.
 
 ## Scheduling: the Requests tab is now paged
 
-Long swap and time-off histories no longer load in one go. If your department
-tracks a season's worth of requests, expect pagination controls where there
-was previously one long list.
+Long swap and time-off histories no longer load in one go. The tab now renders
+twenty rows at a time with a **Load more** button beneath them — not numbered
+pages — and the button simply is not there once everything is loaded.
+
+One thing to know before you go looking for it: the tab opens filtered to
+**Pending**, and a season's worth of history is resolved by definition. Set the
+status filter to **All Statuses** first, or the list will look like it holds
+three requests when the count beside the view's name says twenty-seven.
 
 **If you have a script or integration reading swap or time-off requests from
 the API, it needs updating** — the response is now an object with an `items`
 list rather than a plain list. See the
 [API Reference](../../wiki/API-Reference.md).
 
-> **[SCREENSHOT NEEDED — Scheduling → Requests with pagination controls
->
-> > visible at the bottom. Seed more requests than one page holds (at least 60)
-> > so the control is genuinely populated rather than a disabled stub.]**
+![The paged Requests tab: twenty time-off rows and the control that fetches the next page](./images/19-13-requests-load-more.png)
 
 ## Equipment checks: safe to finish in a dead spot
 
@@ -666,11 +799,14 @@ submission before sending so a retry lands on the same record.
 The same protection covers a double tap on **Submit** and a dropped connection
 mid-save.
 
-> **[SCREENSHOT NEEDED — a completed shift equipment check on a phone viewport
->
-> > (390x844), showing the submitted state. Pair with a second capture of the
-> > offline/queued state if the harness can simulate it; if it cannot, note the
-> > limitation in the caption rather than staging it.]**
+![A completed check as one record on a phone — the state a replayed queue or a double-tapped Submit resolves to](./images/19-14-submitted-check-phone.png)
+
+_The queued/offline half of that description is not pictured. Simulating a
+dropped connection means setting state on the browser rather than on the
+page, which this capture harness does not do — an "offline" banner staged
+any other way would be a photograph of something the app never rendered.
+What the record above shows is the end state either route arrives at: one
+check, one set of answers._
 
 ### Other equipment-check changes
 
@@ -698,11 +834,7 @@ Open houses and recruitment nights have their own event type. Pick
 "create a prospect from each guest" — because a recruitment event whose
 attendees never reach the pipeline has not recruited anybody.
 
-> **[SCREENSHOT NEEDED — the event form with Recruitment selected, showing
->
-> > both guest switches on and the teal banner explaining that guests will be
-> > added to the prospective members pipeline. This replaces any existing event
-> > type-picker capture, which predates the new type.]**
+![A new event with Recruitment chosen: guest sign-in and create-a-prospect both switched on, under the banner explaining that guests reach the prospective-members pipeline](./images/19-10-event-recruitment-type.png)
 
 ### Edge cases
 
@@ -729,11 +861,7 @@ untappable, and the tap navigated the page out from under the dialog.
 
 The bar now hides while a dialog, drawer or bottom sheet is open.
 
-> **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport scrolled to its
->
-> > action row, with the bottom navigation absent. Any existing phone dialog
-> > capture in the guides is now wrong and should be replaced with this one — the
-> > old shots were all taken with the bar covering the dialog.]**
+![The fix in force: a dialog scrolled to its action row on a phone, with no navigation bar painting over the buttons](./images/19-15-tall-dialog-action-row.png)
 
 Also improved on phones this week: the events page, equipment template
 actions, the checklist builder, calendar month navigation, and the document,

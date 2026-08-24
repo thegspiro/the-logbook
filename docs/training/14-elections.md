@@ -209,10 +209,20 @@ Safeguards:
 
 ![Nominations tab with the nominate form and current nominations](./images/14-05-nominations-tab.png)
 
-> **[SCREENSHOT NEEDED — the candidate list for the same election seen from a
-> member account and an `elections.manage` account after nominations close:
-> pending nominations present for the manager, absent for the member. Caption
-> which account is which.]**
+![The candidate list on an election past nominations, as an elections manager: the accepted candidate and the nominee who has not yet accepted](./images/14-25-candidates-as-manager.png)
+
+![The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld once nominations have closed](./images/14-26-candidates-as-member.png)
+
+**Above: an elections manager. Below: an ordinary member, on the same
+election.** The manager's Candidates tab lists Sofia Marchetti as **Pending**
+with an Accept action beside her; the member's ballot offers Amara Osei alone.
+A member has no Candidates tab at all — their view of who is standing _is_ the
+ballot, which is why the withheld nomination shows up as a shorter list of
+options rather than as a hidden row.
+
+While nominations are still open a member **does** see pending nominations, so
+that a nominee can find and answer their own. It is only after nominations close
+that they become management records.
 
 ---
 

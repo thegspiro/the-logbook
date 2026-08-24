@@ -18,7 +18,7 @@ import type { Room } from '../types';
 import { enumLabel, ZONE_CLASSIFICATION_COLORS } from '../types';
 import { inputCls, labelCls, MAX_ROOM_NESTING_DEPTH, ROOM_TYPE_OPTIONS, ZONE_OPTIONS } from '../constants';
 import type { RoomNode } from '../roomTree';
-import { buildRoomTree, collectSubtreeIds, countDescendants, orderRoomsByHierarchy } from '../roomTree';
+import { buildRoomTree, collectSubtreeIds, orderRoomsByHierarchy } from '../roomTree';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatNumber } from '../../../utils/dateFormatting';
@@ -229,7 +229,14 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
   };
 
   const handleDelete = async (node: RoomNode) => {
-    const nested = countDescendants(node);
+    // Direct children, not the whole subtree. The backend re-parents only the
+    // rooms whose parent is this one (`WHERE parent_room_id = room_id`), so a
+    // grandchild keeps its own parent and moves up inside that subtree rather
+    // than one level on its own. Counting descendants overstated what happens:
+    // deleting a room with two sub-rooms and one grandchild promised that "3
+    // sub-rooms will move up a level" when 2 do -- and contradicted the row
+    // badge directly above it, which has always shown the direct count.
+    const nested = node.children.length;
     // Sub-rooms survive: the backend re-parents them onto this room's parent.
     const message = nested
       ? `Delete "${node.room.name}"? Its ${nested === 1 ? 'sub-room' : `${nested} sub-rooms`} will move up a level rather than be deleted. This cannot be undone.`

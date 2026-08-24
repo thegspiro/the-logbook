@@ -12,28 +12,43 @@ docs/DATABASE_SCHEMA.md
 # Rendered from the training guides by scripts/screenshots/status_report.py
 docs/training/SCREENSHOT_STATUS.md
 
-# Training guides carrying multi-line SCREENSHOT NEEDED markers.
+# Files carrying multi-line SCREENSHOT NEEDED markers.
 #
 # The marker convention is `> **[SCREENSHOT NEEDED — …]**` opening a blockquote
-# whose closing `**]**` sits several lines later. Prettier reads the opening
-# `**` as unmatched emphasis and escapes it to `\*\*`, which does not change
-# how the page reads — and silently removes the marker from
+# whose closing `**]**` sits several lines later. Prettier reads that opening
+# `**` as unmatched emphasis and escapes it to `\*\*`, which does not change how
+# the page reads — and silently removes the marker from
 # `scripts/screenshots/status_report.py`, whose pattern anchors on `^>\s*\*\*\[?`.
 #
-# `lint-staged` runs `prettier --write` over `*.md`, so without this the next
-# commit touching one of these files would drop 40 tracked screenshot requests
-# from the tracker with no visible diff in the rendered prose. That is the exact
-# failure recorded in SCREENSHOT_CURRENCY.md under "0 remaining was measuring
-# the wrong thing", and it is why these are ignored rather than reformatted.
+# `lint-staged` runs `prettier --write` over `*.md`, so without this a commit
+# touching one of these files can drop tracked screenshot requests with no
+# visible diff in the rendered prose. That is the failure recorded in
+# SCREENSHOT_CURRENCY.md under "0 remaining was measuring the wrong thing".
 #
-# Verified 2026-08-24 by running `prettier --write` over a copy of every guide:
-# these five are the only ones affected. Re-run that check before adding a file
-# here, and remove a file once its markers are captured.
+# The criterion is deliberately "carries a multi-line marker", not "Prettier
+# breaks it today". Whether a given marker escapes depends on surrounding
+# context, so a file that survives now can flip the next time one is added.
+# Listing prose-formatting off a file costs nothing that matters; losing a
+# tracked capture silently does. Re-derive the list with:
+#
+#   python3 - <<'EOF'
+#   import glob, re
+#   for f in sorted(glob.glob('docs/training/*.md')):
+#       for L in open(f).read().split('\n'):
+#           if re.match(r'^>\s*\*\*\[?\s*SCREENSHOT NEEDED', L, re.I) \
+#              and not L.rstrip().endswith('**]**'):
+#               print(f); break
+#   EOF
+#
+# Take a file off the list once it has no multi-line markers left.
 docs/training/03-scheduling.md
 docs/training/04-events-meetings.md
-docs/training/08-admin-reports.md
+docs/training/09-skills-testing.md
 docs/training/10-mobile-pwa.md
+docs/training/17-privacy-data-rights.md
 docs/training/19-august-2026-release-changes.md
+docs/training/SCREENSHOT_CURRENCY.md
+docs/training/TRAINING_MATERIALS_REVIEW.md
 
 # Dependencies and build output
 node_modules/

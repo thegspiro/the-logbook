@@ -90,6 +90,7 @@ import type {
   FleetReadinessResponse,
   CheckLogResponse,
 } from '../types/equipmentCheck';
+import { normalizeCheckType } from '../types/equipmentCheck';
 import { blankToNull } from '@/utils/formValues';
 
 declare module 'axios' {
@@ -437,6 +438,40 @@ const api = createApiClient();
 // ============================================
 // Scheduling Service
 // ============================================
+
+/**
+ * Settle every item's `checkType` to one of the four canonical values.
+ *
+ * The read boundary is where this belongs, and it is what `normalizeCheckType`
+ * was written for -- its own doc comment says so -- but nothing called it: the
+ * live check form compares `item.checkType` against 'count' / 'level' /
+ * 'expiry' / 'function' directly, and its switch ends in
+ * `default: passFailButtons`.
+ *
+ * So a response carrying the older spellings (`quantity`, `pass_fail`,
+ * `reading`, `date_lot`) does not fail, it *degrades*: every count, level and
+ * expiry item silently renders the pass/fail control. The crew answers Pass on
+ * a row that was meant to record a number, no quantity is stored, and "Set all
+ * to par" has nothing to act on. `pass_fail` is the cruel part -- it lands on
+ * the right control by accident, so most of the form looks fine.
+ *
+ * That is not hypothetical. It is exactly what a backend running the previous
+ * release serves, which is the normal state of a rolling deploy, and it was
+ * found that way: a backend process left running across an upgrade rendered
+ * every counted item on the medic's supply check as pass/fail.
+ */
+function normalizeTemplateCheckTypes<T extends EquipmentCheckTemplate>(template: T): T {
+  if (!Array.isArray(template?.compartments)) return template;
+  return {
+    ...template,
+    compartments: template.compartments.map((compartment) => ({
+      ...compartment,
+      items: Array.isArray(compartment.items)
+        ? compartment.items.map((item) => ({ ...item, checkType: normalizeCheckType(item.checkType) }))
+        : compartment.items,
+    })),
+  };
+}
 
 export const schedulingService = {
   async getShifts(params?: {
@@ -975,11 +1010,11 @@ export const schedulingService = {
     check_timing?: string;
   }): Promise<EquipmentCheckTemplate[]> {
     const response = await api.get<EquipmentCheckTemplate[]>('/equipment-checks/templates', { params });
-    return asArray(response.data);
+    return asArray(response.data).map(normalizeTemplateCheckTypes);
   },
   async getEquipmentCheckTemplate(templateId: string): Promise<EquipmentCheckTemplate> {
     const response = await api.get<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}`);
-    return response.data;
+    return normalizeTemplateCheckTypes(response.data);
   },
   async updateEquipmentCheckTemplate(
     templateId: string,

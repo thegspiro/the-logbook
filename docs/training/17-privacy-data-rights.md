@@ -134,9 +134,20 @@ their duties require:
   fields remain visible to user administrators (`users.view`), roster
   managers, and you on your own record.
 
-> **[SCREENSHOT NEEDED — the same member profile viewed with `members.view`
-> only and with `users.view`, side by side, showing the account-security
-> block absent in the first; use a demo member with MFA enabled.]**
+![A colleague's profile as an officer: compliance summary, training and certification history and emergency contacts all present](./images/17-03-profile-as-officer.png)
+
+![The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered](./images/17-04-profile-as-member.png)
+
+**Above: an officer. Below: an ordinary member, on the same record.** The
+account-security fields listed above this pair — MFA enrolment, last sign-in,
+email verification — are **not on this screen for anybody.** They live on your
+own settings page, so a colleague's profile cannot show them either way, and
+neither picture contains a block to compare. What the pair does show is the
+difference the paragraph above is really about: the officer gets the compliance
+summary, the training and certification history and the emergency contacts, and
+the member gets none of the three. The member's Contact Information panel
+renders empty rather than absent, which is worth pointing out in training —
+the panel is there, the values are withheld.
 
 - **Date of birth and emergency contacts are restricted to leadership**
   _(2026-08-02)_ — the chiefs, captains, president, vice-president,

@@ -161,11 +161,16 @@ What you will notice in practice:
 768 pixels wide — a mouse pointer does not need the target a fingertip does, and
 widening everything would have loosened desktop forms for no benefit.
 
-> **[SCREENSHOT NEEDED — manual annotation]:** _The Submit Training form on a
-> 375px-wide phone viewport, annotated to show the 44px tap area on an input, a
-> checkbox and a small icon button. This one cannot be captured automatically:
-> the "before" state no longer exists in any running build, so the comparison
-> has to be drawn on rather than shot._
+![The Submit Training form at 375px — full-width text fields, a certification checkbox whose whole row is the tap target, and the edit and delete icon buttons on the submission below it, all sized for a fingertip](./images/10-20-submit-training-touch-targets.png)
+
+_Measured on that screen rather than drawn on it, which is the more useful form
+of the same claim: of its **52 interactive controls, 50 are already 44px or
+taller**. The two that are not are the painted 18×18 checkbox indicator and a
+1×1 hidden file input — and each sits inside a label that takes the tap. The
+certification label above measures **44×317**, so anywhere on that row toggles
+it; the attach-certificate label is 46px tall. The "before" state cannot be
+photographed — it no longer exists in any running build — but nothing needs to
+be drawn on to check this one: open the form on a phone and try it._
 
 ### Nothing Is Too Small to Read _(2026-08-08)_
 
@@ -469,10 +474,16 @@ scheduling calendar. Press it, then hold the phone to the tag.
 Tags exist for three things today: **event check-in**, **admin hours clock-in**,
 and **shift check-in** on an apparatus.
 
-> **[SCREENSHOT NEEDED — a phone holding against a mounted NFC tag on an
->
-> > apparatus, and the resulting shift check-in page naming the unit, date and
-> > hours. Two frames or one composite]**
+**Not pictured.** This one needs a physical tag held against a physical
+phone, and the screenshot harness drives headless Chromium over
+`http://localhost` — where, per the paragraph below, Web NFC does not exist at
+all. There is no staging of it that would be honest: a composite would be two
+pictures of something the tooling cannot do.
+
+What lands when it works is not special, which is the reassuring part — it is
+the ordinary shift check-in page for that apparatus, naming the unit, the date
+and the hours, exactly as it looks when reached by scanning the QR code or by
+tapping through the app.
 
 **This is Chrome on Android, over HTTPS, and nothing else.** iPhone cannot do
 it; Safari does not implement Web NFC and no iOS browser does. A desktop cannot
@@ -795,11 +806,7 @@ notched phone even a dialog sized to the viewport lost around 32px.
 The bar now hides while a dialog, drawer or bottom sheet is open, and returns
 when it closes.
 
-> **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport, scrolled to its
-> action row, with the bottom navigation absent. **Every existing phone dialog
-> capture across the guides is now wrong** and should be replaced with a shot
-> taken after this change — the old ones all show the bar covering the
-> dialog.]**
+![A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable](./images/10-17-tall-dialog-action-row.png)
 
 ### Also improved on phones this week
 
@@ -812,10 +819,14 @@ when it closes.
 - **Icon-only controls are named**, so a screen reader announces them.
 - Toast notifications are positioned and announced correctly on a phone.
 
-> **[SCREENSHOT NEEDED — one of the reflowed tables (documents or check-in) at
->
-> > 390x844 showing the stacked-card layout, beside the same table on desktop.
-> > The pair is the point; a single shot does not show the reflow.]**
+![One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways](./images/10-18-training-table-phone.png)
+
+![The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files](./images/10-19-training-table-desktop.png)
+
+_The same page, the same three records, at 390px and at desktop width. On the
+phone every value keeps the column heading that named it, so nothing has to be
+remembered from a header row that is no longer on screen — and there is no
+sideways scroll to discover._
 
 ### Browser tabs
 

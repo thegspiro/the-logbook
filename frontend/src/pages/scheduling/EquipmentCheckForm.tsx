@@ -2145,7 +2145,21 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </div>
         ))}
 
-        {/* Overall notes + submit */}
+        {/* Overall notes + submit.
+
+            bg-theme-bg, not a surface token, and the distinction is the whole
+            point of that token existing: these blocks are sticky, so they have
+            to *occlude* the item list scrolling under them. The surface tokens
+            are translucent white in dark mode by design, so a sticky bar
+            painted with one shows the rows sliding through the notes field and
+            the Submit button — which reads as overlapping content rather than
+            as a colour choice, and is why it survived so long.
+
+            (They were briefly bg-theme-surface. At that time nothing defined
+            --color-theme-bg, so the name compiled to no CSS at all and the
+            block was transparent; a surface token was the lesser of two wrongs.
+            The token is defined now — see styles/index.css — and is the right
+            answer. themeTokenIntegrity.test.ts guards the rest.) */}
         {!previewMode && (
           <div className="bg-theme-bg border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>

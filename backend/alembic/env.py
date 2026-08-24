@@ -96,8 +96,16 @@ from app.models.user import Organization, Role, Session, User, user_roles
 # This is the Alembic Config object
 config = context.config
 
-# Set the database URL from our settings
-config.set_main_option("sqlalchemy.url", settings.SYNC_DATABASE_URL)
+# Set the database URL from our settings.
+#
+# `set_main_option` writes through ConfigParser, whose interpolation reads `%`
+# as the start of a `%(name)s` reference. The DSN percent-encodes its
+# credentials, so a password containing a reserved character (`@` -> `%40`)
+# arrives here as `%40` and raises "invalid interpolation syntax" on every
+# Alembic command. Doubling `%` escapes it; ConfigParser returns the original
+# single-`%` string on read. Only this ConfigParser-backed write needs it —
+# `run_migrations_online` assigns into a plain dict, which does not interpolate.
+config.set_main_option("sqlalchemy.url", settings.SYNC_DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
