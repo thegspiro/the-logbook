@@ -87,7 +87,13 @@ export const useLearningProgressStore = create<LearningProgressState>((set, get)
     set({ completed: next });
     if (!userId) return;
     try {
-      localStorage.setItem(storageKey(userId), JSON.stringify(next));
+      // Each tab holds its own snapshot, so writing this one wholesale would
+      // delete a step the member ticked in another tab since this one loaded.
+      // Merging over what is on disk now makes it last-write-wins per step
+      // rather than per tab.
+      const merged = { ...readProgress(userId), ...next };
+      localStorage.setItem(storageKey(userId), JSON.stringify(merged));
+      set({ completed: merged });
     } catch {
       // Quota or blocked storage; the in-memory update above still stands for
       // this session.

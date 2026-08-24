@@ -88,6 +88,38 @@ describe('learningProgressStore', () => {
     expect(useLearningProgressStore.getState().promptDismissed).toBe(true);
   });
 
+  it('does not delete a step another tab recorded', () => {
+    useLearningProgressStore.getState().loadFor('member-a');
+    useLearningProgressStore.getState().setStepComplete('getting-started', 'dashboard', true);
+
+    // A second tab, holding its own snapshot from before that write, records a
+    // different step straight to storage.
+    localStorage.setItem(
+      'logbook.learning-progress.v2.member-a',
+      JSON.stringify({ 'getting-started.dashboard': true, 'mobile.install': true })
+    );
+
+    useLearningProgressStore.getState().setStepComplete('getting-started', 'account', true);
+
+    const persisted: unknown = JSON.parse(localStorage.getItem('logbook.learning-progress.v2.member-a') ?? '{}');
+    expect(persisted).toEqual({
+      'getting-started.dashboard': true,
+      'mobile.install': true,
+      'getting-started.account': true,
+    });
+    // The merged result is adopted, so this tab stops overwriting from a stale
+    // snapshot on its next write too.
+    expect(useLearningProgressStore.getState().completed).toEqual(persisted);
+  });
+
+  it('still lets a member untick a step', () => {
+    useLearningProgressStore.getState().loadFor('member-a');
+    useLearningProgressStore.getState().setStepComplete('getting-started', 'dashboard', true);
+    useLearningProgressStore.getState().setStepComplete('getting-started', 'dashboard', false);
+
+    expect(useLearningProgressStore.getState().completed).toEqual({ 'getting-started.dashboard': false });
+  });
+
   it('still tracks progress in memory when there is no signed-in member', () => {
     useLearningProgressStore.getState().loadFor(null);
     useLearningProgressStore.getState().setStepComplete('getting-started', 'dashboard', true);

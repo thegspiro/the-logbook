@@ -14,12 +14,20 @@ import { findLearningPath } from './learningPaths';
  */
 export default function LearningPathPage() {
   const { pathId } = useParams<{ pathId: string }>();
-  const { isStepComplete, setStepComplete } = useLearningProgress();
-  const path = findLearningPath(pathId);
+  const { visiblePaths, modulesLoading, isStepComplete, setStepComplete } = useLearningProgress();
 
   // An unknown id is a stale bookmark or a mistyped URL, not an error state
   // worth a screen of its own.
-  if (!path) return <Navigate to="/learning" replace />;
+  if (!findLearningPath(pathId)) return <Navigate to="/learning" replace />;
+
+  // A lesson for a module the department has since switched off must not open
+  // either: its steps link to screens that are gone, and ticking them records
+  // progress the index filters out of its own totals — leaving the member with
+  // a lesson they completed and a counter that never moves. Waiting for the
+  // module lookup to settle first, because it is permissive until it does and
+  // bouncing a valid lesson on first paint would be the worse failure.
+  const path = visiblePaths.find((candidate) => candidate.id === pathId);
+  if (!path) return modulesLoading ? null : <Navigate to="/learning" replace />;
 
   const done = path.steps.filter((step) => isStepComplete(path.id, step.id)).length;
 

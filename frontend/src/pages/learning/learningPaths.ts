@@ -77,23 +77,24 @@ export const learningPaths: LearningPath[] = [
         path: '/account?tab=account',
         why: 'The department reaches you at whatever is on this screen — a stale number here means a missed callout. Two-factor matters because your account can see other members’ personal information, not just your own.',
         how: [
-          'On the Account tab, confirm the phone number and email address are ones you actually check.',
+          'On the Account tab, confirm the Phone and Mobile numbers are ones you actually answer.',
           'Open the Security tab and enable two-factor authentication.',
           'Open Emergency Contacts and add at least one person the department can call for you.',
         ],
-        success: 'Your phone and email are correct, two-factor is on, and one emergency contact is saved.',
+        success: 'Your phone numbers are correct, two-factor is on, and one emergency contact is saved.',
       },
       {
         id: 'notifications',
         label: 'Learn where department messages land',
         path: '/notifications?tab=inbox',
-        why: 'Email is the channel of record — every notification is emailed to you whatever else happens. The Inbox is that same list inside the app, so you can catch up without digging through your mail.',
+        why: 'Department announcements are the channel of record: they are emailed to you whether or not you switch email off, because you cannot opt out of being told. Reminders are different — event, training, and certification reminders follow your Email Notifications preference, so turning it off really does stop them.',
         how: [
-          'Read anything already waiting in your Inbox.',
+          'Read anything already waiting in your Inbox — it carries the same notices, inside the app.',
           'Open Account → Notifications and set how you want to be reached.',
-          'Understand that the email always goes out; in-app, push, and text are additions on top of it, never replacements.',
+          'Leave Email Notifications on unless you are certain: it is the switch that silences reminder emails, and the in-app entry is then the only copy you get.',
         ],
-        success: 'Your inbox is clear and your notification preferences match how you actually want to be contacted.',
+        success:
+          'Your inbox is clear, and you can say which notices reach you by email even with reminders switched off.',
       },
       {
         id: 'directory',

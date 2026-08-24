@@ -5,9 +5,17 @@ import { useLearningProgressStore } from '../stores/learningProgressStore';
 import { learningPaths, stepKey, type LearningPath } from '../pages/learning/learningPaths';
 import { useEnabledModules } from './useEnabledModules';
 
+/**
+ * Stable empty map. A fresh object literal per render would change identity and
+ * re-run every effect keyed on `completed`.
+ */
+const NO_PROGRESS: Record<string, boolean> = Object.freeze({});
+
 export interface LearningProgress {
   /** Paths the organization has the modules for. */
   visiblePaths: LearningPath[];
+  /** True until the enabled-module lookup settles, either way. */
+  modulesLoading: boolean;
   completed: Record<string, boolean>;
   /** Completed steps among `visiblePaths` only. */
   completedCount: number;
@@ -29,17 +37,28 @@ export interface LearningProgress {
  */
 export function useLearningProgress(): LearningProgress {
   const userId = useAuthStore((state) => state.user?.id ?? null);
-  const { isModuleOn } = useEnabledModules();
-  const completed = useLearningProgressStore((state) => state.completed);
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const storeUserId = useLearningProgressStore((state) => state.userId);
+  const storedCompleted = useLearningProgressStore((state) => state.completed);
   const loadFor = useLearningProgressStore((state) => state.loadFor);
   const setStepComplete = useLearningProgressStore((state) => state.setStepComplete);
-  const promptDismissed = useLearningProgressStore((state) => state.promptDismissed);
+  const storedDismissed = useLearningProgressStore((state) => state.promptDismissed);
   const dismissPrompt = useLearningProgressStore((state) => state.dismissPrompt);
   const reset = useLearningProgressStore((state) => state.reset);
 
   useEffect(() => {
     loadFor(userId);
   }, [userId, loadFor]);
+
+  // The store is a singleton and `loadFor` runs in a passive effect, so between
+  // one member signing in and that effect firing, the store still holds the
+  // previous member's data. Painting it even once on a shared station browser
+  // is the leak the per-member keying exists to prevent — and a stale
+  // `promptDismissed` would also hide the orientation prompt from someone who
+  // never dismissed it. A mismatch therefore reads as "nothing loaded yet".
+  const isCurrentMember = storeUserId === userId;
+  const completed = isCurrentMember ? storedCompleted : NO_PROGRESS;
+  const promptDismissed = isCurrentMember ? storedDismissed : false;
 
   const visiblePaths = learningPaths.filter((path) => !path.module || isModuleOn(path.module));
 
@@ -51,6 +70,7 @@ export function useLearningProgress(): LearningProgress {
 
   return {
     visiblePaths,
+    modulesLoading,
     completed,
     completedCount,
     totalCount,

@@ -6,8 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLearningProgressStore } from '../../stores/learningProgressStore';
 import LearningPathPage from './LearningPathPage';
 
+const isModuleOn = vi.fn((_module: string) => true);
+let modulesLoading = false;
 vi.mock('../../hooks/useEnabledModules', () => ({
-  useEnabledModules: () => ({ isModuleOn: () => true, enabledModules: null, isLoading: false }),
+  useEnabledModules: () => ({ isModuleOn, enabledModules: null, isLoading: modulesLoading }),
 }));
 
 vi.mock('../../stores/authStore', () => ({
@@ -30,6 +32,8 @@ const renderPath = (pathId: string) =>
 describe('LearningPathPage', () => {
   beforeEach(() => {
     localStorage.clear();
+    isModuleOn.mockImplementation(() => true);
+    modulesLoading = false;
     useLearningProgressStore.setState({ userId: null, completed: {}, promptDismissed: false });
   });
 
@@ -79,5 +83,27 @@ describe('LearningPathPage', () => {
     renderPath('not-a-lesson');
 
     expect(screen.getByRole('heading', { name: 'Learning Center' })).toBeInTheDocument();
+  });
+
+  it('redirects a lesson whose module the department switched off', () => {
+    // Reachable by bookmark or history even though the index stopped listing
+    // it. Left open, its steps link to screens that are gone and its ticks
+    // never appear in the index totals.
+    isModuleOn.mockImplementation((module: string) => module !== 'scheduling');
+
+    renderPath('scheduling');
+
+    expect(screen.getByRole('heading', { name: 'Learning Center' })).toBeInTheDocument();
+  });
+
+  it('waits for the module lookup rather than bouncing a valid lesson', () => {
+    // useEnabledModules is permissive until it settles, so redirecting on the
+    // first paint would throw the member out of a lesson they can use.
+    modulesLoading = true;
+    isModuleOn.mockImplementation(() => false);
+
+    renderPath('scheduling');
+
+    expect(screen.queryByRole('heading', { name: 'Learning Center' })).not.toBeInTheDocument();
   });
 });
