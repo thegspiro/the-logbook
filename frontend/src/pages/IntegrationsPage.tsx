@@ -40,6 +40,8 @@ import {
   FileSignature,
   CalendarClock,
   Wallet,
+  CreditCard,
+  KeyRound,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -134,6 +136,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     color: 'text-blue-700 dark:text-blue-400',
     bgColor: 'bg-blue-500/10',
     features: ['Contact sync', 'Donor management', 'Event push', 'Bidirectional sync'],
+  },
+  'nfc-id-cards': {
+    icon: <CreditCard className="h-6 w-6" />,
+    color: 'text-teal-700 dark:text-teal-400',
+    bgColor: 'bg-teal-500/10',
+    features: ['Tap to check in', 'Officer-issued cards', 'Shifts, meetings & admin hours'],
   },
   documenso: {
     icon: <FileSignature className="h-6 w-6" />,
@@ -230,6 +238,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   CRM: <Users className="h-3.5 w-3.5" />,
   Documents: <FileSignature className="h-3.5 w-3.5" />,
   Scheduling: <CalendarClock className="h-3.5 w-3.5" />,
+  'Access Control': <KeyRound className="h-3.5 w-3.5" />,
 };
 
 type CategoryFilter =
@@ -246,7 +255,8 @@ type CategoryFilter =
   | 'Mapping'
   | 'Documents'
   | 'Scheduling'
-  | 'Payments';
+  | 'Payments'
+  | 'Access Control';
 
 const ALL_CATEGORIES: CategoryFilter[] = [
   'all',
@@ -263,6 +273,7 @@ const ALL_CATEGORIES: CategoryFilter[] = [
   'Documents',
   'Scheduling',
   'Payments',
+  'Access Control',
 ];
 
 // Integration types that need webhook URL config
@@ -279,6 +290,20 @@ const CONFIG_TYPES = new Set([
   'calcom',
   'paypal',
 ]);
+
+/**
+ * Entries that are features of The Logbook itself rather than links to an
+ * outside service.
+ *
+ * There is no account to connect and no round trip to test: the card is an
+ * organization-level switch, so it reads Activate/Deactivate. NFC ID Cards is
+ * one — turning it on is what lets an officer issue a card and a station read
+ * it — and `test_integration_connection` on the backend has no case for it, so
+ * offering Test here only ever produced an error toast.
+ */
+const ACTIVATION_TYPES = new Set(['nfc-id-cards']);
+
+const isActivation = (integrationType: string): boolean => ACTIVATION_TYPES.has(integrationType);
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
@@ -499,23 +524,38 @@ const IntegrationsPage: React.FC = () => {
       setIntegrations((prev) => prev.map((i) => (i.id === integrationId ? updated : i)));
       setShowConnectModal(null);
       resetFormState();
-      toast.success('Integration connected successfully!');
+      toast.success(
+        isActivation(integration.integration_type)
+          ? `${integration.name} activated`
+          : 'Integration connected successfully!'
+      );
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to connect integration'));
+      toast.error(
+        getErrorMessage(
+          err,
+          isActivation(integration.integration_type)
+            ? `Failed to activate ${integration.name}`
+            : 'Failed to connect integration'
+        )
+      );
     } finally {
       setConnecting(false);
     }
   };
 
   const handleDisconnect = async (integrationId: string) => {
+    const integration = integrations.find((i) => i.id === integrationId);
+    const activation = integration ? isActivation(integration.integration_type) : false;
     try {
       await integrationsService.disconnectIntegration(integrationId);
       setIntegrations((prev) =>
         prev.map((i) => (i.id === integrationId ? { ...i, status: 'available' as const, enabled: false } : i))
       );
-      toast.success('Integration disconnected');
+      toast.success(activation ? `${integration?.name ?? 'Integration'} deactivated` : 'Integration disconnected');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to disconnect integration'));
+      toast.error(
+        getErrorMessage(err, activation ? 'Failed to deactivate integration' : 'Failed to disconnect integration')
+      );
     }
   };
 
@@ -1239,7 +1279,7 @@ const IntegrationsPage: React.FC = () => {
             <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">{connectedCount}</p>
           </div>
           <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Ready to Connect</p>
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Ready to Set Up</p>
             <p className="mt-1 text-2xl font-bold text-indigo-700 dark:text-indigo-400">{availableCount}</p>
           </div>
         </div>
@@ -1292,6 +1332,7 @@ const IntegrationsPage: React.FC = () => {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredIntegrations.map((integration) => {
             const ui = getUI(integration.integration_type);
+            const activation = isActivation(integration.integration_type);
             return (
               <div
                 key={integration.id}
@@ -1309,8 +1350,8 @@ const IntegrationsPage: React.FC = () => {
                   <div className="flex items-center gap-1">
                     {integration.status === ConnectionStatus.CONNECTED && (
                       <span className="flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
-                        <Wifi className="h-3 w-3" />
-                        <span>Connected</span>
+                        {activation ? <Check className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
+                        <span>{activation ? 'Active' : 'Connected'}</span>
                       </span>
                     )}
                     {integration.status === 'coming_soon' && (
@@ -1356,16 +1397,18 @@ const IntegrationsPage: React.FC = () => {
                           <span>Bookings</span>
                         </button>
                       )}
-                      <button
-                        onClick={() => {
-                          void handleTestConnection(integration.id);
-                        }}
-                        disabled={testing}
-                        className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                      >
-                        <Bell className="h-3.5 w-3.5" />
-                        <span>Test</span>
-                      </button>
+                      {!activation && (
+                        <button
+                          onClick={() => {
+                            void handleTestConnection(integration.id);
+                          }}
+                          disabled={testing}
+                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                        >
+                          <Bell className="h-3.5 w-3.5" />
+                          <span>Test</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           void handleDisconnect(integration.id);
@@ -1373,7 +1416,7 @@ const IntegrationsPage: React.FC = () => {
                         className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
                       >
                         <Settings className="h-3.5 w-3.5" />
-                        <span>Disconnect</span>
+                        <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
                       </button>
                     </>
                   )}
@@ -1385,8 +1428,8 @@ const IntegrationsPage: React.FC = () => {
                       }}
                       className="flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
                     >
-                      <Plug className="h-3.5 w-3.5" />
-                      <span>Connect</span>
+                      {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
+                      <span>{activation ? 'Activate' : 'Connect'}</span>
                     </button>
                   )}
                 </div>
@@ -1692,6 +1735,7 @@ const IntegrationsPage: React.FC = () => {
           selectedIntegration &&
           (() => {
             const ui = getUI(selectedIntegration.integration_type);
+            const activation = isActivation(selectedIntegration.integration_type);
             const hasConfigForm =
               WEBHOOK_TYPES.has(selectedIntegration.integration_type) ||
               CONFIG_TYPES.has(selectedIntegration.integration_type);
@@ -1719,7 +1763,7 @@ const IntegrationsPage: React.FC = () => {
                         <div className="flex items-center space-x-3">
                           <div className={`rounded-lg p-2 ${ui.bgColor} ${ui.color}`}>{ui.icon}</div>
                           <h3 className="text-theme-text-primary text-lg font-medium">
-                            Connect {selectedIntegration.name}
+                            {activation ? 'Activate' : 'Connect'} {selectedIntegration.name}
                           </h3>
                         </div>
                         <button
@@ -1741,7 +1785,9 @@ const IntegrationsPage: React.FC = () => {
                       {/* Features list for non-config integrations */}
                       {!hasConfigForm && (
                         <div className="mb-4 space-y-3">
-                          <h4 className="text-theme-text-primary text-sm font-medium">Features included:</h4>
+                          <h4 className="text-theme-text-primary text-sm font-medium">
+                            {activation ? 'What this turns on:' : 'Features included:'}
+                          </h4>
                           {ui.features.map((feature) => (
                             <div key={feature} className="flex items-center space-x-2">
                               <Check className="h-4 w-4 text-green-700 dark:text-green-400" />
@@ -1755,8 +1801,9 @@ const IntegrationsPage: React.FC = () => {
                         <div className="flex items-start space-x-2">
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" />
                           <p className="text-sm text-indigo-700">
-                            Clicking Connect will enable this integration for your organization. You can disconnect it
-                            at any time.
+                            {activation
+                              ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
+                              : 'Clicking Connect will enable this integration for your organization. You can disconnect it at any time.'}
                           </p>
                         </div>
                       </div>
@@ -1779,7 +1826,13 @@ const IntegrationsPage: React.FC = () => {
                         disabled={connecting}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
                       >
-                        {connecting ? 'Connecting...' : 'Connect'}
+                        {activation
+                          ? connecting
+                            ? 'Activating...'
+                            : 'Activate'
+                          : connecting
+                            ? 'Connecting...'
+                            : 'Connect'}
                       </button>
                     </div>
                   </DialogPanel>
