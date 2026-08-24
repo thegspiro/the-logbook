@@ -722,6 +722,48 @@ class TestRequiredEvidenceEverywhere:
 
 
 class TestMultipartFailureHandling:
+    async def test_an_integrity_failure_removes_the_unowned_file(
+        self, monkeypatch, tmp_path
+    ):
+        """A rejected foreign key must not leave an attacker-sized orphan."""
+        from sqlalchemy.exc import IntegrityError
+
+        monkeypatch.setattr(
+            training_submissions, "SUBMISSION_ATTACHMENT_DIR", str(tmp_path)
+        )
+        monkeypatch.setattr(
+            training_submissions, "detect_mime_type", lambda content: "application/pdf"
+        )
+
+        async def _rejects_transaction(**kwargs):
+            raise IntegrityError("INSERT", {}, Exception("foreign key rejected"))
+
+        monkeypatch.setattr(
+            training_submissions,
+            "TrainingSubmissionService",
+            lambda db: SimpleNamespace(create_submission=_rejects_transaction),
+        )
+
+        with pytest.raises(HTTPException):
+            await training_submissions.create_submission_with_attachment(
+                payload=json.dumps(
+                    {
+                        "course_name": "Pump Ops",
+                        "training_type": "continuing_education",
+                        "completion_date": str(date.today()),
+                        "hours_completed": 2.0,
+                        "category_id": str(uuid4()),
+                    }
+                ),
+                file=SimpleNamespace(
+                    read=AsyncMock(return_value=b"%PDF-1.4"), filename="cert.pdf"
+                ),
+                db=None,
+                current_user=SimpleNamespace(id="user-1", organization_id="org-1"),
+            )
+
+        assert os.listdir(os.path.join(str(tmp_path), "org-1")) == []
+
     async def test_a_post_commit_failure_leaves_the_file_alone(
         self, monkeypatch, tmp_path
     ):
