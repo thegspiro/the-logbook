@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Logged hours read on the quarter hour (2026-08-24)
+
+**Changed**
+
+- **Time a member worked or was credited with is shown to the nearest quarter,
+  halfway values going up.** That is the granularity it is entered at — the
+  external-training duration stepper moves in 15-minute steps — and the
+  granularity a department reports against, so a screen that printed a raw
+  division of stored minutes claimed a precision the record does not have. It
+  also summed as floats: the dashboard read `69.60000000000001 hrs in August`
+  for 66.7 standby plus 2.9 administrative. Applied across the dashboard, admin
+  hours, scheduling, training, member profiles and the report renderers.
+- **A total is the sum of the parts printed beside it**, not a rounding of the
+  raw sum. Rounding 69.6 once gives 69.5 above segments reading 66.75 and 3,
+  which is arithmetic the reader can see is wrong. The same reasoning settles
+  the scheduling report's worked-vs-scheduled variance, the compliance
+  dashboard's "Total Contributed" card and the admin-hours and annual-training
+  report totals.
+- **Stored minutes are untouched.** This is a display rule, so a
+  backend-generated CSV export can still read 2.9 where the screen reads 3.
+
+**Fixed**
+
+- **A requirement could read as met while the member was short.** Rounding
+  logged hours before subtracting turned a sub-eighth shortfall into zero, so
+  7.9 of 8 printed "Requirement met" beside a status badge that still read
+  behind — and a member who believes they are done stops logging. Met is now
+  decided on the raw hours, and an unmet requirement is held an increment below
+  its target rather than rounding up onto it, so the row still subtracts to the
+  gap: "7.75 / 8 hrs · 0.25 hrs still needed".
+
+**Not rounded**
+
+- **Derived averages and percentage-derived credit ceilings**, which are not
+  recorded time and are not constrained to the increment. 2.5 hours over three
+  shifts is 0.83, and 0.75 misreports the metric by a tenth; an event mapped at
+  40% credits 0.4 hours for an hour of attendance, and "Credits up to 0.5"
+  promises more than check-out awards. Those use `formatHoursExact`.
+- **Configuration thresholds** (auto-approve ceilings, max hours per session,
+  shift template lengths, reminder lead times) and **meter readings**
+  (apparatus engine hours), which are entered as exact figures and must read
+  back exactly as entered. Editable hours fields and the manual shift report's
+  duration preview likewise show the value actually being submitted.
+
 ### Scheduling: the calendar now says which shifts need people, and claiming one is a tap (2026-08-24)
 
 **Changed**
