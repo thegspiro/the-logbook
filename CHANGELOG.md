@@ -36,6 +36,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Between them these three settle a navigation that had it backwards: the
 officer's page was shown to everyone, and the crew's page to no one.
 
+**Also changed**
+
+- **The gear catalogue is manager-only too.** `/inventory` — the whole
+  department's uniforms and equipment — had no route guard at all and no
+  permission on its navigation row, so every member could browse it. It and its
+  `/inventory/items` alias now require `inventory.manage`. A member keeps My
+  Issued Gear, the request and return they raise from it, and the detail page
+  for an item they hold.
+- **`inventory.view` could not be the gate, and that is the whole difficulty.**
+  Its name says "View gear and uniforms", but the seeded `member` and
+  `firefighter` roles hold it _and need it_: the request picker on My Issued
+  Gear searches `GET /items` to find something to ask for, and item detail
+  reads `GET /items/{id}`. Gating the list on `inventory.view` would have gated
+  nothing, and taking the grant off those roles would have broken requesting —
+  the one thing a member is supposed to be able to do here.
+- **The item-detail breadcrumb no longer leads members somewhere they cannot
+  go.** It pointed at Inventory › Items unconditionally. For a member arriving
+  from their own issued gear, both of those are now closed, so the trail leads
+  back to My Issued Gear instead.
+
 ### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
 
 **Fixed**

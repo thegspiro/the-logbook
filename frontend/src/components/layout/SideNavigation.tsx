@@ -223,6 +223,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       path: '#',
       icon: Package,
       subItems: [
+        // My Issued Gear carries no gate: it is a member's own kit, plus the
+        // request and return they raise against it. Gear & Uniforms is the
+        // whole department's catalogue and gates on `inventory.manage` —
+        // NOT on `inventory.view`, which every seeded member holds and needs
+        // for the request picker's item search.
         ...(isModuleOn('inventory')
           ? [
               {
@@ -230,7 +235,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 path: '/inventory/my-equipment',
                 icon: Package,
               },
-              { label: 'Gear & Uniforms', path: '/inventory', icon: Package },
+              { label: 'Gear & Uniforms', path: '/inventory', icon: Package, permission: 'inventory.manage' },
             ]
           : []),
         // Its own entry rather than a child of Gear & Uniforms: the two are

@@ -150,10 +150,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       label: 'Operations',
       path: '/inventory',
       subItems: [
+        // Gates mirror SideNavigation's Operations group — see there.
         ...(isModuleOn('inventory')
           ? [
               { label: 'My Issued Gear', path: '/inventory/my-equipment' },
-              { label: 'Gear & Uniforms', path: '/inventory' },
+              { label: 'Gear & Uniforms', path: '/inventory', permission: 'inventory.manage' },
             ]
           : []),
         // Gates mirror SideNavigation's Operations group — see the reasoning

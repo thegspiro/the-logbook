@@ -379,11 +379,22 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 | URL                        | Page                         | Permission         |
 | -------------------------- | ---------------------------- | ------------------ |
-| `/inventory`               | Inventory Items List         | Authenticated      |
-| `/inventory/items`         | Inventory Items List (alias) | Authenticated      |
+| `/inventory`               | Inventory Items List         | `inventory.manage` |
+| `/inventory/items`         | Inventory Items List (alias) | `inventory.manage` |
 | `/inventory/my-equipment`  | My Equipment                 | Authenticated      |
 | `/inventory/items/:id`     | Item Detail                  | Authenticated      |
 | `/inventory/storage-areas` | Storage Areas                | `inventory.manage` |
+
+> **The catalogue is manager-only; a member's own kit is not.** The two items-list
+> routes show the whole department's gear and gate on `inventory.manage`. A member's
+> business with inventory is their own issued items and the request or return they
+> raise against one — all of which live on `/inventory/my-equipment`, which stays
+> open to any authenticated member, as does the detail page for an item they hold.
+>
+> `inventory.view` is deliberately **not** the gate on the list. The seeded `member`
+> and `firefighter` roles hold it and need it: the request picker on My Issued Gear
+> searches `GET /items` to find something to ask for, and item detail reads
+> `GET /items/{id}`. Gating the list on `inventory.view` would have gated nothing.
 
 ### Inventory Admin Hub (`/inventory/admin`)
 

@@ -319,14 +319,25 @@ const ItemDetailPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       {/* Breadcrumbs */}
+      {/* A member reaches this page from their own issued gear, and the full
+          catalogue above it is manager-only — so the trail has to lead back
+          where they came from, not to a page that would bounce them. */}
       <nav className="text-theme-text-muted flex items-center gap-1 text-sm">
-        <Link to="/inventory" className="hover:text-theme-text-primary">
-          Inventory
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link to="/inventory/items" className="hover:text-theme-text-primary">
-          Items
-        </Link>
+        {canManage ? (
+          <>
+            <Link to="/inventory" className="hover:text-theme-text-primary">
+              Inventory
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5" />
+            <Link to="/inventory/items" className="hover:text-theme-text-primary">
+              Items
+            </Link>
+          </>
+        ) : (
+          <Link to="/inventory/my-equipment" className="hover:text-theme-text-primary">
+            My Issued Gear
+          </Link>
+        )}
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="text-theme-text-primary max-w-[200px] truncate font-medium">{item.name}</span>
       </nav>
