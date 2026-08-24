@@ -96,7 +96,7 @@ instructor can't create a test where they're the candidate. But the **scoring**
 mutations (`PUT /tests/{id}` = `update_test`, `POST /tests/{id}/complete` =
 `complete_test`) authorize only through `_authorize_test_write`, which returns
 early for anyone with `training.manage` and **never checked actor ≠ candidate**.
-Officers routinely hold `training.manage` *and* get tested for higher certs — so
+Officers routinely hold `training.manage` _and_ get tested for higher certs — so
 officer B, named candidate on a test officer A created, could enter their own
 `section_results` and complete it, self-crediting the linked pipeline/cert
 requirement. The guard's own docstring already states "a candidate gets no write
@@ -170,7 +170,7 @@ dual-control — a workflow change. Already in `KNOWN_LIMITATIONS.md` (CS-8).
   window (data-layer feature). Deferred.
 - **Recipient allow-list** — ✅ RESOLVED (owner decision, 2026-08-09). Restricting
   recipients to org-member emails would break legitimate external auditors, so the
-  owner chose *allow any recipient, but audit-log each external send.*
+  owner chose _allow any recipient, but audit-log each external send._
   `_email_report` now calls the shared `audit_external_recipients`
   (`app/utils/external_recipients.py`), which classifies recipients against org
   membership (work + personal email, case-insensitive) and writes one
@@ -207,9 +207,9 @@ attestation clarified (schema already bounds the value); monthly/recipient stand
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_training_compliance` + `test_iso_readiness_framing` + `test_compliance_officer` **95 passed**; `test_iso_readiness_user_scoping` **1 passed** (new). No DB needed. |
+| Check                     | Result                                                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (service + test) | ✅ 0 violations                                                                                                                                                             |
+| `black --check`           | ✅ unchanged                                                                                                                                                                |
+| `tsc --noEmit`            | ✅ n/a — no frontend change                                                                                                                                                 |
+| backend tests             | ✅ `test_training_compliance` + `test_iso_readiness_framing` + `test_compliance_officer` **95 passed**; `test_iso_readiness_user_scoping` **1 passed** (new). No DB needed. |

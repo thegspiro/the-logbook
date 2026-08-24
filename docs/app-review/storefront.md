@@ -24,7 +24,7 @@ the payer selected. A PayPal.me payer can pick a non-USD currency, so a capture 
 auto-settles the order — recording $50 collected for a payment worth materially
 more or less. `StoreOrder` has no currency column, so nothing downstream catches it.
 (`KNOWN_LIMITATIONS` flags `auto_apply_payments` generally but reasons only about the
-*amount*.) **Fix:** a currency guard as the second match branch — a capture whose
+_amount_.) **Fix:** a currency guard as the second match branch — a capture whose
 currency differs from `get_settings().currency` is routed to **AMBIGUOUS** for human
 reconciliation, exactly like a short/over payment; a matching-currency exact amount
 still auto-applies unchanged. 1 DB-backed regression test (`test_storefront_
@@ -64,7 +64,7 @@ request schemas were checked against the invariants the code assumes.
 
 **Not exhaustively read:** the 987 L notification service and 512 L email
 template module beyond their call sites (they are covered by four dedicated test
-files and belong to the A4 *Email templates & delivery* iteration), and the
+files and belong to the A4 _Email templates & delivery_ iteration), and the
 frontend module's component internals beyond the service/store layer.
 
 This was the largest never-reviewed feature in the codebase and the only
@@ -90,7 +90,7 @@ defense-in-depth, not live defects.
 - **Client prices are never trusted (XC-1 clean on the order path).**
   `_price_lines` re-prices every line from the catalog: the product is fetched
   org-scoped, the window offering is matched org-scoped, and a `variant_id` is
-  resolved only against *that product's own* variants. A cart referencing
+  resolved only against _that product's own_ variants. A cart referencing
   another org's product or an unoffered product is rejected.
 - **Quantity and money inputs are bounded at the schema.**
   `quantity: int = Field(..., ge=1, le=999)`, refund `amount: Field(None, gt=0)`,
@@ -121,12 +121,12 @@ defense-in-depth, not live defects.
   must never be silently dropped is implemented as written.
 - **CSV export uses `SafeCsvWriter`** (`storefront_service.py:2737`), so the
   formula-injection class (CI-1, CS-4) does not recur here.
-- **Product image upload is hardened**: magic-byte MIME detection, 
+- **Product image upload is hardened**: magic-byte MIME detection,
   re-encode to WebP (which strips EXIF/GPS), size cap, org-scoped write, and
   serving is `storefront.view`-gated with a `private` cache header.
 - **Order numbers are race-safe**: `UniqueConstraint(organization_id,
-  order_number)` backing a retry-on-conflict allocator — the constraint that
-  FIN-7 flagged as *missing* for finance request numbers is present here.
+order_number)` backing a retry-on-conflict allocator — the constraint that
+  FIN-7 flagged as _missing_ for finance request numbers is present here.
 - **Frontend module uses the shared `createApiClient` factory**, so Pitfall #7
   (module axios instances missing CSRF/credentials) does not apply.
 - **Test coverage is real**: 11 backend test files and 10 frontend test files,
@@ -145,7 +145,7 @@ address. Comparable surfaces (`/prospective-members/`, `/finance/`,
 
 **Where:** `frontend/src/utils/apiCache.ts:31`.
 
-**Impact:** *Latent, not live.* The storefront module builds its client through
+**Impact:** _Latent, not live._ The storefront module builds its client through
 `createApiClient()`, which installs CSRF and auth-refresh interceptors but **not**
 the caching interceptor — that lives only on the global `services/api.ts`
 instance, and no `/store/` call routes through it today. The exposure would
@@ -191,7 +191,7 @@ Worth doing alongside any future refactor of this method, not on its own.
 
 ## Duplication
 
-None material. Two things that *look* like duplication are deliberate and
+None material. Two things that _look_ like duplication are deliberate and
 correct:
 
 - `email_templates_storefront.py` (512 L) is separate from the general
@@ -225,7 +225,7 @@ migration.
    down, the webhook 401s and PayPal eventually stops retrying — the payment is
    then lost to the ledger with no way to re-ingest it. The Transaction Search
    API (noted in the service docstring as rejected for latency) would be the
-   natural backfill source. *Scale/robustness.*
+   natural backfill source. _Scale/robustness._
 2. **Per-IP webhook rate limiting is per-process.** `public_rate_limit` shares
    the same limitation flagged in PP-6: with more than one worker the effective
    limit is 60/min × workers. Same Redis-backed fix as PP-6 would resolve both.
@@ -233,27 +233,28 @@ migration.
    record a payment, mark an order paid, waive the balance, and issue a refund.
    This is the same SoD gap as FIN-4 and AH-4, and the same product decision:
    plausible for a small department, not for a large one. A `storefront.disburse`
-   tier would mirror the `finance.disburse` proposal. *Product decision.*
+   tier would mirror the `finance.disburse` proposal. _Product decision._
 4. **`auto_apply_payments` defaults to `True`** (`paypal_webhook.py:124`) when
    the integration config omits it, so an exact-amount capture settles an order
    with no human in the loop. Correct for the intended workflow and well-guarded
    by the amount check — but it is an implicit default on a money path and
-   deserves to be explicit in the integration setup UI. *Product decision.*
+   deserves to be explicit in the integration setup UI. _Product decision._
 5. **No test asserts the negative-quantity and negative-refund rejections.**
    Both are currently enforced only by Pydantic `Field` constraints; a schema
    refactor could silently drop `ge=1` / `gt=0`. These are cheap regression
    tests for two invariants that directly protect money.
 6. **Order export is unpaginated.** `GET /orders/export` streams every order for
-   the org. Same shape as the export DoS noted in FIN-7. *Scale limit.*
+   the org. Same shape as the export DoS noted in FIN-7. _Scale limit._
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (repo-wide) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `eslint` | ✅ clean |
-| frontend tests | ✅ 156 passed (11 files: storefront + apiCache) |
-| backend tests | ✅ 129 storefront tests passed · ⚠️ 180 errored at fixture setup — all are `db_session` failing to reach MySQL, which is not running in the review sandbox (no Docker daemon). Environment limitation, not a regression: neither fix touches a DB path, and the errors reproduce on an unmodified checkout. |
+| Check                | Result                                                                                                                                                                                                                                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (repo-wide)                                                                                                                                                                                                                                                                                     |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                                                                                                                                             |
+| `black --check`      | ✅ unchanged                                                                                                                                                                                                                                                                                                |
+| `eslint`             | ✅ clean                                                                                                                                                                                                                                                                                                    |
+| frontend tests       | ✅ 156 passed (11 files: storefront + apiCache)                                                                                                                                                                                                                                                             |
+| backend tests        | ✅ 129 storefront tests passed · ⚠️ 180 errored at fixture setup — all are `db_session` failing to reach MySQL, which is not running in the review sandbox (no Docker daemon). Environment limitation, not a regression: neither fix touches a DB path, and the errors reproduce on an unmodified checkout. |
+
 </content>

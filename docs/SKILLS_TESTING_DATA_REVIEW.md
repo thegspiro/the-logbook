@@ -55,12 +55,12 @@ blueprint through to a score.
 
 ### Fixed in this change
 
-| Layer | Change |
-| ----- | ------ |
-| API | `CRITERION_TYPES` whitelist + a `model_validator` on `SkillCriterionSchema`. An unknown type is now a 422 naming the offending step and the accepted values. |
-| Frontend | `hydrateTemplateSections` normalizes an unrecognized stored type to `pass_fail`, so templates already written into existing databases become scorable instead of silently failing. `??` could not do this — the stored value is a non-null string. |
-| Seed data | Blueprints moved to `backend/app/data/skill_sheet_library.py` with `C_*` constants, so a typo is an `AttributeError` at import rather than an unscorable sheet in production. |
-| Tests | `test_skill_criterion_type_validation.py` holds the whitelist closed; `test_seed_skill_sheet_library.py` validates every blueprint against the real create-template schema and then **scores it with the real scorer** — a clean run must pass with a non-zero percentage, and failing one critical step must fail the test. |
+| Layer     | Change                                                                                                                                                                                                                                                                                                                       |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API       | `CRITERION_TYPES` whitelist + a `model_validator` on `SkillCriterionSchema`. An unknown type is now a 422 naming the offending step and the accepted values.                                                                                                                                                                 |
+| Frontend  | `hydrateTemplateSections` normalizes an unrecognized stored type to `pass_fail`, so templates already written into existing databases become scorable instead of silently failing. `??` could not do this — the stored value is a non-null string.                                                                           |
+| Seed data | Blueprints moved to `backend/app/data/skill_sheet_library.py` with `C_*` constants, so a typo is an `AttributeError` at import rather than an unscorable sheet in production.                                                                                                                                                |
+| Tests     | `test_skill_criterion_type_validation.py` holds the whitelist closed; `test_seed_skill_sheet_library.py` validates every blueprint against the real create-template schema and then **scores it with the real scorer** — a clean run must pass with a non-zero percentage, and failing one critical step must fail the test. |
 
 ---
 
@@ -70,18 +70,18 @@ blueprint through to a score.
 I/O, so the API, the general seeder, the screenshot harness and the test suite
 all share one definition:
 
-| Sheet | Category | Exercises |
-| ----- | -------- | --------- |
-| Patient Assessment / Management — Medical | Emergency Medical | NREMT critical steps, a scored hand-off |
-| SCBA Donning — Timed Evolution | Fire Suppression | `statement` with `starts_timer`, `time_limit` |
-| Bleeding Control and Shock Management | Emergency Medical | mid-evolution statement prompt |
-| 24' Extension Ladder — Two-Firefighter Raise | Fire Suppression | `checklist` + timed raise |
-| 1¾" Handline — Advance and Flow | Fire Suppression | critical PPE checklist, scored stream work |
-| Pump Operations — Draft and Relay Supply | Apparatus Operations | point-scored rubric, 75% threshold |
-| Emergency Vehicle Operations — Driving Course | Apparatus Operations | scored manoeuvres, course time limit |
-| Primary Search — Limited Visibility | Rescue | staged statements, air-management critical |
-| Hazmat — Level A Suit Donning and Doffing | Hazardous Materials | checklist-heavy safety gates |
-| Company Officer — Incident Size-Up and Initial IAP | Command | `score_pass_fail_criteria` on, 80% threshold |
+| Sheet                                              | Category             | Exercises                                     |
+| -------------------------------------------------- | -------------------- | --------------------------------------------- |
+| Patient Assessment / Management — Medical          | Emergency Medical    | NREMT critical steps, a scored hand-off       |
+| SCBA Donning — Timed Evolution                     | Fire Suppression     | `statement` with `starts_timer`, `time_limit` |
+| Bleeding Control and Shock Management              | Emergency Medical    | mid-evolution statement prompt                |
+| 24' Extension Ladder — Two-Firefighter Raise       | Fire Suppression     | `checklist` + timed raise                     |
+| 1¾" Handline — Advance and Flow                    | Fire Suppression     | critical PPE checklist, scored stream work    |
+| Pump Operations — Draft and Relay Supply           | Apparatus Operations | point-scored rubric, 75% threshold            |
+| Emergency Vehicle Operations — Driving Course      | Apparatus Operations | scored manoeuvres, course time limit          |
+| Primary Search — Limited Visibility                | Rescue               | staged statements, air-management critical    |
+| Hazmat — Level A Suit Donning and Doffing          | Hazardous Materials  | checklist-heavy safety gates                  |
+| Company Officer — Incident Size-Up and Initial IAP | Command              | `score_pass_fail_criteria` on, 80% threshold  |
 
 103 criteria: 77 `pass_fail`, 13 `score`, 6 `statement`, 4 `checklist`,
 3 `time_limit`. Every rendering path has a worked example behind it.
@@ -118,7 +118,7 @@ the step contributed nothing to the percentage — silently, exactly like
 `checkbox`.
 
 Now blocked at save with the offending section and criterion named, and warned
-inline while the box is still empty. Deliberately *not* enforced in the API
+inline while the box is still empty. Deliberately _not_ enforced in the API
 schema: the template PUT resends every section, so a 422 would block edits to
 templates saved before the rule existed, with no way to see which step was at
 fault. The seeded library is held to the same rule by a test.
@@ -185,7 +185,7 @@ Skill Test, re-picking the same sheet each time.
 
 The candidate step now takes a list: picking someone adds them and leaves the
 search open, each can be removed, and the button says how many evaluations it
-is about to create. Tests are created one at a time and *sequentially* — the
+is about to create. Tests are created one at a time and _sequentially_ — the
 attempt cap is checked against tests already recorded, so firing a squad's
 worth together could let a candidate past a cap two racing requests both read
 as not yet reached. One refusal does not discard the rest of the squad.
@@ -233,7 +233,7 @@ covers exactly what the search has left on screen.
 **5c. No way back to the examiner — fixed, owner-approved.** The only exits
 from pending were `/validate` and `/void`, and the endpoint docstring was
 explicit that "the rejection path is `/void`". Right for a result that was
-*wrong* — the record survives with its reason, which is what a candidate who
+_wrong_ — the record survives with its reason, which is what a candidate who
 sat the evaluation is owed — and a heavy instrument for "Engine 2's captain
 mis-scored step 4, have him redo it", where the void is permanent and
 candidate-visible and the correction becomes a second test.
@@ -260,7 +260,7 @@ furthest from a desk.
 
 **Blank skill sheet — built in this change.** `SkillSheetPrintPage`
 (`/training/skills-testing/print/template?id=…`, printer icon on each row of
-the Templates tab) renders a published *or* draft template as the paper form an
+the Templates tab) renders a published _or_ draft template as the paper form an
 examiner carries on a clipboard: a candidate/examiner/date block, the scoring
 rules stated before the first mark, one marking affordance per criterion type
 (P/F boxes, `___ / max` with the passing floor, a stopwatch blank with the
@@ -270,7 +270,7 @@ signature lines.
 
 It exists because full offline support (§4a) is blocked on two owner decisions
 and could sit for a while, while paper is what departments already fall back
-to. Printing the department's *own* sheet rather than a generic one means what
+to. Printing the department's _own_ sheet rather than a generic one means what
 gets marked in the field matches what gets transcribed afterwards — sections and
 criteria are numbered exactly as the examiner screen numbers them, so a paper
 mark maps onto one field with no interpretation in between. It goes through the
@@ -289,7 +289,7 @@ server's own score breakdown section by section, what was recorded against
 each step, and the officer sign-off the result rests on. Reachable from a Print
 button on the member's own result page.
 
-Two things it deliberately does *not* do. It derives nothing the API withheld —
+Two things it deliberately does _not_ do. It derives nothing the API withheld —
 `GET /tests/{id}` already runs the test → template → organization disclosure
 chain and redacts before the payload leaves the server, so a candidate under
 `scores` disclosure gets marks with the examiner's notes stripped and the print
@@ -348,7 +348,7 @@ you look.
 This is the strongest part of the module, and mostly needs confirming rather
 than changing:
 
-- **`template_snapshot`** freezes the template's structure *and* its scoring
+- **`template_snapshot`** freezes the template's structure _and_ its scoring
   rules at test creation. Because criterion identity is positional, without
   this an edit to a published template would silently re-bind historical
   results to different criteria. Correct, and the reasoning is documented at
@@ -369,7 +369,7 @@ than changing:
 Two things to watch:
 
 **6a. `section_results` is a plain `Column(JSON)` keyed positionally.** The
-snapshot makes this safe for *reading back* a finished test. It is worth an
+snapshot makes this safe for _reading back_ a finished test. It is worth an
 explicit test that a template edited between a test's creation and its
 completion still scores against the snapshot — the failure mode is silent and
 would only show up as a scorecard that reads slightly wrong months later.
@@ -384,25 +384,25 @@ seed data; the import path (§3c) is the next one to cover.
 
 ## 7. Priority
 
-| # | Item | Effort | Why now |
-| - | ---- | ------ | ------- |
-| 1 | ~~Unknown criterion type is unscorable~~ | — | **Fixed** |
-| 2 | ~~No printable blank skill sheet~~ (§5d) | — | **Built** — the paper fallback while offline waits |
-| 3 | ~~No printable completed scorecard~~ (§5d) | — | **Built** — audit hand-off and paper training file |
-| 4 | ~~No CSV export of results~~ (§5d) | — | **Built** — `SafeCsvWriter`, officer-only, audit-logged |
-| 5 | ~~Position ordering in the disclosure picker~~ (§5d) | — | **Fixed** — sorted by name, not by authorization rank |
-| 6 | ~~`score` with no `max_score`~~ (§3a) | — | **Fixed** — blocked in the builder, warned inline |
-| 7 | ~~Review queue is a filter, not an inbox~~ (§5a, §5b) | — | **Built** — tile links in, selection, bulk accept |
-| 8 | ~~No batch testing~~ (§4b) | — | **Built** — one sheet against a squad |
-| 9 | ~~No starter template library~~ (§3b) | — | **Built** — copy-on-demand, lands as a draft |
-| 10 | ~~Return for correction~~ (§5c) | — | **Built** — approved by the owner; third exit from a pending result |
-| 11 | ~~Viewers panel used a roster `<select>`~~ (§4d) | — | **Fixed** — same typeahead as the candidate picker |
-| 12 | **Offline (§4a)** | L | **Not started.** Scope decided (plan options A+B); §5 still open — see below |
+| #   | Item                                                  | Effort | Why now                                                                      |
+| --- | ----------------------------------------------------- | ------ | ---------------------------------------------------------------------------- |
+| 1   | ~~Unknown criterion type is unscorable~~              | —      | **Fixed**                                                                    |
+| 2   | ~~No printable blank skill sheet~~ (§5d)              | —      | **Built** — the paper fallback while offline waits                           |
+| 3   | ~~No printable completed scorecard~~ (§5d)            | —      | **Built** — audit hand-off and paper training file                           |
+| 4   | ~~No CSV export of results~~ (§5d)                    | —      | **Built** — `SafeCsvWriter`, officer-only, audit-logged                      |
+| 5   | ~~Position ordering in the disclosure picker~~ (§5d)  | —      | **Fixed** — sorted by name, not by authorization rank                        |
+| 6   | ~~`score` with no `max_score`~~ (§3a)                 | —      | **Fixed** — blocked in the builder, warned inline                            |
+| 7   | ~~Review queue is a filter, not an inbox~~ (§5a, §5b) | —      | **Built** — tile links in, selection, bulk accept                            |
+| 8   | ~~No batch testing~~ (§4b)                            | —      | **Built** — one sheet against a squad                                        |
+| 9   | ~~No starter template library~~ (§3b)                 | —      | **Built** — copy-on-demand, lands as a draft                                 |
+| 10  | ~~Return for correction~~ (§5c)                       | —      | **Built** — approved by the owner; third exit from a pending result          |
+| 11  | ~~Viewers panel used a roster `<select>`~~ (§4d)      | —      | **Fixed** — same typeahead as the candidate picker                           |
+| 12  | **Offline (§4a)**                                     | L      | **Not started.** Scope decided (plan options A+B); §5 still open — see below |
 
 ### What offline still needs
 
 The owner has chosen **plan options A+B**: persist an in-progress evaluation
-locally and replay writes in order on reconnect, *and* allow starting a test
+locally and replay writes in order on reconnect, _and_ allow starting a test
 from a device that has never had signal for it.
 
 One thing that decision does not settle, and implementation should not start

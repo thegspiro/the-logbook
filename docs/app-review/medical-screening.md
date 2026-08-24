@@ -32,7 +32,7 @@ them can't break a lookup.
 1. **New `EncryptedJSON` column type** (`app/core/encrypted_types.py`) — the same
    transparent contract as `EncryptedText`, but `json.dumps`/`json.loads` around
    the payload. Its legacy-read path also handles the `JSON`→`TEXT` alter: a
-   pre-encryption row is the JSON *text*, so an `InvalidToken` read falls back to
+   pre-encryption row is the JSON _text_, so an `InvalidToken` read falls back to
    `json.loads` of that text (and to the raw string only if it isn't valid JSON).
 2. **Model** (`app/models/medical_screening.py`) — `provider_name`,
    `result_summary`, `notes` → `EncryptedText`; `result_data` → `EncryptedJSON`.
@@ -120,11 +120,11 @@ rejected on create and update, case-normalization, omitted-fields-on-update pass
   but a true SQL `LIMIT/OFFSET` (with a separate full-set path for compliance) is
   the 10× fix. Future dev.
 - **Exactly-one-of `user_id`/`prospect_id` not enforced (LOW)** — the model
-  docstring says a record links to *either*, but `create_record` accepts both or
+  docstring says a record links to _either_, but `create_record` accepts both or
   neither. Unchanged from pass 1 (a `@model_validator` on the create schema is the
   fix); left flagged because it changes accept/reject behavior on a PHI write path.
 - **Compliance-by-id doesn't 404 an unknown subject (LOW)** — `GET
-  /compliance/{user_id}` returns an empty-ish summary for any id rather than 404;
+/compliance/{user_id}` returns an empty-ish summary for any id rather than 404;
   not a leak (org-scoped, no data returned), but a clearer contract would validate
   the subject in-org first. Future dev.
 
@@ -212,7 +212,7 @@ client-supplied `user_id`, `prospect_id`, and `requirement_id` with no in-org
 check.
 
 **Why it's worse than a generic XC-1 here:** the record holds **PHI**. A generic
-dangling FK is a mis-attribution nuisance; attaching a *medical screening result*
+dangling FK is a mis-attribution nuisance; attaching a _medical screening result_
 to a foreign or wrong `user_id` is a PHI-integrity problem — the screening data
 ends up associated with the wrong person. The original audit rated it LOW as a
 plain dangling-FK; the PHI context nudges it toward MED.
@@ -271,7 +271,7 @@ this module and is migration-shaped, not a review-time fix.
 
 ## Duplication
 
-None introduced; `_resolve_names` *removes* the latent temptation to resolve
+None introduced; `_resolve_names` _removes_ the latent temptation to resolve
 names per-row in two separate methods by giving both one shared, org-scoped path.
 
 ## Dead code
@@ -296,17 +296,18 @@ TODO/FIXME markers. Frontend avoids Pitfall #1 (no `??` on outgoing form values)
    tests mock the queries; an integration test would lock the org-scoping join
    behavior once MySQL is available in CI.
 3. **`create_record` doesn't enforce exactly-one-of `user_id`/`prospect_id`** —
-   the model comment says a record links to *either*, but nothing rejects both
-   or neither. Out of scope for MS-3 (which was about *in-org* validation); worth
+   the model comment says a record links to _either_, but nothing rejects both
+   or neither. Out of scope for MS-3 (which was about _in-org_ validation); worth
    a `@model_validator` on the schema.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed** (was 2514 — 3 tests added; the 19 medical-screening tests all pass). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| Check                | Result                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                                                                     |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                      |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                                                               |
+| `eslint`             | ✅ clean                                                                                                                                                                             |
+| backend tests        | ✅ **2517 passed, 0 failed** (was 2514 — 3 tests added; the 19 medical-screening tests all pass). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+
 </content>

@@ -1,6 +1,6 @@
 # Cal.com Integration
 
-*(Added 2026-07-13)*
+_(Added 2026-07-13)_
 
 The Cal.com integration lets a department pull scheduled bookings and offer
 self-scheduling links — an open-source [Calendly](https://cal.com) alternative.
@@ -23,8 +23,8 @@ prospective member's stage.
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
+| URL             | Page                                             | Permission            |
+| --------------- | ------------------------------------------------ | --------------------- |
 | `/integrations` | Integrations Hub (Cal.com card + Bookings panel) | `integrations.manage` |
 
 Cal.com is configured from the **Integrations** page. The connect dialog collects
@@ -63,7 +63,7 @@ other triggers are acknowledged and ignored.
 
 ## How Auto-Advance Works
 
-1. A coordinator sets a **Meeting** stage's scheduling method to *Cal.com* and
+1. A coordinator sets a **Meeting** stage's scheduling method to _Cal.com_ and
    pastes the booking link.
 2. The applicant books a time via that link using the email they applied with.
 3. Cal.com posts a `BOOKING_CREATED` event to the callback URL.
@@ -90,34 +90,34 @@ Configuration is stored in the `integrations` table with
 Secret values (`api_key`, `webhook_secret`) are stored in the encrypted
 `encrypted_config` column, never in plaintext `config`.
 
-| Field | Description |
-|-------|-------------|
-| `api_key` | Cal.com API key (**Settings → Developer → API keys**). Sent as the `apiKey` query parameter. Encrypted. |
-| `api_base_url` | Cloud default `https://api.cal.com/v1`; self-hosted uses `https://<host>/api/v1`. SSRF-validated. |
-| `webhook_secret` | Optional signing secret enabling inbound webhook auto-advance. Encrypted. |
+| Field            | Description                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `api_key`        | Cal.com API key (**Settings → Developer → API keys**). Sent as the `apiKey` query parameter. Encrypted. |
+| `api_base_url`   | Cloud default `https://api.cal.com/v1`; self-hosted uses `https://<host>/api/v1`. SSRF-validated.       |
+| `webhook_secret` | Optional signing secret enabling inbound webhook auto-advance. Encrypted.                               |
 
 ---
 
 ## Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Webhook received with no secret configured | Rejected with 401 — the endpoint never trusts unverified payloads |
-| Signature mismatch | Rejected with 401; logged |
-| `BOOKING_CREATED` for an email with no matching active prospect | Acknowledged; no stage advanced (normal, non-error) |
-| Matching prospect's current stage isn't a Cal.com meeting stage | Acknowledged; not advanced |
-| Non-creation trigger (cancelled, rescheduled) | Acknowledged and ignored |
-| Bookings fetch fails upstream | `GET /integrations/calcom/bookings` returns 502 with a sanitized error |
-| Self-hosted base URL points at a private/internal address | Rejected at save time by SSRF URL validation |
+| Scenario                                                        | Behavior                                                               |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Webhook received with no secret configured                      | Rejected with 401 — the endpoint never trusts unverified payloads      |
+| Signature mismatch                                              | Rejected with 401; logged                                              |
+| `BOOKING_CREATED` for an email with no matching active prospect | Acknowledged; no stage advanced (normal, non-error)                    |
+| Matching prospect's current stage isn't a Cal.com meeting stage | Acknowledged; not advanced                                             |
+| Non-creation trigger (cancelled, rescheduled)                   | Acknowledged and ignored                                               |
+| Bookings fetch fails upstream                                   | `GET /integrations/calcom/bookings` returns 502 with a sanitized error |
+| Self-hosted base URL points at a private/internal address       | Rejected at save time by SSRF URL validation                           |
 
 ---
 
 ## Permissions
 
-| Permission | Required For |
-|------------|-------------|
+| Permission            | Required For                                                  |
+| --------------------- | ------------------------------------------------------------- |
 | `integrations.manage` | Connect/disconnect, configure, test connection, view bookings |
-| `settings.manage` | Access the Integrations page |
+| `settings.manage`     | Access the Integrations page                                  |
 
 ---
 

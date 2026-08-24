@@ -11,6 +11,7 @@ hash chain H4, hard-delete restriction M9, rate-limiter client-IP H5).
 (B) security-monitoring, (C) audit-logs + error-logs + core/audit.
 
 ## Verified good ✅
+
 - **H1 / H4 / M9 all confirmed intact.** Audit reads are org-scoped (via the
   `org_user_ids` subquery, by-id path included); the hash chain is keyed
   HMAC-SHA256 from `AUDIT_LOG_SIGNING_KEY`/`SECRET_KEY` (never hardcoded), with a
@@ -33,6 +34,7 @@ hash chain H4, hard-delete restriction M9, rate-limiter client-IP H5).
 ## Findings
 
 ### SEC-1 — MEDIUM (DoS) — In-memory tracking caps were defined but never enforced — ✅ FIXED
+
 `SecurityMonitoringService` declared `_MAX_TRACKING_KEYS = 5000` but never used
 it. The only eviction (`_evict_stale_tracking_keys`) is throttled to once/60s and
 drops only keys older than 2h, and `detect_brute_force` didn't call it at all — so
@@ -45,6 +47,7 @@ every eviction call and is also invoked directly from `detect_brute_force` (the
 hot login path). Existing tests pass.
 
 ### SEC-2 — MEDIUM — Audit chain verification didn't detect head-truncation — ✅ FIXED
+
 `verify_integrity` checked each row's hash and the `previous_hash` link between
 adjacent rows, but never anchored the first row to the genesis value, and never
 cross-checked a checkpoint. Deleting rows from the **head** of the chain leaves a
@@ -62,6 +65,7 @@ purge the old head, not the tail). 2 regression tests added. See
 `docs/app-review/security-audit-ip.md`.
 
 ### SEC-3 — MEDIUM (DoS) — `POST /error_logs/log` allowed unbounded step strings — ✅ FIXED
+
 `troubleshooting_steps: list[str]` capped only the item **count** (20), not the
 length of each string, and the column is effectively LONGTEXT — so any member
 could POST 20 multi-MB strings per row, ballooning rows / flooding the table.
@@ -70,17 +74,20 @@ could POST 20 multi-MB strings per row, ballooning rows / flooding the table.
 server-stamped from `current_user` (verified good).
 
 ### SEC-4 — LOW — Audit search built a LIKE without escaping metacharacters — ✅ FIXED
+
 `list_audit_logs` built `f"%{search}%"` and `.ilike()`'d it with no `escape=`, so
 caller-supplied `%`/`_` acted as wildcards (LIKE-pattern injection within the
 caller's own org scope).
 **Fix:** escape `\ % _` in the term and pass `escape="\\"`.
 
 ### SEC-5 — LOW — `error_type` schema cap exceeded the DB column width — ✅ FIXED
+
 `ErrorLogCreate.error_type` allowed 100 chars but the column is `String(50)`, so a
 51–100 char value passed validation then 500'd on insert.
 **Fix:** aligned the schema cap to 50 (clean 422 instead of a DB error).
 
 ### SEC-6 — HIGH — ✅ FIXED — `security_alerts` is a global table → cross-tenant read, IDOR-suppress, and metric leaks
+
 `SecurityAlertRecord` had **no `organization_id` column**, and the service never
 scoped it: `get_recent_alerts` returned every tenant's alerts (source IP, user id,
 description, and a details blob with prior/current IPs + session id) via
@@ -109,16 +116,18 @@ it cannot be safely scoped). Endpoint callers pass
 `str(current_user.organization_id)`.
 
 ### SEC-7 — MEDIUM — ✅ FIXED — Global audit-chain admin ops gated by any org's `audit.export`
+
 `POST /audit-log/rehash` (recomputed hashes for **all** orgs' rows),
 `/checkpoint`, and `/integrity` operate over the entire global chain but were
 gated only by `audit.export` — any org's admin could trigger a platform-wide
 rehash / attest the whole chain. Worse, `rehash_chain` recomputed `current_hash`
-from each row's *current* `event_data` for **every** row, so a privileged
+from each row's _current_ `event_data` for **every** row, so a privileged
 operator with DB write access could edit a keyed (v2) row then run rehash to
 launder the tamper into a valid keyed chain (the server holds the HMAC key;
 SEC-2's genesis anchor only covers head deletions, not tail edits).
 
 **Fix (two layers):**
+
 - **Anti-laundering — `rehash_chain` no longer rewrites keyed rows.** The tool
   now only repairs legacy (v1, unkeyed) rows — its actual purpose, fixing the
   historical hash-computation bug. For a keyed (v2) row it recomputes the
@@ -140,7 +149,8 @@ tests cover the repair, the fail-closed keyed-tamper refusal, and the clean-chai
 no-op. **Status:** fixed.
 
 ### SEC-8 — MEDIUM — ✅ FIXED — IP geo-blocking fails OPEN and `CountryBlockRule` is global
-`geoip.is_ip_blocked` returned *allow* when a country couldn't be resolved (no
+
+`geoip.is_ip_blocked` returned _allow_ when a country couldn't be resolved (no
 MaxMind DB, `AddressNotFoundError`, lookup error) — a missing/corrupt DB silently
 disabled geo-blocking app-wide (the code comment already flagged "change to
 fail-closed"). Separately, `CountryBlockRule` has no `organization_id` (one global
@@ -149,17 +159,18 @@ affected **every** tenant.
 
 **Fix (two configurable postures, both secure-by-default where it doesn't lock
 people out):**
+
 - **Fail-closed geo-blocking is now selectable.** `GEOIP_FAIL_CLOSED` (default
   `False`, preserving fail-open so a lookup gap doesn't lock users out) makes
   `is_ip_blocked` return `(True, "country_unknown_failclosed")` for any IP whose
   country can't be resolved — including the missing/corrupt-DB case, closing the
   "silently disabled app-wide" hole. Private/reserved and allowlisted IPs are
-  checked *before* the country lookup, so a fail-closed deployment with a broken
+  checked _before_ the country lookup, so a fail-closed deployment with a broken
   DB still lets internal/LAN and allowlisted operators in to recover.
 - **Runtime country-rule management is a platform-operator action.** Geo-blocking
   is an edge control that runs before any tenant/auth context exists, so per-org
   `CountryBlockRule` rows don't fit the enforcement model (and there's no
-  platform-super-admin role). Instead, the two *mutating* endpoints
+  platform-super-admin role). Instead, the two _mutating_ endpoints
   (`POST`/`DELETE /ip-security/blocked-countries`) are now gated by
   `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (default `False`): an org admin can no
   longer alter the shared, cross-tenant blocklist via the API. The platform
@@ -171,6 +182,7 @@ New unit tests cover fail-closed on unknown country plus the private-IP and
 allowlist recovery paths under fail-closed. **Status:** fixed.
 
 ### SEC-9 — LOW — ✅ mostly FIXED — Residual exposure / robustness
+
 - **✅ session_id redacted in the audit export.** The export now emits a
   non-reversible truncated-SHA-256 fingerprint of `session_id` instead of the
   raw value (`_fingerprint_session_id`), so an `audit.export` holder can still
@@ -201,9 +213,10 @@ allowlist recovery paths under fail-closed. **Status:** fixed.
   control); the `TRUSTED_PROXY_IPS`-empty startup warning already exists; admin
   country-block self-lockout is now operator-only after SEC-8's management gate.
   (AL #7, IP #3/#4)
-**Status:** actionable items fixed; the `audit_logs` org-column is done.
+  **Status:** actionable items fixed; the `audit_logs` org-column is done.
 
 ## Notes
+
 - Large-file caveat: `security_monitoring.py` (1,009 L), `ip_security_service.py`
   (733 L), and the IP-enforcement path of `security_middleware.py` (1,341 L) were
   reviewed for security invariants (org-scoping, enforcement fail-closed, DoS,

@@ -11,6 +11,7 @@ This document describes the multi-layer safeguards implemented to prevent TypeSc
 ## Problem Statement
 
 **Issue**: TypeScript build errors can slip through if not caught early:
+
 ```
 ❌ Unused imports → Build fails in Docker
 ❌ Type mismatches → Runtime errors
@@ -18,6 +19,7 @@ This document describes the multi-layer safeguards implemented to prevent TypeSc
 ```
 
 **Impact**:
+
 - Wasted CI/CD time
 - Failed deployments
 - Developer frustration
@@ -53,12 +55,14 @@ Catches issues while you type:
 ```
 
 **Benefits**:
+
 - ✅ See errors immediately (red squiggles)
 - ✅ Auto-remove unused imports on save
 - ✅ Fix ESLint issues automatically
 - ✅ No manual checking needed
 
 **Setup**:
+
 ```bash
 # VSCode will prompt to install recommended extensions
 # Or manually install:
@@ -79,10 +83,13 @@ Enforces code quality rules:
 {
   "rules": {
     // Error on unused variables/imports
-    "@typescript-eslint/no-unused-vars": ["error", {
-      "vars": "all",
-      "args": "after-used"
-    }],
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "after-used"
+      }
+    ],
 
     // Catch unhandled Promises
     "@typescript-eslint/no-floating-promises": "error",
@@ -94,6 +101,7 @@ Enforces code quality rules:
 ```
 
 **What It Catches**:
+
 - ✅ Unused imports (like `getOnboardingErrorMessage` we removed)
 - ✅ Unused variables
 - ✅ Type mismatches
@@ -101,6 +109,7 @@ Enforces code quality rules:
 - ✅ Potential null/undefined errors
 
 **Usage**:
+
 ```bash
 cd frontend
 
@@ -112,6 +121,7 @@ npm run lint:fix
 ```
 
 **Auto-runs**:
+
 - On file save (if VSCode settings configured)
 - Before commit (via pre-commit hook)
 - In CI/CD pipeline
@@ -135,12 +145,14 @@ npm run lint:fix
 **Usage**:
 
 **One-time check**:
+
 ```bash
 cd frontend
 npm run typecheck
 ```
 
 **Watch mode** (continuous checking):
+
 ```bash
 cd frontend
 npm run typecheck:watch
@@ -149,12 +161,14 @@ npm run typecheck:watch
 ```
 
 **Full validation** (type + lint):
+
 ```bash
 cd frontend
 npm run validate
 ```
 
 **What It Catches**:
+
 - ✅ All TypeScript type errors
 - ✅ Type mismatches (like `string | undefined` → `string`)
 - ✅ Missing type annotations
@@ -194,6 +208,7 @@ echo "✅ All pre-commit checks passed!"
 ```
 
 **What It Does**:
+
 1. Runs TypeScript type checking (`npm run typecheck`)
 2. Runs ESLint (`npm run lint`)
 3. **Blocks commit** if any errors found
@@ -202,6 +217,7 @@ echo "✅ All pre-commit checks passed!"
 **Example Output**:
 
 **Success**:
+
 ```
 🔍 Running pre-commit checks...
 📘 Checking TypeScript types...
@@ -213,6 +229,7 @@ echo "✅ All pre-commit checks passed!"
 ```
 
 **Failure**:
+
 ```
 🔍 Running pre-commit checks...
 📘 Checking TypeScript types...
@@ -223,12 +240,14 @@ Fix the errors above before committing.
 ```
 
 **Benefits**:
+
 - ✅ Impossible to commit broken code
 - ✅ Catches errors before CI/CD
 - ✅ Saves time (no waiting for build failures)
 - ✅ Maintains code quality
 
 **Setup** (already configured):
+
 ```bash
 # Hooks are in .husky/pre-commit
 # Automatically runs on git commit
@@ -246,6 +265,7 @@ RUN npm run build  # Runs: tsc && vite build
 ```
 
 **What It Catches**:
+
 - ✅ Any errors missed by previous layers (rare)
 - ✅ Module resolution in production
 - ✅ Build-time optimizations
@@ -259,11 +279,13 @@ RUN npm run build  # Runs: tsc && vite build
 ### Error 1: Unused Imports
 
 **Before** (catches in Layer 1-4):
+
 ```typescript
-import { getOnboardingErrorMessage } from '../utils/errorHandler'; // ❌ Never used
+import { getOnboardingErrorMessage } from "../utils/errorHandler"; // ❌ Never used
 ```
 
 **Prevention**:
+
 - **Layer 1**: VSCode highlights in gray, auto-removes on save
 - **Layer 2**: ESLint error: "TS6133: declared but never read"
 - **Layer 4**: Pre-commit hook blocks commit
@@ -273,20 +295,23 @@ import { getOnboardingErrorMessage } from '../utils/errorHandler'; // ❌ Never 
 ### Error 2: Type Mismatches
 
 **Before**:
+
 ```typescript
 const portNumber = parseInt(config.smtpPort, 10);
 // ❌ config.smtpPort might be undefined
 ```
 
 **Prevention**:
+
 - **Layer 1**: VSCode red squiggle: "Type 'string | undefined' not assignable"
 - **Layer 2**: ESLint error
 - **Layer 3**: TypeScript compiler error
 - **Layer 4**: Pre-commit hook blocks
 
 **After** (fixed):
+
 ```typescript
-const portNumber = parseInt(config.smtpPort || '0', 10);
+const portNumber = parseInt(config.smtpPort || "0", 10);
 // ✅ Provides fallback value
 ```
 
@@ -295,6 +320,7 @@ const portNumber = parseInt(config.smtpPort || '0', 10);
 ### Error 3: Unhandled Promises
 
 **Before**:
+
 ```typescript
 async function fetchData() {
   apiClient.getData(); // ❌ Promise not awaited or handled
@@ -302,10 +328,12 @@ async function fetchData() {
 ```
 
 **Prevention**:
+
 - **Layer 2**: ESLint error: "@typescript-eslint/no-floating-promises"
 - **Layer 4**: Pre-commit hook blocks
 
 **After**:
+
 ```typescript
 async function fetchData() {
   await apiClient.getData(); // ✅ Awaited
@@ -319,6 +347,7 @@ async function fetchData() {
 ### Error 4: Missing API Service Methods
 
 **Before** (caught in Layer 3-5):
+
 ```typescript
 // Page component calls a method that doesn't exist on the service
 const data = await schedulingService.getShiftCalls(shiftId);
@@ -328,6 +357,7 @@ const data = await schedulingService.getShiftCalls(shiftId);
 **Cause**: New page components were created referencing API methods that hadn't been added to `services/api.ts`. This caused 70+ build errors in Docker (2026-02-18).
 
 **Prevention**:
+
 - **Layer 3**: `npm run typecheck` catches missing method errors immediately
 - **Layer 4**: Pre-commit hook blocks if methods are missing
 - **Layer 5**: Docker build fails (last resort)
@@ -339,12 +369,14 @@ const data = await schedulingService.getShiftCalls(shiftId);
 ### Error 5: Missing Type Exports
 
 **Before**:
+
 ```typescript
-import { ArchivedMember } from '../types/user';
+import { ArchivedMember } from "../types/user";
 // ❌ Module '"../types/user"' has no exported member 'ArchivedMember'
 ```
 
 **Prevention**:
+
 - **Layer 1**: VSCode red squiggle on import
 - **Layer 3**: TypeScript compiler error
 - **Layer 4**: Pre-commit hook blocks
@@ -399,6 +431,7 @@ npm run validate
 ### Fixing Errors
 
 **Unused Imports**:
+
 ```bash
 # Auto-fix with ESLint
 npm run lint:fix
@@ -408,6 +441,7 @@ npm run lint:fix
 ```
 
 **Type Errors**:
+
 ```bash
 # See all type errors
 npm run typecheck
@@ -417,6 +451,7 @@ npm run typecheck
 ```
 
 **All Errors**:
+
 ```bash
 # Check everything
 npm run validate
@@ -434,11 +469,13 @@ npm run lint:fix
 ### Required Extensions
 
 Install from `.vscode/extensions.json`:
+
 - **ESLint** (dbaeumer.vscode-eslint)
 - **Prettier** (esbenp.prettier-vscode)
 - **Tailwind CSS IntelliSense** (bradlc.vscode-tailwindcss)
 
 VSCode will prompt on first open:
+
 ```
 This workspace has extension recommendations.
 [Install All] [Show Recommendations] [Ignore]
@@ -452,24 +489,24 @@ Click **Install All**.
 
 From `.vscode/settings.json`:
 
-| Setting | Benefit |
-|---------|---------|
-| `editor.codeActionsOnSave` → `organizeImports` | Auto-removes unused imports |
-| `editor.codeActionsOnSave` → `fixAll.eslint` | Auto-fixes ESLint issues |
-| `editor.formatOnSave` | Auto-formats with Prettier |
-| `typescript.validate.enable` | Shows type errors inline |
-| Problems panel | Shows all errors in one place |
+| Setting                                        | Benefit                       |
+| ---------------------------------------------- | ----------------------------- |
+| `editor.codeActionsOnSave` → `organizeImports` | Auto-removes unused imports   |
+| `editor.codeActionsOnSave` → `fixAll.eslint`   | Auto-fixes ESLint issues      |
+| `editor.formatOnSave`                          | Auto-formats with Prettier    |
+| `typescript.validate.enable`                   | Shows type errors inline      |
+| Problems panel                                 | Shows all errors in one place |
 
 ---
 
 ### Keyboard Shortcuts
 
-| Action | macOS | Windows/Linux |
-|--------|-------|---------------|
-| Organize Imports | `Cmd+Shift+O` | `Ctrl+Shift+O` |
-| Fix All ESLint | `Cmd+.` → "Fix all" | `Ctrl+.` → "Fix all" |
-| Show Problems | `Cmd+Shift+M` | `Ctrl+Shift+M` |
-| Go to Type Definition | `Cmd+Click` | `Ctrl+Click` |
+| Action                | macOS               | Windows/Linux        |
+| --------------------- | ------------------- | -------------------- |
+| Organize Imports      | `Cmd+Shift+O`       | `Ctrl+Shift+O`       |
+| Fix All ESLint        | `Cmd+.` → "Fix all" | `Ctrl+.` → "Fix all" |
+| Show Problems         | `Cmd+Shift+M`       | `Ctrl+Shift+M`       |
+| Go to Type Definition | `Cmd+Click`         | `Ctrl+Click`         |
 
 ---
 
@@ -489,7 +526,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Install dependencies
         run: cd frontend && npm ci
       - name: Run TypeScript check
@@ -533,6 +570,7 @@ chmod +x .husky/pre-commit
 ### TypeScript errors not showing
 
 1. **Check TypeScript version**:
+
    ```bash
    cd frontend
    npm list typescript
@@ -614,15 +652,15 @@ All TypeScript build errors across the entire frontend codebase were fixed in a 
 
 All 17 `as any` type assertions were removed across the frontend (commit `ef938f7`). Each was replaced with a proper type:
 
-| File | Before | After |
-|------|--------|-------|
-| `apparatus/services/api.ts` | `as any` on response data | Proper generic response types |
-| `pages/AddMember.tsx` | `as any` on form data | Typed form state interface |
-| `pages/EventDetailPage.tsx` | `as any` on event fields | `Event` type with optional fields |
-| `pages/EventQRCodePage.test.tsx` | `as any` on mock data | `Partial<Event>` test helpers |
-| `pages/MinutesDetailPage.tsx` | `as any` on section data | `MinutesSection` interface |
-| `test/setup.ts` | `as any` on mock implementations | Properly typed mock functions |
-| `utils/errorHandling.ts` | `as any` on caught errors | `unknown` type with type guards |
+| File                             | Before                           | After                             |
+| -------------------------------- | -------------------------------- | --------------------------------- |
+| `apparatus/services/api.ts`      | `as any` on response data        | Proper generic response types     |
+| `pages/AddMember.tsx`            | `as any` on form data            | Typed form state interface        |
+| `pages/EventDetailPage.tsx`      | `as any` on event fields         | `Event` type with optional fields |
+| `pages/EventQRCodePage.test.tsx` | `as any` on mock data            | `Partial<Event>` test helpers     |
+| `pages/MinutesDetailPage.tsx`    | `as any` on section data         | `MinutesSection` interface        |
+| `test/setup.ts`                  | `as any` on mock implementations | Properly typed mock functions     |
+| `utils/errorHandling.ts`         | `as any` on caught errors        | `unknown` type with type guards   |
 
 **Why This Matters**: `as any` bypasses TypeScript's type system entirely, hiding potential runtime errors. Removing these assertions ensures the compiler catches type mismatches at build time rather than production.
 

@@ -92,7 +92,7 @@ entries simply missed it. **Six confirmed live** (each verified on the cached gl
 (private member-to-member messages, **HIGH**), `/integrations` (configs with API
 keys/webhook secrets, **MED-HIGH**), `/documents`, `/errors` (user context +
 tracebacks), `/notifications/my`. **Fix:** drop the trailing slash on all six (now
-`startsWith` covers list *and* sub-paths; no cacheable endpoint is lost since every
+`startsWith` covers list _and_ sub-paths; no cacheable endpoint is lost since every
 `/x/…` sub-path was already excluded). Verified no collision — e.g. `/messages`
 does not catch `/message-history` (its own exclusion), `/events` list stays
 cacheable. **2 hardening additions** in the same edit: `/meetings` (attendee PII +
@@ -138,7 +138,7 @@ This also generalizes the one-off repair made for the membership-pipeline 409
   `http/https/mailto`; `LinkifiedText.tsx` emits React text nodes + `<a href>` where
   the href regex only matches `https?://…` (no `javascript:`), with
   `rel="noopener noreferrer nofollow"`. The only two `dangerouslySetInnerHTML`
-  grep hits are the comments in those files stating they *don't* use it.
+  grep hits are the comments in those files stating they _don't_ use it.
 - **The HIPAA cache-exclusion list is thorough and well-maintained.**
   `apiCache.ts` `UNCACHEABLE_PREFIXES` (57 entries) + `UNCACHEABLE_SUBSTRINGS` cover
   auth, users, security, medical-screening, the full training-PHI surface,
@@ -174,8 +174,8 @@ XSS-safety notes on the render helpers). No doc inaccuracies found.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors |
-| `eslint` (changed files) | ✅ 0 errors |
-| frontend tests | ✅ `errorHandling.test.ts` **34 passed** (+2 new). |
+| Check                    | Result                                             |
+| ------------------------ | -------------------------------------------------- |
+| `tsc --noEmit`           | ✅ 0 errors                                        |
+| `eslint` (changed files) | ✅ 0 errors                                        |
+| frontend tests           | ✅ `errorHandling.test.ts` **34 passed** (+2 new). |

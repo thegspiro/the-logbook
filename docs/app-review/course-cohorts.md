@@ -43,7 +43,7 @@ cosmetic-integrity, no cross-tenant escalation).
 **Frontend:** `components/training/CohortWizard.tsx`,
 `CourseSyllabusBuilder.tsx`, `pages/training/CohortsPage.tsx`,
 `CohortDetailPage.tsx`
-**Docs:** `docs/training/02-training.md` § *Multi-Class Courses & Cohorts*,
+**Docs:** `docs/training/02-training.md` § _Multi-Class Courses & Cohorts_,
 `docs/TRAINING_PROGRAMS.md`
 
 ---
@@ -89,7 +89,7 @@ a defect.
   create, ad-hoc add, and the running count), so a syllabus cannot be turned
   into an unbounded event-creation DoS.
 - **DST is handled correctly**, which is unusual. `resolve_class_datetimes`
-  computes the target *date* first (applying roll policy and blackout dates),
+  computes the target _date_ first (applying roll policy and blackout dates),
   then attaches the wall-clock time in the org's IANA zone and converts to UTC
   (`scheduling_dates.py:205`). A 19:00 class therefore stays 19:00 local across
   a spring-forward boundary. The naive alternative — adding `timedelta` to a UTC
@@ -99,7 +99,7 @@ a defect.
 - **Frontend avoids Pitfall #1.** The wizard's outgoing payload uses
   `|| undefined` for every optional string (`code`, `default_start_time`,
   `program_id`) and explicit length checks for arrays. The `??` occurrences in
-  these files are all *state initialization from a nullable source to a string*,
+  these files are all _state initialization from a nullable source to a string_,
   which is the correct use. No banned date API (`toLocaleDateString` etc.), and
   `useTimezone()` is used in both the wizard and the detail page.
 - **Well tested for new code:** 96 tests across `test_course_cohort.py`,
@@ -123,7 +123,7 @@ a defect.
 **Where:** `course_syllabus_service.list_classes`,
 `course_cohort_service._syllabus`.
 
-**Impact:** *defence in depth, not a live leak.* `add_class` validates
+**Impact:** _defence in depth, not a live leak._ `add_class` validates
 `class_course_id` in-org, so no foreign id can be stored through the API today.
 But the joined row is projected into the response as `class_course_name` /
 `class_course_code`, which is precisely the MM-1 shape — an eager-loaded FK with
@@ -144,6 +144,7 @@ sets it**. `grep -rn "location_id" src/pages/training/ src/components/training/`
 returns nothing.
 
 What exists behind it:
+
 - `CourseCohortCreate.location_id`, validated in-org via `assert_in_org`
   (`course_cohort_service.py:285`).
 - `CourseClass.location_id` per syllabus row.
@@ -152,8 +153,8 @@ What exists behind it:
   `"Location already booked: …"` as a per-class warning
   (`course_cohort_service.py:198–213`), and `create_training_session` runs the
   same check at generation.
-- The service docstring advertises the behaviour: *"any warnings (a member who
-  could not be enrolled, **a room clash the officer chose to accept**)"*.
+- The service docstring advertises the behaviour: _"any warnings (a member who
+  could not be enrolled, **a room clash the officer chose to accept**)"_.
 - The type definitions declare `location_id` in five places.
 
 **Impact:** because nothing ever sets a location, **the room-conflict warning
@@ -161,8 +162,8 @@ can never fire in practice**. A department scheduling a fifteen-class recruit
 school into rooms that are already booked gets no warning, and the preview
 screen's headline promise — see the clashes before fifteen events land — is only
 half delivered. Nothing is broken; a built and tested capability is simply not
-wired to a control. Same shape as the *"Finance: dues administration has no
-UI"* entry already in KNOWN_LIMITATIONS.
+wired to a control. Same shape as the _"Finance: dues administration has no
+UI"_ entry already in KNOWN_LIMITATIONS.
 
 **Why not fixed:** this is a frontend build-out (a location picker in the wizard
 and in the syllabus builder, plus surfacing the returned warnings), not a
@@ -198,7 +199,7 @@ fields rather than dead code.
 None requiring correction. The feature was documented before this review, in
 the user-facing guide rather than only in code — including the roll-policy
 warning behaviour and the cohort-vs-program distinction. Worth noting the
-contrast: the *documented* room-clash warning (CC-2) is the one behaviour a
+contrast: the _documented_ room-clash warning (CC-2) is the one behaviour a
 reader could not actually reach.
 
 ## Future development
@@ -220,11 +221,12 @@ reader could not actually reach.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 502 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2508 passed, 0 failed**; the 57 cohort/syllabus tests pass against the changed joins. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| Check                | Result                                                                                                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                                                              |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                               |
+| `black --check`      | ✅ 502 files unchanged                                                                                                                                                        |
+| `eslint`             | ✅ clean                                                                                                                                                                      |
+| backend tests        | ✅ **2508 passed, 0 failed**; the 57 cohort/syllabus tests pass against the changed joins. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+
 </content>

@@ -12,6 +12,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 ```
 
 This automated script will:
+
 - ✅ Clean up any existing containers (fixes container conflicts)
 - ✅ Clone the repository to `/mnt/user/appdata/the-logbook`
 - ✅ Generate secure passwords automatically
@@ -49,6 +50,7 @@ chmod +x unraid-setup.sh
 ```
 
 Choose installation option:
+
 1. **Fresh Installation** - First time install (recommended)
 2. **Update Existing** - Update current installation
 3. **Clean Install** - Remove all data and reinstall
@@ -140,11 +142,13 @@ docker compose up -d
 The setup script automatically configures:
 
 ### 🔐 Security
+
 - Generates unique `SECRET_KEY` and `ENCRYPTION_KEY`
 - Creates strong database passwords
 - Sets proper Unraid permissions (nobody:users)
 
 ### 📦 Containers
+
 - **Frontend** - React/Vite app (Port 7880)
 - **Backend** - FastAPI (Port 7881)
 - **Database** - MySQL 8.0
@@ -152,6 +156,7 @@ The setup script automatically configures:
 - **Backup** - nightly database + uploads archives with restore drills
 
 ### 📁 Directory Structure
+
 ```
 /mnt/user/appdata/the-logbook/
 ├── mysql/           # Database files
@@ -186,6 +191,7 @@ TZ=America/New_York
 ```
 
 After changing `.env`, restart:
+
 ```bash
 docker compose restart
 ```
@@ -220,18 +226,21 @@ See the **[Troubleshooting Guide](Troubleshooting)** for common issues.
 ### Quick Fixes
 
 **Frontend not loading:**
+
 ```bash
 docker compose logs frontend
 docker compose restart frontend
 ```
 
 **Backend API errors:**
+
 ```bash
 curl http://localhost:7881/health
 docker compose logs backend
 ```
 
 **Database issues:**
+
 ```bash
 docker ps | grep logbook-db
 docker compose logs db

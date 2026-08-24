@@ -8,9 +8,11 @@
 permission assignment, org settings/secrets, and member lifecycle — so privilege
 escalation and secret handling are the headline risks.
 **Audited:** iteration 21 — three parallel readers: (A) users + ranks, (B) roles
-+ permissions + member-status, (C) organizations.
+
+- permissions + member-status, (C) organizations.
 
 ## Verified good ✅
+
 - **The H2 role-grant privilege ceiling is real and correct on the paths it
   covers.** `_enforce_permission_grant_ceiling` guards role create/update/clone;
   `_enforce_role_grant_ceiling` guards the assign/add-role paths. Wildcard
@@ -37,6 +39,7 @@ escalation and secret handling are the headline risks.
 ## Findings
 
 ### ORU-1 — HIGH (privilege escalation) — `create_member` bypassed the role-grant ceiling — ✅ FIXED
+
 `POST /users` (`create_member`) assigned client-supplied `role_ids` with **no**
 `_enforce_role_grant_ceiling` call — unlike the assign (`PUT /users/{id}/roles`)
 and add (`POST /users/{id}/roles/{role_id}`) paths that do enforce it. Roles were
@@ -53,6 +56,7 @@ get_client_ip(request))` right after the role-validity check, before insertion
 unaffected.
 
 ### ORU-2 — HIGH (privilege escalation → secret rewrite) — `PATCH /settings` accepted the narrow contact-visibility permission — ✅ FIXED
+
 The full-settings update was gated `require_permission("settings.manage",
 "settings.manage_contact_visibility", "organization.update_settings")` (any-of),
 but its body is the entire `OrganizationSettingsUpdate` schema (auth/SSO, SMTP,
@@ -67,6 +71,7 @@ that writes only `contact_info_visibility`, so the secretary keeps their
 legitimate capability and loses only the unintended full-settings write.
 
 ### ORU-3 — MEDIUM — Auth secret destroyed on a full-settings round-trip — ✅ FIXED
+
 The `"••••••••"` redacted-placeholder preservation loop in
 `update_organization_settings` iterated only `("email_service", "file_storage")`,
 not `"auth"`. Since GET `/settings` redacts SSO client secrets to `"••••••••"`, a
@@ -77,6 +82,7 @@ breaking login.
 **Fix:** added `"auth"` to the preservation loop's section list.
 
 ### ORU-4 — MEDIUM (cross-tenant) — Module migration read another org's onboarding row — ✅ FIXED
+
 `_resolve_module_settings`'s safety-net path ran
 `select(OnboardingStatus).limit(1)` with **no org filter and no ordering**. In the
 migration path (org settings' modules empty/all-False and not `_user_configured`),
@@ -88,12 +94,14 @@ non-determinism.
 defaults are returned.
 
 ### ORU-5 — MEDIUM — `PATCH /settings/auth` echoed secrets un-redacted — ✅ FIXED
+
 Unlike its email/file-storage siblings (which `return ….redacted()`), the auth
 PATCH returned `auth_settings` directly, serializing `*_client_secret` fields in
 plaintext in the response body/logs.
 **Fix:** `return auth_settings.redacted()`.
 
 ### ORU-6 — LOW — Self-service email change: type-mismatch + no re-verification — ✅ FIXED
+
 On `PATCH /users/{id}/contact-info`, the email-uniqueness self-exclusion used
 `.where(User.id != user_id)` — a `UUID`-vs-`String` comparison that never
 excludes the caller's own row, so re-saving your own email raised a spurious
@@ -103,8 +111,9 @@ inheriting trust it hadn't earned.
 the email actually changes.
 
 ### ORU-7 — MED/LOW — Role-edit ceiling, last-admin lockout, member-role guard — ⚠️ MOSTLY FIXED (app-review B21)
+
 - **✅ Role-edit ceiling (roles #2) — FIXED (B21).** The grant ceiling only
-  validated the *new* permission list (early-returns on `[]`), so a
+  validated the _new_ permission list (early-returns on `[]`), so a
   privileged-but-not-`*` caller could wipe/downgrade the tenant's only `*` role.
   A new `_enforce_role_edit_ceiling` now requires the caller's ceiling to cover the
   role's **current** permissions when changing them — you cannot edit a role more
@@ -117,10 +126,11 @@ the email actually changes.
 - **🚩 Member-role mass-escalation (roles #4) — still flagged.** The org-wide
   `member` role can be escalated up to the caller's ceiling (intended-but-sharp);
   a dedicated guard/confirmation is a product decision. In `KNOWN_LIMITATIONS.md`.
-**Status:** roles #2 fixed, roles #3 already-fixed, roles #4 flagged. See
-`docs/app-review/orgs-roles-users.md`.
+  **Status:** roles #2 fixed, roles #3 already-fixed, roles #4 flagged. See
+  `docs/app-review/orgs-roles-users.md`.
 
 ### ORU-8 — MED/LOW — ✅ FIXED (2026-08-04) — Broader PII/config exposure than the privacy gate intends
+
 - `GET /users/{id}/with-roles` and `GET /users/with-roles` serialized full
   contact PII (email, phone, home address, DOB, emergency contacts) to any
   `users.view` holder, bypassing the `contact_info_visibility` gate the list
@@ -136,7 +146,7 @@ decision this was carried for — the policy was already expressed, in
 sites that did not consult it.
 
 - **ORU-8a.** The roster endpoint was redacted first; `GET /users/{id}/with-roles`
-  was left returning the raw ORM record, which made the setting *advisory* —
+  was left returning the raw ORM record, which made the setting _advisory_ —
   anything the roster withheld was one request to the detail URL away, plus
   `personal_email` and the full home address, which the roster never exposes at
   any visibility setting. Both endpoints now share `_clear_hidden_contact_fields`
@@ -150,7 +160,7 @@ sites that did not consult it.
   email and phone of whoever administers the deployment, plus `backup_access` —
   unstructured text about break-glass access. Now emptied (not nulled, so the
   settings UI still renders the section) for callers without `settings.manage`.
-- **Date of birth and emergency contacts** were the part that *was* a product
+- **Date of birth and emergency contacts** were the part that _was_ a product
   call, since `contact_info_visibility` has no flag for either. Decided
   leadership-only, unconditionally: cleared by `_clear_leadership_only_fields`
   for everyone except `members.manage` holders and the member themselves, with
@@ -167,6 +177,7 @@ sites that did not consult it.
 **Status:** fixed. Covered by `tests/test_pii_exposure.py`.
 
 ### ORU-9 — LOW — mostly FIXED — Correctness/robustness polish
+
 - **✅ Membership-ID generation hardened.** `generate_next_membership_id` now
   locks the org row `FOR UPDATE` before reading/incrementing the JSON counter,
   so two concurrent member creations can't read the same `next_number` and mint
@@ -190,10 +201,11 @@ sites that did not consult it.
   transitions return 400 with the allowed list. Unit-tested in
   `tests/test_member_status_transitions.py`. (roles #5) **✅ users #6 unblocked (resolved 2026-07-30: `audit_logs.organization_id` exists (migration `20260801_0009`, backfilled from user_id, hash-bound from version 3)):** the member
   audit-history query now filters `AuditLog.organization_id` directly.
-**Status:** correctness/robustness items fixed; two items deferred (design /
-blocked on the audit-log org column).
+  **Status:** correctness/robustness items fixed; two items deferred (design /
+  blocked on the audit-log org column).
 
 ## Notes
+
 - Large-file caveat: `users.py` (1,774 L) and `member_status.py` (911 L) were
   reviewed for security invariants (escalation, org-scoping, self-or-admin gates,
   secret/PII handling), not line-by-line. The invariants held on every path

@@ -29,21 +29,21 @@ resolves the real client from the right-most non-proxy `X-Forwarded-For` hop —
 but `request.client.host` returns **the proxy's address**. Every record written
 with the raw value therefore stores one identical internal IP for all users.
 
-This is not a disclosure bug; it is a *silent-loss-of-signal* bug, which is
+This is not a disclosure bug; it is a _silent-loss-of-signal_ bug, which is
 worse in the places it appears: the data looks present and is trusted by
 features built on top of it.
 
 ### Site inventory, by consequence
 
-| File | Sites | Feature / iteration | Consequence |
-|---|---|---|---|
-| `api/v1/endpoints/elections.py` | 5 ✅ | B5 elections | **HIGH — breaks a documented feature.** Per-vote IPs feed ballot fraud detection. `BALLOT_FORENSICS_GUIDE.md` documents `suspicious_ips` ("any IP that cast more than 5 votes") and `unique_ip_count`. Behind the proxy every ballot carries the same IP, so `unique_ip_count` collapses to 1 and **every election trips the suspicious-IP threshold** — the anomaly detection is not merely degraded, it is inverted into a permanent false positive. |
-| `api/v1/endpoints/ip_security.py` | 10 ✅ | B23 security/audit/IP | **MED — the module is *about* IPs.** Requester/admin IPs on exception requests and approvals all record the proxy, so the audit of who requested and approved an IP allowlist entry carries no attribution. |
-| `api/v1/endpoints/security_monitoring.py` | 8 ✅ | B23 security/audit/IP | MED — security-event IPs are the primary investigative field. |
-| `api/v1/onboarding.py` | 5 ✅ | B25 onboarding | LOW/MED — tenant-provisioning audit trail (owner creation, org creation). |
-| `core/public_portal_security.py` | 2 ✅ | B26 public-portal | **MED — unauthenticated surface.** Anonymous callers are the case where the real IP matters most. |
-| `api/public/portal.py` | 1 ✅ | B26 public-portal | MED — same. |
-| `api/v1/endpoints/error_logs.py` | 2 ✅ | B23 | LOW — error-report attribution. |
+| File                                      | Sites | Feature / iteration   | Consequence                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------- | ----- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `api/v1/endpoints/elections.py`           | 5 ✅  | B5 elections          | **HIGH — breaks a documented feature.** Per-vote IPs feed ballot fraud detection. `BALLOT_FORENSICS_GUIDE.md` documents `suspicious_ips` ("any IP that cast more than 5 votes") and `unique_ip_count`. Behind the proxy every ballot carries the same IP, so `unique_ip_count` collapses to 1 and **every election trips the suspicious-IP threshold** — the anomaly detection is not merely degraded, it is inverted into a permanent false positive. |
+| `api/v1/endpoints/ip_security.py`         | 10 ✅ | B23 security/audit/IP | **MED — the module is _about_ IPs.** Requester/admin IPs on exception requests and approvals all record the proxy, so the audit of who requested and approved an IP allowlist entry carries no attribution.                                                                                                                                                                                                                                            |
+| `api/v1/endpoints/security_monitoring.py` | 8 ✅  | B23 security/audit/IP | MED — security-event IPs are the primary investigative field.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `api/v1/onboarding.py`                    | 5 ✅  | B25 onboarding        | LOW/MED — tenant-provisioning audit trail (owner creation, org creation).                                                                                                                                                                                                                                                                                                                                                                              |
+| `core/public_portal_security.py`          | 2 ✅  | B26 public-portal     | **MED — unauthenticated surface.** Anonymous callers are the case where the real IP matters most.                                                                                                                                                                                                                                                                                                                                                      |
+| `api/public/portal.py`                    | 1 ✅  | B26 public-portal     | MED — same.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `api/v1/endpoints/error_logs.py`          | 2 ✅  | B23                   | LOW — error-report attribution.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 `core/audit.py` also carried the pattern in its `log_audit_event` **docstring
 example** — no runtime effect, but it is the snippet developers copy, and the
@@ -78,7 +78,7 @@ on the real client, with a comment recording why.
 The sweep corrects IPs **going forward only**. Rows already written — session
 records, audit events, and per-vote election IPs — still hold the proxy
 address, and nothing distinguishes them from real ones. For elections
-specifically, an administrator reading `suspicious_ips` on a *past* election
+specifically, an administrator reading `suspicious_ips` on a _past_ election
 will still see the inverted result. Two options, both owner decisions:
 
 1. Leave historical rows and note the cutover date in

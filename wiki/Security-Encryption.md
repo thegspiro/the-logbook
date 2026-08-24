@@ -6,12 +6,12 @@ The Logbook uses multi-layer encryption to protect data at rest, in transit, and
 
 ## Overview
 
-| Layer | Algorithm | Purpose |
-|-------|-----------|---------|
-| **Passwords** | Argon2id | Password hashing (irreversible) |
-| **Data at rest** | AES-256-GCM | Authenticated encryption of sensitive database fields (legacy Fernet values still readable) |
-| **Data in transit** | TLS 1.3 | HTTPS for all client-server communication |
-| **Audit log integrity** | HMAC-SHA256 keyed hash chain | Tamper-evident audit trail |
+| Layer                   | Algorithm                    | Purpose                                                                                     |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| **Passwords**           | Argon2id                     | Password hashing (irreversible)                                                             |
+| **Data at rest**        | AES-256-GCM                  | Authenticated encryption of sensitive database fields (legacy Fernet values still readable) |
+| **Data in transit**     | TLS 1.3                      | HTTPS for all client-server communication                                                   |
+| **Audit log integrity** | HMAC-SHA256 keyed hash chain | Tamper-evident audit trail                                                                  |
 
 ---
 
@@ -60,12 +60,12 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 > on `screening_records` now use the transparent `EncryptedText` /
 > `EncryptedJSON` column types rather than plain text:
 >
-> | Column | Type | Holds |
-> | --- | --- | --- |
-> | `provider_name` | `EncryptedText` | The clinic or physician who performed the screening |
-> | `result_summary` | `EncryptedText` | Free-text outcome |
-> | `result_data` | `EncryptedJSON` | Structured results — scores, measurements |
-> | `notes` | `EncryptedText` | Free-text notes |
+> | Column           | Type            | Holds                                               |
+> | ---------------- | --------------- | --------------------------------------------------- |
+> | `provider_name`  | `EncryptedText` | The clinic or physician who performed the screening |
+> | `result_summary` | `EncryptedText` | Free-text outcome                                   |
+> | `result_data`    | `EncryptedJSON` | Structured results — scores, measurements           |
+> | `notes`          | `EncryptedText` | Free-text notes                                     |
 >
 > The column types decrypt on read and encrypt on write, so service and endpoint
 > code is unchanged. **Legacy plaintext values remain readable** — a value that
@@ -79,7 +79,7 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 
 > **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
-### Key Rotation *(2026-07-31)*
+### Key Rotation _(2026-07-31)_
 
 Rotation uses a **legacy-key ring**: decryption tries the current
 `ENCRYPTION_KEY` first, then each key listed in `ENCRYPTION_KEYS_LEGACY`

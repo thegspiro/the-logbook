@@ -33,14 +33,14 @@ cross-org write gap**:
 The audit's only finding is the **already-flagged BXC-1 residual**:
 `FormField.condition_field_id` is written through `create_form`/`add_field`/
 `update_field` without a same-form/org check. Re-confirmed this pass that it is
-**not a security gap**: the column is a *soft* reference (`String(36)`, **no** DB
+**not a security gap**: the column is a _soft_ reference (`String(36)`, **no** DB
 `ForeignKey`), it has **no** `organization_id` of its own (org-scoped only via the
 parent `Form`), and — decisively — it is **never dereferenced server-side**. It
 drives only client-side conditional-visibility rendering, which matches against
-fields of the *current* form, so a foreign/garbage value is a dangling,
+fields of the _current_ form, so a foreign/garbage value is a dangling,
 never-matching reference (a broken visibility rule), never cross-org data reach.
 
-**Left flagged, not fixed.** The one worthwhile hardening would be a *same-form*
+**Left flagged, not fixed.** The one worthwhile hardening would be a _same-form_
 validation (reject a `condition_field_id` not among this form's fields) — a
 correctness guard, not a security one. It's deferred deliberately: the semantics
 are builder-specific (a field's visibility can depend on another field created in
@@ -60,14 +60,14 @@ Re-verified FORM-1/2/3/6/7 hold. The B1 latent-500 enum lens — which pass 2's
 error-handling latent-500 check didn't cover — surfaced a genuine gap, plus two
 false positives a read cleared.
 
-### FORM2-1 — LOW/MED — Enum fields 500 on a bad value (incl. an *incomplete* prior guard) — ✅ FIXED
+### FORM2-1 — LOW/MED — Enum fields 500 on a bad value (incl. an _incomplete_ prior guard) — ✅ FIXED
 
 **What:** `category`/`status` (Form), `field_type` (FormField), and
 `target_module`/`integration_type` (FormIntegration) map to **strict MySQL ENUM**
 columns but were typed as free `str` and inserted raw (`create_form`/`create_field`
 via `**data`, the `update_*` `setattr` loops, `create_integration` via explicit
 kwargs). An out-of-set value 500'd at MySQL. Notably `category` **already had a
-`@field_validator`, but it only lowercase-*normalized* — it did not reject
+`@field_validator`, but it only lowercase-_normalized_ — it did not reject
 unknowns**, so `category="bogus"` still reached MySQL and 500'd; the guard looked
 present but didn't prevent the fault.
 
@@ -79,9 +79,10 @@ the model enum, → 422. Request-only, so the response schemas are untouched.
 **10 tests added.**
 
 **Two lens false positives, cleared by reading (no change):**
+
 - `Form.integration_type` (`FormCreate`/`FormUpdate.integration_type`) is a plain
   **String** column, not an ENUM — no 500 path (distinct from
-  `FormIntegration.integration_type`, which *is* an ENUM and *was* fixed).
+  `FormIntegration.integration_type`, which _is_ an ENUM and _was_ fixed).
 - `FormIntegrationUpdate` exposes no enum field (only `field_mappings`/`is_active`).
 
 ### FORM2-2 — NIT — 6 boolean-column E712 swept; 1 JSON compare kept — ✅ FIXED
@@ -94,7 +95,7 @@ semantics), now with a comment saying so.
 
 ### Still flagged (unchanged)
 
-- **FORM-4** (definition text stored unescaped — escaped at *render*, not storage, by
+- **FORM-4** (definition text stored unescaped — escaped at _render_, not storage, by
   design), **FORM-5** (`require_authentication`/`allow_multiple_submissions`
   semantics — product decision), and the BXC-1 `condition_field_id` residual
   (client-only conditional visibility, degrades to a no-op, never dereferenced
@@ -237,9 +238,9 @@ change focused on the reachable leak.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_forms_service` **9 passed** (new); forms-related selection 56 passed (DB-fixture errors are unrelated `-k form` false matches — plat**form**/**form**at). |
+| Check                     | Result                                                                                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8` (service + test) | ✅ 0 violations                                                                                                                                                    |
+| `black --check`           | ✅ unchanged                                                                                                                                                       |
+| `tsc --noEmit`            | ✅ n/a — no frontend change                                                                                                                                        |
+| backend tests             | ✅ `test_forms_service` **9 passed** (new); forms-related selection 56 passed (DB-fixture errors are unrelated `-k form` false matches — plat**form**/**form**at). |

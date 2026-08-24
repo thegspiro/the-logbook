@@ -127,6 +127,7 @@ on the not-live item, and applied one safe cleanup.
 ### No new code-level security findings.
 
 Re-confirmed present and correct:
+
 - `_validate_finance_fks` is wired into every create/update path (PR, CR, expense
   report + line items, budget: lines 260/271/1171/1196/1369/1371/1406), so a
   foreign `budget_id`/`category_id`/`fiscal_year_id` fails closed — **FIN-1/FIN-2
@@ -154,8 +155,8 @@ recorded as future defense-in-depth.
 ### FIN-4 / FIN-7 — 🚩 FLAGGED (unchanged, product/behavior decisions); FIN-5 ✅ RESOLVED
 
 - **FIN-4** — no `finance.disburse` separation: one `finance.manage` holder can
-  create a request *and* mark it paid / issue the check / record-or-waive dues. The
-  approval-chain step is SoD-guarded; the *disbursement* actions are not. Needs a
+  create a request _and_ mark it paid / issue the check / record-or-waive dues. The
+  approval-chain step is SoD-guarded; the _disbursement_ actions are not. Needs a
   new treasury permission on roles. (In `KNOWN_LIMITATIONS.md`.)
 - **FIN-5** — ✅ RESOLVED (owner decision, 2026-08-09). Reimbursement (expense
   report) lists/reads were readable by any `finance.view` holder. `list_expense_reports`
@@ -196,9 +197,9 @@ carries the deliberate no-thread rationale). FIN-4/5 already mirrored in
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_finance` + `test_dues_payment_guards`: **19 passed** (the pure unit tests — allocation, `_apply_payment_totals`); 30 DB-fixture errors (no MySQL), unchanged from baseline. E712 change behavior-neutral. |
+| Check              | Result                                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8` (service) | ✅ 0 violations                                                                                                                                                                                                    |
+| `black --check`    | ✅ unchanged                                                                                                                                                                                                       |
+| `tsc --noEmit`     | ✅ n/a — no frontend change                                                                                                                                                                                        |
+| backend tests      | ✅ `test_finance` + `test_dues_payment_guards`: **19 passed** (the pure unit tests — allocation, `_apply_payment_totals`); 30 DB-fixture errors (no MySQL), unchanged from baseline. E712 change behavior-neutral. |
