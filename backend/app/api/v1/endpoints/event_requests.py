@@ -70,12 +70,15 @@ from app.services.event_request_service import (
     get_user_name,
     lead_time_error,
     open_staffing_shift,
+    render_request_template,
 )
 from app.services.event_request_service import (
     send_request_notification as _send_request_notification,
 )
 from app.services.event_request_service import (
     send_volunteer_call,
+    sync_staffing_shift_cancelled,
+    sync_staffing_shift_date,
 )
 from app.services.forms_service import FormsService
 from app.utils.org_scoping import assert_in_org
@@ -472,6 +475,15 @@ async def public_cancel_request(
         notes=data.reason or "Cancelled by requester",
     )
     db.add(activity)
+
+    # The requester withdrawing is exactly when the crew most needs telling.
+    await sync_staffing_shift_cancelled(
+        db,
+        event_request,
+        actor_id=None,
+        reason="The requester cancelled this outreach event.",
+    )
+
     await db.commit()
 
     # Notify department
@@ -723,6 +735,18 @@ async def update_event_request_status(
         performed_by=current_user.id,
     )
     db.add(activity)
+
+    # A called-off request must not leave a signup sheet standing: the shift
+    # would keep its original time and keep taking volunteers for an event
+    # nobody is running.
+    if new_status in (EventRequestStatus.CANCELLED, EventRequestStatus.DECLINED):
+        await sync_staffing_shift_cancelled(
+            db,
+            event_request,
+            actor_id=current_user.id,
+            reason=update.decline_reason or update.notes,
+        )
+
     await db.commit()
 
     # Send notification
@@ -986,6 +1010,17 @@ async def schedule_request(
         event_request.event_id = event.id
         event_id = event.id
 
+    # A request being re-scheduled out of POSTPONED may still carry the sheet
+    # opened the first time round; move it rather than stranding the crew on
+    # the old date.
+    if event_request.staffing_shift_id:
+        org_for_shift = await db.scalar(
+            select(Organization).where(Organization.id == current_user.organization_id)
+        )
+        await sync_staffing_shift_date(
+            db, event_request, org_for_shift, current_user.id
+        )
+
     activity = EventRequestActivity(
         request_id=event_request.id,
         action="scheduled",
@@ -1085,13 +1120,28 @@ async def postpone_request(
         performed_by=current_user.id,
     )
     db.add(activity)
-    await db.commit()
 
-    # Send notification
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     org = org_result.scalar_one_or_none()
+
+    # Keep the signup sheet honest about the postponement. A new date moves the
+    # shift and keeps the crew who already volunteered; no date means there is
+    # nothing left to sign up for, so the sheet is cancelled and they are told.
+    if data.new_event_date:
+        await sync_staffing_shift_date(db, event_request, org, current_user.id)
+    else:
+        await sync_staffing_shift_cancelled(
+            db,
+            event_request,
+            actor_id=current_user.id,
+            reason=data.reason or "This outreach event was postponed to a date TBD.",
+        )
+
+    await db.commit()
+
+    # Send notification
     if org:
         await _send_request_notification(
             db,
@@ -1233,48 +1283,22 @@ async def send_template_email(
     org = org_result.scalar_one_or_none()
 
     try:
-        from app.services.email_service import EmailService, build_email_logo_img
+        from app.services.email_service import EmailService
 
         email_service = EmailService(organization=org)
-
-        # Simple variable substitution in subject and body
-        context = {
-            "contact_name": event_request.contact_name,
-            "outreach_type": event_request.outreach_type.replace("_", " ").title(),
-            "organization_name": event_request.organization_name or "",
-            "organization_logo_img": build_email_logo_img(org),
-            "event_date": (
-                event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
-                if event_request.event_date
-                else "TBD"
-            ),
-        }
-        if data.additional_context:
-            context.update(data.additional_context)
-
-        # organization_logo_img is markup this module builds (and has already
-        # escaped the url and alt text inside). Escaping it again renders the
-        # tag as literal "<img ...>" text at the top of every template email.
-        raw_html_keys = {"organization_logo_img"}
-
-        subject = template.subject
-        body = template.body_html
-        for key, value in context.items():
-            # EV-7: coerce to str before replace/escape — a None base-context
-            # value (e.g. a missing contact_name) or a non-str additional_context
-            # value would otherwise raise TypeError -> 500.
+        subject, body, text_body = render_request_template(template, event_request, org)
+        # Caller-supplied extras are applied after the shared context so a
+        # coordinator can override a value for this one send.
+        for key, value in (data.additional_context or {}).items():
             safe_value = "" if value is None else str(value)
             subject = subject.replace(f"{{{{{key}}}}}", safe_value)
-            body = body.replace(
-                f"{{{{{key}}}}}",
-                safe_value if key in raw_html_keys else _html.escape(safe_value),
-            )
+            body = body.replace(f"{{{{{key}}}}}", _html.escape(safe_value))
 
         await email_service.send_email(
             to_emails=[event_request.contact_email],
             subject=subject,
             html_body=body,
-            text_body=template.body_text,
+            text_body=text_body,
         )
 
         # Log the email send
@@ -1301,15 +1325,27 @@ async def send_template_email(
 
 
 async def _load_request_for_staffing(
-    db: AsyncSession, request_id: str, organization_id: str
+    db: AsyncSession,
+    request_id: str,
+    organization_id: str,
+    *,
+    for_update: bool = False,
 ) -> EventRequest:
-    """Fetch an org-scoped request or 404."""
-    result = await db.execute(
-        select(EventRequest).where(
-            EventRequest.id == request_id,
-            EventRequest.organization_id == organization_id,
-        )
+    """Fetch an org-scoped request or 404.
+
+    ``for_update`` locks the row for the caller's transaction. Opening a signup
+    sheet reads ``staffing_shift_id``, then creates a shift, then writes the id
+    back; two coordinators doing that at once both see NULL, both create a
+    shift, and the loser's shift is orphaned on the schedule — still visible,
+    still open for signups, attached to nothing.
+    """
+    query = select(EventRequest).where(
+        EventRequest.id == request_id,
+        EventRequest.organization_id == organization_id,
     )
+    if for_update:
+        query = query.with_for_update()
+    result = await db.execute(query)
     event_request = result.scalar_one_or_none()
     if not event_request:
         raise HTTPException(status_code=404, detail="Event request not found")
@@ -1353,7 +1389,7 @@ async def open_request_staffing(
     a scheduled request has a date to staff.
     """
     event_request = await _load_request_for_staffing(
-        db, request_id, current_user.organization_id
+        db, request_id, current_user.organization_id, for_update=True
     )
 
     if event_request.status != EventRequestStatus.SCHEDULED:

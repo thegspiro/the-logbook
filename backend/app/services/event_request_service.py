@@ -51,6 +51,19 @@ def _event_settings_defaults() -> dict:
     return EVENT_SETTINGS_DEFAULTS
 
 
+# Nested settings maps that must be merged key-by-key rather than replaced.
+# A department that saved its email triggers before a new one existed has a
+# stored map missing that key, and a shallow merge hands back exactly what was
+# stored — so every trigger added later reads as "not configured" and its
+# sender does nothing. That is the same shape as pitfall #19: absence has to
+# mean "current behaviour", not "off".
+#
+# `tasks` is deliberately NOT in here. It is a list the department orders and
+# prunes itself, so a stored one replaces the default outright — merging would
+# resurrect a checklist step somebody deleted.
+_MERGED_PIPELINE_MAPS = ("email_triggers",)
+
+
 def get_pipeline_settings(org: Optional[Organization]) -> dict:
     """Read pipeline settings from an organization, falling back to defaults."""
     defaults = _event_settings_defaults()["request_pipeline"]
@@ -58,7 +71,26 @@ def get_pipeline_settings(org: Optional[Organization]) -> dict:
         return dict(defaults)
     settings = (org.settings or {}).get("events", {})
     stored = settings.get("request_pipeline", {})
-    return {**defaults, **stored}
+    merged = {**defaults, **stored}
+
+    for key in _MERGED_PIPELINE_MAPS:
+        default_map = defaults.get(key)
+        stored_map = stored.get(key)
+        if isinstance(default_map, dict) and isinstance(stored_map, dict):
+            # One level deeper as well: an existing `days_before_event` entry
+            # predates `notify_requester`, and without it the reminder task
+            # runs, ledgers the send, and delivers nothing.
+            combined = {**default_map}
+            for name, value in stored_map.items():
+                base = combined.get(name)
+                combined[name] = (
+                    {**base, **value}
+                    if isinstance(base, dict) and isinstance(value, dict)
+                    else value
+                )
+            merged[key] = combined
+
+    return merged
 
 
 def get_outreach_types(org: Optional[Organization]) -> list[dict[str, str]]:
@@ -172,18 +204,68 @@ async def apply_default_assignee(
     return default_assignee
 
 
+def render_request_template(
+    template: Any, event_request: EventRequest, org: Optional[Organization]
+) -> tuple[str, str, Optional[str]]:
+    """Fill a department's email template for one request.
+
+    Returns ``(subject, html_body, text_body)``. Shared by the manual send and
+    the scheduled reminder so a template renders identically either way.
+    """
+    from app.services.email_service import build_email_logo_img
+
+    # organization_logo_img is markup this module builds (and has already
+    # escaped the url and alt text inside). Escaping it again renders the tag
+    # as literal "<img ...>" text at the top of every template email.
+    raw_html_keys = {"organization_logo_img"}
+
+    context = {
+        "contact_name": event_request.contact_name,
+        "outreach_type": outreach_type_label(org, event_request.outreach_type),
+        "organization_name": event_request.organization_name or "",
+        "organization_logo_img": build_email_logo_img(org),
+        "event_date": (
+            event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
+            if event_request.event_date
+            else "TBD"
+        ),
+    }
+
+    subject = template.subject
+    body = template.body_html
+    for key, value in context.items():
+        # EV-7: coerce to str before replace/escape — a None base-context value
+        # would otherwise raise TypeError -> 500.
+        safe_value = "" if value is None else str(value)
+        subject = subject.replace(f"{{{{{key}}}}}", safe_value)
+        body = body.replace(
+            f"{{{{{key}}}}}",
+            safe_value if key in raw_html_keys else _html.escape(safe_value),
+        )
+    return subject, body, template.body_text
+
+
 async def send_request_notification(
     db: AsyncSession,
     event_request: EventRequest,
     trigger_key: str,
     org: Organization,
     extra_context: Optional[dict] = None,
-) -> None:
+    template: Any = None,
+) -> bool:
     """
     Send email notification based on pipeline trigger settings.
 
     Reads trigger config from org settings, sends to requester and/or assignee
-    as configured. Failures are logged but do not block the request.
+    as configured. ``template``, when given, is a department's own
+    EventRequestEmailTemplate and is sent as itself in place of the generic
+    status email.
+
+    Returns True when the configured work completed — including "the trigger is
+    switched off, so there was nothing to send". Returns False only when
+    delivery raised, which is what lets the scheduled reminder tell a real send
+    apart from a failed one before it writes its ledger entry: a failure
+    recorded as a send retires that reminder permanently.
     """
     try:
         from app.services.email_service import EmailService
@@ -194,7 +276,7 @@ async def send_request_notification(
         trigger_config = triggers.get(trigger_key, {})
 
         if not trigger_config.get("enabled", False):
-            return
+            return True
 
         email_service = EmailService(organization=org)
         notifications_service = NotificationsService(db)
@@ -263,20 +345,33 @@ async def send_request_notification(
                 "organization_name": org_name,
             }
 
-            # _render_with_fallback loads the department's template and falls
-            # back to the built-in default, escaping each destination the way
-            # it needs. Hand-rolling that here previously fed each value to
-            # re.sub as a replacement string, so a backslash in a public
-            # contact name was read as a group reference.
-            subject, html_body, text_body = await email_service._render_with_fallback(
-                template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
-                context=context,
-                db=db,
-                organization_id=str(org.id) if org else None,
-                default_subject=DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
-                default_html=DEFAULT_EVENT_REQUEST_STATUS_HTML,
-                default_text=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
-            )
+            if template is not None:
+                # The department attached this template to the trigger, so it
+                # is the message — subject and HTML body included. Pouring only
+                # its body_text into the generic status email discarded
+                # everything an administrator actually wrote.
+                subject, html_body, text_body = render_request_template(
+                    template, event_request, org
+                )
+            else:
+                # _render_with_fallback loads the department's template and
+                # falls back to the built-in default, escaping each destination
+                # the way it needs. Hand-rolling that here previously fed each
+                # value to re.sub as a replacement string, so a backslash in a
+                # public contact name was read as a group reference.
+                (
+                    subject,
+                    html_body,
+                    text_body,
+                ) = await email_service._render_with_fallback(
+                    template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
+                    context=context,
+                    db=db,
+                    organization_id=str(org.id) if org else None,
+                    default_subject=DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
+                    default_html=DEFAULT_EVENT_REQUEST_STATUS_HTML,
+                    default_text=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
+                )
 
             await email_service.send_email(
                 to_emails=[event_request.contact_email],
@@ -332,6 +427,7 @@ async def send_request_notification(
                         "body": f"New event request from {event_request.contact_name}",
                     },
                 )
+        return True
     except Exception as e:
         # A failed notification must not roll back an event request the public
         # already submitted — but swallowing it without a trace meant nobody
@@ -342,6 +438,7 @@ async def send_request_notification(
             getattr(org, "id", None),
             e,
         )
+        return False
 
 
 # ============================================
@@ -829,11 +926,19 @@ async def resolve_outreach_signup_role(
     """
     from app.models.training import AssignmentStatus, ShiftAssignment
 
+    # FOR UPDATE: the count below and the insert the caller makes afterwards
+    # are a read-then-write. Two members claiming the last Educator seat at the
+    # same time both read "0 taken" and both get in, which overfills that role
+    # and — because the shift's generic capacity is shared across roles — can
+    # leave another role with no seat left to fill. Serializing on the request
+    # row makes the pair atomic; every claim for one sheet contends on one row.
     event_request = await db.scalar(
-        select(EventRequest).where(
+        select(EventRequest)
+        .where(
             EventRequest.staffing_shift_id == str(shift.id),
             EventRequest.organization_id == str(organization_id),
         )
+        .with_for_update()
     )
     needed = normalize_staffing_roles(
         event_request.staffing_roles if event_request else None
@@ -878,3 +983,118 @@ async def resolve_outreach_signup_role(
             f"The last {role_label(labels, requested_role)} seat was just claimed."
         )
     return requested_role
+
+
+async def sync_staffing_shift_cancelled(
+    db: AsyncSession,
+    event_request: EventRequest,
+    actor_id: Optional[str],
+    reason: Optional[str] = None,
+) -> None:
+    """Cancel the signup sheet when its request is called off.
+
+    Without this the shift stays on the schedule at its original time and keeps
+    taking signups, so members can turn out for an event that no longer exists.
+    ``cancel_shift`` also cancels the existing assignments and tells the crew,
+    which is the part that matters to somebody who already volunteered.
+
+    Never raises into the caller: the request has already been cancelled, and
+    failing that write to report a scheduling problem would leave the pipeline
+    in a worse state than the stale shift does.
+    """
+    if not event_request.staffing_shift_id:
+        return
+    from app.services.scheduling_service import SchedulingService
+
+    try:
+        _shift, error = await SchedulingService(db).cancel_shift(
+            event_request.staffing_shift_id,
+            event_request.organization_id,
+            cancelled_by_user_id=actor_id,
+            reason=reason or "The outreach event this covered was cancelled.",
+        )
+        if error:
+            logger.warning(
+                "Could not cancel staffing shift {} for request {}: {}",
+                event_request.staffing_shift_id,
+                event_request.id,
+                error,
+            )
+            return
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="staffing_cancelled",
+                notes="Cancelled the volunteer signup sheet and told the crew",
+                details={"shift_id": event_request.staffing_shift_id},
+                performed_by=actor_id,
+            )
+        )
+    except Exception as e:
+        logger.warning(
+            "Could not cancel staffing shift {} for request {}: {}",
+            event_request.staffing_shift_id,
+            event_request.id,
+            e,
+        )
+
+
+async def sync_staffing_shift_date(
+    db: AsyncSession,
+    event_request: EventRequest,
+    org: Optional[Organization],
+    actor_id: Optional[str],
+) -> None:
+    """Move the signup sheet when its request's confirmed date changes.
+
+    A postponed-and-rescheduled request whose shift stayed put is worse than no
+    sheet at all: the crew that signed up is booked for the old time and the new
+    one has nobody. Members keep their seats — the event moved, not the roster.
+    """
+    if not event_request.staffing_shift_id or not event_request.event_date:
+        return
+    from app.models.training import Shift
+
+    try:
+        shift = await db.scalar(
+            select(Shift).where(
+                Shift.id == event_request.staffing_shift_id,
+                Shift.organization_id == str(event_request.organization_id),
+            )
+        )
+        if shift is None or shift.is_finalized:
+            return
+
+        tz = _org_timezone(org)
+        start = event_request.event_date
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        end = event_request.event_end_date or (start + timedelta(hours=2))
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+
+        if shift.start_time == start and shift.end_time == end:
+            return
+
+        shift.shift_date = start.astimezone(tz).date()
+        shift.start_time = start
+        shift.end_time = end
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="staffing_rescheduled",
+                notes="Moved the volunteer signup sheet to the new date",
+                details={
+                    "shift_id": event_request.staffing_shift_id,
+                    "start_time": start.isoformat(),
+                },
+                performed_by=actor_id,
+            )
+        )
+    except Exception as e:
+        logger.warning(
+            "Could not move staffing shift {} for request {}: {}",
+            event_request.staffing_shift_id,
+            event_request.id,
+            e,
+        )

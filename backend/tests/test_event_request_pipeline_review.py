@@ -51,8 +51,12 @@ from app.services.event_request_service import (
     open_staffing_shift,
     outreach_role_label,
     outreach_type_label,
+    render_request_template,
     resolve_outreach_signup_role,
+    send_request_notification,
     send_volunteer_call,
+    sync_staffing_shift_cancelled,
+    sync_staffing_shift_date,
     validate_staffing_roles,
 )
 
@@ -1084,3 +1088,262 @@ class TestOutreachSignupRole:
             )
             == ""
         )
+
+
+# ============================================
+# Codex review findings (2026-08-24)
+# ============================================
+
+
+class TestTriggerDefaultsReachExistingDepartments:
+    """A stored trigger map must not hide triggers added after it was saved.
+
+    `{**defaults, **stored}` replaces the whole nested map, so a department
+    that configured its email triggers before `on_assigned` existed would read
+    back exactly what it stored — and every trigger added later would look
+    disabled forever, with its sender doing nothing.
+    """
+
+    def test_a_legacy_trigger_map_still_gains_new_triggers(self):
+        org = _org(
+            {
+                "email_triggers": {
+                    "on_submitted": {"enabled": True, "notify_requester": True},
+                }
+            }
+        )
+        triggers = get_pipeline_settings(org)["email_triggers"]
+
+        assert triggers["on_assigned"]["notify_assignee"] is True
+        assert triggers["volunteer_call"]["enabled"] is True
+
+    def test_a_legacy_entry_gains_newly_required_keys(self):
+        """An existing days_before_event predates notify_requester.
+
+        Without it the reminder task runs, ledgers the send and delivers
+        nothing at all.
+        """
+        org = _org({"email_triggers": {"days_before_event": {"enabled": True}}})
+        entry = get_pipeline_settings(org)["email_triggers"]["days_before_event"]
+
+        assert entry["notify_requester"] is True
+        assert entry["enabled"] is True
+
+    def test_a_stored_value_still_wins_over_the_default(self):
+        org = _org({"email_triggers": {"on_scheduled": {"enabled": False}}})
+        triggers = get_pipeline_settings(org)["email_triggers"]
+
+        assert triggers["on_scheduled"]["enabled"] is False
+
+    def test_a_pruned_task_list_is_not_resurrected(self):
+        """tasks is a list the department orders and prunes — replace, not merge."""
+        org = _org({"tasks": [{"id": "review_request", "label": "Review"}]})
+
+        assert get_pipeline_settings(org)["tasks"] == [
+            {"id": "review_request", "label": "Review"}
+        ]
+
+
+class TestNotificationReportsDelivery:
+    """The scheduled reminder needs to tell a real send from a failed one."""
+
+    @pytest.mark.asyncio
+    async def test_a_disabled_trigger_counts_as_done(self):
+        """Nothing to send is a completed decision, not a failure to retry."""
+        org = _org({"email_triggers": {"days_before_event": {"enabled": False}}})
+
+        assert (
+            await send_request_notification(
+                AsyncMock(), _request_row(), "days_before_event", org
+            )
+            is True
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_raising_send_reports_failure(self):
+        """A transient SMTP failure must not be ledgered as delivered."""
+        org = _org()
+        exploding = MagicMock()
+        exploding.send_email = AsyncMock(side_effect=RuntimeError("smtp down"))
+        exploding._render_with_fallback = AsyncMock(return_value=("s", "h", "t"))
+
+        with patch(
+            "app.services.email_service.EmailService",
+            MagicMock(return_value=exploding),
+        ):
+            delivered = await send_request_notification(
+                AsyncMock(),
+                _request_row(event_date=datetime.now(timezone.utc)),
+                "on_scheduled",
+                org,
+            )
+
+        assert delivered is False
+
+
+class TestReminderTemplateRendering:
+    """A template attached to an offset is sent as itself."""
+
+    def test_the_templates_own_subject_and_body_are_used(self):
+        template = SimpleNamespace(
+            subject="Reminder for {{contact_name}}",
+            body_html="<p>See you on {{event_date}}, {{contact_name}}.</p>",
+            body_text="plain",
+        )
+        request = _request_row(
+            contact_name="Dana Reyes",
+            event_date=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
+        )
+
+        subject, body, text = render_request_template(template, request, _org())
+
+        assert subject == "Reminder for Dana Reyes"
+        assert "Dana Reyes" in body
+        assert "September 12, 2026" in body
+        assert text == "plain"
+
+    def test_requester_supplied_text_is_escaped_but_the_logo_is_not(self):
+        template = SimpleNamespace(
+            subject="Hi",
+            body_html="{{organization_logo_img}}<p>{{contact_name}}</p>",
+            body_text=None,
+        )
+        request = _request_row(contact_name="<script>x</script>")
+
+        with patch(
+            "app.services.email_service.build_email_logo_img",
+            MagicMock(return_value='<img src="https://cdn.example.org/l.png">'),
+        ):
+            _subject, body, _text = render_request_template(template, request, _org())
+
+        assert '<img src="https://cdn.example.org/l.png">' in body
+        assert "&lt;script&gt;" in body
+
+
+class TestStaffingLifecycle:
+    """A called-off request must not leave its signup sheet standing."""
+
+    @pytest.mark.asyncio
+    async def test_cancelling_a_request_cancels_its_sheet(self):
+        request = _request_row(staffing_shift_id="shift-9")
+        scheduling = MagicMock()
+        scheduling.cancel_shift = AsyncMock(return_value=(SimpleNamespace(), None))
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        with patch(
+            "app.services.scheduling_service.SchedulingService",
+            MagicMock(return_value=scheduling),
+        ):
+            await sync_staffing_shift_cancelled(db, request, USER_ID, "called off")
+
+        assert scheduling.cancel_shift.await_args.args[0] == "shift-9"
+        assert "staffing_cancelled" in {c.args[0].action for c in db.add.call_args_list}
+
+    @pytest.mark.asyncio
+    async def test_a_request_with_no_sheet_is_a_no_op(self):
+        db = AsyncMock()
+        db.add = MagicMock()
+        await sync_staffing_shift_cancelled(db, _request_row(), USER_ID)
+        db.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_scheduling_failure_never_raises_into_the_caller(self):
+        """The request is already cancelled; a stale shift beats a 500."""
+        request = _request_row(staffing_shift_id="shift-9")
+        scheduling = MagicMock()
+        scheduling.cancel_shift = AsyncMock(side_effect=RuntimeError("boom"))
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        with patch(
+            "app.services.scheduling_service.SchedulingService",
+            MagicMock(return_value=scheduling),
+        ):
+            await sync_staffing_shift_cancelled(db, request, USER_ID)
+
+        db.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_new_date_moves_the_sheet_and_keeps_the_crew(self):
+        request = _request_row(
+            staffing_shift_id="shift-9",
+            event_date=datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc),
+        )
+        shift = SimpleNamespace(
+            id="shift-9",
+            is_finalized=False,
+            shift_date=date(2026, 9, 12),
+            start_time=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
+            end_time=datetime(2026, 9, 12, 16, 0, tzinfo=timezone.utc),
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar = AsyncMock(return_value=shift)
+
+        await sync_staffing_shift_date(db, request, _org(), USER_ID)
+
+        assert shift.start_time == request.event_date
+        assert shift.shift_date == date(2026, 10, 3)
+
+    @pytest.mark.asyncio
+    async def test_a_finalized_sheet_is_left_alone(self):
+        """Its data is locked for hours and training credit."""
+        request = _request_row(
+            staffing_shift_id="shift-9",
+            event_date=datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc),
+        )
+        shift = SimpleNamespace(
+            id="shift-9",
+            is_finalized=True,
+            shift_date=date(2026, 9, 12),
+            start_time=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
+            end_time=None,
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar = AsyncMock(return_value=shift)
+
+        await sync_staffing_shift_date(db, request, _org(), USER_ID)
+
+        assert shift.shift_date == date(2026, 9, 12)
+
+
+class TestReminderOffsetsAreNotRetiredEarly:
+    """A reminder that is not due yet must survive an earlier one being sent.
+
+    With the shipped offsets [7, 1], a healthy run at seven days used to record
+    the one-day reminder as superseded in the same breath, so the configured
+    one-day message could never be sent when it later came due. Suppression is
+    for a catch-up run — offsets that are ALSO already due — not for every
+    closer offset whenever an earlier one goes out on time.
+    """
+
+    @staticmethod
+    def _supersedable(offsets, sent_offset, event_date, now):
+        """The rule the task applies, isolated from its I/O."""
+        return sorted(
+            closer
+            for closer in offsets
+            if closer < sent_offset and event_date - timedelta(days=closer) <= now
+        )
+
+    def test_a_healthy_seven_day_run_leaves_the_one_day_reminder_alive(self):
+        now = datetime(2026, 9, 5, 7, 0, tzinfo=timezone.utc)
+        event_date = now + timedelta(days=7)
+
+        assert self._supersedable({7, 1}, 7, event_date, now) == []
+
+    def test_a_catch_up_run_still_collapses_the_offsets_already_due(self):
+        # The task has been down; the event is tomorrow, so 7 and 1 are both
+        # due and the requester must get one email, not two.
+        now = datetime(2026, 9, 11, 7, 0, tzinfo=timezone.utc)
+        event_date = now + timedelta(days=1)
+
+        assert self._supersedable({7, 3, 1}, 7, event_date, now) == [1, 3]
+
+    def test_only_the_offsets_actually_due_are_collapsed(self):
+        now = datetime(2026, 9, 9, 7, 0, tzinfo=timezone.utc)
+        event_date = now + timedelta(days=3)
+
+        assert self._supersedable({7, 3, 1}, 7, event_date, now) == [3]

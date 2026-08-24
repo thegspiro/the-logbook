@@ -5033,6 +5033,20 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
             )
 
             for event_request in requests:
+                # FOR UPDATE: the ledger check below is an ordinary read, and
+                # the marker is only written after the send. The in-process
+                # runner and a manual /scheduled/run-task call can overlap, and
+                # both would see no marker and email the same requester.
+                # Serializing on the request row makes check-send-record atomic
+                # per request; a second runner blocks here and then sees the
+                # marker the first one wrote.
+                event_request = await db.scalar(
+                    select(EventRequest)
+                    .where(EventRequest.id == event_request.id)
+                    .with_for_update()
+                )
+                if event_request is None:
+                    continue
                 event_date = event_request.event_date
                 if event_date.tzinfo is None:
                     event_date = event_date.replace(tzinfo=dt_timezone.utc)
@@ -5065,18 +5079,37 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                         f"This is a reminder that your event is coming up in "
                         f"{days} {'day' if days == 1 else 'days'}."
                     )
+                    # A template attached to this offset is sent as itself —
+                    # its own subject and HTML body — rather than having its
+                    # plain-text alternative poured into the generic status
+                    # email, which discarded everything the department wrote.
+                    matched_template = None
                     for template in templates:
                         if int(template.trigger_days_before or 0) == days:
-                            message = template.body_text or message
+                            matched_template = template
                             break
 
-                    await send_request_notification(
+                    delivered = await send_request_notification(
                         db,
                         event_request,
                         "days_before_event",
                         org,
                         extra_context={"message": message},
+                        template=matched_template,
                     )
+                    if not delivered:
+                        # The ledger is what stops a reminder being sent twice,
+                        # so writing it for a send that raised would retire the
+                        # reminder permanently on one transient SMTP failure.
+                        # Leave the offset unclaimed and let the next run retry.
+                        logger.warning(
+                            "Event request {} {}-day reminder not delivered; "
+                            "leaving it unledgered to retry",
+                            event_request.id,
+                            days,
+                        )
+                        break
+
                     db.add(
                         EventRequestActivity(
                             request_id=event_request.id,
@@ -5087,12 +5120,18 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
                     already.add(action)
                     org_sent += 1
-                    # Anything closer is now redundant: mark it sent so a
-                    # catch-up run does not email the same requester three
-                    # times on the same afternoon.
+                    # Only offsets that are ALSO already due are covered by
+                    # this send. Suppressing every closer offset unconditionally
+                    # is what a catch-up run needs — a task down for a week must
+                    # not fire 7, 3 and 1 in the same afternoon — but on a
+                    # healthy run at seven days the one-day reminder is not due
+                    # for another six, and retiring it here means the department
+                    # configured a reminder that could never be sent.
                     for closer in (d for d in offsets if d < days):
                         closer_action = f"reminder_sent:{closer}"
                         if closer_action in already:
+                            continue
+                        if event_date - timedelta(days=closer) > now:
                             continue
                         db.add(
                             EventRequestActivity(

@@ -3026,6 +3026,7 @@ class SchedulingService:
                     user_id=str(user_id),
                     position=assigned_position or "",
                     organization_id=organization_id,
+                    outreach_role=assignment_data.get("outreach_role"),
                 )
                 await self.db.commit()
 
@@ -3469,6 +3470,7 @@ class SchedulingService:
         user_id: str,
         position: str,
         organization_id: UUID,
+        outreach_role: Optional[str] = None,
     ) -> None:
         """Send in-app (and optionally email) notification when a
         member is assigned to a shift.
@@ -3499,7 +3501,16 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = _position_label(position)
+            # On an outreach signup sheet the seat is a plain `volunteer` and
+            # the job the member actually chose lives on outreach_role. Telling
+            # them they are "assigned to the Volunteer position" loses the one
+            # thing they picked.
+            if outreach_role:
+                from app.services.event_request_service import outreach_role_label
+
+                position_label = outreach_role_label(org, outreach_role)
+            else:
+                position_label = _position_label(position)
 
             from app.services.scheduled_tasks import resolve_check_templates
 

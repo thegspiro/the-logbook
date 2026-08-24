@@ -51,7 +51,7 @@ import type {
   StaffingRoleNeed,
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatShortDateTime } from '../utils/dateFormatting';
+import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 
 const STATUS_CONFIG: Record<EventRequestStatus, { label: string; color: string; icon: React.ElementType }> = {
@@ -405,8 +405,13 @@ const EventRequestsTab: React.FC = () => {
     setActionLoading(true);
     try {
       await eventRequestService.scheduleRequest(requestId, {
-        event_date: scheduleDate,
-        event_end_date: scheduleEndDate || undefined,
+        // DateTimeQuarterHour yields a naive "YYYY-MM-DDTHH:mm" in the
+        // department's own timezone. Sent as-is the backend stores it as UTC,
+        // which shifts the confirmed date by the offset — and with it the
+        // calendar event, the requester's "Scheduled Date" email, the staffing
+        // shift and the volunteer call, all by the same amount.
+        event_date: localToUTC(scheduleDate, tz),
+        event_end_date: scheduleEndDate ? localToUTC(scheduleEndDate, tz) : undefined,
         location_id: scheduleLocationId || undefined,
         notes: scheduleNotes || undefined,
         create_calendar_event: true,
@@ -433,7 +438,7 @@ const EventRequestsTab: React.FC = () => {
     try {
       await eventRequestService.postponeRequest(requestId, {
         reason: postponeReason || undefined,
-        new_event_date: postponeNewDate || undefined,
+        new_event_date: postponeNewDate ? localToUTC(postponeNewDate, tz) : undefined,
       });
       toast.success('Request postponed.');
       setShowPostponeForm(false);
