@@ -249,13 +249,20 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         // below, not this. The route and the API stay open on `inventory.view`
         // — a member who follows a link can still look — but an entry every
         // member carries in their nav implies a job they do not have.
+        //
+        // `view_medical` alone, and not the manage grants beside it: the route
+        // accepts only MEDICAL_VIEW_PERMISSIONS, and `checkPermission` gives
+        // no manage-implies-view. Advertising `manage_medical` here would send
+        // a supply officer who holds it without the read grant straight to
+        // Access Denied. A nav gate has to be a subset of its route's gate.
+        // Every seeded role that stocks medical holds `view_medical`.
         ...(isModuleOn('medical_supplies')
           ? [
               {
                 label: 'Medical Supplies',
                 path: '/medical-supplies',
                 icon: Stethoscope,
-                anyPermission: ['inventory.view_medical', 'inventory.manage_medical', 'inventory.manage'],
+                permission: 'inventory.view_medical',
               },
             ]
           : []),

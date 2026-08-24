@@ -165,7 +165,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               {
                 label: 'Medical Supplies',
                 path: '/medical-supplies',
-                anyPermission: ['inventory.view_medical', 'inventory.manage_medical', 'inventory.manage'],
+                permission: 'inventory.view_medical',
               },
             ]
           : []),

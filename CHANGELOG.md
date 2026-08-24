@@ -56,6 +56,31 @@ officer's page was shown to everyone, and the crew's page to no one.
   from their own issued gear, both of those are now closed, so the trail leads
   back to My Issued Gear instead.
 
+**Fixed in review**
+
+- **Five more ways in, all of them one mistake.** Closing a page closes it for
+  every surface that offers it, and "navigation" turned out to mean more than
+  the two nav components: the item detail page's header **Back** button and its
+  error-state link still pointed at the closed catalogue (the breadcrumb above
+  was only one of three exits), the **command palette** listed Inventory with
+  no permission at all, the **`i` keyboard shortcut** navigated there on a bare
+  keypress with no label to gate, and Medical Supplies' "tracked separately
+  under Gear & Uniforms" aside linked a medical-only officer into a page they
+  cannot open. Each one turned a fixed bug into an Access Denied reached from a
+  control the app itself offered.
+- **The medical navigation gate was a superset of its route's gate.** It
+  advertised `manage_medical` and `inventory.manage`, but `/medical-supplies`
+  accepts only `MEDICAL_VIEW_PERMISSIONS` and `checkPermission` has no
+  manage-implies-view rule, so a supply officer holding management without the
+  read grant was invited to Access Denied. The entry gates on
+  `inventory.view_medical` alone — the one grant in the route's own list that
+  distinguishes a stocker from every member.
+- **`src/navGateIntegrity.test.ts` asserts both invariants**, in the manner of
+  `routeIntegrity.test.ts`: a nav gate must be a subset of its route's gate,
+  and every surface offering the gear catalogue must gate on
+  `inventory.manage`. Each assertion was confirmed to fail against the original
+  defect before being kept.
+
 ### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
 
 **Changed**

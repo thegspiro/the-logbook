@@ -137,6 +137,11 @@ const ItemDetailPage: React.FC = () => {
   // permission here as defense-in-depth (the backend enforces them too).
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
+  // A member reaches this page from their own issued gear, and the catalogue
+  // above it is manager-only — so every way out of here (breadcrumb, header
+  // Back, and the error state's link) has to lead somewhere they can open.
+  const backTo = canManage ? '/inventory/items' : '/inventory/my-equipment';
+  const backLabel = canManage ? 'Items' : 'My Issued Gear';
 
   // Core state
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -296,8 +301,8 @@ const ItemDetailPage: React.FC = () => {
       <div className="mx-auto max-w-3xl py-12 text-center">
         <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-red-500" />
         <p className="text-theme-text-primary font-medium">{error ?? 'Item not found'}</p>
-        <Link to="/inventory/items" className="btn-info mt-4 inline-block text-sm">
-          Back to Items
+        <Link to={backTo} className="btn-info mt-4 inline-block text-sm">
+          Back to {backLabel}
         </Link>
       </div>
     );
@@ -319,25 +324,18 @@ const ItemDetailPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       {/* Breadcrumbs */}
-      {/* A member reaches this page from their own issued gear, and the full
-          catalogue above it is manager-only — so the trail has to lead back
-          where they came from, not to a page that would bounce them. */}
       <nav className="text-theme-text-muted flex items-center gap-1 text-sm">
-        {canManage ? (
+        {canManage && (
           <>
             <Link to="/inventory" className="hover:text-theme-text-primary">
               Inventory
             </Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <Link to="/inventory/items" className="hover:text-theme-text-primary">
-              Items
-            </Link>
           </>
-        ) : (
-          <Link to="/inventory/my-equipment" className="hover:text-theme-text-primary">
-            My Issued Gear
-          </Link>
         )}
+        <Link to={backTo} className="hover:text-theme-text-primary">
+          {backLabel}
+        </Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="text-theme-text-primary max-w-[200px] truncate font-medium">{item.name}</span>
       </nav>
@@ -363,7 +361,7 @@ const ItemDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/inventory/items" className="btn-secondary btn-sm inline-flex items-center gap-1">
+          <Link to={backTo} className="btn-secondary btn-sm inline-flex items-center gap-1">
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
           <Link
