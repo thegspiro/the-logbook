@@ -79,6 +79,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A standing claim's `apparatus_id` is verified in-org before it is stored, and
   the standing service and shift generation now resolve the organisation's
   timezone through one shared helper instead of disagreeing about the default.
+- **A cancelled, finalized or past shift no longer reads as short-staffed.**
+  Its empty chairs counted towards the day's open-seat total and its urgent
+  flag, and it offered a claim button the server refuses. It now reads as
+  closed and offers nothing.
+- **Each shift on the board carries a details link again.** The board's own
+  actions cover claiming and giving up a seat; editing a shift, managing its
+  attendance and finalizing it live in the detail panel, which a fully staffed
+  shift an officer is not assigned to had no other route into.
+- **Giving up a seat is withheld while your own offer of it stands.** Releasing
+  it, or offering it again, left the first recipient holding an offer that
+  could no longer be honoured. Withdrawing is the only move until they answer.
+- **A standing series is anchored on the shift it was started from.** Biweekly
+  parity and the monthly ordinal both come from the first matching weekday
+  after the start date, so anchoring on today built a fortnight that skipped
+  the very shift the member opened it from. A series covering only dates the
+  department has not scheduled yet can also be saved — that is the case
+  standing shifts exist for.
+- **A training seat cannot be handed over through a trade.** It carries the
+  trainee's program and evaluating officer, and moving only the member id
+  would file one member's training against another. Approved time off is
+  rechecked when an offer is accepted, not only when candidates are picked.
 
 ### The app never updated in Brave until the cache was cleared by hand (2026-08-23)
 
