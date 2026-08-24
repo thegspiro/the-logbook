@@ -66,7 +66,12 @@ HOST_QUERY = "~HI~HQES"
 # ESC/POS real-time status requests (DLE EOT n). Unlike ZPL's text queries
 # these are answered one byte at a time, so they are sent as separate
 # exchanges rather than back to back.
+#
+# n=2 (offline) reports why printing is halted, n=4 (paper roll sensor) reports
+# the roll, and n=3 (error cause) is what separates a cutter jam from the
+# unhelpful "something is wrong" that n=2's error bit would otherwise be.
 ESCPOS_OFFLINE_QUERY = b"\x10\x04\x02"
+ESCPOS_ERROR_QUERY = b"\x10\x04\x03"
 ESCPOS_PAPER_QUERY = b"\x10\x04\x04"
 
 _ETX = b"\x03"
@@ -297,18 +302,25 @@ async def query_printer_raw(
         )
         # One deadline for the whole exchange, for the same reason as above: a
         # per-read budget multiplies by the number of questions asked.
+        #
+        # Each read is then capped at an equal share of what is left. Without
+        # that cap a printer that implements some real-time queries and ignores
+        # others spends the entire budget waiting on the first silent one, and
+        # every later question comes back empty — so adding a query nothing
+        # answers would silently disable the ones that worked before it.
         deadline = time.monotonic() + timeout
-        for payload in exchanges:
+        for index, payload in enumerate(exchanges):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 replies.append(b"")
                 continue
             writer.write(payload)
             await asyncio.wait_for(writer.drain(), timeout=remaining)
+            share = (deadline - time.monotonic()) / (len(exchanges) - index)
             try:
                 chunk = await asyncio.wait_for(
                     reader.read(min(read_bytes, MAX_STATUS_BYTES)),
-                    timeout=max(0.001, deadline - time.monotonic()),
+                    timeout=max(0.001, share),
                 )
             except asyncio.TimeoutError:
                 chunk = b""

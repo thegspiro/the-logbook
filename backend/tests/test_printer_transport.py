@@ -412,3 +412,33 @@ class TestReadDeadline:
         # Two questions must not cost two full budgets.
         assert elapsed < 1.0
         assert replies == [b"", b""]
+
+    async def test_a_silent_question_does_not_starve_the_ones_after_it(self):
+        # Real-time status support is uneven: a receipt printer may answer the
+        # offline and paper queries and ignore the error-cause one. If the
+        # silent question could spend the whole budget, adding it would
+        # silently disable the out-of-paper reporting that worked before.
+        writer = _writer()
+
+        async def silent_middle(*_):
+            call = reader.read.call_count
+            if call == 2:
+                await asyncio.sleep(5)
+            return b"\x12"
+
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=silent_middle)
+        with _resolver("192.168.1.50"):
+            with patch(
+                "asyncio.open_connection", AsyncMock(return_value=(reader, writer))
+            ):
+                replies = await query_printer_raw(
+                    "printer.local",
+                    9100,
+                    [b"\x10\x04\x02", b"\x10\x04\x03", b"\x10\x04\x04"],
+                    timeout=0.3,
+                )
+        assert replies[0] == b"\x12"
+        assert replies[1] == b""
+        # The point of the fix: the third question still gets its answer.
+        assert replies[2] == b"\x12"

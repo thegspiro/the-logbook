@@ -5,7 +5,7 @@ Request and response schemas for self-reported training submissions
 and self-report configuration.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 from uuid import UUID
 
@@ -83,6 +83,9 @@ class TrainingSubmissionCreate(BaseModel):
     description: Optional[str] = None
 
     completion_date: date
+    # Time of day the training started. The form derives hours from this plus a
+    # length; keeping it means an edit does not have to invent one.
+    start_time: Optional[time] = None
     hours_completed: float = Field(..., gt=0)
     credit_hours: Optional[float] = Field(None, ge=0)
 
@@ -127,6 +130,7 @@ class TrainingSubmissionUpdate(BaseModel):
     description: Optional[str] = None
 
     completion_date: Optional[date] = None
+    start_time: Optional[time] = None
     hours_completed: Optional[float] = Field(None, gt=0)
     credit_hours: Optional[float] = Field(None, ge=0)
 
@@ -199,6 +203,7 @@ class TrainingSubmissionResponse(UTCResponseBase):
     description: Optional[str]
 
     completion_date: date
+    start_time: Optional[time] = None
     hours_completed: float
     credit_hours: Optional[float]
 

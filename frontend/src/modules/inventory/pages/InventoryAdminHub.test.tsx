@@ -256,7 +256,7 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
-    expect(screen.getByText('Department Store').closest('a')).toHaveAttribute('href', '/store/admin');
+    expect(screen.getByRole('link', { name: /Department Store/ })).toHaveAttribute('href', '/store/admin');
   });
 
   it('shows badges on nav cards with counts', async () => {

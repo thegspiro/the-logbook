@@ -1190,6 +1190,24 @@ export const trainingSubmissionService = {
     return response.data;
   },
 
+  /**
+   * Create a submission and attach its certificate in one request.
+   *
+   * Uploading afterwards cannot work for a submission the department
+   * auto-approves: it is frozen the moment it exists and its training record
+   * has already been copied from it, so the evidence has to arrive with the
+   * row that routing sees.
+   */
+  async createSubmissionWithAttachment(data: TrainingSubmissionCreate, file: File): Promise<TrainingSubmission> {
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(data));
+    formData.append('file', file);
+    const response = await api.post<TrainingSubmission>('/training/submissions/with-attachment', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   async getMySubmissions(status?: string): Promise<TrainingSubmission[]> {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/my', {
       params: status ? { status } : undefined,
