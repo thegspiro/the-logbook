@@ -909,6 +909,11 @@ class StorefrontService:
     # ==================================================================
 
     async def get_open_windows(self, organization_id: str) -> List[StoreOrderWindow]:
+        # Eager-loads the offerings the same way list_windows/get_window do.
+        # The admin dashboard renders the open window through the full window
+        # payload, which reads window.offerings — a lazy load there raises
+        # MissingGreenlet under async SQLAlchemy and 500s the whole page, so a
+        # department only saw it once it had a window open.
         result = await self.db.execute(
             select(StoreOrderWindow)
             # Offerings and their products are eager-loaded for the same reason

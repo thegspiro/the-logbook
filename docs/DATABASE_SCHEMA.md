@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**250 tables · 4278 columns · 810 foreign keys**
+**252 tables · 4311 columns · 815 foreign keys**
 
 ---
 
@@ -199,7 +199,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
-| [`event_rsvps`](#event_rsvps) | `EventRSVP` | 20 | Event RSVP model for tracking attendance |
+| [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 28 | Event Template model for reusable event configurations |
 | [`events`](#events) | `Event` | 50 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
@@ -335,6 +335,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
+### Label_Printer
+
+<sub>`app/models/label_printer.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`label_printers`](#label_printers) | `LabelPrinter` | 17 | A ZPL-capable network label printer belonging to an organization. |
+
 ### Legal
 
 <sub>`app/models/legal.py`</sub>
@@ -396,6 +404,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospect_interviews`](#prospect_interviews) | `ProspectInterview` | 12 | Interview record for a prospective member. |
 | [`prospect_step_progress`](#prospect_step_progress) | `ProspectStepProgress` | 10 | Tracks a prospect's progress on each pipeline step. |
 | [`prospective_members`](#prospective_members) | `ProspectiveMember` | 29 | Prospective member record, kept separate from the users table. |
+
+### Nfc_Tag
+
+<sub>`app/models/nfc_tag.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`nfc_tags`](#nfc_tags) | `NfcTag` | 15 | An NFC credential (ID card) issued to a member. |
 
 ### Notifications
 
@@ -2511,6 +2527,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `checked_in_at` | DATETIME | yes |  |  |  |
 | `checked_out_at` | DATETIME | yes |  |  |  |
 | `attendance_duration_minutes` | INTEGER | yes |  |  |  |
+| `early_check_in_minutes` | INTEGER | yes |  |  |  |
 | `override_check_in_at` | DATETIME | yes |  |  |  |
 | `override_check_out_at` | DATETIME | yes |  |  |  |
 | `override_duration_minutes` | INTEGER | yes |  |  |  |
@@ -5321,6 +5338,42 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_storage_areas_parent` (`parent_id`)
 - `ix_storage_areas_is_active` (`is_active`)
 
+## Label_Printer
+
+### `label_printers`
+
+**LabelPrinter** · `app/models/label_printer.py`
+
+> A ZPL-capable network label printer belonging to an organization.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `location` | VARCHAR(200) | yes |  |  |  |
+| `language` | VARCHAR(20) | no |  | `'zpl'` |  |
+| `host` | VARCHAR(255) | no |  |  |  |
+| `port` | INTEGER | no |  | `9100` |  |
+| `dpi` | INTEGER | no |  | `203` |  |
+| `label_format` | VARCHAR(50) | no |  | `'zebra_2x1'` |  |
+| `custom_width` | FLOAT | yes |  |  |  |
+| `custom_height` | FLOAT | yes |  |  |  |
+| `darkness` | INTEGER | yes |  |  |  |
+| `is_default` | BOOL | no |  | `False` |  |
+| `is_active` | BOOL | no |  | `True` |  |
+| `created_by_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_label_printers_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_label_printer_org_name` (`organization_id`, `name`)
+
 ## Legal
 
 ### `legal_document_revisions`
@@ -5932,6 +5985,43 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_prospective_members_status` (`status`)
 - UNIQUE `ix_prospective_members_status_token` (`status_token`)
 - UNIQUE `uq_prospect_org_active_email` (`organization_id`, `active_email`)
+
+## Nfc_Tag
+
+### `nfc_tags`
+
+**NfcTag** · `app/models/nfc_tag.py`
+
+> An NFC credential (ID card) issued to a member. SECURITY — the UID is stored **hashed**, never in clear text. A card UID is the whole of the secret: anything holding one can be cloned onto a writable tag, so a leaked database dump would otherwise be a stack of working ID cards. Lookups are by hash of the normalized UID, which is why ``uid_hash`` carries the unique constraint and there is no column holding the UID itself. ``uid_preview`` keeps the last four characters so an officer can tell two cards apart on screen and match one against the number printed on the card.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `uid_hash` | VARCHAR(64) | no |  |  |  |
+| `uid_preview` | VARCHAR(8) | no |  |  |  |
+| `credential_type` | ENUM(`serial`, `written`) | no |  | `serial` |  |
+| `label` | VARCHAR(100) | yes |  |  |  |
+| `status` | ENUM(`active`, `suspended`, `lost`, `revoked`) | no | IDX | `active` |  |
+| `issued_at` | DATETIME | no |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_reason` | TEXT | yes |  |  |  |
+| `issued_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_nfc_tag_org_user` (`organization_id`, `user_id`)
+- `ix_nfc_tags_organization_id` (`organization_id`)
+- `ix_nfc_tags_status` (`status`)
+- `ix_nfc_tags_user_id` (`user_id`)
+
+**Constraints**
+
+- UNIQUE `uq_nfc_tag_org_uid` (`organization_id`, `uid_hash`)
 
 ## Notifications
 
@@ -8827,7 +8917,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (301 references)
+### → `users` (304 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8994,6 +9084,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_issuances` | `returned_by` | NO ACTION | yes |
 | `item_issuances` | `user_id` | CASCADE | no |
 | `item_variant_groups` | `created_by` | NO ACTION | yes |
+| `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
 | `locations` | `created_by` | NO ACTION | yes |
@@ -9022,6 +9113,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_action_items` | `assignee_id` | NO ACTION | yes |
 | `minutes_templates` | `created_by` | NO ACTION | yes |
 | `multi_agency_trainings` | `created_by` | SET NULL | yes |
+| `nfc_tags` | `issued_by` | SET NULL | yes |
+| `nfc_tags` | `user_id` | CASCADE | no |
 | `nfpa_exposure_records` | `created_by` | NO ACTION | yes |
 | `nfpa_exposure_records` | `user_id` | SET NULL | yes |
 | `nfpa_item_compliance` | `created_by` | NO ACTION | yes |
@@ -9133,7 +9226,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (198 references)
+### → `organizations` (200 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9246,6 +9339,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `item_assignments` | `organization_id` | CASCADE | no |
 | `item_issuances` | `organization_id` | CASCADE | no |
 | `item_variant_groups` | `organization_id` | CASCADE | no |
+| `label_printers` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
@@ -9263,6 +9357,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `message_history` | `organization_id` | CASCADE | yes |
 | `minutes_templates` | `organization_id` | CASCADE | no |
 | `multi_agency_trainings` | `organization_id` | CASCADE | no |
+| `nfc_tags` | `organization_id` | CASCADE | no |
 | `nfpa_exposure_records` | `organization_id` | CASCADE | no |
 | `nfpa_inspection_details` | `organization_id` | CASCADE | no |
 | `nfpa_item_compliance` | `organization_id` | CASCADE | no |

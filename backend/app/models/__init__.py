@@ -230,6 +230,7 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.label_printer import LabelPrinter
 from app.models.legal import (
     LegalDocumentRevision,
     LegalDocumentType,
@@ -272,6 +273,7 @@ from app.models.minute import (
     Motion,
     MotionStatus,
 )
+from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
 from app.models.notification import (
     DepartmentMessage,
     DepartmentMessageRead,
@@ -545,6 +547,8 @@ __all__ = [
     "StorePaymentMethod",
     "StoreFulfillmentMethod",
     "StoreOrderEventType",
+    # Label printing
+    "LabelPrinter",
     # Inventory models
     "InventoryCategory",
     "InventoryItem",
@@ -704,6 +708,10 @@ __all__ = [
     # Consent models
     "ConsentType",
     "UserConsent",
+    # NFC tag (member ID card) models
+    "NfcCredentialType",
+    "NfcTag",
+    "NfcTagStatus",
     # Legal document models
     "LegalDocumentRevision",
     "LegalDocumentType",

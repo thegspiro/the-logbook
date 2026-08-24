@@ -84,15 +84,135 @@ class TrainingSubmissionService:
         training_type: str,
         completion_date: date,
         hours_completed: float,
+        save_as_draft: bool = False,
         **kwargs,
     ) -> TrainingSubmission:
-        """Create a new self-reported training submission."""
+        """Create a new self-reported training submission.
+
+        ``save_as_draft`` parks the submission in the member's own list without
+        entering the review workflow; ``submit_draft`` is the only way out of
+        that state, and it re-runs the approval routing below.
+        """
         config = await self.get_config(organization_id)
 
         if hours_completed <= 0:
             raise ValueError("Hours completed must be greater than zero")
 
-        # Validate against config
+        self._assert_within_department_limits(config, training_type, hours_completed)
+
+        if save_as_draft:
+            status = SubmissionStatus.DRAFT
+        else:
+            status = self._route_for_review(
+                config, training_type, hours_completed, kwargs
+            )
+
+        submission = TrainingSubmission(
+            id=generate_uuid(),
+            organization_id=organization_id,
+            submitted_by=submitted_by,
+            course_name=course_name,
+            training_type=training_type,
+            completion_date=completion_date,
+            hours_completed=hours_completed,
+            status=status,
+            **{k: v for k, v in kwargs.items() if v is not None},
+        )
+        self.db.add(submission)
+
+        # One transaction for the submission and any record it spawns, so a
+        # failed record insert cannot leave an approved submission that
+        # credits nothing and can never be retried.
+        if status == SubmissionStatus.APPROVED:
+            await self._record_if_auto_approved(submission)
+        else:
+            await self.db.commit()
+        await self.db.refresh(submission)
+
+        logger.info(
+            f"Training submission created: {course_name} by {submitted_by} "
+            f"({hours_completed}h, status={status.value})"
+        )
+
+        return submission
+
+    async def _record_if_auto_approved(self, submission: TrainingSubmission) -> None:
+        """Create the training record immediately for an auto-approved submission.
+
+        Runs the same duplicate check the manual-review path uses so an
+        auto-approved submission can't silently spawn a duplicate record without
+        any warning.
+        """
+        if submission.status != SubmissionStatus.APPROVED:
+            return
+        duplicate_info = await self._check_duplicate(submission)
+        if duplicate_info:
+            logger.warning(
+                f"Duplicate detected on auto-approve: submission={submission.id} "
+                f"existing_record={duplicate_info['existing_record_id']}"
+            )
+        await self._create_record_from_submission(submission)
+
+    async def submit_draft(
+        self, submission_id: str, user_id: str, organization_id: str
+    ) -> TrainingSubmission:
+        """Move a member's own saved draft into the review workflow.
+
+        Routing is decided here rather than at save time: a draft can sit for
+        weeks, and the department's approval settings may have changed in the
+        meantime.
+        """
+        submission = await self.get_submission(submission_id, organization_id)
+        if not submission:
+            raise ValueError("Submission not found")
+
+        if str(submission.submitted_by) != str(user_id):
+            raise PermissionError("You can only submit your own drafts")
+
+        if submission.status != SubmissionStatus.DRAFT:
+            raise ValueError("Only a draft can be submitted for review")
+
+        config = await self.get_config(organization_id)
+        # A draft can sit for weeks. Re-check the department's restrictions as
+        # well as its routing: an entry the same member could no longer create
+        # must not reach the queue just because it was started earlier.
+        self._assert_within_department_limits(
+            config, submission.training_type, submission.hours_completed
+        )
+        self._assert_required_evidence(config, submission)
+
+        submission.status = self._route_for_review(
+            config,
+            submission.training_type,
+            submission.hours_completed,
+            {
+                "certification_number": submission.certification_number,
+                "issuing_agency": submission.issuing_agency,
+                "expiration_date": submission.expiration_date,
+                "category_id": submission.category_id,
+            },
+        )
+        # The review queue orders by submitted_at and the review card prints
+        # it. Left at the draft's creation time, a draft kept for a fortnight
+        # arrives already buried under submissions filed after it.
+        submission.submitted_at = datetime.now(timezone.utc)
+
+        # One transaction for the status change and the record it spawns. Two
+        # would leave a failed record insert behind an already-approved
+        # submission that no retry can reach — it is no longer a draft.
+        if submission.status == SubmissionStatus.APPROVED:
+            await self._record_if_auto_approved(submission)
+        else:
+            await self.db.commit()
+        await self.db.refresh(submission)
+
+        return submission
+
+    @staticmethod
+    def _assert_within_department_limits(
+        config: SelfReportConfig, training_type: str, hours_completed: float
+    ) -> None:
+        """Reject an entry the department's self-report settings disallow."""
         if (
             config.max_hours_per_submission
             and hours_completed > config.max_hours_per_submission
@@ -109,58 +229,52 @@ class TrainingSubmissionService:
                 f"Training type '{training_type}' is not allowed for self-reporting"
             )
 
-        # Determine initial status. Auto-approve is a convenience for low-stakes
-        # logged hours — it must never let a member self-credit a certification or
-        # a training requirement without a second person's sign-off (separation of
-        # duties, owner decision 2026-08-09). A submission that would credit a
-        # certification/requirement is always routed to manual review regardless of
-        # the org's auto-approve settings.
-        status = SubmissionStatus.PENDING_REVIEW
-        credits_cert_or_requirement = self._credits_certification_or_requirement(
-            training_type, kwargs
-        )
-        if not credits_cert_or_requirement:
-            if not config.require_approval:
-                status = SubmissionStatus.APPROVED
-            elif (
-                config.auto_approve_under_hours
-                and hours_completed <= config.auto_approve_under_hours
-            ):
-                status = SubmissionStatus.APPROVED
+    @staticmethod
+    def _assert_required_evidence(
+        config: SelfReportConfig, submission: TrainingSubmission
+    ) -> None:
+        """Enforce a department that requires supporting documents.
 
-        submission = TrainingSubmission(
-            id=generate_uuid(),
-            organization_id=organization_id,
-            submitted_by=submitted_by,
-            course_name=course_name,
-            training_type=training_type,
-            completion_date=completion_date,
-            hours_completed=hours_completed,
-            status=status,
-            **{k: v for k, v in kwargs.items() if v is not None},
-        )
-        self.db.add(submission)
-        await self.db.commit()
-        await self.db.refresh(submission)
+        Only reachable at the draft handoff: an attachment cannot exist before
+        the row it hangs off, so a straight create has nothing to check. The
+        form routes a submission carrying a file through a draft for exactly
+        this reason.
+        """
+        field_config = config.field_config or {}
+        attachments_config = field_config.get("attachments") or {}
+        if not attachments_config.get("required"):
+            return
+        if not submission.attachments:
+            raise ValueError(
+                "This department requires supporting documents on a submission"
+            )
 
-        logger.info(
-            f"Training submission created: {course_name} by {submitted_by} "
-            f"({hours_completed}h, status={status.value})"
-        )
+    def _route_for_review(
+        self,
+        config: SelfReportConfig,
+        training_type: str,
+        hours_completed: float,
+        fields: dict,
+    ) -> SubmissionStatus:
+        """Decide whether a submission goes to an officer or is auto-approved.
 
-        # If auto-approved, create the training record immediately. Run the same
-        # duplicate check the manual-review path uses so an auto-approved submission
-        # can't silently spawn a duplicate record without any warning.
-        if status == SubmissionStatus.APPROVED:
-            duplicate_info = await self._check_duplicate(submission)
-            if duplicate_info:
-                logger.warning(
-                    f"Duplicate detected on auto-approve: submission={submission.id} "
-                    f"existing_record={duplicate_info['existing_record_id']}"
-                )
-            await self._create_record_from_submission(submission)
-
-        return submission
+        Auto-approve is a convenience for low-stakes logged hours — it must never
+        let a member self-credit a certification or a training requirement without
+        a second person's sign-off (separation of duties, owner decision
+        2026-08-09). A submission that would credit a certification/requirement is
+        always routed to manual review regardless of the org's auto-approve
+        settings.
+        """
+        if self._credits_certification_or_requirement(training_type, fields):
+            return SubmissionStatus.PENDING_REVIEW
+        if not config.require_approval:
+            return SubmissionStatus.APPROVED
+        if (
+            config.auto_approve_under_hours
+            and hours_completed <= config.auto_approve_under_hours
+        ):
+            return SubmissionStatus.APPROVED
+        return SubmissionStatus.PENDING_REVIEW
 
     @staticmethod
     def _credits_certification_or_requirement(training_type: str, fields: dict) -> bool:
@@ -212,6 +326,7 @@ class TrainingSubmissionService:
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        exclude_statuses: Optional[List[str]] = None,
     ) -> List[TrainingSubmission]:
         """Get submissions with optional filters."""
         query = select(TrainingSubmission).where(
@@ -223,6 +338,9 @@ class TrainingSubmissionService:
 
         if status:
             query = query.where(TrainingSubmission.status == status)
+
+        if exclude_statuses:
+            query = query.where(TrainingSubmission.status.notin_(exclude_statuses))
 
         query = query.order_by(TrainingSubmission.submitted_at.desc())
         query = query.limit(limit).offset(offset)

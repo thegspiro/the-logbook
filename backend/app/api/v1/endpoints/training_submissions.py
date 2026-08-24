@@ -5,8 +5,14 @@ Handles self-reported training from members, officer review/approval,
 and self-report configuration management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import asyncio
+import os
+import uuid as uuid_lib
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.dependencies import (
     _collect_user_permissions,
@@ -14,9 +20,12 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.api.v1.endpoints.training_enhancements import TRAINING_ATTACHMENT_DIR
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import ensure_found, handle_service_errors
+from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
+from app.models.training import SubmissionStatus, TrainingSubmission
 from app.models.user import User
 from app.schemas.training_submission import (
     SelfReportConfigResponse,
@@ -25,8 +34,11 @@ from app.schemas.training_submission import (
     TrainingSubmissionCreate,
     TrainingSubmissionResponse,
     TrainingSubmissionUpdate,
+    sanitize_attachments,
 )
 from app.services.training_submission_service import TrainingSubmissionService
+from app.utils.mime_validation import detect_mime_type
+from app.utils.upload_limits import read_upload_limited
 
 router = APIRouter()
 
@@ -139,6 +151,10 @@ async def get_all_submissions(
         status=status,
         limit=limit,
         offset=offset,
+        # A draft is a member's unfinished note to themselves, not something
+        # they have handed to the department — it stays out of the officer
+        # queue unless an officer explicitly asks for that status.
+        exclude_statuses=None if status else [SubmissionStatus.DRAFT.value],
     )
     return submissions
 
@@ -199,9 +215,22 @@ async def delete_submission(
     """Delete a submission (only by submitter, before approval)."""
     service = TrainingSubmissionService(db)
     async with handle_service_errors("Failed to delete submission"):
+        # Collected before the row goes: a withdrawn submission's certificate
+        # can carry PHI, and deleting only the row leaves the file in the
+        # uploads volume — and in its backups — indefinitely.
+        submission = await service.get_submission(
+            submission_id, current_user.organization_id
+        )
+        stored_paths = (
+            _confined_attachment_paths(submission.attachments) if submission else []
+        )
+
         await service.delete_submission(
             submission_id, current_user.id, current_user.organization_id
         )
+
+        for path in stored_paths:
+            await asyncio.to_thread(_remove_quietly, path)
 
 
 # ==================== Officer Review ====================
@@ -328,3 +357,280 @@ async def reverse_submission_approval(
             username=current_user.username,
         )
         return submission
+
+
+# ==================== Draft Submission ====================
+
+
+@router.post("/{submission_id}/submit", response_model=TrainingSubmissionResponse)
+async def submit_draft(
+    submission_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hand a saved draft to the department (submitter only)."""
+    service = TrainingSubmissionService(db)
+    async with handle_service_errors("Failed to submit draft"):
+        submission = await service.submit_draft(
+            submission_id=submission_id,
+            user_id=current_user.id,
+            organization_id=current_user.organization_id,
+        )
+        return submission
+
+
+# ==================== Certificate Attachments ====================
+
+
+# A member attaches proof of the training they are reporting — a certificate
+# PDF or, far more often, a phone photo of a paper card. MIME type is verified
+# from the file's magic bytes, never the client-supplied Content-Type.
+#
+# Nested *inside* the training-record attachment root on purpose: approval
+# copies these attachment dicts verbatim onto the TrainingRecord, and the
+# record download route confines paths to TRAINING_ATTACHMENT_DIR. A sibling
+# directory would leave every approved member's certificate 404ing from their
+# own training history. tests/test_training_submission_drafts_attachments.py
+# asserts the nesting so a later tidy-up cannot quietly break it.
+SUBMISSION_ATTACHMENT_DIR = os.path.join(
+    TRAINING_ATTACHMENT_DIR, "self_reported_submissions"
+)
+ALLOWED_SUBMISSION_ATTACHMENT_MIME = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+}
+MAX_SUBMISSION_ATTACHMENT_BYTES = 10 * 1024 * 1024
+# Statuses in which the submitter may still change what they sent. Mirrors the
+# service's edit/delete guard: once an officer has ruled, the evidence is
+# frozen with the decision.
+EDITABLE_SUBMISSION_STATUSES = (
+    SubmissionStatus.DRAFT,
+    SubmissionStatus.PENDING_REVIEW,
+    SubmissionStatus.REVISION_REQUESTED,
+)
+
+
+async def _load_submission_for_attachment(
+    db: AsyncSession,
+    submission_id: str,
+    current_user: User,
+) -> TrainingSubmission:
+    """Fetch a submission in the caller's org, enforcing attachment access.
+
+    The submitter may read their own attachments; everyone else needs
+    ``training.manage`` — a certificate can carry PHI, so a same-org member
+    without the permission is refused like any other reader.
+    """
+    service = TrainingSubmissionService(db)
+    submission = ensure_found(
+        await service.get_submission(submission_id, current_user.organization_id),
+        "Submission",
+    )
+
+    if str(submission.submitted_by) != str(current_user.id) and not _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to access this submission's attachments.",
+        )
+    return submission
+
+
+def _remove_quietly(path: str) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _confined_path(attachment) -> str | None:
+    """Real path of a stored attachment, or None if it escapes the root.
+
+    file_path is server-generated, but the column is client-writable through
+    the create/update schemas — this is what keeps that from becoming an
+    arbitrary file read (or, on delete, an arbitrary unlink).
+    """
+    if not isinstance(attachment, dict) or not attachment.get("file_path"):
+        return None
+    real_path = os.path.realpath(attachment["file_path"])
+    attachment_root = os.path.realpath(SUBMISSION_ATTACHMENT_DIR)
+    if not real_path.startswith(attachment_root + os.sep):
+        return None
+    return real_path
+
+
+def _confined_attachment_paths(attachments) -> list[str]:
+    paths = [_confined_path(a) for a in attachments or []]
+    return [path for path in paths if path]
+
+
+@router.post("/{submission_id}/attachments")
+async def upload_submission_attachment(
+    submission_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Attach a certificate or photo to a submission (submitter only)."""
+    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+
+    if str(submission.submitted_by) != str(current_user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the submitter can attach a certificate.",
+        )
+
+    if submission.status not in EDITABLE_SUBMISSION_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot attach to a submission that has been approved or rejected.",
+        )
+
+    try:
+        content = await read_upload_limited(file, MAX_SUBMISSION_ATTACHMENT_BYTES)
+    except ValueError:
+        raise CodedHTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 10MB.",
+            error_code=ErrorCode.UPLD_TOO_LARGE,
+        )
+
+    try:
+        detected_mime = detect_mime_type(content)
+    except RuntimeError:
+        raise CodedHTTPException(
+            status_code=503,
+            detail="File validation is unavailable. Please try again later.",
+            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
+        )
+
+    ext = ALLOWED_SUBMISSION_ATTACHMENT_MIME.get(detected_mime)
+    if not ext:
+        raise CodedHTTPException(
+            status_code=400,
+            detail=(
+                f"File type not allowed (detected: {detected_mime}). "
+                "Allowed: PDF, JPG, or PNG."
+            ),
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
+        )
+
+    org_dir = os.path.join(SUBMISSION_ATTACHMENT_DIR, str(current_user.organization_id))
+    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
+    # Server-generated name + magic-derived extension, so a double extension
+    # (cert.pdf.exe) cannot survive the round trip.
+    stored_name = f"{uuid_lib.uuid4().hex}{ext}"
+    file_path = os.path.join(org_dir, stored_name)
+
+    def _write_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as handle:
+            handle.write(data)
+
+    await asyncio.to_thread(_write_file, file_path, content)
+
+    attachment = {
+        "file_name": file.filename or stored_name,
+        "file_path": file_path,
+        "file_type": detected_mime,
+        "file_size": len(content),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": str(current_user.id),
+    }
+    # Plain JSON column — reassign rather than append in place so SQLAlchemy
+    # detects the change (CLAUDE.md pitfall #12).
+    submission.attachments = list(submission.attachments or []) + [attachment]
+    flag_modified(submission, "attachments")
+
+    try:
+        await db.commit()
+        await db.refresh(submission)
+    except Exception as e:
+        await asyncio.to_thread(_remove_quietly, file_path)
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    return {
+        "submission_id": submission_id,
+        "attachments": sanitize_attachments(submission.attachments),
+    }
+
+
+@router.get("/{submission_id}/attachments")
+async def get_submission_attachments(
+    submission_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List a submission's attachments (metadata only, no file paths)."""
+    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+    return {
+        "submission_id": submission_id,
+        "attachments": sanitize_attachments(submission.attachments),
+    }
+
+
+@router.get("/{submission_id}/attachments/{index}/download")
+async def download_submission_attachment(
+    submission_id: str,
+    index: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream one stored attachment by its index."""
+    from fastapi.responses import FileResponse
+
+    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+    attachments = submission.attachments or []
+    if index < 0 or index >= len(attachments):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    attachment = attachments[index]
+    real_path = _confined_path(attachment)
+    if not real_path:
+        raise HTTPException(status_code=404, detail="Attachment file not found")
+
+    if not await asyncio.to_thread(os.path.isfile, real_path):
+        raise HTTPException(status_code=404, detail="Attachment file not found")
+
+    return FileResponse(
+        real_path,
+        media_type=attachment.get("file_type") or "application/octet-stream",
+        filename=attachment.get("file_name") or os.path.basename(real_path),
+    )
+
+
+@router.delete("/{submission_id}/attachments/{index}", status_code=204)
+async def delete_submission_attachment(
+    submission_id: str,
+    index: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove an attachment the member added (submitter only, before a ruling)."""
+    submission = await _load_submission_for_attachment(db, submission_id, current_user)
+
+    if str(submission.submitted_by) != str(current_user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the submitter can remove an attachment.",
+        )
+
+    if submission.status not in EDITABLE_SUBMISSION_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change attachments after a decision has been made.",
+        )
+
+    attachments = list(submission.attachments or [])
+    if index < 0 or index >= len(attachments):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    removed = attachments.pop(index)
+    submission.attachments = attachments
+    flag_modified(submission, "attachments")
+    await db.commit()
+
+    removed_path = _confined_path(removed)
+    if removed_path:
+        await asyncio.to_thread(_remove_quietly, removed_path)

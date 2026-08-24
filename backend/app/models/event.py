@@ -336,6 +336,15 @@ class EventRSVP(Base):
         Integer, nullable=True
     )  # Calculated duration in minutes
 
+    # How many minutes before the event's scheduled start a *self* check-in
+    # landed, or NULL when it did not precede the start. Recorded so an event
+    # manager can see who tapped in early and decide whether that time should
+    # count; the credited start time is clamped independently (see
+    # EventService._credited_check_in_time). Not set for manager-recorded
+    # check-ins — an officer checking somebody in early is doing it on purpose
+    # and does not need warning about their own action.
+    early_check_in_minutes = Column(Integer, nullable=True)
+
     # Attendance overrides (for managers/training officers)
     override_check_in_at = Column(
         DateTime(timezone=True), nullable=True

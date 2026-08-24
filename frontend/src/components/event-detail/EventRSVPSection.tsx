@@ -127,6 +127,21 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                         {rsvp.override_check_in_at && (
                           <span className="text-[10px] text-amber-500">(times overridden)</span>
                         )}
+                        {/* Their credited time already starts at the event's
+                            scheduled start, so this is not a correction to
+                            make — it is here so an organizer can spot the
+                            member who really was working beforehand and edit
+                            their times to credit it. */}
+                        {!rsvp.override_check_in_at &&
+                          rsvp.early_check_in_minutes != null &&
+                          rsvp.early_check_in_minutes > 0 && (
+                            <span
+                              className="text-[10px] text-yellow-600 dark:text-yellow-400"
+                              title="Credited from the event's scheduled start. Edit times if this member was working before then."
+                            >
+                              (tapped in {rsvp.early_check_in_minutes} min early)
+                            </span>
+                          )}
                       </div>
                     )}
 
