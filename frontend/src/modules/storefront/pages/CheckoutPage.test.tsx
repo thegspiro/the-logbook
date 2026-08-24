@@ -37,6 +37,7 @@ const storefront: Storefront = {
     { method: 'zelle', label: 'Zelle', handle: 'treasurer@fcfd.example', instructions: null },
   ],
   paymentPolicy: 'before_vendor_order',
+  sendsOrderConfirmation: true,
   otherOpenWindows: [],
   products: [],
   window: { id: 'w1', name: 'Fall 2026' },
@@ -96,6 +97,40 @@ describe('CheckoutPage', () => {
     expect(screen.getByRole('radio', { name: /Venmo/ })).toBeChecked();
     expect(screen.getByText('@FallsChurchFire')).toBeInTheDocument();
     expect(screen.getByText('treasurer@fcfd.example')).toBeInTheDocument();
+  });
+
+  it('explains a method whose whole meaning is its instructions', async () => {
+    // Cash, check, payroll deduction and a custom "Other" carry no handle.
+    // Without their instructions a configured method renders as a bare label a
+    // member has to choose blind.
+    useStorefrontStore.setState({
+      storefront: {
+        ...storefront,
+        paymentMethods: [
+          { method: 'other', label: 'Other', handle: null, instructions: 'Payroll deduction over two pay periods' },
+        ],
+      },
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    expect(screen.getByText('Payroll deduction over two pay periods')).toBeInTheDocument();
+  });
+
+  it('does not promise an email the department has switched off', async () => {
+    useStorefrontStore.setState({ storefront: { ...storefront, sendsOrderConfirmation: false } });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    expect(screen.getByText(/on the confirmation screen\. The department records/)).toBeInTheDocument();
+    expect(screen.queryByText(/by email/)).not.toBeInTheDocument();
+  });
+
+  it('still promises the email where confirmations are on', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    expect(screen.getByText(/on the confirmation screen and by email/)).toBeInTheDocument();
   });
 
   it('adds the shipping flat rate to the total when shipping is chosen', async () => {

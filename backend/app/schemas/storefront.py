@@ -574,6 +574,10 @@ class StorefrontResponse(UTCResponseBase):
     # Drives the "what happens after I submit" line: whether an unpaid order
     # still reaches the vendor is the department's policy, not a fixed fact.
     payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
+    # Checkout promises the payment handle will arrive by email. A department
+    # that turned confirmations off makes that a lie, so the promise is
+    # conditional on the setting rather than baked into the copy.
+    sends_order_confirmation: bool = True
     window: Optional[StorefrontWindowSummary] = None
     # A department can run more than one order period at once (apparel and
     # challenge coins, say); the shopper picks which one they're browsing.

@@ -241,7 +241,7 @@ const StorefrontPage: React.FC = () => {
             <StoreCartPanel
               cart={cart}
               totals={totals}
-              acceptedPaymentMethods={storefront.acceptedPaymentMethods}
+              paymentMethods={storefront.paymentMethods ?? []}
               onUpdateQuantity={(line, quantity) =>
                 updateCartQuantity(line.productId, line.variantId, quantity, line.personalizationText)
               }

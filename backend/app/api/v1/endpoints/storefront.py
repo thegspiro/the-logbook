@@ -326,6 +326,7 @@ async def get_storefront(
         "payment_methods": build_payment_method_summaries(settings),
         "payment_instructions": settings.payment_instructions,
         "payment_policy": settings.payment_policy,
+        "sends_order_confirmation": settings.send_order_confirmation,
         "window": _window_summary(window) if window else None,
         "other_open_windows": [
             _window_summary(other) for other in data["other_open_windows"]

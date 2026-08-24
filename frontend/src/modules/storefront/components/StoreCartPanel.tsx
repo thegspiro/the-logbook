@@ -11,7 +11,7 @@ import { Info, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import { cartLineKey, cartLineMeta } from '../utils/cartLines';
 import { productGlyph } from '../utils/productGlyph';
-import { PAYMENT_METHOD_LABELS, type CartLine } from '../types';
+import type { CartLine, StorefrontPaymentMethodInfo } from '../types';
 
 interface CartTotals {
   subtotal: number;
@@ -23,16 +23,23 @@ interface CartTotals {
 interface StoreCartPanelProps {
   cart: CartLine[];
   totals: CartTotals;
-  acceptedPaymentMethods: string[];
+  paymentMethods: StorefrontPaymentMethodInfo[];
   onUpdateQuantity: (line: CartLine, quantity: number) => void;
   onRemove: (line: CartLine) => void;
   onReview: () => void;
 }
 
-/** Names only what the department has actually configured, so the reassurance
- *  never promises a payment route nobody can use. */
-const paymentSentence = (methods: string[]): string => {
-  const labels = methods.map((method) => PAYMENT_METHOD_LABELS[method] ?? method);
+/**
+ * Names only what the department has actually configured.
+ *
+ * Built from `paymentMethods`, not `acceptedPaymentMethods`: the latter is the
+ * raw list of methods enabled in settings, and the backend drops any whose
+ * handle is missing or malformed from both checkout and the post-order
+ * instructions. Promising Venmo off the raw list therefore named a route that
+ * checkout would not offer and the order could not explain.
+ */
+const paymentSentence = (methods: StorefrontPaymentMethodInfo[]): string => {
+  const labels = methods.map((method) => method.label);
   if (labels.length === 0) {
     return 'Nothing is charged here. You’ll get payment instructions as soon as you submit.';
   }
@@ -43,7 +50,7 @@ const paymentSentence = (methods: string[]): string => {
 export const StoreCartPanel: React.FC<StoreCartPanelProps> = ({
   cart,
   totals,
-  acceptedPaymentMethods,
+  paymentMethods,
   onUpdateQuantity,
   onRemove,
   onReview,
@@ -148,9 +155,7 @@ export const StoreCartPanel: React.FC<StoreCartPanelProps> = ({
 
           <div className="alert-info flex gap-2.5 p-3">
             <Info className="text-theme-alert-info-icon mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p className="text-theme-alert-info-title text-xs leading-relaxed">
-              {paymentSentence(acceptedPaymentMethods)}
-            </p>
+            <p className="text-theme-alert-info-title text-xs leading-relaxed">{paymentSentence(paymentMethods)}</p>
           </div>
 
           <button type="button" className="btn-primary min-h-[48px] w-full font-bold" onClick={onReview}>

@@ -234,8 +234,9 @@ const CheckoutPage: React.FC = () => {
               <section className="card p-4 sm:p-5">
                 <h2 className="text-theme-text-primary text-[15px] font-bold">How you&apos;ll pay</h2>
                 <p className="text-theme-text-secondary mt-1 mb-3.5 text-[13px]">
-                  Pick one now — you&apos;ll get the handle and a payment link on the confirmation screen and by email.
-                  The department records the payment when it arrives.
+                  Pick one now — you&apos;ll get the handle and a payment link on the confirmation screen
+                  {storefront?.sendsOrderConfirmation === false ? '' : ' and by email'}. The department records the
+                  payment when it arrives.
                 </p>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   {methods.map((option) => {
@@ -256,10 +257,20 @@ const CheckoutPage: React.FC = () => {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="text-theme-text-primary block text-sm font-semibold">{option.label}</span>
-                          {option.handle && (
+                          {option.handle ? (
                             <span className="text-theme-text-secondary mt-0.5 block truncate font-mono text-xs">
                               {option.handle}
                             </span>
+                          ) : (
+                            // Cash, check, payroll deduction and a custom "Other"
+                            // have no handle — their instructions are the whole
+                            // explanation, and without them a configured method
+                            // reads as a bare, unexplained "Other".
+                            option.instructions && (
+                              <span className="text-theme-text-secondary mt-0.5 block text-xs">
+                                {option.instructions}
+                              </span>
+                            )
                           )}
                         </span>
                         {selected && (

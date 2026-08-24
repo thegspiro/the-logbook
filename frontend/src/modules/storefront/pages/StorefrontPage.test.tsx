@@ -52,7 +52,11 @@ const storefront = (overrides: Partial<Storefront> = {}): Storefront => ({
   shippingFlatRate: '0',
   taxRate: '0',
   acceptedPaymentMethods: ['venmo', 'zelle', 'cash'],
-  paymentMethods: [],
+  paymentMethods: [
+    { method: 'venmo', label: 'Venmo', handle: '@FallsChurchFire', instructions: null },
+    { method: 'zelle', label: 'Zelle', handle: 'treasurer@fcfd.example', instructions: null },
+    { method: 'cash', label: 'Cash', handle: null, instructions: 'To the quartermaster at Station 1' },
+  ],
   paymentPolicy: 'none',
   otherOpenWindows: [],
   window: {
@@ -164,6 +168,26 @@ describe('StorefrontPage', () => {
     expect(
       screen.getByText(/Nothing is charged here\..*Venmo, Zelle or Cash.*as soon as you submit/)
     ).toBeInTheDocument();
+  });
+
+  it('never promises a method the department has not configured', async () => {
+    const user = userEvent.setup();
+    // `acceptedPaymentMethods` still lists Venmo, but the backend drops a method
+    // whose handle is missing from `paymentMethods` — and from the instructions
+    // a placed order would carry. Promising it here names a route that checkout
+    // will not offer and the order cannot explain.
+    const open = storefront();
+    mockGetStorefront.mockResolvedValue({
+      ...open,
+      paymentMethods: open.paymentMethods.filter((method) => method.method !== 'venmo'),
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Job Shirt' });
+
+    await user.click(screen.getAllByRole('button', { name: /Add \$65\.00/ })[0] as HTMLElement);
+
+    expect(screen.getByText(/Zelle or Cash/)).toBeInTheDocument();
+    expect(screen.queryByText(/Venmo/)).not.toBeInTheDocument();
   });
 
   it('takes the member to checkout from the cart', async () => {

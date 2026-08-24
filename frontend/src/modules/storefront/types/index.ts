@@ -492,6 +492,9 @@ export interface Storefront {
   paymentInstructions?: string | null;
   /** Decides the "what happens after I submit" line at checkout. */
   paymentPolicy: StorePaymentPolicy;
+  /** False when the department has turned order-confirmation emails off, so
+   *  checkout must not promise the payment handle will arrive by email. */
+  sendsOrderConfirmation: boolean;
   window?: StorefrontWindowSummary | null;
   otherOpenWindows: StorefrontWindowSummary[];
   products: StorefrontProductOffer[];

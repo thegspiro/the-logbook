@@ -32,10 +32,18 @@ import {
   type StoreOrder,
 } from '../types';
 
-/** An order with nothing outstanding and nothing left to do collapses. */
+/**
+ * An order with nothing left to do collapses.
+ *
+ * Cancellation alone is enough, without checking the balance: cancelling an
+ * unpaid order changes only its fulfilment status, so `balanceDue` keeps the
+ * full total. Requiring a zero balance therefore left every cancelled unpaid
+ * order sitting in the active list — the exact orders a member most wants out
+ * of the way.
+ */
 const isSettled = (order: StoreOrder): boolean =>
-  Number(order.balanceDue) <= 0 &&
-  (order.status === StoreOrderStatus.FULFILLED || order.status === StoreOrderStatus.CANCELLED);
+  order.status === StoreOrderStatus.CANCELLED ||
+  (Number(order.balanceDue) <= 0 && order.status === StoreOrderStatus.FULFILLED);
 
 const MyOrdersPage: React.FC = () => {
   const tz = useTimezone();
@@ -128,7 +136,10 @@ const MyOrdersPage: React.FC = () => {
   );
 
   const renderOrderCard = (order: StoreOrder) => {
-    const balance = Number(order.balanceDue);
+    // A cancelled order carries its old balance — the backend zeroes nothing on
+    // cancellation — but nobody owes it. Demanding payment for an order the
+    // member already cancelled is worse than showing no figure at all.
+    const balance = order.status === StoreOrderStatus.CANCELLED ? 0 : Number(order.balanceDue);
     const instructions = order.paymentInstructions;
     const canCancel = order.status === 'submitted' || order.status === 'awaiting_payment';
 

@@ -28,22 +28,50 @@ const STEPS: Step[] = [
   { key: 'ready', label: 'Ready for pickup', icon: PackageCheck },
 ];
 
-/**
- * How far along the track an order is, as the index of the first step that is
- * not yet done.
- *
- * Payment and fulfilment advance independently — a department may run no
- * payment gate at all, so an order can be `ordered` while still unpaid. The
- * fulfilment status is therefore the authority on the last two stops, and
- * payment only decides whether stop 2 is done.
- */
-const orderStepIndex = (order: Pick<StoreOrder, 'status' | 'paymentStatus'>): number => {
-  if (order.status === StoreOrderStatus.FULFILLED) return STEPS.length;
-  if (order.status === StoreOrderStatus.READY_FOR_PICKUP) return 3;
-  if (order.status === StoreOrderStatus.ORDERED) return 2;
+/** Payment statuses that leave nothing owed. */
+const SETTLED_PAYMENT: string[] = [StorePaymentStatus.PAID, StorePaymentStatus.WAIVED, StorePaymentStatus.REFUNDED];
 
-  const settled: string[] = [StorePaymentStatus.PAID, StorePaymentStatus.WAIVED, StorePaymentStatus.REFUNDED];
-  return settled.includes(order.paymentStatus) ? 2 : 1;
+/** Fulfilment statuses at or past the vendor order. */
+const ORDERED_ONWARD: string[] = [
+  StoreOrderStatus.ORDERED,
+  StoreOrderStatus.READY_FOR_PICKUP,
+  StoreOrderStatus.FULFILLED,
+];
+
+/** Fulfilment statuses at or past "on the shelf waiting for you". */
+const READY_ONWARD: string[] = [StoreOrderStatus.READY_FOR_PICKUP, StoreOrderStatus.FULFILLED];
+
+/**
+ * Whether one stop is done — asked of each stop independently, because payment
+ * and fulfilment genuinely advance on separate tracks.
+ *
+ * Under a `none` or `before_pickup` policy the backend lets an unpaid order
+ * reach `ordered` and `ready_for_pickup`. Treating the track as one linear
+ * count therefore marked the payment stop complete on the strength of
+ * fulfilment alone, and the card said "Paid" directly above an Unpaid badge
+ * and a balance-due demand. Fulfilment progress is not evidence of payment.
+ */
+const isStepComplete = (order: Pick<StoreOrder, 'status' | 'paymentStatus'>, key: string): boolean => {
+  switch (key) {
+    case 'submitted':
+      return true;
+    case 'payment':
+      return SETTLED_PAYMENT.includes(order.paymentStatus);
+    case 'ordered':
+      return ORDERED_ONWARD.includes(order.status);
+    case 'ready':
+      return READY_ONWARD.includes(order.status);
+    default:
+      return false;
+  }
+};
+
+/** What a finished payment stop should say. "Paid" is a claim about the member
+ *  having paid, so a waived or refunded order must not make it. */
+const SETTLED_LABEL: Record<string, string> = {
+  [StorePaymentStatus.PAID]: 'Paid',
+  [StorePaymentStatus.WAIVED]: 'Waived',
+  [StorePaymentStatus.REFUNDED]: 'Refunded',
 };
 
 export const OrderStatusStepper: React.FC<{ order: StoreOrder }> = ({ order }) => {
@@ -56,10 +84,13 @@ export const OrderStatusStepper: React.FC<{ order: StoreOrder }> = ({ order }) =
     );
   }
 
-  const reached = orderStepIndex(order);
+  const complete = STEPS.map((step) => isStepComplete(order, step.key));
+  // Exactly one stop is "current": the earliest one still outstanding. A later
+  // stop may already be complete — that is the point of asking each separately.
+  const currentIndex = complete.indexOf(false);
 
   const stateOf = (index: number): StepState =>
-    index < reached ? 'complete' : index === reached ? 'current' : 'pending';
+    complete[index] ? 'complete' : index === currentIndex ? 'current' : 'pending';
 
   const circleClass = (state: StepState) =>
     state === 'complete'
@@ -84,7 +115,10 @@ export const OrderStatusStepper: React.FC<{ order: StoreOrder }> = ({ order }) =
         const Icon = state === 'complete' ? Check : step.icon;
         // "Payment due" is a demand, not a milestone — once it is met the stop
         // has to stop demanding, or a paid-up member reads the card as a bill.
-        const label = step.key === 'payment' && state === 'complete' ? 'Paid' : step.label;
+        const label =
+          step.key === 'payment' && state === 'complete'
+            ? (SETTLED_LABEL[order.paymentStatus] ?? 'Settled')
+            : step.label;
         return (
           <React.Fragment key={step.key}>
             {index > 0 && (
