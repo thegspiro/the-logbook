@@ -24,7 +24,6 @@ import {
   Hash,
   Gauge,
   Calendar,
-  Eye,
   Wrench,
   Camera,
   Info,
@@ -275,13 +274,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const CHECK_TYPE_ICONS: Partial<Record<CheckType, React.ElementType>> = {
-  pass_fail: CheckCircle,
-  present: Eye,
-  functional: Wrench,
-  quantity: Hash,
   level: Gauge,
-  date_lot: Calendar,
-  reading: Hash,
+  function: Wrench,
+  count: Hash,
+  expiry: Calendar,
   text: MessageSquare,
   header: Type,
 };
@@ -780,13 +776,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             // carries everything used since, so a crew that pulled two at 03:00
             // opens this at 2 rather than at the 4 the last check recorded.
             const known = item.quantityOnTruck ?? prev?.quantity_found;
-            if (item.checkType === 'quantity' && known != null) {
+            if (item.checkType === 'count' && known != null) {
               // Seeded WITHOUT a status. The number is a starting point, not a
               // check — marking it pass/fail here would let a crew submit a
               // complete report having looked at nothing, and the progress
               // counter would agree with them.
               seed[item.id] = { status: 'not_checked', quantityFound: known };
-            } else if ((item.checkType === 'level' || item.checkType === 'reading') && prev?.level_reading != null) {
+            } else if (item.checkType === 'level' && prev?.level_reading != null) {
               seed[item.id] = { status: 'not_checked', levelReading: prev.level_reading };
             }
           }
@@ -1015,7 +1011,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const required = item.requiredQuantity ?? item.expectedQuantity;
         const shown = existing?.quantityFound;
         const patch: Partial<ItemResult> = { status: 'pass' };
-        if (item.checkType === 'quantity' && required != null) {
+        if (item.checkType === 'count' && required != null) {
           // Nothing carried means nothing to confirm; leave it for the crew.
           if (shown == null) continue;
           patch.status = shown >= required ? 'pass' : 'fail';
@@ -1037,7 +1033,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const shortOfPar = useCallback(
     (compartment: CheckTemplateCompartment) =>
       checkableIn(compartment).filter((item) => {
-        if (item.checkType !== 'quantity') return false;
+        if (item.checkType !== 'count') return false;
         const required = item.requiredQuantity ?? item.expectedQuantity;
         const shown = results[item.id]?.quantityFound;
         return required != null && shown != null && shown < required;
@@ -1072,7 +1068,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         for (const item of checkableIn(compartment)) {
           const existing = next[item.id];
           const patch: Partial<ItemResult> = { status: 'pass' };
-          if (item.checkType === 'quantity') {
+          if (item.checkType === 'count') {
             const required = item.requiredQuantity ?? item.expectedQuantity;
             if (required != null) patch.quantityFound = required;
           }
@@ -1087,7 +1083,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   const hasQuantityItems = useCallback(
-    (compartment: CheckTemplateCompartment) => compartment.items.some((item) => item.checkType === 'quantity'),
+    (compartment: CheckTemplateCompartment) => compartment.items.some((item) => item.checkType === 'count'),
     []
   );
 
@@ -1108,10 +1104,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       checkableIn(compartment).filter(
         (item) =>
           !item.hasExpiration &&
-          (item.checkType === 'pass_fail' ||
-            item.checkType === 'present' ||
-            item.checkType === 'functional' ||
-            item.checkType === 'quantity')
+          // Under the four canonical types this is exactly "a pass/fail or a
+          // count": `level` is excluded because a pressure reading moves while
+          // the bag sits shut, and an expiring item is excluded whatever its
+          // type, because a seal proves unchanged, not full.
+          (item.checkType === 'function' || item.checkType === 'count')
       ),
     [checkableIn]
   );
@@ -1520,45 +1517,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     );
 
     switch (item.checkType) {
-      case 'pass_fail':
-      case 'functional':
+      case 'function':
         return passFailButtons;
 
-      case 'present':
-        return (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              data-action="pass"
-              onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
-              className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-                effectiveStatus === 'pass'
-                  ? 'bg-green-600 text-white'
-                  : 'border-theme-surface-border text-theme-text-muted border hover:border-green-500 hover:text-green-600'
-              }`}
-            >
-              <Eye className="h-4 w-4" />
-              Present
-            </button>
-            <button
-              type="button"
-              data-action="fail"
-              onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
-              className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-                effectiveStatus === 'fail'
-                  ? 'bg-red-600 text-white'
-                  : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
-              }`}
-            >
-              <XCircle className="h-4 w-4" />
-              Missing
-            </button>
-            {notApplicableButton}
-            {outOfServiceButton}
-          </div>
-        );
-
-      case 'quantity': {
+      case 'count': {
         const required = item.requiredQuantity ?? item.expectedQuantity;
         const expected = item.expectedQuantity ?? required;
         const criticalMin = item.criticalMinimumQuantity;
@@ -1731,7 +1693,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
       }
 
-      case 'date_lot': {
+      case 'expiry': {
         return (
           <div className="space-y-2">
             {/* Inventory owns identifiers and dates. A shift check verifies the
@@ -1762,33 +1724,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </div>
         );
       }
-
-      case 'reading':
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <label htmlFor={`reading-${item.id}`} className="text-theme-text-secondary text-xs whitespace-nowrap">
-                Reading:
-              </label>
-              <input
-                id={`reading-${item.id}`}
-                type="number"
-                step="0.01"
-                inputMode="decimal"
-                className="form-input min-h-[48px] w-32 px-3 py-2.5 text-sm focus:ring-blue-500"
-                value={result?.levelReading ?? ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  updateResult(item.id, {
-                    levelReading: val ? Number(val) : undefined,
-                    status: val ? 'pass' : 'not_checked',
-                  });
-                }}
-              />
-            </div>
-            {passFailButtons}
-          </div>
-        );
 
       case 'text':
       case 'header':
@@ -1834,7 +1769,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const effectiveStatus = getEffectiveStatus(item, result, today);
     const showNotesField = expandedNotes.has(item.id);
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
-    const isQuantity = item.checkType === 'quantity';
+    const isQuantity = item.checkType === 'count';
 
     return (
       <div

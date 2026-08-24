@@ -334,7 +334,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Equipment and inventory management',
         icon: Wrench,
         priority: 85,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'storefront']),
       },
       {
         id: 'scheduling_officer',
@@ -366,7 +366,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Day-to-day fleet tracking, maintenance logging, and equipment checks',
         icon: Truck,
         priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory']),
+        permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory', 'storefront']),
       },
       {
         id: 'membership_coordinator',
@@ -398,7 +398,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Day-to-day building management, maintenance logging, and inspections',
         icon: Building2,
         priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities']),
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities', 'storefront']),
       },
     ],
   },

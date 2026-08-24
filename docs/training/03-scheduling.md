@@ -58,18 +58,19 @@ attendance or readiness information.
 3. [My Shifts](#my-shifts)
 4. [Open Shifts](#open-shifts)
 5. [Shift Assignments](#shift-assignments)
-6. [Attendance Tracking](#attendance-tracking)
-7. [Call Logging](#call-logging)
-8. [Counting Calls Without an RMS](#counting-calls-without-an-rms-2026-08-18)
-9. [Time-Off Requests](#time-off-requests)
-10. [Shift Swap Requests](#shift-swap-requests)
-11. [Shift Templates and Patterns](#shift-templates-and-patterns)
-12. [Minimum Staffing and Coverage Rules](#minimum-staffing-and-coverage-rules)
-13. [Shift Reports and Compliance](#shift-reports-and-compliance)
-14. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
-15. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
-16. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
-17. [Troubleshooting](#troubleshooting)
+6. [Printing Station Documents](#printing-station-documents)
+7. [Attendance Tracking](#attendance-tracking)
+8. [Call Logging](#call-logging)
+9. [Counting Calls Without an RMS](#counting-calls-without-an-rms-2026-08-18)
+10. [Time-Off Requests](#time-off-requests)
+11. [Shift Swap Requests](#shift-swap-requests)
+12. [Shift Templates and Patterns](#shift-templates-and-patterns)
+13. [Minimum Staffing and Coverage Rules](#minimum-staffing-and-coverage-rules)
+14. [Shift Reports and Compliance](#shift-reports-and-compliance)
+15. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
+16. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
+17. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -188,6 +189,77 @@ Officers can edit shift start and end times, apparatus assignment, color, notes,
 
 ---
 
+## Printing Station Documents
+
+Two things a crew reads on paper rather than on a phone can be printed straight
+to a **receipt printer** at the watch desk: the **shift roster** and an
+**apparatus check sheet**. Both go out on the same ESC/POS printer registered in
+_Organization Settings → Label Printers_ — see
+[Direct printing to a network label printer](./05-inventory.md#direct-printing-to-a-network-label-printer)
+for how to add one.
+
+**The buttons only appear once a receipt printer is registered.** A department
+with only a label printer never sees them, rather than seeing a control that
+could only explain why it will not work.
+
+### Shift roster
+
+**Required permission:** `scheduling.view`
+
+Open a shift and click **Print roster**. The sheet carries:
+
+- the date, hours, apparatus and platoon;
+- the shift officer;
+- the crew, **officers first** — a roster is read at shift change to find out
+  who is in charge, so that name is at the top rather than wherever the
+  alphabet puts it;
+- a count against minimum staffing, so a short crew is visible at a glance;
+- any shift notes;
+- the pass-down notes from the outgoing crew — **only for the crew they belong
+  to**. Pass-downs are operationally sensitive, so the printed roster applies
+  the same rule as the handoff screen: they appear for `scheduling.manage`
+  holders, the named shift officer, and members actually rostered on the shift.
+  Everyone else gets the roster without that section.
+
+Someone who declined or was cancelled is **not** printed — the oncoming crew
+should not be looking for a person who is not coming. A seat that nobody has
+confirmed is printed and marked `(unconfirmed)`, because that is the difference
+between a crew of four and a crew of three. Training seats are marked too.
+
+Times are printed in the department's configured timezone, not UTC.
+
+### Apparatus check sheet
+
+**Required permission:** `equipment_check.view`, `equipment_check.submit`, or
+`equipment_check.manage` — the same permissions that open the template itself.
+A member who only holds `equipment_check.submit` gets the checklists for the
+positions they actually check, exactly as they do on screen.
+
+From **Equipment Check Templates**, click the printer icon on a template. The
+sheet is the checklist as something to carry round the truck:
+
+- one section per compartment, in the order the template sets;
+- a container nested inside a compartment (a bag inside a cabinet) stays
+  **under the same heading, indented** — it is a place inside the one already
+  open, not a new trip across the truck;
+- a tick box against every item, a `*` on required ones, and a short note of
+  what "correct" looks like — `qty 6`, `min 4500psi`;
+- a line at the bottom to sign and date, because a sheet handed in unsigned
+  proves nothing.
+
+### Before it prints
+
+Both buttons show a **preview** first — the same structure the printer is sent,
+so what you check on screen is what comes off the roll. The preview is drawn at
+48 characters, which is an 80mm roll; a 58mm roll fits 32, so lines wrap
+differently on narrow paper.
+
+After printing, the printer is asked how it is. A job sent to a printer that is
+out of paper reports **out of paper** rather than a success message over an
+empty roll.
+
+---
+
 ## Attendance Tracking
 
 Attendance is recorded for each shift to track who was present and for how long.
@@ -270,6 +342,7 @@ reports a number when they close the shift out, and nothing else is collected.
 at close-out.**
 
 > **[SCREENSHOT NEEDED — Scheduling → Settings → General, scrolled to the
+>
 > > _Shift close-out rules_ block, with the "Record a call count at close-out"
 > > toggle switched on and its explanatory paragraph legible]**
 
@@ -351,6 +424,7 @@ Member credit is a third thing again, and is never the shift's number restated.
 A member who came on at 0300 was not on the 2200 call.
 
 > **[SCREENSHOT NEEDED — Reports → Call Volume for a count-only department,
+>
 > > showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
 > > cards and the footnote beneath them. Caption it alongside the same report for
 > > a detailed-mode department so a reader can see the labels differ and
@@ -556,6 +630,7 @@ members that the rest of the schedule does not.
   `scheduling.manage` will now get a permission error there.
 
 > **[SCREENSHOT NEEDED — the shift detail page as a scheduler with the
+>
 > > hold-over roster populated, paired with the same shift as an ordinary member
 > > with the roster absent. Seed at least one member on approved leave so the
 > > availability distinction is visible, and caption which account is which.]**
@@ -1453,6 +1528,7 @@ deliberate: they used to be invisible, which meant no hours, no credit, and
 nothing on screen to tell the officer somebody had been missed.
 
 > **[SCREENSHOT NEEDED — close-out wizard step 1: the crew list with editable
+>
 > > on/off times, the combined-hours figure, and at least one member carrying the
 > > "missing check-out" flag. Use a four-person crew so the combined figure is
 > > visibly several times the shift length]**
@@ -1467,6 +1543,7 @@ One row per call type. Enter a number against each type you ran; the **total is
 calculated from those rows and cannot be typed into**.
 
 > **[SCREENSHOT NEEDED — close-out wizard step 2: the per-type rows with a
+>
 > > couple filled in, and the derived read-only total beside them. This is the
 > > screen that teaches "the rows are the only source" and it needs the picture]**
 
@@ -1501,6 +1578,7 @@ Every member starts credited with the apparatus's full count. Adjust anyone who
 came on late or left early.
 
 > **[SCREENSHOT NEEDED — close-out wizard step 3: per-member credit seeded from
+>
 > > the apparatus count, with one member adjusted downward, plus the pass-down
 > > notes field and the final "Close out shift" button]**
 
@@ -1520,6 +1598,7 @@ wizard replaces that screen and has to carry everything it could do. The
 override is still logged and still audited.
 
 > **[SCREENSHOT NEEDED — close-out wizard with outstanding end-of-shift checks,
+>
 > > showing the warning, the override checkbox, and the reason field it requires]**
 
 #### Wizard edge cases
@@ -2702,6 +2781,7 @@ A blocked attempt changes nothing: the request stays pending for somebody else
 to action.
 
 > **[SCREENSHOT NEEDED — Scheduling → Requests viewed by the member who raised
+>
 > > the top request, showing the rejection message "Requesters cannot review
 > > their own swap requests". Seed one request raised by the capturing account
 > > and one raised by another member so the available actions differ visibly
@@ -2717,6 +2797,7 @@ API, the response shape changed — it is now an object with an `items` list
 rather than a plain list.
 
 > **[SCREENSHOT NEEDED — Scheduling → Requests with the pagination control
+>
 > > populated. Seed more than one page of requests (at least 60) so the control
 > > is genuinely active rather than a disabled stub.]**
 
@@ -2742,5 +2823,6 @@ Also changed:
 - **Timing is recorded by the server**, not supplied by the phone.
 
 > **[SCREENSHOT NEEDED — a submitted shift equipment check on a 390x844
+>
 > > viewport. If the harness can simulate the queued/offline state, capture that
 > > too; if it cannot, say so in the caption rather than staging it.]**

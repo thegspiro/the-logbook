@@ -26,7 +26,7 @@ export interface CatalogAddPayload {
   name: string;
   inventoryItemId?: string | undefined;
   /** Pool-tracked catalog items are counted, so the position should be too. */
-  checkType?: 'quantity' | undefined;
+  checkType?: 'count' | undefined;
   /** True when the catalog item carries dated stock. */
   hasExpiration?: boolean | undefined;
 }
@@ -173,7 +173,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       // differently are what made the link invisible in the first place.
       name: result.name,
       inventoryItemId: result.id,
-      ...(result.trackingType === 'pool' ? { checkType: 'quantity' as const } : {}),
+      ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
       ...(hasExpiration ? { hasExpiration: true } : {}),
     });
     reset();
@@ -191,7 +191,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         tracking_type: 'pool',
         quantity: 0,
       });
-      await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'quantity' });
+      await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
       toast.success(`Added “${created.name}” to inventory`);
       reset();
     } catch (err: unknown) {

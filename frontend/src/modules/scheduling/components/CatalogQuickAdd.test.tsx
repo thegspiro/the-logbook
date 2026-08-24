@@ -108,7 +108,7 @@ describe('CatalogQuickAdd', () => {
         // made the link invisible in the first place.
         name: 'Gauze Pads, 4x4 Sterile',
         inventoryItemId: 'inv-1',
-        checkType: 'quantity',
+        checkType: 'count',
       });
     });
   });
@@ -243,7 +243,7 @@ describe('CatalogQuickAdd', () => {
     expect(onAdd).toHaveBeenCalledWith({
       name: 'Burn Sheet',
       inventoryItemId: 'inv-new',
-      checkType: 'quantity',
+      checkType: 'count',
     });
   });
 

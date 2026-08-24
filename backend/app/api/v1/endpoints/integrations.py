@@ -150,6 +150,19 @@ INTEGRATION_CATALOG = [
         "status": "available",
     },
     {
+        "integration_type": "nfc-id-cards",
+        "name": "NFC ID Cards",
+        "description": (
+            "Issue member ID cards carrying an NFC tag, and check members in "
+            "to shifts, meetings and admin hours by tapping one against a "
+            "reader. Cards are issued by an officer from the member's profile; "
+            "members cannot register their own. Turn this off and no card can "
+            "be issued or read."
+        ),
+        "category": "Access Control",
+        "status": "available",
+    },
+    {
         "integration_type": "documenso",
         "name": "Documenso",
         "description": "Send documents for electronic signature via Documenso, the open-source DocuSign alternative. Works with Documenso Cloud or a self-hosted instance.",

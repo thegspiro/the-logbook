@@ -21,6 +21,7 @@ import {
   Filter,
   Info,
   Edit2,
+  Paperclip,
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -705,6 +706,28 @@ const SubmissionCard: React.FC<{
               <div className="mt-3">
                 <span className="text-theme-text-muted text-sm">Description: </span>
                 <p className="text-theme-text-secondary mt-1 text-sm">{submission.description}</p>
+              </div>
+            )}
+            {/* The certificate the member attached is the evidence this
+                decision rests on, so it has to be reachable from the queue. */}
+            {submission.attachments && submission.attachments.length > 0 && (
+              <div className="mt-3">
+                <span className="text-theme-text-muted text-sm">Attached: </span>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {submission.attachments.map((attachment) => (
+                    <li key={attachment.index} className="flex items-center space-x-1 text-sm">
+                      <Paperclip className="text-theme-text-muted h-3 w-3 shrink-0" />
+                      <a
+                        href={trainingSubmissionService.getAttachmentDownloadUrl(submission.id, attachment.index)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-theme-text-secondary link-underline truncate"
+                      >
+                        {attachment.file_name || `Attachment ${attachment.index + 1}`}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {submission.reviewer_notes && (
