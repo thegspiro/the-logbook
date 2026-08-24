@@ -107,18 +107,25 @@ opens.
 **Writing one (officers):** open the same **QR Code** page, tap **Write to an
 NFC tag**, and hold a blank tag to the back of the phone.
 
-> **[SCREENSHOT NEEDED — `/events/:id/qr-code` with the "Write to an NFC tag"
->
-> > control visible beneath the QR code, mid-write, showing the "hold a tag to
-> > your phone" state]**
+**There is no screenshot of this, and the reason is the same thing the
+requirements paragraph below says.** Web NFC exists only in Chrome on Android
+over HTTPS. Where it is missing, the QR Code page does not show a disabled
+**Write to an NFC tag** control — it shows a line of text in its place saying
+which of the two conditions you are failing. Every screenshot in this library is
+taken by headless Chromium over `http://localhost`, which fails both, so the
+control cannot be photographed by the tooling that takes the rest of these
+images. What you will see on a supporting phone is a button beneath the QR code
+and, once tapped, a "hold a tag to your phone" state until a tag touches it or
+you cancel.
 
 **Tapping one (members):** with the app closed, Android opens the link by
 itself. With the app already open on screen, Android does _not_ hand the tag
 off — so use **Tap Tag** on the Events page instead.
 
-> **[SCREENSHOT NEEDED — the Events page with Tap Tag pressed and the scan
->
-> > armed, waiting for a tag]**
+**Not pictured, for the same reason, with one extra thing worth knowing:
+where Web NFC is unavailable the **Tap Tag** button is not on the page at all** —
+not greyed out, absent. If you are looking for it on a desktop or an iPhone and
+cannot find it, that is why, and it is not a permission problem.
 
 **Requirements: Chrome on Android, over HTTPS.** Web NFC exists nowhere else —
 not on iPhone, not on a desktop browser — and browsers only expose it on a
@@ -135,10 +142,12 @@ point back at your own Logbook and only to check-in pages it knows. Anything
 else leaves the scan waiting and says so, rather than sending you somewhere you
 did not intend to go.
 
-> **[SCREENSHOT NEEDED — Tap Tag after reading an unrecognized tag: the
->
-> > explanatory message with the scan still armed. This is the security
-> > behaviour and a reader will not believe it without seeing it]**
+**Not pictured** — reaching this state needs a phone that supports Web NFC
+and a tag written with a foreign link, neither of which the screenshot harness
+has. What happens is worth stating precisely even without the picture: the scan
+**stays armed** and reports that the tag was not recognized. It does not
+navigate, it does not close, and it does not ask you whether to trust the link.
+Hold a valid tag to the phone and the same armed scan picks it up.
 
 > **Room kiosk display codes cannot be written to a tag, and that is
 > deliberate.** A kiosk code is a check-in credential for an unauthenticated

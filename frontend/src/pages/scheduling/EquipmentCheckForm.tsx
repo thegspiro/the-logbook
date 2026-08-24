@@ -2147,16 +2147,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Overall notes + submit.
 
-            The sticky wrappers below are bg-theme-bg, not a surface token: the
-            two names they used to carry backed no token at all, compiled to
-            nothing and left the block transparent, so the item list scrolled
-            visibly through the notes field and the Submit button. A surface
-            token would not have fixed it either — in dark mode those are
-            translucent by design, so the content still slides beneath. The
-            canvas token is the opaque one. That the bar reads as overlapping
-            content rather than as a missing colour is why it survived so long:
-            it looks like a layout bug that is not there.
-            themeTokenIntegrity.test.ts guards the rest. */}
+            bg-theme-bg, not a surface token, and the distinction is the whole
+            point of that token existing: these blocks are sticky, so they have
+            to *occlude* the item list scrolling under them. The surface tokens
+            are translucent white in dark mode by design, so a sticky bar
+            painted with one shows the rows sliding through the notes field and
+            the Submit button — which reads as overlapping content rather than
+            as a colour choice, and is why it survived so long.
+
+            (They were briefly bg-theme-surface. At that time nothing defined
+            --color-theme-bg, so the name compiled to no CSS at all and the
+            block was transparent; a surface token was the lesser of two wrongs.
+            The token is defined now — see styles/index.css — and is the right
+            answer. themeTokenIntegrity.test.ts guards the rest.) */}
         {!previewMode && (
           <div className="bg-theme-bg border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>

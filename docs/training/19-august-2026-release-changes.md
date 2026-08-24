@@ -211,7 +211,20 @@ Practical guidance for an installer: gather the department address, station
 list, apparatus list and first administrator's details before starting, allow an
 uninterrupted half hour, and stay in one tab until the dashboard appears.
 
-> **[SCREENSHOT NEEDED — sequence of two: (1) the wizard reopened after a browser restart, showing the previously typed answers repainted; (2) the session-expired error raised when continuing to the next step. Demo data: start an onboarding run through the stations step, close the browser, reopen `/onboarding`. Both frames are required — a single frame of either one teaches the wrong lesson.]**
+**Not pictured, and it is not a tooling limitation so much as a contradiction
+in what would have to be true.** Every other image in this library is taken
+against a demo department that exists. This wizard only runs when one does
+**not**: with a department on file, `/onboarding` sends you to the sign-in page
+rather than to step one — which is the same "Onboarding has already been
+completed" condition the table above distinguishes from an expired session. So
+the two frames would need a database with no department, and the rest of the
+library needs one with a department, in the same run.
+
+Reproduce it yourself on a scratch install in about a minute: start the wizard,
+fill in the department and stations steps, quit the browser, reopen
+`/onboarding`, and press Next. The form comes back filled in — that is the local
+draft — and the step fails. That failure is the whole lesson: a populated form
+is not evidence of a live session.
 
 ## Dark mode: the strip at the right edge is gone _(August 15)_
 
@@ -467,9 +480,11 @@ screen, with **Tap Tag** on the Events page, My Admin Hours, or the scheduling
 calendar. Android only hands a tag to the browser when the app is _not_ in the
 foreground, which is the gap Tap Tag fills.
 
-> **[SCREENSHOT NEEDED — the admin hours category QR page with the NFC tag
->
-> > writer beside the QR code]**
+**Not pictured, and the paragraph below is why.** The screenshot harness
+runs headless Chromium over `http://localhost`, which fails both of Web NFC's
+conditions, so the writer beside the QR code is replaced there by the line
+explaining which condition is missing. Photographing that would put a picture of
+an unavailable feature under a caption about using it.
 
 **Requirements: Chrome on Android, over HTTPS.** Not iPhone, not desktop, not a
 plain-`http://` LAN deployment. Where it is unavailable the controls are absent
@@ -513,10 +528,69 @@ values sitting in `.env` that never reach the container. Those used to become
 defaults silently, which is how production ends up running a development
 setting with nothing on screen to say so.
 
-> **[SCREENSHOT NEEDED — two terminal captures side by side: `python -m
-app.preflight` exiting 0 on a good configuration, and exiting 1 on a broken
->
-> > one with the blocking items listed]**
+**This one is text, not a screenshot** — and deliberately so. Terminal output
+belongs in a code block, where it can be searched, copied and diffed against
+what your own run prints. A picture of it can do none of those things.
+
+A development configuration, which is not checked because the blocking rules
+apply only to production and staging:
+
+```console
+$ python -m app.preflight
+Environment: development
+
+RESULT: this configuration starts.
+
+NOTE: no blocking checks run for 'development' — they apply only to production
+and staging. To test a production configuration, re-run with: --as production
+$ echo $?
+0
+```
+
+The same process re-run as production, which is the check worth doing before a
+deploy:
+
+```console
+$ python -m app.preflight --as production
+Environment: production  (forced via --as)
+
+BLOCKING (5):
+  - CRITICAL: REDIS_PASSWORD must be set in production
+  - CRITICAL: DB_SSL should be enabled in production to encrypt database
+    traffic ...
+  - CRITICAL: REDIS_SSL should be enabled in production to encrypt Redis
+    traffic ...
+  - CRITICAL: API documentation (ENABLE_DOCS) must be disabled in production —
+    /docs, /redoc, and /openapi.json expose the full API surface for
+    enumeration
+  - CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production. ...
+
+Advisory, does not prevent startup (1):
+  - WARNING: VOTE_SIGNING_KEY should be set for any organization using the
+    elections module. ...
+
+CONFIGURATION SOURCE CHECK — did these values reach this process?
+  COOKIE_SECURE           NOT PRESENT — using built-in default None
+  DB_SSL                  NOT PRESENT — using built-in default False
+  ENABLE_DOCS             NOT PRESENT — using built-in default True
+  REDIS_PASSWORD          NOT PRESENT — using built-in default None
+  SECURITY_ENFORCE_HTTPS  NOT PRESENT — using built-in default False
+  ...
+
+9 blocking setting(s) are absent from this process's environment. If you set
+them in a .env file, the value is NOT reaching the container.
+
+RESULT: this configuration will NOT start. Fix the blocking items.
+$ echo $?
+1
+```
+
+The **configuration source check** is the part to read first when something
+surprises you. It answers a different question from the blocking list above it:
+not "is this setting right" but "did this setting arrive at all". A value in
+`.env` that a Compose `environment:` block never lists cannot reach the
+container, and before this existed it simply became the built-in default with
+nothing on screen to say so.
 
 ## Sign-in hardening
 
