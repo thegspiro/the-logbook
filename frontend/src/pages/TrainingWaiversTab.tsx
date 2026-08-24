@@ -222,7 +222,7 @@ const TrainingWaiversTab: React.FC = () => {
               onClick={() => setStatusFilter(f)}
               className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                 statusFilter === f
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'bg-theme-surface text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >

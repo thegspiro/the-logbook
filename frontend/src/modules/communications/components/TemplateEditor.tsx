@@ -1,20 +1,28 @@
 /**
  * Template Editor Component
  *
- * Provides form fields for editing an email template's subject, HTML body,
- * plain-text body, and CSS styles. Includes a variable insertion helper.
+ * The form fields for one email template: subject, footer, CC/BCC, the
+ * variable and block palettes, the HTML body, and the collapsed plain-text
+ * and CSS boxes.
+ *
+ * It does not own the draft and does not own Save. Both live in the page:
+ * Save is a sticky pair in the header, because with the editor and preview
+ * side by side the button was scrolling out of sight while the thing it saves
+ * stayed on screen; and the draft has a second reader now — the live preview
+ * renders the body you are typing, not the one on the server.
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Save, Variable, Loader2, ChevronDown, ChevronUp, Info, Undo2, UserCheck } from 'lucide-react';
-import type { EmailFooter, EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
-import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Variable, ChevronDown, ChevronUp, Info, UserCheck } from 'lucide-react';
+import type { EmailFooter, EmailTemplate, TemplateVariable } from '../types';
+import type { TemplateDraft } from '../hooks/useTemplateDraft';
+import { BlockPalette } from './BlockPalette';
+import { COLOURWAYS, EMAIL_LAYOUTS, FALLBACK_COLOURWAY } from '../constants/blocks';
 
 interface TemplateEditorProps {
   template: EmailTemplate;
-  isSaving: boolean;
-  onSave: (data: EmailTemplateUpdate) => void;
-  onDirtyChange?: (dirty: boolean) => void;
+  /** The unsaved state, owned by the page. */
+  draft: TemplateDraft;
   /**
    * Signature variables from the department office directory. Kept separate
    * from the template's own variables: they apply to every template, so
@@ -29,20 +37,36 @@ interface TemplateEditorProps {
 
 export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   template,
-  isSaving,
-  onSave,
-  onDirtyChange,
+  draft,
   officerVariables = [],
   footers = [],
   footerDefaultKey = '',
 }) => {
-  const [subject, setSubject] = useState(template.subject);
-  const [htmlBody, setHtmlBody] = useState(template.html_body);
-  const [textBody, setTextBody] = useState(template.text_body ?? '');
-  const [cssStyles, setCssStyles] = useState(template.css_styles ?? '');
-  const [footerKey, setFooterKey] = useState(template.footer_key ?? '');
-  const [defaultCc, setDefaultCc] = useState((template.default_cc ?? []).join(', '));
-  const [defaultBcc, setDefaultBcc] = useState((template.default_bcc ?? []).join(', '));
+  const {
+    subject,
+    setSubject,
+    htmlBody,
+    setHtmlBody,
+    textBody,
+    setTextBody,
+    cssStyles,
+    setCssStyles,
+    footerKey,
+    setFooterKey,
+    headerAccent,
+    setHeaderAccent,
+    statusChip,
+    setStatusChip,
+    layout,
+    setLayout,
+    defaultCc,
+    setDefaultCc,
+    defaultBcc,
+    setDefaultBcc,
+    ccError,
+    bccError,
+  } = draft;
+
   const [showCss, setShowCss] = useState(false);
   const [showTextBody, setShowTextBody] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
@@ -51,114 +75,49 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     () => (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0
   );
   const htmlRef = useRef<HTMLTextAreaElement>(null);
-  const subjectRef = useRef<HTMLInputElement>(null);
 
-  const parsedCc = parseEmailList(defaultCc);
-  const parsedBcc = parseEmailList(defaultBcc);
-  const origCc = (template.default_cc ?? []).join(', ');
-  const origBcc = (template.default_bcc ?? []).join(', ');
-
-  // Track dirty state
-  const isDirty =
-    subject !== template.subject ||
-    htmlBody !== template.html_body ||
-    textBody !== (template.text_body ?? '') ||
-    cssStyles !== (template.css_styles ?? '') ||
-    footerKey !== (template.footer_key ?? '') ||
-    defaultCc !== origCc ||
-    defaultBcc !== origBcc;
-
-  React.useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [isDirty, onDirtyChange]);
-
-  // Reset when template changes
-  React.useEffect(() => {
-    setSubject(template.subject);
-    setHtmlBody(template.html_body);
-    setTextBody(template.text_body ?? '');
-    setCssStyles(template.css_styles ?? '');
-    setFooterKey(template.footer_key ?? '');
-    setDefaultCc((template.default_cc ?? []).join(', '));
-    setDefaultBcc((template.default_bcc ?? []).join(', '));
-    setShowRecipients((template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0);
-  }, [
-    template.id,
-    template.subject,
-    template.html_body,
-    template.text_body,
-    template.css_styles,
-    template.footer_key,
-    template.default_cc,
-    template.default_bcc,
-  ]);
-
-  const ccError = validateEmailList(defaultCc);
-  const bccError = validateEmailList(defaultBcc);
-  const hasValidationErrors = ccError !== null || bccError !== null;
-
-  const handleDiscard = useCallback(() => {
-    setSubject(template.subject);
-    setHtmlBody(template.html_body);
-    setTextBody(template.text_body ?? '');
-    setCssStyles(template.css_styles ?? '');
-    setFooterKey(template.footer_key ?? '');
-    setDefaultCc((template.default_cc ?? []).join(', '));
-    setDefaultBcc((template.default_bcc ?? []).join(', '));
-  }, [template]);
-
-  const handleSave = () => {
-    if (hasValidationErrors) return;
-    const data: EmailTemplateUpdate = {};
-    if (subject !== template.subject) data.subject = subject;
-    if (htmlBody !== template.html_body) data.html_body = htmlBody;
-    if (textBody !== (template.text_body ?? '')) data.text_body = textBody;
-    if (cssStyles !== (template.css_styles ?? '')) data.css_styles = cssStyles;
-    // Sent as '' rather than omitted when cleared: an omitted key means
-    // "leave this alone" to the backend's exclude_unset update, so the
-    // template would keep its old footer behind a success toast.
-    if (footerKey !== (template.footer_key ?? '')) data.footer_key = footerKey;
-    if (defaultCc !== origCc) data.default_cc = parsedCc.length > 0 ? parsedCc : null;
-    if (defaultBcc !== origBcc) data.default_bcc = parsedBcc.length > 0 ? parsedBcc : null;
-    onSave(data);
-  };
-
-  // Ctrl+S / Cmd+S keyboard shortcut to save
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (isDirty && !isSaving && !hasValidationErrors) {
-          handleSave();
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  });
+    setShowRecipients((template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0);
+  }, [template.id, template.default_cc, template.default_bcc]);
 
-  const insertVariable = (variable: TemplateVariable) => {
-    const tag = `{{${variable.name}}}`;
-    const textarea = htmlRef.current;
-    if (textarea) {
+  /**
+   * Drop *snippet* in at the cursor, or append when the textarea has never
+   * been focused. Generalised from the variable chips, which did exactly this
+   * for a `{{tag}}` — a block is the same operation with a longer string.
+   */
+  const insertSnippet = useCallback(
+    (snippet: string) => {
+      const textarea = htmlRef.current;
+      if (!textarea) {
+        setHtmlBody((prev) => prev + snippet);
+        return;
+      }
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
-      const before = htmlBody.slice(0, start);
-      const after = htmlBody.slice(end);
-      setHtmlBody(before + tag + after);
-      // Restore cursor position after the inserted tag
+      setHtmlBody((prev) => prev.slice(0, start) + snippet + prev.slice(end));
+      // The cursor lands after what was inserted, so a run of clicks builds a
+      // body in order rather than stacking everything at one offset.
       requestAnimationFrame(() => {
         textarea.focus();
-        textarea.selectionStart = start + tag.length;
-        textarea.selectionEnd = start + tag.length;
+        textarea.selectionStart = start + snippet.length;
+        textarea.selectionEnd = start + snippet.length;
       });
-    } else {
-      setHtmlBody((prev) => prev + tag);
-    }
-  };
+    },
+    [setHtmlBody]
+  );
+
+  const insertVariable = useCallback(
+    (variable: TemplateVariable) => insertSnippet(`{{${variable.name}}}`),
+    [insertSnippet]
+  );
 
   const labelClass = 'form-label';
   const inputClass = 'form-input font-mono';
+  const plainInputClass = 'form-input';
+
+  // Falls back to the first colourway so the preview pill is never colourless
+  // for a template that predates these columns.
+  const chipPreview = COLOURWAYS.find((c) => c.accent === headerAccent.toLowerCase()) ?? FALLBACK_COLOURWAY;
 
   const defaultFooter = footers.find((footer) => footer.key === footerDefaultKey);
   // Falls back to the default footer, matching what the renderer does with a
@@ -167,32 +126,6 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Header with save button */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-theme-text-primary text-lg font-semibold">Edit Template</h3>
-        <div className="flex items-center gap-2">
-          {isDirty && (
-            <button
-              onClick={handleDiscard}
-              disabled={isSaving}
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
-            >
-              <Undo2 className="h-4 w-4" />
-              <span>Discard</span>
-            </button>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={!isDirty || isSaving || hasValidationErrors}
-            className="flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Save changes (Ctrl+S)"
-          >
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            <span>Save</span>
-          </button>
-        </div>
-      </div>
-
       {/* Subject */}
       <div>
         <div className="flex items-center justify-between">
@@ -207,12 +140,11 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           </span>
         </div>
         <input
-          ref={subjectRef}
           id="template-subject"
           type="text"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          className={inputClass.replace('font-mono', '')}
+          className={plainInputClass}
           placeholder="Email subject..."
           maxLength={500}
           aria-describedby="subject-hint"
@@ -249,6 +181,94 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         </div>
       )}
 
+      {/* Layout and accent.
+          Both are columns on the template rather than hexes buried in the
+          body, which is what makes a colourway something an officer can
+          change from here instead of it taking a deploy. The seven accents
+          are the only ones the API accepts: each carries white button text
+          and tints a chip behind text of its own colour, and both are easy
+          to get wrong by eye and fail for the member squinting at a phone
+          in daylight. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <span className={labelClass}>Layout</span>
+          <div className="bg-theme-surface-secondary mt-1 flex rounded-lg p-0.5">
+            {EMAIL_LAYOUTS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setLayout(option.id)}
+                aria-pressed={(layout || 'notice') === option.id}
+                title={option.hint}
+                className={`mobile-touch-target flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                  (layout || 'notice') === option.id
+                    ? 'bg-red-600 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className={labelClass}>Header accent</span>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {COLOURWAYS.map((option) => {
+              const isSelected = headerAccent.toLowerCase() === option.accent;
+              return (
+                <button
+                  key={option.accent}
+                  type="button"
+                  onClick={() => setHeaderAccent(option.accent)}
+                  aria-pressed={isSelected}
+                  aria-label={option.label}
+                  title={option.label}
+                  style={{ backgroundColor: option.accent }}
+                  className={`h-[22px] w-[22px] rounded-md transition-shadow ${
+                    isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-current' : ''
+                  }`}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Status chip */}
+      <div>
+        <label htmlFor="template-chip" className={labelClass}>
+          Status chip
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            id="template-chip"
+            type="text"
+            value={statusChip}
+            onChange={(e) => setStatusChip(e.target.value)}
+            className={`${plainInputClass} flex-1`}
+            placeholder="Action required"
+            maxLength={40}
+            aria-describedby="chip-hint"
+          />
+          {/* Shown as it will render, because the chip is uppercased and
+              letter-spaced by the email stylesheet — what is typed here and
+              what a member sees are not the same string. */}
+          <span
+            className="inline-block shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-[0.08em] uppercase"
+            style={{
+              backgroundColor: chipPreview.tint,
+              color: chipPreview.accent,
+            }}
+          >
+            {statusChip || 'No chip'}
+          </span>
+        </div>
+        <p id="chip-hint" className="text-theme-text-muted mt-1 text-xs">
+          Leave it empty and the header carries no chip at all.
+        </p>
+      </div>
+
       {/* Default CC / BCC (collapsible) */}
       <div>
         <button
@@ -269,7 +289,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 type="text"
                 value={defaultCc}
                 onChange={(e) => setDefaultCc(e.target.value)}
-                className={`${inputClass.replace('font-mono', '')} ${ccError ? 'border-red-500' : ''}`}
+                className={`${plainInputClass} ${ccError ? 'border-red-500' : ''}`}
                 placeholder="chief@dept.org, admin@dept.org"
                 aria-invalid={!!ccError}
                 aria-describedby="cc-hint"
@@ -291,7 +311,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 type="text"
                 value={defaultBcc}
                 onChange={(e) => setDefaultBcc(e.target.value)}
-                className={`${inputClass.replace('font-mono', '')} ${bccError ? 'border-red-500' : ''}`}
+                className={`${plainInputClass} ${bccError ? 'border-red-500' : ''}`}
                 placeholder="records@dept.org"
                 aria-invalid={!!bccError}
                 aria-describedby="bcc-hint"
@@ -307,6 +327,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           </div>
         )}
       </div>
+
+      {/* Blocks */}
+      <BlockPalette onInsert={insertSnippet} />
 
       {/* Variable helper */}
       {template.available_variables.length > 0 && (
@@ -333,7 +356,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     key={v.name}
                     onClick={() => insertVariable(v)}
                     title={v.description}
-                    className="inline-flex items-center rounded-sm border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 font-mono text-xs text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                    className="inline-flex items-center rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
                   >
                     {`{{${v.name}}}`}
                   </button>

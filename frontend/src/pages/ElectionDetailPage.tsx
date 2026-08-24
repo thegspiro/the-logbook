@@ -1193,7 +1193,7 @@ export const ElectionDetailPage: React.FC = () => {
 
           {/* Meeting Selector Modal (inline) */}
           {showMeetingSelector && canManage && (
-            <div className="bg-theme-surface-alt border-theme-surface-border mt-4 rounded-lg border p-4">
+            <div className="bg-theme-surface-secondary border-theme-surface-border mt-4 rounded-lg border p-4">
               <div className="mb-2 flex items-center justify-between">
                 <h4 className="text-theme-text-primary text-sm font-medium">Link Meeting or Event</h4>
                 <button
@@ -1563,7 +1563,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {pendingPackages.map((pkg) => (
                               <div
                                 key={pkg.id}
-                                className="bg-theme-bg border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
+                                className="bg-theme-surface-secondary border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
                               >
                                 <div>
                                   <p className="text-theme-text-primary text-sm font-medium">{pkg.applicant_name}</p>

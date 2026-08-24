@@ -668,7 +668,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             <button
               onClick={() => setViewMode('kanban')}
               className={`flex min-h-11 items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
-                viewMode === 'kanban' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                viewMode === 'kanban' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -677,7 +677,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             <button
               onClick={() => setViewMode('table')}
               className={`flex min-h-11 items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors ${
-                viewMode === 'table' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                viewMode === 'table' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <List className="h-4 w-4" />
@@ -774,7 +774,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             void handleBulkReject();
                           }}
                           disabled={isBulkRejecting}
-                          className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm text-white transition-colors hover:bg-red-900 disabled:opacity-50"
                         >
                           {isBulkRejecting ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />

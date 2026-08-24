@@ -38,13 +38,23 @@ that registers no printer simply never sees the direct-print controls.
 
 **Labels** — five modules generate them, each gated on its own permission:
 
-| Module key            | Permissions (any-of)                                     | Label carries                  |
-| --------------------- | -------------------------------------------------------- | ------------------------------ |
-| `inventory`           | `inventory.view`, `inventory.manage`                     | item name, asset tag           |
-| `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier          |
-| `facilities`          | `facilities.view`, `facilities.manage`                   | facility / storage area        |
-| `membership`          | `members.view`, `members.manage`                         | member name, membership number |
-| `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name                 |
+| Module key            | Permissions (any-of)                                     | Label carries                    |
+| --------------------- | -------------------------------------------------------- | -------------------------------- |
+| `inventory`           | `inventory.view`, `inventory.manage`                     | item name, asset tag             |
+| `apparatus`           | `apparatus.view`, `apparatus.manage`                     | unit name, identifier            |
+| `facilities`          | `facilities.view`, `facilities.manage`                   | facility name                    |
+| `membership`          | `members.view`, `members.manage`                         | member name, membership number   |
+| `prospective_members` | `prospective_members.view`, `prospective_members.manage` | applicant name, **status token** |
+
+> **An applicant label's barcode is a bearer token.** `_build_prospect_specs`
+> encodes `ProspectiveMember.status_token`, which is what
+> `GET /api/public/v1/application-status/{token}` accepts — unauthenticated. So
+> anyone who can read the barcode can read that applicant's status page. That is
+> the point (it is the applicant's own label), but it means these labels should
+> be handled like the token they carry: not left on a noticeboard, not
+> photographed into a group chat. `facilities` labels carry a facility record
+> only — there is no storage-area label builder, so a storage-area id produces
+> no label.
 
 **Station documents** — built from live records on request and printed at the
 watch desk. Nothing is stored; these are separate from `/documents`, which is
@@ -79,14 +89,26 @@ printer. It is also the only language that prints station documents.
 
 ### Geometry that is shared, deliberately
 
-`label_renderer.py` owns the symbology geometry both renderers depend on —
-`MIN_BAR_WIDTH_INCH` (5 mil), `code128_width_dots()`, `qr_modules_for()`, and
-the QR version table. Neither renderer carries its own copy.
+`label_renderer.py` owns the parts that are genuinely format-independent, and
+**only those** — be precise about which, because changing a floor that is not
+shared will not update every output path:
 
-The reason is a bug that was caught in review: an independently-chosen 2-dot
-module floor in the ZPL renderer rejected a 1×1″ label the PDF path prints
-happily. A barcode's minimum readable width is a property of the symbology, not
-of the output format, so it lives in one place and every path reads it.
+| Lives in `label_renderer.py`, read by others                            | Local to one renderer                                                                         |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `code128_width_dots()`                                                  | `escpos_renderer._MIN_MODULE_DOTS` (2) and `_MAX_MODULE_DOTS` (6) — `GS w`'s documented range |
+| `qr_modules_for()` and the QR version table                             | `escpos_renderer._MIN_QR_MODULE_DOTS` (3)                                                     |
+| `MIN_BAR_WIDTH_INCH` (5 mil) — used by the PDF path and by ZPL Code 128 | `zpl_renderer._MIN_QR_MODULE_INCH` (0.01)                                                     |
+
+**ESC/POS does not read `MIN_BAR_WIDTH_INCH` at all.** Its floors are in dots
+because its resolution is fixed by the paper width, not configured per printer,
+so an inch-based minimum has nothing to convert against.
+
+What is shared is shared because of a bug caught in review: an
+independently-chosen 2-dot module floor in the ZPL renderer rejected a 1×1″
+label the PDF path prints happily. The _number of modules a value needs_ is a
+property of the symbology and belongs in one place. The _minimum dots per
+module a given printer can resolve_ is a property of that printer class, and
+reasonably differs.
 
 ---
 
@@ -103,6 +125,12 @@ of the output format, so it lives in one place and every path reads it.
 **Listing is deliberately open.** The print page needs the list to offer a
 destination, and a printer's name and host are not sensitive. Changing them is
 what needs `settings.manage`.
+
+**`organization.update_settings` reaches the API, not the screen.** The
+endpoints accept it, but Label Printers lives inside `/settings`, and that
+route is wrapped in `<ProtectedRoute requiredPermission="settings.manage">`. A
+member holding only `organization.update_settings` can register a printer by
+calling the API directly and cannot get to the page that does it.
 
 **Printing is gated on the module, not on printers.** A label reveals nothing
 the PDF path does not, so `POST /labels/print` accepts exactly what
@@ -169,14 +197,25 @@ at some point:
   are validated against the spec's fixed bit pattern (bits 1 and 4 set, bits 0
   and 7 clear) before being decoded at all.
 - **A fault whose bit is not in the table is reported generically**, never
-  dropped. This holds even when _other_ bits in the same mask are recognised —
-  decoding one bit must not make a partly-understood mask look fully understood.
+  dropped. This holds when _other_ bits in the same mask are recognised —
+  decoding one bit must not make a partly-understood mask look fully understood
+  — and when the condition sits in `~HQES`'s high group, which no table here
+  names. The high group is consulted only when the printer's own fault flag is
+  set, so a unit that parks something benign there does not report a fault on
+  every query.
 - **A wrong specific diagnosis is worse than a vague true one.** Only bits the
   published tables name are named. Bit 2 of `DLE EOT 3` is undefined in Epson's
   table and is reported generically rather than guessed at.
 
 Older firmware that does not answer the query reports its identity and says
 fault reporting is unavailable — again, rather than claiming health.
+
+**That message is on the Check status screen only.** The API carries
+`status_known: false` after a direct print, but neither `LabelPrintPage` nor
+`PrintDocumentButton` reads it, so a print to a printer whose firmware cannot
+answer shows an ordinary success toast. It is a success — the job was
+accepted — but "accepted" is weaker than the confirmation a status-capable
+printer gives, and the UI does not currently draw that distinction.
 
 ---
 
@@ -330,9 +369,16 @@ authorized against.
 | `POST` | `/station-documents/preview` | the document's own |
 | `POST` | `/station-documents/print`   | the document's own |
 
-`preview` returns the same structure the renderer consumes, so what someone
-checks before printing is what comes out — not a second rendering free to
-disagree.
+`preview` returns the **same structure the renderer consumes**, so the on-screen
+check and the printed page cannot disagree about layout — there is no second
+rendering free to drift from the first.
+
+It is not a snapshot, though. `print_document` rebuilds from live records on
+the second request, and no document id or version travels between the two
+calls. If the roster changes while the modal is open — someone confirms, a
+pass-down note is edited — the printed page reflects the change, and the
+approval was of slightly older content. For a watch-desk roster that is
+usually what you want; it is worth knowing before assuming otherwise.
 
 **A printer that cannot be reached returns 502**, not 500: the application
 worked and a downstream device did not.

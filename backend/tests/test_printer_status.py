@@ -99,6 +99,27 @@ class TestErrorStatus:
         assert result is not None
         assert result["warnings"] == ["Labels nearly out", "Printer reports a warning"]
 
+    def test_a_condition_in_the_high_group_is_not_dropped(self):
+        # The high group holds conditions the table does not name. Decoding
+        # only the low group reported "Out of labels" and silently lost
+        # whatever else the printer was complaining about.
+        result = parse_error_status(_status(errors="1 00000001 00000001"))
+        assert result is not None
+        assert result["errors"] == ["Out of labels", "Printer reports an error"]
+
+    def test_a_high_group_alone_is_still_reported(self):
+        result = parse_error_status(_status(errors="1 00000004 00000000"))
+        assert result is not None
+        assert result["errors"] == ["Printer reports an error"]
+
+    def test_a_high_group_without_the_fault_flag_is_ignored(self):
+        # The flag digit is the printer's own answer to "is anything wrong".
+        # Without gating on it, a unit that parks something benign in the high
+        # group would report a fault on every query.
+        result = parse_error_status(_status(errors="0 00000001 00000000"))
+        assert result is not None
+        assert result["errors"] == []
+
     def test_a_head_open_is_an_error(self):
         result = parse_error_status(_status(errors="1 00000000 00000004"))
         assert result is not None

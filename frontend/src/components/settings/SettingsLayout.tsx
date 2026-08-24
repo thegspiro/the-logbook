@@ -78,6 +78,23 @@ interface SettingsLayoutProps<K extends string, S extends string> {
   /** Renders a back button left of the icon tile when set. */
   onBack?: (() => void) | undefined;
   backLabel?: string;
+  /**
+   * Content column width. `standard` is the 960px every settings screen reads
+   * at and is what a new screen should want.
+   *
+   * `wide` exists for one case: a panel that puts two working surfaces beside
+   * each other rather than stacking them, where 960px does not fit both and
+   * narrowing one defeats the reason they are side by side. Email Templates'
+   * Templates section is the only such panel — an editor and the live preview
+   * of what it renders, which have to be legible at the same time or the
+   * preview is just a tab you visit afterwards. Its other four sections are
+   * lists and stay `standard`, so the widening is scoped to the panel that
+   * needs it rather than to the screen.
+   *
+   * Deliberately not a free-form class or a pixel number: two widths is a
+   * design decision, a hundred is the drift this component was written to end.
+   */
+  width?: 'standard' | 'wide';
   children: React.ReactNode;
 }
 
@@ -95,6 +112,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
   headerAside,
   onBack,
   backLabel = 'Go back',
+  width = 'standard',
   children,
 }: SettingsLayoutProps<K, S>) {
   const current = sections.find((section) => section.key === activeSection);
@@ -102,10 +120,13 @@ export function SettingsLayout<K extends string, S extends string = string>({
   const hasSubPages = subPages.length > 0;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className={`mx-auto px-4 py-8 sm:px-6 lg:px-8 ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
       {/* One content column at every settings screen, replacing the max-w-4xl /
-          5xl / 6xl / 1600px the nine screens had drifted into. */}
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5">
+          5xl / 6xl / 1600px the nine screens had drifted into. `wide` is the
+          single documented exception — see the prop. Both caps are applied
+          here and on the outer container, because max-w-6xl (1152px) would
+          otherwise clamp the wide column back down without anything saying so. */}
+      <div className={`mx-auto flex w-full flex-col gap-5 ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-[960px]'}`}>
         {/* Wraps rather than squeezing: a title, a subtitle and a status pill
             (or a breadcrumb trail, on Email Templates) do not fit one row on a
             small phone, and a non-shrinking aside beside a shrinking title
@@ -122,7 +143,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
                 <ArrowLeft className="h-5 w-5" />
               </button>
             ) : null}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800">
               <SettingsIcon className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">

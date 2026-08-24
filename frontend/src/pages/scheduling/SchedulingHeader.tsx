@@ -21,13 +21,13 @@ const SchedulingHeader: React.FC<SchedulingHeaderProps> = ({
       {backTo && (
         <Link
           to={backTo}
-          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary focus-visible:ring-theme-focus flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary focus-visible:ring-theme-focus-ring flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
           aria-label={backLabel}
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
       )}
-      <div className="rounded-lg bg-red-600 p-2">
+      <div className="rounded-lg bg-red-800 p-2">
         <Clock className="h-6 w-6 text-white" aria-hidden="true" />
       </div>
       <div>

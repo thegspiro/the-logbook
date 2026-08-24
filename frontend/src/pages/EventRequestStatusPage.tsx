@@ -195,7 +195,7 @@ const EventRequestStatusPage: React.FC = () => {
                         <div
                           className={`flex h-10 w-10 items-center justify-center rounded-full ${
                             isCurrent
-                              ? 'ring-theme-accent-red-muted bg-red-600 text-white ring-4'
+                              ? 'ring-theme-accent-red-muted bg-red-800 text-white ring-4'
                               : isActive
                                 ? 'bg-green-500 text-white'
                                 : 'bg-theme-surface-hover text-theme-text-muted'

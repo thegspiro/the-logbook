@@ -3531,8 +3531,11 @@ class SchedulingService:
                         if shift.start_time
                         else "See the schedule"
                     ),
+                    # <h2>, not <p><strong>: .content h2 is the shell's
+                    # section heading, and an injected chunk that opts out of
+                    # it does not look like part of the same email.
                     "checklist_html": (
-                        "<p><strong>Equipment checklists to complete:</strong></p>"
+                        "<h2>Equipment checklists</h2>"
                         "<ul>"
                         + "".join(
                             f"<li>{_html.escape(n)}</li>" for n in checklist_names

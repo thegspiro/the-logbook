@@ -491,7 +491,7 @@ const SchedulingPage: React.FC = () => {
                   tabIndex={isActive ? 0 : -1}
                   onClick={() => handleTabChange(tab.id)}
                   onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
-                  className={`focus-visible:ring-theme-focus flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset sm:px-4 ${
+                  className={`focus-visible:ring-theme-focus-ring flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset sm:px-4 ${
                     isActive
                       ? 'border-violet-600 text-violet-600 dark:text-violet-400'
                       : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'

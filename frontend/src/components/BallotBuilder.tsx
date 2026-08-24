@@ -887,7 +887,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                                     <button
                                       type="button"
                                       onClick={() => void handleDeleteSavedTemplate(template)}
-                                      className="rounded bg-red-600 px-2 py-1 text-xs text-white"
+                                      className="rounded bg-red-800 px-2 py-1 text-xs text-white"
                                     >
                                       Delete
                                     </button>
