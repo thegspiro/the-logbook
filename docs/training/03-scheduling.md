@@ -2781,11 +2781,12 @@ A blocked attempt changes nothing: the request stays pending for somebody else
 to action.
 
 > **[SCREENSHOT NEEDED — Scheduling → Requests viewed by the member who raised
->
-> > the top request, showing the rejection message "Requesters cannot review
-> > their own swap requests". Seed one request raised by the capturing account
-> > and one raised by another member so the available actions differ visibly
-> > between the two rows.]**
+> it, clicking **Approve** on their own pending swap, showing the resulting
+> error "Requesters cannot review their own swap requests" with the request
+> still pending. Do **not** attempt a side-by-side of differing controls:
+> Approve and Deny render on every pending request for anyone holding
+> `scheduling.manage`, own requests included, so nothing distinguishes the rows
+> until the button is pressed.]**
 
 **Plan the second approver.** If exactly one person in your department holds
 `scheduling.manage` and that person also requests swaps, nobody can approve
@@ -2811,15 +2812,14 @@ same record.
 
 Also changed:
 
-- **Standalone (non-shift) equipment checks now require
-  `equipment_check.manage`.** A member who could previously start an ad-hoc
-  check may find the control gone — that is the permission change, not a
-  fault.
+- **Standalone (non-shift) equipment checks still accept
+  `equipment_check.submit`** as well as `equipment_check.manage`, so ordinary
+  members keep the ad-hoc check they had.
 - **Deep nested storage paths now fit** in a check item's recorded location.
 - **A compartment cannot be made its own parent.**
-- **Expired-equipment failures are worked out when the check is read**, so a
-  lot that expires after submission shows up without the record being
-  rewritten.
+- **Expired-equipment failures are decided from authoritative inventory at
+  submission** rather than from the client's assertion, then stored with the
+  check. A lot expiring later does not retroactively fail an earlier check.
 - **Timing is recorded by the server**, not supplied by the phone.
 
 > **[SCREENSHOT NEEDED — a submitted shift equipment check on a 390x844

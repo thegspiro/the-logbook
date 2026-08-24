@@ -2161,9 +2161,11 @@ and pushed every following column sideways. Every export in the product now
 goes through one escaper, blank cells no longer pick up a stray apostrophe,
 and spreadsheet formula characters are neutralized consistently.
 
-**New dashboard sections** are gated by both module and permission, and a
-section you cannot see is **omitted rather than shown empty** — so the
-dashboard cannot be used to work out what exists elsewhere in the department.
+**New dashboard sections** are authorized per section, so what you see depends
+on your own grants. Two of the three endpoints leave out what you cannot see;
+the main widgets endpoint returns those sections empty instead. Either way,
+**a section you cannot see is not a section that is broken** — it is one your
+role does not reach.
 
 Worth knowing when assigning roles: **`settings.manage` is deliberately not
 financial access.** Money totals need `finance.manage`, fundraising needs

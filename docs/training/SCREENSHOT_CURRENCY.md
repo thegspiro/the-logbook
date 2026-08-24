@@ -62,11 +62,16 @@ that is what a capture run has to set up and the marker cannot carry.
 
 **Guide 03 — scheduling (3 markers)**
 
-- **Requests tab under the member who raised the top request**, showing the
-  rejection "Requesters cannot review their own swap requests". _Demo data:_
-  one request raised by the capturing account **and** one raised by another
-  member, so the available actions differ visibly between two rows in the same
-  frame. A single-row shot cannot show a rule about who you are.
+- **The error after a self-review attempt.** Sign in as the member who raised a
+  pending swap, press **Approve** on it, and capture the error ("Requesters
+  cannot review their own swap requests") with the request still pending.
+  _Demo data:_ one pending swap raised by the capturing account.
+  **Corrected 2026-08-23:** this marker previously asked for a side-by-side of
+  two rows with differing controls. That capture cannot be taken —
+  `RequestsTab` renders Approve/Deny for **every** pending request whenever the
+  viewer holds `scheduling.manage`, own requests included, so the rows are
+  identical until the button is pressed. The rejection is server-side and only
+  appears after the click.
 - **Requests tab with pagination populated.** _Demo data:_ **at least 60**
   requests, so the control is active rather than a disabled stub.
 - **Submitted shift equipment check at 390×844.** _Demo data:_ a completed
