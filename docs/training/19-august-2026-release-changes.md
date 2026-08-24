@@ -560,11 +560,13 @@ A department that wants the secretary to draft and an officer to approve gets
 that from the permissions. A department that does not want the ceremony gives
 one person `settings.manage`.
 
-> **[SCREENSHOT NEEDED — the revision editor with the body text area, the
->
-> > required "change note" field visibly filled in, and the "Last updated" free
-> > text field. Capture under an account holding only `legal.propose`, so the
-> > Publish control is absent — that absence is the point of the shot.]**
+![The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated](./images/19-16-legal-revision-editor.png)
+
+_Publishing is not a control on this form. **Save draft** and **Cancel** are
+what it offers everyone, including a member who can publish — publishing is an
+action on the saved proposal afterwards, and that is where the permission shows
+(the proposal card offers **Publish to members** only to `legal.publish` or
+`settings.manage`)._
 
 ### Every change needs a reason
 
@@ -599,11 +601,7 @@ not silently kept.
   review before publishing, that is a process you run — the module does not
   chase anyone.
 
-> **[SCREENSHOT NEEDED — the revision history for one document showing a
->
-> > published revision and at least one archived revision with its change note
-> > and the member who published it. Seed three revisions so the archive is
-> > visibly a history rather than a single row.]**
+![Three revisions of the privacy notice — one live, two replaced — each keeping the reason it was changed and who published it](./images/19-17-legal-revision-history.png)
 
 ## Scheduling: you can no longer approve your own swap
 

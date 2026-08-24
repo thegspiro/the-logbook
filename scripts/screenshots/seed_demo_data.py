@@ -653,7 +653,54 @@ is destroyed.""",
         "Added the retention schedule and the separate handling of medical "
         "records, per counsel's note of 21 August.",
     ),
+    (
+        """\
+Oakville Fire Department operates this member intranet to run department
+operations. The department is the data controller for everything in it.
+
+What we keep: membership records, training and certification history, shift and
+attendance records, and the emergency contact details you give us.
+
+How long: personnel records for the length of membership plus seven years, per
+the department's retention schedule and the Virginia Public Records Act.
+
+Who sees it: access follows your role. Medical and screening records are held
+separately and reached only by the members named in the department's HIPAA
+policy.
+
+Leaving the department: your record is retained under the schedule above rather
+than deleted, because it is a department record and in places a statutory one.
+Ask the secretary for a copy of what is held about you at any time.
+
+Questions about your record go to the department secretary, not to the software
+vendor. The department decides what is collected, who may read it, and when it
+is destroyed.""",
+        "Answered the question members kept asking at orientation: what happens "
+        "to your record after you leave. Adopted at the 19 August business "
+        "meeting.",
+    ),
 ]
+
+SECRETARY_DRAFT_NOTE = (
+    "Second pass after the officers' meeting: added the account-suspension "
+    "and equipment-return clauses the bylaws already require."
+)
+
+SECRETARY_DRAFT_BODY = """\
+DRAFT — not yet adopted. Second pass, incorporating the officers' comments.
+
+Using this system: your account is issued by Oakville Fire Department and
+belongs to the department. Use it for department business.
+
+Your account is suspended when your membership is suspended, and closed when
+your membership ends. Department property issued to you — turnout gear, radios,
+keys, station fobs — is returned at the same time, per Article VII of the
+bylaws.
+
+What you post: minutes, reports and messages entered here are department
+records. Write them as such.
+
+Questions go to the department secretary."""
 
 TERMS_DRAFT_BODY = """\
 DRAFT — not yet adopted.
@@ -6765,7 +6812,112 @@ class Seeder:
                 )
             )
 
+        self._ensure_legal_proposer()
+        self._seed_secretary_draft()
         return created
+
+    #: The demo account that may draft a revision but not publish one. The
+    #: Secretary role is the department office that actually holds
+    #: `legal.propose` without `legal.publish` or `settings.manage`, which is
+    #: the middle rung of the guide's three-way table and the one no other demo
+    #: account can photograph.
+    LEGAL_PROPOSER_USERNAME = "okittredge"
+    LEGAL_PROPOSER_ROLE = "Secretary"
+
+    def _seed_secretary_draft(self) -> None:
+        """A draft written by the propose-only account, not by the publisher.
+
+        Who *wrote* a draft decides what its card offers: the page allows
+        editing to the author or to anyone who can publish, and offers Publish
+        only to the latter. A draft the administrator wrote therefore shows the
+        secretary no controls at all, which pictures nothing — the guide's
+        claim is about a secretary looking at their own proposal and finding
+        Edit and Discard but no way to publish it.
+
+        On Terms rather than Privacy: Privacy's card is photographed elsewhere
+        in its published, no-proposals state, and a pending proposal would
+        change what that capture shows.
+        """
+        session = self.member_session(
+            self.base_url,
+            next(
+                (
+                    str(pick(u, "id"))
+                    for u in items(self.api.get("/users?limit=200"), "users")
+                    if pick(u, "username") == self.LEGAL_PROPOSER_USERNAME
+                ),
+                "",
+            ),
+            self.LEGAL_PROPOSER_USERNAME,
+        )
+        overview = session.get("/legal-documents") or {}
+        terms = next(
+            (
+                d
+                for d in (overview.get("documents") or [])
+                if str(pick(d, "document_type", "documentType")) == "terms_of_service"
+            ),
+            {},
+        )
+        notes = {
+            str(pick(r, "change_note", "changeNote") or "")
+            for r in (terms.get("drafts") or [])
+        }
+        if SECRETARY_DRAFT_NOTE in notes:
+            return
+        session.post(
+            "/legal-documents/revisions",
+            {
+                "document_type": "terms_of_service",
+                "body": SECRETARY_DRAFT_BODY,
+                "change_note": SECRETARY_DRAFT_NOTE,
+                "effective_date": str(TODAY + timedelta(days=7)),
+            },
+        )
+
+    def _ensure_legal_proposer(self) -> None:
+        """Guarantee the propose-only account this screen's captures need.
+
+        The role reached this member as a side effect of seeding the closed
+        election's ballot attestations. That worked, and is exactly the kind of
+        dependency that goes quiet when the other step's fixture guard
+        short-circuits: the capture then signs in successfully, lands on a
+        screen it no longer has, and times out with nothing pointing at why.
+        The step that owns the screen asserts its own account.
+        """
+        user_id = next(
+            (
+                str(pick(u, "id"))
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == self.LEGAL_PROPOSER_USERNAME
+            ),
+            "",
+        )
+        if not user_id:
+            self.blocked.append(
+                f"legal documents: {self.LEGAL_PROPOSER_USERNAME} is not on the roster"
+            )
+            return
+        roles = self.api.get("/roles")
+        role_id = next(
+            (
+                str(pick(r, "id"))
+                for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+                if pick(r, "name") == self.LEGAL_PROPOSER_ROLE
+            ),
+            "",
+        )
+        if not role_id:
+            self.blocked.append(
+                f"legal documents: no {self.LEGAL_PROPOSER_ROLE} role to grant"
+            )
+            return
+        try:
+            self.api.post(f"/users/{user_id}/roles/{role_id}", {})
+        except ApiError as exc:
+            # Already held is the common case on a re-run.
+            if exc.code not in (400, 409):
+                raise
 
     def seed_documents(self) -> list[dict]:
         folders = items(self.api.get("/documents/folders"), "folders")

@@ -63,6 +63,25 @@ export const DEMO_MEMBER_CREDENTIALS = {
 };
 
 /**
+ * The department secretary: holds `legal.propose`, and neither `legal.publish`
+ * nor `settings.manage`.
+ *
+ * Shots marked `auth: "secretary"` sign in as this account. It exists for the
+ * middle rung of the legal-documents permission table, which no other demo
+ * account can photograph — the administrator can publish and an ordinary
+ * member cannot reach the screen at all, so the state the guide describes
+ * (the editor open, the Publish control absent) is only reachable from here.
+ *
+ * Must match LEGAL_PROPOSER_USERNAME in seed_demo_data.py, whose
+ * `_ensure_legal_proposer` guarantees the role rather than leaving it to
+ * arrive as a side effect of the election seeding.
+ */
+export const DEMO_SECRETARY_CREDENTIALS = {
+  username: "okittredge",
+  password: "DemoMember!2026",
+};
+
+/**
  * The one account enrolled in TOTP, used to photograph the login page's
  * authentication-code step.
  *
@@ -1284,6 +1303,62 @@ export async function openTrainingHistoryTable(page) {
     window.scrollBy(0, -120);
   });
   await page.waitForTimeout(500);
+}
+
+/** Open the Terms of Service tab of the legal-documents screen. */
+async function openTermsTab(page) {
+  await page.getByRole("tab", { name: /Terms of Service/i }).click();
+  await page
+    .getByText(/Second pass after the officers' meeting/)
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Show the secretary their own proposal, where the permission is visible.
+ *
+ * Publishing is not a control in the revision editor -- that form offers
+ * Cancel and Save draft to everybody, publisher included. It is an action on
+ * the saved proposal, so the proposal card is the only place the difference
+ * between `legal.propose` and `legal.publish` can be photographed.
+ */
+export async function openOwnLegalProposal(page) {
+  await openTermsTab(page);
+  await page
+    .getByText(/Second pass after the officers' meeting/)
+    .first()
+    .evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(400);
+}
+
+/** Reopen that proposal in the editor, with all three fields already filled. */
+export async function openLegalRevisionEditor(page) {
+  await openTermsTab(page);
+  const proposal = page
+    .locator("li.card")
+    .filter({ hasText: /Second pass after the officers' meeting/ })
+    .first();
+  await proposal.getByRole("button", { name: /^Edit$/ }).click();
+  await page
+    .locator("#revision-note")
+    .waitFor({ state: "visible", timeout: 20_000 });
+  // The panel scrolls internally and opens at the top, which puts the
+  // effective-date field -- printed to members as "Last updated", and half of
+  // what the marker asks for -- below the fold. Scrolled to the end so the
+  // change note and that field are both in frame; the body textarea is 24rem
+  // tall, so its tail stays visible above them.
+  await page
+    .locator("#revision-note")
+    .evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(400);
+}
+
+/** The published history of the privacy notice, three revisions deep. */
+export async function openLegalHistory(page) {
+  const history = page.getByText(/Published history/).first();
+  await history.waitFor({ state: "visible", timeout: 20_000 });
+  await history.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(400);
 }
 
 export const SHOTS = [
@@ -10883,6 +10958,59 @@ export const SHOTS = [
     alt: "The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files",
     route: "/members",
     prepare: openTrainingHistoryTable,
+  },
+  {
+    // Shot as the secretary, because the *absence* is the subject and an
+    // administrator's capture of the same card shows Publish and teaches the
+    // opposite. Their own draft, not the administrator's: the page allows
+    // editing to the author or to anyone who can publish, so a draft somebody
+    // else wrote offers the secretary nothing at all and pictures no rule.
+    id: "08-77-legal-proposal-as-proposer",
+    doc: "08-admin-reports.md",
+    line: 2121,
+    anchor: "the revision editor captured under an account holding",
+    alt: "The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing",
+    route: "/governance/legal",
+    auth: "secretary",
+    prepare: openOwnLegalProposal,
+    fullPage: true,
+  },
+  {
+    id: "08-78-legal-revision-history",
+    doc: "08-admin-reports.md",
+    line: 2149,
+    anchor: "the revision history for one document showing a",
+    alt: "The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out",
+    route: "/governance/legal",
+    // Clipped to the history section. The whole page also carries the privacy
+    // notice's "No proposals yet" -- true, and nothing to do with this shot,
+    // but enough for the empty-state guard to hold the capture back.
+    selector: "section:has(> h2:has-text('Published history'))",
+    prepare: openLegalHistory,
+  },
+  {
+    id: "19-16-legal-revision-editor",
+    doc: "19-august-2026-release-changes.md",
+    line: 563,
+    anchor: "the revision editor with the body text area, the",
+    alt: "The revision editor under a propose-only account: the document text, the filled-in change note, and the free-text Effective date printed to members as Last updated",
+    route: "/governance/legal",
+    auth: "secretary",
+    prepare: openLegalRevisionEditor,
+    fullPage: true,
+  },
+  {
+    id: "19-17-legal-revision-history",
+    doc: "19-august-2026-release-changes.md",
+    line: 602,
+    anchor: "the revision history for one document showing a",
+    alt: "Three revisions of the privacy notice — one live, two replaced — each keeping the reason it was changed and who published it",
+    route: "/governance/legal",
+    // Clipped to the history section. The whole page also carries the privacy
+    // notice's "No proposals yet" -- true, and nothing to do with this shot,
+    // but enough for the empty-state guard to hold the capture back.
+    selector: "section:has(> h2:has-text('Published history'))",
+    prepare: openLegalHistory,
   },
   {
     id: "03-43-time-off-request-form",

@@ -2118,10 +2118,14 @@ This is how a department gets "the secretary drafts, an officer approves"
 without running it as an off-system procedure. A department that does not want
 the ceremony gives one person `settings.manage`.
 
-> **[SCREENSHOT NEEDED — the revision editor captured under an account holding
->
-> > only `legal.propose`, so the Publish control is visibly absent. That absence
-> > is the subject of the shot; caption it explicitly.]**
+![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
+
+_The permission does not show in the editor: **Save draft** and **Cancel** are
+what everyone gets there, publisher included. It shows on the saved proposal —
+above, the secretary's own draft offers Edit and Discard and no **Publish to
+members**, while the administrator's draft beneath it offers them nothing at
+all. Editing is allowed to the member who wrote a draft and to anyone who can
+publish; publishing to the second group only._
 
 ### What gets recorded
 
@@ -2146,11 +2150,7 @@ the ceremony gives one person `settings.manage`.
 - **There is no approval queue.** Saving a draft notifies nobody. Review before
   publishing is a process you run, not a workflow the module enforces.
 
-> **[SCREENSHOT NEEDED — the revision history for one document showing a
->
-> > published revision plus at least one archived revision, each with its change
-> > note and the publishing member. Seed three revisions so it reads as a
-> > history.]**
+![The privacy notice's published history: the live revision above two replaced ones, each with its change note, its publisher and the moment it went out](./images/08-78-legal-revision-history.png)
 
 ## August 19–23, 2026 update — exports and dashboards
 

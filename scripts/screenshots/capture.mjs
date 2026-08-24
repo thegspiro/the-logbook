@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import {
   DEMO_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
+  DEMO_SECRETARY_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
 
@@ -318,6 +319,11 @@ function makeSessions(browser, baseOptions) {
         // position. Shots that picture what a member sees have to be taken as
         // one, because the officer view of the same route is a different page.
         await login(page, DEMO_MEMBER_CREDENTIALS);
+      } else if (auth === "secretary") {
+        // Holds legal.propose and nothing that can publish. Used where the
+        // *absence* of a control is the subject: an admin capture of the same
+        // screen shows it working and teaches the opposite.
+        await login(page, DEMO_SECRETARY_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

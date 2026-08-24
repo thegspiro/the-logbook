@@ -1,5 +1,50 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (sixth) — a fourth sign-in, and a Publish control that was never in the editor
+
+`08-77`, `08-78`, `19-16`, `19-17`, opened and checked. **475 of 507 filled.**
+
+**Both editor markers described a control the form does not have.** They ask
+for "the revision editor captured under an account holding only
+`legal.propose`, so the Publish control is visibly absent". Measured: the
+editor offers **Cancel** and **Save draft** — to everybody, publisher included.
+Publishing is an action on the _saved proposal_, so the proposal card is the
+only place the permission is visible at all. The guides now say that, and the
+two shots split accordingly: guide 08, whose marker makes the absence the
+subject, gets the proposal card; guide 19, whose marker asks for the body, the
+filled change note and the free-text "Last updated" field, gets the editor.
+
+**Whose draft it is decides what the card offers, and that took a second
+seeded draft.** `canModify = canPublish || revision.createdBy === currentUser`,
+so a draft the administrator wrote shows the secretary _no_ controls — a true
+screen picturing no rule. `_seed_secretary_draft` now writes one in the
+secretary's own name, and the capture shows both on one card list: their own
+proposal with Edit and Discard and no Publish, the administrator's beneath it
+with nothing.
+
+**This needed a fourth sign-in, `auth: "secretary"`.** No existing demo account
+sits on the middle rung of the guide's three-way table: the administrator
+publishes and an ordinary member cannot reach the screen. The **Secretary**
+role is the department office that actually carries `legal.propose` without
+`legal.publish` or `settings.manage`, which is also the arrangement the guide
+describes in words ("the secretary drafts, an officer approves").
+
+**The role was reaching that member as a side effect and now does not.** It was
+granted while seeding the closed election's ballot attestations — which works,
+and is exactly the dependency that goes quiet when the other step's fixture
+guard short-circuits: the capture would then sign in successfully, land on a
+screen it no longer has, and time out with nothing pointing at why.
+`_ensure_legal_proposer` asserts it from the step that owns the screen.
+
+**The history shots are clipped, and not for framing.** The privacy notice has
+no pending proposals, so the page carries "No proposals yet" — true, unrelated
+to the history below it, and enough for the empty-state guard to hold both
+captures back. Clipping to the history section is also the better shot: the
+caption is about the three revisions, not the page.
+
+A third revision was added to `PRIVACY_REVISIONS` because both markers ask for
+three, and two entries read as a change rather than as a history.
+
 ## Captured 2026-08-24 (fifth) — the tall dialog, and a table shown at both widths
 
 `10-17`/`19-15` and the `10-18`/`10-19` pair, opened and checked. **471 of 507
