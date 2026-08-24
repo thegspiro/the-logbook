@@ -1,5 +1,40 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (seventh) — guide 19's back-references, and a 403 no department can reach
+
+`19-18`/`19-19` and `19-20`/`19-21`, opened and checked. **479 of 507 filled.**
+
+Two of guide 19's markers describe the same states guides 17 and 14 already
+picture, so they are the same pairs re-shot for the release note. Guide 17's
+correction travels with them: **there is no account-security block on a
+colleague's profile for anybody**, so "use a demo member with MFA enabled so
+the redaction is visible" cannot be honoured — enrolment is shown on your own
+settings page. Guide 19 now says so beside the pair.
+
+**The hire-date 403 is unreachable in the shipped role catalogue, so it is
+written rather than photographed.** The guard is real: `hire_date`, `rank`,
+`station`, `platoon` and `membership_number` require `members.manage`, and the
+refusal names all five. But no shipped role grants `users.edit` without also
+granting `members.manage` — checked against all 28 — so nothing in the product
+can be put into the state the marker asks for. Staging it would mean inventing
+a role no department has. The guide now quotes the exact refusal and says when
+a department would meet it: after building a custom role that separates the
+two, a records clerk who maintains contact details but does not set rank.
+
+**One `allowEmptyState` reason was wrong and got corrected before it was
+committed.** I wrote that the member's "No address on file." is the withholding
+the pair is about, and that the officer's half shows the address filled in.
+Checked against `/users`: the member has no address recorded at all, so _both_
+halves show that line and it illustrates nothing. The reason now says which
+part is the permission (the three absent panels) and which part is simply
+unseeded — the rule being that a reason beside `allowEmptyState` is a claim,
+and a claim gets verified like any other.
+
+**`TRAINING_MATERIALS_REVIEW.md`'s marker is an example, and is now fenced.**
+`status_report.py` excludes that file by name so the count was never wrong, but
+a plain `grep` over the guides returns it, and it is the one hit in the library
+nobody can act on. Quoted as syntax now rather than demonstrated.
+
 ## Captured 2026-08-24 (sixth) — a fourth sign-in, and a Publish control that was never in the editor
 
 `08-77`, `08-78`, `19-16`, `19-17`, opened and checked. **475 of 507 filled.**

@@ -305,11 +305,30 @@ list change is per-request permission logic, not stored state, so no data
 migration is involved; the draft purge also removes orphaned draft keys that
 lost their index entry.
 
-> **[SCREENSHOT NEEDED — the same colleague profile side by side as seen with `members.view` only (metadata absent) and with `users.view`; use a demo member with MFA enabled so the redaction is visible.]**
->
-> **[SCREENSHOT NEEDED — profile edit attempting a hire-date change without the coordinator grant, showing the 403 explanation toast.]**
->
-> **[SCREENSHOT NEEDED — member candidate list on an election in nominations phase (pending visible) and the same election after close (accepted only); label which account is which.]**
+![A colleague's profile with the officer's grant: the compliance summary, the training and certification history and the emergency contacts are all rendered](./images/19-18-profile-as-officer.png)
+
+![The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered at all](./images/19-19-profile-as-member.png)
+
+_One thing the marker asked for cannot be shown, because no screen has it: there is no account-security block on a **colleague's** profile for anybody. MFA enrolment, last sign-in and email verification are on your own settings page, so neither account has one to compare. What the permission does change is the three panels above._
+
+**No shipped role can reach that 403, so there is no screenshot of it.** The
+guard is real — `hire_date`, `rank`, `station`, `platoon` and
+`membership_number` all require `members.manage`, and an attempt without it is
+refused with:
+
+> Only leadership, the secretary, or the membership coordinator can update hire
+> date, rank, station, platoon, or membership number
+
+But every role in the shipped catalogue that grants `users.edit` also grants
+`members.manage`, so the refusal is unreachable until a department builds a
+custom role that separates them — a records clerk who maintains contact details
+but does not set rank or hire date, say. That is the situation to keep in mind
+when you build one; it is not a state the product can be put into out of the
+box, and staging it would mean photographing a role no department has.
+
+![The candidate list as an elections manager: both the accepted candidate and the nominee who has not yet accepted](./images/19-20-candidates-as-manager.png)
+
+![The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld now that nominations have closed](./images/19-21-candidates-as-member.png)
 
 ## Reliability changes members may notice (August 15–16)
 

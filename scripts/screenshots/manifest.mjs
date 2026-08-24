@@ -11013,6 +11013,73 @@ export const SHOTS = [
     prepare: openLegalHistory,
   },
   {
+    // The guide-17 pair, re-shot for this release note. See 17-03: there is no
+    // account-security block on a colleague's profile for anybody, so the
+    // marker's "use a demo member with MFA enabled so the redaction is
+    // visible" cannot be honoured -- MFA enrolment is shown on your own
+    // settings page. What the permission actually changes is large and
+    // visible, and is what the pair shows.
+    id: "19-18-profile-as-officer",
+    doc: "19-august-2026-release-changes.md",
+    line: 308,
+    anchor: "the same colleague profile side by side as seen with",
+    alt: "A colleague's profile with the officer's grant: the compliance summary, the training and certification history and the emergency contacts are all rendered",
+    route: "/members",
+    prepare: openMemberProfile,
+    fullPage: true,
+  },
+  {
+    id: "19-19-profile-as-member",
+    doc: "19-august-2026-release-changes.md",
+    line: 308,
+    anchor: "__paired-with-19-18__",
+    alt: "The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered at all",
+    route: "/members",
+    auth: "member",
+    prepare: openMemberProfile,
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see fewer panels on a colleague's profile -- the " +
+      "missing ones are the subject of the shot, so a thinner page is the " +
+      'result rather than a sign of missing demo data. ("No address on file." ' +
+      "is separate and true of both halves: this member has none recorded, " +
+      "verified against /users -- it is not what the permission withholds.)",
+  },
+  {
+    id: "19-20-candidates-as-manager",
+    doc: "19-august-2026-release-changes.md",
+    line: 312,
+    anchor: "member candidate list on an election in nominations phase",
+    alt: "The candidate list as an elections manager: both the accepted candidate and the nominee who has not yet accepted",
+    route: "/elections",
+    prepare: openElectionTab("candidates", isPostNominationElection),
+    fullPage: true,
+    allowEmptyState:
+      'Matches "No votes cast yet" from the results panel, which is true and ' +
+      "expected on an election still open. The candidate list this shot is " +
+      "about carries both nominees.",
+  },
+  {
+    id: "19-21-candidates-as-member",
+    doc: "19-august-2026-release-changes.md",
+    line: 312,
+    anchor: "__paired-with-19-20__",
+    alt: "The same election as an ordinary member: the ballot offers only the candidate who accepted, the pending nomination withheld now that nominations have closed",
+    route: "/elections",
+    auth: "member",
+    prepare: openFirstFromApi(
+      "/elections?limit=20",
+      (id) => `/elections/${id}`,
+      "elections",
+      isPostNominationElection,
+    ),
+    fullPage: true,
+    allowEmptyState:
+      "A member is meant to see a shorter list here -- the withheld pending " +
+      "nomination is the subject of the shot, so one name on the ballot is " +
+      "the result rather than missing demo data.",
+  },
+  {
     id: "03-43-time-off-request-form",
     doc: "03-scheduling.md",
     line: 199,
