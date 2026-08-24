@@ -55,13 +55,26 @@ def _registry_user_facing_ids() -> set:
 
 
 def _settings_page_module_keys() -> set:
-    """Keys from the STANDARD_MODULES / ADDITIONAL_MODULES toggle lists."""
+    """Keys from the STANDARD_MODULES / ADDITIONAL_MODULES toggle lists.
+
+    Each array is matched on its own declaration rather than as one span
+    running to whatever happens to be declared next. The previous form ended
+    at ``const CONFIGURABLE_MODULES``, a derived constant that existed only to
+    total the two lists; when the Settings screen started counting each list
+    separately that constant went away, and this read as "no module toggle
+    lists found" rather than as the anchor having moved. Matching each array
+    also narrows what is scanned, so a `key:` belonging to anything declared
+    between them can no longer be mistaken for a module.
+    """
     source = _SETTINGS_FILE.read_text()
-    match = re.search(
-        r"const STANDARD_MODULES.*?const CONFIGURABLE_MODULES", source, re.S
-    )
-    assert match, f"No module toggle lists found in {_SETTINGS_FILE.name}"
-    return set(re.findall(r"key:\s*'(\w+)'", match.group(0)))
+    keys: set = set()
+    for name in ("STANDARD_MODULES", "ADDITIONAL_MODULES"):
+        match = re.search(
+            rf"const {name}: ConfigurableModule\[\] = \[(.*?)\n\];", source, re.S
+        )
+        assert match, f"No {name} list found in {_SETTINGS_FILE.name}"
+        keys |= set(re.findall(r"key:\s*'(\w+)'", match.group(1)))
+    return keys
 
 
 def test_every_module_setting_is_either_core_offered_or_settings_only():
