@@ -25,7 +25,7 @@ so an existing member holding the Firefighter position would have kept the
 grant if only ``member`` were rewritten here.
 
 Revision ID: 31e2816df7c3
-Revises: e7a41b6d09c2
+Revises: b7d1e04f92a3
 Create Date: 2026-08-24 21:40:00.000000
 """
 
@@ -35,7 +35,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "31e2816df7c3"
-down_revision = "e7a41b6d09c2"
+down_revision = "b7d1e04f92a3"
 branch_labels = None
 depends_on = None
 
