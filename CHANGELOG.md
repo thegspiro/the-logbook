@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A view grant that read other members' compliance, and 21 officer pages with no gate (2026-08-24)
+
+**Fixed**
+
+- **`compliance.view` was seeded to every member, and it is not a view
+  grant.** It never opened a page of its own, which is how it went unnoticed;
+  what it did was appear as one accepted alternative in two OR-gates.
+  `GET /compliance-officer/contributed-hours` takes `training.manage` **or**
+  `reports.view` **or** `compliance.view` and returns hours contributed by
+  _all_ members. Worse, the admin-hours compliance endpoint narrows non-admins
+  to their own record _unless_ the caller holds `admin_hours.manage`,
+  `compliance.view` or `*` — so with every member holding it, the narrowing
+  never applied and any member could read any other member's compliance
+  progress by passing their `user_id`. The endpoint's own comment reads
+  "Non-admins can only see their own compliance"; the seeded grant had been
+  quietly contradicting it.
+
+  Removed from the `member` position and the `firefighter` rank, and revoked
+  from both stored system positions by migration. Nothing in the frontend
+  referenced the grant.
+
+  The migration's scope was initially wrong, and the reason is worth keeping:
+  `operational_ranks` really has no permissions column, so it looked as though
+  the rank half needed no data change. But
+  `DEFAULT_POSITIONS["firefighter"]["permissions"]` _is_
+  `OPERATIONAL_RANKS["firefighter"]["default_permissions"]` — the same list
+  object — so onboarding also writes a system **position** with slug
+  `firefighter` carrying a copy, and `dependencies.py` unions every assigned
+  position's stored permissions. On an existing installation, revoking only
+  `member` would have left the grant live for everyone holding the Firefighter
+  position. Caught in review.
+
+  The argument for this was already written one line below the removal site,
+  where `equipment_check.view` is withheld from members _"because it also opens
+  the compliance/failure reports"_. Same reasoning, two lines apart, applied to
+  one grant and not the other.
+
+- **21 officer pages had no route guard**, each in a module that gates some of
+  its own siblings: all 13 finance pages beside a `finance.view`-gated
+  `/finance/dues`, seven grants pages — donors and donations among them —
+  beside a `fundraising.view`-gated `/grants/reports`, and `/medical-screening`
+  whose API and navigation entry have always required
+  `medical_screening.view`. Their APIs were gated throughout (finance 66/66,
+  grants 45/45), so these were pages of failed requests rather than leaks —
+  but the app was offering screens it knew the viewer could not use.
+
+- **Barcode label printing was open to every member.** `POST
+/inventory/labels/generate` took `inventory.view`, accepts arbitrary item ids
+  and returns a document describing them — a read of the catalogue that
+  survived closing the catalogue page itself. Both it and `/inventory/print-labels`
+  now require `inventory.manage`, and the **Print Barcode** button on item
+  detail moved inside the manage gate beside **Edit**, so the member who
+  reaches that page from their own issued gear is not shown a button that only
+  lands on Access Denied.
+
+  Gating those two was not enough on its own: the generic
+  `POST /labels/generate` authorizes through `MODULE_LABELS`, whose inventory
+  entry still accepted `inventory.view`, so the same ids could be posted with
+  `module: "inventory"` for the identical document. That entry is now
+  manage-only. Its neighbours stay view-level deliberately — apparatus,
+  facilities and membership labels match modules whose own pages are
+  view-level, and `prospective_members.view` is not a baseline grant. Caught in
+  review.
+
+**Not changed, having been checked**
+
+- The other 19 baseline grants are appropriate. `users.py`'s endpoints without
+  a `require_permission` dependency guard themselves inline with self-or-admin
+  checks and org scoping; `GET /training/records` confines non-officers to
+  their own records; `GET /training/requirements` redacts officer fields; and
+  `PUT /inventory/label-preset` is per-user, not org-wide config.
+- Of the remaining ungated routes, the ones left open are onboarding, the
+  pre-auth and token-based pages, kiosk displays, and member-facing pages whose
+  grants members legitimately hold. Sixteen more are `<Navigate>` redirects
+  whose targets are themselves gated.
+
+`backend/tests/test_baseline_member_grants.py` now asserts what the day-one set
+may not contain — `compliance.view`, any `.manage` grant, and the four
+aggregating read grants — because the two seed sites are 400 lines apart and
+neither shows what the other already grants.
+
 ### Events: finalizing attendance closes the event, and only a leader reopens it (2026-08-24)
 
 **Fixed**

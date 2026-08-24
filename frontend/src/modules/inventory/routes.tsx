@@ -325,13 +325,21 @@ export const getInventoryRoutes = () => {
         }
       />
 
-      {/* Inventory - Barcode Label Printing */}
+      {/* Inventory - Barcode Label Printing.
+
+          Manage-gated to match POST /inventory/labels/generate, which this
+          page is the only caller of. That endpoint takes arbitrary item ids
+          and returns a document describing them, so leaving either on
+          `inventory.view` kept a read of the catalogue open after the
+          catalogue page itself was closed. */}
       <Route
         path="/inventory/print-labels"
         element={
-          <Suspense fallback={null}>
-            <InventoryBarcodePrintPage />
-          </Suspense>
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <InventoryBarcodePrintPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
     </React.Fragment>

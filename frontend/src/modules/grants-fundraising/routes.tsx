@@ -37,13 +37,34 @@ export const getGrantsFundraisingRoutes = () => {
   return (
     <React.Fragment>
       {/* Dashboard */}
-      <Route path="/grants" element={<GrantsDashboardPage />} />
+      <Route
+        path="/grants"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <GrantsDashboardPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Grant Opportunities */}
-      <Route path="/grants/opportunities" element={<GrantOpportunitiesPage />} />
+      <Route
+        path="/grants/opportunities"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <GrantOpportunitiesPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Grant Applications */}
-      <Route path="/grants/applications" element={<GrantApplicationsPage />} />
+      <Route
+        path="/grants/applications"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <GrantApplicationsPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/grants/applications/new"
         element={
@@ -52,7 +73,14 @@ export const getGrantsFundraisingRoutes = () => {
           </ProtectedRoute>
         }
       />
-      <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
+      <Route
+        path="/grants/applications/:id"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <GrantDetailPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/grants/applications/:id/edit"
         element={
@@ -63,13 +91,34 @@ export const getGrantsFundraisingRoutes = () => {
       />
 
       {/* Fundraising Campaigns */}
-      <Route path="/grants/campaigns" element={<CampaignsPage />} />
+      <Route
+        path="/grants/campaigns"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <CampaignsPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Donors */}
-      <Route path="/grants/donors" element={<DonorsPage />} />
+      <Route
+        path="/grants/donors"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <DonorsPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Donations */}
-      <Route path="/grants/donations" element={<DonationsPage />} />
+      <Route
+        path="/grants/donations"
+        element={
+          <ProtectedRoute requiredPermission="fundraising.view">
+            <DonationsPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Reports */}
       <Route

@@ -6,8 +6,11 @@ compliance officers and elected officers (President, Vice President,
 Secretary) — hold compliance.manage, not necessarily settings.manage, so the
 profile endpoints must accept either. The read endpoints the config page loads
 must accept compliance.manage so the same officers can see the current rules,
-without exposing organization-level configuration to baseline members who hold
-compliance.view.
+without exposing organization-level configuration more widely than that.
+
+(Until 2026-08-24 the risk here was baseline members, who were seeded
+compliance.view; that grant is now officer-only, so these gates guard against
+an officer holding only the narrow view grant rather than against everyone.)
 
 Asserted against the endpoint source (AST) the same way
 test_election_package_permissions.py does: the gate is a decorator argument,
@@ -76,7 +79,7 @@ def test_compliance_reads_accept_manage_permissions(handler_name):
 
 def test_report_listing_accepts_officer_view_permissions():
     # Stored reports contain recipient addresses and generation errors, so the
-    # baseline compliance.view permission must not grant access.
+    # narrow compliance.view permission must not grant access.
     assert _permission_names("list_compliance_reports") == {
         "training.manage",
         "reports.view",
