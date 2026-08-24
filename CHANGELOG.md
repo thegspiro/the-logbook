@@ -75,6 +75,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transitive, mostly `@rollup`/`@rolldown` platform binaries. No range was
   widened; these are what a fresh install would have picked up anyway.
 
+### The dashboard tabs, and a card that stretched to nothing (2026-08-24)
+
+**Changed**
+
+- **The leadership tab is "My Department"; the member's own view is
+  "Personal".** The strip read My Department and Organization, which named the
+  member's own dashboard after the department and the department's dashboard
+  after a word no single-department deployment uses for itself. Both were one
+  step off. The panel heading and its load-failure card follow ("Department
+  summary is unavailable"), and the tab ids follow the labels — the leadership
+  view is `?tab=department`, with `?tab=organization` and `?tab=overview` still
+  accepted so existing bookmarks land where they always did.
+- **"My Account" was deliberately not reused for the personal tab.** The
+  sidebar already points that name at `/account` — profile, password,
+  appearance — and one label on two destinations inside the same shell is a
+  worse problem than the one being fixed.
+
+**Fixed**
+
+- **The operations panels no longer stretch to their tallest neighbour.**
+  The chief grid inherited the CSS grid default of `align-items: stretch`, so
+  Operational readiness — one row on a quiet day — grew to match the five rows
+  of Critical exceptions beside it and rendered as a mostly empty box roughly
+  three times the height of its content. The panels are `items-start` and size
+  to what they hold.
+- **The department overview row had no gap above it.** Its wrapper was a plain
+  `div`, so the five stat cards butted directly against the operations panels
+  with zero spacing while every other seam on the page used `gap-4`; the
+  heading's own `mb-4` was the only spacing in the whole block.
+
 ### "Medical Categories" did not say what it categorized (2026-08-24)
 
 **Changed**

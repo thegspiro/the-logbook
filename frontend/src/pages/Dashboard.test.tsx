@@ -869,7 +869,7 @@ describe('Dashboard', () => {
       await waitFor(() => {
         expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
       });
-      expect(screen.queryByRole('tab', { name: 'Organization' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'My Department' })).not.toBeInTheDocument();
       expect(
         screen.queryByText('Department-wide staffing, compliance, events, action items, and operations.')
       ).not.toBeInTheDocument();
@@ -883,8 +883,8 @@ describe('Dashboard', () => {
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
 
-      const personalTab = await screen.findByRole('tab', { name: 'My Department' });
-      const organizationTab = screen.getByRole('tab', { name: 'Organization' });
+      const personalTab = await screen.findByRole('tab', { name: 'Personal' });
+      const departmentTab = screen.getByRole('tab', { name: 'My Department' });
       expect(personalTab).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByText('Next 7 Days')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
@@ -892,30 +892,30 @@ describe('Dashboard', () => {
       expect(mockGetSetupChecklist).not.toHaveBeenCalled();
       expect(mockGetInventorySummary).not.toHaveBeenCalled();
 
-      await user.click(organizationTab);
+      await user.click(departmentTab);
 
-      expect(organizationTab).toHaveAttribute('aria-selected', 'true');
+      expect(departmentTab).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^Admin Hours:/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
       expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
-      expect(window.location.search).toBe('?tab=organization');
+      expect(window.location.search).toBe('?tab=department');
       await waitFor(() => {
         expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
         expect(mockGetSetupChecklist).toHaveBeenCalledTimes(1);
-        // The legacy inventory summary no longer owns Organization-tab UI;
+        // The legacy inventory summary no longer owns My Department-tab UI;
         // asset widgets are permission-scoped independently.
         expect(mockGetInventorySummary).not.toHaveBeenCalled();
       });
     });
 
-    it('keeps legacy overview bookmarks working', async () => {
+    it.each(['overview', 'organization'])('keeps legacy %s bookmarks working', async (legacyTab) => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
-      window.history.replaceState({}, '', '/dashboard?tab=overview');
+      window.history.replaceState({}, '', `/dashboard?tab=${legacyTab}`);
 
       renderWithRouter(<Dashboard />);
 
-      expect(await screen.findByRole('tab', { name: 'Organization' })).toHaveAttribute('aria-selected', 'true');
+      expect(await screen.findByRole('tab', { name: 'My Department' })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
     });
 
@@ -924,30 +924,30 @@ describe('Dashboard', () => {
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
 
-      const personalTab = await screen.findByRole('tab', { name: 'My Department' });
-      const organizationTab = screen.getByRole('tab', { name: 'Organization' });
+      const personalTab = await screen.findByRole('tab', { name: 'Personal' });
+      const departmentTab = screen.getByRole('tab', { name: 'My Department' });
       expect(personalTab).toHaveAttribute('tabindex', '0');
-      expect(organizationTab).toHaveAttribute('tabindex', '-1');
+      expect(departmentTab).toHaveAttribute('tabindex', '-1');
 
       personalTab.focus();
       await user.keyboard('{ArrowRight}');
 
-      expect(organizationTab).toHaveAttribute('aria-selected', 'true');
-      expect(organizationTab).toHaveAttribute('tabindex', '0');
+      expect(departmentTab).toHaveAttribute('aria-selected', 'true');
+      expect(departmentTab).toHaveAttribute('tabindex', '0');
       expect(personalTab).toHaveAttribute('tabindex', '-1');
-      await waitFor(() => expect(organizationTab).toHaveFocus());
+      await waitFor(() => expect(departmentTab).toHaveFocus());
     });
 
-    it('shows a retry state instead of false zero metrics when the organization summary fails', async () => {
+    it('shows a retry state instead of false zero metrics when the department summary fails', async () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
       mockGetAdminSummary.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValueOnce({});
-      window.history.replaceState({}, '', '/dashboard?tab=organization');
+      window.history.replaceState({}, '', '/dashboard?tab=department');
       const user = userEvent.setup();
 
       renderWithRouter(<Dashboard />);
 
       const alert = await screen.findByRole('alert');
-      expect(within(alert).getByText('Organization summary is unavailable')).toBeInTheDocument();
+      expect(within(alert).getByText('Department summary is unavailable')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
 
       await user.click(within(alert).getByRole('button', { name: 'Try again' }));
