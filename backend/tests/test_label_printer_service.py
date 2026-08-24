@@ -585,14 +585,18 @@ class TestPrinterLanguages:
         svc, _ = _service(scalar=_receipt_printer())
         ok = bytes([0b00010010])
         paper_end = bytes([0b01110010])
-        with self._patched(escpos_replies=[ok, paper_end]):
+        with self._patched(escpos_replies=[ok, ok, paper_end]):
             result = await svc.get_status("printer-1", ORG)
             # Captured inside the block: outside it the patch is undone and
             # the name is the real function again.
             zpl_query = lps.query_printer
+            sent = lps.query_printer_raw.await_args.args[2]
         assert result["errors"] == ["Out of paper"]
         assert result["language"] == LANGUAGE_ESCPOS
         zpl_query.assert_not_called()
+        # The parser reads each reply by position, so the order the queries go
+        # out in is part of the contract, not an implementation detail.
+        assert sent == [b"\x10\x04\x02", b"\x10\x04\x03", b"\x10\x04\x04"]
 
     async def test_a_zpl_printer_uses_the_text_query(self):
         svc, _ = _service(scalar=_printer())

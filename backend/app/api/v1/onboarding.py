@@ -45,7 +45,10 @@ from app.models.onboarding import (
 from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.services.auth_service import AuthService
-from app.services.onboarding import OnboardingService
+from app.services.onboarding import (
+    ONBOARDING_ACCEPTED_MODULE_IDS,
+    OnboardingService,
+)
 from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
@@ -1665,51 +1668,13 @@ async def save_session_modules(
     # Validate session
     session = await validate_session(request, db)
 
-    # Validate modules - must match module IDs from frontend AVAILABLE_MODULES
-    # (types/modules.ts) or their snake_case equivalents.
-    available_modules = [
-        # Core modules (always enabled)
-        "members",
-        "events",
-        "documents",
-        "forms",
-        # Operations modules
-        "training",
-        "inventory",
-        "scheduling",
-        "apparatus",
-        "facilities",
-        "communications",
-        # Governance modules
-        "elections",
-        "minutes",
-        "reports",
-        # Communication modules
-        "notifications",
-        "mobile",
-        # Advanced modules
-        "integrations",
-        # Membership
-        "prospective_members",
-        "prospective-members",
-        # HR & Finance
-        "hr_payroll",
-        "hr-payroll",
-        "grants",
-        # Public
-        "public_info",
-        "public-info",
-        # Incidents
-        "incidents",
-        # Legacy/additional modules (for backwards compatibility)
-        "compliance",
-        "meetings",
-        "fundraising",
-        "equipment",
-        "vehicles",
-        "budget",
+    # One accepted set, shared with the wizard's own module step. This used
+    # to be a second hardcoded list, and it did not list the Department
+    # Store — so enabling the store got all the way to the final Continue
+    # and then failed here with "Invalid modules".
+    invalid_modules = [
+        m for m in data.modules if m not in ONBOARDING_ACCEPTED_MODULE_IDS
     ]
-    invalid_modules = [m for m in data.modules if m not in available_modules]
     if invalid_modules:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1843,17 +1808,42 @@ async def save_session_organization(
         )
 
 
-_CARRYOVER_SUBPERMISSIONS = frozenset(
-    {
-        "facilities.view_sensitive",
-        "scheduling.swap",
-        # Browsing the store without being able to check out is not a state any
-        # department wants a member in, and the two-checkbox editor cannot
-        # express it. This rode along as an un-submitted module's default until
-        # the Department Store joined the frontend registry.
-        "storefront.order",
-    }
-)
+_CARRYOVER_SUBPERMISSIONS = frozenset({"facilities.view_sensitive", "scheduling.swap"})
+
+# Permissions the editor's View checkbox grants on top of ``module.view``.
+#
+# Carrying a sub-permission over from DEFAULT_POSITIONS only helps a position
+# that was seeded with it. A position built from scratch in the editor has no
+# defaults to carry, so an advertised capability that lives in a separate
+# permission is simply never granted — the member browses the catalogue and
+# takes a 403 at checkout.
+#
+# ``storefront.order`` qualifies on the evidence: all fourteen seeded positions
+# holding ``storefront.view`` hold ``storefront.order`` too, with no exception.
+# The permissions are separate so a department can revoke ordering
+# deliberately, not because view without ordering is a state setup should be
+# able to produce by accident.
+#
+# Only applied when Manage is unticked — Manage already emits the ``module.*``
+# wildcard, which covers every sub-permission without padding the list.
+_VIEW_IMPLIED_PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "storefront": ("storefront.order",),
+}
+
+
+def expand_module_checkboxes(submitted: dict[str, RolePermission]) -> list[str]:
+    """Turn the editor's per-module view/manage checkboxes into permissions."""
+    permission_list: list[str] = []
+    for module_id, perms in submitted.items():
+        if perms.view:
+            permission_list.append(f"{module_id}.view")
+            if not perms.manage:
+                permission_list.extend(_VIEW_IMPLIED_PERMISSIONS.get(module_id, ()))
+        if perms.manage:
+            permission_list.append(f"{module_id}.manage")
+            # Full access if manage
+            permission_list.append(f"{module_id}.*")
+    return permission_list
 
 
 def _merge_default_permissions(
@@ -1983,16 +1973,7 @@ async def save_session_roles(
     updated_roles = []
 
     for role_data in data.roles:
-        # Convert permissions dict to list format
-        permission_list = []
-        for module_id, perms in role_data.permissions.items():
-            if perms.view:
-                permission_list.append(f"{module_id}.view")
-            if perms.manage:
-                permission_list.append(f"{module_id}.manage")
-                permission_list.append(
-                    f"{module_id}.*"
-                )  # Also grant full access if manage
+        permission_list = expand_module_checkboxes(role_data.permissions)
 
         # Check if this is an existing system role
         if role_data.id in existing_system_roles:
