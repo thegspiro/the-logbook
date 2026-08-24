@@ -1,7 +1,7 @@
 """Add standing shift claims.
 
 Revision ID: e7a41b6d09c2
-Revises: d5b207e4f139
+Revises: e7a41b9c3d85
 
 A standing shift is a member's recurring claim on a seat — "every Tuesday
 night through December". It is stored rather than written once as a batch of
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "e7a41b6d09c2"
-down_revision = "d5b207e4f139"
+down_revision = "e7a41b9c3d85"
 branch_labels = None
 depends_on = None
 

@@ -101,6 +101,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would file one member's training against another. Approved time off is
   rechecked when an offer is accepted, not only when candidates are picked.
 
+### The Department Store errored for admins and was invisible to everyone else (2026-08-24)
+
+**Fixed**
+
+- **The store admin console returned a 500 on load**, for any department that
+  had an order window open. The dashboard renders the open window through the
+  full window payload, which reads its offerings, but `get_open_windows` was
+  the one window query that did not eager-load them — `list_windows` and
+  `get_window` both do. Under async SQLAlchemy that lazy load raises
+  `MissingGreenlet`, so the page failed on its own landing request. A
+  department hit it the moment it opened its first window and never saw the
+  page work again.
+- **The Department Store could not be enabled during setup, so members never
+  saw it.** The wizard's module step renders the frontend registry, and the
+  registry had no storefront entry. Setup therefore saved the store as
+  disabled — alongside the marker that tells the backend the choice was
+  deliberate — and it stayed hidden from every member's navigation until
+  somebody found Settings → Modules. Departments already installed keep that
+  stored `false`: **turn the store on at Settings → Modules → Department
+  Store** to make it appear.
+- **A module with no configuration step could not be enabled at all.** The
+  wizard set a module's status only on its way to a config route, so a card
+  without one fell through every branch: no status, no confirmation, nothing.
+  The button looked like it worked and did not. That was the Department Store,
+  and it is still why Medical Supplies could not be switched on during setup.
+- **The position editor silently revoked the quartermaster's store access.**
+  Saving positions rebuilds each one from two checkboxes per module, and the
+  quartermaster, apparatus officer and facilities manager are seeded with
+  `storefront.manage` but were presented with Manage unticked. The first save
+  took the store console away from the person who runs the store.
+- **Members could reach the checkout and get a 403.** `storefront.order` is a
+  separate permission from `storefront.view`, and the two checkboxes cannot
+  express it, so a position built in the editor could browse the catalogue with
+  no way to place an order. View now grants ordering alongside it — all
+  fourteen seeded positions holding one hold the other.
+
+**Added**
+
+- **A route can now be gated on its organization's module flag**, via
+  `requiredModule` on `ProtectedRoute`. Module flags used to hide navigation
+  and nothing else, so a bookmark or a typed URL still opened the page — which
+  is how a store came to be configured that no member could see. Applied to the
+  three store routes for now. It is a usability gate, not an access control:
+  the API is not module-aware, and the permission checks still do the real
+  gating.
+- The refusal names the module and, for anyone who can fix it, links straight
+  to Settings → Modules rather than reporting a permission problem it is not.
+  It waits for the module lookup instead of rendering optimistically, and falls
+  through to the page if that lookup fails — a flaky request must not lock a
+  department out of a module it has switched on.
+- The Logistics Admin hub's Department Store card is gated on the module and
+  `storefront.manage`, the way every other navigation surface already was. It
+  was the one unguarded door into the console.
+- **Contract tests against this whole class of drift.** Every module setting
+  must now be placed deliberately as core, offered during setup, or
+  Settings-only, with the registry and the Settings screen asserted to agree —
+  a module can no longer ship with a toggle and no way to reach it. A second
+  test asserts no position seeded with a manage grant is shown Manage unticked,
+  since an unticked box is read as an intentional revocation.
+- The setup wizard's module cards name their module on every button. Eight
+  buttons shared six accessible names, so a screen reader heard a page of
+  identical "Enable" controls.
+
+**Notes**
+
+- Turning the module off now makes `/store/admin` and `/store/orders`
+  unreachable, so an administrator cannot wind down a live store and members
+  cannot see orders they have already paid for. Recoverable from the link on
+  the refusal screen, but worth knowing before switching it off mid-window.
+
+### A contract-test server that will not boot now says so (2026-08-24)
+
+**Fixed**
+
+- **`collected 0 items` was all CI reported when the contract suite could not
+  start.** Every generated test in `test_api_contract.py` is defined inside
+  `if SCHEMA_AVAILABLE`, so a server that fails to come up leaves the module
+  with no tests at all — not even skipped ones. pytest exits 5 and the job
+  goes red with nothing else in the log, while `SKIP_REASON`, which names the
+  actual cause, was computed and then discarded. A `skipif` on the class read
+  as though it handled the case; it could not, because there were no tests for
+  it to skip. One test now always exists to carry the reason, and it **fails**
+  rather than skips once `RUN_API_CONTRACT_TESTS=1` has asked for the suite —
+  skipping would let "the application does not start" pass for green.
+- **A dead server thread reported no cause.** uvicorn raises inside the
+  thread, where the exception was lost, so the only symptom was a thread that
+  was no longer alive. The exception is now recorded and named in the failure,
+  which is what separates a runner hiccup from the app genuinely failing to
+  start.
+
 ### The events list now shows what it wants from you (2026-08-24)
 
 **Added**
