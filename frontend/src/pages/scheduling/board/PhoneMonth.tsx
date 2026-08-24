@@ -51,7 +51,9 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
   onSelect,
 }) => (
   <div>
-    <div className="mb-1 grid grid-cols-7 gap-1" aria-hidden="true">
+    {/* Same grid geometry as the day cells below, gap included, or the
+        weekday initials stop lining up with their columns. */}
+    <div className="mb-1 grid grid-cols-7 gap-0" aria-hidden="true">
       {WEEKDAY_INITIALS.map((label, index) => (
         <div key={index} className="text-theme-text-muted text-center text-[10px] font-bold">
           {label}
@@ -61,8 +63,17 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
 
     {/* A distinct name from the desktop grid: both are in the document at
         once and only CSS decides which is shown, so sharing one would give
-        assistive tech two identically-named calendars. */}
-    <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Month calendar, compact">
+        assistive tech two identically-named calendars.
+
+        `gap-0` is load-bearing, not a default left un-set. Seven day cells
+        have to clear the 44px touch minimum, and inside a 390px phone the
+        grid only ever sees 317px of that — the page gutters, the card's
+        padding and the scrollbar take the rest. That leaves 45.3px a cell
+        with no gap and 41.9px at `gap-1`, which is what
+        `mobile-presentation.spec.ts` fails on. Each cell carries its own
+        border, so adjacent edges still read as a divider. Re-introducing a
+        gap here means finding the width somewhere else first. */}
+    <div className="grid grid-cols-7 gap-0" role="grid" aria-label="Month calendar, compact">
       {weeksOf(days).map((week, index) => (
         <div key={`week-${index}`} role="row" className="contents">
           {week.map((day) => {
