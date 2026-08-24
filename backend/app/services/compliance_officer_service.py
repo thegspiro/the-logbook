@@ -40,6 +40,7 @@ from app.services.training_compliance import (
     get_org_include_current_month,
 )
 from app.services.training_waiver_service import fetch_org_waivers
+from app.utils.hours import hours_from_minutes, round_hours_exact
 
 # ISO/FSRS training hour requirements per category (annual, per member).
 #
@@ -300,7 +301,8 @@ class ISOReadinessService:
                     "name": cat["name"],
                     "nfpa_standard": cat["nfpa_standard"],
                     "required_hours": cat["required_hours"],
-                    "avg_hours_completed": round(avg_hours, 1),
+                    # An average is not recorded time — kept off the quarter.
+                    "avg_hours_completed": round_hours_exact(avg_hours),
                     # The dashboard prints this next to the average; without it
                     # the card read "Dept Total: hrs" with the number missing.
                     "total_department_hours": round(total_hours, 1),
@@ -690,7 +692,7 @@ class ContributedHoursService:
         )
         admin_by_user: Dict[str, float] = {}
         for uid, mins in admin_result:
-            admin_by_user[uid] = round(float(mins) / 60.0, 1)
+            admin_by_user[uid] = hours_from_minutes(mins)
 
         # Admin hours by category
         cat_result = await self.db.execute(
@@ -719,7 +721,7 @@ class ContributedHoursService:
                 {
                     "category_id": cat_id,
                     "category_name": cat_name,
-                    "hours": round(float(mins) / 60.0, 1),
+                    "hours": hours_from_minutes(mins),
                     "entries": count,
                 }
             )
@@ -1157,15 +1159,15 @@ class AnnualComplianceReportService:
                 {
                     "category_id": cat_id,
                     "category_name": cat.name if cat else "Unknown",
-                    "approved_hours": round(counts["approved"] / 60.0, 1),
-                    "pending_hours": round(counts["pending"] / 60.0, 1),
+                    "approved_hours": hours_from_minutes(counts["approved"]),
+                    "pending_hours": hours_from_minutes(counts["pending"]),
                     "total_entries": counts["entries"],
                 }
             )
 
         return {
-            "total_approved_hours": round(total_approved_mins / 60.0, 1),
-            "total_pending_hours": round(total_pending_mins / 60.0, 1),
+            "total_approved_hours": hours_from_minutes(total_approved_mins),
+            "total_pending_hours": hours_from_minutes(total_pending_mins),
             "total_entries": total_entries,
             "by_category": by_category,
             "by_user": user_mins,

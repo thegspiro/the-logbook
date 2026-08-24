@@ -115,6 +115,7 @@ from app.services.scheduling_widget_service import (
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
+from app.utils.hours import hours_from_minutes
 from app.utils.positions import normalize_stored_positions
 
 router = APIRouter()
@@ -369,7 +370,7 @@ async def _enrich_shifts(
         )
         for row in hours_result.all():
             total_min = float(row[1])
-            hours_map[str(row[0])] = round(total_min / 60.0, 1)
+            hours_map[str(row[0])] = hours_from_minutes(total_min)
 
     enriched = []
     for s in shifts:
@@ -557,7 +558,7 @@ async def get_shift(
     # TypeError and 500s the whole shift detail response. The list endpoint
     # above coerces for the same reason.
     total_min = float(total_min_result.scalar() or 0)
-    total_hours = round(total_min / 60.0, 1) if total_min > 0 else None
+    total_hours = hours_from_minutes(total_min) if total_min > 0 else None
 
     attendees = await service.enrich_attendance_records(
         attendance_records, member_call_counts

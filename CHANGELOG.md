@@ -25,8 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the scheduling report's worked-vs-scheduled variance, the compliance
   dashboard's "Total Contributed" card and the admin-hours and annual-training
   report totals.
-- **Stored minutes are untouched.** This is a display rule, so a
-  backend-generated CSV export can still read 2.9 where the screen reads 3.
+- **The backend reports on the quarter too**, so an export matches the screen
+  it came from. `app/utils/hours.py` carries the same rule, tie-breaking the
+  same direction — Python's built-in `round` uses banker's rounding and would
+  disagree with the frontend by an increment on every exact half. Applied to
+  the figures that leave the system: the admin-hours summary and its CSV
+  export, the compliance-officer dashboard, the scheduling summaries and
+  member-hours report, the annual-training and department-overview reports,
+  and the end-of-shift digest a member is emailed.
+- **Stored minutes and stored snapshots are untouched.** `duration_minutes`,
+  a training record's `hours_completed`, a shift report's `hours_on_shift` and
+  the `Shift.total_hours` snapshot all keep what actually happened — a column
+  holding 66.75 against attendance rows summing to 66.7 is a database that
+  disagrees with itself.
+- **Compliance grading still reads raw minutes.** `_get_user_compliance`
+  compares `logged_hours < required_hours` before any rounding, which is the
+  whole point: rounding first is what marked a member compliant while short.
 
 **Fixed**
 
