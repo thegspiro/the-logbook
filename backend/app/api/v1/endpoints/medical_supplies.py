@@ -78,11 +78,11 @@ async def _require_medical_item(
 async def _require_medical_category(
     service: InventoryService, category_id: Optional[str], organization_id: str
 ) -> None:
-    """Refuse a category id that is not a medical category."""
+    """Refuse a category id that is not a medical supply category."""
     if not await service.category_in_domain(
         category_id, organization_id, MEDICAL_ITEM_TYPES
     ):
-        raise HTTPException(status_code=404, detail="Medical category not found")
+        raise HTTPException(status_code=404, detail="Medical supply category not found")
 
 
 # ============================================
@@ -195,7 +195,7 @@ async def update_medical_category(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "A medical category cannot be reclassified from this page. "
+                "A medical supply category cannot be reclassified from this page. "
                 "Move it from Gear & Uniforms admin instead."
             ),
         )
@@ -217,7 +217,7 @@ async def update_medical_category(
             detail=sanitize_error_message(error),
         )
     if not updated:
-        raise HTTPException(status_code=404, detail="Medical category not found")
+        raise HTTPException(status_code=404, detail="Medical supply category not found")
     return updated
 
 
@@ -400,7 +400,7 @@ async def update_medical_item(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "A medical supply must stay in a medical category. "
+                    "A medical supply must stay in a medical supply category. "
                     "Pick a different category rather than clearing it."
                 ),
             )

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### "Medical Categories" did not say what it categorized (2026-08-24)
+
+**Changed**
+
+- **The admin nav entry is now "Medical Supply Categories".** It sat between
+  "Gear Admin" and "Store Admin" with nothing around it to supply the noun, so
+  read cold it could as easily have meant medical records, certifications or
+  incident types. The gear side avoids this by accident of placement rather
+  than by wording: its categories page is titled plainly "Categories" and is
+  reached through the Gear Admin hub, which supplies the scope. The medical
+  page is promoted straight into the admin list, so its label has to carry the
+  scope alone — and "Supply" is the word that does it. The page heading, empty
+  state, modal titles, load-failure toast, the shortcut's `aria-label` on
+  Medical Supplies and the "no categories exist yet" hint in the item form all
+  follow, as do the three docs tables.
+- **The backend's four error details agree with its own docstrings.** The
+  endpoint docstrings already read "medical supply categories"; the
+  `HTTPException` details said "medical category". Routes, API paths, component
+  names and the `medical_category_created` audit event type are unchanged — the
+  URL is already scoped by its `/medical-supplies/` prefix, and the event type
+  is a stored data contract that renaming would orphan existing rows against.
+
 ### Scheduling: the calendar now says which shifts need people, and claiming one is a tap (2026-08-24)
 
 **Changed**

@@ -100,7 +100,7 @@ export type { Role } from '../../../types/role';
 /**
  * Item type options for category classification.
  *
- * `medical` is deliberately absent: medical categories are created on the
+ * `medical` is deliberately absent: medical supply categories are created on the
  * Medical Supplies page, and the gear endpoints exclude that domain from
  * their listings. Adding it here would offer a category this page cannot
  * then show back to the user.
