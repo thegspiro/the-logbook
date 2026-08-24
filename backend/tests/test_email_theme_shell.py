@@ -693,3 +693,105 @@ class TestTheColourwayMigrationConvertsWhatItClaimsTo:
             assert '<div class="content">' in forms[1]
         else:
             assert len(forms) == 1
+
+
+class TestSavingATemplateWritesWhatWasSent:
+    """A PUT has to persist what the editor sent, including a cleared field.
+
+    Two ways this went wrong at once, and both are silent — the endpoint
+    answers 200 either way and the screen shows a success toast, so the only
+    symptom is the change not being there the next time somebody looks.
+    """
+
+    @pytest.fixture
+    async def template(self, db_session, sample_org_data):
+        from app.models.email_template import EmailTemplate, EmailTemplateType
+        from app.models.user import Organization
+
+        org = Organization(**sample_org_data)
+        db_session.add(org)
+        await db_session.flush()
+
+        defn = next(d for d in _DEFS if d["type"] == EmailTemplateType.WELCOME)
+        row = EmailTemplate(
+            organization_id=org.id,
+            template_type=defn["type"],
+            name=defn["name"],
+            subject=defn["subject"],
+            html_body=defn["html"],
+            text_body=defn["text"],
+            header_accent=defn["accent"],
+            status_chip=defn["chip"],
+            layout=defn["layout"],
+            default_cc=["chief@example.test"],
+        )
+        db_session.add(row)
+        await db_session.flush()
+        return row
+
+    async def test_the_colourway_columns_can_actually_be_saved(
+        self, db_session, template
+    ):
+        # The editor writes these and the schema accepts them; if the service
+        # does not list them as writable the whole control is inert, and
+        # nothing anywhere says so.
+        from app.services.email_template_service import EmailTemplateService
+
+        service = EmailTemplateService(db_session)
+        await service.update_template(
+            template_id=template.id,
+            organization_id=template.organization_id,
+            header_accent=ACCENT_INDIGO,
+            status_chip="Recoloured",
+            layout="digest",
+        )
+        await db_session.refresh(template)
+        assert template.header_accent == ACCENT_INDIGO
+        assert template.status_chip == "Recoloured"
+        assert template.layout == "digest"
+
+    async def test_clearing_a_field_persists_the_clear(self, db_session, template):
+        # `if value is not None` collapses "absent" and "explicitly null" into
+        # one case. The user empties the CC box, the browser sends null to say
+        # so, and the old address keeps receiving every copy.
+        from app.services.email_template_service import EmailTemplateService
+
+        service = EmailTemplateService(db_session)
+        await service.update_template(
+            template_id=template.id,
+            organization_id=template.organization_id,
+            default_cc=None,
+        )
+        await db_session.refresh(template)
+        assert template.default_cc is None
+
+    async def test_a_field_nobody_sent_is_left_alone(self, db_session, template):
+        # The other half of the same distinction: an absent key still has to
+        # mean "leave this", or every save would blank everything it omits.
+        from app.services.email_template_service import EmailTemplateService
+
+        service = EmailTemplateService(db_session)
+        await service.update_template(
+            template_id=template.id,
+            organization_id=template.organization_id,
+            subject="Reworded",
+        )
+        await db_session.refresh(template)
+        assert template.subject == "Reworded"
+        assert template.default_cc == ["chief@example.test"]
+        assert template.header_accent == _DEFS[0]["accent"]
+
+    async def test_tenancy_columns_are_not_writable_through_an_update(
+        self, db_session, template
+    ):
+        from app.services.email_template_service import EmailTemplateService
+
+        service = EmailTemplateService(db_session)
+        await service.update_template(
+            template_id=template.id,
+            organization_id=template.organization_id,
+            organization_id_="ignored",
+            id="ignored",
+        )
+        await db_session.refresh(template)
+        assert template.id != "ignored"

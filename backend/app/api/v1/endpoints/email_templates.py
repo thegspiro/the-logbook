@@ -277,12 +277,22 @@ async def update_email_template(
     Admins use this to customize the welcome email message, styling, etc.
     """
     service = EmailTemplateService(db)
-    template = await service.update_template(
-        template_id=template_id,
-        organization_id=current_user.organization_id,
-        updated_by=current_user.id,
-        **update_data.model_dump(exclude_none=True),
-    )
+    # exclude_unset, not exclude_none: a null here is the client saying
+    # "clear this field", and dropping it strips the clear a layer before
+    # the service can honour it.
+    try:
+        template = await service.update_template(
+            template_id=template_id,
+            organization_id=current_user.organization_id,
+            updated_by=current_user.id,
+            **update_data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        # apply_updates raises rather than letting a null against a NOT NULL
+        # column fail at flush time as a 500.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"

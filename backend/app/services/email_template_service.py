@@ -46,6 +46,7 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     colourway_context,
     colourway_for,
 )
+from app.utils.model_updates import apply_updates
 
 # Organization columns that reach templates unchanged, as
 # {column: variable}. Driving the injection from a map rather than a run of
@@ -2449,6 +2450,9 @@ class EmailTemplateService:
         if not template:
             return None
 
+        # An allowlist, not a skip list: `fields` arrives as **kwargs, so a
+        # caller could otherwise name `id` or `organization_id` and move a
+        # template between departments.
         allowed_fields = {
             "name",
             "subject",
@@ -2461,10 +2465,20 @@ class EmailTemplateService:
             "default_cc",
             "default_bcc",
             "footer_key",
+            "header_accent",
+            "status_chip",
+            "layout",
         }
-        for key, value in fields.items():
-            if key in allowed_fields and value is not None:
-                setattr(template, key, value)
+        # apply_updates, not `if value is not None`. That guard collapses
+        # "the caller did not mention this field" and "the caller sent an
+        # explicit null to clear it" into one case, so emptying the CC box
+        # was acknowledged with a 200 while the old address kept receiving
+        # every copy. The endpoint pairs this with exclude_unset, so a key
+        # that reaches here at all is one the client actually sent.
+        apply_updates(
+            template,
+            {k: v for k, v in fields.items() if k in allowed_fields},
+        )
 
         template.updated_by = updated_by
         await self.db.flush()

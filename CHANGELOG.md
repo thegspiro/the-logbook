@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Saving an email template dropped fields it said it had saved (2026-08-23)
+
+**Fixed**
+
+- **Clearing the default CC or BCC on a template did nothing.** The service
+  guarded its writes with `if value is not None`, and the endpoint dumped the
+  payload with `exclude_none=True` — the two halves of the mirror-image bug in
+  CLAUDE.md pitfall #1. Emptying the box sent an explicit `null` to say so, both
+  layers read that as "the client did not mention this field", and the old
+  address kept receiving every copy behind a success toast. Now `exclude_unset`
+  at the endpoint and `apply_updates` in the service, which distinguishes
+  absent from explicitly-null and raises a 400 rather than a flush-time 500 for
+  a null against a NOT NULL column.
+
 ### 58 theme classes across 22 files generated no CSS at all (2026-08-23)
 
 **Fixed**
