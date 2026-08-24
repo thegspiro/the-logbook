@@ -305,7 +305,24 @@ tables now carry a note in `printer_status.py` naming where they came from.
   on start time alone, so a drill that ended hours ago stayed in the list — and
   because the list is ordered by start time it could be the _default_, leaving
   an operator armed against an event whose check-in window had shut, with every
-  tap refused. Now bounded by `end_after` as well.
+  tap refused. Now bounded by `end_after` as well, set behind the present
+  moment: a `window` event's check-in outlives its scheduled end by
+  `check_in_minutes_after`, and a flexible or strict one runs to its
+  `actual_end_time`, none of which reach the client.
+- **A card in a terminal state could be laundered back to active.** The first
+  guard rejected only `lost → active`, so two requests — `lost → suspended`,
+  then `suspended → active` — restored exactly the credential somebody else may
+  be holding. Any transition out of `lost` or `revoked` is now refused;
+  relabelling still works.
+- **Ending a shift took the station away from the crew tapping out.** Dropping
+  a shift the moment its scheduled end passed was wrong in both directions:
+  `member_check_out` has no window at all — it accepts a checkout until an
+  officer finalizes — so the filter cut the station off at exactly the moment
+  a crew goes off duty. Shifts now stay offered through a checkout grace.
+- **A busy previous day could hide today's shifts entirely.** The widened
+  two-day query kept the endpoint's default page size of 100 while it orders by
+  `shift_date` ascending, so an organization with a full day of records behind
+  it would receive only those.
 
 ### Events: early check-ins are flagged, and never credited as attendance (2026-08-23)
 
