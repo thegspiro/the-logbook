@@ -45,6 +45,7 @@ from app.schemas.training_session import (
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
 )
+from app.services.admin_hours_service import AdminHoursService
 from app.services.event_service import EventService
 from app.services.location_service import LocationService
 from app.utils.model_updates import apply_updates
@@ -664,6 +665,128 @@ class TrainingSessionService:
 
         return training_approval, None
 
+    async def _resync_admin_hours(
+        self,
+        event_id: str,
+        rsvps: List[EventRSVP],
+    ) -> None:
+        """Push officer-corrected durations into the admin hours ledger.
+
+        Credit is idempotent per (RSVP, category), so without an explicit
+        resync the entry keeps whatever finalize wrote and the two records
+        disagree for good. Failures are logged rather than raised: the approval
+        and its training records are already committed, and losing them to a
+        mapping problem in a downstream ledger would be the worse outcome.
+        """
+        if not rsvps:
+            return
+
+        event_result = await self.db.execute(
+            select(Event).where(Event.id == str(event_id))
+        )
+        event = event_result.scalar_one_or_none()
+        if not event:
+            return
+
+        effective_end = event.actual_end_time or event.end_datetime
+        if effective_end is not None and effective_end.tzinfo is None:
+            effective_end = effective_end.replace(tzinfo=timezone.utc)
+
+        admin_hours = AdminHoursService(self.db)
+        event_type_val = event.event_type.value if event.event_type else None
+
+        for rsvp in rsvps:
+            check_in = (
+                rsvp.override_check_in_at or rsvp.checked_in_at or event.start_datetime
+            )
+            check_out = (
+                rsvp.override_check_out_at or rsvp.checked_out_at or effective_end
+            )
+            duration = rsvp.override_duration_minutes or (
+                rsvp.attendance_duration_minutes
+            )
+            if not check_in or not check_out or not duration or duration <= 0:
+                continue
+            try:
+                await admin_hours.credit_event_attendance(
+                    organization_id=str(event.organization_id),
+                    user_id=str(rsvp.user_id),
+                    event_id=str(event.id),
+                    rsvp_id=str(rsvp.id),
+                    event_title=event.title or "Event",
+                    check_in_at=check_in,
+                    check_out_at=check_out,
+                    duration_minutes=duration,
+                    event_type=event_type_val,
+                    custom_category=event.custom_category,
+                    resync=True,
+                )
+            except Exception:
+                logger.exception("Failed to resync admin hours for RSVP {}", rsvp.id)
+
+        await self.db.commit()
+
+    async def reopen_training_session(
+        self,
+        training_session_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[TrainingSession], Optional[str]]:
+        """Reopen a finalized training session so it can be corrected.
+
+        Finalizing a session was previously one-way: ``is_finalized`` refused a
+        second finalize and nothing ever cleared it, so a member left off the
+        roster could not be added and a wrong duration could not be fixed —
+        the opposite failure from the event side, which locked nothing at all.
+
+        Reopening clears the flag and kills any approval still outstanding:
+
+        * A PENDING approval's token is expired on the spot. It was emailed to
+          the training officers against attendee data that is about to change,
+          and the whole point of reopening is that those numbers were wrong.
+          Re-finalizing issues a fresh token and a fresh notification.
+        * An APPROVED one is left as it is. Its training records were already
+          written, and re-finalizing updates them in place rather than
+          duplicating (``_finalize_training_records`` matches on user, course
+          and event date). Pipeline credit is idempotent per session through
+          the progress ledger, so the corrected hours land without
+          double-crediting.
+
+        The caller audit-logs who reopened it and why.
+        """
+        result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.id == str(training_session_id))
+            .where(TrainingSession.organization_id == str(organization_id))
+        )
+        training_session = result.scalar_one_or_none()
+
+        if not training_session:
+            return None, "Training session not found"
+
+        if not training_session.is_finalized:
+            return None, "Training session is not finalized"
+
+        now = datetime.now(timezone.utc)
+
+        pending_result = await self.db.execute(
+            select(TrainingApproval).where(
+                TrainingApproval.training_session_id == training_session.id,
+                TrainingApproval.status == ApprovalStatus.PENDING,
+            )
+        )
+        for approval in pending_result.scalars().all():
+            approval.token_expires_at = now
+
+        training_session.is_finalized = False
+        training_session.finalized_at = None
+        training_session.finalized_by = None
+        training_session.updated_at = now
+
+        await self.db.commit()
+        await self.db.refresh(training_session)
+
+        return training_session, None
+
     async def _notify_training_officers(
         self,
         organization_id: UUID,
@@ -872,7 +995,16 @@ class TrainingSessionService:
         approval.approval_notes = approval_notes
         approval.attendee_data = [a.model_dump(mode="python") for a in attendees]
 
-        # Update RSVP records with overrides
+        # Update RSVP records with overrides.
+        #
+        # This writes attendance on an event whose own attendance lock may
+        # already be closed, and that is deliberate: the officer approval is
+        # the designated correction path for training time, gated on the
+        # officer rather than on events.manage. Because it can move a duration
+        # after finalize credited one, each corrected RSVP is resynced into the
+        # hours ledger below — otherwise the training record shows the
+        # officer's number while admin hours keeps the finalized one.
+        corrected_rsvps = []
         for attendee in attendees:
             rsvp_result = await self.db.execute(
                 select(EventRSVP)
@@ -891,6 +1023,7 @@ class TrainingSessionService:
 
                 rsvp.overridden_by = approved_by
                 rsvp.overridden_at = datetime.now(timezone.utc)
+                corrected_rsvps.append(rsvp)
 
         # Create/Update TrainingRecords with final hours and mark as completed.
         # Do this BEFORE committing so that approval + records are atomic.
@@ -911,6 +1044,8 @@ class TrainingSessionService:
         await self._apply_pipeline_updates(
             pipeline_updates, organization_id, approved_by, can_manage_training
         )
+
+        await self._resync_admin_hours(approval.event_id, corrected_rsvps)
 
         return True, None
 

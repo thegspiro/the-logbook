@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services import scheduled_tasks
-from app.services.event_service import EventService
+from app.services.event_service import ATTENDANCE_LOCKED_PREFIX, EventService
 from app.services.scheduling_service import SchedulingService
 
 
@@ -37,13 +37,15 @@ def _scalar(value):
     return result
 
 
-def _ended_event(custom_fields=None):
+def _ended_event(custom_fields=None, finalized_at=None):
     now = datetime.now(timezone.utc)
     return SimpleNamespace(
         id="event-1",
         custom_fields=custom_fields,
         actual_end_time=now - timedelta(hours=1),
         end_datetime=now - timedelta(hours=2),
+        attendance_finalized_at=finalized_at,
+        attendance_finalized_by=None,
     )
 
 
@@ -63,29 +65,28 @@ class TestEventFinalizeMarker:
         assert err is None
         assert count == 0
         assert event.custom_fields == {"attendance_finalized": True}
+        # The column is the lock; the JSON marker is kept for the reminder task.
+        assert event.attendance_finalized_at is not None
         db.commit.assert_awaited_once()
         archive.assert_awaited_once_with(
             "org-1", "event_validation", "event_id", "event-1"
         )
 
-    async def test_already_marked_event_is_not_rewritten_but_still_archived(self):
-        original = {"attendance_finalized": True}
-        event = _ended_event(custom_fields=original)
+    async def test_finalizing_an_already_finalized_event_is_refused(self):
+        """Finalize is a state transition now, so the second press is a
+        conflict rather than a silent re-run over closed attendance."""
+        event = _ended_event(custom_fields={"attendance_finalized": True})
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(event), _all([])])
+        db.execute = AsyncMock(side_effect=[_one(event)])
         db.commit = AsyncMock()
         svc = EventService(db)
 
-        with patch("app.services.event_service.NotificationsService") as notif_cls:
-            archive = AsyncMock()
-            notif_cls.return_value.archive_related_notifications = archive
-            count, err = await svc.finalize_event_attendance("event-1", "org-1")
+        count, err = await svc.finalize_event_attendance("event-1", "org-1")
 
-        assert err is None
         assert count == 0
+        assert err is not None
+        assert err.startswith(ATTENDANCE_LOCKED_PREFIX)
         db.commit.assert_not_awaited()
-        assert event.custom_fields is original
-        archive.assert_awaited_once()
 
     async def test_marker_reassigns_a_deep_copy_of_custom_fields(self):
         """Pitfall #12: the marker must land on a fresh deep copy — sharing

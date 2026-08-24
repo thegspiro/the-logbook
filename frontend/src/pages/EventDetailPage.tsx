@@ -30,7 +30,20 @@ import { useRSVPForm } from '../hooks/useRSVPForm';
 import { useEventNotifications } from '../hooks/useEventNotifications';
 import { useOverrideAttendance } from '../hooks/useOverrideAttendance';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Bell, Repeat, CalendarPlus, CheckCircle, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
+import {
+  Bell,
+  Repeat,
+  CalendarPlus,
+  CheckCircle,
+  Clock,
+  ChevronDown,
+  MapPin,
+  StopCircle,
+  Lock,
+  Unlock,
+} from 'lucide-react';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { PromptDialog } from '../components/ux';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
@@ -76,6 +89,9 @@ const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
   'reminders_sent',
   'validation_notification_sent',
   'series_end_reminder_sent',
+  // Legacy twin of attendance_finalized_at, kept for the reminder task. The
+  // lock is shown as a banner, not as a details row reading "true".
+  'attendance_finalized',
 ]);
 
 const DISPLAYED_TRAINING_FIELD_KEYS = [
@@ -117,6 +133,8 @@ export const EventDetailPage: React.FC = () => {
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [finalizingAttendance, setFinalizingAttendance] = useState(false);
+  const [showReopenPrompt, setShowReopenPrompt] = useState(false);
+  const [reopeningAttendance, setReopeningAttendance] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [eligibleMembers, setEligibleMembers] = useState<
     Array<{ id: string; first_name: string; last_name: string; email: string }>
@@ -140,6 +158,10 @@ export const EventDetailPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+  // Deliberately a separate grant from events.manage: whoever closed the event
+  // should not also be able to quietly reopen it and move the numbers.
+  const canReopenAttendance = checkPermission('events.reopen_attendance');
+  const { confirm } = useConfirm();
 
   // Extracted hooks for RSVP form, notifications, and override attendance
   const rsvpForm = useRSVPForm({
@@ -472,6 +494,23 @@ export const EventDetailPage: React.FC = () => {
   const handleFinalizeAttendance = async () => {
     if (!eventId) return;
 
+    // Finalizing closes the event: check-in, attendee edits and time
+    // corrections all stop working afterwards, and only a department leader
+    // can undo it. That is worth a sentence before the click, not a toast
+    // after it.
+    const confirmed = await confirm({
+      title: 'Finalize attendance?',
+      message:
+        'This closes the event. Credited hours are written to the members\u2019 ' +
+        'records, and check-in, adding or removing attendees, and correcting ' +
+        'times all stop being available. Only someone who can reopen ' +
+        'attendance will be able to make further changes.',
+      confirmLabel: 'Finalize and close',
+      cancelLabel: 'Keep it open',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+
     try {
       setFinalizingAttendance(true);
       const result = await eventService.finalizeAttendance(eventId);
@@ -479,15 +518,36 @@ export const EventDetailPage: React.FC = () => {
         toast.success(
           `Attendance finalized for ${result.updated_count} member${result.updated_count !== 1 ? 's' : ''}`
         );
-        await fetchRSVPs();
-        await fetchStats();
       } else {
-        toast.success('All attendance records are already up to date');
+        toast.success('Attendance finalized');
       }
+      // Refetch the event too: the lock it just acquired is what decides which
+      // actions this page still offers.
+      await fetchEvent();
+      await fetchRSVPs();
+      await fetchStats();
     } catch (err) {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to finalize attendance');
     } finally {
       setFinalizingAttendance(false);
+    }
+  };
+
+  const handleReopenAttendance = async (reason: string) => {
+    if (!eventId) return;
+
+    try {
+      setReopeningAttendance(true);
+      await eventService.reopenAttendance(eventId, reason);
+      toast.success('Attendance reopened for corrections');
+      setShowReopenPrompt(false);
+      await fetchEvent();
+      await fetchRSVPs();
+      await fetchStats();
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to reopen attendance');
+    } finally {
+      setReopeningAttendance(false);
     }
   };
 
@@ -587,10 +647,15 @@ export const EventDetailPage: React.FC = () => {
   const isEventOver = isPastEvent || Boolean(event.actual_end_time);
   const hasStarted = new Date(event.start_datetime) <= new Date();
   const isOngoing = hasStarted && !isPastEvent && !event.is_cancelled && !event.actual_end_time;
+  // The API refuses every attendance write past this point, so the actions
+  // that would hit those endpoints are not rendered at all — an enabled button
+  // that always 409s is worse than an absent one.
+  const isAttendanceFinalized = Boolean(event.attendance_finalized_at);
   const canRSVP =
     event.requires_rsvp &&
     !event.is_cancelled &&
     !isPastEvent &&
+    !isAttendanceFinalized &&
     (!event.rsvp_deadline || new Date(event.rsvp_deadline) > new Date());
 
   // RSVP deadline countdown
@@ -775,49 +840,53 @@ export const EventDetailPage: React.FC = () => {
                 </button>
                 {canManage && (
                   <>
-                    <button
-                      onClick={() => void navigate(`/events/${eventId}/edit`)}
-                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
-                    >
-                      <svg
-                        className="mr-2 h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
+                    {!isAttendanceFinalized && (
+                      <button
+                        onClick={() => void navigate(`/events/${eventId}/edit`)}
+                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                      Edit
-                    </button>
-                    <button
-                      onClick={openCheckInModal}
-                      className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
-                    >
-                      <svg
-                        className="mr-2 h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
+                        <svg
+                          className="mr-2 h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                        Edit
+                      </button>
+                    )}
+                    {!isAttendanceFinalized && (
+                      <button
+                        onClick={openCheckInModal}
+                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                        />
-                      </svg>
-                      Check In
-                    </button>
+                        <svg
+                          className="mr-2 h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                          />
+                        </svg>
+                        Check In
+                      </button>
+                    )}
 
                     {/* Send Reminders dropdown */}
-                    {!event.is_cancelled && (
+                    {!event.is_cancelled && !isAttendanceFinalized && (
                       <div className="relative" ref={reminderMenuRef}>
                         <button
                           onClick={() => notifications.setShowReminderMenu(!notifications.showReminderMenu)}
@@ -850,7 +919,7 @@ export const EventDetailPage: React.FC = () => {
                     )}
 
                     {/* End Event button — visible when event is in progress */}
-                    {isOngoing && (
+                    {isOngoing && !isAttendanceFinalized && (
                       <button
                         onClick={() => setShowEndEventConfirm(true)}
                         disabled={submitting}
@@ -861,7 +930,7 @@ export const EventDetailPage: React.FC = () => {
                       </button>
                     )}
 
-                    {isEventOver && (
+                    {isEventOver && !isAttendanceFinalized && (
                       <button
                         onClick={() => void handleFinalizeAttendance()}
                         disabled={finalizingAttendance}
@@ -869,6 +938,17 @@ export const EventDetailPage: React.FC = () => {
                       >
                         <CheckCircle className="mr-2 h-4 w-4" />
                         {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}
+                      </button>
+                    )}
+
+                    {isAttendanceFinalized && canReopenAttendance && (
+                      <button
+                        onClick={() => setShowReopenPrompt(true)}
+                        disabled={reopeningAttendance}
+                        className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs disabled:opacity-50"
+                      >
+                        <Unlock className="mr-2 h-4 w-4" />
+                        {reopeningAttendance ? 'Reopening...' : 'Reopen Attendance'}
                       </button>
                     )}
 
@@ -907,15 +987,17 @@ export const EventDetailPage: React.FC = () => {
                             >
                               Duplicate Event
                             </button>
-                            <button
-                              onClick={() => {
-                                setShowActionsMenu(false);
-                                openRecordTimesModal();
-                              }}
-                              className="text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm"
-                            >
-                              Record Times
-                            </button>
+                            {!isAttendanceFinalized && (
+                              <button
+                                onClick={() => {
+                                  setShowActionsMenu(false);
+                                  openRecordTimesModal();
+                                }}
+                                className="text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm"
+                              >
+                                Record Times
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setShowActionsMenu(false);
@@ -956,36 +1038,43 @@ export const EventDetailPage: React.FC = () => {
                             >
                               Save as Template
                             </button>
-                            <div className="border-theme-surface-border my-1 border-t" />
-                            <button
-                              onClick={() => {
-                                setShowActionsMenu(false);
-                                setShowCancelModal(true);
-                              }}
-                              className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400"
-                            >
-                              Cancel Event
-                            </button>
-                            {(event.is_recurring || event.recurrence_parent_id) && (
-                              <button
-                                onClick={() => {
-                                  setShowActionsMenu(false);
-                                  setShowCancelSeriesModal(true);
-                                }}
-                                className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400"
-                              >
-                                Cancel Entire Series
-                              </button>
+                            {/* Cancelling or deleting a closed event would
+                                contradict the attendance it already credited,
+                                and the API refuses both. */}
+                            {!isAttendanceFinalized && (
+                              <>
+                                <div className="border-theme-surface-border my-1 border-t" />
+                                <button
+                                  onClick={() => {
+                                    setShowActionsMenu(false);
+                                    setShowCancelModal(true);
+                                  }}
+                                  className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400"
+                                >
+                                  Cancel Event
+                                </button>
+                                {(event.is_recurring || event.recurrence_parent_id) && (
+                                  <button
+                                    onClick={() => {
+                                      setShowActionsMenu(false);
+                                      setShowCancelSeriesModal(true);
+                                    }}
+                                    className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400"
+                                  >
+                                    Cancel Entire Series
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setShowActionsMenu(false);
+                                    setShowDeleteConfirm(true);
+                                  }}
+                                  className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400"
+                                >
+                                  Delete Event
+                                </button>
+                              </>
                             )}
-                            <button
-                              onClick={() => {
-                                setShowActionsMenu(false);
-                                setShowDeleteConfirm(true);
-                              }}
-                              className="hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400"
-                            >
-                              Delete Event
-                            </button>
                           </div>
                         </div>
                       )}
@@ -1010,6 +1099,31 @@ export const EventDetailPage: React.FC = () => {
                   {event.cancellation_reason && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">Reason: {event.cancellation_reason}</p>
                   )}
+                </div>
+              )}
+
+              {isAttendanceFinalized && (
+                <div className="border-theme-surface-border bg-theme-surface-hover mb-4 rounded-lg border p-4">
+                  <div className="flex items-start gap-3">
+                    <Lock className="text-theme-text-muted mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="text-theme-text-primary text-sm font-medium">Attendance finalized</p>
+                      <p className="text-theme-text-secondary mt-1 text-sm">
+                        {event.attendance_finalized_by_name
+                          ? `Closed by ${event.attendance_finalized_by_name}`
+                          : 'Closed'}
+                        {event.attendance_finalized_at
+                          ? ` on ${formatDateTime(event.attendance_finalized_at, tz)}`
+                          : ''}
+                        . Credited hours are recorded, and attendance can no longer be changed.
+                      </p>
+                      {canReopenAttendance && (
+                        <p className="text-theme-text-muted mt-1 text-sm">
+                          Use Reopen Attendance to make a correction, then finalize again.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1239,7 +1353,7 @@ export const EventDetailPage: React.FC = () => {
             {/* Requirement/program links for the attached training session.
                 Renders nothing when the event has no training session. */}
             {event.event_type === EventTypeEnum.TRAINING && (
-              <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} />
+              <TrainingSessionLinkageCard eventId={event.id} canManage={canManage} canReopen={canReopenAttendance} />
             )}
 
             {/* Pipeline meeting stages can also link prospects to ordinary
@@ -1333,10 +1447,11 @@ export const EventDetailPage: React.FC = () => {
                 }}
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
+                attendanceFinalized={isAttendanceFinalized}
               />
             )}
             {/* Notifications Panel (for managers) */}
-            {canManage && !event.is_cancelled && (
+            {canManage && !event.is_cancelled && !isAttendanceFinalized && (
               <EventNotificationPanel
                 notificationType={notifications.notificationType}
                 onNotificationTypeChange={notifications.setNotificationType}
@@ -1664,6 +1779,23 @@ export const EventDetailPage: React.FC = () => {
             onClose={() => setShowTemplateModal(false)}
           />
         )}
+
+        <PromptDialog
+          isOpen={showReopenPrompt}
+          onClose={() => setShowReopenPrompt(false)}
+          onSubmit={(reason) => void handleReopenAttendance(reason)}
+          title="Reopen attendance?"
+          message="Attendance becomes editable again and the event can be corrected, then finalized a second time. Re-finalizing updates the hours already credited rather than adding to them."
+          label="Reason"
+          placeholder="e.g. Two members were left off the roster"
+          multiline
+          minLength={4}
+          hint="Recorded on the audit trail alongside your name."
+          confirmLabel="Reopen for corrections"
+          cancelLabel="Leave it closed"
+          confirmVariant="warning"
+          loading={reopeningAttendance}
+        />
       </div>
     </div>
   );
