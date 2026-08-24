@@ -33,6 +33,7 @@ import socket
 import threading
 import time
 from contextlib import closing
+from typing import List
 
 import httpx
 import pytest
@@ -93,7 +94,21 @@ def _start_server() -> str:
             access_log=False,
         )
     )
-    thread = threading.Thread(target=server.run, daemon=True)
+    # uvicorn raises inside the thread, where the exception is lost — so the
+    # only symptom is a thread that is no longer alive, and the boot failure
+    # reaches CI as "server unavailable" with no cause attached. Recording it
+    # here is what makes the difference between a runner hiccup and the app
+    # genuinely failing to start visible from the log alone.
+    boot_error: List[Exception] = []
+
+    def _serve() -> None:
+        try:
+            server.run()
+        except Exception as exc:
+            boot_error.append(exc)
+            raise
+
+    thread = threading.Thread(target=_serve, daemon=True)
     thread.start()
 
     base_url = f"http://127.0.0.1:{port}"
@@ -101,7 +116,14 @@ def _start_server() -> str:
     last_state = "no response yet"
     while time.monotonic() < deadline:
         if not thread.is_alive():
-            raise RuntimeError("Contract-test server thread exited during startup")
+            cause = (
+                f": {type(boot_error[0]).__name__}: {boot_error[0]}"
+                if boot_error
+                else " (no exception recorded)"
+            )
+            raise RuntimeError(
+                f"Contract-test server thread exited during startup{cause}"
+            )
         try:
             # Wait for `ready`, not merely for a reply. /health answers well
             # before the connection pool is open, and every database-backed
@@ -153,10 +175,35 @@ else:
         BASE_URL = ""
         schema = None
         SCHEMA_AVAILABLE = False
-        SKIP_REASON = f"Contract-test server unavailable: {exc}"
+        SKIP_REASON = f"Contract-test server unavailable: {type(exc).__name__}: {exc}"
 
 
-@pytest.mark.skipif(not SCHEMA_AVAILABLE, reason=SKIP_REASON or "server unavailable")
+def test_contract_suite_can_run():
+    """Report why the suite could not start, instead of collecting nothing.
+
+    Every generated test below is defined inside ``if SCHEMA_AVAILABLE``, so
+    when the server does not come up this module contains no tests at all —
+    not even skipped ones. ``pytest tests/test_api_contract.py`` then exits 5
+    ("no tests collected") and the job goes red showing ``collected 0 items``
+    and nothing else: ``SKIP_REASON``, which names the actual cause, is
+    computed and then never surfaced anywhere.
+
+    This test always exists, so the reason always has somewhere to be
+    reported. It **fails** rather than skips once the suite has been asked
+    for, because a server that will not boot is a real failure — skipping it
+    would let "the application does not start" pass for green, which is the
+    one thing a contract suite must never do.
+    """
+    if not _ENABLED:
+        pytest.skip(SKIP_REASON)
+    assert SCHEMA_AVAILABLE, SKIP_REASON
+    assert schema is not None
+
+
+# No skipif on the class: when the schema is unavailable these tests are never
+# defined, so there is nothing for a marker to skip. One used to sit here and
+# read as though it handled that case, which is why the missing report went
+# unnoticed — the test above is what actually covers it.
 class TestAPIContract:
     """
     Auto-generated API contract tests.
