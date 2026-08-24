@@ -35,22 +35,22 @@ method that persists a client-supplied FK without an in-org check.
 **What:** ~13 methods stored a client-supplied FK id straight onto an org-stamped
 row without verifying the referenced row is in the caller's org. Each is a
 dangling/mis-attributed cross-tenant reference (XC-1). A full map (via a
-sub-agent) confirmed every FK target *is* org-scoped and validatable, and that the
+sub-agent) confirmed every FK target _is_ org-scoped and validatable, and that the
 read-leak subset (member `user_id` via listings) was already closed in INV2-1 —
 so these were integrity-only, which is why they were safe to leave flagged until a
 focused pass. Now fixed:
 
-| Method | FK(s) now validated in-org | Target model |
-|---|---|---|
-| `create_category` / `update_category` | `parent_category_id` | `InventoryCategory` |
-| `create_item` / `update_item` | `location_id`, `storage_area_id`, `variant_group_id`, `assigned_to_user_id` | `Location`, `StorageArea`, `ItemVariantGroup`, `User` |
-| `create_maintenance_record` / `update_maintenance_record` | `performed_by` | `User` |
-| `create_write_off_request` | `clearance_id` | `DepartureClearance` |
-| `create_size_variants` | `category_id`, `location_id`, `storage_area_id` | `InventoryCategory`, `Location`, `StorageArea` |
-| `create_return_request` | `assignment_id`, `issuance_id`, `checkout_id` | `ItemAssignment`, `ItemIssuance`, `CheckOutRecord` |
-| `create_reorder_request` / `update_reorder_request` | `item_id`, `category_id` | `InventoryItem`, `InventoryCategory` |
-| `create_equipment_kit` | line-item `item_id`, `category_id` | `InventoryItem`, `InventoryCategory` |
-| `create_reorder_from_plan` | `stock_category_id` | `InventoryCategory` |
+| Method                                                    | FK(s) now validated in-org                                                  | Target model                                          |
+| --------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `create_category` / `update_category`                     | `parent_category_id`                                                        | `InventoryCategory`                                   |
+| `create_item` / `update_item`                             | `location_id`, `storage_area_id`, `variant_group_id`, `assigned_to_user_id` | `Location`, `StorageArea`, `ItemVariantGroup`, `User` |
+| `create_maintenance_record` / `update_maintenance_record` | `performed_by`                                                              | `User`                                                |
+| `create_write_off_request`                                | `clearance_id`                                                              | `DepartureClearance`                                  |
+| `create_size_variants`                                    | `category_id`, `location_id`, `storage_area_id`                             | `InventoryCategory`, `Location`, `StorageArea`        |
+| `create_return_request`                                   | `assignment_id`, `issuance_id`, `checkout_id`                               | `ItemAssignment`, `ItemIssuance`, `CheckOutRecord`    |
+| `create_reorder_request` / `update_reorder_request`       | `item_id`, `category_id`                                                    | `InventoryItem`, `InventoryCategory`                  |
+| `create_equipment_kit`                                    | line-item `item_id`, `category_id`                                          | `InventoryItem`, `InventoryCategory`                  |
+| `create_reorder_from_plan`                                | `stock_category_id`                                                         | `InventoryCategory`                                   |
 
 **How:** every check reuses the shared `assert_in_org(..., allow_none=True,
 label=…)` (all these FKs are nullable), matching the existing `create_variant_group`
@@ -147,13 +147,13 @@ Re-verified pass 1 (INV-3 maintenance item validation, INV-5 LIKE escape, INV-6
 `getattr` guard — all intact). Then took the flagged **INV-4** XC-1 sweep and
 applied the B1/B2 lens: which of its FK sites are actually **projected into a
 response** (a real read leak) versus dangling-only? Pass 1 had checked one site
-(`assign_item_to_user`'s `user_id`) against the *item* response and cleared it —
+(`assign_item_to_user`'s `user_id`) against the _item_ response and cleared it —
 but the assignment/checkout/issuance/charge **listings** tell a different story.
 
 ### INV2-1 — MED — Member-facing mutations didn't validate `user_id` in-org; the member name leaks via listings — ✅ FIXED
 
 **What:** `assign_item_to_user`, `checkout_item`, and `issue_from_pool` each lock
-and org-validate the *item*, but stored the client-supplied **`user_id` with no
+and org-validate the _item_, but stored the client-supplied **`user_id` with no
 in-org check** (`issue_kit_to_member` does the same via delegation).
 
 **Why it's a read leak, not just a dangling FK (correcting pass 1's scope):** the
@@ -269,7 +269,7 @@ message. The intended "skip if optional / fail if required" logic never worked.
 sites — removes the crash and makes every item required, which is the behavior
 the missing column already implied. **Flagged:** persisting a real `optional`
 value needs the column + an Alembic migration + wiring it through
-`create_equipment_kit` (which currently drops it), so the *feature* remains a
+`create_equipment_kit` (which currently drops it), so the _feature_ remains a
 tracked follow-up.
 
 ### INV-4 — LOW — Broad create/update FK-validation gaps (XC-1) — 🚩 FLAGGED (with a verification)
@@ -308,7 +308,7 @@ inline form is readable and consistent. Noted, not actioned.
 ## Dead code
 
 None (vulture clean per prior audit; no TODO/FIXME). The `optional`-branch code
-in `issue_kit_to_member` was *latent-broken*, not dead — now made safe.
+in `issue_kit_to_member` was _latent-broken_, not dead — now made safe.
 
 ## Documentation
 
@@ -320,7 +320,7 @@ safe half); INV-4 stands with the read-back verification added.
 1. **INV-4 dedicated XC-1 sweep** — the biggest remaining item; ~15 create/update
    methods, mechanical with `assert_in_org`.
 2. **Equipment-kit `optional` feature** (INV-6 flagged half) — column + migration
-   + `create_equipment_kit` wiring, so kit items can actually be optional.
+   - `create_equipment_kit` wiring, so kit items can actually be optional.
 3. **`_escape_like` helper** — small DRY cleanup across the search methods.
 4. **No service-level unit tests for the maintenance/kit paths** — the fixes
    here rest on `test_org_scoping.py` and the DB-backed `test_inventory_gaps.py`;
@@ -329,11 +329,12 @@ safe half); INV-4 stands with the read-back verification added.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed**; 137 inventory-selected tests pass. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. The DB-backed maintenance test creates its item in-org, so the new INV-3 guard is compatible. |
+| Check                | Result                                                                                                                                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                                                                                                                                  |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                                                                                   |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                                                                                                                            |
+| `eslint`             | ✅ clean                                                                                                                                                                                                                                          |
+| backend tests        | ✅ **2517 passed, 0 failed**; 137 inventory-selected tests pass. 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. The DB-backed maintenance test creates its item in-org, so the new INV-3 guard is compatible. |
+
 </content>

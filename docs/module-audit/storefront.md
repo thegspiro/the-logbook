@@ -20,7 +20,7 @@ best-defended module reviewed to date, and the one finding below is LOW.
 - **Auth coverage:** all 47 endpoints carry an auth dependency. 46 are
   `require_permission`-gated (`storefront.manage` ×39, `storefront.view` ×6,
   `storefront.order` ×1). The single bare-`get_current_user` route is
-  `GET /store/permissions`, which returns only the caller's *own* store
+  `GET /store/permissions`, which returns only the caller's _own_ store
   permissions — a self-probe, correctly ungated.
 - **Tenant isolation:** no unscoped by-id read/update/delete. Every
   `select()` in the service filters `organization_id`, or resolves through a
@@ -40,7 +40,7 @@ best-defended module reviewed to date, and the one finding below is LOW.
 - **No raw SQL:** no `text()`, f-string, or `.format()` query construction.
 - **Money path (the reason this module matters).** Reviewed closely:
   - `_price_lines` prices **every line from the catalog**, never from the
-    client. Quantities are locked (`_lock_products`) *before* per-window and
+    client. Quantities are locked (`_lock_products`) _before_ per-window and
     per-member limits are counted, so a concurrent order cannot slip past a
     limit. Duplicate cart lines are collapsed with personalization as part of
     the key, so per-product caps see the true ask.
@@ -115,7 +115,7 @@ in place** — they are already correct, and a mechanical sweep of them could no
 be verified end-to-end in an environment without MySQL. Migrating them is a
 follow-up whose value is consistency, not a fix.
 
-All seven escape the same three characters correctly. What they *don't* do is
+All seven escape the same three characters correctly. What they _don't_ do is
 pass `escape="\\"` to `ilike()`, so they rely on MySQL's implicit default
 escape character rather than declaring it. That is correct under MySQL's
 default configuration and wrong under `NO_BACKSLASH_ESCAPES`; the helper takes

@@ -143,7 +143,7 @@ lesson.]**
 > has the wildcard permission — meaning access to every feature, every setting,
 > every module."
 
-**[CALLOUT: "System Owner = IT Manager position = full access (wildcard *)"]**
+*_[CALLOUT: "System Owner = IT Manager position = full access (wildcard *)"]*_
 
 > "A quick note on best practice: this account should belong to whoever is
 > responsible for managing the technology in your department. It might be you,

@@ -13,17 +13,17 @@ The backend uses **Python 3.13+ with FastAPI** - a modern, high-performance fram
 
 ## Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| **Runtime** | Python 3.13+ |
-| **Framework** | FastAPI |
-| **ORM** | SQLAlchemy 2.0 (async) |
-| **Migrations** | Alembic |
-| **Validation** | Pydantic |
-| **Server** | Uvicorn (ASGI) |
-| **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
-| **Cache** | Redis 7+ |
-| **Package Manager** | pip / pip-tools |
+| Component           | Technology                          |
+| ------------------- | ----------------------------------- |
+| **Runtime**         | Python 3.13+                        |
+| **Framework**       | FastAPI                             |
+| **ORM**             | SQLAlchemy 2.0 (async)              |
+| **Migrations**      | Alembic                             |
+| **Validation**      | Pydantic                            |
+| **Server**          | Uvicorn (ASGI)                      |
+| **Database**        | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
+| **Cache**           | Redis 7+                            |
+| **Package Manager** | pip / pip-tools                     |
 
 ---
 
@@ -169,6 +169,7 @@ class UserCreate(BaseModel):
 ### Automatic API Documentation
 
 FastAPI generates OpenAPI docs automatically:
+
 - **Swagger UI**: `http://localhost:3001/docs`
 - **ReDoc**: `http://localhost:3001/redoc`
 - **OpenAPI JSON**: `http://localhost:3001/openapi.json`
@@ -215,6 +216,7 @@ nano .env  # Edit configuration
 ```
 
 Required variables:
+
 ```env
 # Database
 DB_HOST=localhost
@@ -333,12 +335,12 @@ pytest tests/test_docker_integration.py -m docker --timeout=1800
 `pytest.ini` registers `unit`, `integration`, `slow`, `docker`, `onboarding`
 and `asyncio`. CI splits on them:
 
-| Job | Selection |
-|-----|-----------|
-| `backend-test` | `not integration and not slow and not docker` |
+| Job                        | Selection                                                          |
+| -------------------------- | ------------------------------------------------------------------ |
+| `backend-test`             | `not integration and not slow and not docker`                      |
 | `backend-test-integration` | `integration and not docker and not slow` (MySQL + Redis services) |
-| `backend-test-contract` | `tests/test_api_contract.py` with `RUN_API_CONTRACT_TESTS=1` |
-| `docker-build` | `-m docker`, after verifying a daemon is reachable |
+| `backend-test-contract`    | `tests/test_api_contract.py` with `RUN_API_CONTRACT_TESTS=1`       |
+| `docker-build`             | `-m docker`, after verifying a daemon is reachable                 |
 
 The daemon check in `docker-build` is deliberate: every test in that module
 skips itself when Docker is absent, and 19 skips would otherwise report as a
@@ -366,11 +368,13 @@ async def test_create_user():
 ## Python 3.13 Features
 
 ### Performance Improvements
+
 - **JIT Compiler**: 10-60% faster execution
 - **Improved asyncio**: Better async performance
 - **Optimized GC**: Reduced memory overhead
 
 ### Language Features
+
 - **Better Error Messages**: More detailed tracebacks
 - **Type System**: Enhanced type checking
 - **Experimental GIL Removal**: Better multi-threading (experimental)
@@ -391,6 +395,7 @@ def get_items(ids: List[str], filter: Optional[str] = None) -> Dict[str, int]:
 ```
 
 ### Benefits for The Logbook
+
 - Faster API response times
 - Lower memory usage
 - Better type safety
@@ -468,6 +473,7 @@ curl http://localhost:3001/health/redis
 ### Add New Endpoint
 
 1. **Create schema** in `app/schemas/`:
+
 ```python
 # app/schemas/task.py
 from pydantic import BaseModel
@@ -478,6 +484,7 @@ class TaskCreate(BaseModel):
 ```
 
 2. **Create model** in `app/models/`:
+
 ```python
 # app/models/task.py
 from sqlalchemy import Column, Integer, String
@@ -492,6 +499,7 @@ class Task(Base):
 ```
 
 3. **Create endpoint** in `app/api/v1/endpoints/`:
+
 ```python
 # app/api/v1/endpoints/tasks.py
 from fastapi import APIRouter, Depends
@@ -515,6 +523,7 @@ async def create_task(
 ```
 
 4. **Register router** in `app/api/v1/api.py`:
+
 ```python
 from app.api.v1.endpoints import tasks
 
@@ -580,11 +589,13 @@ redis-cli info server
 ## Migration History
 
 ### Node.js to Python (2025-2026)
+
 - **From:** Node.js/Express.js with Knex.js
 - **To:** Python/FastAPI with SQLAlchemy
 - **Reason:** Better performance, type safety, and automatic API docs
 
 ### Version Updates
+
 - **Python:** 3.11 → 3.13 (January 2026)
 - **FastAPI:** Latest stable
 - **SQLAlchemy:** 2.0+ (async support)

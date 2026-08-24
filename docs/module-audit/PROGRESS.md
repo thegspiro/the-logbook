@@ -11,36 +11,36 @@ fixes, and flags anything risky rather than changing it.
 Untouched, higher-risk domains are front-loaded (the auth/security surface was
 already covered by the red-team review on this branch).
 
-| # | Module / domain | Backend | Frontend | Status |
-|---|-----------------|---------|----------|--------|
-| 1 | medical-screening | endpoints/medical_screening.py, services/medical_screening_service.py | modules/medical-screening | ✅ |
-| 2 | apparatus | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py | modules/apparatus | ✅ |
-| 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | ✅ |
-| 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ✅ |
-| 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ✅ |
-| 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ✅ |
-| 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ✅ |
-| 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ✅ |
-| 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ✅ |
-| 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ✅ |
-| 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ✅ |
-| 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ✅ |
-| 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ✅ |
-| 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ✅ |
-| 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ✅ |
-| 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ✅ |
-| 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ✅ |
-| 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ✅ |
-| 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ✅ |
-| 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ✅ |
-| 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ✅ |
-| 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ✅ |
-| 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ✅ |
-| 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ✅ |
-| 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ✅ |
-| 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ✅ |
-| 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ✅ |
-| 28 | storefront | endpoints/storefront.py, services/storefront_service.py, storefront_notification_service.py, storefront_preview_service.py, public/paypal_webhook.py | modules/storefront | ✅ |
+| #   | Module / domain     | Backend                                                                                                                                              | Frontend                                             | Status |
+| --- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------ |
+| 1   | medical-screening   | endpoints/medical_screening.py, services/medical_screening_service.py                                                                                | modules/medical-screening                            | ✅     |
+| 2   | apparatus           | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py                                                                         | modules/apparatus                                    | ✅     |
+| 3   | inventory           | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py                                                                   | (in-app)                                             | ✅     |
+| 4   | facilities          | endpoints/facilities.py, services/facilities_service.py                                                                                              | modules/facilities                                   | ✅     |
+| 5   | elections           | endpoints/elections.py, services/election_service.py, quorum_service.py                                                                              | modules/elections                                    | ✅     |
+| 6   | meetings/minutes    | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py                                                                   | modules/minutes                                      | ✅     |
+| 7   | equipment-check     | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py                                                               | (in-app)                                             | ✅     |
+| 8   | documents           | endpoints/documents.py, services/document_service.py, documents_service.py                                                                           | (in-app)                                             | ✅     |
+| 9   | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py                                        | modules/prospective-members                          | ✅     |
+| 10  | messaging/comms     | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py                                                | modules/communications                               | ✅     |
+| 11  | notifications       | endpoints/notifications.py, services/notifications_service.py                                                                                        | (in-app)                                             | ✅     |
+| 12  | integrations        | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/*                                                       | (in-app)                                             | ✅     |
+| 13  | forms               | endpoints/forms.py, public/forms.py, services/forms_service.py                                                                                       | modules/forms                                        | ✅     |
+| 14  | grants/fundraising  | endpoints/grants.py, services/grant_service.py, fundraising_service.py                                                                               | modules/grants-fundraising                           | ✅     |
+| 15  | admin-hours         | endpoints/admin_hours.py, services/admin_hours_service.py                                                                                            | modules/admin-hours                                  | ✅     |
+| 16  | reports/analytics   | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py                                                               | modules/reports                                      | ✅     |
+| 17  | events              | endpoints/events.py, event_requests.py, services/event_service.py                                                                                    | modules/events                                       | ✅     |
+| 18  | training            | endpoints/training*.py, external_training.py, services/training*.py                                                                                  | modules/training                                     | ✅     |
+| 19  | scheduling          | endpoints/scheduling.py, `shift_*.py`, services/scheduling_service.py, `shift_*_service.py`                                                          | modules/scheduling                                   | ✅     |
+| 20  | finance             | endpoints/finance.py, services/finance_service.py                                                                                                    | modules/finance                                      | ✅     |
+| 21  | orgs/roles/users    | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py                                                               | (in-app)                                             | ✅     |
+| 22  | compliance/skills   | `endpoints/compliance_*.py`, skills_testing.py, `services/compliance_*_service.py`, skills_testing_service.py                                        | (in-app)                                             | ✅     |
+| 23  | security/audit/ip   | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py                                                        | modules/ip-security                                  | ✅     |
+| 24  | core infra          | core/config, database, cache, security_middleware, geoip, websocket_manager                                                                          | services/, utils/, hooks/                            | ✅     |
+| 25  | onboarding          | services/onboarding.py, org_template_service.py                                                                                                      | modules/onboarding                                   | ✅     |
+| 26  | public-portal       | public/portal.py, display.py, calendar.py, core/public_portal_security.py                                                                            | modules/public-portal                                | ✅     |
+| 27  | frontend shared     | —                                                                                                                                                    | components/, components/ux/, hooks/, utils/, stores/ | ✅     |
+| 28  | storefront          | endpoints/storefront.py, services/storefront_service.py, storefront_notification_service.py, storefront_preview_service.py, public/paypal_webhook.py | modules/storefront                                   | ✅     |
 
 **✅ Rotation complete — all 28 modules audited.** Each module has a
 `docs/module-audit/<module>.md`; cross-cutting patterns are in CROSS-CUTTING.md;
@@ -290,22 +290,22 @@ table. Anything added after a rotation table is written needs a row, or
   FIN-1 (HIGH XC-1 dangerous variant: a client budget_id on a PR/CR/expense fed
   three bare-id budget write-helpers that incremented another org's
   encumbered/spent totals; fixed in two layers — org-filter on the three helpers
-  + a new _validate_finance_fks that rejects foreign budget/category/fiscal-year
-  FKs at create/update), FIN-2 (MED: create/update_budget stored unvalidated
-  fiscal_year_id/category_id — same helper), FIN-3 (HIGH XC-2: GET /dues leaked
-  any member's dues balances to any finance.view holder via the user_id param;
-  non-managers now confined to their own dues, dues managers keep the
-  cross-member view). 4 flagged: FIN-4 (no SoD on terminal money movement —
-  needs finance.disburse tier), FIN-5 (reimbursement/payee records readable by
-  any finance.view holder), FIN-6 (✅ FIXED 2026-08-04: dues_payments ledger —
-  amount_paid re-derived from the ledger with a uniqueness constraint on
-  (member_dues_id, transaction_reference) as the idempotency key, WAIVED/EXEMPT
-  refuse payment, POST /dues/{id}/unwaive as the deliberate reversal, GET
-  /dues/{id}/payments exposes the history), FIN-7 (✅ add_expense_line_item total drift fixed via fresh SUM
-  aggregate; still flagged: request-number race needs unique-constraint
-  migration, module-wide float→Decimal, export/pagination DoS refactor, overspend
-  guard, pending-approvals not assignee-filtered). See
-  finance.md. Next: orgs/roles/users.
+  - a new _validate_finance_fks that rejects foreign budget/category/fiscal-year
+    FKs at create/update), FIN-2 (MED: create/update_budget stored unvalidated
+    fiscal_year_id/category_id — same helper), FIN-3 (HIGH XC-2: GET /dues leaked
+    any member's dues balances to any finance.view holder via the user_id param;
+    non-managers now confined to their own dues, dues managers keep the
+    cross-member view). 4 flagged: FIN-4 (no SoD on terminal money movement —
+    needs finance.disburse tier), FIN-5 (reimbursement/payee records readable by
+    any finance.view holder), FIN-6 (✅ FIXED 2026-08-04: dues_payments ledger —
+    amount_paid re-derived from the ledger with a uniqueness constraint on
+    (member_dues_id, transaction_reference) as the idempotency key, WAIVED/EXEMPT
+    refuse payment, POST /dues/{id}/unwaive as the deliberate reversal, GET
+    /dues/{id}/payments exposes the history), FIN-7 (✅ add_expense_line_item total drift fixed via fresh SUM
+    aggregate; still flagged: request-number race needs unique-constraint
+    migration, module-wide float→Decimal, export/pagination DoS refactor, overspend
+    guard, pending-approvals not assignee-filtered). See
+    finance.md. Next: orgs/roles/users.
 - #21 orgs/roles/users ✅ — the privilege-management surface (5 endpoint files +
   4 services + core/permissions); three parallel readers (users+ranks / roles+
   permissions+member-status / organizations). Verified good: the H2 role-grant

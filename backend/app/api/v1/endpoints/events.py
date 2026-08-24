@@ -67,6 +67,7 @@ from app.schemas.event import (
     QRCheckInData,
     RecordActualTimes,
     RecurringEventCreate,
+    ReopenAttendanceRequest,
     RSVPCreate,
     RSVPHistoryResponse,
     RSVPOverride,
@@ -79,6 +80,7 @@ from app.schemas.event import (
 from app.schemas.organization import MembershipTierSettings
 from app.services.documents_service import DocumentsService
 from app.services.event_service import (
+    ATTENDANCE_LOCKED_PREFIX,
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
@@ -93,6 +95,42 @@ from app.services.notifications_service import NotificationsService
 from app.utils.mime_validation import detect_mime_type
 
 router = APIRouter()
+
+
+def _event_error(
+    error: str, default_status: int = status.HTTP_400_BAD_REQUEST
+) -> HTTPException:
+    """Map a service error string onto the right HTTP status.
+
+    A refusal from the attendance lock is a 409, not a 400: nothing is wrong
+    with the request, the event is closed. The sentinel prefix is stripped so
+    the client shows the sentence and not the marker.
+    """
+    if error.startswith(ATTENDANCE_LOCKED_PREFIX):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error[len(ATTENDANCE_LOCKED_PREFIX) :],
+        )
+    return HTTPException(status_code=default_status, detail=error)
+
+
+async def _assert_attendance_open(
+    db: AsyncSession,
+    event_id: UUID,
+    organization_id,
+    action: str,
+) -> None:
+    """Reject the request when this event's attendance is finalized.
+
+    For endpoints that do their own inline ORM work (external attendees) or
+    that loop over many members (bulk add) rather than routing through a
+    single guarded service call.
+    """
+    error = await EventService(db).attendance_lock_error_for(
+        event_id, organization_id, action
+    )
+    if error:
+        raise _event_error(error)
 
 
 def _build_event_response(event: Event, **extra_fields) -> EventResponse:
@@ -180,6 +218,8 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         is_cancelled=event.is_cancelled,
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
+        attendance_finalized_at=event.attendance_finalized_at,
+        attendance_finalized_by=event.attendance_finalized_by,
         created_by=event.created_by,
         updated_by=event.updated_by,
         created_at=event.created_at,
@@ -885,12 +925,32 @@ async def get_event(
         else 0
     )
 
+    # Resolved only on the detail view, which is the one screen that shows who
+    # closed the event. Rows backfilled from the pre-column marker carry no
+    # actor, so this stays None and the badge reads "Attendance finalized"
+    # without a name rather than inventing one.
+    finalized_by_name = None
+    if event.attendance_finalized_by:
+        finalizer_result = await db.execute(
+            select(User).where(
+                User.id == str(event.attendance_finalized_by),
+                User.organization_id == current_user.organization_id,
+            )
+        )
+        finalizer = finalizer_result.scalar_one_or_none()
+        if finalizer:
+            finalized_by_name = (
+                f"{finalizer.first_name} {finalizer.last_name}".strip()
+                or finalizer.username
+            )
+
     return _build_event_response(
         event,
         rsvp_count=rsvp_count,
         going_count=going_count,
         not_going_count=not_going_count,
         maybe_count=maybe_count,
+        attendance_finalized_by_name=finalized_by_name,
         user_rsvp_status=(
             (
                 user_rsvp.status.value
@@ -1009,9 +1069,7 @@ async def update_event(
 
         return _build_event_response(event)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
+        raise _event_error(safe_error_detail(e))
 
 
 @router.patch("/{event_id}/update-future")
@@ -1135,10 +1193,16 @@ async def delete_event(
     **Requires permission: events.manage**
     """
     service = EventService(db)
-    success = await service.delete_event(
-        event_id=event_id,
-        organization_id=current_user.organization_id,
-    )
+    # delete_event raises ValueError for a refusal the caller can act on — the
+    # attendance lock, or linked records blocking the cascade. Without this the
+    # linked-records message surfaced as a 500 with a generic body.
+    try:
+        success = await service.delete_event(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise _event_error(safe_error_detail(e))
 
     if not success:
         raise HTTPException(
@@ -1255,9 +1319,7 @@ async def cancel_event(
 
         return _build_event_response(event)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
+        raise _event_error(safe_error_detail(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1368,7 +1430,7 @@ async def create_or_update_rsvp(
                     "message": error[len(PHASE_GATE_PREFIX) :],
                 },
             )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     return _build_rsvp_response(rsvp, user=current_user)
 
@@ -1560,7 +1622,7 @@ async def check_in_attendee(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -1610,7 +1672,7 @@ async def manager_add_attendee(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -1658,6 +1720,10 @@ async def bulk_add_attendees(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot add more than {BULK_ADD_MAX_SIZE} attendees at once",
         )
+
+    await _assert_attendance_open(
+        db, event_id, current_user.organization_id, "adding attendees"
+    )
 
     service = EventService(db)
     created_count = 0
@@ -1739,7 +1805,7 @@ async def override_rsvp_attendance(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     # Get user details
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
@@ -1787,7 +1853,7 @@ async def remove_attendee(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     await log_audit_event(
         db=db,
@@ -1897,10 +1963,11 @@ async def record_actual_times(
         organization_id=current_user.organization_id,
         actual_start_time=times_data.actual_start_time,
         actual_end_time=times_data.actual_end_time,
+        finalized_by=current_user.id,
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     return _build_event_response(event)
 
@@ -1930,15 +1997,64 @@ async def finalize_attendance(
     updated_count, error = await service.finalize_event_attendance(
         event_id=event_id,
         organization_id=current_user.organization_id,
+        finalized_by=current_user.id,
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     # finalize_event_attendance archives the related validation prompt itself,
     # so every finalize path (end_event, auto-finalize, this endpoint) clears it.
 
     return FinalizeAttendanceResponse(updated_count=updated_count)
+
+
+@router.post("/{event_id}/reopen-attendance", response_model=EventResponse)
+async def reopen_attendance(
+    event_id: UUID,
+    body: ReopenAttendanceRequest = ReopenAttendanceRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.reopen_attendance")),
+):
+    """
+    Reopen a finalized event so attendance can be corrected, then re-finalized.
+
+    Finalizing closes an event: adding an overlooked member, correcting a
+    credited time or ending it again are all refused afterwards. This is the
+    way back, and it is deliberately behind its own permission rather than
+    events.manage — the organizer who closed the event should not be able to
+    quietly reopen it and change the numbers that already reached the hours
+    ledger, training records and compliance totals.
+
+    **Authentication required**
+    **Requires permission: events.reopen_attendance**
+    """
+    service = EventService(db)
+    event, error = await service.reopen_event_attendance(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        if error == "Event not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+        raise _event_error(error)
+
+    await log_audit_event(
+        db=db,
+        event_type="event_attendance_reopened",
+        event_category="events",
+        severity="warning",
+        event_data={
+            "event_id": str(event_id),
+            "title": event.title,
+            "reason": (body.reason or "").strip() or None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_event_response(event)
 
 
 @router.post("/{event_id}/end-event", response_model=EndEventResponse)
@@ -1960,10 +2076,11 @@ async def end_event(
     event, checked_out_count, error = await service.end_event(
         event_id=event_id,
         organization_id=current_user.organization_id,
+        ended_by=current_user.id,
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     await log_audit_event(
         db=db,
@@ -2012,7 +2129,7 @@ async def get_qr_check_in_data(
     )
 
     if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     return QRCheckInData(**data)
 
@@ -2069,7 +2186,7 @@ async def self_check_in(
                 headers={"X-Already-Checked-In": "true"},
             )
 
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise _event_error(error)
 
     await log_audit_event(
         db=db,
@@ -2707,6 +2824,10 @@ async def add_external_attendee(
     if not event.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Event not found")
 
+    await _assert_attendance_open(
+        db, event_id, current_user.organization_id, "adding an external attendee"
+    )
+
     attendee = EventExternalAttendee(
         id=generate_uuid(),
         organization_id=current_user.organization_id,
@@ -2758,6 +2879,10 @@ async def update_external_attendee(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """Update an external attendee's information."""
+    await _assert_attendance_open(
+        db, event_id, current_user.organization_id, "editing an external attendee"
+    )
+
     result = await db.execute(
         select(EventExternalAttendee).where(
             EventExternalAttendee.id == str(attendee_id),
@@ -2807,6 +2932,13 @@ async def check_in_external_attendee(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """Check in an external attendee at an event."""
+    await _assert_attendance_open(
+        db,
+        event_id,
+        current_user.organization_id,
+        "checking in an external attendee",
+    )
+
     result = await db.execute(
         select(EventExternalAttendee).where(
             EventExternalAttendee.id == str(attendee_id),
@@ -2897,6 +3029,10 @@ async def remove_external_attendee(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """Remove an external attendee from an event."""
+    await _assert_attendance_open(
+        db, event_id, current_user.organization_id, "removing an external attendee"
+    )
+
     result = await db.execute(
         select(EventExternalAttendee).where(
             EventExternalAttendee.id == str(attendee_id),

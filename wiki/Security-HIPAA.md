@@ -10,46 +10,47 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 
 ### Access Control (§ 164.312(a))
 
-| HIPAA Requirement | Feature |
-|-------------------|---------|
-| Unique user identification | Every user has a unique ID and username |
-| Emergency access procedure | System owner bypass for emergency situations |
-| Automatic logoff | 30-minute inactivity timeout (configurable) |
-| Encryption and decryption | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable) |
+| HIPAA Requirement          | Feature                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| Unique user identification | Every user has a unique ID and username                                                    |
+| Emergency access procedure | System owner bypass for emergency situations                                               |
+| Automatic logoff           | 30-minute inactivity timeout (configurable)                                                |
+| Encryption and decryption  | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable) |
 
 ### Audit Controls (§ 164.312(b))
 
-| HIPAA Requirement | Feature |
-|-------------------|---------|
-| Audit log recording | All access to PHI is logged with user, timestamp, and action |
-| Tamper-proof storage | Keyed HMAC-SHA256 hash chain prevents modification |
-| Log retention | 7-year retention (2555 days), exceeds 6-year HIPAA minimum |
-| Periodic verification | Daily integrity checkpoints |
-| Export capability | JSON export for compliance reporting |
-| Retention of audit records | 7 years, **enforced** — expired entries are exported to signed archives before purge, with an attested chain hand-off *(2026-07-31)* |
-| Protection against log destruction | Optional off-host shipping of every entry to an external collector/SIEM as HMAC-signed batches *(2026-07-31)* |
+| HIPAA Requirement                  | Feature                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Audit log recording                | All access to PHI is logged with user, timestamp, and action                                                                         |
+| Tamper-proof storage               | Keyed HMAC-SHA256 hash chain prevents modification                                                                                   |
+| Log retention                      | 7-year retention (2555 days), exceeds 6-year HIPAA minimum                                                                           |
+| Periodic verification              | Daily integrity checkpoints                                                                                                          |
+| Export capability                  | JSON export for compliance reporting                                                                                                 |
+| Retention of audit records         | 7 years, **enforced** — expired entries are exported to signed archives before purge, with an attested chain hand-off _(2026-07-31)_ |
+| Protection against log destruction | Optional off-host shipping of every entry to an external collector/SIEM as HMAC-signed batches _(2026-07-31)_                        |
+
 ### Integrity (§ 164.312(c))
 
-| HIPAA Requirement | Feature |
-|-------------------|---------|
-| Data integrity | Hash chain verification for audit logs |
-| Transmission integrity | TLS 1.3 for all data in transit |
-| Modification tracking | Before/after values recorded in audit log |
+| HIPAA Requirement      | Feature                                   |
+| ---------------------- | ----------------------------------------- |
+| Data integrity         | Hash chain verification for audit logs    |
+| Transmission integrity | TLS 1.3 for all data in transit           |
+| Modification tracking  | Before/after values recorded in audit log |
 
 ### Person or Entity Authentication (§ 164.312(d))
 
-| HIPAA Requirement | Feature |
-|-------------------|---------|
-| Strong passwords | Argon2id hashing, 12+ character minimum |
+| HIPAA Requirement           | Feature                                     |
+| --------------------------- | ------------------------------------------- |
+| Strong passwords            | Argon2id hashing, 12+ character minimum     |
 | Multi-factor authentication | TOTP-based 2FA (optional or admin-enforced) |
-| Account lockout | 5 failed attempts = 30-minute lockout |
-| Session management | JWT tokens with configurable expiration |
+| Account lockout             | 5 failed attempts = 30-minute lockout       |
+| Session management          | JWT tokens with configurable expiration     |
 
 ### Transmission Security (§ 164.312(e))
 
-| HIPAA Requirement | Feature |
-|-------------------|---------|
-| Encryption | TLS 1.3 required in production |
+| HIPAA Requirement  | Feature                            |
+| ------------------ | ---------------------------------- |
+| Encryption         | TLS 1.3 required in production     |
 | Integrity controls | Message authentication codes (MAC) |
 
 ---
@@ -131,6 +132,7 @@ curl http://YOUR-IP:3001/api/v1/security/alerts
 ## Business Associate Agreement (BAA)
 
 If The Logbook is hosted by a third party (cloud provider), ensure you have a signed BAA with:
+
 - Your cloud hosting provider (AWS, Azure, GCP, etc.)
 - Any third-party integrations that access PHI
 
@@ -138,13 +140,13 @@ For self-hosted deployments (Unraid, on-premises), the BAA requirement applies t
 
 ---
 
-## Individual Rights (Privacy Rule) *(2026-07-31)*
+## Individual Rights (Privacy Rule) _(2026-07-31)_
 
-| Right | Implementation |
-|-------|----------------|
-| Right of access | Members download a complete personal-data export, including their medical screening records, from Settings → Security |
-| Accounting of disclosures | Access to PHI is recorded in the tamper-evident audit log |
-| Minimum necessary | Medical screening carries dedicated permissions; holding a general admin role does not imply medical access |
+| Right                           | Implementation                                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Right of access                 | Members download a complete personal-data export, including their medical screening records, from Settings → Security        |
+| Accounting of disclosures       | Access to PHI is recorded in the tamper-evident audit log                                                                    |
+| Minimum necessary               | Medical screening carries dedicated permissions; holding a general admin role does not imply medical access                  |
 | Consent for optional processing | Photo use, public roster listing, and SMS notifications are consent-gated, with an immutable consent ledger in the audit log |
 
 Full detail: [Privacy & Data Rights](Security-Privacy).

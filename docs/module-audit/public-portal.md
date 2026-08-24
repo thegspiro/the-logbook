@@ -10,6 +10,7 @@ kiosk board). (`public/forms.py` was audited in #13; the webhook receivers in #1
 calendar + display.
 
 ## Verified good ✅
+
 - **Portal tenant isolation is enforced** — every endpoint scopes exclusively to
   `api_key.organization_id`; a key resolves to exactly one org, and org A's key
   cannot read org B. API keys are bcrypt-hashed at rest and verified in
@@ -37,6 +38,7 @@ calendar + display.
 ## Findings
 
 ### PP-1 — HIGH (availability) — API-key auth crashed once a second key existed — ✅ FIXED
+
 `generate_api_key` sets `key_prefix = api_key[:8]`, but the key is
 `f"logbook_{token}"` and `"logbook_"` is exactly 8 chars — so the stored prefix is
 the **constant** `"logbook_"` for every key. `authenticate_api_key` looked up by
@@ -49,6 +51,7 @@ Migration-free — works with the existing non-selective prefix. Making the pref
 actually selective needs a key re-issue migration (flagged).
 
 ### PP-2 — MEDIUM — ICS injection via unescaped carriage return — ✅ FIXED
+
 `_escape_ics` escaped `\`, `;`, `,`, and `\n`, but a lone `\r` survived. RFC 5545
 lines are CRLF-delimited and many calendar parsers treat a bare `\r` as a line
 break, so a `\r` in an event title/description/location (e.g. a shift's free-text
@@ -60,6 +63,7 @@ un-escaped feed line), and `_format_ics_datetime` escapes its fallback instead o
 echoing an unparseable string into `DTSTART`/`DTEND`.
 
 ### PP-3 — LOW — Display-code validation accepted Unicode — ✅ FIXED
+
 `display_code.isalnum()` returns True for Unicode letters/digits, a looser gate
 than the ASCII codes actually issued.
 **Fix:** replaced with an explicit `re.fullmatch(r"[A-Za-z0-9]{6,12}", ...)`. (No
@@ -67,6 +71,7 @@ injection — the lookup is parameterized — but the gate now matches the real
 alphabet.)
 
 ### PP-4 — HIGH/MED — ✅ FIXED — Expensive bcrypt ran before any IP rate limit (CPU DoS)
+
 `authenticate_api_key` (a `Depends`) ran `bcrypt.checkpw` before the endpoint
 body's `validate_ip_rate_limit` ever executed, and — with the non-selective
 prefix (PP-1) — an unauthenticated attacker sending a well-formed `logbook_…` key
@@ -74,6 +79,7 @@ forced a bcrypt verify against **every** key per request, with no IP throttle in
 front (a cheap CPU-exhaustion DoS).
 
 **Fix:**
+
 - **IP rate limiting moved ahead of the bcrypt step.** `authenticate_api_key` now
   takes `request` and calls `validate_ip_rate_limit(request)` as its first line —
   before the DB lookup and the bcrypt loop — so an unauthenticated flood is
@@ -98,6 +104,7 @@ chain unrunnable — the `add_department_message_deleted_at` migration was
 renumbered to `20260720_0004` and the chain relinearized.)
 
 ### PP-5 — MEDIUM — ✅ verified safe — Unauthenticated client input logged verbatim
+
 `log_access` stores the raw `user-agent`, `referer`, and `ip_address` (all
 attacker-controlled) into `PublicPortalAccessLog`. The stored-XSS risk depends on
 the admin viewer rendering them unescaped. **Verified:** the access-log viewer
@@ -108,13 +115,14 @@ helpers). No stored-XSS path. **Status:** verified safe (storing raw values is
 fine given output-encoding at render).
 
 ### PP-6 — MEDIUM (flagged) — Rate limiter is per-process + application-status token plaintext at rest
+
 The in-memory `rate_limit_cache`/`ip_rate_limit_cache` are per-worker (true
 ceiling = workers × limit) and reset on restart — a shared Redis store is needed
 for a real global limit. Separately, the application-status token is stored
 plaintext and matched by DB `==` (a DB/backup read yields live 30-day tokens); it
 should be hashed at rest and looked up by hash. Both are behavior/schema changes.
 **Status:** flagged. **Nuance added (app-review B26):** unlike a reset token, the
-status token is *re-read* to rebuild the status-check URL (email templates +
+status token is _re-read_ to rebuild the status-check URL (email templates +
 `get_application_status` response), so it can't be hash-only — hashing at rest needs
 a **two-column** design (`status_token_hash` indexed for lookup + the token stored
 **encrypted** via `EncryptedText` for re-display) plus a backfill; the naive "hash
@@ -122,6 +130,7 @@ it" would break every status link. Confirms the schema-change deferral. See
 `docs/app-review/public-portal.md`.
 
 ### PP-7 — LOW — ✅ mostly FIXED — Per-request write + query amplification, nested-address whitelist
+
 - **✅ `last_used_at` write throttled.** `authenticate_api_key` no longer writes +
   commits `last_used_at` on every GET; it refreshes at most once per 60 s per key
   (`_last_used_is_stale`), and only commits when something actually changed (the
@@ -143,9 +152,10 @@ it" would break every status link. Confirms the schema-change deferral. See
   from any single IP is infeasible; a dedicated per-code lockout adds state for
   marginal gain. The Redis-outage degradation to a per-process limiter is the
   separate PP-6 (MED, needs Redis) item.
-**Status:** actionable items fixed; two items accepted as design limitations.
+  **Status:** actionable items fixed; two items accepted as design limitations.
 
 ## Notes
+
 - Large-file caveat: `portal.py` (512 L) and `public_portal_security.py` (477 L)
   were reviewed for security invariants (auth correctness, tenant isolation,
   rate-limit fail-closed, data exposure), not line-by-line. The invariants held.

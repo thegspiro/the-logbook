@@ -10,6 +10,7 @@ address, background checks, IDs).
 **Audited:** iteration 9.
 
 ## Verified good ✅
+
 - **Auth coverage:** all 62 endpoints authenticated.
 - **Tenant isolation is solid.** Every by-id read/write (prospect, pipeline,
   step, document, note/activity, interview, reference, election package, event
@@ -29,6 +30,7 @@ address, background checks, IDs).
 ## Findings
 
 ### MP-1 — HIGH — Applicant PII / background-check downloads reachable with generic `members.view` — ✅ FIXED
+
 All 13 prospect **read** routes (list, detail, documents list, **document
 download**, interviews list, activity, election-package) gated on
 `require_permission("members.view", "prospective_members.view",
@@ -45,6 +47,7 @@ that only widened the raw API. The one cross-module consumer is the
 ElectionDetailPage (gated on `elections.*`), which reads pending **election
 packages** via `list_election_packages`.
 **Fix:**
+
 - The 11 applicant-PII and pipeline routes (prospects list/detail, documents
   list, **document download**, activity, interviews, kanban, and the
   pipeline/steps/stats reads) now require `prospective_members.view`/`.manage`;
@@ -54,9 +57,10 @@ packages** via `list_election_packages`.
   **or** `elections.view`/`.manage`, preserving the election-officer workflow
   while dropping the generic `members.view`.
 - Stale `Requires permission: members.view` docstrings corrected.
-No frontend change needed (it already required `prospective_members.view`).
+  No frontend change needed (it already required `prospective_members.view`).
 
 ### MP-2 — MEDIUM — `create_prospect` stored an unvalidated `pipeline_id` (cross-org config leak) — ✅ FIXED
+
 A client-supplied `pipeline_id` was used to seed `current_step_id` and
 `step_progress` from that pipeline's steps and stored on the prospect, with no
 org check. Because `get_prospect` eager-loads `current_step`/`step_progress` and
@@ -68,6 +72,7 @@ the prospect with cross-org step refs). Exploit needs a valid foreign UUID
 `get_pipeline`; reject with `ValueError` (→ 400) when it isn't in the org.
 
 ### MP-3 — LOW/MED — `create_leave` didn't validate `user_id` is in-org — ✅ FIXED
+
 `create_leave` wrote a `MemberLeaveOfAbsence` (and an auto-created
 `TrainingWaiver`) using a client-supplied `user_id` with only `organization_id`
 from `current_user`, so a `members.manage` user could create leave/waiver rows
@@ -77,6 +82,7 @@ org was unaffected — junk cross-org FK in the caller's own tenant.)
 (reject with `ValueError` → 400).
 
 ### MP-4 — LOW — `PATCH /leaves-of-absence/{id}` skipped start/end date-order validation — ✅ FIXED
+
 The create path enforced `end_date >= start_date`; the update path did not, so an
 inverted range could be persisted.
 **Fix:** validate date order on the resulting record in `update_leave` (and
@@ -84,6 +90,7 @@ surfaced both leave `ValueError`s as clean 400s in the endpoints, which
 previously didn't catch them).
 
 ### MP-5 — LOW — Other create paths store client ids without org validation (XC-1, integrity only) — ✅ FIXED (B9)
+
 `create_election_package` (`pipeline_id`/`step_id`), `create_interview`
 (`step_id`), and `complete_step` (wrote a `ProspectStepProgress` even when the
 `step_id` wasn't in the prospect's pipeline) stored client ids unvalidated. All
@@ -96,6 +103,7 @@ a foreign `pipeline_id` on the election package is checked in-org via
 `docs/app-review/membership-pipeline.md`.
 
 ### MP-6 — LOW — Sensitive PII persisted in the activity log / audit trail — ✅ FIXED (B9)
+
 `update_prospect` recorded old→new values of every changed field (incl.
 `date_of_birth`, `address_*`) into `ProspectActivityLog.details`, which
 `GET /prospects/{id}/activity` returns (compounds MP-1). **Fix (B9):** a sensitive
@@ -106,6 +114,7 @@ keeps who/when/what-field without the PII value. `create_prospect`'s email in th
 member-readable activity log) is accepted as-is.
 
 ### MP-7 — LOW — Inconsistent PII disclosure on the two "existing member" paths — ✅ FIXED (B9)
+
 `POST /prospects/check-existing` deliberately strips name/email/user_id (returns
 only `status`+`match_type`), but `POST /prospects` returned the full archived
 member match — name, email, `user_id` — in the 409 body. **Fix (B9):** the 409 now
@@ -115,6 +124,7 @@ structured fields, which the frontend never read and which mis-rendered as
 the archived member at all — flagged in `KNOWN_LIMITATIONS.md`.
 
 ## Notes
+
 - Status-token public flow (`get_prospect_by_token`) gates on
   `public_status_enabled`, enforces a 30-day TTL, and returns only public-safe
   fields — but lives in `app/api/public/portal.py` (iteration #26).

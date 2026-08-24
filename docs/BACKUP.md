@@ -8,11 +8,11 @@ from a total loss. Business-continuity alignment context (ISO 22301) lives in
 
 `scripts/backup.sh` produces a single timestamped archive containing:
 
-| Component | Contents | Notes |
-|---|---|---|
-| `database.sql` | Full `mysqldump` of the application database | `--single-transaction --quick`, safe against a running server |
-| `uploads.tar.gz` | The `uploads/` directory (documents, photos, attachments) | Only if local uploads are used — S3/MinIO-stored files are not included |
-| `config/` | `.env.example`, docker-compose files, and a **sanitized** `.env` template | Values are stripped — see the warning below |
+| Component        | Contents                                                                  | Notes                                                                   |
+| ---------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `database.sql`   | Full `mysqldump` of the application database                              | `--single-transaction --quick`, safe against a running server           |
+| `uploads.tar.gz` | The `uploads/` directory (documents, photos, attachments)                 | Only if local uploads are used — S3/MinIO-stored files are not included |
+| `config/`        | `.env.example`, docker-compose files, and a **sanitized** `.env` template | Values are stripped — see the warning below                             |
 
 Destinations: local disk (default `./backups`), S3, Azure Blob, or Google
 Cloud Storage via `--destination`. Old local backups are pruned after

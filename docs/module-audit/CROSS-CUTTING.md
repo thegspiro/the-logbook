@@ -4,6 +4,7 @@ Patterns that recur across modules, aggregated here so a single fix can address
 the whole class rather than one module at a time.
 
 ## XC-1 — Create/update paths don't validate referenced FK ids are in-org
+
 **Seen in:** medical-screening (MS-3), apparatus (AP-1), inventory (INV-3,
 INV-4 — the largest cluster: ~15 create/update methods across the service and
 endpoints), facilities (FAC-3 — create_photo/document facility_id, maintenance
@@ -16,9 +17,10 @@ fixed in-place). Now confirmed in **every module audited so far** — this is th
 dominant cross-cutting pattern.
 
 ## XC-3 — Admin by-id writes scoped only by permission, not by org (IDOR)
+
 **Seen in:** elections (ELEC-2 — `update_candidate`/`delete_candidate` fetched
 the target by `(id, election_id)` path params with no `organization_id` filter;
-`require_permission` only asserts the permission in the caller's *own* org).
+`require_permission` only asserts the permission in the caller's _own_ org).
 Distinct from XC-1: this is a live cross-tenant **write/delete**, not just a
 stored dangling FK. Also seen in equipment-check (EC-4 — `clone_template`
 looked up the target apparatus by id with no org filter and attached the clone
@@ -37,8 +39,8 @@ belong to the caller's organization. Impact is low individually (children are
 org-scoped, so it's mis-attribution / orphan rows, not cross-tenant disclosure),
 but it's a consistent gap.
 
-**Escalated impact seen in forms (FORM-1/FORM-2):** the forms *integration
-processors* trusted submitter-supplied FK ids (`member_id`/`item_id`/`event_id`)
+**Escalated impact seen in forms (FORM-1/FORM-2):** the forms _integration
+processors_ trusted submitter-supplied FK ids (`member_id`/`item_id`/`event_id`)
 and drove **cross-module writes** — assigning an in-org item to a foreign user,
 and creating an RSVP against a foreign org's event. So this pattern is not always
 "just a dangling FK": when the unvalidated id feeds a downstream write, it's a
@@ -55,6 +57,7 @@ exactly this — promote it to a shared util. Roll out per-module with tests.
 `assert_in_org` (raises `ValueError` → 400, fails **closed**) and `is_in_org`
 (boolean). It is wired into the create/update paths that had **confirmed
 cross-tenant impact**, which were also fixed in the same pass:
+
 - **Elections** — `meeting_id`/`event_id` were client-settable and applied via a
   blind setattr, so re-pointing an election at another org's meeting/event id
   leaked that org's attendee roster + meeting metadata through the
@@ -72,20 +75,20 @@ cross-tenant impact**, which were also fixed in the same pass:
   export. It now fails closed.
 
 The remaining XC-1 tail — the many create/update methods that store a client FK
-with only *mis-attribution* risk (org-stamped, no direct read-back) — is a
+with only _mis-attribution_ risk (org-stamped, no direct read-back) — is a
 mechanical sweep now that the shared helper exists; prioritize any that
 eager-load the FK into a response.
 
 **✅ UPDATE (2026-08-07): the prioritized band is closed.** A scan of all 85
 services for the stated priority — a create/update that stores a client-supplied
-FK *and* eager-loads that same relationship into a response — returned exactly
+FK _and_ eager-loads that same relationship into a response — returned exactly
 three candidates, and two were already validated by local ad-hoc helpers
 (`grant_service._opportunity_in_org` for `opportunity_id`;
 `membership_pipeline_service` re-fetches a client `pipeline_id` org-scoped).
 The third was real and is now fixed: `inventory_service.create_variant_group`
 stored a client `category_id` unvalidated, and `update_variant_group` reached it
 through a blind `setattr` over client keys. Both now call `assert_in_org`. The
-schema bounds *which* keys can arrive (`organization_id` is not among them, so
+schema bounds _which_ keys can arrive (`organization_id` is not among them, so
 there is no mass-assignment path) but not which org the category belongs to.
 
 What remains is the genuine tail: ~80 services that still validate client FKs
@@ -97,6 +100,7 @@ DB-backed tests, so a migration done without MySQL available cannot be confirmed
 end-to-end and should not be batched blind.
 
 ## XC-2 — Sensitive reads gated by a permission broader than intended
+
 **Seen in:** membership-pipeline (MP-1 — applicant PII / background-check
 document downloads reachable with generic `members.view` roster permission —
 **✅ FIXED**: the applicant/pipeline routes now require
@@ -107,7 +111,7 @@ FIXED**: reads now return only approved, non-executive minutes to callers withou
 `minutes.manage`), documents (DOC-4 — summary aggregates ignore the folder ACL —
 still open). Pattern: a `.view`-style read is gated by a permission held by
 rank-and-file when the data warrants a narrower gate. Two fix shapes seen: (a)
-the broad permission is *dead over-permission* because the frontend already gates
+the broad permission is _dead over-permission_ because the frontend already gates
 tighter, so removing it is safe (MP-1); (b) the read genuinely needs a
 status/type gate keyed on the existing `.manage` permission (MM-3). **Action:**
 for each module, confirm the intended audience of sensitive reads vs the

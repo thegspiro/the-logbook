@@ -10,6 +10,7 @@ utils/stores/components) is deferred to iteration #27 to avoid overlap.
 database, (B) crypto/auth primitives, (C) config + upload/util hardening.
 
 ## Verified good ✅
+
 - **Crypto foundation is strong.** Argon2id password hashing (above OWASP mins,
   no bcrypt 72-byte truncation, constant-time verify, rehash-on-login); JWT
   algorithm hard-pinned to HS256 (no alg-confusion, no `verify_signature=False`
@@ -36,6 +37,7 @@ database, (B) crypto/auth primitives, (C) config + upload/util hardening.
 ## Findings
 
 ### CI-1 — MEDIUM — Spreadsheet formula injection in five CSV exporters — ✅ FIXED
+
 A correct shared `SafeCsvWriter` (neutralizes cells starting with `= + - @`)
 existed, but five exporters still used raw `csv.writer`, writing
 attacker-influenceable free text (item names, memos, member names, notes) into
@@ -46,11 +48,13 @@ CSVs opened in Excel/Sheets — `=…` cells execute on the responder's machine.
 export was already hardened via `_csv_safe` in iteration #22.)
 
 ### CI-2 — MEDIUM — DB connection errors could log the credentialed DSN — ✅ FIXED
+
 `database.py` logged the raw connection exception (`{e}`); several async-driver
 exceptions embed the connection string, which carries `DB_PASSWORD`.
 **Fix:** log the exception **type** plus a message scrubbed of `DB_PASSWORD`.
 
 ### CI-3 — MEDIUM (DoS) — WebSocket connection registry was unbounded — ✅ FIXED
+
 `ConnectionManager` had no per-org cap; an authenticated tenant could open
 connections in a loop and exhaust worker memory (the registry only reaps dead
 sockets).
@@ -58,6 +62,7 @@ sockets).
 socket (code 1013) and returning `False` when the org is at cap; the caller bails.
 
 ### CI-4 — MEDIUM — ORM field decryption masked all errors (fail-open) — ✅ FIXED
+
 `EncryptedText.process_result_value` (and the `mfa_secret`/`mfa_backup_codes`
 getters) caught bare `Exception` and returned the raw stored value, so a genuine
 decrypt failure — wrong/rotated key, programming bug — was silently surfaced as
@@ -68,6 +73,7 @@ plaintext passthrough is preserved; a full fail-closed switch remains flagged
 (needs a backfill migration of legacy rows).
 
 ### CI-5 — MEDIUM (doc accuracy) — "AES-256" claimed where Fernet is AES-128-CBC — ✅ FIXED
+
 `encrypt_data` and the `EncryptedText` docstrings claimed AES-256 in HIPAA-facing
 comments, but Fernet is AES-128-CBC + HMAC-SHA256 (still authenticated, NIST-
 approved, "AES or equivalent" for HIPAA — just not 256-bit).
@@ -79,24 +85,28 @@ stay readable and `scripts/reencrypt_to_aesgcm.py` backfills them (runbook:
 re-encryption — flagged" note no longer stands.
 
 ### CI-6 — LOW — `decode_token` didn't require an `exp` claim — ✅ FIXED
+
 `jwt.decode` pinned HS256 but didn't require `exp`, so a token minted without one
 would never expire. Every issuer sets `exp`, so this only closes the
 malformed/forged-without-exp case.
 **Fix:** added `options={"require": ["exp"]}`.
 
 ### CI-7 — LOW — Security-notification email interpolated `message` unescaped — ✅ FIXED
+
 `security_notifications.py` built `f"<p>{message}</p>"` while `wrap_email_body`
 documents its body as pre-escaped. All current callers pass literals (not
 exploitable today), but it's a latent HTML-injection footgun.
 **Fix:** `html.escape` the interpolated message.
 
 ### CI-8 — LOW — Misleading comment on the dev insecure-defaults block — ✅ FIXED
+
 `main.py` claimed `SECURITY_BLOCK_INSECURE_DEFAULTS` "defaults to True" while it
 defaults to `False`, which could lull an operator into thinking a dev box with
 default secrets is self-protecting.
 **Fix:** corrected the comment.
 
 ### CI-9 — MED/LOW (flagged) — Fail-open / hardening items needing a decision
+
 - **DB/Redis TLS only WARNS in prod** (not CRITICAL), so a HIPAA deployment can
   boot with PHI/queries and cached session data crossing the network in cleartext.
   Promoting these to CRITICAL is the correct posture but would refuse boot for any
@@ -109,9 +119,10 @@ default secrets is self-protecting.
 - **Redis TLS disables cert + hostname verification** when no CA is configured
   (`CERT_NONE`) — MITM on the rate-limit / pub-sub channel. Failing closed could
   break deployments relying on this path. (cache #2)
-**Status:** flagged.
+  **Status:** flagged.
 
 ### CI-10 — LOW (flagged) — Latent isolation / robustness
+
 - The Redis cache manager provides **no tenant namespacing** — all current
   callers use intentionally-global keys (no PHI/PII cached), but the shared infra
   offers no guardrail, so a future caller caching an org-scoped record under a
@@ -127,9 +138,10 @@ default secrets is self-protecting.
   MFA **recovery codes are 40-bit, unsalted SHA-256** — well-mitigated
   (Fernet-encrypted at rest, single-use, lockout-throttled) and migration-shaped.
   (crypto #3 done / #5 open)
-**Status:** flagged.
+  **Status:** flagged.
 
 ## Notes
+
 - Large-file caveat: `security.py` (748 L), `config.py` (603 L), and
   `security_middleware.py` (IP path, reviewed in #23) were reviewed for security
   invariants (crypto correctness, secret handling, fail-closed), not

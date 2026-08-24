@@ -22,7 +22,7 @@ So a rotation is safe at every intermediate step: the moment you deploy the
 new key with the old one in the legacy list, everything still reads, and all
 new writes already use the new key.
 
-### Key-derivation work factor *(2026-08-01)*
+### Key-derivation work factor _(2026-08-01)_
 
 The key is derived from `ENCRYPTION_KEY` with PBKDF2-HMAC-SHA256. New writes
 use **600,000 iterations** and carry a `$gcm2$` marker; values written before
@@ -38,7 +38,7 @@ The drain step below rewrites `$gcm1$` values at the new factor as a side
 effect: `decrypts_with_current_key()` reports them as needing a rewrite, so no
 separate migration is required.
 
-Scope, stated honestly: iteration count defends a *low-entropy* input. A
+Scope, stated honestly: iteration count defends a _low-entropy_ input. A
 properly generated `ENCRYPTION_KEY` (64 hex characters) is not brute-forceable
 at any count. This is defense in depth for installations that set a weak key
 or fall back to the `SECRET_KEY`-derived salt, plus alignment with OWASP's

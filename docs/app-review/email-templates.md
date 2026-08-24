@@ -51,7 +51,7 @@ iterations). Read in full: the rendering core (`render`, `render_static`,
 attachment upload.
 
 Not read line-by-line: the ~20 default template bodies (they are content, and
-the escaping contract is enforced centrally by the renderer, which *was* read).
+the escaping contract is enforced centrally by the renderer, which _was_ read).
 
 ## Verified good ✅
 
@@ -85,7 +85,7 @@ the escaping contract is enforced centrally by the renderer, which *was* read).
   exposes only `scheduled_at` and `status`, so `POST /schedule` is the single
   entry point for `template_id` — which is what makes the MAIL-2 fix complete.
 - **`email_templates_storefront.py` is not duplication** — resolving the
-  question A1 raised. It is a *data* module of default template definitions
+  question A1 raised. It is a _data_ module of default template definitions
   whose `TEMPLATE_VARIABLES`, `SAMPLE_CONTEXT`, `RAW_HTML_VARIABLES` and
   `DEFAULT_TEMPLATE_DEFS` are imported and merged into the main service
   (`email_template_service.py:19, 365, 751, 2434, 2722`). A clean extension
@@ -194,7 +194,7 @@ is a product decision, not a bug fix. Not re-derived — cross-referenced.
 ## Duplication
 
 None requiring action; see the `email_templates_storefront.py` note under
-*Verified good*, which closes the question A1 raised.
+_Verified good_, which closes the question A1 raised.
 
 ## Dead code
 
@@ -208,8 +208,8 @@ no unreferenced service methods surfaced.
   being applied to non-HTML destinations. Updated as part of MAIL-1 to state
   which destination gets which treatment and why — the corrected doc is the
   thing that stops the bug being reintroduced.
-- **Not fixed:** nothing documents that template *bodies* are trusted HTML
-  authored by admins while template *variables* are escaped. That distinction
+- **Not fixed:** nothing documents that template _bodies_ are trusted HTML
+  authored by admins while template _variables_ are escaped. That distinction
   is the whole security model of this feature and currently exists only as
   implementation detail.
 
@@ -236,12 +236,13 @@ no unreferenced service methods surfaced.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 502 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2508 passed, 0 failed** (was 2501 — 7 tests added). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
-| new tests | ✅ 7 added to `tests/test_email_template_render.py`; 3 verified to fail against the pre-fix renderer |
+| Check                | Result                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no frontend change)                                                                                                            |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                             |
+| `black --check`      | ✅ 502 files unchanged                                                                                                                      |
+| `eslint`             | ✅ clean                                                                                                                                    |
+| backend tests        | ✅ **2508 passed, 0 failed** (was 2501 — 7 tests added). 648 errors, all `db_session` fixture failures against the sandbox's missing MySQL. |
+| new tests            | ✅ 7 added to `tests/test_email_template_render.py`; 3 verified to fail against the pre-fix renderer                                        |
+
 </content>

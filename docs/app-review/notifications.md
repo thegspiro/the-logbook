@@ -22,10 +22,10 @@ public host, flip its DNS to `169.254.169.254` / `127.0.0.1` / an intranet host,
 and turn each push to themselves into a blind SSRF.
 
 **Why it stayed flagged until now:** pass 3 recorded that adding real DNS
-resolution *at subscribe time* would break the delivery integration tests (they
+resolution _at subscribe time_ would break the delivery integration tests (they
 call `service.subscribe` directly with a `127.0.0.1` endpoint) and the 17
 endpoint-validation unit tests (non-resolving fake hosts). The insight this pass:
-the rebinding window is *between subscribe and send*, so the correct guard is at
+the rebinding window is _between subscribe and send_, so the correct guard is at
 **send time**, which sidesteps the subscribe-time harness entirely.
 
 **Fix:** `_send_one` now calls the shared `assert_outbound_url_safe(endpoint)`
@@ -63,8 +63,9 @@ under the default `development` env, where the new guard is intentionally skippe
 ## Pass 3 (2026-08-09) — latent-500 on rule enums; push SSRF re-verified
 
 Re-verified NOTIF2-3 (`validate_push_endpoint` at the API boundary, `push_service.py`
-+ `notifications.py:380`) and the push scoping/fail-safe delivery hold. The B1
-latent-500 lens surfaced a genuine recurrence on the rule schemas.
+
+- `notifications.py:380`) and the push scoping/fail-safe delivery hold. The B1
+  latent-500 lens surfaced a genuine recurrence on the rule schemas.
 
 ### NOTIF2-4 — LOW/MED — Rule `trigger`/`category`/`channel` 500 on a bad value — ✅ FIXED
 
@@ -84,7 +85,7 @@ is untouched; the rule editor sends only valid values. **7 tests added.**
 ### NOTIF2-3 residual (DNS rebinding) — 🚩 STILL FLAGGED (deliberately)
 
 The push-endpoint validator blocks IP-literal/localhost/private-suffix hosts at
-subscribe time, but a public hostname that *resolves* to a private IP still isn't
+subscribe time, but a public hostname that _resolves_ to a private IP still isn't
 caught. A shared `assert_outbound_url_safe` (with `_assert_hostname_resolves_public`)
 exists in `app/utils/url_validator.py` and would close it — **but** pass 2 put the
 validator at the API boundary precisely because the delivery integration tests call
@@ -140,13 +141,13 @@ boundary** (`subscribe_to_push`), where the untrusted value enters, not inside
 that verifies real push send). Legitimate endpoints (always HTTPS on a public DNS
 host) pass unchanged. 17 unit tests added (`test_push_endpoint_validation.py`,
 DB-free so they run in the unit job). **Residual flagged:** a public hostname that
-*resolves* to a private IP (DNS rebinding) isn't caught without a resolve-time IP
+_resolves_ to a private IP (DNS rebinding) isn't caught without a resolve-time IP
 check — recorded as a hardening follow-up.
 
 ### Web push — verified good ✅
 
 - **Subscribe/unsubscribe scoping:** `send_to_user` selects `WHERE organization_id
-  AND user_id` (a member's pushes go only to their own devices); `unsubscribe` is
+AND user_id` (a member's pushes go only to their own devices); `unsubscribe` is
   org-scoped so a known endpoint can't be deleted cross-tenant. `subscribe`
   re-points an existing endpoint_hash to the current user (device-handoff design,
   documented) — the endpoint is a browser secret so this isn't a takeover vector.
@@ -250,10 +251,10 @@ iteration, not removed here (prior audit's note stands).
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| `eslint` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_notification_dispatch` + `test_notifications_service` + `test_security_notifications`: **17 passed** (2 new `TestErrorSanitization`). No DB needed for these files. |
+| Check                     | Result                                                                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (service + test) | ✅ 0 violations                                                                                                                                                              |
+| `black --check`           | ✅ unchanged                                                                                                                                                                 |
+| `tsc --noEmit`            | ✅ n/a — no frontend change                                                                                                                                                  |
+| `eslint`                  | ✅ n/a — no frontend change                                                                                                                                                  |
+| backend tests             | ✅ `test_notification_dispatch` + `test_notifications_service` + `test_security_notifications`: **17 passed** (2 new `TestErrorSanitization`). No DB needed for these files. |

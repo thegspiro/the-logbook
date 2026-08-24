@@ -36,12 +36,12 @@ PATCH /api/v1/organization/settings
 
 ### Configuration Fields
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `cc_roles` | `string[]` | `["admin", "quartermaster", "chief"]` | Role names whose holders are automatically CC'd on every drop notification |
-| `cc_emails` | `string[]` | `[]` | Additional static email addresses always CC'd (e.g., a shared HR mailbox) |
-| `include_personal_email` | `boolean` | `true` | Also send the notification to the member's `personal_email` if one is on file |
-| `use_custom_template` | `boolean` | `false` | Use the organization's customized MEMBER_DROPPED email template instead of the default property return letter |
+| Field                    | Type       | Default                               | Description                                                                                                   |
+| ------------------------ | ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `cc_roles`               | `string[]` | `["admin", "quartermaster", "chief"]` | Role names whose holders are automatically CC'd on every drop notification                                    |
+| `cc_emails`              | `string[]` | `[]`                                  | Additional static email addresses always CC'd (e.g., a shared HR mailbox)                                     |
+| `include_personal_email` | `boolean`  | `true`                                | Also send the notification to the member's `personal_email` if one is on file                                 |
+| `use_custom_template`    | `boolean`  | `false`                               | Use the organization's customized MEMBER_DROPPED email template instead of the default property return letter |
 
 ### Example: Update Drop Notification Settings
 
@@ -71,11 +71,11 @@ CC recipients can see each other in the email headers. If you need invisible rec
 
 ### Permissions Required
 
-| Action | Required Permission |
-|--------|-------------------|
-| Read organization settings | Any authenticated user |
+| Action                       | Required Permission                                                    |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| Read organization settings   | Any authenticated user                                                 |
 | Update organization settings | `settings.manage_contact_visibility` or `organization.update_settings` |
-| Manage email templates | `settings.manage_email_templates` or `organization.edit_settings` |
+| Manage email templates       | `settings.manage_email_templates` or `organization.edit_settings`      |
 
 ---
 
@@ -110,9 +110,9 @@ When `include_personal_email` is `false` or no personal email is on file:
 
 ### Database
 
-| Column | Table | Type | Nullable | Migration |
-|--------|-------|------|----------|-----------|
-| `personal_email` | `users` | `VARCHAR(255)` | Yes | `20260214_0800` |
+| Column           | Table   | Type           | Nullable | Migration       |
+| ---------------- | ------- | -------------- | -------- | --------------- |
+| `personal_email` | `users` | `VARCHAR(255)` | Yes      | `20260214_0800` |
 
 ---
 
@@ -142,18 +142,18 @@ POST /api/v1/email-templates/{id}/preview — Preview with sample data
 
 The `MEMBER_DROPPED` template type supports 10 variables, all using `{{variable_name}}` syntax:
 
-| Variable | Description | Example Value |
-|----------|-------------|---------------|
-| `{{member_name}}` | Full name of the dropped member | Jane Doe |
-| `{{organization_name}}` | Organization/department name | Springfield Fire Department |
-| `{{drop_type_display}}` | Type of separation | Dropped - Voluntary |
-| `{{reason}}` | Reason provided by leadership | Relocated out of district |
-| `{{effective_date}}` | Date the drop takes effect | February 14, 2026 |
-| `{{return_deadline}}` | Deadline to return all property | March 16, 2026 |
-| `{{item_count}}` | Number of outstanding items | 5 |
-| `{{total_value}}` | Total dollar value of outstanding items | 2,340.00 |
-| `{{performed_by_name}}` | Name of the officer who performed the drop | Chief John Smith |
-| `{{performed_by_title}}` | Title/rank of the officer | Fire Chief |
+| Variable                 | Description                                | Example Value               |
+| ------------------------ | ------------------------------------------ | --------------------------- |
+| `{{member_name}}`        | Full name of the dropped member            | Jane Doe                    |
+| `{{organization_name}}`  | Organization/department name               | Springfield Fire Department |
+| `{{drop_type_display}}`  | Type of separation                         | Dropped - Voluntary         |
+| `{{reason}}`             | Reason provided by leadership              | Relocated out of district   |
+| `{{effective_date}}`     | Date the drop takes effect                 | February 14, 2026           |
+| `{{return_deadline}}`    | Deadline to return all property            | March 16, 2026              |
+| `{{item_count}}`         | Number of outstanding items                | 5                           |
+| `{{total_value}}`        | Total dollar value of outstanding items    | 2,340.00                    |
+| `{{performed_by_name}}`  | Name of the officer who performed the drop | Chief John Smith            |
+| `{{performed_by_title}}` | Title/rank of the officer                  | Fire Chief                  |
 
 ### Attachments
 
@@ -173,10 +173,10 @@ DELETE /api/v1/email-templates/{id}/attachments/{att_id}  — Remove attachment
 
 The `EmailService.send_email()` method now supports CC and BCC for all outbound emails, not just drop notifications:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `to_emails` | `List[str]` | Primary recipients |
-| `cc_emails` | `Optional[List[str]]` | CC recipients (visible in headers) |
+| Parameter    | Type                  | Description                                    |
+| ------------ | --------------------- | ---------------------------------------------- |
+| `to_emails`  | `List[str]`           | Primary recipients                             |
+| `cc_emails`  | `Optional[List[str]]` | CC recipients (visible in headers)             |
 | `bcc_emails` | `Optional[List[str]]` | BCC recipients (invisible to other recipients) |
 
 CC addresses are included in the `Cc` header of the email. BCC addresses receive the email but do not appear in any header.
@@ -209,36 +209,36 @@ When `PATCH /api/v1/users/{user_id}/status` is called with `send_property_return
 
 ### CC Recipients Not Receiving Email
 
-| Check | How |
-|-------|-----|
-| CC roles configured? | `GET /api/v1/organization/settings` — check `member_drop_notifications.cc_roles` |
-| Users have those roles? | Verify role assignments in the Members section |
-| Users have email addresses? | Check member profiles for populated email field |
-| Email service enabled? | `organization.settings.email_service.enabled` must be `true` |
+| Check                       | How                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| CC roles configured?        | `GET /api/v1/organization/settings` — check `member_drop_notifications.cc_roles` |
+| Users have those roles?     | Verify role assignments in the Members section                                   |
+| Users have email addresses? | Check member profiles for populated email field                                  |
+| Email service enabled?      | `organization.settings.email_service.enabled` must be `true`                     |
 
 ### Personal Email Not Included
 
-| Check | How |
-|-------|-----|
-| Personal email on file? | Check member profile for `personal_email` field |
-| Setting enabled? | `member_drop_notifications.include_personal_email` must be `true` |
+| Check                   | How                                                               |
+| ----------------------- | ----------------------------------------------------------------- |
+| Personal email on file? | Check member profile for `personal_email` field                   |
+| Setting enabled?        | `member_drop_notifications.include_personal_email` must be `true` |
 
 ### Template Not Rendering Variables
 
-| Check | How |
-|-------|-----|
-| Correct syntax? | Variables must use double curly braces: `{{variable_name}}` |
-| Valid variable name? | Only the 10 variables listed above are supported |
-| Template active? | Check `is_active` field on the template |
+| Check                | How                                                         |
+| -------------------- | ----------------------------------------------------------- |
+| Correct syntax?      | Variables must use double curly braces: `{{variable_name}}` |
+| Valid variable name? | Only the 10 variables listed above are supported            |
+| Template active?     | Check `is_active` field on the template                     |
 
 ### Email Not Sending At All
 
-| Check | How |
-|-------|-----|
-| Email enabled globally? | Check `EMAIL_ENABLED` environment variable |
-| Org email enabled? | `organization.settings.email_service.enabled` |
-| SMTP configured? | Verify `smtp_host`, `smtp_port`, `smtp_user`, `smtp_password` in org settings |
-| Check logs | `docker logs the-logbook-backend-1 --tail 100` for SMTP errors |
+| Check                   | How                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| Email enabled globally? | Check `EMAIL_ENABLED` environment variable                                    |
+| Org email enabled?      | `organization.settings.email_service.enabled`                                 |
+| SMTP configured?        | Verify `smtp_host`, `smtp_port`, `smtp_user`, `smtp_password` in org settings |
+| Check logs              | `docker logs the-logbook-backend-1 --tail 100` for SMTP errors                |
 
 ---
 

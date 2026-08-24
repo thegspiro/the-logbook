@@ -10,6 +10,7 @@ salesforce OAuth+sync, calendar, documenso, weather, EMS), model
 handling, OAuth, webhook verification).
 
 ## Verified good ✅
+
 - **Auth coverage:** all endpoints authed except `salesforce_oauth_callback`
   (an OAuth redirect callback — public by design, but validates state; see below).
 - **No secret exposure.** Secrets live in a separate encrypted column; responses
@@ -36,6 +37,7 @@ handling, OAuth, webhook verification).
 ## Findings
 
 ### INT-1 — MEDIUM-HIGH — SSRF: chat + Cal.com senders didn't re-validate the URL at send time — ✅ FIXED
+
 `webhook_service.send_webhook` re-validated the destination at send time
 (`assert_outbound_url_safe`), but the chat senders
 (`send_slack_notification` / `send_discord_notification` /
@@ -50,6 +52,7 @@ test-message paths) and to the Cal.com client's two GETs. Matches the M4
 send-time-revalidation pattern from the red-team review.
 
 ### INT-2 — LOW — Unencoded `error` reflected into the OAuth redirect — ✅ FIXED
+
 `salesforce_oauth_callback` passed the attacker-controllable `error` query param
 straight into the redirect `Location` (`salesforce_error={reason}`) unencoded.
 Not an open redirect (fixed host) and CRLF is blocked, but the reflected value
@@ -57,18 +60,20 @@ could inject extra query/fragment content.
 **Fix:** URL-encode the reason with `quote(..., safe="")`.
 
 ### INT-3 — LOW-MED (flagged) — `list`/`get` integration reads not gated by a manage permission
+
 `list_integrations` / `get_integration` use bare `get_current_user`, while all
 writes require `integrations.manage`. Any authenticated member can read every
 integration's **non-secret** config (instance_url, field_mappings, api_base_url).
 Secrets are redacted, so this is not credential exposure.
 **Why flagged, not tightened:** unlike MP-1, the integration **list** is consumed
 cross-module (prospective-members meeting-config, training-officer dashboard)
-gated on *those* permissions, not `integrations.manage` — so gating the read on
+gated on _those_ permissions, not `integrations.manage` — so gating the read on
 `integrations.manage` would break those config flows. A dedicated
 `integrations.view` permission (or scoping the cross-module reads to a minimal
 projection) is the right follow-up. Not auto-applied.
 
 ### INT-4 — MEDIUM — PATCH update resets omitted config fields to schema defaults — ✅ FIXED (app-review B12)
+
 `update_integration` / `connect_integration` ran the incoming config through
 `schema_cls(**config).model_dump()`, which re-emitted **all** schema fields with
 their defaults and merged that over the stored config. A partial update that
@@ -83,6 +88,7 @@ same defaults, so a partial stored config stays usable. 1 regression test added.
 See `docs/app-review/integrations.md`.
 
 ### INT-5 — LOW / dead code (flagged)
+
 - The `KNOWN_WEBHOOK_DOMAINS` allowlist + `allow_known_only=True` branch in
   `url_validator.py` are **never invoked** (`_validate_urls_in_config` uses the
   default `allow_known_only=False`). So a chat `webhook_url` is only checked for
@@ -95,5 +101,6 @@ See `docs/app-review/integrations.md`.
   redact if it ever landed in public config (harmless today).
 
 ## Notes
+
 - flake8 `PT028` warnings on `test_connection` (integrations.py) are pytest-plugin
   false positives — it's a FastAPI endpoint named `test_connection`, not a test.

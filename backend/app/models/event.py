@@ -236,6 +236,21 @@ class Event(Base):
     )  # Flexible storage for event-specific data
     attachments = Column(JSON, nullable=True)  # List of attachment URLs/metadata
 
+    # Attendance finalization.
+    #
+    # Finalizing is a state transition, not just a recalculation: once
+    # attendance is closed, the numbers behind it feed admin hours, training
+    # records and compliance, so the attendance-affecting writes are refused
+    # (see ATTENDANCE_LOCKED_PREFIX in app/services/event_service.py) until a
+    # department leader reopens the event with events.reopen_attendance. The
+    # legacy custom_fields["attendance_finalized"] marker is still written
+    # alongside these columns because the post-event validation reminder task
+    # keys off it; these columns are the authority for the lock.
+    attendance_finalized_at = Column(DateTime(timezone=True), nullable=True)
+    attendance_finalized_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Status
     is_draft = Column(Boolean, default=False, server_default="0")
     is_cancelled = Column(Boolean, nullable=False, default=False, server_default="0")
