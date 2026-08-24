@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_encryption_salt
+from app.models.admin_hours import AdminHoursEntryMethod
 from app.models.event import Event, EventRSVP
 from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
 from app.models.user import User, UserStatus
@@ -35,6 +36,12 @@ from app.services.scheduling_service import SchedulingService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 
+# Card states that are the end of that card's life. Reporting a card lost is a
+# statement about the physical world — somebody else may be holding it — which
+# reactivating cannot undo, and revocation is a decision that should be revisited
+# by issuing a new card rather than by quietly restoring the old one.
+_TERMINAL_CARD_STATUSES = {NfcTagStatus.LOST, NfcTagStatus.REVOKED}
+
 # A second tap this soon after the first is a bounce — a card held against the
 # reader a beat too long, or a member who tapped, did not see the screen, and
 # tapped again. Reading it as "check out" would close an arrival that is
@@ -43,9 +50,13 @@ from app.utils.org_scoping import assert_in_org
 MIN_TOGGLE_SECONDS = 60
 
 # Members whose card must stop working even though the record still exists.
-# A retired or on-leave member is deliberately not on this list: they still
-# attend meetings and banquets, which is exactly what a station records.
+# Mirrors ``User.is_active`` (status ACTIVE and not deleted) apart from two
+# deliberate exceptions: a retired or on-leave member keeps a working card,
+# because they still attend meetings and banquets, which is exactly what a
+# station records. INACTIVE carries no such meaning — it is the plain "not an
+# active member" state — so a card must not go on recording attendance for one.
 _BLOCKED_MEMBER_STATUSES = {
+    UserStatus.INACTIVE,
     UserStatus.SUSPENDED,
     UserStatus.DROPPED_VOLUNTARY,
     UserStatus.DROPPED_INVOLUNTARY,
@@ -193,6 +204,16 @@ class NfcTagService:
             raise ValueError("Card not found")
 
         new_status = updates.get("status")
+        if new_status == NfcTagStatus.ACTIVE and tag.status in _TERMINAL_CARD_STATUSES:
+            # Enforced here rather than left to the screen that hides the
+            # button. A lost card is terminal because whoever picked it up can
+            # still tap it, and an invariant only the UI knows about is one an
+            # API client silently breaks.
+            raise ValueError(
+                f"A card marked {tag.status.value} cannot be reactivated. "
+                "Issue a replacement card instead."
+            )
+
         apply_updates(tag, updates, skip={"organization_id", "id", "user_id"})
 
         # Stamping the revocation here rather than asking the caller to send it
@@ -527,6 +548,7 @@ class NfcTagService:
                     category_id=str(category_id),
                     user_id=str(user.id),
                     organization_id=str(organization_id),
+                    entry_method=AdminHoursEntryMethod.NFC_STATION,
                 )
                 return self._result(
                     NfcCheckInStatus.CHECKED_IN,
