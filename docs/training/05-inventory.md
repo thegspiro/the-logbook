@@ -778,9 +778,32 @@ most people should get with **Make default**.
 print. This matters more than it sounds: a network connection succeeds against
 a printer that is powered on but out of labels, and against whatever else has
 picked up that address — so "connected" alone is not good news. The status line
-reports the model, and any fault the printer names (out of labels, printhead
-open, and so on). A printer that accepts the connection but answers nothing is
-called out as such rather than shown as fine.
+reports the model, and any fault the printer names. A printer that accepts the
+connection but answers nothing is called out as such rather than shown as fine.
+
+Faults are separated into **errors**, which mean the printer cannot print now,
+and **warnings**, which mean it can but somebody should do something soon:
+
+| Reported                                | Kind    | What to do                           |
+| --------------------------------------- | ------- | ------------------------------------ |
+| Out of labels / Out of paper            | Error   | Load stock                           |
+| Out of ribbon                           | Error   | Load ribbon                          |
+| Printhead open / Cover is open          | Error   | Close and latch it                   |
+| Cutter fault                            | Error   | Clear the cutter                     |
+| Printhead over temperature              | Error   | Let it cool; check for a stalled job |
+| Unrecoverable fault                     | Error   | Power cycle the printer              |
+| Labels nearly out / Paper is nearly out | Warning | Load a roll before the next shift    |
+| Media needs calibrating                 | Warning | Run the printer's calibration        |
+| Printhead needs cleaning / replacing    | Warning | Clean it; replace if lines persist   |
+
+**"Labels nearly out" does not stop a print.** The printer will finish the
+label in front of it. It is reported so a roll gets loaded between shifts
+rather than in the middle of one.
+
+A fault a printer reports that the app has no name for is still shown — as
+"Printer reports an error" — rather than being dropped. A printer that is
+faulted never reads as healthy just because its particular model words the
+fault differently.
 
 The same check runs automatically after every direct print, so a job sent to a
 printer that is out of stock reports **out of labels** instead of a success
