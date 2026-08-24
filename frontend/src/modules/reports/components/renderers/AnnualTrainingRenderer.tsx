@@ -7,7 +7,7 @@ import type { AnnualTrainingReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
-import { formatHours, roundHoursToQuarter } from '@/utils/hoursFormatting';
+import { formatHours, formatHoursExact, sumHoursToQuarter } from '@/utils/hoursFormatting';
 
 interface Props {
   data: AnnualTrainingReport;
@@ -50,10 +50,13 @@ export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) =>
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Hours" value={roundHoursToQuarter(summary.total_combined_hours)} />
+        <StatCard
+          label="Total Hours"
+          value={formatHours(sumHoursToQuarter(data.entries.flatMap((e) => [e.training_hours, e.shift_hours])))}
+        />
         <StatCard label="Completions" value={summary.total_completions} />
         <StatCard label="Calls Responded" value={summary.total_calls_responded} />
-        <StatCard label="Avg Hours/Member" value={roundHoursToQuarter(summary.avg_hours_per_member)} />
+        <StatCard label="Avg Hours/Member" value={formatHoursExact(summary.avg_hours_per_member)} />
       </div>
 
       {Object.keys(summary.training_by_type).length > 0 && (

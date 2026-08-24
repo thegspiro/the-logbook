@@ -34,6 +34,12 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.call_tracking_service import CallTrackingService
+from app.utils.hours import (
+    hours_from_minutes,
+    round_hours_exact,
+    round_hours_to_quarter,
+    sum_hours_to_quarter,
+)
 from app.utils.sql_ordering import nulls_last_asc
 
 
@@ -743,6 +749,15 @@ class ReportsService:
                     sum(r_list) / len(r_list), 1
                 )
 
+        # The per-member columns are reported time, so they go on the quarter.
+        # The department totals keep their own aggregation basis rather than
+        # being re-derived from these rows — the accumulators above count a
+        # shift report whose trainee is not in `member_data`, and quietly
+        # changing that is a different report, not a rounding.
+        for member in member_data.values():
+            member["training_hours"] = round_hours_to_quarter(member["training_hours"])
+            member["shift_hours"] = round_hours_to_quarter(member["shift_hours"])
+
         entries = sorted(
             member_data.values(),
             key=lambda m: m["training_hours"] + m["shift_hours"],
@@ -757,13 +772,17 @@ class ReportsService:
             "year": year,
             "summary": {
                 "total_members": len(users),
-                "total_training_hours": round(total_hours, 1),
-                "total_shift_hours": round(total_shift_hours, 1),
-                "total_combined_hours": round(total_hours + total_shift_hours, 1),
+                "total_training_hours": round_hours_to_quarter(total_hours),
+                "total_shift_hours": round_hours_to_quarter(total_shift_hours),
+                "total_combined_hours": sum_hours_to_quarter(
+                    [total_hours, total_shift_hours]
+                ),
                 "total_completions": total_completions,
                 "total_calls_responded": total_calls,
-                "avg_hours_per_member": round(
-                    (total_hours + total_shift_hours) / max(1, len(users)), 1
+                # An average is not recorded time and is not constrained to the
+                # increment, so it keeps its own precision.
+                "avg_hours_per_member": round_hours_exact(
+                    (total_hours + total_shift_hours) / max(1, len(users))
                 ),
                 "avg_performance_rating": (
                     round(sum(ratings) / len(ratings), 1) if ratings else None
@@ -1615,9 +1634,9 @@ class ReportsService:
                 "total_records": t_total,
                 "completed": t_completed,
                 "completion_rate": training_rate,
-                "total_hours": total_training_hours,
+                "total_hours": round_hours_to_quarter(total_training_hours),
                 "avg_hours_per_member": (
-                    round(total_training_hours / active_members, 1)
+                    round_hours_exact(total_training_hours / active_members)
                     if active_members > 0
                     else 0
                 ),
@@ -1689,7 +1708,7 @@ class ReportsService:
         unique_members = set()
         for entry, first_name, last_name, category_name in entries_rows:
             unique_members.add(entry.user_id)
-            hours = round((entry.duration_minutes or 0) / 60, 2)
+            hours = hours_from_minutes(entry.duration_minutes)
             entries.append(
                 {
                     "member_name": f"{first_name} {last_name}",
@@ -1707,32 +1726,18 @@ class ReportsService:
                 }
             )
 
-        # Summary totals
-        total_query = await self.db.execute(
-            select(
-                func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0),
-                func.count(AdminHoursEntry.id),
-            ).where(*base_conditions)
-        )
-        total_row = total_query.one()
-        total_minutes = int(total_row[0])
-        total_entries = int(total_row[1])
-
-        # By category
-        category_query = await self.db.execute(
-            select(
-                AdminHoursCategory.name,
-                func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0),
+        # The total and the category breakdown are summed from the same rounded
+        # entries the table lists, not re-aggregated from raw minutes. Three
+        # ten-minute entries read 0.25 each, so their category and their total
+        # must read 0.75 — a breakdown of 0.5 under a total of 0.75 is
+        # arithmetic the reader can see is wrong.
+        total_entries = len(entries)
+        hours_by_category: Dict[str, float] = {}
+        for entry_row in entries:
+            name = entry_row["category_name"]
+            hours_by_category[name] = round_hours_to_quarter(
+                hours_by_category.get(name, 0.0) + entry_row["hours"]
             )
-            .join(
-                AdminHoursCategory, AdminHoursEntry.category_id == AdminHoursCategory.id
-            )
-            .where(*base_conditions)
-            .group_by(AdminHoursCategory.name)
-        )
-        hours_by_category = {
-            name: round(int(mins) / 60, 2) for name, mins in category_query.all()
-        }
 
         return {
             "report_type": "admin_hours",
@@ -1740,7 +1745,9 @@ class ReportsService:
             "period_start": str(start_date) if start_date else None,
             "period_end": str(end_date) if end_date else None,
             "summary": {
-                "total_hours": round(total_minutes / 60, 2),
+                "total_hours": sum_hours_to_quarter(
+                    entry_row["hours"] for entry_row in entries
+                ),
                 "total_entries": total_entries,
                 "unique_members": len(unique_members),
                 "hours_by_category": hours_by_category,
