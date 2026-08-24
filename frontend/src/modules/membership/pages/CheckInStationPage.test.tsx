@@ -43,6 +43,15 @@ vi.mock('../../../hooks/useConnectedIntegrations', () => ({
 
 import CheckInStationPage from './CheckInStationPage';
 
+/**
+ * Fixture times are relative to now, never literal.
+ *
+ * The station filters out shifts that have already ended, so an absolute
+ * `end_time` turns the whole suite red the moment real time passes it — which
+ * is exactly what happened to an earlier version of this file overnight.
+ */
+const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
 /** Types a serial the way a USB keyboard-wedge reader does: a burst, then Enter. */
 async function tapWedgeCard(serial: string) {
   for (const char of serial) {
@@ -61,8 +70,8 @@ beforeEach(() => {
         id: 'shift-1',
         apparatus_unit_number: 'E4',
         apparatus_name: 'Engine 4',
-        start_time: '2026-08-23T12:00:00Z',
-        end_time: '2026-08-24T00:00:00Z',
+        start_time: hoursFromNow(-6),
+        end_time: hoursFromNow(6),
         is_finalized: false,
       },
     ],
@@ -159,8 +168,8 @@ describe('CheckInStationPage', () => {
     const user = userEvent.setup();
     mockGetShifts.mockResolvedValue({
       shifts: [
-        { id: 'shift-1', apparatus_unit_number: 'E4', start_time: '2026-08-23T12:00:00Z', is_finalized: false },
-        { id: 'shift-2', apparatus_unit_number: 'L1', start_time: '2026-08-23T12:00:00Z', is_finalized: false },
+        { id: 'shift-1', apparatus_unit_number: 'E4', start_time: hoursFromNow(-6), is_finalized: false },
+        { id: 'shift-2', apparatus_unit_number: 'L1', start_time: hoursFromNow(-6), is_finalized: false },
       ],
       total: 2,
       skip: 0,
@@ -265,8 +274,8 @@ describe('CheckInStationPage', () => {
     const user = userEvent.setup();
     mockGetShifts.mockResolvedValue({
       shifts: [
-        { id: 'shift-1', apparatus_unit_number: 'E4', start_time: '2026-08-23T12:00:00Z', is_finalized: false },
-        { id: 'shift-2', apparatus_unit_number: 'L1', start_time: '2026-08-23T12:00:00Z', is_finalized: false },
+        { id: 'shift-1', apparatus_unit_number: 'E4', start_time: hoursFromNow(-6), is_finalized: false },
+        { id: 'shift-2', apparatus_unit_number: 'L1', start_time: hoursFromNow(-6), is_finalized: false },
       ],
       total: 2,
       skip: 0,
@@ -303,13 +312,13 @@ describe('CheckInStationPage', () => {
     // A shift is filed under the date it started. A 24-hour tour that began at
     // 06:00 yesterday is the shift running at 02:00 now, and asking only for
     // today's date made the crew on duty vanish from the station at midnight.
-    const stillRunning = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+    const stillRunning = hoursFromNow(4);
     mockGetShifts.mockResolvedValue({
       shifts: [
         {
           id: 'shift-overnight',
           apparatus_unit_number: 'E4',
-          start_time: '2026-08-22T10:00:00Z',
+          start_time: hoursFromNow(-20),
           end_time: stillRunning,
           is_finalized: false,
         },
@@ -337,8 +346,8 @@ describe('CheckInStationPage', () => {
         {
           id: 'shift-finished',
           apparatus_unit_number: 'L1',
-          start_time: '2026-08-22T10:00:00Z',
-          end_time: '2026-08-22T22:00:00Z',
+          start_time: hoursFromNow(-20),
+          end_time: hoursFromNow(-8),
           is_finalized: false,
         },
       ],

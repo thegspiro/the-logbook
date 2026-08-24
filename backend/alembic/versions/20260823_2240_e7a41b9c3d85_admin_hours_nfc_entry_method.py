@@ -1,7 +1,7 @@
 """Add nfc_station to the admin_hours entry_method enum.
 
 Revision ID: e7a41b9c3d85
-Revises: d5e82c0a7f31
+Revises: e4b91c7d2a58
 
 An ID card tapped at an officer-operated station was being recorded as
 ``qr_scan`` — the value the clock-in path was originally written for — so
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "e7a41b9c3d85"
-down_revision = "d5e82c0a7f31"
+down_revision = "e4b91c7d2a58"
 branch_labels = None
 depends_on = None
 
