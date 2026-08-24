@@ -13,10 +13,13 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.inventory import (
+    _is_quartermaster,
+    _redact_holder,
     _require_self_or_quartermaster,
     router,
 )
 from app.core.permissions import DEFAULT_POSITIONS
+from app.schemas.inventory import InventoryItemResponse
 
 
 def _permission_set(path: str, method: str) -> set[str]:
@@ -71,6 +74,70 @@ def test_wildcard_grant_covers_quartermaster_reads():
 def test_members_inventory_roster_requires_quartermaster():
     """The roster names who holds which gear, for every member at once."""
     permissions = _permission_set("/members-summary", "GET")
+
+    assert permissions == {"inventory.manage"}
+    assert "inventory.view" not in permissions
+
+
+def _item(assigned_to: str | None) -> InventoryItemResponse:
+    return InventoryItemResponse.model_construct(
+        assigned_to_user_id=assigned_to,
+        assigned_to_name="Jane Doe" if assigned_to else None,
+    )
+
+
+def test_the_catalog_does_not_name_who_holds_a_colleagues_item():
+    """The alternate route to the same disclosure.
+
+    ``/items`` stays open to every member — they browse it for gear and search
+    it for a replacement — so the holder is stripped instead. Without this,
+    ``?assigned_to=<uuid>`` rebuilds a colleague's kit from an endpoint the
+    whole department can reach.
+    """
+    viewer = _user("user-1", "inventory.view")
+
+    redacted = _redact_holder(_item("user-2"), viewer, _is_quartermaster(viewer))
+
+    assert redacted.assigned_to_user_id is None
+    assert redacted.assigned_to_name is None
+
+
+def test_a_member_still_sees_their_own_name_on_their_own_gear():
+    viewer = _user("user-1", "inventory.view")
+
+    kept = _redact_holder(_item("user-1"), viewer, _is_quartermaster(viewer))
+
+    assert kept.assigned_to_user_id == "user-1"
+    assert kept.assigned_to_name == "Jane Doe"
+
+
+def test_a_quartermaster_sees_who_holds_what():
+    viewer = _user("user-1", "inventory.manage")
+
+    kept = _redact_holder(_item("user-2"), viewer, _is_quartermaster(viewer))
+
+    assert kept.assigned_to_user_id == "user-2"
+    assert kept.assigned_to_name == "Jane Doe"
+
+
+@pytest.mark.parametrize(
+    ("path", "method"),
+    [
+        ("/items/{item_id}/history", "GET"),
+        ("/items/{item_id}/issuances", "GET"),
+        ("/checkout/active", "GET"),
+        ("/checkout/overdue", "GET"),
+    ],
+)
+def test_reads_that_name_the_holder_require_quartermaster(path, method):
+    """Every route that answers "who has this" carries the same gate.
+
+    Gating only the per-member routes left these as equivalent ways to ask the
+    same question: an item's chain of custody, the members issued units of a
+    pool item, and the outstanding-checkout lists (which take a user_id filter)
+    all name members.
+    """
+    permissions = _permission_set(path, method)
 
     assert permissions == {"inventory.manage"}
     assert "inventory.view" not in permissions
