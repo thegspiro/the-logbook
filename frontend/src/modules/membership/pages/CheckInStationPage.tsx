@@ -43,7 +43,7 @@ import { schedulingService } from '../../scheduling/services/api';
 import { adminHoursCategoryService } from '../../admin-hours/services/api';
 import { useNfcScanner } from '../../../hooks/useNfcScanner';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate } from '../../../utils/dateFormatting';
+import { addCalendarDays, formatTime, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { getNfcUnavailableReason } from '../../../constants/nfc';
 import {
@@ -129,10 +129,25 @@ const CheckInStationPage: React.FC = () => {
 
   const fetchTargets = useCallback(async (): Promise<TargetOption[]> => {
     if (targetType === NfcCheckInTarget.SHIFT) {
+      // Yesterday as well as today, because a shift is filed under the date it
+      // *started*. A 24-hour tour that began at 06:00 yesterday is still the
+      // shift running at 02:00 now, and asking only for today's date made the
+      // crew on duty disappear from the station at midnight.
       const today = getTodayLocalDate(tz);
-      const { shifts } = await schedulingService.getShifts({ start_date: today, end_date: today });
+      const { shifts } = await schedulingService.getShifts({
+        start_date: addCalendarDays(today, -1),
+        end_date: today,
+      });
+      const now = Date.now();
       return shifts
         .filter((s) => !s.is_finalized)
+        .filter((s) => {
+          // A yesterday-dated shift only belongs here while it is still
+          // running; without this the station would offer every finished tour
+          // from the previous day.
+          if (!s.end_time) return true;
+          return new Date(s.end_time).getTime() >= now;
+        })
         .map((s) => ({
           id: s.id,
           label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
@@ -143,10 +158,17 @@ const CheckInStationPage: React.FC = () => {
       // A window rather than "today": a drill that started last night and
       // a breakfast that starts in three hours are both things somebody
       // could be standing at a station for.
+      //
+      // `end_after` is what keeps a finished event out of it. Filtering on
+      // start time alone left this morning's drill in the list — and because
+      // the list is ordered by start time it could be the *default*, so an
+      // operator could arm the station against an event whose check-in window
+      // shut hours ago and have every tap refused.
       const now = Date.now();
       const events = await eventService.getEvents({
         start_after: new Date(now - 12 * 60 * 60 * 1000).toISOString(),
         start_before: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+        end_after: new Date(now).toISOString(),
       });
       return events
         .filter((e) => !e.is_cancelled && !e.is_draft)

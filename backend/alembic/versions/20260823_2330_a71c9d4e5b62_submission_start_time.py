@@ -1,7 +1,7 @@
 """Keep the time of day a self-reported training ran.
 
 Revision ID: a71c9d4e5b62
-Revises: e4b91c7d2a58
+Revises: e7a41b9c3d85
 
 The submit form asks for a start time and a length and derives the hours from
 the pair, but only the date and the hours were stored. Editing a submission
@@ -21,7 +21,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a71c9d4e5b62"
-down_revision = "e4b91c7d2a58"
+down_revision = "e7a41b9c3d85"
 branch_labels = None
 depends_on = None
 

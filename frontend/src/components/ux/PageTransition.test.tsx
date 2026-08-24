@@ -59,7 +59,6 @@ describe('PageTransition accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-
   // The announcement used to be captured on the first frame and never looked
   // again, so any page opening on a spinner or skeleton announced "Page
   // loaded" forever, whatever heading its data eventually brought.
