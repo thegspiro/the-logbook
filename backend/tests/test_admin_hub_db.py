@@ -30,6 +30,17 @@ from app.services.admin_hub_service import (
 pytestmark = [pytest.mark.integration]
 
 
+# What an admin looking at the members hub actually holds. Two of the members
+# metrics are permission-gated on medical_screening.view — the screenings
+# metric itself, and the attention queue via the module's
+# attention_permission — and the gate is applied on the way in (save_settings
+# refuses a metric the caller may not see), on the way out (_sanitize drops
+# one the *reader* may not see, so a second admin reading a colleague's choice
+# needs it too) and around the queue. A member holding nothing would never
+# reach this screen at all: modules_for gates the frame on members.manage.
+HUB_ADMIN_PERMISSIONS = ["members.manage", "medical_screening.view"]
+
+
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -67,6 +78,7 @@ async def _member(
         membership_type=membership_type,
         deleted_at=datetime.now(timezone.utc) if deleted else None,
     )
+    positions: list[Position] = []
     if permissions is not None:
         position = Position(
             id=str(uuid.uuid4()),
@@ -77,7 +89,15 @@ async def _member(
         )
         db_session.add(position)
         await db_session.flush()
-        user.positions = [position]
+        positions.append(position)
+    # Assigned even when empty, which is the whole point. Every permission
+    # check reads user.positions, and on a User built here and flushed the
+    # collection is unloaded, so that read is deferred IO — which under
+    # asyncio raises MissingGreenlet rather than returning "no permissions".
+    # Production never hands the services a user in that state: the token
+    # path loads one with selectinload(User.roles), roles being a synonym for
+    # positions. Assigning here puts the fixture in the same shape.
+    user.positions = positions
     db_session.add(user)
     await db_session.flush()
     return user
@@ -630,7 +650,7 @@ class TestSummaryShape:
 
     async def test_the_fourth_slot_counts_the_queue_beneath_it(self, db_session):
         org = await _org(db_session)
-        member = await _member(db_session, org)
+        member = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         await _screening(
             db_session,
             org,
@@ -648,7 +668,7 @@ class TestSummaryShape:
     # assignment is not pushed under a larger count of softer exceptions.
     async def test_critical_rows_sort_above_warnings(self, db_session):
         org = await _org(db_session)
-        member = await _member(db_session, org)
+        member = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         await _screening(
             db_session,
             org,
@@ -719,7 +739,7 @@ class TestMetricPreferences:
 
     async def test_a_saved_selection_comes_back(self, db_session):
         org = await _org(db_session)
-        member = await _member(db_session, org)
+        member = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         chosen = ["members_on_leave", "screening_current", "active_members"]
 
         saved = await _save(db_session, "members", member, chosen)
@@ -731,8 +751,11 @@ class TestMetricPreferences:
     # the settings screen sees what the chief picked.
     async def test_a_department_choice_reaches_every_admin(self, db_session):
         org = await _org(db_session)
-        chief = await _member(db_session, org)
-        captain = await _member(db_session, org)
+        chief = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
+        # The reader needs the permission as much as the writer: _sanitize
+        # drops a metric the caller may not see, so a captain without it would
+        # be served the default rather than the chief's choice.
+        captain = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         chosen = ["members_on_leave", "screening_current", "active_members"]
 
         await _save(db_session, "members", chief, chosen)
@@ -741,8 +764,8 @@ class TestMetricPreferences:
 
     async def test_a_personal_choice_stays_personal(self, db_session):
         org = await _org(db_session)
-        chief = await _member(db_session, org)
-        captain = await _member(db_session, org)
+        chief = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
+        captain = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         department = ["active_members", "probationary_members", "inactive_members"]
         await _save(db_session, "members", chief, department)
 
@@ -761,7 +784,7 @@ class TestMetricPreferences:
         self, db_session
     ):
         org = await _org(db_session)
-        chief = await _member(db_session, org)
+        chief = await _member(db_session, org, permissions=HUB_ADMIN_PERMISSIONS)
         department = ["active_members", "probationary_members", "inactive_members"]
         await _save(db_session, "members", chief, department)
         await _save(
