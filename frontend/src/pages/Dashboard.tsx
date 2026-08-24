@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../hooks/useRelativeTime';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
 import DashboardNeedsYou from '../components/dashboard/DashboardNeedsYou';
+import DashboardOrientation from '../components/dashboard/DashboardOrientation';
 import type { NeedsYouItem } from '../components/dashboard/DashboardNeedsYou';
 import DashboardHoursCard from '../components/dashboard/DashboardHoursCard';
 import type { HoursSegment } from '../components/dashboard/DashboardHoursCard';
@@ -1097,6 +1098,9 @@ const Dashboard: React.FC = () => {
           >
             {/* ── Main column ── */}
             <div className="flex min-w-0 flex-col gap-5">
+              {/* First thing a new member sees, because the dashboard is where
+                  they land and nothing here pointed at the lessons before. */}
+              <DashboardOrientation />
               <DashboardOrganizationWidgets />
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where

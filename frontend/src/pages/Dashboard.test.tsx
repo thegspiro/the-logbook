@@ -92,6 +92,9 @@ vi.mock('../services/api', () => ({
   },
   organizationService: {
     getSetupChecklist: mockGetSetupChecklist,
+    // Reached via DashboardOrientation -> useEnabledModules, which decides
+    // which learning lessons count toward the orientation prompt.
+    getEnabledModules: vi.fn().mockResolvedValue({ enabled_modules: [] }),
   },
   inventoryService: {
     getUserInventory: mockGetUserInventory,
@@ -120,11 +123,18 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 }));
 
 // Mock auth store
+// Selector-aware, as the real store is. A mock that ignores the selector hands
+// every caller the whole state object, so a consumer selecting one primitive
+// (`state.user?.id`) gets a fresh object each render and spins any effect keyed
+// on it — which is exactly what DashboardOrientation does.
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: () => ({
-    checkPermission: mockCheckPermission,
-    user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
-  }),
+  useAuthStore: (selector?: (state: Record<string, unknown>) => unknown) => {
+    const state = {
+      checkPermission: mockCheckPermission,
+      user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 // Mock timezone hook
