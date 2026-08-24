@@ -1,7 +1,7 @@
 """Keep the time of day a self-reported training ran.
 
 Revision ID: a71c9d4e5b62
-Revises: d5e82c0a7f31
+Revises: e4b91c7d2a58
 
 The submit form asks for a start time and a length and derives the hours from
 the pair, but only the date and the hours were stored. Editing a submission
@@ -11,13 +11,17 @@ a four-hour entry could not tell a morning class from an evening one.
 Both columns are nullable and nothing is backfilled. A row written before this
 has no start time; guessing one would put a number on the record that was
 never reported. NULL reads as "not recorded", which is the truth.
+
+Re-parented onto main's merge head rather than merged: this revision has only
+ever existed on its own branch, so no database has been stamped with it and
+moving its parent cannot strand one mid-chain.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "a71c9d4e5b62"
-down_revision = "d5e82c0a7f31"
+down_revision = "e4b91c7d2a58"
 branch_labels = None
 depends_on = None
 
