@@ -30,8 +30,8 @@ import {
   Settings,
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
-import { formatDate, formatNumber } from '../utils/dateFormatting';
-import { formatHours } from '../utils/hoursFormatting';
+import { formatDate } from '../utils/dateFormatting';
+import { formatHours, formatHoursExact, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
@@ -206,7 +206,9 @@ const AnnualReportSection: React.FC = () => {
         <SummaryCard label="Admin Hours" value={formatHours(summary.total_admin_hours)} color="orange" icon={Award} />
         <SummaryCard
           label="Total Contributed"
-          value={formatNumber(summary.total_contributed_hours)}
+          // The backend defines this as training + admin, so deriving it from
+          // the two cards beside it is both faithful and guaranteed to add up.
+          value={formatHours(sumHoursToQuarter([summary.total_training_hours, summary.total_admin_hours]))}
           color="green"
           icon={Award}
         />
@@ -507,9 +509,11 @@ const AnnualReportSection: React.FC = () => {
                     <td className="text-theme-text-secondary px-4 py-2 text-center">
                       {formatHours(member.hours_completed)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">{member.admin_hours_approved}</td>
+                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                      {formatHours(member.admin_hours_approved)}
+                    </td>
                     <td className="px-4 py-2 text-center font-semibold text-green-500">
-                      {member.total_contributed_hours}
+                      {formatHours(sumHoursToQuarter([member.hours_completed, member.admin_hours_approved]))}
                     </td>
                     <td className="text-theme-text-secondary px-4 py-2 text-center">
                       {member.requirements_met}/{member.requirements_total}
@@ -632,7 +636,7 @@ const ISOReadinessSection: React.FC = () => {
               />
             </div>
             <div className="text-theme-text-muted mt-2 flex justify-between text-xs">
-              <span>Avg: {formatHours(cat.avg_hours_completed)} hrs/member</span>
+              <span>Avg: {formatHoursExact(cat.avg_hours_completed)} hrs/member</span>
               <span>Dept Total: {formatHours(cat.total_department_hours)} hrs</span>
             </div>
           </div>

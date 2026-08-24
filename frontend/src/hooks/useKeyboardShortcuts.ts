@@ -7,6 +7,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import { useAuthStore } from '../stores/authStore';
 
 interface ShortcutConfig {
   /** Key (e.g., 'n', 's', '?') */
@@ -58,13 +59,19 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
 /** Pre-built navigation shortcuts */
 export function useNavigationShortcuts(): void {
   const navigate = useNavigate();
+  // The gear catalogue is manager-only. A bare keypress is the least
+  // recoverable way to land on Access Denied — there is no label to gate and
+  // nothing on screen that explains what just happened — so 'i' resolves to
+  // whichever inventory page the member can actually open.
+  const canManageInventory = useAuthStore((s) => s.checkPermission)('inventory.manage');
+  const inventoryPath = canManageInventory ? '/inventory' : '/inventory/my-equipment';
 
   useKeyboardShortcuts([
     { key: 'g', handler: () => void navigate('/dashboard'), description: 'Go to Dashboard' },
     { key: 'e', handler: () => void navigate('/events'), description: 'Go to Events' },
     { key: 'm', handler: () => void navigate('/members'), description: 'Go to Members' },
     { key: 't', handler: () => void navigate('/training/my-training'), description: 'Go to Training' },
-    { key: 'i', handler: () => void navigate('/inventory'), description: 'Go to Inventory' },
+    { key: 'i', handler: () => void navigate(inventoryPath), description: 'Go to Inventory' },
     { key: 'n', handler: () => void navigate('/notifications'), description: 'Go to Notifications' },
     {
       key: '?',

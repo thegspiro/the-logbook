@@ -465,7 +465,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                 aria-pressed={filter === option.value}
                 className={`min-h-[30px] shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors max-md:min-h-[44px] ${
                   filter === option.value
-                    ? 'bg-red-600 text-white'
+                    ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
@@ -485,7 +485,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                 onClick={() => onViewChange(option)}
                 aria-selected={view === option}
                 className={`min-h-[30px] rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
-                  view === option ? 'bg-red-600 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+                  view === option ? 'bg-red-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
                 {option === 'month' ? 'Month' : 'Week'}
