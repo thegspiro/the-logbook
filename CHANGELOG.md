@@ -56,6 +56,38 @@ officer's page was shown to everyone, and the crew's page to no one.
   from their own issued gear, both of those are now closed, so the trail leads
   back to My Issued Gear instead.
 
+### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
+
+**Changed**
+
+- **A lesson no longer sends you to GitHub to read it.** The three pilot paths
+  carried no content of their own: each one's "Read full guide" button opened a
+  markdown file on github.com. That reached nothing from a station on a
+  firewalled or offline network, pointed at `main` rather than the build the
+  department runs, and landed on a 2,600–3,000 line file with no anchor to the
+  step just clicked. Each step now states why it matters, how to do it against
+  the current screens, and what proves it is done, at `/learning/:pathId`. The
+  full reference guide stays linked at the foot of each lesson.
+- **Progress is stored per member.** The old key was shared by everyone using a
+  browser, so on a station computer one member saw and overwrote another's
+  checkmarks. Progress is now keyed by member; the old data is discarded rather
+  than adopted, because nothing recorded who entered it. Two tabs open at once
+  no longer delete each other's ticks.
+- **The Learning Center index is a menu, not a checklist.** Ticking a task off
+  happens on the lesson, where the member has just read what the task is.
+
+**Added**
+
+- **A dashboard prompt for anyone with orientation left to do.** The Learning
+  Center sat in all three navigation surfaces and new members still never
+  opened it, because the dashboard is where they land and nothing there said
+  the lessons existed. The prompt hides once orientation is complete or waved
+  off.
+- **Three more lessons for a member's first week** — installing the app on a
+  phone and what still works without signal, RSVPing and checking in to an
+  event, and reviewing the gear signed out to you. Six lessons and nineteen
+  tasks in all, hidden where the department has switched the module off.
+
 ### Build: the linter's TypeScript is a declaration again, not an npm accident (2026-08-24)
 
 **Fixed**
@@ -91,6 +123,36 @@ officer's page was shown to everyone, and the crew's page to no one.
   `concurrently` 10.0.4 → 10.0.5, `@types/react-dom` 19.2.4 → 19.2.5) and 61
   transitive, mostly `@rollup`/`@rolldown` platform binaries. No range was
   widened; these are what a fresh install would have picked up anyway.
+
+### The dashboard tabs, and a card that stretched to nothing (2026-08-24)
+
+**Changed**
+
+- **The leadership tab is "My Department"; the member's own view is
+  "Personal".** The strip read My Department and Organization, which named the
+  member's own dashboard after the department and the department's dashboard
+  after a word no single-department deployment uses for itself. Both were one
+  step off. The panel heading and its load-failure card follow ("Department
+  summary is unavailable"), and the tab ids follow the labels — the leadership
+  view is `?tab=department`, with `?tab=organization` and `?tab=overview` still
+  accepted so existing bookmarks land where they always did.
+- **"My Account" was deliberately not reused for the personal tab.** The
+  sidebar already points that name at `/account` — profile, password,
+  appearance — and one label on two destinations inside the same shell is a
+  worse problem than the one being fixed.
+
+**Fixed**
+
+- **The operations panels no longer stretch to their tallest neighbour.**
+  The chief grid inherited the CSS grid default of `align-items: stretch`, so
+  Operational readiness — one row on a quiet day — grew to match the five rows
+  of Critical exceptions beside it and rendered as a mostly empty box roughly
+  three times the height of its content. The panels are `items-start` and size
+  to what they hold.
+- **The department overview row had no gap above it.** Its wrapper was a plain
+  `div`, so the five stat cards butted directly against the operations panels
+  with zero spacing while every other seam on the page used `gap-4`; the
+  heading's own `mb-4` was the only spacing in the whole block.
 
 ### "Medical Categories" did not say what it categorized (2026-08-24)
 

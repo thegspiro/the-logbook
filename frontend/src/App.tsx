@@ -79,7 +79,8 @@ import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
 
 // Public legal pages (privacy policy / terms of service)
 const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
-const LearningCenterPage = lazyWithRetry(() => import('./pages/LearningCenterPage'));
+const LearningCenterPage = lazyWithRetry(() => import('./pages/learning/LearningCenterPage'));
+const LearningPathPage = lazyWithRetry(() => import('./pages/learning/LearningPathPage'));
 
 /**
  * Main Application Component
@@ -129,6 +130,7 @@ function App() {
                     {/* Main Dashboard */}
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/learning" element={<LearningCenterPage />} />
+                    <Route path="/learning/:pathId" element={<LearningPathPage />} />
 
                     {/* Feature Modules */}
                     {getApparatusRoutes()}
