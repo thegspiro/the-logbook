@@ -1,0 +1,76 @@
+"""Who may read a *named member's* gear.
+
+A member profile is a directory card. Which turnout coat, radio or SCBA mask a
+colleague signed for — and what condition it is in — is quartermaster business,
+not part of it. These routes were gated on ``inventory.view``, which every
+member holds as part of the baseline Member position, so the gate passed for
+the whole department. Cross-member reads require ``inventory.manage``.
+"""
+
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
+from app.api.v1.endpoints.inventory import (
+    _require_self_or_quartermaster,
+    router,
+)
+from app.core.permissions import DEFAULT_POSITIONS
+
+
+def _permission_set(path: str, method: str) -> set[str]:
+    for route in router.routes:
+        if route.path == path and method in route.methods:
+            for dependency in route.dependant.dependencies:
+                permissions = getattr(dependency.call, "required_permissions", None)
+                if permissions is not None:
+                    return set(permissions)
+    pytest.fail(f"Permission dependency not found for {method} {path}")
+
+
+def _user(user_id: str, *permissions: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=user_id,
+        rank=None,
+        positions=[SimpleNamespace(permissions=list(permissions))],
+    )
+
+
+def test_baseline_member_holds_inventory_view_but_not_manage():
+    """The fact that makes ``inventory.view`` unusable as the gate.
+
+    If this ever stops being true, the guard below can be revisited — until
+    then, ``inventory.view`` says only "this person is a member".
+    """
+    member_permissions = set(DEFAULT_POSITIONS["member"]["permissions"])
+
+    assert "inventory.view" in member_permissions
+    assert "inventory.manage" not in member_permissions
+
+
+def test_member_may_read_their_own_gear_without_an_inventory_permission():
+    _require_self_or_quartermaster("user-1", _user("user-1"))
+
+
+def test_baseline_member_may_not_read_a_colleagues_gear():
+    with pytest.raises(HTTPException) as exc_info:
+        _require_self_or_quartermaster("user-2", _user("user-1", "inventory.view"))
+
+    assert exc_info.value.status_code == 403
+
+
+def test_quartermaster_may_read_any_members_gear():
+    _require_self_or_quartermaster("user-2", _user("user-1", "inventory.manage"))
+
+
+def test_wildcard_grant_covers_quartermaster_reads():
+    _require_self_or_quartermaster("user-2", _user("user-1", "inventory.*"))
+
+
+def test_members_inventory_roster_requires_quartermaster():
+    """The roster names who holds which gear, for every member at once."""
+    permissions = _permission_set("/members-summary", "GET")
+
+    assert permissions == {"inventory.manage"}
+    assert "inventory.view" not in permissions

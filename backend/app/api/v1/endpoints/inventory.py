@@ -188,6 +188,27 @@ router = APIRouter()
 MAX_INVENTORY_CSV_BYTES = 10 * 1024 * 1024
 
 
+def _require_self_or_quartermaster(user_id: UUID, current_user: User) -> None:
+    """Guard a per-member inventory read.
+
+    ``inventory.view`` is part of the baseline Member position — every member
+    holds it so they can browse the catalog and their own gear — so it says
+    nothing about whether the caller may read a *colleague's* kit. Which
+    turnout coat, radio or SCBA mask a named member carries, and what
+    condition it is in, is quartermaster business; gating these routes on
+    ``inventory.view`` left them readable by the whole department. Cross-member
+    reads therefore require ``inventory.manage``.
+    """
+    if str(user_id) == str(current_user.id):
+        return
+    if _has_permission("inventory.manage", _collect_user_permissions(current_user)):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not authorized to view this member's inventory",
+    )
+
+
 async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
     """Publish a real-time inventory event to WebSocket clients."""
     try:
@@ -1682,14 +1703,18 @@ async def get_user_assignments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get all assignments for a user
 
+    Members can view their own assignments. Quartermasters
+    (inventory.manage) can view any member's.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    _require_self_or_quartermaster(user_id, current_user)
+
     service = InventoryService(db)
     assignments = await service.get_user_assignments(
         user_id=user_id,
@@ -1858,14 +1883,18 @@ async def get_user_issuances(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get all pool items issued to a specific user.
 
+    Members can view their own issuances. Quartermasters
+    (inventory.manage) can view any member's.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    _require_self_or_quartermaster(user_id, current_user)
+
     service = InventoryService(db)
     issuances = await service.get_user_issuances(
         user_id=user_id,
@@ -2403,16 +2432,18 @@ async def get_members_inventory_summary(
         None, description="Search by name, username, or membership number"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     List all active members with their inventory item counts.
 
     Returns permanent assignment, checkout, issuance, and overdue counts
-    for every member. Used by the Quartermaster's Members tab.
+    for every member. Used by the Quartermaster's Members tab. Gated on
+    inventory.manage: the roster names who holds which gear, which the
+    baseline member-level inventory.view must not open up.
 
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
     members = await service.get_members_inventory_summary(
@@ -2827,21 +2858,11 @@ async def get_user_inventory(
     Get user's complete inventory (for dashboard)
 
     Users can view their own inventory.
-    Quartermasters can view any user's inventory.
+    Quartermasters (inventory.manage) can view any user's inventory.
 
     **Authentication required**
     """
-    # Check if user is viewing their own inventory or has inventory.view permission
-    if str(user_id) != str(current_user.id):
-        # Check if user has inventory.view permission
-        has_permission = _has_permission(
-            "inventory.view", _collect_user_permissions(current_user)
-        )
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view this user's inventory",
-            )
+    _require_self_or_quartermaster(user_id, current_user)
 
     service = InventoryService(db)
     inventory = await service.get_user_inventory(
@@ -3212,20 +3233,12 @@ async def get_user_departure_clearance(
     """
     Get the active departure clearance for a specific member.
 
-    Members can view their own clearance. Staff with inventory.view
-    can view any member's clearance.
+    Members can view their own clearance. Quartermasters
+    (inventory.manage) can view any member's clearance.
 
     **Authentication required**
     """
-    if str(user_id) != str(current_user.id):
-        has_permission = _has_permission(
-            "inventory.view", _collect_user_permissions(current_user)
-        )
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view this member's clearance",
-            )
+    _require_self_or_quartermaster(user_id, current_user)
 
     service = DepartureClearanceService(db)
     clearance = await service.get_clearance_for_user(
@@ -5640,14 +5653,18 @@ async def review_return_request(
 async def get_user_issuance_history(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get full issuance history (active + returned) for a member.
 
+    Members can view their own history. Quartermasters
+    (inventory.manage) can view any member's.
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
+    _require_self_or_quartermaster(user_id, current_user)
+
     service = InventoryService(db)
     issuances = await service.get_user_issuance_history(
         user_id=user_id,
