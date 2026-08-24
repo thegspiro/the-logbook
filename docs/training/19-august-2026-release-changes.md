@@ -71,7 +71,37 @@ starting point for a _new_ election rather than a change to a configured one,
 and if the method it brought is wrong for the vote, re-create the election with
 the pairing you need.
 
-> **[SCREENSHOT NEEDED — closed election results showing manual paper-ballot count and its roster-bound validation.]**
+### Paper ballots and the roster bound
+
+A tally taken in the room is entered from an **open** election — **Record Paper
+Ballots** — one count per accepted candidate. Every ballot is written as an
+ordinary vote row attributed to the officer who recorded it, which is why a
+closed election's results carry no separate "paper" figure: the paper votes are
+simply in the counts. What is itemized, and stays itemized after the election
+closes, is the **Paper-Ballot Batches** panel above the tabs — who recorded the
+batch, when, and which officers attested it. It is
+[pictured in the elections guide](./14-elections.md#paper-ballots--attestation).
+Until the required officers attest a batch, its votes are excluded from results,
+turnout and the vote count in the elections list.
+
+The roster bound is enforced where the tally is entered, not where it is read:
+
+![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
+
+Twenty-four ballots for a position with twenty-two eligible members is refused
+before a single vote row is written, and the message names all three numbers —
+the projected total, the eligible count, and the cap. The cap is not always the
+roster: an approval-voting position multiplies it by the number of accepted
+candidates, and a position allowing several votes multiplies it by that, because
+one member legitimately hands in more marks than ballots. The separate
+**Physical ballots in this stack** field has no multiplier at all — one member,
+one sheet — so it is checked against the roster directly.
+
+Nothing here is a lock. The checkbox that appears with the error records the
+override rather than removing the check, and the batch it creates is written to
+the audit log at `warning` severity, naming who overrode it. Use it when the
+tally is genuinely right — a proxy arrangement, a roster that changed mid-vote —
+and fix the count when it is not.
 
 ## Dashboard and admin hours
 

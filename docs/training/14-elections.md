@@ -526,6 +526,12 @@ voters × allowed votes_ is rejected with the numbers spelled out. If the count
 really is correct (e.g., overrides admitted extra voters), an explicit
 **Allow over-count** override records it anyway — audited at warning severity.
 
+![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
+
+The override checkbox is not on the form until the guard has fired — there is
+no way to switch the check off in advance, and nothing is written when a batch
+is refused.
+
 ### Officer Attestation
 
 By default, **2 officers other than the recorder** (configurable 0–3 in

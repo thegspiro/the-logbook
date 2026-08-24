@@ -11421,6 +11421,49 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // The roster bound, refused. Not on the results page -- results carry no
+    // trace of which votes arrived on paper, because each paper ballot is
+    // written as an ordinary vote row -- so the only screen that states the
+    // rule is the one that enforces it. 14 + 10 is a plausible tally for a
+    // room of 22, and two over the roster is exactly the miscount this guard
+    // is for.
+    //
+    // Refused, so it writes nothing: the batch is rejected before any vote row
+    // is created, which is why this needs no `mutatesSeedData` flag.
+    id: "19-27-paper-ballot-over-roster",
+    doc: "19-august-2026-release-changes.md",
+    line: 74,
+    anchor: "closed election results showing manual paper-ballot count and its",
+    alt: "Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead",
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) =>
+          (election.title ?? "") === "Line Officer Election — 2027 Term",
+      )(page);
+      await clickByName(/^Record Paper Ballots$/)(page);
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByLabel(/Dana Ruiz/).fill("14");
+      await dialog.getByLabel(/Emeka Adeyemi/).fill("10");
+      await dialog
+        .getByRole("button", { name: /^Record 24 Ballots$/ })
+        .click({ timeout: 10_000 });
+      // The override checkbox renders only once the server has answered with a
+      // message containing "over-count", so waiting for the alert is waiting
+      // for the whole state this shot is about.
+      await dialog
+        .getByRole("alert")
+        .getByText(/only 22 member\(s\) are eligible/)
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: "div[role='dialog']",
+  },
+  {
     // The first half of the pair the marker asks for. Framed on the whole page
     // rather than the ballot alone, because the two facts that change sit in
     // different places: the item count inside the builder, and the voting

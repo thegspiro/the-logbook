@@ -1,5 +1,42 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (sixteenth) — the roster bound, photographed where it is enforced
+
+`19-27`, opened and checked. **10 markers remaining.**
+
+**Half the marker asked for a screen that does not exist.** It wanted "closed
+election results showing manual paper-ballot count" — and a closed election's
+results show no paper figure at all. `ElectionResults.tsx` contains no reference
+to manual votes or batches, by design: recording a paper tally writes one
+ordinary vote row per ballot, so by the time results are drawn the paper votes
+_are_ the counts. What stays itemized is the Paper-Ballot Batches panel above
+the tab strip, already captured as `14-18`. Guide 19 links to it and says why
+there is nothing else to point at.
+
+**The other half is real, and it is a good picture.** The roster bound lives in
+the Record Paper Ballots dialog on an _open_ election: 14 + 10 ballots for a
+position with 22 eligible members is refused with all three numbers named —
+projected, eligible, cap — and the override checkbox renders only once the
+server has answered. One image carries the rule, the refusal and the escape
+hatch.
+
+**It writes nothing, so it needs no `mutatesSeedData` flag.** The batch is
+rejected before any vote row exists — checked by re-reading the open election's
+`total_votes` after the run, still 0.
+
+**Facts verified rather than paraphrased from the guide:** the cap is
+`eligible × votes-per-position`, multiplied by accepted candidates under
+approval voting; the separate "physical ballots in this stack" field is checked
+against the roster with no multiplier, because one member hands in one sheet;
+and the override is audited at `warning` severity while a normal batch is
+`info`. All four are in `record_manual_ballots`.
+
+**Also placed in guide 14.** The plausibility guard was already described there
+in prose, with no picture of it. The same image is referenced from both — which
+is established practice here (`19-09`, `19-10` and `06-24` are each in two
+guides) and does inflate `SCREENSHOT_STATUS.md`'s captured column by one, since
+that column counts image lines per guide rather than markers closed.
+
 ## Captured 2026-08-24 (fifteenth) — what applying a ballot template changes without saying so
 
 `19-25`/`19-26`, opened and checked. **490 filled, 11 remaining.** The picker
