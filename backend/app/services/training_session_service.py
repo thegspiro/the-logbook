@@ -668,6 +668,7 @@ class TrainingSessionService:
     async def _resync_admin_hours(
         self,
         event_id: str,
+        organization_id: UUID,
         rsvps: List[EventRSVP],
     ) -> None:
         """Push officer-corrected durations into the admin hours ledger.
@@ -682,7 +683,10 @@ class TrainingSessionService:
             return
 
         event_result = await self.db.execute(
-            select(Event).where(Event.id == str(event_id))
+            select(Event).where(
+                Event.id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
         )
         event = event_result.scalar_one_or_none()
         if not event:
@@ -1045,7 +1049,9 @@ class TrainingSessionService:
             pipeline_updates, organization_id, approved_by, can_manage_training
         )
 
-        await self._resync_admin_hours(approval.event_id, corrected_rsvps)
+        await self._resync_admin_hours(
+            approval.event_id, organization_id, corrected_rsvps
+        )
 
         return True, None
 

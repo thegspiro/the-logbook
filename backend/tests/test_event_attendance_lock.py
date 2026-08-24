@@ -427,6 +427,43 @@ class TestBackfillMigration:
         )
 
 
+class TestNewQueriesAreOrgScoped:
+    """Pitfall #14: every by-id read filters organization_id, including the
+    ones whose id came from a row that was already scoped."""
+
+    def _compiled(self, statement):
+        return str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+
+    async def test_the_lock_precheck_scopes_its_event_fetch(self):
+        db = _mock_db(_one(None))
+        await EventService(db).attendance_lock_error_for(
+            "event-1", "org-1", "adding attendees"
+        )
+        assert "organization_id" in self._compiled(db.execute.await_args.args[0])
+
+    async def test_reopen_scopes_its_event_fetch(self):
+        db = _mock_db(_one(None))
+        await EventService(db).reopen_event_attendance("event-1", "org-1")
+        assert "organization_id" in self._compiled(db.execute.await_args.args[0])
+
+    async def test_the_finalizer_name_lookup_is_org_scoped(self):
+        """The id is not client-supplied, but a bare by-id read on users is the
+        exact shape the 2026-07 audit kept finding."""
+        from pathlib import Path
+
+        endpoint = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "api"
+            / "v1"
+            / "endpoints"
+            / "events.py"
+        )
+        source = endpoint.read_text(encoding="utf-8")
+        lookup = source.split("attendance_finalized_by:", 1)[1][:500]
+        assert "User.organization_id == current_user.organization_id" in lookup
+
+
 class TestReopenPermissionIsSeparate:
     def test_permission_exists_in_the_catalog(self):
         names = {p.name for p in ALL_PERMISSIONS}

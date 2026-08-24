@@ -932,7 +932,10 @@ async def get_event(
     finalized_by_name = None
     if event.attendance_finalized_by:
         finalizer_result = await db.execute(
-            select(User).where(User.id == str(event.attendance_finalized_by))
+            select(User).where(
+                User.id == str(event.attendance_finalized_by),
+                User.organization_id == current_user.organization_id,
+            )
         )
         finalizer = finalizer_result.scalar_one_or_none()
         if finalizer:
