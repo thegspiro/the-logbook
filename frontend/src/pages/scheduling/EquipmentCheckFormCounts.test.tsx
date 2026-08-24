@@ -222,9 +222,11 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
 
     await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
-    const payload = mockSubmitCheck.mock.calls[0][1];
+    const payload = mockSubmitCheck.mock.calls[0][1] as {
+      items: Array<{ template_item_id: string }>;
+    };
     expect(payload.items).toHaveLength(1);
-    expect(payload.items[0].template_item_id).toBe('ti-1');
+    expect(payload.items[0]?.template_item_id).toBe('ti-1');
   });
 
   it('does not queue text instruction rows after a transport failure', async () => {
@@ -458,7 +460,10 @@ describe('EquipmentCheckForm quantity seeding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
     await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalledOnce());
-    expect(mockSubmitCheck.mock.calls[0][1].items[0]).toMatchObject({ status: 'fail', is_expired: true });
+    const submitted = mockSubmitCheck.mock.calls[0][1] as {
+      items: Array<{ status: string; is_expired: boolean }>;
+    };
+    expect(submitted.items[0]).toMatchObject({ status: 'fail', is_expired: true });
   });
 
   /**

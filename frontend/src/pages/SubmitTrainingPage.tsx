@@ -1,20 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { ArrowLeft, Info, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
 import {
-  ArrowLeft,
-  Check,
-  Info,
-  Minus,
-  Paperclip,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Send,
-  Trash2,
-  Upload,
-  X,
-} from 'lucide-react';
+  AttachmentField,
+  Checklist,
+  DEFAULT_DURATION_MINUTES,
+  DURATION_STEP_MINUTES,
+  DurationStepper,
+  FieldLabel,
+  MIN_DURATION_MINUTES,
+  Overline,
+  RevisionNotice,
+  SectionCard,
+  StatusBadge,
+  SubmissionReceipt,
+  UNCONFIGURED_MAX_HOURS,
+  attachmentRejection,
+  durationToHours,
+  formatDuration,
+  minutesToTime,
+  timeToMinutes,
+} from '../components/training/submit';
+import type { ChecklistRow, Receipt } from '../components/training/submit';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
@@ -43,37 +51,6 @@ const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
   { value: 'specialty', label: 'Specialty' },
 ];
 
-const STATUS_BADGE: Record<SubmissionStatus, { label: string; className: string }> = {
-  draft: { label: 'Draft', className: 'bg-theme-surface-hover text-theme-text-muted' },
-  pending_review: {
-    label: 'Pending Review',
-    className: 'bg-theme-alert-warning-bg text-theme-alert-warning-text',
-  },
-  approved: { label: 'Approved', className: 'bg-theme-alert-success-bg text-theme-alert-success-text' },
-  rejected: { label: 'Rejected', className: 'bg-theme-alert-danger-bg text-theme-alert-danger-text' },
-  revision_requested: {
-    label: 'Needs Edits',
-    className: 'bg-theme-alert-warning-bg text-orange-700 dark:text-orange-400',
-  },
-};
-
-/** Length is entered as start time + duration, so the member never types an end time. */
-const DURATION_STEP_MINUTES = 15;
-const MIN_DURATION_MINUTES = 15;
-const DEFAULT_DURATION_MINUTES = 240;
-/**
- * Ceiling for the stepper when the department has set no maximum (the column
- * is nullable and null means "no limit"). A single entry is a start time plus
- * a length, so a day is its natural bound; a longer course is logged one day
- * at a time, which is what the copy at the ceiling says.
- */
-const UNCONFIGURED_MAX_HOURS = 24;
-const QUICK_DURATIONS = [60, 120, 240, 480];
-
-/** A photo of a paper certificate is the expected case, so images come first. */
-const ATTACHMENT_ACCEPT = 'application/pdf,image/jpeg,image/png';
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-
 /**
  * Which fields the redesigned form asks for when the department has not said
  * otherwise. An explicit `field_config` entry from the org's settings still
@@ -100,338 +77,6 @@ const EDITABLE_STATUSES: SubmissionStatus[] = ['draft', 'pending_review', 'revis
 
 /** Placeholder id the API service returns for a submission queued while offline. */
 const OFFLINE_SUBMISSION_ID = 'pending-sync';
-
-// ==================== Helpers ====================
-
-/** "4h", "2h 30m", "45m" — the duration readout and the rail's hours figure. */
-function formatDuration(minutes: number): string {
-  if (minutes <= 0) return '0h';
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (!mins) return `${hours}h`;
-  if (!hours) return `${mins}m`;
-  return `${hours}h ${mins}m`;
-}
-
-function timeToMinutes(hhmm: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})/.exec(hhmm);
-  if (!match) return null;
-  const hours = parseInt(match[1] ?? '', 10);
-  const mins = parseInt(match[2] ?? '', 10);
-  if (isNaN(hours) || isNaN(mins) || hours > 23 || mins > 59) return null;
-  return hours * 60 + mins;
-}
-
-function minutesToTime(minutes: number): string {
-  const wrapped = ((minutes % 1440) + 1440) % 1440;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(Math.floor(wrapped / 60))}:${pad(wrapped % 60)}`;
-}
-
-/** Hours as the API stores them: duration in minutes, to two decimals. */
-function durationToHours(minutes: number): number {
-  return Math.round((minutes / 60) * 100) / 100;
-}
-
-function attachmentRejection(file: File): string | null {
-  if (file.size > MAX_ATTACHMENT_BYTES) return 'That file is over 10 MB. Try a smaller scan or photo.';
-  // An empty or unfamiliar `File.type` is the browser's gap, not the member's:
-  // some OS/browser pairs report nothing for a perfectly good PDF. The upload
-  // endpoint reads the magic bytes and does not trust this value anyway, so
-  // only a type we positively recognise as wrong is turned away here.
-  if (file.type && !ATTACHMENT_ACCEPT.split(',').includes(file.type)) {
-    return 'Attach a PDF, JPG, or PNG.';
-  }
-  return null;
-}
-
-// ==================== Small presentational pieces ====================
-
-const Overline: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-theme-text-muted text-[10px] font-bold tracking-[0.12em] uppercase">{children}</p>
-);
-
-const SectionCard: React.FC<{ title: string; action?: React.ReactNode; children: React.ReactNode }> = ({
-  title,
-  action,
-  children,
-}) => (
-  <section className="card flex flex-col gap-3.5 p-4 sm:p-5">
-    <div className="flex items-center justify-between gap-3">
-      <Overline>{title}</Overline>
-      {action}
-    </div>
-    {children}
-  </section>
-);
-
-const FieldLabel: React.FC<{ htmlFor: string; required?: boolean; optional?: boolean; children: React.ReactNode }> = ({
-  htmlFor,
-  required,
-  optional,
-  children,
-}) => (
-  <label htmlFor={htmlFor} className="form-label">
-    {children}
-    {required && (
-      <span className="text-red-700 dark:text-red-400" aria-hidden="true">
-        {' '}
-        *
-      </span>
-    )}
-    {optional && <span className="text-theme-text-muted font-normal"> optional</span>}
-  </label>
-);
-
-const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
-  const badge = STATUS_BADGE[status];
-  return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}>{badge.label}</span>;
-};
-
-/** A field is complete when the member has actually put something in it. */
-interface ChecklistRow {
-  id: string;
-  label: string;
-  ok: boolean;
-  required: boolean;
-}
-
-const Checklist: React.FC<{ rows: ChecklistRow[] }> = ({ rows }) => (
-  <ul className="flex flex-col gap-2">
-    {rows.map((row) => (
-      <li key={row.id} className="flex items-center gap-2.5">
-        <span
-          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
-            row.ok ? 'bg-theme-alert-success-bg text-theme-alert-success-icon' : 'bg-theme-surface-hover'
-          }`}
-          aria-hidden="true"
-        >
-          {row.ok && <Check className="h-3 w-3" />}
-        </span>
-        <span className={`text-sm ${row.ok ? 'text-theme-text-secondary' : 'text-theme-text-muted'}`}>{row.label}</span>
-        <span className="sr-only">{row.ok ? 'complete' : 'not filled in'}</span>
-      </li>
-    ))}
-  </ul>
-);
-
-const AttachmentField: React.FC<{
-  id: string;
-  file: File | null;
-  error: string;
-  required?: boolean;
-  invalid?: boolean;
-  onSelect: (file: File | null) => void;
-}> = ({ id, file, error, required, invalid, onSelect }) => (
-  <div>
-    <label
-      htmlFor={id}
-      className={`bg-theme-surface-secondary text-theme-text-secondary hover:border-theme-text-muted/40 flex min-h-[44px] w-full cursor-pointer items-center gap-2.5 rounded-lg border border-dashed p-3 text-sm transition-colors ${
-        invalid ? 'border-red-600 dark:border-red-500' : 'border-theme-input-border'
-      }`}
-    >
-      <Upload className="text-theme-text-muted h-[18px] w-[18px] shrink-0" />
-      <span className="truncate">
-        {file ? file.name : 'Attach certificate'}
-        {!file &&
-          (required ? (
-            <span className="text-red-700 dark:text-red-400"> *</span>
-          ) : (
-            <span className="text-theme-text-muted font-normal"> optional</span>
-          ))}
-      </span>
-    </label>
-    <input
-      id={id}
-      type="file"
-      accept={ATTACHMENT_ACCEPT}
-      className="sr-only"
-      onChange={(e) => {
-        const selected = e.target.files?.[0] ?? null;
-        onSelect(selected);
-        // Clear the input so re-picking the same file after an error still fires.
-        e.target.value = '';
-      }}
-    />
-    {file && (
-      <button
-        type="button"
-        onClick={() => onSelect(null)}
-        className="text-theme-text-muted hover:text-theme-text-primary mt-1 inline-flex items-center gap-1 text-xs"
-      >
-        <X className="h-3 w-3" /> Remove attachment
-      </button>
-    )}
-    {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
-  </div>
-);
-
-const DurationStepper: React.FC<{
-  minutes: number;
-  maxMinutes: number;
-  onChange: (minutes: number) => void;
-}> = ({ minutes, maxMinutes, onChange }) => {
-  const step = (delta: number) => onChange(Math.min(maxMinutes, Math.max(MIN_DURATION_MINUTES, minutes + delta)));
-
-  return (
-    <div className="flex flex-wrap items-center gap-2.5">
-      <div className="flex flex-1 items-center justify-between gap-2.5 sm:flex-none sm:justify-start">
-        <button
-          type="button"
-          onClick={() => step(-DURATION_STEP_MINUTES)}
-          disabled={minutes <= MIN_DURATION_MINUTES}
-          aria-label="Decrease length by 15 minutes"
-          className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover flex h-12 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 sm:h-11 sm:w-11"
-        >
-          <Minus className="h-[18px] w-[18px]" />
-        </button>
-        <output className="text-theme-text-primary min-w-24 text-center font-mono text-2xl font-semibold sm:text-xl">
-          {formatDuration(minutes)}
-        </output>
-        <button
-          type="button"
-          onClick={() => step(DURATION_STEP_MINUTES)}
-          disabled={minutes >= maxMinutes}
-          aria-label="Increase length by 15 minutes"
-          className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover flex h-12 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 sm:h-11 sm:w-11"
-        >
-          <Plus className="h-[18px] w-[18px]" />
-        </button>
-      </div>
-      <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto">
-        {QUICK_DURATIONS.filter((quick) => quick <= maxMinutes).map((quick) => {
-          const active = quick === minutes;
-          return (
-            <button
-              key={quick}
-              type="button"
-              onClick={() => onChange(quick)}
-              aria-pressed={active}
-              className={`min-h-11 rounded-full border px-3.5 font-mono text-sm transition-colors sm:min-h-9 ${
-                active
-                  ? 'border-red-600 bg-red-600 text-white'
-                  : 'border-theme-input-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
-              }`}
-            >
-              {formatDuration(quick)}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-// ==================== Receipt (post-submit confirmation) ====================
-
-interface Receipt {
-  rows: { key: string; value: string }[];
-  approved: boolean;
-}
-
-const SubmissionReceipt: React.FC<{
-  receipt: Receipt;
-  onSubmitAnother: () => void;
-  onDone: () => void;
-}> = ({ receipt, onSubmitAnother, onDone }) => (
-  <div className="card animate-scale-in mx-auto flex max-w-md flex-col gap-4 p-5">
-    <div className="flex items-start gap-3.5">
-      <span className="bg-theme-alert-success-bg text-theme-alert-success-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
-        <Check className="h-6 w-6" />
-      </span>
-      <div>
-        <h2 className="text-theme-text-primary text-xl font-semibold">Training Submitted</h2>
-        <p className="text-theme-text-muted text-sm">
-          {receipt.approved ? 'Recorded on your training record.' : 'Sent to the training officer for review.'}
-        </p>
-      </div>
-    </div>
-
-    <dl className="border-theme-surface-border divide-theme-surface-border divide-y rounded-lg border">
-      {receipt.rows.map((row) => (
-        <div key={row.key} className="flex items-baseline justify-between gap-4 px-3.5 py-2.5">
-          <dt className="text-theme-text-muted text-xs font-bold tracking-[0.08em] uppercase">{row.key}</dt>
-          <dd className="text-theme-text-primary text-right text-sm font-medium">{row.value}</dd>
-        </div>
-      ))}
-    </dl>
-
-    <div className="alert-info flex items-start gap-2.5">
-      <Info className="text-theme-alert-info-icon mt-0.5 h-4 w-4 shrink-0" />
-      <p className="text-theme-alert-info-text text-sm">
-        {receipt.approved
-          ? 'These hours count toward your requirements now. An officer can still review the entry later.'
-          : 'Most submissions are reviewed within a week. You can edit or delete it until an officer approves it. The hours count toward your requirements once approved.'}
-      </p>
-    </div>
-
-    <div className="flex gap-3">
-      <button type="button" onClick={onSubmitAnother} className="btn-primary flex-1 text-sm font-semibold">
-        Submit Another
-      </button>
-      <button type="button" onClick={onDone} className="btn-secondary flex-1 text-sm">
-        Back to Training
-      </button>
-    </div>
-  </div>
-);
-
-// ==================== Returned-submission notice ====================
-
-const RevisionNotice: React.FC<{
-  submission: TrainingSubmission;
-  onFix: () => void;
-  onWithdraw: () => void;
-}> = ({ submission, onFix, onWithdraw }) => {
-  const meta = [
-    `${submission.hours_completed}h`,
-    formatCalendarDate(submission.completion_date, { month: 'short', day: 'numeric' }),
-    submission.issuing_agency,
-    submission.certification_number ? `Cert ${submission.certification_number}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
-  return (
-    <div className="alert-warning animate-page-enter mb-5 flex flex-col gap-3">
-      <div className="flex items-start gap-2.5">
-        <RotateCcw className="text-theme-alert-warning-icon mt-0.5 h-[18px] w-[18px] shrink-0" />
-        <div className="flex flex-col gap-1">
-          <p className="text-theme-alert-warning-title text-sm font-semibold">
-            {submission.reviewer_notes ? 'A training officer asked for a change' : 'A training officer sent this back'}
-          </p>
-          {submission.reviewer_notes && (
-            <p className="text-theme-alert-warning-text text-sm">&ldquo;{submission.reviewer_notes}&rdquo;</p>
-          )}
-          <p className="text-theme-text-muted text-xs">
-            {submission.reviewed_at
-              ? `Returned ${formatCalendarDate(submission.reviewed_at.slice(0, 10), { month: 'short', day: 'numeric' })} · `
-              : ''}
-            Your hours are not counted yet
-          </p>
-        </div>
-      </div>
-
-      <div>
-        <p className="text-theme-text-primary text-lg font-semibold">{submission.course_name}</p>
-        <p className="text-theme-text-muted text-sm">{meta}</p>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onFix}
-          className="btn-primary flex flex-1 items-center justify-center gap-2 text-sm"
-        >
-          <Pencil className="h-4 w-4" /> Fix and Resubmit
-        </button>
-        <button type="button" onClick={onWithdraw} className="btn-secondary text-sm">
-          Withdraw
-        </button>
-      </div>
-    </div>
-  );
-};
 
 // ==================== Submission Form ====================
 
@@ -490,6 +135,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   const [certificationNumber, setCertificationNumber] = useState('');
   const [issuingAgency, setIssuingAgency] = useState('');
   const [expirationDate, setExpirationDate] = useState('');
+  // Plenty of certifications never expire. Asking is the only way the form can
+  // know whether a department that requires an expiry date should be enforced
+  // here, so the member says so rather than being blocked or inventing a date.
+  const [certificationNeverExpires, setCertificationNeverExpires] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState('');
   const [storedAttachments, setStoredAttachments] = useState<SubmissionAttachment[]>([]);
@@ -524,11 +173,15 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setCertificationNumber(editSubmission.certification_number || '');
     setIssuingAgency(editSubmission.issuing_agency || '');
     setExpirationDate(editSubmission.expiration_date || '');
+    // Never inferred from an absent date. A submission an officer sent back
+    // *because* the expiry was missing would otherwise reopen with "does not
+    // expire" already ticked and the field disabled — answering for the member,
+    // and letting them resubmit without the date they were asked for.
+    setCertificationNeverExpires(false);
     setStoredAttachments(editSubmission.attachments ?? []);
-    // The API stores a date and a number of hours, not a start and an end.
-    // 09:00 is the same assumption the previous form made when it rebuilt the
-    // two datetime pickers; here it only has to reconstruct one field.
-    setStartTime('09:00');
+    // Reported start times are kept now. 09:00 is the fallback only for rows
+    // written before the column existed, which genuinely have none.
+    setStartTime(editSubmission.start_time?.slice(0, 5) || '09:00');
     setDurationMinutes(
       Math.min(
         maxDurationMinutes,
@@ -658,7 +311,12 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       if (isFieldVisible('issuing_agency') && isFieldRequired('issuing_agency') && !issuingAgency.trim()) {
         missing.push('issuing_agency');
       }
-      if (isFieldVisible('expiration_date') && isFieldRequired('expiration_date') && !expirationDate) {
+      if (
+        isFieldVisible('expiration_date') &&
+        isFieldRequired('expiration_date') &&
+        !certificationNeverExpires &&
+        !expirationDate
+      ) {
         missing.push('expiration_date');
       }
     }
@@ -671,7 +329,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   const certificationValues = {
     certification_number: hasCertification ? certificationNumber : '',
     issuing_agency: hasCertification ? issuingAgency : '',
-    expiration_date: hasCertification ? expirationDate : '',
+    expiration_date: hasCertification && !certificationNeverExpires ? expirationDate : '',
   };
 
   /** Create payload: blanks are omitted so `""` never reaches a validator. */
@@ -679,6 +337,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     course_name: courseName.trim(),
     training_type: trainingType,
     completion_date: completionDate,
+    start_time: startTime || undefined,
     hours_completed: hours,
     credit_hours: hours,
     description: description.trim() || undefined,
@@ -700,6 +359,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     course_name: courseName.trim(),
     training_type: trainingType,
     completion_date: completionDate,
+    start_time: blankToNull(startTime),
     hours_completed: hours,
     credit_hours: hours,
     description: blankToNull(description),
@@ -767,6 +427,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setCertificationNumber('');
     setIssuingAgency('');
     setExpirationDate('');
+    setCertificationNeverExpires(false);
     setAttachment(null);
     setAttachmentError('');
     setStoredAttachments([]);
@@ -790,13 +451,14 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 
     const setBusy = options.asDraft ? setIsSavingDraft : setIsSubmitting;
     setBusy(true);
-    // A submission that is auto-approved on create is frozen the moment it
-    // exists — the attachment endpoint refuses it, and the training record has
-    // already been copied from it. So a new submission carrying a file is
-    // filed as a draft, given its evidence, and only then handed over.
+    // A submission the department auto-approves is frozen the moment it exists
+    // — the attachment endpoint refuses it, and its training record has already
+    // been copied from it. So a new submission carrying a file goes through the
+    // multipart create, which attaches the evidence inside the same transaction
+    // that routes it. Offline has no such route: the queued create carries JSON
+    // only, and uploadAttachmentIfAny says so.
     const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-    const stageAsDraft = !options.asDraft && !!attachment && !offline;
-    let stagedDraftId: string | null = null;
+    const attachOnCreate = !!attachment && !offline;
     try {
       if (isEdit && editSubmission) {
         await trainingSubmissionService.updateSubmission(editSubmission.id, buildUpdatePayload());
@@ -817,12 +479,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           onSaved();
         }
       } else {
-        const created = await trainingSubmissionService.createSubmission(
-          buildCreatePayload(options.asDraft || stageAsDraft)
-        );
+        const payload = buildCreatePayload(options.asDraft);
+        const attachedName = attachOnCreate && attachment ? attachment.name : null;
+        const created =
+          attachOnCreate && attachment
+            ? await trainingSubmissionService.createSubmissionWithAttachment(payload, attachment)
+            : await trainingSubmissionService.createSubmission(payload);
         const queuedOffline = created.id === OFFLINE_SUBMISSION_ID;
-        if (stageAsDraft && !queuedOffline) stagedDraftId = created.id;
-        const uploaded = await uploadAttachmentIfAny(created.id);
+        // Only the offline path can still be holding an unsent file.
+        const uploaded = attachOnCreate ? null : await uploadAttachmentIfAny(created.id);
+        if (attachOnCreate) setAttachment(null);
 
         if (options.asDraft) {
           toast.success('Draft saved. It stays in your list until you submit it.');
@@ -831,24 +497,14 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           const savedDraft = uploaded ? { ...created, attachments: uploaded.attachments } : created;
           onSaved(queuedOffline ? undefined : savedDraft);
         } else {
-          const filed = stagedDraftId ? await trainingSubmissionService.submitDraft(stagedDraftId) : created;
-          stagedDraftId = null;
-          setReceipt(buildReceipt(uploaded?.name ?? null, filed.status === 'approved'));
+          setReceipt(buildReceipt(attachedName ?? uploaded?.name ?? null, created.status === 'approved'));
           resetForm();
           onSaved();
         }
       }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      const message = typeof detail === 'string' ? detail : 'Failed to submit training';
-      // The staged draft survives a failed handoff, attachment and all — say
-      // where it went rather than leaving it to be found by accident.
-      setError(
-        stagedDraftId
-          ? `${message} Your entry is saved as a draft with its attachment — open it from Recent Submissions to submit.`
-          : message
-      );
-      if (stagedDraftId) onSaved();
+      setError(typeof detail === 'string' ? detail : 'Failed to submit training');
     } finally {
       setBusy(false);
     }
@@ -1163,17 +819,34 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               )}
               {isFieldVisible('expiration_date') && (
                 <div>
-                  <FieldLabel htmlFor="expiration-date" required={isFieldRequired('expiration_date')}>
+                  <FieldLabel
+                    htmlFor="expiration-date"
+                    required={isFieldRequired('expiration_date') && !certificationNeverExpires}
+                    optional={!isFieldRequired('expiration_date') && !certificationNeverExpires}
+                  >
                     {fieldLabel('expiration_date', 'Expires')}
                   </FieldLabel>
                   <input
                     id="expiration-date"
                     ref={registerField('expiration_date')}
                     type="date"
-                    value={expirationDate}
+                    value={certificationNeverExpires ? '' : expirationDate}
+                    disabled={certificationNeverExpires}
                     onChange={(e) => setExpirationDate(e.target.value)}
-                    className={`form-input font-mono ${invalidClass('expiration_date')}`}
+                    className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
                   />
+                  {/* Whether an expiry is required follows the certification,
+                      not a blanket rule: a department can ask for the date and
+                      still take a credential that never expires. */}
+                  <label className="mobile-touch-target mt-1 flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={certificationNeverExpires}
+                      onChange={(e) => setCertificationNeverExpires(e.target.checked)}
+                      className="form-checkbox"
+                    />
+                    <span className="text-theme-text-muted text-xs">Does not expire</span>
+                  </label>
                 </div>
               )}
             </div>
@@ -1230,7 +903,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAllSubmissions((open) => !open)}
-                  className="text-sm text-blue-700 dark:text-blue-400"
+                  className="max-md:mobile-touch-target text-sm text-blue-700 dark:text-blue-400"
                 >
                   {showAllSubmissions ? 'Show fewer' : `View all ${submissions.length}`}
                 </button>
@@ -1250,13 +923,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                 return (
                   <li
                     key={submission.id}
-                    className="border-theme-surface-border flex items-center justify-between gap-3 border-t py-2.5 first:border-t-0"
+                    className="border-theme-surface-border flex flex-col gap-1 border-t py-2.5 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                   >
+                    {/* Stacked on a phone: a badge and two 44px actions beside
+                        the title leave about 200px for a course name, which
+                        turns every row into an ellipsis. */}
                     <div className="min-w-0">
                       <p className="text-theme-text-primary truncate text-sm font-medium">{submission.course_name}</p>
                       <p className="text-theme-text-muted text-xs">{meta}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                       <StatusBadge status={submission.status} />
                       {/* Shown on every listed row, not only in the expanded
                           list: a member with three submissions would otherwise
@@ -1267,7 +943,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                             type="button"
                             onClick={() => onEdit(submission)}
                             aria-label={`Edit ${submission.course_name}`}
-                            className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                            className="text-theme-text-muted hover:text-theme-text-primary max-md:mobile-touch-target rounded-sm p-1.5"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -1275,7 +951,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                             type="button"
                             onClick={() => onDelete(submission.id)}
                             aria-label={`Delete ${submission.course_name}`}
-                            className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                            className="text-theme-text-muted max-md:mobile-touch-target rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1366,8 +1042,14 @@ const SubmitTrainingPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editingSubmission, setEditingSubmission] = useState<TrainingSubmission | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  /**
+   * `silent` refreshes the lists without swapping the page for the spinner.
+   * A loud refresh after a save unmounts the form — and with it the receipt
+   * the member is supposed to be reading, which is how the confirmation
+   * screen managed to pass its test and never appear in a browser.
+   */
+  const loadData = async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) setLoading(true);
     setLoadError(null);
     try {
       const [configData, categoriesData, submissionsData, requirementsData] = await Promise.all([
@@ -1382,10 +1064,12 @@ const SubmitTrainingPage: React.FC = () => {
       setSubmissions(submissionsData);
       setRequirements(requirementsData);
     } catch (_error) {
-      setLoadError('Failed to load submission form. Please try again.');
+      // A failed background refresh must not replace a form the member is
+      // still filling in — or a receipt they are still reading.
+      if (!options.silent) setLoadError('Failed to load submission form. Please try again.');
       toast.error('Failed to load submission form');
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   };
 
@@ -1407,7 +1091,7 @@ const SubmitTrainingPage: React.FC = () => {
       await trainingSubmissionService.deleteSubmission(submissionId);
       toast.success('Submission deleted');
       if (editingSubmission?.id === submissionId) setEditingSubmission(null);
-      void loadData();
+      void loadData({ silent: true });
     } catch {
       toast.error('Failed to delete submission');
     }
@@ -1483,7 +1167,7 @@ const SubmitTrainingPage: React.FC = () => {
           submissions={submissions}
           onSaved={(continueEditing) => {
             setEditingSubmission(continueEditing ?? null);
-            void loadData();
+            void loadData({ silent: true });
           }}
           onEdit={(submission) => setEditingSubmission(submission)}
           onDelete={(submissionId) => {
