@@ -215,7 +215,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
                 aria-label={`${formatDateCustom(date, { month: 'long', day: 'numeric', year: 'numeric' }, timezone)}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}` : ''}`}
               >
                 <span
-                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${isToday ? 'bg-red-600 text-white' : ''} ${!isToday && isCurrentMonth ? 'text-theme-text-primary' : ''} ${!isToday && !isCurrentMonth ? 'text-theme-text-muted' : ''} `}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${isToday ? 'bg-red-800 text-white' : ''} ${!isToday && isCurrentMonth ? 'text-theme-text-primary' : ''} ${!isToday && !isCurrentMonth ? 'text-theme-text-muted' : ''} `}
                 >
                   {date.getDate()}
                 </span>

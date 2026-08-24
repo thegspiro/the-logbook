@@ -342,7 +342,7 @@ interface BarChartProps {
 
 const barColors = {
   blue: { bar: 'bg-blue-600', hover: 'hover:bg-blue-700' },
-  red: { bar: 'bg-red-600', hover: 'hover:bg-red-700' },
+  red: { bar: 'bg-red-800', hover: 'hover:bg-red-900' },
   green: { bar: 'bg-green-600', hover: 'hover:bg-green-700' },
 } as const;
 

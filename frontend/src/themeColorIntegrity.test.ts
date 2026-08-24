@@ -6,19 +6,17 @@
  * not obviously a missing colour either — the element simply takes whatever is
  * behind it.
  *
- * `bg-theme-bg` and `bg-theme-background` are both in that state: the tokens
- * defined in styles/index.css are `--color-theme-surface`, `--color-theme-nav-bg`
- * and the three `--color-theme-bg-from|via|to` gradient stops, and none of them
- * produces either class. Both resolve to `rgba(0, 0, 0, 0)` in the running app.
+ * That is harmless on a static block and destructive on a sticky or fixed one:
+ * the equipment check form's Submit bar carried `bg-theme-bg` while nothing
+ * defined that token, so the item list scrolled visibly through the notes field
+ * and the Submit button — which reads as overlapping content, not as a missing
+ * background, and so gets diagnosed as a layout bug that is not there.
  *
- * That is harmless on a static block and destructive on a sticky or fixed one.
- * The equipment check form's Submit bar carried both, so the item list scrolled
- * visibly through the notes field and the Submit button — which reads as
- * overlapping content, not as a missing background, and so gets diagnosed as a
- * layout bug that is not there.
- *
- * This walks the source for background utilities naming a `theme-` token and
- * fails on any the stylesheet does not define.
+ * `--color-theme-bg` is defined now (styles/index.css), as the flat opaque page
+ * canvas for exactly that job, and the sites that named it are no longer
+ * broken. The mechanism is what remains worth guarding: this walks the source
+ * for background utilities naming a `theme-` token and fails on any the
+ * stylesheet does not define.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -64,31 +62,15 @@ const BG_UTILITY = /\bbg-(theme-[a-z0-9-]+)/g;
  * Sites that carry an undefined token today.
  *
  * A ratchet, in the manner of the coverage floors: it blocks a new one rather
- * than pretending these are fixed. Each needs a visual decision about which
- * defined token it meant — `bg-theme-bg` on a plain block is invisible and
- * harmless, on a sticky or fixed one it is the see-through-panel bug — and that
- * is a change per screen, not a rename. EquipmentCheckForm is deliberately
- * absent: it was the one caught with a screenshot on it and is fixed.
+ * than pretending these are fixed. It reached zero on 2026-08-24, when the
+ * tokens the fifteen remaining sites named were defined rather than renamed —
+ * so the assertion below is now a plain invariant with no allowance in it.
  *
- * Removing an entry as you fix it is the point. Adding one is not.
+ * Adding an entry back is not the way to make a failure go away. A `bg-theme-*`
+ * the stylesheet does not define is either a typo or a token somebody meant to
+ * add; the fix is one of those two, at the call site or in the stylesheet.
  */
-const KNOWN_BROKEN = [
-  'modules/apparatus/pages/ApparatusDetailPage.tsx: bg-theme-bg',
-  'modules/communications/pages/MessagesAdminPage.tsx: bg-theme-info',
-  'modules/grants-fundraising/pages/GrantApplicationsPage.tsx: bg-theme-bg',
-  'modules/grants-fundraising/pages/GrantDetailPage.tsx: bg-theme-bg',
-  'modules/prospective-members/pages/InterviewPage.tsx: bg-theme-bg-secondary',
-  'pages/ActiveSkillTestPage.tsx: bg-theme-bg',
-  'pages/ElectionDetailPage.tsx: bg-theme-bg',
-  'pages/ElectionDetailPage.tsx: bg-theme-surface-alt',
-  'pages/FinanceApprovalPage.tsx: bg-theme-background',
-  'pages/TrainingAdminPage.tsx: bg-theme-surface-primary',
-  'pages/scheduling/EquipmentCheckReportsPage.tsx: bg-theme-bg',
-  'pages/scheduling/SchedulingAdminReportsPage.tsx: bg-theme-bg',
-  'pages/scheduling/SchedulingPatternsPage.tsx: bg-theme-bg',
-  'pages/scheduling/SchedulingPlatoonsPage.tsx: bg-theme-bg',
-  'pages/scheduling/SchedulingTemplatesPage.tsx: bg-theme-bg',
-];
+const KNOWN_BROKEN: string[] = [];
 
 describe('theme colour integrity', () => {
   it('every bg-theme-* utility names a token the stylesheet defines', () => {

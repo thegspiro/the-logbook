@@ -40,10 +40,21 @@ import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 
 type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications' | 'app';
 
 const TAB_IDS: TabType[] = ['account', 'password', 'security', 'emergency', 'appearance', 'notifications', 'app'];
+
+const SECTIONS: SettingsSection<TabType>[] = [
+  { key: 'account', label: 'Account', icon: User, description: 'Your name, contact details, and photo' },
+  { key: 'password', label: 'Password', icon: Lock, description: 'Change the password you sign in with' },
+  { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Two-factor authentication and sessions' },
+  { key: 'emergency', label: 'Emergency Contacts', icon: Heart, description: 'Who the department calls for you' },
+  { key: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and display preferences' },
+  { key: 'notifications', label: 'Notifications', icon: Bell, description: 'How and when the department reaches you' },
+  { key: 'app', label: 'App', icon: Smartphone, description: 'Installed version and update status' },
+];
 
 export const UserSettingsPage: React.FC = () => {
   const { user, loadUser } = useAuthStore();
@@ -469,51 +480,16 @@ export const UserSettingsPage: React.FC = () => {
     },
   ];
 
-  const tabs = [
-    { id: 'account' as TabType, label: 'Account', icon: User },
-    { id: 'password' as TabType, label: 'Password', icon: Lock },
-    { id: 'security' as TabType, label: 'Security', icon: ShieldCheck },
-    { id: 'emergency' as TabType, label: 'Emergency Contacts', icon: Heart },
-    { id: 'appearance' as TabType, label: 'Appearance', icon: Palette },
-    { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
-    { id: 'app' as TabType, label: 'App', icon: Smartphone },
-  ];
-
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">User Settings</h1>
-          <p className="text-theme-text-secondary">Manage your account settings and preferences</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-theme-surface-border -mx-4 mb-6 border-b px-4 sm:mx-0 sm:px-0">
-          <nav className="flex scrollbar-thin space-x-4 overflow-x-auto sm:space-x-6" aria-label="Settings tabs">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => selectTab(tab.id)}
-                  className={`focus:ring-theme-focus-ring flex items-center space-x-2 border-b-2 px-1 pb-4 whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                    activeTab === tab.id
-                      ? 'text-theme-text-primary border-red-500'
-                      : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'
-                  }`}
-                  aria-current={activeTab === tab.id ? 'page' : undefined}
-                >
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                  <span className="font-medium">{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div className="card p-4 sm:p-6">
+      <SettingsLayout<TabType>
+        sections={SECTIONS}
+        activeSection={activeTab}
+        onSectionChange={selectTab}
+        navLabel="User settings sections"
+        title="User Settings"
+      >
+        <>
           {/* Account Tab */}
           {activeTab === 'account' && (
             <div className="space-y-6">
@@ -1272,7 +1248,7 @@ export const UserSettingsPage: React.FC = () => {
                         void (push.subscribed ? push.unsubscribe() : push.subscribe());
                       }}
                       className={`${
-                        push.subscribed ? 'bg-red-600' : 'bg-theme-surface-border'
+                        push.subscribed ? 'bg-red-800' : 'bg-theme-surface-border'
                       } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                       role="switch"
                       aria-checked={push.subscribed}
@@ -1297,7 +1273,7 @@ export const UserSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setEmailNotifications(!emailNotifications)}
                     className={`${
-                      emailNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                      emailNotifications ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={emailNotifications}
@@ -1333,7 +1309,7 @@ export const UserSettingsPage: React.FC = () => {
                       void handleSmsAddOnToggle(!(smsConsentGranted && smsNotifications));
                     }}
                     className={`${
-                      smsConsentGranted && smsNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                      smsConsentGranted && smsNotifications ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md disabled:opacity-50`}
                     role="switch"
                     aria-checked={smsConsentGranted && smsNotifications}
@@ -1358,7 +1334,7 @@ export const UserSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setEventReminders(!eventReminders)}
                     className={`${
-                      eventReminders ? 'bg-red-600' : 'bg-theme-surface-border'
+                      eventReminders ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={eventReminders}
@@ -1381,7 +1357,7 @@ export const UserSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setTrainingReminders(!trainingReminders)}
                     className={`${
-                      trainingReminders ? 'bg-red-600' : 'bg-theme-surface-border'
+                      trainingReminders ? 'bg-red-800' : 'bg-theme-surface-border'
                     } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={trainingReminders}
@@ -1407,8 +1383,8 @@ export const UserSettingsPage: React.FC = () => {
 
           {/* App Tab */}
           {activeTab === 'app' && <AppVersionSection />}
-        </div>
-      </div>
+        </>
+      </SettingsLayout>
     </div>
   );
 };

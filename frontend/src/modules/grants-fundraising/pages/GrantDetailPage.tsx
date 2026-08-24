@@ -404,7 +404,7 @@ export const GrantDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-red-500" />
           <p className="text-theme-text-secondary">Loading grant application...</p>
@@ -415,7 +415,7 @@ export const GrantDetailPage: React.FC = () => {
 
   if (!application) {
     return (
-      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Application Not Found</h2>
@@ -425,7 +425,7 @@ export const GrantDetailPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/grants/applications')}
-            className="rounded-lg bg-red-600 px-6 py-3 text-sm font-medium text-white hover:bg-red-700"
+            className="rounded-lg bg-red-800 px-6 py-3 text-sm font-medium text-white hover:bg-red-900"
           >
             Back to Applications
           </button>
@@ -463,7 +463,7 @@ export const GrantDetailPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="bg-theme-bg min-h-screen">
+    <div className="min-h-screen">
       {/* ================================================================== */}
       {/* Header                                                             */}
       {/* ================================================================== */}
@@ -501,7 +501,7 @@ export const GrantDetailPage: React.FC = () => {
             <button
               type="button"
               onClick={() => void navigate(`/grants/applications/${application.id}/edit`)}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
             >
               <Edit className="h-4 w-4" />
               Edit
@@ -510,7 +510,7 @@ export const GrantDetailPage: React.FC = () => {
 
           {/* Key stats */}
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Amount Requested
@@ -519,7 +519,7 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.amountRequested)}
               </p>
             </div>
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Amount Awarded
@@ -528,7 +528,7 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Target className="h-4 w-4" />
                 Match Required
@@ -537,7 +537,7 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.matchAmount)}
               </p>
             </div>
-            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+            <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4" />
                 Grant Period
@@ -573,7 +573,7 @@ export const GrantDetailPage: React.FC = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:bg-theme-surface-secondary hover:text-theme-text-primary'
               }`}
             >
@@ -704,7 +704,7 @@ export const GrantDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowBudgetModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Add Item
@@ -833,7 +833,7 @@ export const GrantDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowExpenditureModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Record Expenditure
@@ -943,7 +943,7 @@ export const GrantDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowComplianceModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
               >
                 <Plus className="h-4 w-4" />
                 Add Task
@@ -1085,7 +1085,7 @@ export const GrantDetailPage: React.FC = () => {
                   type="button"
                   disabled={!newNoteContent.trim() || isSubmittingNote}
                   onClick={() => void handleAddNote()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Add Note
@@ -1175,7 +1175,7 @@ export const GrantDetailPage: React.FC = () => {
               type="button"
               disabled={budgetBusy || !budgetCategory || !budgetDescription || !budgetAmount}
               onClick={() => void handleAddBudgetItem()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add Item
             </button>
@@ -1294,7 +1294,7 @@ export const GrantDetailPage: React.FC = () => {
               type="button"
               disabled={expenditureBusy || !expenditureDescription || !expenditureAmount || !expenditureDate}
               onClick={() => void handleAddExpenditure()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Record Expenditure
             </button>
@@ -1414,7 +1414,7 @@ export const GrantDetailPage: React.FC = () => {
               type="button"
               disabled={complianceBusy || !complianceTitle || !complianceDueDate}
               onClick={() => void handleAddComplianceTask()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add Task
             </button>

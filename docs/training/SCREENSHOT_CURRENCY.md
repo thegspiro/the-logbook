@@ -654,6 +654,14 @@ walks the source and fails on a background utility naming an undefined token,
 with the other 15 sites recorded as a ratchet baseline rather than pretended
 fixed — each needs a per-screen decision about which token it meant.
 
+> **Superseded 2026-08-24.** `--color-theme-bg` is defined now: main added it
+> as the flat opaque page canvas, for precisely the sticky-bar job described
+> above (a surface token cannot do it — those are translucent white in dark
+> mode). So `bg-theme-bg` is the _right_ answer on that Submit bar, not the
+> wrong one, and the fix recorded here was replaced by main's on merge. The
+> ratchet is empty and the guard is now a plain invariant. Two sessions fixing
+> one bug from opposite ends: worth reading both sides before keeping either.
+
 _This was nearly misdiagnosed._ The overlap appeared when the width changed, so
 it looked like a 390 regression. It reproduces identically at 414 on the same
 code, and the geometry probe found no collision at either width — the DOM was

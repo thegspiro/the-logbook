@@ -28,7 +28,13 @@ from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
 from app.services.email_template_service import EmailTemplateService
-from app.services.email_theme import build_email_document
+from app.services.email_theme import (
+    ACCENT_RED,
+    build_email_document,
+    build_logo_cell,
+    build_shell,
+    colourway_context,
+)
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -248,34 +254,54 @@ def build_email_logo_html(organization: Optional[Organization]) -> str:
     return f'<div style="text-align:center;padding:16px 0;">' f"{img}</div>"
 
 
+def build_email_logo_cell(organization: Optional[Organization]) -> str:
+    """The header lockup's logo cell for *organization*, or an empty string.
+
+    Thin wrapper over :func:`email_theme.build_logo_cell` so callers holding
+    an ``Organization`` do not each dig the two fields out themselves. The
+    logic lives in ``email_theme`` because ``email_template_service`` needs it
+    too and cannot import this module — the dependency runs the other way.
+    """
+    if not organization:
+        return ""
+    return build_logo_cell(
+        getattr(organization, "logo", None) or "",
+        getattr(organization, "name", "Organization"),
+    )
+
+
 def wrap_email_body(
     organization: Optional[Organization],
     title: str,
     body_html: str,
     footer_text: str = "",
     header_color: str = "",
+    chip: str = "",
+    subtitle: str = "",
 ) -> str:
     """Wrap raw HTML content in the standard email template chrome.
 
-    Produces the same visual structure as the ``EmailTemplateService``
-    default templates:  container > logo > header(h1) > content > footer.
-
-    Use this for one-off emails in scheduled tasks that build HTML
-    inline rather than going through the template system.
+    Produces the same shell as every default template, because it calls the
+    same :func:`build_shell`. Use this for one-off emails in scheduled tasks
+    that build HTML inline rather than going through the template system —
+    they are the mail a department is most likely to receive looking like it
+    came from somewhere else, precisely because nobody edits them.
 
     Args:
-        organization: Org for logo. ``None`` skips the logo.
-        title: Text for the ``<h1>`` header banner.
+        organization: Org for the lockup. ``None`` omits the logo cell.
+        title: Text for the ``<h1>``.
         body_html: Pre-escaped HTML for the content area.
         footer_text: Optional replacement for the whole footer block. Left
             empty — which is the usual case — the department's default footer
             is used, the same one its templates close with.
-        header_color: Optional inline ``background-color`` for the header.
-            E.g. ``"#b91c1c"`` for red alerts.
+        header_color: The accent. Named for the solid header band it used to
+            paint; since 1b it drives the header rule, the chip tint, the
+            details panel's left edge and the button. Callers pass hexes that
+            are not ``ACCENT_*`` constants, which is why ``build_shell``
+            falls back rather than raising on an unmapped tint.
+        chip: Optional status chip text for the lockup.
+        subtitle: Optional accent-coloured subline under the title.
     """
-    logo_img = build_email_logo_img(organization)
-    logo_div = f'<div class="logo">{logo_img}</div>' if logo_img else ""
-
     # The department's default footer, so a one-off email from a scheduled
     # task closes the same way its templated mail does. *footer_text*
     # overrides the whole block for the few callers that need to say
@@ -286,15 +312,30 @@ def wrap_email_body(
         context = EmailTemplateService.build_context({}, organization)
         footer_block = str(context.get("footer_html", ""))
 
-    style_attr = f' style="background-color: {header_color};"' if header_color else ""
-    body = (
-        f'<div class="container">'
-        f"{logo_div}"
-        f'<div class="header"{style_attr}>'
-        f"<h1>{_html.escape(title)}</h1></div>"
-        f'<div class="content">{body_html}</div>'
-        f"{footer_block}</div>"
+    accent = header_color or ACCENT_RED
+    body = build_shell(
+        _html.escape(title),
+        body_html,
+        accent=accent,
+        chip=chip,
+        subtitle=subtitle,
     )
+    # build_shell writes the shell as a template and this path never goes
+    # through variable substitution, so every token it emits is filled in
+    # here. Missing the colourway ones mailed a literal
+    # "border-top-color: {{header_accent}};" and, on the test email, a chip
+    # reading "{{status_chip}}" — to every scheduled task and alert, which
+    # are exactly the sends nobody is looking at when they go out.
+    for _key, _value in colourway_context(accent, chip).items():
+        body = body.replace("{{" + _key + "}}", str(_value))
+    body = body.replace(
+        "{{organization_logo_cell}}", build_email_logo_cell(organization)
+    )
+    body = body.replace(
+        "{{organization_name}}",
+        _html.escape(getattr(organization, "name", "") or "") if organization else "",
+    )
+    body = body.replace("{{footer_html}}", footer_block)
     return build_email_document(title, body)
 
 
@@ -403,6 +444,19 @@ class EmailService:
             ),
             {},
         )
+        # The colourway too. This path has no template row to read the
+        # header_accent / status_chip columns off, and a body whose accent
+        # never got filled mails a style attribute reading
+        # "border-top-color: {{header_accent}};" — a header with no rule at
+        # all, to the departments least likely to notice, because this is
+        # exactly the path a department that has never opened the Email
+        # Templates screen is on.
+        for _key, _value in colourway_context(
+            default_definition.get("accent", ACCENT_RED),
+            default_definition.get("chip", ""),
+        ).items():
+            context.setdefault(_key, _value)
+
         context = EmailTemplateService.build_context(
             context,
             self.organization,

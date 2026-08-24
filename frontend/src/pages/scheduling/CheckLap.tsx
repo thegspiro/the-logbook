@@ -145,7 +145,7 @@ export const CheckStop: React.FC<StopProps> = ({
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
             failures.length > 0
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : complete
                 ? 'bg-green-600 text-white'
                 : 'border-theme-surface-border text-theme-text-muted border'

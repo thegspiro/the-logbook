@@ -38,13 +38,25 @@ describe('SchedulingSettingsPage', () => {
     window.history.replaceState({}, '', '/scheduling/settings');
   });
 
-  it('renders the page header once, not stacked with a panel heading', () => {
+  // The header names the page, not the module. It used to read "Shift
+  // Scheduling" — the module's identity — on a screen whose entire subject is
+  // that module's settings, which left the tab strip as the only thing saying
+  // where you were.
+  it('renders the page header once, naming the page rather than the module', () => {
     renderWithRouter(<SchedulingSettingsPage />);
 
-    expect(screen.getByRole('heading', { name: 'Shift Scheduling' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Scheduling Settings' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'Back to scheduling' })).toHaveAttribute('href', '/scheduling');
-    expect(screen.getByText('Settings · Configure department-wide scheduling defaults')).toBeInTheDocument();
+    expect(screen.getByText('Department-wide scheduling defaults')).toBeInTheDocument();
+  });
+
+  it('offers a way back to the scheduling module', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingSettingsPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Back to scheduling' }));
+
+    expect(window.location.pathname).toBe('/scheduling');
   });
 
   it('opens on General and lists the settings sections', () => {

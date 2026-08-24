@@ -322,7 +322,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         isComplete
                           ? 'border-green-600 bg-green-600'
                           : isActive
-                            ? 'border-red-600 bg-red-600'
+                            ? 'border-red-600 bg-red-800'
                             : 'bg-theme-input-bg border-theme-input-border'
                       }`}
                     >

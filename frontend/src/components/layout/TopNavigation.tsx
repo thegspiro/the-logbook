@@ -431,7 +431,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                                 aria-current={subActive ? 'page' : undefined}
                                 className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
                                   subActive
-                                    ? 'bg-red-600 text-white'
+                                    ? 'bg-red-800 text-white'
                                     : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                                 }`}
                               >
@@ -638,7 +638,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                                   aria-current={subActive ? 'page' : undefined}
                                   className={`focus:ring-theme-focus-ring flex min-h-[44px] items-center rounded-md px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden ${
                                     subActive
-                                      ? 'bg-red-600 text-white'
+                                      ? 'bg-red-800 text-white'
                                       : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                                   }`}
                                 >

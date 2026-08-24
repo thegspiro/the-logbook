@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { emailTemplatesService } from '../../../services/api';
 import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
-import type { EmailTemplate, EmailTemplateUpdate, EmailTemplatePreview } from '../types';
+import type { EmailTemplate, EmailTemplateUpdate, EmailTemplatePreview, TemplatePreviewOverrides } from '../types';
 
 interface EmailTemplatesState {
   // Data
@@ -28,12 +28,15 @@ interface EmailTemplatesState {
   previewTemplate: (
     templateId: string,
     context?: Record<string, unknown>,
-    overrides?: { subject?: string; html_body?: string; css_styles?: string },
+    overrides?: TemplatePreviewOverrides,
     memberId?: string
   ) => Promise<void>;
   clearPreview: () => void;
   clearError: () => void;
 }
+
+/** Which preview request is the current one; see previewTemplate. */
+let previewGeneration = 0;
 
 export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
   templates: [],
@@ -71,11 +74,24 @@ export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
   },
 
   previewTemplate: async (templateId, context, overrides, memberId) => {
+    // The debounce upstream cancels a pending timer, not a request already in
+    // flight. Two previews can therefore be open at once — change the draft,
+    // or pick a different member, while the first is still running — and the
+    // slower one settling last would paint stale content over newer. The pane
+    // would then contradict the body on screen until something else refreshed
+    // it, which is the one thing a live preview must not do.
+    //
+    // A monotonic token rather than an AbortController: the response still has
+    // to be discarded even when it arrives before the abort lands, so the
+    // check is needed either way and the token is the whole of it.
+    const token = ++previewGeneration;
     set({ isPreviewing: true, error: null });
     try {
       const preview = await emailTemplatesService.previewTemplate(templateId, context, overrides, memberId);
+      if (token !== previewGeneration) return;
       set({ preview, isPreviewing: false });
     } catch (err: unknown) {
+      if (token !== previewGeneration) return;
       set({ error: handleStoreError(err, 'Failed to preview template'), isPreviewing: false });
     }
   },

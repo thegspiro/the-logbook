@@ -1504,7 +1504,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-800 text-white'
               : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
           }`}
         >
@@ -2147,15 +2147,21 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Overall notes + submit.
 
-            The sticky wrappers below are bg-theme-surface because no token
-            backs the two names they used to carry — those compiled to nothing
-            and left the block transparent, so the item list scrolled visibly
-            through the notes field and the Submit button. That reads as
-            overlapping content rather than as a missing colour, which is why it
-            survived: it looks like a layout bug that is not there.
-            themeColorIntegrity.test.ts guards the rest. */}
+            bg-theme-bg, not a surface token, and the distinction is the whole
+            point of that token existing: this block is sticky, so it has to
+            *occlude* the item list scrolling under it. The surface tokens are
+            translucent white in dark mode by design, so a sticky bar painted
+            with one shows the rows sliding through the notes field and the
+            Submit button — which reads as overlapping content rather than as a
+            colour choice, and is why it survived so long.
+
+            (This line was briefly bg-theme-surface. At that time nothing
+            defined --color-theme-bg, so the name compiled to no CSS at all and
+            the block was transparent; a surface token was the lesser of two
+            wrongs. The token is defined now — see styles/index.css — and is the
+            right answer.) */}
         {!previewMode && (
-          <div className="bg-theme-surface border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
+          <div className="bg-theme-bg border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>
               <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes
@@ -2383,7 +2389,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                           onClick={() => setDisposition(value)}
                           className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                             disposition === value
-                              ? 'border-red-500 bg-red-600 text-white'
+                              ? 'border-red-500 bg-red-800 text-white'
                               : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
                           }`}
                         >

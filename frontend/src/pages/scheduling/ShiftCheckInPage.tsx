@@ -277,7 +277,7 @@ const ShiftCheckInPage: React.FC = () => {
                 void handleCheckOut();
               }}
               disabled={processing || shift.is_finalized}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-800 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogOut className="h-6 w-6" />}
               Check Out
