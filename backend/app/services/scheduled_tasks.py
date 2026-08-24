@@ -112,6 +112,7 @@ from app.models.user import Organization, User
 from app.services.call_tracking_service import CallTrackingService
 from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.hours import hours_from_minutes
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
@@ -2602,7 +2603,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         continue
 
                     hours = (
-                        round((att.duration_minutes or 0) / 60.0, 2)
+                        hours_from_minutes(att.duration_minutes)
                         if att.duration_minutes
                         else 0.0
                     )

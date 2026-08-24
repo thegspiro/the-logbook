@@ -227,6 +227,15 @@ const EmailTemplatesPage: React.FC = () => {
    * Sent on every preview, saved or not: the endpoint has always accepted
    * these, and passing them is what lets the right-hand pane show the edit
    * rather than the last thing written to the database.
+   *
+   * The accent and layout are omitted when blank rather than sent as ''.
+   * A template is allowed to carry neither — the renderer then uses the
+   * colourway and layout shipped for its type — but the form holds that
+   * absence as an empty string, and '' is not one of the seven accents or
+   * three layouts the API accepts. Sending it 422'd the preview on every
+   * such template, which took the whole live pane down rather than one
+   * field. Every other override keeps '' intact: a cleared footer, chip,
+   * plain-text body or stylesheet means "cleared", not "unchanged".
    */
   const previewOverrides = useCallback(
     () => ({
@@ -235,9 +244,9 @@ const EmailTemplatesPage: React.FC = () => {
       text_body: draft.textBody,
       css_styles: draft.cssStyles,
       footer_key: draft.footerKey,
-      header_accent: draft.headerAccent,
+      header_accent: draft.headerAccent || undefined,
       status_chip: draft.statusChip,
-      layout: draft.layout,
+      layout: draft.layout || undefined,
     }),
     [
       draft.subject,
@@ -353,11 +362,21 @@ const EmailTemplatesPage: React.FC = () => {
     setIsSendingTest(true);
     try {
       const { messageHistoryService } = await import('../../../services/api');
-      await messageHistoryService.sendTestEmail({
+      // The endpoint answers 200 with the history row it just wrote, and that
+      // row says `failed` when the provider rejected the message — a bad
+      // mailbox, a refused relay, SMTP switched off. Reporting success off the
+      // absence of a thrown error told an admin their configuration worked
+      // whenever it did not, which is the one question this button exists to
+      // answer. Same check the History tab's own test-send makes.
+      const result = await messageHistoryService.sendTestEmail({
         to_email: '',
         template_id: selectedTemplate.id,
       });
-      toast.success('Test email sent to your inbox');
+      if (result.status === 'sent') {
+        toast.success('Test email sent to your inbox');
+      } else {
+        toast.error(`Test email failed: ${result.error_message ?? 'Unknown error'}`);
+      }
     } catch {
       toast.error('Failed to send test email');
     } finally {

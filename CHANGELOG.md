@@ -74,6 +74,147 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   week; members who have turned off email notifications are skipped and
   counted back to the sender.
 
+### The stock room was in everyone's nav; the page members actually need was in nobody's (2026-08-24)
+
+**Changed**
+
+- **Medical Supplies is now advertised only to the people who stock it.** The
+  Operations entry gated on `inventory.view`, which both rank-and-file seeded
+  roles hold, so every member carried a row to the supply room in their
+  navigation — a screen about lot numbers, expiration dates and incoming
+  deliveries, and a job almost none of them have. It now gates on
+  `inventory.view_medical` / `manage_medical` / `inventory.manage`. **The route
+  and the API are unchanged**: a member who follows a link can still look at
+  what is on hand. What went away is the standing invitation.
+- **Apparatus Inventory has a navigation entry.** The crew half of the same
+  shelf — _"we just used two of these"_, recorded without starting a whole
+  checklist — was reachable only from a secondary button on My Checklists, and
+  nothing in either navigation pointed at it. It now sits in Operations beside
+  Medical Supplies, on the default member grant that its route already used.
+  This is the medical page most members need, and it is the one they could not
+  find.
+- **The Administration section no longer carries a medical row.** It pointed at
+  `/medical-supplies/categories` — a setup screen configured once — and with
+  Medical Supplies now gated to the same people, every user who could see it
+  already had the Operations entry to the same module. Categories keeps its
+  name and is still reached by the tag button on Medical Supplies, the way gear
+  categories are reached through the Gear Admin hub.
+
+Between them these three settle a navigation that had it backwards: the
+officer's page was shown to everyone, and the crew's page to no one.
+
+**Also changed**
+
+- **The gear catalogue is manager-only too.** `/inventory` — the whole
+  department's uniforms and equipment — had no route guard at all and no
+  permission on its navigation row, so every member could browse it. It and its
+  `/inventory/items` alias now require `inventory.manage`. A member keeps My
+  Issued Gear, the request and return they raise from it, and the detail page
+  for an item they hold.
+- **`inventory.view` could not be the gate, and that is the whole difficulty.**
+  Its name says "View gear and uniforms", but the seeded `member` and
+  `firefighter` roles hold it _and need it_: the request picker on My Issued
+  Gear searches `GET /items` to find something to ask for, and item detail
+  reads `GET /items/{id}`. Gating the list on `inventory.view` would have gated
+  nothing, and taking the grant off those roles would have broken requesting —
+  the one thing a member is supposed to be able to do here.
+- **The item-detail breadcrumb no longer leads members somewhere they cannot
+  go.** It pointed at Inventory › Items unconditionally. For a member arriving
+  from their own issued gear, both of those are now closed, so the trail leads
+  back to My Issued Gear instead.
+
+**Fixed in review**
+
+- **Five more ways in, all of them one mistake.** Closing a page closes it for
+  every surface that offers it, and "navigation" turned out to mean more than
+  the two nav components: the item detail page's header **Back** button and its
+  error-state link still pointed at the closed catalogue (the breadcrumb above
+  was only one of three exits), the **command palette** listed Inventory with
+  no permission at all, the **`i` keyboard shortcut** navigated there on a bare
+  keypress with no label to gate, and Medical Supplies' "tracked separately
+  under Gear & Uniforms" aside linked a medical-only officer into a page they
+  cannot open. Each one turned a fixed bug into an Access Denied reached from a
+  control the app itself offered.
+- **The medical navigation gate was a superset of its route's gate.** It
+  advertised `manage_medical` and `inventory.manage`, but `/medical-supplies`
+  accepts only `MEDICAL_VIEW_PERMISSIONS` and `checkPermission` has no
+  manage-implies-view rule, so a supply officer holding management without the
+  read grant was invited to Access Denied. The entry gates on
+  `inventory.view_medical` alone — the one grant in the route's own list that
+  distinguishes a stocker from every member.
+- **`src/navGateIntegrity.test.ts` asserts both invariants**, in the manner of
+  `routeIntegrity.test.ts`: a nav gate must be a subset of its route's gate,
+  and every surface offering the gear catalogue must gate on
+  `inventory.manage`. Each assertion was confirmed to fail against the original
+  defect before being kept.
+- **Two Playwright specs signed in as nobody.** `signIn` sets
+  `permissions: []`, which _overrides_ the fixture user's own list, so the
+  end-to-end user holds no grants at all. The navigation spec clicked a Gear &
+  Uniforms row that no longer renders for a plain member, and the mobile
+  presentation pass — which visits `/inventory` — quietly measured the redirect
+  instead of the page, reporting "rendered little content" for a screen that
+  renders plenty. Both now sign in with `inventory.manage`. The full mobile
+  ratchet still passes every route at zero sub-44px targets, so the wider grant
+  costs nothing it was protecting.
+
+### Logged hours read on the quarter hour (2026-08-24)
+
+**Changed**
+
+- **Time a member worked or was credited with is shown to the nearest quarter,
+  halfway values going up.** That is the granularity it is entered at — the
+  external-training duration stepper moves in 15-minute steps — and the
+  granularity a department reports against, so a screen that printed a raw
+  division of stored minutes claimed a precision the record does not have. It
+  also summed as floats: the dashboard read `69.60000000000001 hrs in August`
+  for 66.7 standby plus 2.9 administrative. Applied across the dashboard, admin
+  hours, scheduling, training, member profiles and the report renderers.
+- **A total is the sum of the parts printed beside it**, not a rounding of the
+  raw sum. Rounding 69.6 once gives 69.5 above segments reading 66.75 and 3,
+  which is arithmetic the reader can see is wrong. The same reasoning settles
+  the scheduling report's worked-vs-scheduled variance, the compliance
+  dashboard's "Total Contributed" card and the admin-hours and annual-training
+  report totals.
+- **The backend reports on the quarter too**, so an export matches the screen
+  it came from. `app/utils/hours.py` carries the same rule, tie-breaking the
+  same direction — Python's built-in `round` uses banker's rounding and would
+  disagree with the frontend by an increment on every exact half. Applied to
+  the figures that leave the system: the admin-hours summary and its CSV
+  export, the compliance-officer dashboard, the scheduling summaries and
+  member-hours report, the annual-training and department-overview reports,
+  and the end-of-shift digest a member is emailed.
+- **Stored minutes and stored snapshots are untouched.** `duration_minutes`,
+  a training record's `hours_completed`, a shift report's `hours_on_shift` and
+  the `Shift.total_hours` snapshot all keep what actually happened — a column
+  holding 66.75 against attendance rows summing to 66.7 is a database that
+  disagrees with itself.
+- **Compliance grading still reads raw minutes.** `_get_user_compliance`
+  compares `logged_hours < required_hours` before any rounding, which is the
+  whole point: rounding first is what marked a member compliant while short.
+
+**Fixed**
+
+- **A requirement could read as met while the member was short.** Rounding
+  logged hours before subtracting turned a sub-eighth shortfall into zero, so
+  7.9 of 8 printed "Requirement met" beside a status badge that still read
+  behind — and a member who believes they are done stops logging. Met is now
+  decided on the raw hours, and an unmet requirement is held an increment below
+  its target rather than rounding up onto it, so the row still subtracts to the
+  gap: "7.75 / 8 hrs · 0.25 hrs still needed".
+
+**Not rounded**
+
+- **Derived averages and percentage-derived credit ceilings**, which are not
+  recorded time and are not constrained to the increment. 2.5 hours over three
+  shifts is 0.83, and 0.75 misreports the metric by a tenth; an event mapped at
+  40% credits 0.4 hours for an hour of attendance, and "Credits up to 0.5"
+  promises more than check-out awards. Those use `formatHoursExact`.
+- **Configuration thresholds** (auto-approve ceilings, max hours per session,
+  shift template lengths, reminder lead times) and **meter readings**
+  (apparatus engine hours), which are entered as exact figures and must read
+  back exactly as entered. Editable hours fields and the manual shift report's
+  duration preview likewise show the value actually being submitted.
+
 ### Learning Center: the lessons are taught in the app, and progress is per member (2026-08-24)
 
 **Changed**

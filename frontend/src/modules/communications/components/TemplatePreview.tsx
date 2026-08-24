@@ -94,7 +94,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
                 onClick={() => setViewport(mode)}
                 aria-pressed={viewport === mode}
                 className={`rounded-md p-1.5 transition-colors ${
-                  viewport === mode ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                  viewport === mode ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                 }`}
                 title={title}
               >

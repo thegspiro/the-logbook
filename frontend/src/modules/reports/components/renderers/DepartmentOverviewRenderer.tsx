@@ -6,7 +6,7 @@ import React from 'react';
 import { Users, BookOpen, Calendar, ClipboardList } from 'lucide-react';
 import type { DepartmentOverviewReport } from '../../types';
 import { StatCard } from '../StatCard';
-import { roundHoursToQuarter } from '@/utils/hoursFormatting';
+import { formatHoursExact } from '@/utils/hoursFormatting';
 
 interface Props {
   data: DepartmentOverviewReport;
@@ -42,7 +42,7 @@ export const DepartmentOverviewRenderer: React.FC<Props> = ({ data }) => {
           <StatCard label="Completed" value={training.completed} />
           <StatCard label="Completion Rate" value={`${training.completion_rate}%`} />
           <StatCard label="Total Hours" value={Math.round(training.total_hours)} />
-          <StatCard label="Avg Hrs/Member" value={roundHoursToQuarter(training.avg_hours_per_member)} />
+          <StatCard label="Avg Hrs/Member" value={formatHoursExact(training.avg_hours_per_member)} />
         </div>
       </div>
 
