@@ -9,20 +9,16 @@ view-only submission, but hidden write permissions must not. These tests lock
 the carry-over rules of ``_merge_default_permissions``.
 """
 
-from app.api.v1.onboarding import RolePermission, _merge_default_permissions
+from app.api.v1.onboarding import (
+    RolePermission,
+    _merge_default_permissions,
+    expand_module_checkboxes,
+)
 from app.core.permissions import DEFAULT_POSITIONS, permission_matches
 
-
-def _rebuild(submitted: dict[str, RolePermission]) -> list[str]:
-    """Mimic the endpoint's checkbox -> permission-list expansion."""
-    permission_list = []
-    for module_id, perms in submitted.items():
-        if perms.view:
-            permission_list.append(f"{module_id}.view")
-        if perms.manage:
-            permission_list.append(f"{module_id}.manage")
-            permission_list.append(f"{module_id}.*")
-    return permission_list
+# The endpoint's own expansion, not a copy of it: a local mimic drifted the
+# moment the real one learned about view-implied permissions.
+_rebuild = expand_module_checkboxes
 
 
 def _merged(submitted: dict[str, RolePermission], defaults: list[str]) -> list[str]:
@@ -142,19 +138,31 @@ def test_view_only_drops_default_write_permissions_across_modules():
 def test_member_keeps_storefront_order_with_store_view_alone():
     """Browsing the store is useless without being able to check out.
 
-    ``storefront.order`` is the same shape as ``scheduling.swap``: an action a
-    plain member holds alongside baseline view access, which the two-checkbox
-    editor cannot express. It rode along as an un-submitted module's default
-    until the Department Store was added to the frontend registry — from that
-    point the module *is* submitted, so without an explicit carry-over a member
-    saved from the position editor browses the catalog and gets a 403 at
-    checkout.
+    ``storefront.order`` is an action a plain member holds alongside baseline
+    view access, which the two-checkbox editor cannot express. It rode along as
+    an un-submitted module's default until the Department Store was added to
+    the frontend registry — from that point the module *is* submitted, so
+    without the view-implied grant a member saved from the position editor
+    browses the catalog and gets a 403 at checkout.
     """
     defaults = DEFAULT_POSITIONS["member"]["permissions"]
     submitted = {"storefront": RolePermission(view=True, manage=False)}
     merged = _merged(submitted, defaults)
     assert "storefront.view" in merged
     assert "storefront.order" in merged
+
+
+def test_a_brand_new_position_can_order_from_store_view_alone():
+    """A position built in the editor has no defaults to carry over.
+
+    Carry-over only rescues a position DEFAULT_POSITIONS already seeded, so a
+    custom position ticked View-only used to save ``storefront.view`` with no
+    way to check out — while the registry told the administrator that View
+    includes placing orders.
+    """
+    submitted = {"storefront": RolePermission(view=True, manage=False)}
+    merged = _merged(submitted, defaults=[])
+    assert merged == ["storefront.view", "storefront.order"]
 
 
 def test_unchecking_the_store_revokes_ordering_too():

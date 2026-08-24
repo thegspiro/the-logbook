@@ -27,6 +27,7 @@ import pytest
 
 from app.schemas.organization import ModuleSettings
 from app.services.onboarding import (
+    ONBOARDING_ACCEPTED_MODULE_IDS,
     ONBOARDING_CORE_MODULES,
     ONBOARDING_LEGACY_MODULES,
     ONBOARDING_OFFERED_MODULES,
@@ -109,3 +110,43 @@ def test_every_offered_module_is_a_real_module_setting():
 
 def test_the_legacy_ids_stay_out_of_the_offered_list():
     assert not set(ONBOARDING_LEGACY_MODULES) & set(ONBOARDING_OFFERED_MODULES)
+
+
+def test_every_offered_module_survives_the_whole_wizard():
+    """Offering a module is worthless if a later step rejects it.
+
+    The module step and the session-save endpoint validated against separate
+    hardcoded lists. Storefront was added to the registry and to the wizard's
+    list but not to the session endpoint's, so enabling the Department Store
+    got as far as the final Continue and failed with "Invalid modules" —
+    setup could not be completed at all.
+    """
+    unaccepted = set(ONBOARDING_OFFERED_MODULES) - ONBOARDING_ACCEPTED_MODULE_IDS
+    assert not unaccepted, (
+        "Setup offers these modules but the onboarding endpoints reject them, "
+        f"so a department that enables one cannot finish setup: {sorted(unaccepted)}"
+    )
+
+
+def test_the_endpoints_validate_against_the_shared_set():
+    """No endpoint may reintroduce a list of its own.
+
+    Asserted by source, because the failure mode is a second list that agrees
+    today and drifts on the next module — which is exactly what happened.
+    """
+    api_source = (
+        Path(__file__).resolve().parents[1] / "app" / "api" / "v1" / "onboarding.py"
+    ).read_text()
+    handler = api_source[api_source.index("async def save_session_modules") :][:3000]
+    assert "ONBOARDING_ACCEPTED_MODULE_IDS" in handler
+    assert '"training",' not in handler, (
+        "save_session_modules is validating against its own module list again; "
+        "use ONBOARDING_ACCEPTED_MODULE_IDS"
+    )
+
+
+def test_the_accepted_set_takes_both_spellings():
+    """Saved sessions carry hyphenated ids alongside snake_case ones."""
+    assert "prospective-members" in ONBOARDING_ACCEPTED_MODULE_IDS
+    assert "prospective_members" in ONBOARDING_ACCEPTED_MODULE_IDS
+    assert "hr-payroll" in ONBOARDING_ACCEPTED_MODULE_IDS
