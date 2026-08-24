@@ -21,45 +21,45 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 
 ### Database Models
 
-| Model | Description |
-|-------|-------------|
-| `MeetingMinutes` | Minutes record with title, meeting type, status, sections (JSON), event link, and publish reference |
+| Model             | Description                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `MeetingMinutes`  | Minutes record with title, meeting type, status, sections (JSON), event link, and publish reference        |
 | `MinutesTemplate` | Template definition with name, meeting type, default sections, header/footer config, and `is_default` flag |
-| `DocumentFolder` | Folder hierarchy for organizing documents with system/custom distinction |
-| `Document` | Document record with file metadata, content HTML, source tracking, and folder assignment |
+| `DocumentFolder`  | Folder hierarchy for organizing documents with system/custom distinction                                   |
+| `Document`        | Document record with file metadata, content HTML, source tracking, and folder assignment                   |
 
 ### Enums
 
-| Enum | Values |
-|------|--------|
-| `MeetingType` | `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other` |
-| `MinuteStatus` | `draft`, `review`, `approved` |
+| Enum           | Values                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `MeetingType`  | `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`   |
+| `MinuteStatus` | `draft`, `review`, `approved`                                                            |
 | `DocumentType` | `policy`, `procedure`, `form`, `report`, `minutes`, `training`, `certificate`, `general` |
-| `SourceType` | `upload`, `generated`, `linked` |
+| `SourceType`   | `upload`, `generated`, `linked`                                                          |
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `backend/app/models/minute.py` | SQLAlchemy models, MeetingType/MinuteStatus enums, default section presets |
-| `backend/app/models/document.py` | Document and DocumentFolder models |
-| `backend/app/schemas/minute.py` | Pydantic schemas for minutes and templates |
-| `backend/app/schemas/document.py` | Pydantic schemas for documents and folders |
-| `backend/app/services/minute_service.py` | Minutes CRUD, search, section management |
-| `backend/app/services/template_service.py` | Template CRUD, default template creation |
-| `backend/app/services/document_service.py` | Document/folder CRUD, system folder initialization, publish target |
-| `backend/app/api/v1/endpoints/minutes.py` | Minutes and template API endpoints |
-| `backend/app/api/v1/endpoints/documents.py` | Document and folder API endpoints |
-| `frontend/src/modules/minutes/pages/MinutesPage.tsx` | Minutes list, create modal with template selector |
-| `frontend/src/modules/minutes/pages/MinutesDetailPage.tsx` | Section editor, reorder, publish |
-| `frontend/src/modules/minutes/index.ts` | Module barrel export |
-| `frontend/src/modules/minutes/routes.tsx` | Route definitions |
-| `frontend/src/modules/minutes/services/api.ts` | Module axios instance with auth interceptors |
-| `frontend/src/modules/minutes/store/minutesStore.ts` | Zustand store for minutes CRUD |
-| `frontend/src/modules/minutes/types/minutes.ts` | TypeScript types and interfaces |
-| `frontend/src/pages/MinutesPage.tsx` | Re-export from module (backward compatibility) |
-| `frontend/src/pages/MinutesDetailPage.tsx` | Re-export from module (backward compatibility) |
-| `frontend/src/pages/DocumentsPage.tsx` | Folder browsing, document viewer |
+| File                                                       | Purpose                                                                    |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `backend/app/models/minute.py`                             | SQLAlchemy models, MeetingType/MinuteStatus enums, default section presets |
+| `backend/app/models/document.py`                           | Document and DocumentFolder models                                         |
+| `backend/app/schemas/minute.py`                            | Pydantic schemas for minutes and templates                                 |
+| `backend/app/schemas/document.py`                          | Pydantic schemas for documents and folders                                 |
+| `backend/app/services/minute_service.py`                   | Minutes CRUD, search, section management                                   |
+| `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                   |
+| `backend/app/services/document_service.py`                 | Document/folder CRUD, system folder initialization, publish target         |
+| `backend/app/api/v1/endpoints/minutes.py`                  | Minutes and template API endpoints                                         |
+| `backend/app/api/v1/endpoints/documents.py`                | Document and folder API endpoints                                          |
+| `frontend/src/modules/minutes/pages/MinutesPage.tsx`       | Minutes list, create modal with template selector                          |
+| `frontend/src/modules/minutes/pages/MinutesDetailPage.tsx` | Section editor, reorder, publish                                           |
+| `frontend/src/modules/minutes/index.ts`                    | Module barrel export                                                       |
+| `frontend/src/modules/minutes/routes.tsx`                  | Route definitions                                                          |
+| `frontend/src/modules/minutes/services/api.ts`             | Module axios instance with auth interceptors                               |
+| `frontend/src/modules/minutes/store/minutesStore.ts`       | Zustand store for minutes CRUD                                             |
+| `frontend/src/modules/minutes/types/minutes.ts`            | TypeScript types and interfaces                                            |
+| `frontend/src/pages/MinutesPage.tsx`                       | Re-export from module (backward compatibility)                             |
+| `frontend/src/pages/MinutesDetailPage.tsx`                 | Re-export from module (backward compatibility)                             |
+| `frontend/src/pages/DocumentsPage.tsx`                     | Folder browsing, document viewer                                           |
 
 ---
 
@@ -78,11 +78,11 @@ Draft  ──(submit for review)──>  Review  ──(approve)──>  Approve
 
 ### Status Rules
 
-| Status | Can Edit Sections | Can Change Status | Can Publish |
-|--------|-------------------|-------------------|-------------|
-| `draft` | Yes | → `review` | No |
-| `review` | Yes | → `approved` or → `draft` | No |
-| `approved` | No (locked) | → `review` | Yes |
+| Status     | Can Edit Sections | Can Change Status         | Can Publish |
+| ---------- | ----------------- | ------------------------- | ----------- |
+| `draft`    | Yes               | → `review`                | No          |
+| `review`   | Yes               | → `approved` or → `draft` | No          |
+| `approved` | No (locked)       | → `review`                | Yes         |
 
 ---
 
@@ -91,6 +91,7 @@ Draft  ──(submit for review)──>  Review  ──(approve)──>  Approve
 Each meeting type has a tailored set of default sections that are pre-populated when creating minutes with a template.
 
 ### Business Meeting (9 sections)
+
 1. Call to Order
 2. Roll Call
 3. Approval of Previous Minutes
@@ -102,6 +103,7 @@ Each meeting type has a tailored set of default sections that are pre-populated 
 9. Adjournment
 
 ### Trustee Meeting (11 sections)
+
 1. Call to Order
 2. Roll Call
 3. Approval of Previous Minutes
@@ -115,6 +117,7 @@ Each meeting type has a tailored set of default sections that are pre-populated 
 11. Adjournment
 
 ### Executive Meeting (11 sections)
+
 1. Call to Order
 2. Roll Call
 3. Approval of Previous Minutes
@@ -128,6 +131,7 @@ Each meeting type has a tailored set of default sections that are pre-populated 
 11. Adjournment
 
 ### Annual Meeting (12 sections)
+
 1. Call to Order
 2. Roll Call
 3. Approval of Previous Minutes
@@ -142,6 +146,7 @@ Each meeting type has a tailored set of default sections that are pre-populated 
 12. Adjournment
 
 ### Special / Committee / Board / Other
+
 These use the business meeting defaults or a subset tailored to the meeting scope.
 
 ---
@@ -157,18 +162,19 @@ These use the business meeting defaults or a subset tailored to the meeting scop
 
 ### Template Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Template display name |
-| `meeting_type` | MeetingType | Which meeting type this template is for |
-| `is_default` | boolean | Whether this is the auto-selected template for its type |
-| `sections` | JSON array | Default sections (`order`, `key`, `title`) |
-| `header_config` | JSON | Header settings (organization name, subtitle, logo) |
-| `footer_config` | JSON | Footer settings (confidentiality notice, page numbers) |
+| Field           | Type        | Description                                             |
+| --------------- | ----------- | ------------------------------------------------------- |
+| `name`          | string      | Template display name                                   |
+| `meeting_type`  | MeetingType | Which meeting type this template is for                 |
+| `is_default`    | boolean     | Whether this is the auto-selected template for its type |
+| `sections`      | JSON array  | Default sections (`order`, `key`, `title`)              |
+| `header_config` | JSON        | Header settings (organization name, subtitle, logo)     |
+| `footer_config` | JSON        | Footer settings (confidentiality notice, page numbers)  |
 
 ### Creating Custom Templates
 
 Use the templates API to create custom templates:
+
 ```
 POST /api/v1/minutes/templates
 {
@@ -191,12 +197,12 @@ POST /api/v1/minutes/templates
 
 Sections are stored as a JSON array on the minutes record. Each section has:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `order` | integer | Display position (0-indexed) |
-| `key` | string | Unique identifier (e.g., `call_to_order`, `new_business`) |
-| `title` | string | Section heading displayed in the editor |
-| `content` | string | Section body text (rich text supported) |
+| Field     | Type    | Description                                               |
+| --------- | ------- | --------------------------------------------------------- |
+| `order`   | integer | Display position (0-indexed)                              |
+| `key`     | string  | Unique identifier (e.g., `call_to_order`, `new_business`) |
+| `title`   | string  | Section heading displayed in the editor                   |
+| `content` | string  | Section body text (rich text supported)                   |
 
 ### Section Operations
 
@@ -220,6 +226,7 @@ When approved minutes are published:
 ### Published Document Structure
 
 The generated HTML includes:
+
 - Organization name header (from template or minutes config)
 - Meeting title and date
 - Each section as a titled block with content
@@ -233,19 +240,20 @@ The generated HTML includes:
 
 7 system folders are auto-created on first access:
 
-| Folder | Slug | Icon | Description |
-|--------|------|------|-------------|
-| SOPs | `sops` | FileText | Standard Operating Procedures |
-| Policies | `policies` | Shield | Organization policies and bylaws |
-| Forms & Templates | `forms-templates` | ClipboardList | Printable forms and templates |
-| Reports | `reports` | BarChart | Generated and uploaded reports |
-| Training Materials | `training-materials` | GraduationCap | Training documents and manuals |
-| Meeting Minutes | `meeting-minutes` | BookOpen | Published meeting minutes |
-| General Documents | `general` | Folder | Uncategorized documents |
+| Folder             | Slug                 | Icon          | Description                      |
+| ------------------ | -------------------- | ------------- | -------------------------------- |
+| SOPs               | `sops`               | FileText      | Standard Operating Procedures    |
+| Policies           | `policies`           | Shield        | Organization policies and bylaws |
+| Forms & Templates  | `forms-templates`    | ClipboardList | Printable forms and templates    |
+| Reports            | `reports`            | BarChart      | Generated and uploaded reports   |
+| Training Materials | `training-materials` | GraduationCap | Training documents and manuals   |
+| Meeting Minutes    | `meeting-minutes`    | BookOpen      | Published meeting minutes        |
+| General Documents  | `general`            | Folder        | Uncategorized documents          |
 
 ### Custom Folders
 
 Users with `meetings.manage` permission can:
+
 - Create custom folders with name, description, icon, and color
 - Delete custom folders (moves contained documents to parent or root)
 - System folders cannot be deleted
@@ -256,20 +264,20 @@ Users with `meetings.manage` permission can:
 
 ### Minutes Endpoints
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/minutes` | `meetings.view` | List minutes with filtering |
-| `POST` | `/api/v1/minutes` | `meetings.manage` | Create new minutes |
-| `GET` | `/api/v1/minutes/search` | `meetings.view` | Search minutes by title/content |
-| `GET` | `/api/v1/minutes/{id}` | `meetings.view` | Get minutes detail with sections |
-| `PUT` | `/api/v1/minutes/{id}` | `meetings.manage` | Update minutes and sections |
-| `DELETE` | `/api/v1/minutes/{id}` | `meetings.manage` | Delete minutes |
-| `POST` | `/api/v1/minutes/{id}/publish` | `meetings.manage` | Publish approved minutes to documents |
-| `GET` | `/api/v1/minutes/templates` | `meetings.view` | List templates |
-| `POST` | `/api/v1/minutes/templates` | `meetings.manage` | Create template |
-| `DELETE` | `/api/v1/minutes/templates/{id}` | `meetings.manage` | Delete template |
+| Method   | Path                             | Permission        | Description                           |
+| -------- | -------------------------------- | ----------------- | ------------------------------------- |
+| `GET`    | `/api/v1/minutes`                | `meetings.view`   | List minutes with filtering           |
+| `POST`   | `/api/v1/minutes`                | `meetings.manage` | Create new minutes                    |
+| `GET`    | `/api/v1/minutes/search`         | `meetings.view`   | Search minutes by title/content       |
+| `GET`    | `/api/v1/minutes/{id}`           | `meetings.view`   | Get minutes detail with sections      |
+| `PUT`    | `/api/v1/minutes/{id}`           | `meetings.manage` | Update minutes and sections           |
+| `DELETE` | `/api/v1/minutes/{id}`           | `meetings.manage` | Delete minutes                        |
+| `POST`   | `/api/v1/minutes/{id}/publish`   | `meetings.manage` | Publish approved minutes to documents |
+| `GET`    | `/api/v1/minutes/templates`      | `meetings.view`   | List templates                        |
+| `POST`   | `/api/v1/minutes/templates`      | `meetings.manage` | Create template                       |
+| `DELETE` | `/api/v1/minutes/templates/{id}` | `meetings.manage` | Delete template                       |
 
-### List Response Counts *(2026-08-17)*
+### List Response Counts _(2026-08-17)_
 
 `MeetingResponse` declares `attendee_count` and `action_item_count`, and the
 Minutes page renders them on every card. The list query loaded no children, so
@@ -297,36 +305,42 @@ is missing rather than deciding the step is done.
 
 ### Document Endpoints
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/documents/folders` | `meetings.view` | List folders (auto-creates system folders) |
-| `POST` | `/api/v1/documents/folders` | `meetings.manage` | Create custom folder |
-| `DELETE` | `/api/v1/documents/folders/{id}` | `meetings.manage` | Delete custom folder |
-| `GET` | `/api/v1/documents` | `meetings.view` | List documents with filtering |
-| `GET` | `/api/v1/documents/{id}` | `meetings.view` | Get document detail with content |
-| `DELETE` | `/api/v1/documents/{id}` | `meetings.manage` | Delete document |
+| Method   | Path                             | Permission        | Description                                |
+| -------- | -------------------------------- | ----------------- | ------------------------------------------ |
+| `GET`    | `/api/v1/documents/folders`      | `meetings.view`   | List folders (auto-creates system folders) |
+| `POST`   | `/api/v1/documents/folders`      | `meetings.manage` | Create custom folder                       |
+| `DELETE` | `/api/v1/documents/folders/{id}` | `meetings.manage` | Delete custom folder                       |
+| `GET`    | `/api/v1/documents`              | `meetings.view`   | List documents with filtering              |
+| `GET`    | `/api/v1/documents/{id}`         | `meetings.view`   | Get document detail with content           |
+| `DELETE` | `/api/v1/documents/{id}`         | `meetings.manage` | Delete document                            |
 
 ---
 
 ## Security
 
 ### Multi-Tenancy
+
 All queries are scoped to `organization_id`. Users can only access minutes and documents belonging to their organization.
 
 ### Permission Model
+
 - **`meetings.view`**: Read access to minutes, templates, folders, and documents
 - **`meetings.manage`**: Write access — create, update, delete, publish
 
 ### Input Sanitization
+
 - All published HTML content uses `html.escape()` to prevent XSS
 - Search queries escape SQL wildcards (`%`, `_`, `\`) to prevent LIKE pattern injection
 - Pydantic validation on all request schemas enforces field types and constraints
 
 ### Edit Protection
+
 Approved minutes are locked — status must be changed back to `review` or `draft` before content can be modified.
 
 ### Audit Logging
+
 All write operations are logged to the tamper-proof audit trail:
+
 - `minutes_created`, `minutes_updated`, `minutes_deleted`
 - `minutes_published`
 - `template_created`, `template_deleted`
@@ -337,13 +351,14 @@ All write operations are logged to the tamper-proof audit trail:
 
 ## Database Migrations
 
-| Migration | Revision | Description |
-|-----------|----------|-------------|
-| `20260212_1200_add_meeting_minutes_tables.py` | `add_meeting_minutes` | Creates `meeting_minutes` table |
-| `20260213_0800_add_templates_documents_dynamic_sections.py` | `20260213_0800` | Creates `minutes_templates`, `document_folders`, `documents` tables |
-| `20260213_1400_add_trustee_executive_annual_meeting_types.py` | `a7f3e2d91b04` | Extends MeetingType ENUM with `trustee`, `executive`, `annual` |
+| Migration                                                     | Revision              | Description                                                         |
+| ------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------- |
+| `20260212_1200_add_meeting_minutes_tables.py`                 | `add_meeting_minutes` | Creates `meeting_minutes` table                                     |
+| `20260213_0800_add_templates_documents_dynamic_sections.py`   | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables |
+| `20260213_1400_add_trustee_executive_annual_meeting_types.py` | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`      |
 
 ### Migration Chain
+
 ```
 20260212_0400 (elections attendees)
     → add_meeting_minutes (minutes table)
@@ -357,6 +372,7 @@ All write operations are logged to the tamper-proof audit trail:
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-minutes-module-issues) for common issues including:
+
 - Minutes sections not loading
 - Cannot edit approved minutes
 - Publish button not appearing
@@ -373,6 +389,7 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-minutes-module-issues) for
 The minutes module was refactored to follow the standard module conventions used by other modules in the application:
 
 ### Changes
+
 - **Module extraction**: Pages moved from `frontend/src/pages/` to `frontend/src/modules/minutes/pages/`. Original files re-export from the module for backward compatibility with existing routes and deep links
 - **Dedicated Zustand store**: `minutesStore.ts` manages loading/error states for all minutes CRUD operations, replacing ad-hoc state management in page components
 - **Module API service**: `services/api.ts` provides a dedicated axios instance with auth interceptors (CSRF, `withCredentials: true`), matching the pattern used by other modules
@@ -380,6 +397,7 @@ The minutes module was refactored to follow the standard module conventions used
 - **Table name migration**: `20260312_0200_rename_meeting_action_items_table.py` renames the table to match the expected SQLAlchemy model table name. Handles index recreation
 
 ### Backend Tests
+
 - `backend/tests/test_minute_service.py` — comprehensive test suite covering:
   - Minutes CRUD (create, read, update, delete)
   - Section operations (add, remove, reorder, edit content)
@@ -389,6 +407,7 @@ The minutes module was refactored to follow the standard module conventions used
   - Edge cases: empty sections, duplicate keys, publish without approval, re-publish
 
 ### Edge Cases
+
 - Existing deployments must run `alembic upgrade head` for the table rename migration
 - Deep links to `/minutes/:id` continue to work via re-exported route definitions
 - The old `meetingsServices.ts` API methods remain functional alongside the new module API service

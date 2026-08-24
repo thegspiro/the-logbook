@@ -7,11 +7,13 @@ Common commands and quick solutions for The Logbook.
 ## 🚀 Installation
 
 ### Unraid (One Line)
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
 ```
 
 ### Docker Compose
+
 ```bash
 git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
@@ -35,6 +37,7 @@ docker compose up -d
 ## 📦 Docker Commands
 
 ### Container Management
+
 ```bash
 # Start all services
 docker compose up -d
@@ -57,6 +60,7 @@ docker compose down -v
 ```
 
 ### Logs
+
 ```bash
 # View all logs (follow)
 docker compose logs -f
@@ -74,6 +78,7 @@ docker compose logs --since 30m backend
 ```
 
 ### Status & Health
+
 ```bash
 # Container status
 docker compose ps
@@ -94,14 +99,15 @@ docker inspect logbook-backend
 
 ### Access Services
 
-| Service | URL |
-|---------|-----|
-| **Frontend** | http://localhost:3000 |
-| **Backend API** | http://localhost:3001 |
-| **API Docs** | http://localhost:3001/docs |
-| **ReDoc** | http://localhost:3001/redoc |
+| Service         | URL                         |
+| --------------- | --------------------------- |
+| **Frontend**    | http://localhost:3000       |
+| **Backend API** | http://localhost:3001       |
+| **API Docs**    | http://localhost:3001/docs  |
+| **ReDoc**       | http://localhost:3001/redoc |
 
 ### Database Access
+
 ```bash
 # MySQL shell
 docker exec -it logbook-db mysql -u logbook_user -p
@@ -114,6 +120,7 @@ SELECT * FROM users LIMIT 5;
 ```
 
 ### Redis Access
+
 ```bash
 # Redis CLI
 docker exec -it logbook-redis redis-cli
@@ -125,6 +132,7 @@ GET key_name
 ```
 
 ### Backend Shell
+
 ```bash
 # Access Python shell
 docker exec -it logbook-backend bash
@@ -141,6 +149,7 @@ docker exec -it logbook-backend alembic upgrade head
 ## 🔄 Updates
 
 ### Update Application
+
 ```bash
 cd /path/to/the-logbook
 docker compose down
@@ -150,6 +159,7 @@ docker compose up -d
 ```
 
 ### Update Unraid
+
 ```bash
 cd /mnt/user/appdata/the-logbook/unraid
 ./unraid-setup.sh
@@ -157,6 +167,7 @@ cd /mnt/user/appdata/the-logbook/unraid
 ```
 
 ### Run Database Migrations
+
 ```bash
 docker exec logbook-backend alembic upgrade head
 ```
@@ -166,6 +177,7 @@ docker exec logbook-backend alembic upgrade head
 ## 💾 Backup & Restore
 
 ### Manual Backup
+
 ```bash
 # Full backup
 ./scripts/backup.sh   # host-side script, run from the install directory
@@ -178,6 +190,7 @@ tar -czf uploads-backup.tar.gz /path/to/uploads/
 ```
 
 ### Restore
+
 ```bash
 # Database restore
 docker exec -i logbook-db mysql -u logbook_user -p the_logbook < backup.sql
@@ -191,6 +204,7 @@ tar -xzf uploads-backup.tar.gz -C /path/to/uploads/
 ## 🏥 Training & Compliance Quick Tips
 
 ### Check Member Compliance
+
 ```bash
 # Via API
 curl http://localhost:3001/api/v1/training/compliance-summary/{user_id}
@@ -198,10 +212,12 @@ curl http://localhost:3001/api/v1/training/compliance-summary/{user_id}
 ```
 
 ### Manage Waivers
+
 - **UI**: Members > Admin > Waivers (unified page for training, meeting, and shift waivers)
 - **Training-specific**: Training Admin > Dashboard > Training Waivers tab
 
 ### Bulk Create Training Records
+
 ```bash
 curl -X POST http://localhost:3001/api/v1/training/records/bulk \
   -H "Content-Type: application/json" \
@@ -210,8 +226,10 @@ curl -X POST http://localhost:3001/api/v1/training/records/bulk \
 ```
 
 ### Generate a Course Cohort
+
 - **UI**: Training > Records > Course Cohorts > New cohort (build the course's
   syllabus first under Training > Setup > Course Library > Manage classes)
+
 ```bash
 # Preview first — read-only, creates nothing
 curl -X POST http://localhost:3001/api/v1/training/cohorts/preview \
@@ -225,12 +243,14 @@ curl -X POST http://localhost:3001/api/v1/training/cohorts \
 ```
 
 ### Process Certification Alerts
+
 ```bash
 # Run daily alert processing (90/60/30/7-day tiers + expired escalation)
 curl -X POST http://localhost:3001/api/v1/training/certifications/process-alerts/all-orgs
 ```
 
 ### Check Rank Validation
+
 ```bash
 curl http://localhost:3001/api/v1/users/rank-validation
 # Lists active members with ranks not matching configured operational ranks
@@ -241,6 +261,7 @@ curl http://localhost:3001/api/v1/users/rank-validation
 ## 🔍 Troubleshooting
 
 ### Container Won't Start
+
 ```bash
 # Check logs for errors
 docker compose logs backend
@@ -256,6 +277,7 @@ docker compose up -d
 ```
 
 ### Port Conflicts
+
 ```bash
 # Edit .env
 nano .env
@@ -267,6 +289,7 @@ docker compose up -d
 ```
 
 ### Permission Issues
+
 ```bash
 # Fix ownership
 sudo chown -R $USER:$USER .
@@ -279,6 +302,7 @@ chown -R 99:100 /mnt/user/appdata/the-logbook/
 ```
 
 ### Database Connection Failed
+
 ```bash
 # Check database is running
 docker compose ps db
@@ -294,6 +318,7 @@ docker exec logbook-backend python -c "import pymysql; pymysql.connect(host='db'
 ```
 
 ### Frontend Not Loading
+
 ```bash
 # Check frontend logs
 docker compose logs frontend
@@ -308,6 +333,7 @@ docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf
 ```
 
 ### API Errors
+
 ```bash
 # Check backend health
 curl http://localhost:3001/health
@@ -327,6 +353,7 @@ docker exec logbook-backend env | grep -i secret
 ## 🔐 Security
 
 ### Generate Secrets
+
 ```bash
 # Secret keys (64 characters)
 openssl rand -hex 32
@@ -339,12 +366,14 @@ openssl rand -hex 32
 ```
 
 ### View Current Config (sanitized)
+
 ```bash
 # Show env without secrets
 cat .env | grep -v PASSWORD | grep -v KEY | grep -v SECRET
 ```
 
 ### Reset Admin Password
+
 ```bash
 # Via API (when logged in as admin)
 curl -X POST http://localhost:3001/api/v1/users/reset-password \
@@ -361,6 +390,7 @@ docker exec -it logbook-db mysql -u root -p
 ## 📊 Monitoring
 
 ### Container Health
+
 ```bash
 # All containers
 docker compose ps
@@ -370,6 +400,7 @@ docker inspect --format='{{.State.Health.Status}}' logbook-backend
 ```
 
 ### Resource Usage
+
 ```bash
 # Real-time stats
 docker stats
@@ -382,6 +413,7 @@ docker compose exec backend du -sh /app/logs
 ```
 
 ### API Health
+
 ```bash
 # Backend health endpoint
 curl http://localhost:3001/health
@@ -395,6 +427,7 @@ curl http://localhost:3001/health
 ## 🧹 Cleanup
 
 ### Remove Unused Images
+
 ```bash
 # Remove dangling images
 docker image prune
@@ -404,6 +437,7 @@ docker image prune -a
 ```
 
 ### Clean Build Cache
+
 ```bash
 # Remove build cache
 docker builder prune
@@ -413,6 +447,7 @@ docker system prune -a --volumes
 ```
 
 ### Clear Logs
+
 ```bash
 # Truncate Docker logs
 truncate -s 0 $(docker inspect --format='{{.LogPath}}' logbook-backend)
@@ -428,6 +463,7 @@ docker compose up -d
 ## 🔑 Environment Variables Quick Reference
 
 ### Required
+
 ```bash
 SECRET_KEY=                 # openssl rand -hex 32
 ENCRYPTION_KEY=             # openssl rand -hex 32
@@ -438,6 +474,7 @@ ALLOWED_ORIGINS=            # http://your-domain.com
 ```
 
 ### Common
+
 ```bash
 FRONTEND_PORT=3000
 BACKEND_PORT=3001
@@ -460,15 +497,15 @@ Modules), stored in the organization's `enabled_modules` setting. See
 
 ## 📱 Useful URLs (Default Ports)
 
-| Resource | URL |
-|----------|-----|
-| **Frontend** | http://localhost:3000 |
-| **API Docs (Swagger)** | http://localhost:3001/docs |
-| **API Docs (ReDoc)** | http://localhost:3001/redoc |
-| **API JSON** | http://localhost:3001/openapi.json |
-| **Health Check** | http://localhost:3001/health |
-| **Database Health** | http://localhost:3001/health/db |
-| **Redis Health** | http://localhost:3001/health/redis |
+| Resource               | URL                                |
+| ---------------------- | ---------------------------------- |
+| **Frontend**           | http://localhost:3000              |
+| **API Docs (Swagger)** | http://localhost:3001/docs         |
+| **API Docs (ReDoc)**   | http://localhost:3001/redoc        |
+| **API JSON**           | http://localhost:3001/openapi.json |
+| **Health Check**       | http://localhost:3001/health       |
+| **Database Health**    | http://localhost:3001/health/db    |
+| **Redis Health**       | http://localhost:3001/health/redis |
 
 ---
 
@@ -480,6 +517,7 @@ Modules), stored in the organization's `enabled_modules` setting. See
 4. **Create [New Issue](https://github.com/thegspiro/the-logbook/issues/new)**
 
 ### Include When Reporting Issues
+
 ```bash
 # System info
 uname -a

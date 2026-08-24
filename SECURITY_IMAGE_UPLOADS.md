@@ -44,12 +44,14 @@ This document describes the comprehensive security measures implemented for imag
 **Location**: `/frontend/src/modules/onboarding/utils/validation.ts`
 
 **Checks**:
+
 - ✅ MIME type validation
 - ✅ File extension whitelist (`.png`, `.jpg`, `.jpeg`)
 - ✅ File size limit (5MB)
 - ✅ SVG blocking
 
 **Limitations**:
+
 - Can be bypassed by modifying browser requests
 - **Not sufficient alone** - defense in depth required
 
@@ -60,6 +62,7 @@ This document describes the comprehensive security measures implemented for imag
 **Location**: `/backend/app/utils/image_validator.py`
 
 #### Magic Byte Validation
+
 ```python
 # Uses python-magic library
 mime_type = magic.from_buffer(image_bytes)
@@ -72,6 +75,7 @@ ALLOWED_MIME_TYPES = {
 ```
 
 **What it prevents**:
+
 - File extension spoofing (e.g., `malware.exe` renamed to `logo.png`)
 - MIME type header falsification
 - Files masquerading as images
@@ -88,6 +92,7 @@ image.load()    # Triggers decompression
 ```
 
 **What it prevents**:
+
 - Malformed images
 - Non-image files
 - Corrupted or crafted files designed to exploit parsers
@@ -108,6 +113,7 @@ except Image.DecompressionBombError:
 ```
 
 **What it prevents**:
+
 - Small compressed images (e.g., 1KB) that decompress to massive size (e.g., 100GB)
 - Memory exhaustion attacks
 - Server crashes
@@ -123,11 +129,13 @@ output_image.save(output_buffer, format=format_name, optimize=True)
 ```
 
 **What it prevents**:
+
 - Privacy leaks (GPS, camera info, timestamps)
 - Metadata-based exploits
 - Embedded malicious content in EXIF fields
 
 **What gets removed**:
+
 - EXIF data
 - GPS coordinates
 - Camera make/model
@@ -147,6 +155,7 @@ MIN_DIMENSION = 16   # Minimum size
 ```
 
 **What it prevents**:
+
 - Storage exhaustion (database filling up)
 - Bandwidth consumption
 - Memory allocation attacks
@@ -167,6 +176,7 @@ BLOCKED_FORMATS = {
 ```
 
 **Why these are blocked**:
+
 - **SVG**: XML-based, can embed `<script>` tags and execute JavaScript
 - **GIF**: Animation frames can be used for steganography or malicious payloads
 - **TIFF**: Complex format with history of buffer overflow vulnerabilities
@@ -188,12 +198,14 @@ ALTER TABLE organizations MODIFY logo LONGTEXT;
 **Type**: `LONGTEXT` (up to 4GB)
 
 **Why LONGTEXT**:
+
 - Base64 encoding increases size by ~33%
 - 250KB PNG → ~330KB base64
 - TEXT (64KB) was too small
 - MEDIUMTEXT (16MB) would work but LONGTEXT provides future-proofing
 
 **Database-level protection**:
+
 - Content is base64 string (not raw binary)
 - Prevents SQL injection (data is encoded)
 - No file system access (stays in database)
@@ -278,6 +290,7 @@ ALTER TABLE organizations MODIFY logo LONGTEXT;
 ### Scenario 1: SVG with Embedded JavaScript
 
 **Attack**:
+
 ```xml
 <svg onload="alert('XSS')">
   <script>maliciousCode();</script>
@@ -285,6 +298,7 @@ ALTER TABLE organizations MODIFY logo LONGTEXT;
 ```
 
 **Mitigations**:
+
 1. ✅ Frontend blocks SVG files (extension check)
 2. ✅ Backend blocks SVG format (magic byte check)
 3. ✅ Even if bypassed, `<img>` tag doesn't execute SVG scripts
@@ -297,11 +311,13 @@ ALTER TABLE organizations MODIFY logo LONGTEXT;
 ### Scenario 2: Decompression Bomb
 
 **Attack**:
+
 - Upload 1KB PNG file
 - File decompresses to 100GB when opened
 - Causes server memory exhaustion
 
 **Mitigations**:
+
 1. ✅ Pillow detects decompression bombs automatically
 2. ✅ `Image.MAX_IMAGE_PIXELS` limit enforced
 3. ✅ Dimension limits (4096x4096 max)
@@ -313,12 +329,14 @@ ALTER TABLE organizations MODIFY logo LONGTEXT;
 ### Scenario 3: File Type Spoofing
 
 **Attack**:
+
 ```bash
 mv malware.exe logo.png
 # Upload as "logo.png"
 ```
 
 **Mitigations**:
+
 1. ✅ Magic byte verification reads actual file content
 2. ✅ Pillow.open() fails on non-image files
 3. ✅ Whitelist-only approach (PNG/JPEG only)
@@ -330,11 +348,13 @@ mv malware.exe logo.png
 ### Scenario 4: EXIF GPS Data Leak
 
 **Attack**:
+
 - Upload photo taken with smartphone
 - EXIF contains GPS coordinates of user's home
 - Privacy leak
 
 **Mitigations**:
+
 1. ✅ All EXIF data stripped during re-encoding
 2. ✅ Image converted to RGB (removes metadata)
 3. ✅ Re-saved with optimize=True (no metadata)
@@ -346,10 +366,12 @@ mv malware.exe logo.png
 ### Scenario 5: Malformed JPEG Exploit
 
 **Attack**:
+
 - Crafted JPEG with buffer overflow exploit
 - Targets vulnerability in image processing library
 
 **Mitigations**:
+
 1. ✅ Pillow library kept up-to-date (11.1.0)
 2. ✅ Image.verify() validates structure
 3. ✅ Image.load() triggers parsing safely
@@ -433,6 +455,7 @@ python-magic==0.4.27    # File type detection
 ```
 
 **Why these versions**:
+
 - Pillow 11.1.0: Latest stable, security patches
 - python-magic 0.4.27: Latest stable
 
@@ -487,6 +510,7 @@ python-magic==0.4.27    # File type detection
 ### Privacy (GDPR/CCPA)
 
 ✅ **EXIF stripping ensures**:
+
 - No GPS coordinates stored
 - No camera/device info leaked
 - No timestamp metadata retained
@@ -494,6 +518,7 @@ python-magic==0.4.27    # File type detection
 ### Security Standards
 
 ✅ **OWASP Top 10 Coverage**:
+
 - A01:2021 - Broken Access Control: ✅ Validation prevents unauthorized file types
 - A03:2021 - Injection: ✅ No SQL injection (base64 encoded)
 - A04:2021 - Insecure Design: ✅ Defense in depth architecture

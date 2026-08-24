@@ -29,7 +29,7 @@ Re-verified this highest-risk (privilege-escalation) module's ceiling guards hol
   `user_service.py`.
 
 Open item unchanged: **ORU-7c** — mass-editing the org-wide `member` role can
-escalate every member at once; intended (an org-wide role *should* be broadly
+escalate every member at once; intended (an org-wide role _should_ be broadly
 editable) but sharp — an optional confirmation/guard is the owner's call.
 
 **Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
@@ -59,7 +59,7 @@ schemas — no free-string→ENUM path. **E712-free** across `role_service.py`,
 ### Still flagged (unchanged)
 
 - **ORU-7c** — mass-editing the org-wide `member` role can escalate every member at
-  once; intended (an org-wide role *should* be broadly editable) but sharp. An
+  once; intended (an org-wide role _should_ be broadly editable) but sharp. An
   optional dedicated confirmation/guard is the owner's call, in `KNOWN_LIMITATIONS.md`.
 
 **Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
@@ -76,7 +76,7 @@ escalation path the role-ceiling work didn't cover.
 
 ### ORU-7d — CRITICAL — Operational rank bypassed the permission-grant ceiling — ✅ FIXED
 
-Effective permissions are the **union of a member's positions *and* their
+Effective permissions are the **union of a member's positions _and_ their
 operational rank** (`_collect_user_permissions` in `dependencies.py`:
 `perms.update(get_rank_default_permissions(user.rank))`). Every role/position
 grant is ceiling-checked — `_enforce_role_grant_ceiling` blocks a caller from
@@ -128,11 +128,12 @@ one was fixed here, one stays flagged.
 `_enforce_permission_grant_ceiling` (on `update_role`) only validated the **new**
 permission list and **early-returns on an empty list**. So a privileged-but-not-`*`
 caller (e.g. a Fire Chief) could:
+
 - set the `*` "System Owner" role's permissions to `[]` (the empty-list bypass), or
 - downgrade it to their own subset,
 
 wiping/sabotaging the tenant's wildcard admin. The grant ceiling stopped
-*raising* a role above your level but not *editing a role already above it*.
+_raising_ a role above your level but not _editing a role already above it_.
 
 **Fix:** a new `_enforce_role_edit_ceiling` runs when the caller is changing a
 role's permissions (`role_update.permissions is not None`): it fetches the role's
@@ -181,9 +182,9 @@ already-fixed (doc drift), ORU-7c stands.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (endpoint + test) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_role_service` + `test_permission_matching` **25 passed**; `test_role_edit_ceiling` **3 passed** (new). No DB needed. |
+| Check                      | Result                                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (endpoint + test) | ✅ 0 violations                                                                                                               |
+| `black --check`            | ✅ unchanged                                                                                                                  |
+| `tsc --noEmit`             | ✅ n/a — no frontend change                                                                                                   |
+| backend tests              | ✅ `test_role_service` + `test_permission_matching` **25 passed**; `test_role_edit_ceiling` **3 passed** (new). No DB needed. |

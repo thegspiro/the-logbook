@@ -16,11 +16,11 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 - **Waiver Adjustments** — Leaves of Absence proportionally reduce requirements
 - **Compliance Calculations** — Documented formulas for every requirement type and frequency
 - **Reporting** — Annual training reports, compliance trends, member-level detail
-- **Compliance Officer Dashboard** — *(2026-03-05)* Dedicated dashboard for compliance officers with ISO readiness scoring, attestation workflows, and NFPA 1401 record quality analysis
-- **ISO Readiness Scoring** — *(2026-03-05)* ISO 9001/14001/45001 readiness scoring based on attestation completion rates
-- **Attestation Workflows** — *(2026-03-05)* Configurable annual compliance sign-off workflows assigned to members with tracking and reminders
-- **NFPA 1401 Record Quality** — *(2026-03-05)* Training record quality analysis per NFPA 1401 standards (requires ≥10 records for meaningful scores)
-- **Configurable Evaluation Period** — *(2026-05-29)* Org-wide and per-requirement control over whether the in-progress (current) month counts toward compliance, so members aren't flagged non-compliant mid-month when drills happen late in the period
+- **Compliance Officer Dashboard** — _(2026-03-05)_ Dedicated dashboard for compliance officers with ISO readiness scoring, attestation workflows, and NFPA 1401 record quality analysis
+- **ISO Readiness Scoring** — _(2026-03-05)_ ISO 9001/14001/45001 readiness scoring based on attestation completion rates
+- **Attestation Workflows** — _(2026-03-05)_ Configurable annual compliance sign-off workflows assigned to members with tracking and reminders
+- **NFPA 1401 Record Quality** — _(2026-03-05)_ Training record quality analysis per NFPA 1401 standards (requires ≥10 records for meaningful scores)
+- **Configurable Evaluation Period** — _(2026-05-29)_ Org-wide and per-requirement control over whether the in-progress (current) month counts toward compliance, so members aren't flagged non-compliant mid-month when drills happen late in the period
 
 ---
 
@@ -28,11 +28,11 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 
 ### Requirement Statuses
 
-| Status | Meaning |
-|--------|---------|
-| **Green (Compliant)** | All requirements met, no certification issues |
-| **Yellow (At Risk)** | Some requirements incomplete or certifications expiring within 90 days |
-| **Red (Non-Compliant)** | Expired certifications or fewer than 50% of requirements met |
+| Status                  | Meaning                                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| **Green (Compliant)**   | All requirements met, no certification issues                          |
+| **Yellow (At Risk)**    | Some requirements incomplete or certifications expiring within 90 days |
+| **Red (Non-Compliant)** | Expired certifications or fewer than 50% of requirements met           |
 
 ### Waiver Adjustment Formula
 
@@ -46,13 +46,13 @@ A calendar month is waived if the leave covers **15 or more days** of that month
 
 ### Requirement Types Adjusted
 
-| Type | Adjusted | Notes |
-|------|----------|-------|
-| Hours | Yes | Proportional reduction |
-| Shifts | Yes | Proportional reduction |
-| Calls | Yes | Proportional reduction |
-| Courses | No | Binary completion |
-| Certification | No | Valid or not |
+| Type          | Adjusted | Notes                  |
+| ------------- | -------- | ---------------------- |
+| Hours         | Yes      | Proportional reduction |
+| Shifts        | Yes      | Proportional reduction |
+| Calls         | Yes      | Proportional reduction |
+| Courses       | No       | Binary completion      |
+| Certification | No       | Valid or not           |
 
 ---
 

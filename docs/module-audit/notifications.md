@@ -7,6 +7,7 @@
 **Audited:** iteration 11.
 
 ## Verified good ✅
+
 - **Auth coverage:** all 15 endpoints authenticated. Rule CRUD requires
   `notifications.manage`; rule/log reads `notifications.view`; the personal
   inbox (`/my/*`) uses `get_current_user`.
@@ -28,6 +29,7 @@
 ## Findings
 
 ### NOTIF-1 — LOW — `/logs/{id}/read` was a `.view`-gated org-wide write — ✅ FIXED
+
 `POST /logs/{log_id}/read` (`mark_notification_read`) marks **any** org
 notification log read (org-wide, no recipient scoping) but required only
 `notifications.view`, while the sibling `POST /logs/read-all` requires
@@ -39,6 +41,7 @@ single mark-read goes through the recipient-scoped `/my/{id}/read`).
 and documented that members use the `/my/` route. Safe — no caller to break.
 
 ### NOTIF-2 — LOW — Raw exception text returned to the client (unlogged) — ✅ FIXED (app-review B11)
+
 All six mutating service methods returned `str(e)` on failure, which the
 endpoints interpolated into the response detail — so a DB `IntegrityError`/
 `OperationalError` leaked raw SQL/column names to the client, and the real
@@ -48,6 +51,7 @@ the project standard (same class as SF-2). 2 regression tests added. See
 `docs/app-review/notifications.md`.
 
 ## Notes
+
 - `NotificationsService.markLogRead` (frontend service method for
   `/logs/{id}/read`) is now effectively unused by any component — a candidate
   for removal in a future frontend cleanup (left as-is; out of this iteration's

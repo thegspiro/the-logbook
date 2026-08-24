@@ -29,26 +29,26 @@ Both FastAPI/Uvicorn (async Python) and Node.js handle I/O-bound CRUD workloads 
 
 Most libraries have Node.js equivalents (cloud SDKs, Stripe, Twilio, Redis, JWT, etc.). But critical gaps exist:
 
-| Library | Purpose | Node.js Equivalent | Assessment |
-|---------|---------|---------------------|------------|
-| **reportlab** | PDF generation | pdfkit/puppeteer/pdf-lib | **Downgrade** — reportlab is the gold standard for programmatic PDFs |
-| **Celery** | Task queue (1,578 lines of tasks) | BullMQ | **Different paradigm** — no built-in scheduler equivalent to Celery Beat |
-| **SQLAlchemy 2.0 async** | ORM (30 models, 17K lines) | Prisma/TypeORM | Adequate but patterns don't map 1:1 |
-| **Pydantic** | Validation (40+ schemas) | Zod | Adequate but 15K lines of schemas to rewrite |
-| python-ldap | LDAP auth | ldapjs | Adequate (minimal current usage) |
-| pysaml2 | SAML SSO | passport-saml | Less mature (zero current usage in app code) |
+| Library                  | Purpose                           | Node.js Equivalent       | Assessment                                                               |
+| ------------------------ | --------------------------------- | ------------------------ | ------------------------------------------------------------------------ |
+| **reportlab**            | PDF generation                    | pdfkit/puppeteer/pdf-lib | **Downgrade** — reportlab is the gold standard for programmatic PDFs     |
+| **Celery**               | Task queue (1,578 lines of tasks) | BullMQ                   | **Different paradigm** — no built-in scheduler equivalent to Celery Beat |
+| **SQLAlchemy 2.0 async** | ORM (30 models, 17K lines)        | Prisma/TypeORM           | Adequate but patterns don't map 1:1                                      |
+| **Pydantic**             | Validation (40+ schemas)          | Zod                      | Adequate but 15K lines of schemas to rewrite                             |
+| python-ldap              | LDAP auth                         | ldapjs                   | Adequate (minimal current usage)                                         |
+| pysaml2                  | SAML SSO                          | passport-saml            | Less mature (zero current usage in app code)                             |
 
 ### 4. Migration Cost — ~3 Developer-Years
 
-| Component | Scale |
-|-----------|-------|
-| Endpoint files | 46 files, ~43,248 lines |
-| Service files | 58 files, ~54,872 lines |
-| Model files | 29 files, ~17,306 lines |
-| Schema files | 37 files, ~15,890 lines |
-| Core infrastructure | 17 files, ~8,106 lines |
-| Tests | ~19,320 lines |
-| Alembic migrations | 141 (cannot be ported; must start fresh) |
+| Component           | Scale                                    |
+| ------------------- | ---------------------------------------- |
+| Endpoint files      | 46 files, ~43,248 lines                  |
+| Service files       | 58 files, ~54,872 lines                  |
+| Model files         | 29 files, ~17,306 lines                  |
+| Schema files        | 37 files, ~15,890 lines                  |
+| Core infrastructure | 17 files, ~8,106 lines                   |
+| Tests               | ~19,320 lines                            |
+| Alembic migrations  | 141 (cannot be ported; must start fresh) |
 
 At a conservative 200 lines/developer/day of well-tested production code, the raw rewrite is ~725 developer-days. This excludes the redesign effort for ORM patterns, middleware, auth, and the re-testing burden.
 
@@ -68,15 +68,15 @@ The backend is mature (145K lines) with exhaustively documented patterns (CLAUDE
 
 ## Summary
 
-| Criterion | Favors Migration? | Weight | Notes |
-|-----------|-------------------|--------|-------|
-| Type safety / DX | Marginally | Medium | Achievable with OpenAPI codegen |
-| Performance | No | Low | Irrelevant at this scale |
-| Library parity | No | High | PDF generation and Celery are downgrades |
-| Migration cost | Strongly no | High | ~3 developer-years |
-| HIPAA risk | Strongly no | Critical | Security code rewrite in healthcare app |
-| Team impact | Marginally | Low | Minor convenience |
-| Maintenance | No | Medium | Stable codebase, no current pain |
+| Criterion        | Favors Migration? | Weight   | Notes                                    |
+| ---------------- | ----------------- | -------- | ---------------------------------------- |
+| Type safety / DX | Marginally        | Medium   | Achievable with OpenAPI codegen          |
+| Performance      | No                | Low      | Irrelevant at this scale                 |
+| Library parity   | No                | High     | PDF generation and Celery are downgrades |
+| Migration cost   | Strongly no       | High     | ~3 developer-years                       |
+| HIPAA risk       | Strongly no       | Critical | Security code rewrite in healthcare app  |
+| Team impact      | Marginally        | Low      | Minor convenience                        |
+| Maintenance      | No                | Medium   | Stable codebase, no current pain         |
 
 ---
 
@@ -91,6 +91,7 @@ Instead of migrating, implement these changes to get the key type-safety benefit
 3. **Contract testing** (2–3 days): `schemathesis` (already in requirements.txt) to automatically test endpoints against the OpenAPI spec, catching schema drift.
 
 **Key files for implementing the alternative:**
+
 - `backend/app/schemas/` — 37 Pydantic schema files (become the single source of truth)
 - `frontend/src/types/` — manually maintained types (would be replaced by generated ones)
 - `frontend/src/services/` — 24 hand-written API service files (would be replaced by generated client)

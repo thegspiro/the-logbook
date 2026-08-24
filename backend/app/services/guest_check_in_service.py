@@ -32,7 +32,7 @@ from app.models.membership_pipeline import (
     ProspectEventLink,
     ProspectiveMember,
 )
-from app.services.event_service import EventService
+from app.services.event_service import EventService, attendance_is_finalized
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 
@@ -65,6 +65,16 @@ class GuestCheckInService:
         """
         if not event.allow_guest_check_in:
             return None, "Guest check-in is not enabled for this event.", False
+
+        # This is an unauthenticated write reached from a room tablet, so it
+        # gets the same lock the member paths do — the sentence, not the
+        # sentinel, because it is shown straight to whoever is at the display.
+        if attendance_is_finalized(event):
+            return (
+                None,
+                "Attendance for this event has been closed.",
+                False,
+            )
 
         normalized_email = (email or "").strip().lower() or None
         full_name = f"{first_name.strip()} {last_name.strip()}".strip()

@@ -30,13 +30,13 @@ Re-verified this unauthenticated surface's guards hold:
   `verify_hmac_signature`, `integrations_webhook.py` 134/200); the API-key path does
   a prefix-scan + constant-time compare.
 - **PP-4** — public feeds/display go through `public_rate_limit(get_client_ip(...))`
-  *before* any expensive work (`calendar.py`/`display.py`), and bcrypt-gated paths
+  _before_ any expensive work (`calendar.py`/`display.py`), and bcrypt-gated paths
   rate-limit before hashing.
 - **PP-2/PP-3/PP-5/PP-7** — ICS escaping, ASCII display-code regex, auto-escaped
   access-log render, throttled `last_used_at` all hold.
 
 **E712-free** across `app/api/public/`. **Latent-500 lens N/A/clean:** the public
-surface is read/webhook; the one public *write* (form submission) flows through the
+surface is read/webhook; the one public _write_ (form submission) flows through the
 forms module's request schemas, whose enum fields were validated in B13 (FORM2-1) —
 no public-specific free-string→ENUM path.
 
@@ -107,7 +107,7 @@ a safe cleanup, and flagged the rest precisely.
 - **Application-status token plaintext at rest.** The 256-bit status token is stored
   plaintext on `ProspectiveMember.status_token` and matched by DB `==`, so a
   DB/backup read yields live 30-day tokens. **Added nuance found this pass:** unlike
-  a reset token (emailed once, then only verified), the status token is *re-read*
+  a reset token (emailed once, then only verified), the status token is _re-read_
   in many places to rebuild the status-check URL (email templates lines 1843/1961,
   the public status response line 3674). So it **cannot be hash-only** — hashing at
   rest requires a **two-column** design: a `status_token_hash` (indexed, for
@@ -153,9 +153,9 @@ hashing nuance; `KNOWN_LIMITATIONS.md` gains the status-token entry.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (portal) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_public_portal_security` + `test_public_display` **21 passed**; broader public selection 57 passed. |
+| Check             | Result                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `flake8` (portal) | ✅ 0 violations                                                                                             |
+| `black --check`   | ✅ unchanged                                                                                                |
+| `tsc --noEmit`    | ✅ n/a — no frontend change                                                                                 |
+| backend tests     | ✅ `test_public_portal_security` + `test_public_display` **21 passed**; broader public selection 57 passed. |

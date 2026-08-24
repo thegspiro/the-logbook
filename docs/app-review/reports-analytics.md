@@ -208,9 +208,9 @@ RPT-3 and the RPT-5 polish items stand.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + test) | ✅ 0 violations |
-| `black --check` | ✅ formatted |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_reports_service` **11 passed** (+1 new `TestTrainingSummaryCompletionRate`). No DB needed for this file. |
+| Check                     | Result                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `flake8` (service + test) | ✅ 0 violations                                                                                                   |
+| `black --check`           | ✅ formatted                                                                                                      |
+| `tsc --noEmit`            | ✅ n/a — no frontend change                                                                                       |
+| backend tests             | ✅ `test_reports_service` **11 passed** (+1 new `TestTrainingSummaryCompletionRate`). No DB needed for this file. |

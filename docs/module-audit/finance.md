@@ -10,6 +10,7 @@ totals, multi-step approval chains, and member dues collection. Frontend
 isolation + financial correctness; (B) endpoint-layer access control + SoD.
 
 ## Verified good ✅
+
 - **All 41 endpoints are `require_permission`-gated** (none fall through to bare
   `get_current_user`). Config mutations require `finance.manage`; approval-chain
   CRUD requires the dedicated `finance.configure_approvals`; approve/deny require
@@ -36,6 +37,7 @@ isolation + financial correctness; (B) endpoint-layer access control + SoD.
 ## Findings
 
 ### FIN-1 — HIGH (XC-1, dangerous variant) — Unvalidated `budget_id` corrupted another department's budget totals — ✅ FIXED
+
 A client-supplied `budget_id` on a purchase request / check request / expense
 line item was stored with no in-org check, then flowed into three budget
 write-helpers (`_encumber_budget`, `_release_encumbrance`, `_add_to_spent`) that
@@ -54,11 +56,13 @@ report + line items, budget), so the FK fails closed with a clear error instead
 of silently no-op'ing the encumbrance.
 
 ### FIN-2 — MEDIUM (XC-1) — `create_budget` stored `fiscal_year_id`/`category_id` without in-org validation — ✅ FIXED
+
 A budget could be bound to another org's fiscal year or category, polluting
 cross-tenant references and the summary/list filtering. **Fix:** covered by the
 same `_validate_finance_fks` call now in `create_budget`/`update_budget`.
 
 ### FIN-3 — HIGH (XC-2, cross-member PII) — `GET /dues` leaked any member's dues to any `finance.view` holder — ✅ FIXED
+
 `list_member_dues` passed the client `user_id` query param straight to the
 service (`WHERE MemberDues.user_id == user_id`) with no self-scoping, gated only
 by the broad `finance.view` (roster-level read). Any member with `finance.view`
@@ -68,14 +72,16 @@ dues payments) is now confined to their own `user_id` regardless of the requeste
 id; dues managers keep the cross-member view. Members still see their own dues.
 
 ### FIN-4 — MEDIUM (flagged) — No separation of duties on terminal money movement
+
 `mark_pr_paid`, `mark_expense_paid`, `issue_check`, `void_check`,
 `record_dues_payment`, `waive_dues` are all gated by `finance.manage` — the same
-permission used to *create* the underlying request. One person can create a
+permission used to _create_ the underlying request. One person can create a
 purchase/check and also mark it paid / issue the physical check. **Status:**
 flagged — closing it needs a distinct `finance.disburse`/treasury permission on
 roles (behavior change).
 
 ### FIN-5 — MEDIUM (flagged) — Reimbursement/payee records readable by any `finance.view` holder
+
 `list_expense_reports` / `list_check_requests` / `list_purchase_requests` (and
 their get-by-id) are `finance.view` with no owner scoping, so any viewer sees
 every member's reimbursement amounts and payee detail. Lower sensitivity than
@@ -83,6 +89,7 @@ dues (FIN-3) but the same XC-2 shape. **Status:** flagged — scoping non-manage
 to their own submissions is a behavior change for treasurers on `.view`.
 
 ### FIN-6 — MEDIUM — ✅ FIXED (2026-08-04) — `record_dues_payment` has no idempotency and no status guard
+
 `amount_paid += amount` accumulated on every call with no dedup on the
 client-supplied `transaction_reference`, so a retried/replayed payment
 double-credited collections; recording a payment against a `WAIVED` record
@@ -94,7 +101,7 @@ from `status == WAIVED`); and `payment_method` / `transaction_reference` /
 written.
 
 **Fix.** The three shared one cause — `MemberDues` was the only record of
-payment, so nothing recorded that a payment had *happened*. A `dues_payments`
+payment, so nothing recorded that a payment had _happened_. A `dues_payments`
 ledger (migration `20260802_0001`) now holds one row per payment and the columns
 on `MemberDues` are a projection of it:
 
@@ -121,6 +128,7 @@ row. `GET /finance/dues/{id}/payments` (`finance.view`) exposes the ledger.
 CI's unit job rather than needing MySQL. **Status:** fixed.
 
 ### FIN-7 — LOW/MED — partially FIXED — Correctness/DoS polish
+
 - **✅ `add_expense_line_item` total drift fixed.** It recomputed `total_amount`
   as `sum(er.line_items) + item.amount`, where `er.line_items` may or may not
   already include the just-added row (depending on load timing) → double-count /
@@ -150,10 +158,11 @@ CI's unit job rather than needing MySQL. **Status:** fixed.
   posting; `get_pending_approvals` returns the org-wide queue rather than the
   caller's assigned steps. Both change established behavior and need an owner
   decision.
-**Status:** the safe correctness fix (line-item total) applied; the rest remain
-flagged as behavior-change or schema/sequence-change (per original triage).
+  **Status:** the safe correctness fix (line-item total) applied; the rest remain
+  flagged as behavior-change or schema/sequence-change (per original triage).
 
 ## Notes
+
 - `get_approval_records` / `get_current_pending_step` query `ApprovalStepRecord`
   by `entity_type`+`entity_id` with no org filter, **but** are not reachable from
   any endpoint — every internal caller resolves the parent entity org-scoped
