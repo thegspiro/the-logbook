@@ -107,6 +107,11 @@
 # ordinary capture of an ordinary screen, landing here purely because it has a
 # scrim. That is the growth this section was warned about: seven entries now,
 # and every future modal shot on a light page joins them.
+#
+# Eight, as of the event-template reminder-audience shot below — added the same
+# day, by a different session, without either of us having to do anything wrong.
+# The section is now growing roughly as fast as the guides gain modal captures,
+# which is the clearest argument yet for retiring the subtle tier.
 05-75-setup-item-prefilled.png
 06-26-room-delete-subrooms.png
 19-05-qr-regenerate-warning.png
@@ -114,3 +119,4 @@
 19-16-legal-revision-editor.png
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
+04-47-template-reminder-audience.png

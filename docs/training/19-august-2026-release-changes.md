@@ -292,7 +292,39 @@ Programs** — that is where a session created before a requirement existed, or
 linked to the wrong pipeline, gets corrected. Members already signed off keep
 the credit they were given; the links only steer what happens next.
 
+### A failed step that costs points without ending the test
+
+Every step on a skill sheet answers two separate questions, and the builder now
+asks them separately. **Critical** decides whether failing the step ends the
+test. **If this step is failed** decides what it costs: nothing, the step's own
+points, or — new here — a fixed number of points off the total.
+
 ![A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure](./images/19-30-skill-point-deduction.png)
+
+The candidate above lost ten points for climbing a ladder nobody had footed and
+still passed at 74%, because that step is not marked Critical. Read the first
+line as the subtraction it is: **47 of 50 points earned, −10 deducted = 74%**,
+with the pass mark stated underneath and the step that took the points named at
+the bottom. The gross total is deliberately left gross — a reader adding up the
+marks on the sheet arrives at 47, and a headline that had already netted the
+penalty off would look like an arithmetic error.
+
+Three rules behind that arithmetic are worth knowing before configuring one:
+
+- **A deducting step does not enlarge the point pool.** The sheet above is out
+  of 50 whether or not it lists the step, so a candidate who does it correctly
+  reads the same percentage as one testing on a sheet that never mentioned it.
+  Only the fault costs anything.
+- **A step left unscored is never charged.** A deduction is a recorded
+  judgement about what the candidate did, and an examiner who never marked the
+  step made no such judgement. (A blank _Critical_ step is a different matter,
+  and is reported as a critical failure in its own right.)
+- **Deductions can drive the total below zero, and the percentage stops at 0%.**
+  The individual penalties are still listed in full, so the clamp hides nothing.
+
+If the sheet carries no point-earning steps at all, there is nothing for a
+deduction to come off — the panel says so rather than quietly ignoring
+judgements the examiner did record.
 
 ## Notifications and integrations
 

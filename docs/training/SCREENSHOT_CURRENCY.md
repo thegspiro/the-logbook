@@ -47,6 +47,61 @@ the RSVP on first tap, and requiring one would also require an
 `POST /events` returning a generic 422 until the actual constraint was read
 from `EventCreate.validate_dates`.
 
+## Corrected 2026-08-24 — two sessions filled the same two markers, and what survived from the losing copy
+
+Guide 19's deduct-mode marker and guide 09's candidate-scorecard marker were
+each captured twice, in parallel, by two sessions working this branch. The other
+session's captures are the ones in the repository (`19-30-skill-point-deduction`,
+`09-24-scorecard-print-candidate`); this entry records what the duplicate work
+was worth keeping and what was thrown away.
+
+**Discarded, because the committed capture is at least as good.** A second
+deduct-mode fixture, built by adding one deduct criterion to the existing
+weighted sheet rather than seeding a fourth template. Cheaper on demo data, and
+framed on the score panel alone; but the committed shot carries the result
+banner, so "passed" is visible in the picture rather than inferred from
+"Passing mark is 70% — met". Two deduct fixtures would have been worse than
+either. The redundant seeder fixture, template criterion and capture were
+dropped rather than merged.
+
+**Kept: three shots that were selecting their record by luck.** `09-23` and
+`09-24` are a pair — the same result under two accounts — and both matched
+"any validated pass"; `09-15` matched "any pass under 100". The deduction
+fixture gave all three a second candidate to choose from, and on this database
+the unpinned matcher already resolved to it: `09-23` would have opened Emeka
+Adeyemi's 90% record while `09-24`, which can only see the demo member's own
+tests, opened Nadia Belhaj's 78% — a pair captioned as one record and showing
+two. All three are now pinned to the 78% fixture that `seed_scored_test` fixes
+and comments.
+
+**Kept: the outreach form must not be answered by the form-submission seeder.**
+The other session fixed the `phone` field type that made those submissions fail
+(theirs is the better fix — an entry in the answer pool rather than a special
+case). But the generated outreach form carries an `event_request` integration:
+answering it four times opens four public event requests, on a queue the events
+step seeds deliberately with one, and `19-24`'s caption reads "0 submissions".
+Forms carrying an integration are now skipped entirely. Verified after a full
+re-seed: one request, from Dana Whitmore, and the form still at zero.
+
+**Kept: the guide-19 deduction section, rewritten around the committed
+fixture's numbers.** The marker had been closed with an image and a caption; the
+three rules that make the arithmetic legible were not written down anywhere —
+a deducting step does not enlarge the point pool, an unscored step is never
+charged, and the percentage clamps at zero while still listing every penalty.
+All three are in `build_score_breakdown`.
+
+**Also corrected:** `09-23`'s caption claimed "one failed step", which that
+print does not show — a non-critical `score` criterion is reported as its
+number, so the step reads "5 / 10" and the section tally counts it as neither
+passed nor failed. The caption now says what the image says. (A deduct-mode
+failure _is_ printed as `FAIL −10`; the two behave differently, which is worth
+knowing before reading a printed sheet for failures.)
+
+**Process note.** Both sessions also independently fixed the same two
+scheduling-seed refusals within the same hour. Duplicated work is the cost of
+two sessions on one branch; the guard against wasted effort is reading the
+other side before committing, not assuming your own copy is the one to keep.
+
 ## Captured 2026-08-24 — a validation prompt, before and after the action that clears it
 
 `19-31`, `19-32`, opened and checked. **2 markers remaining.**
