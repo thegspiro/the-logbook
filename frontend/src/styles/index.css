@@ -653,6 +653,46 @@
   @apply bg-theme-accent-blue-muted text-theme-accent-blue;
 }
 
+/* --- Settings Shell --- */
+/* The two-level chrome every settings screen renders through SettingsLayout:
+   sections run across the top as a segmented pill row, and a section's own
+   sub-pages take the left rail beneath it. Both levels reuse colours the app
+   already carries — blue-muted for a selected section (settings-nav-item-active)
+   and the 3px red left marker for a selected sub-page (as nav-item-active) — so
+   neither treatment is new to the product. */
+
+@utility settings-section-tab {
+  /* One section pill. Colour, hover and focus come from settings-nav-item;
+     this contributes only the box, so the two levels cannot drift apart. */
+  @apply settings-nav-item inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap duration-150 ease-out;
+}
+
+@utility settings-subnav-item {
+  /* Sub-page in the left rail. Below md the rail collapses to a scrolling
+     strip above the panel, where the same active signal reads as an underline
+     rather than a left marker — one nav element either way, so the sub-page
+     list is a single landmark at every width. An inactive item keeps the
+     marker transparent rather than absent, so selecting one does not shift
+     the label sideways. */
+  @apply settings-nav-item block w-auto shrink-0 border-b-3 border-b-transparent px-3 py-2.5 text-left whitespace-nowrap duration-150 ease-out md:w-full md:border-b-0 md:border-l-3 md:border-l-transparent md:whitespace-normal;
+
+  /* Touch minimum. Padded rather than capped: on desktop the item carries a
+     hint line under its label, so shrinking it would clip the hint instead. */
+  @media (max-width: 767px) {
+    min-height: 44px;
+  }
+}
+
+@utility settings-subnav-item-active {
+  @apply bg-theme-surface-hover text-theme-text-primary border-b-red-800 md:border-l-red-800;
+}
+
+@utility settings-save-pill {
+  /* Autosave status, right-aligned against the page header's icon tile. The
+     call site supplies only the per-state colour pair. */
+  @apply inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium;
+}
+
 /* --- QR Code Container --- */
 @utility qr-container {
   /* QR codes require a white background for scanner contrast, regardless of theme */

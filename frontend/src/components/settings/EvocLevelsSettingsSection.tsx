@@ -362,7 +362,7 @@ const EvocLevelsSettingsSection: React.FC = () => {
                   level.isActive ? '' : 'opacity-60'
                 }`}
               >
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-500/15 text-xs font-bold text-violet-700 dark:text-violet-400">
+                <span className="bg-theme-accent-blue-muted text-theme-accent-blue mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold">
                   {level.levelNumber}
                 </span>
                 <div className="min-w-0 flex-1">
