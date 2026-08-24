@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**252 tables · 4311 columns · 815 foreign keys**
+**252 tables · 4313 columns · 815 foreign keys**
 
 ---
 
@@ -553,10 +553,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
-| [`training_records`](#training_records) | `TrainingRecord` | 37 | Training Record model |
+| [`training_records`](#training_records) | `TrainingRecord` | 38 | Training Record model |
 | [`training_requirements`](#training_requirements) | `TrainingRequirement` | 42 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
-| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 24 | Training Submission model |
+| [`training_submissions`](#training_submissions) | `TrainingSubmission` | 25 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
 | [`xapi_statements`](#xapi_statements) | `XAPIStatement` | 27 | xAPI (Experience API / Tin Can) Statement model |
 
@@ -8373,6 +8373,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completion_date` | DATE | yes | IDX |  |  |
 | `expiration_date` | DATE | yes | IDX |  |  |
+| `start_time` | TIME | yes |  |  |  |
 | `hours_completed` | FLOAT | no |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `certification_number` | VARCHAR(100) | yes |  |  |  |
@@ -8536,6 +8537,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `completion_date` | DATE | no | IDX |  |  |
+| `start_time` | TIME | yes |  |  |  |
 | `hours_completed` | FLOAT | no |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
