@@ -9060,6 +9060,154 @@ class Seeder:
 
     # -- event RSVPs --------------------------------------------------
 
+    #: The platoon whose roster the guide-03 pair photographs, and the two
+    #: members taken off its shift so the roster has something to say: one
+    #: booked off, one free to be held over.
+    PLATOON_NAMES = ("A", "B", "C")
+    PLATOON_PATTERN_NAME = "A/B/C Platoon Rotation"
+    #: Far enough out that no board, dashboard or open-shift count the guides
+    #: already picture reaches these shifts. The roster shot opens its shift by
+    #: id, so it does not need them near today.
+    PLATOON_SHIFT_DAYS_AHEAD = 35
+
+    def seed_platoon_roster(self) -> dict | None:
+        """Duty platoons, and one shift whose roster shows all three states.
+
+        `Shift.platoon` is written in exactly one place — the recurring-pattern
+        generator, when a `platoon` pattern carries `schedule_config.platoons`.
+        Neither `ShiftCreate` nor `ShiftUpdate` accepts the field, so a shift
+        made by hand can never have one, and the department's platoon roster
+        (the fill-in / hold-over panel on the shift page) had nothing to render
+        for any seeded shift. That is the whole of the gap this closes.
+
+        The generator seats *every* member of the platoon on every occurrence,
+        which is a fully-crewed shift and a roster with nothing to say. Two
+        assignments are removed afterwards, the way a real shift loses them:
+        one member is booked off — an approved time-off request covering the
+        date, so the roster reads "On leave" — and one is simply free, which is
+        the "Available" row an officer holds over.
+        """
+        # Membership is `seed_platoons`' job, and it is idempotent: dealing the
+        # roster again here would reshuffle the columns of the Platoon
+        # Management screen `03-16` pictures, for no gain. This step only needs
+        # the platoons to exist.
+        overview = self.api.get("/scheduling/platoons/overview") or {}
+        staffed = sum(
+            group.get("member_count") or 0
+            for group in (overview.get("groups") or [])
+            if (group.get("platoon") or "").strip()
+        )
+        if staffed < 6:
+            self.blocked.append("platoon roster: no platoon has members")
+            return None
+
+        pattern = next(
+            (
+                p
+                for p in items(self.api.get("/scheduling/patterns"), "patterns")
+                if pick(p, "name") == self.PLATOON_PATTERN_NAME
+            ),
+            None,
+        )
+        if not pattern:
+            self.blocked.append("platoon roster: the A/B/C pattern is missing")
+            return None
+
+        # Without this the generator falls through to its single-track branch
+        # and writes no platoon at all — the pattern is typed `platoon` and
+        # still produces ordinary shifts.
+        self.api.patch(
+            f"/scheduling/patterns/{pick(pattern, 'id')}",
+            {"schedule_config": {"platoons": list(self.PLATOON_NAMES)}},
+        )
+
+        first = TODAY + timedelta(days=self.PLATOON_SHIFT_DAYS_AHEAD)
+        last = first + timedelta(days=2)
+        existing = [
+            sh
+            for sh in items(
+                self.api.get(
+                    f"/scheduling/shifts?start_date={first}&end_date={last}&limit=50"
+                ),
+                "shifts",
+            )
+            if pick(sh, "platoon")
+        ]
+        if not existing:
+            self.api.post(
+                f"/scheduling/patterns/{pick(pattern, 'id')}/generate",
+                {"start_date": str(first), "end_date": str(last)},
+            )
+            existing = [
+                sh
+                for sh in items(
+                    self.api.get(
+                        f"/scheduling/shifts?start_date={first}"
+                        f"&end_date={last}&limit=50"
+                    ),
+                    "shifts",
+                )
+                if pick(sh, "platoon")
+            ]
+        shift = existing[0] if existing else None
+        if not shift:
+            self.blocked.append("platoon roster: the pattern generated no shift")
+            return None
+
+        self._open_two_platoon_seats(shift)
+        return shift
+
+    def _open_two_platoon_seats(self, shift: dict) -> None:
+        """Take two of the platoon off this shift, one of them on leave."""
+        shift_id = pick(shift, "id")
+        assignments = items(
+            self.api.get(f"/scheduling/shifts/{shift_id}/assignments"), "assignments"
+        )
+        # Two is the minimum that shows both remaining states at once; more
+        # than that and the shift reads as unstaffed rather than short-handed.
+        if len(assignments) < 4:
+            return
+        freed = assignments[-2:]
+        for row in freed:
+            self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
+
+        booked_off = pick(freed[0], "user_id", "userId")
+        username = next(
+            (
+                pick(u, "username")
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "id") == booked_off
+            ),
+            None,
+        )
+        if not booked_off or not username:
+            return
+        shift_date = str(pick(shift, "shift_date", "shiftDate") or "")
+        if not shift_date:
+            return
+        try:
+            session = self.member_session(self.base_url, booked_off, str(username))
+            created = session.post(
+                "/scheduling/time-off",
+                {
+                    "start_date": shift_date,
+                    "end_date": shift_date,
+                    "reason": "Family commitment — booked well ahead.",
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"platoon roster: leave request refused ({exc})")
+            return
+        request_id = pick(created or {}, "id")
+        if not request_id:
+            return
+        # Approved, not pending: the roster reads active leave, and a request
+        # still awaiting a decision leaves the member simply available.
+        self.api.post(
+            f"/scheduling/time-off/{request_id}/review",
+            {"status": "approved", "review_notes": "Approved — cover arranged."},
+        )
+
     def member_session(self, base_url: str, user_id: str, username: str) -> Api:
         """A signed-in session for an ordinary member, usable for API calls.
 
@@ -13696,6 +13844,7 @@ class Seeder:
         self.step("count-only calls", self.seed_count_only_calls)
         self.step("admin hours entries", self.seed_admin_hours_entries)
         self.step("apparatus crew positions", self.seed_apparatus_crew_positions)
+        self.step("platoon roster", self.seed_platoon_roster)
         self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))

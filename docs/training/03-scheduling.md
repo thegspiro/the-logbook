@@ -630,11 +630,34 @@ members that the rest of the schedule does not.
   implicitly. Anyone who used Platoon Management before and does not hold
   `scheduling.manage` will now get a permission error there.
 
-> **[SCREENSHOT NEEDED — the shift detail page as a scheduler with the
->
-> > hold-over roster populated, paired with the same shift as an ordinary member
-> > with the roster absent. Seed at least one member on approved leave so the
-> > availability distinction is visible, and caption which account is which.]**
+### The roster, and who sees it
+
+A shift tied to a platoon carries a second list under its crew board: every
+active member of that platoon, and what each of them is doing on that date.
+It is the panel an officer works from when a shift comes up short.
+
+![Platoon A's roster on a shift, as a scheduler: six members on shift, one on leave, and one available with an Assign control beside them](./images/03-84-platoon-roster-scheduler.png)
+
+_As a **scheduler**. Three states, and the middle one is the point: **On shift**
+is already assigned, **On leave** has approved time off covering the date, and
+**Available** is in the platoon, free, and one tap from being held over — which
+is what the **Assign** button beside Emeka Adeyemi does. Somebody on leave is
+listed rather than hidden, because "why is this shift short" and "who can I
+call" are the same question._
+
+![The same shift as an ordinary member: the crew board is there, the platoon roster is not, and nothing marks its absence](./images/03-85-platoon-roster-member.png)
+
+_As an **ordinary member**, scrolled to the same place. The crew board, the
+sign-up box and the calls below it are all there; the roster is simply not, and
+nothing says so. That is deliberate — it is availability information about other
+members, gated on `scheduling.assign` or `scheduling.manage`, or on being the
+shift's own named officer. A member sees no error and no empty panel._
+
+**A shift only has a platoon if a platoon pattern generated it.** The field is
+written by the recurring-pattern generator, for a pattern whose type is
+**Platoon** and whose configuration names its platoons; a shift created by hand
+carries none, and shows no roster however the department's members are
+organized.
 
 ---
 

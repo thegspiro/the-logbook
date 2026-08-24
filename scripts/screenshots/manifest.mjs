@@ -1057,6 +1057,34 @@ function openPartStaffedShift(shotId) {
   };
 }
 
+/**
+ * Open the seeded platoon shift's detail drawer.
+ *
+ * `Shift.platoon` is written only by the recurring-pattern generator, so this
+ * is the one shift in the department that carries one — the seeder generates it
+ * five weeks out, deliberately clear of every board, dashboard and open-shift
+ * count the guides already picture.
+ *
+ * Same `?shift=` entry the other shift shots use; the drawer is state on the
+ * scheduling page rather than a route of its own.
+ */
+async function openPlatoonShift(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/scheduling/shifts?limit=400", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const rows = Array.isArray(body) ? body : body.shifts || body.items || [];
+    return rows.find((shift) => shift.platoon)?.id ?? null;
+  });
+  if (!id) throw new Error("no shift carries a platoon");
+  const url = new URL(page.url());
+  url.searchParams.set("shift", id);
+  await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1800);
+}
+
 /** Open the Shift Reports tab and switch to one of its views. */
 function openReportView(name) {
   return async (page) => {
@@ -1684,6 +1712,65 @@ export const SHOTS = [
       await page.waitForTimeout(700);
     },
     selector: "div.fixed.inset-0 > div",
+  },
+  {
+    // The scheduler's half of the pair. Framed on the drawer, not the page:
+    // the roster panel sits well down a long drawer over a board that is not
+    // what the caption is about.
+    id: "03-84-platoon-roster-scheduler",
+    doc: "03-scheduling.md",
+    line: 633,
+    anchor: "the shift detail page as a scheduler with the",
+    alt: "Platoon A's roster on a shift, as a scheduler: six members on shift, one on leave, and one available with an Assign control beside them",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await openPlatoonShift(page);
+      const roster = page.getByRole("heading", { name: /^Platoon A Roster$/ });
+      await roster.waitFor({ timeout: 20_000 });
+      await roster.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(500);
+    },
+    // `div.drawer-panel`, not the `div.fixed.inset-0 > div` the modal shots
+    // use: the shift drawer is laid out inside the page's own main element,
+    // not as a fixed overlay, so that selector matches nothing here.
+    selector: "div.drawer-panel",
+    allowEmptyState:
+      '"No calls logged for this shift." belongs to the Calls panel below ' +
+      "the roster, and is true: this shift is five weeks away and has not " +
+      "run. The roster this shot is about is fully populated. Same reason " +
+      "03-57 carries the flag.",
+  },
+  {
+    // The member's half. Same shift, same URL, no roster: the panel is gated
+    // on scheduling.assign / scheduling.manage or being the shift's named
+    // officer, and an ordinary member holds none of those. Nothing tells them
+    // a panel is missing, which is the point -- the rest of the shift page
+    // works exactly as it does above.
+    id: "03-85-platoon-roster-member",
+    doc: "03-scheduling.md",
+    line: 633,
+    anchor: "__paired-with-03-84__",
+    alt: "The same shift as an ordinary member: the crew board is there, the platoon roster is not, and nothing marks its absence",
+    route: "/scheduling",
+    auth: "member",
+    prepare: async (page) => {
+      await openPlatoonShift(page);
+      await page
+        .getByRole("heading", { name: /Shift Details|Crew/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      // Scrolled to the foot of the drawer, where the scheduler's copy has the
+      // roster panel. Framed at the top instead, the pair would differ mostly
+      // in where each one happens to be scrolled to.
+      await page
+        .locator("div.drawer-panel")
+        .evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await page.waitForTimeout(500);
+    },
+    selector: "div.drawer-panel",
+    allowEmptyState:
+      "The absence of the roster panel is the subject of the shot, and the " +
+      "scheduler's copy beside it carries what this one withholds.",
   },
   {
     id: "03-57-shift-assignment-controls",

@@ -1,5 +1,53 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (twenty-first) — the platoon roster, and the last marker closed
+
+`03-84`/`03-85`, opened and checked. **504 filled, 0 remaining** — every
+placeholder in the guides now has an image or the prose that replaced it.
+
+**The gap was structural, and it is worth stating plainly.** `Shift.platoon` is
+written in exactly one place: the recurring-pattern generator, for a pattern
+typed `platoon` whose `schedule_config` names its platoons. Neither
+`ShiftCreate` nor `ShiftUpdate` accepts the field. Every seeded shift was made
+by hand, so no shift in the demo department had a platoon, so the fill-in /
+hold-over roster had nothing to render — for anybody, on any screen. The
+department already had three platoons and an A/B/C pattern; the pattern had no
+`schedule_config`, which is what makes the generator take its single-track
+branch and write ordinary shifts.
+
+**The generator seats the whole platoon, which is a roster with nothing to
+say.** Two assignments are removed afterwards, the way a real shift loses them:
+one member is booked off with an approved request covering the date, so the
+roster reads **On leave**; one is simply free, which is the **Available** row
+with the **Assign** button an officer holds someone over with. Six on shift, one
+of each — all three states in one frame.
+
+**Generated five weeks out, deliberately.** Every board, dashboard card and
+open-shift count the guides already picture reads from the weeks around today.
+The roster shot opens its shift by id, so it does not need to be near today at
+all, and nothing else moves.
+
+**I broke `03-16` and put it back.** My first version re-dealt the platoon
+membership before generating — not realizing `seed_platoons` already assigns it,
+idempotently, and that the Platoon Management screen pictures the exact deal.
+The columns changed. The tell was almost missed: `/users` does not carry
+`platoon` at all, so every member reads `platoon: None` there whatever they are
+assigned — the list-shape trap again, and this time it made a populated feature
+look unseeded. `/scheduling/platoons/overview` is where the truth is. The deal
+is deterministic (`ids[i::3]` over the API's own order), so re-running it
+restored the committed image exactly, and the fixture now only reads the
+membership it finds.
+
+**Left behind:** one approved time-off request for 2026-09-28 from the
+mis-dealt run. It cannot be deleted — the API cancels only your own, and only
+before approval — and it is harmless: the member it belongs to is in another
+platoon now, and that date's shift is not hers. A fresh seed will not produce
+it.
+
+**One selector note.** The shift drawer is `div.drawer-panel`, laid out inside
+the page's own `main`. The `div.fixed.inset-0 > div` that the modal shots use
+matches nothing on this page.
+
 ## Corrected 2026-08-24 — the early-check-in fix, found twice, and what the second copy was good for
 
 Both sessions independently found the same defect within the same hour: the self
