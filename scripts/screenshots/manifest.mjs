@@ -1213,6 +1213,79 @@ export async function openSubmittedCheck(page) {
   await page.waitForTimeout(500);
 }
 
+/**
+ * Open a dialog taller than a phone screen and scroll it to its action row.
+ *
+ * "Add Course" because it is the tallest dialog the demo department has --
+ * roughly 1250px of form inside a panel capped at 90dvh -- so on a 390x844
+ * viewport it genuinely scrolls internally, which is what the marker is about.
+ * The shot is NOT `fullPage`: this capture is about what covers the action row,
+ * and `capture.mjs` hides the bottom bar for full-page shots (it would
+ * otherwise be stitched in at a document offset), which would prove the point
+ * by removing the thing being tested.
+ *
+ * The bar is asserted present before the dialog opens. Without that check a
+ * release that stopped rendering it altogether would leave this capture
+ * looking exactly the same and still captioned "the bar is hidden while a
+ * dialog is open".
+ */
+export async function openTallDialogAtActionRow(page) {
+  const bar = page.locator('nav[aria-label="Primary"]');
+  await bar.waitFor({ state: "visible", timeout: 20_000 });
+  await page
+    .getByRole("button", { name: /add course/i })
+    .first()
+    .click();
+  const panel = page.locator(".modal-panel").first();
+  await panel.waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(400);
+  await panel.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Open one member's training history and put its table at the top of the frame.
+ *
+ * The member is chosen by username rather than by roster position, so both
+ * halves of the reflow pair land on the same records — a comparison between
+ * two different members' histories would show a difference that is not the
+ * one being illustrated.
+ *
+ * Both halves are viewport shots rather than element clips. Clipping to the
+ * table works at desktop width and does not on a phone: the element is then
+ * taller than the screen, and a Playwright element screenshot paints the
+ * sticky header and the bottom bar at their document offsets, stamping both
+ * across the middle of the table.
+ */
+export async function openTrainingHistoryTable(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users?limit=200", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const users = Array.isArray(body) ? body : body.users || body.items || [];
+    const target = users.find((u) => u.username === "whalloway");
+    return target ? target.id : null;
+  });
+  if (!id)
+    throw new Error("the demo member whose history this pair uses is missing");
+  await page.goto(`${new URL(page.url()).origin}/members/${id}/training`, {
+    waitUntil: "domcontentloaded",
+  });
+  const table = page.locator("table.rwd-table").first();
+  await table.waitFor({ state: "visible", timeout: 20_000 });
+  await table.evaluate((el) => {
+    el.scrollIntoView({ block: "start" });
+    // Clear of the sticky page header, which `block: "start"` parks the
+    // table's first row underneath.
+    window.scrollBy(0, -120);
+  });
+  await page.waitForTimeout(500);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -10760,6 +10833,56 @@ export const SHOTS = [
     viewport: { width: 390, height: 844 },
     prepare: openSubmittedCheck,
     fullPage: true,
+  },
+  {
+    id: "10-17-tall-dialog-action-row",
+    doc: "10-mobile-pwa.md",
+    line: 797,
+    anchor: "a tall dialog on a 390x844 viewport, scrolled to its",
+    alt: "A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable",
+    route: "/training/courses",
+    viewport: { width: 390, height: 844 },
+    fullPage: false,
+    prepare: openTallDialogAtActionRow,
+  },
+  {
+    id: "19-15-tall-dialog-action-row",
+    doc: "19-august-2026-release-changes.md",
+    line: 728,
+    anchor: "a tall dialog on a 390x844 viewport scrolled to its",
+    alt: "The fix in force: a dialog scrolled to its action row on a phone, with no navigation bar painting over the buttons",
+    route: "/training/courses",
+    viewport: { width: 390, height: 844 },
+    fullPage: false,
+    prepare: openTallDialogAtActionRow,
+  },
+  {
+    // Half of a pair, and only meaningful as one: the marker says so, and it
+    // is right -- a stacked list nobody has seen wide reads as an ordinary
+    // card layout rather than as a table that reflowed.
+    //
+    // The training history rather than the documents table the marker
+    // suggests: /documents lists folders until one is opened, and the largest
+    // seeded folder holds two files, so the wide half would be a two-row table
+    // -- too thin to read as a table at all. The guide's own list of what
+    // reflowed names the training table alongside documents.
+    id: "10-18-training-table-phone",
+    doc: "10-mobile-pwa.md",
+    line: 814,
+    anchor: "one of the reflowed tables (documents or check-in) at",
+    alt: "One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways",
+    route: "/members",
+    viewport: { width: 390, height: 844 },
+    prepare: openTrainingHistoryTable,
+  },
+  {
+    id: "10-19-training-table-desktop",
+    doc: "10-mobile-pwa.md",
+    line: 814,
+    anchor: "__paired-with-10-18__",
+    alt: "The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files",
+    route: "/members",
+    prepare: openTrainingHistoryTable,
   },
   {
     id: "03-43-time-off-request-form",

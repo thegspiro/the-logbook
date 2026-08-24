@@ -1,5 +1,46 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (fifth) — the tall dialog, and a table shown at both widths
+
+`10-17`/`19-15` and the `10-18`/`10-19` pair, opened and checked. **471 of 507
+filled.**
+
+**Finding the tall dialog took measuring, not guessing.** `modal-panel-scroll`
+caps a panel at `100dvh - 2rem`, which on a 390x844 phone is 812px — so a
+dialog only demonstrates the fix if its content exceeds that, and most do not.
+Measured: template picker 301, New Folder 328, Extend Time 375, Merge Write-Ins
+409, Clone Election 445, Request Time Off 508, Record Paper Ballots 661,
+Rollback 709 — all of which fit without scrolling and put their action row
+mid-screen, where nothing was ever painting over it. **Add Course** is 1259px
+inside a 758px panel, which is the one that genuinely scrolls.
+
+**The shot is deliberately not `fullPage`.** `capture.mjs` hides
+`nav[aria-label="Primary"]` for full-page shots, because full-page stitching
+paints a `position: fixed` element at its document offset. A full-page capture
+here would have removed the very thing the caption is about and proved nothing.
+The prepare step also **asserts the bar is present before opening the dialog**:
+without that check, a release that stopped rendering the bar at all would leave
+this capture looking identical and still captioned "the bar is hidden while a
+dialog is open".
+
+**The reflow pair is the training table, not the documents table the marker
+suggested.** `/documents` lists folders until one is opened, and the largest
+seeded folder holds two files — a two-row wide table does not read as a table
+at all, so the comparison would have shown nothing. The guide's own list of
+what reflowed names the training table beside documents, so the pair uses one
+member's training history: same page, same three records, 390px and desktop.
+
+**Both halves are viewport shots rather than element clips, and that is not a
+style choice.** Clipping to `table.rwd-table` is clean at desktop width and
+wrong on a phone: the element is then taller than the screen, and a Playwright
+element screenshot paints the sticky header and the bottom bar at their
+document offsets — stamped across the middle of the table. Same family as the
+full-page rule above; worth remembering as one rule rather than two.
+
+The desktop half is placed in the guide by hand, as the pairing convention
+requires — `apply_placeholders` fills one marker per shot, and the second half
+carries the `__paired-with-10-18__` anchor that deliberately never matches.
+
 ## Captured 2026-08-24 (fourth) — the seeded checks that never existed, and two defects in reading one back
 
 `03-80` and `19-14`, opened and checked. **467 of 506 filled.**

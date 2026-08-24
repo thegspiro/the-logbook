@@ -470,6 +470,7 @@ Tags exist for three things today: **event check-in**, **admin hours clock-in**,
 and **shift check-in** on an apparatus.
 
 > **[SCREENSHOT NEEDED — a phone holding against a mounted NFC tag on an
+>
 > > apparatus, and the resulting shift check-in page naming the unit, date and
 > > hours. Two frames or one composite]**
 
@@ -794,11 +795,7 @@ notched phone even a dialog sized to the viewport lost around 32px.
 The bar now hides while a dialog, drawer or bottom sheet is open, and returns
 when it closes.
 
-> **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport, scrolled to its
-> action row, with the bottom navigation absent. **Every existing phone dialog
-> capture across the guides is now wrong** and should be replaced with a shot
-> taken after this change — the old ones all show the bar covering the
-> dialog.]**
+![A dialog taller than the phone screen, scrolled to its Cancel and Save row — the bottom navigation bar is gone while it is open, so both buttons are reachable](./images/10-17-tall-dialog-action-row.png)
 
 ### Also improved on phones this week
 
@@ -811,9 +808,14 @@ when it closes.
 - **Icon-only controls are named**, so a screen reader announces them.
 - Toast notifications are positioned and announced correctly on a phone.
 
-> **[SCREENSHOT NEEDED — one of the reflowed tables (documents or check-in) at
-> > 390x844 showing the stacked-card layout, beside the same table on desktop.
-> > The pair is the point; a single shot does not show the reflow.]**
+![One member's training history on a 390px phone: each row has become a stacked card, every value carrying its own column label, with nothing to scroll sideways](./images/10-18-training-table-phone.png)
+
+![The same three records at desktop width — one row each across Course, Type, Date, Hours, Expires, Status and Files](./images/10-19-training-table-desktop.png)
+
+_The same page, the same three records, at 390px and at desktop width. On the
+phone every value keeps the column heading that named it, so nothing has to be
+remembered from a header row that is no longer on screen — and there is no
+sideways scroll to discover._
 
 ### Browser tabs
 

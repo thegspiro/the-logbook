@@ -725,11 +725,7 @@ untappable, and the tap navigated the page out from under the dialog.
 
 The bar now hides while a dialog, drawer or bottom sheet is open.
 
-> **[SCREENSHOT NEEDED — a tall dialog on a 390x844 viewport scrolled to its
->
-> > action row, with the bottom navigation absent. Any existing phone dialog
-> > capture in the guides is now wrong and should be replaced with this one — the
-> > old shots were all taken with the bar covering the dialog.]**
+![The fix in force: a dialog scrolled to its action row on a phone, with no navigation bar painting over the buttons](./images/19-15-tall-dialog-action-row.png)
 
 Also improved on phones this week: the events page, equipment template
 actions, the checklist builder, calendar month navigation, and the document,
