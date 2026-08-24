@@ -9,6 +9,7 @@ isolation/correctness, with a full line-by-line tenant-isolation read of the
 service layer).
 
 ## Verified good ✅
+
 - **Auth coverage:** all 116 endpoints authenticated. 115 carry a
   `require_permission` / `require_all_permissions` / `get_current_user`
   dependency; the `/ws` WebSocket authenticates manually (decodes the JWT,
@@ -35,6 +36,7 @@ service layer).
 ## Findings
 
 ### INV-1 — correctness bug — `get_item_history` AttributeError — ✅ FIXED
+
 `get_item_history` built the issuance timeline using `i.quantity` and
 `i.reason`, but the `ItemIssuance` model defines those columns as
 `quantity_issued` and `issue_reason` (there is no `quantity`/`reason`
@@ -46,6 +48,7 @@ references across the issuance + issuance-return branches). Verified against the
 model; compiles + flake8 clean.
 
 ### INV-2 — MEDIUM — `create_equipment_request` cross-tenant item read — ✅ FIXED
+
 `POST /requests` (any authenticated member) looked up the referenced item with
 `select(...).where(InventoryItem.id == item_id)` and **no org filter**. A member
 could pass an `item_id` from another org: the rank/position restriction logic
@@ -57,6 +60,7 @@ legitimate request always references an item the member can see; `item_id` is
 optional — name-only purchase requests are unaffected). Compiles + flake8 clean.
 
 ### INV-3 — MEDIUM — `create_maintenance_record` doesn't validate item is in-org (+ silent no-op) — ✅ FIXED (app-review B3, 2026-08-06)
+
 `create_maintenance_record` accepts a client-supplied `item_id`, writes the
 record with the caller's `organization_id`, but never checks the item belongs to
 the org. Worse, when `is_completed=True`, `_get_item_locked` silently returns
@@ -66,6 +70,7 @@ error surfaced** — a "completed" maintenance record that updated nothing.
 and raising when the item isn't in-org, mirroring the INV-2 fix.
 
 ### INV-4 — LOW — Broad create/update FK-validation gaps (XC-1 class)
+
 Multiple create/update methods persist client-supplied FK ids without verifying
 the referenced row is in-org (see `CROSS-CUTTING.md` XC-1 for the full list):
 `assign_item_to_user`/`checkout_item`/`issue_from_pool`/`issue_kit_to_member`
@@ -81,6 +86,7 @@ is data-integrity/mis-attribution, not a live cross-tenant write.
 **Status:** flagged — best closed by the shared `assert_in_org` helper (XC-1).
 
 ### INV-5 — LOW — `list_reorder_requests` LIKE without wildcard escaping — ✅ FIXED (app-review B3, 2026-08-06)
+
 `list_reorder_requests` uses `ReorderRequest.item_name.ilike(f"%{search}%")`
 without escaping `%`/`_`, unlike the other search methods. Still a bound
 parameter (no SQL injection) — just inconsistent wildcard behavior (a `%` in the
@@ -89,6 +95,7 @@ search box matches everything).
 helper the other search paths use.
 
 ### INV-6 — MEDIUM — Equipment-kit `optional` flag read but never persisted (live AttributeError) — ✅ FIXED safe half / 🚩 feature flagged (app-review B3, 2026-08-06)
+
 `issue_kit_to_member` branches on `kit_item.optional`, but `create_equipment_kit`
 never persists an `optional` value from the incoming line-item data (it sets
 `item_id`, `category_id`, `item_name`, `quantity`, `size_selectable`,
@@ -98,6 +105,7 @@ issue path would error.
 **Status:** flagged — confirm the model column and wire it through on create.
 
 ## Notes
+
 - `retire_item` and `get_nfpa_retirement_due_items` have by-id sub-queries that
   omit the org filter, but the id is provably in-org already (parent row fetched
   org-scoped). Not exploitable; noted for completeness.

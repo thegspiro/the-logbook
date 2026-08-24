@@ -24,7 +24,7 @@ in the request schemas).
 
 Open items unchanged: **SCH-5** (swap accept-path re-validation + approver identity
 — a swap-workflow design change, not a drive-by) and **SCH-6 residual** (validate
-`station_id`/`template_id` *if/when* the station link is wired — conditional on a
+`station_id`/`template_id` _if/when_ the station link is wired — conditional on a
 feature not yet built).
 
 **Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
@@ -118,8 +118,8 @@ verifications this pass ruled out phantom findings; the real SCH-6 gap
   `_user_in_org`; a foreign id rejects with "One or more members are not in your
   organization" before any row is written. (The `hours` value is **already**
   bounded at the schema — `ManualHoursEntry.hours: Field(gt=0, le=48)` — so the
-  audit's "trusts a client-supplied manual_hours override" concern on the *value*
-  is already closed; the gap was the *user*.)
+  audit's "trusts a client-supplied manual_hours override" concern on the _value_
+  is already closed; the gap was the _user_.)
 - **`apparatus_id` on `create_shift` / `update_shift`.** Stored a client-supplied
   `apparatus_id` unchecked; it drives the min-staffing lookup. Now validated in-org
   via the shared `is_in_org` (defense-in-depth — `_get_apparatus_map` is already
@@ -133,7 +133,7 @@ user on finalize).
 
 ### SCH-5 — MEDIUM — Swap accept-path re-validation & self-approval — 🚩 FLAGGED (design change)
 
-When a swap is *accepted* by the counterparty (vs. manager approval), the target
+When a swap is _accepted_ by the counterparty (vs. manager approval), the target
 shift's current state (capacity, cancellation, finalization) is not re-validated at
 accept time, and the accept path's approver-identity check is looser than the
 manual-review path. Closing it is a behavior change to the swap-accept workflow
@@ -165,9 +165,9 @@ apparatus); SCH-5 stands.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + test) | ✅ 0 violations |
-| `black --check` | ✅ formatted |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_scheduling_org_scoping` **2 passed** (new). `test_scheduling.py` is DB-backed (70 errors, all the no-MySQL fixture — unchanged from baseline). |
+| Check                     | Result                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (service + test) | ✅ 0 violations                                                                                                                                         |
+| `black --check`           | ✅ formatted                                                                                                                                            |
+| `tsc --noEmit`            | ✅ n/a — no frontend change                                                                                                                             |
+| backend tests             | ✅ `test_scheduling_org_scoping` **2 passed** (new). `test_scheduling.py` is DB-backed (70 errors, all the no-MySQL fixture — unchanged from baseline). |

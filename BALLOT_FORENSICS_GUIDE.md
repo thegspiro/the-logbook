@@ -13,16 +13,16 @@ This guide explains how to investigate a disputed election using The Logbook's b
 
 ## Quick Reference: Available Tools
 
-| Tool | Endpoint | What It Does |
-|------|----------|-------------|
-| **Forensics Report** | `GET /elections/{id}/forensics` | Full aggregated report (start here) |
-| **Integrity Check** | `GET /elections/{id}/integrity` | Verify all vote signatures |
-| **Election Stats** | `GET /elections/{id}/stats` | Ballot counts and turnout |
-| **Election Results** | `GET /elections/{id}/results` | Candidate vote counts |
-| **Soft-Delete Vote** | `DELETE /elections/{id}/votes/{vote_id}` | Remove vote with reason |
-| **Receipt Verification** | `GET /elections/{id}/verify-receipt?receipt=` | Confirm a voter's receipt maps to a recorded vote |
-| **Paper Batches** | `GET /elections/{id}/manual-ballots` | Paper-tally batches with recorder, status, and attestation trail |
-| **Certified Results** | `GET /elections/{id}/certified-results` | Formal results PDF: tallies, quorum, attestation trail, integrity result, signature lines (closed elections) |
+| Tool                     | Endpoint                                      | What It Does                                                                                                 |
+| ------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Forensics Report**     | `GET /elections/{id}/forensics`               | Full aggregated report (start here)                                                                          |
+| **Integrity Check**      | `GET /elections/{id}/integrity`               | Verify all vote signatures                                                                                   |
+| **Election Stats**       | `GET /elections/{id}/stats`                   | Ballot counts and turnout                                                                                    |
+| **Election Results**     | `GET /elections/{id}/results`                 | Candidate vote counts                                                                                        |
+| **Soft-Delete Vote**     | `DELETE /elections/{id}/votes/{vote_id}`      | Remove vote with reason                                                                                      |
+| **Receipt Verification** | `GET /elections/{id}/verify-receipt?receipt=` | Confirm a voter's receipt maps to a recorded vote                                                            |
+| **Paper Batches**        | `GET /elections/{id}/manual-ballots`          | Paper-tally batches with recorder, status, and attestation trail                                             |
+| **Certified Results**    | `GET /elections/{id}/certified-results`       | Formal results PDF: tallies, quorum, attestation trail, integrity result, signature lines (closed elections) |
 
 All endpoints require `elections.manage` permission, except receipt verification,
 which is public (rate-limited) so voters can check their own receipts.
@@ -132,9 +132,10 @@ Check the `anomaly_detection` section:
 ```
 
 Look for:
+
 - **Normal pattern:** Votes spread throughout the voting period
 - **Suspicious pattern:** Large burst of votes in a very short window (potential ballot stuffing)
-- **Late votes:** Votes near the deadline are normal; votes *after* the deadline should be impossible (blocked by the system)
+- **Late votes:** Votes near the deadline are normal; votes _after_ the deadline should be impossible (blocked by the system)
 
 ### Step 5: Review the Audit Trail
 
@@ -151,30 +152,30 @@ The `audit_log.entries` array shows a chronological history:
 
 **Key event types to look for:**
 
-| Event Type | Severity | What It Means |
-|------------|----------|--------------|
-| `election_created` | info | Election was created |
-| `election_opened` | info | Voting started |
-| `election_closed` | info | Voting ended |
-| `election_rollback` | warning | Status was rolled back (check reason) |
-| `vote_cast` | info | Normal vote cast |
-| `vote_cast_token` | info | Anonymous vote via email token |
-| `vote_double_attempt` | warning | Someone tried to vote twice (blocked) |
-| `vote_double_attempt_token` | warning | Token double-vote attempt (blocked) |
-| `vote_soft_deleted` | warning | Admin removed a vote (check reason) |
-| `vote_integrity_check` | info/critical | Integrity check was run |
-| `ballot_emails_sent` | info | Ballot notification emails distributed |
-| `forensics_report_generated` | info | Someone pulled this report |
-| `runoff_election_created` | info | Automatic runoff triggered |
-| `election_auto_opened` / `election_auto_closed` | info | Lifecycle task opened/closed the election on schedule |
-| `election_reminder_sent` | info | Non-voter reminder ballots sent (manual or automatic) |
-| `election_manual_ballots_recorded` | info/warning | Paper tally recorded (warning when the over-count override was used) |
-| `election_manual_ballots_attested` | info | An officer attested a paper batch |
-| `election_manual_ballots_voided` | warning | A paper batch was voided (check reason) |
-| `election_manual_ballots_unattested_at_close` | warning | Election closed with a batch still pending — its votes are excluded |
-| `election_tie_detected` | info | A tie was flagged under a non-co-winners tie policy |
-| `election_write_ins_merged` | info | Write-in variants consolidated (alias only; vote rows untouched) |
-| `election_cloned` | info | A fresh draft was cloned from this election |
+| Event Type                                      | Severity      | What It Means                                                        |
+| ----------------------------------------------- | ------------- | -------------------------------------------------------------------- |
+| `election_created`                              | info          | Election was created                                                 |
+| `election_opened`                               | info          | Voting started                                                       |
+| `election_closed`                               | info          | Voting ended                                                         |
+| `election_rollback`                             | warning       | Status was rolled back (check reason)                                |
+| `vote_cast`                                     | info          | Normal vote cast                                                     |
+| `vote_cast_token`                               | info          | Anonymous vote via email token                                       |
+| `vote_double_attempt`                           | warning       | Someone tried to vote twice (blocked)                                |
+| `vote_double_attempt_token`                     | warning       | Token double-vote attempt (blocked)                                  |
+| `vote_soft_deleted`                             | warning       | Admin removed a vote (check reason)                                  |
+| `vote_integrity_check`                          | info/critical | Integrity check was run                                              |
+| `ballot_emails_sent`                            | info          | Ballot notification emails distributed                               |
+| `forensics_report_generated`                    | info          | Someone pulled this report                                           |
+| `runoff_election_created`                       | info          | Automatic runoff triggered                                           |
+| `election_auto_opened` / `election_auto_closed` | info          | Lifecycle task opened/closed the election on schedule                |
+| `election_reminder_sent`                        | info          | Non-voter reminder ballots sent (manual or automatic)                |
+| `election_manual_ballots_recorded`              | info/warning  | Paper tally recorded (warning when the over-count override was used) |
+| `election_manual_ballots_attested`              | info          | An officer attested a paper batch                                    |
+| `election_manual_ballots_voided`                | warning       | A paper batch was voided (check reason)                              |
+| `election_manual_ballots_unattested_at_close`   | warning       | Election closed with a batch still pending — its votes are excluded  |
+| `election_tie_detected`                         | info          | A tie was flagged under a non-co-winners tie policy                  |
+| `election_write_ins_merged`                     | info          | Write-in variants consolidated (alias only; vote rows untouched)     |
+| `election_cloned`                               | info          | A fresh draft was cloned from this election                          |
 
 ### Step 6: Check for Deleted Votes
 
@@ -197,6 +198,7 @@ The `audit_log.entries` array shows a chronological history:
 ```
 
 Soft-deleted votes are **never physically removed** from the database. They remain for full accountability. Check:
+
 - **Who deleted it?** (`deleted_by`)
 - **Why?** (`deletion_reason`)
 - **Was it before or after closing?** (compare `deleted_at` with election `end_date`)
@@ -218,6 +220,7 @@ Soft-deleted votes are **never physically removed** from the database. They rema
 ```
 
 Every status rollback requires a reason and is emailed to all leadership members. Verify:
+
 - Was the reason legitimate?
 - Did the rollback extend the voting window unfairly?
 - Were additional votes cast during the reopened window?
@@ -249,11 +252,13 @@ votes in older history, treat it as a red flag for exactly this reason.
 ```
 
 Check for:
+
 - **Tokens never used** — Did all eligible voters receive their tokens?
 - **High access counts** — A token accessed many times but not used may indicate someone struggling with the system (or attempting unauthorized access)
 - **Token usage timing** — Were tokens used before the election opened? (should be impossible)
 
 **Notes on token data (since 2026-07):**
+
 - Tokens issued via **"send test ballot"** are flagged `is_test`; votes cast with
   them are stored `is_test` and excluded from results, stats, and rosters. When
   reconciling counts, remember test votes appear in the raw `votes` table but
@@ -300,6 +305,7 @@ Check for:
 The audit log uses blockchain-inspired hash chains. Each entry's hash depends on the previous entry, making it impossible to insert, delete, or modify entries without detection.
 
 The system automatically verifies the audit chain on startup (in production). To manually verify:
+
 - The audit log integrity is verified automatically in the background
 - Any tampering triggers `CRITICAL` severity logging
 - The `forensics_report_generated` events in the audit log show who has been reviewing the data
@@ -325,6 +331,7 @@ If you suspect fraud and may need to escalate:
 ### Voter Anonymity Protection
 
 For anonymous elections:
+
 - `voter_id` is **never stored** on votes
 - Voters are tracked via `voter_hash` (HMAC-SHA256 of user ID + election-specific salt)
 - The salt (`voter_anonymity_salt`) is destroyed automatically when the election closes, making de-anonymization **permanently impossible**
@@ -337,8 +344,8 @@ For anonymous elections:
 
 ## Environment Configuration
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
+| Variable           | Purpose                      | Default                                       |
+| ------------------ | ---------------------------- | --------------------------------------------- |
 | `VOTE_SIGNING_KEY` | HMAC key for vote signatures | `default-signing-key` (change in production!) |
 
 **Important:** Change `VOTE_SIGNING_KEY` to a strong random value in production. If the key is compromised, an attacker could forge valid vote signatures.
@@ -358,6 +365,7 @@ For anonymous elections:
 **Permission:** `elections.manage`
 
 **Response:**
+
 ```json
 {
   "election_id": "...",
@@ -375,6 +383,7 @@ For anonymous elections:
 **Permission:** `elections.manage`
 
 **Response:**
+
 ```json
 {
   "message": "Vote soft-deleted successfully",
@@ -406,35 +415,35 @@ recorded (or expose that it wasn't) without anyone learning who they voted for.
 
 All election events are logged to the tamper-proof `audit_logs` table with `event_category = "elections"`.
 
-| Event Type | When | Data Included |
-|------------|------|---------------|
-| `election_created` | Election created | ID, title, type, voting method |
-| `election_opened` | Voting opened | ID, title, candidate count |
-| `election_closed` | Voting closed | ID, title |
-| `election_deleted` | Election deleted | ID, title |
-| `election_rollback` | Status rolled back | ID, from/to status, reason |
-| `vote_cast` | Authenticated vote | Election ID, vote ID, position |
-| `vote_cast_token` | Anonymous token vote | Election ID, vote ID, position |
-| `vote_double_attempt` | Double-vote blocked (auth) | Election ID, position |
-| `vote_double_attempt_token` | Double-vote blocked (token) | Election ID, position |
-| `vote_soft_deleted` | Vote removed by admin | Vote ID, election ID, reason |
-| `vote_integrity_check` | Integrity verification run | Total, valid, tampered count |
-| `ballot_emails_sent` | Email ballots distributed | Election ID, success/failed counts |
-| `runoff_election_created` | Automatic runoff | Parent and runoff election IDs |
-| `forensics_report_generated` | Forensics report pulled | Election ID |
-| `pre_meeting_package_sent` | Pre-meeting package emailed | Election ID, recipient count, roster variant |
-| `pre_meeting_package_downloaded` | Package PDF downloaded | Election ID, variant |
-| `nominations_opened` / `nominations_closed` / `nominations_auto_closed` | Nomination phase transitions | Election ID (deadline for auto-close) |
-| `candidate_nominated` | A member nominated (self or third-party) | Election ID, position, nominee, nominator |
-| `nomination_accepted` / `nomination_declined` | Nominee responded | Election ID, candidate ID (declines keep the record here after the entry is removed) |
-| `election_auto_opened` / `election_auto_closed` | Lifecycle task transition | Election ID |
-| `election_reminder_sent` | Non-voter reminder ballots sent | Election ID, recipient count |
-| `election_manual_ballots_recorded` | Paper tally recorded | Election ID, batch ID, vote count (warning severity when over-count override used) |
-| `election_manual_ballots_attested` | Officer attested a paper batch | Election ID, batch ID, attesting officer |
-| `election_manual_ballots_voided` | Paper batch voided | Election ID, batch ID, reason |
-| `election_manual_ballots_unattested_at_close` | Close with a pending batch | Election ID, batch ID (votes excluded from results) |
-| `election_tie_detected` | Tie under a non-co-winners policy | Election ID, position, tied candidates |
-| `election_write_ins_merged` | Write-in variants consolidated | Election ID, merged candidate IDs, target |
-| `election_cloned` | Draft cloned from an election | Source and new election IDs |
-| `printable_ballot_downloaded` | Blank paper ballot PDF generated | Election ID |
-| `certified_results_downloaded` | Certified results package generated | Election ID |
+| Event Type                                                              | When                                     | Data Included                                                                        |
+| ----------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| `election_created`                                                      | Election created                         | ID, title, type, voting method                                                       |
+| `election_opened`                                                       | Voting opened                            | ID, title, candidate count                                                           |
+| `election_closed`                                                       | Voting closed                            | ID, title                                                                            |
+| `election_deleted`                                                      | Election deleted                         | ID, title                                                                            |
+| `election_rollback`                                                     | Status rolled back                       | ID, from/to status, reason                                                           |
+| `vote_cast`                                                             | Authenticated vote                       | Election ID, vote ID, position                                                       |
+| `vote_cast_token`                                                       | Anonymous token vote                     | Election ID, vote ID, position                                                       |
+| `vote_double_attempt`                                                   | Double-vote blocked (auth)               | Election ID, position                                                                |
+| `vote_double_attempt_token`                                             | Double-vote blocked (token)              | Election ID, position                                                                |
+| `vote_soft_deleted`                                                     | Vote removed by admin                    | Vote ID, election ID, reason                                                         |
+| `vote_integrity_check`                                                  | Integrity verification run               | Total, valid, tampered count                                                         |
+| `ballot_emails_sent`                                                    | Email ballots distributed                | Election ID, success/failed counts                                                   |
+| `runoff_election_created`                                               | Automatic runoff                         | Parent and runoff election IDs                                                       |
+| `forensics_report_generated`                                            | Forensics report pulled                  | Election ID                                                                          |
+| `pre_meeting_package_sent`                                              | Pre-meeting package emailed              | Election ID, recipient count, roster variant                                         |
+| `pre_meeting_package_downloaded`                                        | Package PDF downloaded                   | Election ID, variant                                                                 |
+| `nominations_opened` / `nominations_closed` / `nominations_auto_closed` | Nomination phase transitions             | Election ID (deadline for auto-close)                                                |
+| `candidate_nominated`                                                   | A member nominated (self or third-party) | Election ID, position, nominee, nominator                                            |
+| `nomination_accepted` / `nomination_declined`                           | Nominee responded                        | Election ID, candidate ID (declines keep the record here after the entry is removed) |
+| `election_auto_opened` / `election_auto_closed`                         | Lifecycle task transition                | Election ID                                                                          |
+| `election_reminder_sent`                                                | Non-voter reminder ballots sent          | Election ID, recipient count                                                         |
+| `election_manual_ballots_recorded`                                      | Paper tally recorded                     | Election ID, batch ID, vote count (warning severity when over-count override used)   |
+| `election_manual_ballots_attested`                                      | Officer attested a paper batch           | Election ID, batch ID, attesting officer                                             |
+| `election_manual_ballots_voided`                                        | Paper batch voided                       | Election ID, batch ID, reason                                                        |
+| `election_manual_ballots_unattested_at_close`                           | Close with a pending batch               | Election ID, batch ID (votes excluded from results)                                  |
+| `election_tie_detected`                                                 | Tie under a non-co-winners policy        | Election ID, position, tied candidates                                               |
+| `election_write_ins_merged`                                             | Write-in variants consolidated           | Election ID, merged candidate IDs, target                                            |
+| `election_cloned`                                                       | Draft cloned from an election            | Source and new election IDs                                                          |
+| `printable_ballot_downloaded`                                           | Blank paper ballot PDF generated         | Election ID                                                                          |
+| `certified_results_downloaded`                                          | Certified results package generated      | Election ID                                                                          |

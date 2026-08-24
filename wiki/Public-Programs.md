@@ -33,13 +33,13 @@ Attends event           →   Coordinator marks complete
 
 **Key concepts:**
 
-| Concept | Description |
-|---------|-------------|
-| **Outreach Types** | Categories of programs your department offers (configurable per department) |
-| **Pipeline Tasks** | Custom checklist steps for each request (reorderable, department-defined) |
-| **Email Triggers** | Automatic notifications on status changes (toggleable per trigger) |
+| Concept             | Description                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| **Outreach Types**  | Categories of programs your department offers (configurable per department)        |
+| **Pipeline Tasks**  | Custom checklist steps for each request (reorderable, department-defined)          |
+| **Email Triggers**  | Automatic notifications on status changes (toggleable per trigger)                 |
 | **Email Templates** | Reusable email messages with template variables (e.g., directions, what-to-expect) |
-| **Status Page** | Public, token-based page where requesters check their request status |
+| **Status Page**     | Public, token-based page where requesters check their request status               |
 
 ---
 
@@ -50,22 +50,23 @@ Attends event           →   Coordinator marks complete
 Navigate to **Events Admin > Settings > Outreach Types**.
 
 Add the program types your department offers. Each type needs:
+
 - **Key**: A lowercase identifier (e.g., `fire_safety_demo`, `station_tour`)
 - **Label**: The display name shown to the public (e.g., "Fire Safety Demonstration")
 
 **Recommended starter types for fire departments:**
 
-| Key | Label |
-|-----|-------|
-| `fire_safety_demo` | Fire Safety Demonstration |
-| `station_tour` | Station Tour |
-| `school_visit` | School Visit / Classroom Presentation |
-| `cpr_first_aid` | CPR / First Aid Class |
-| `smoke_detector_install` | Smoke Detector Installation |
-| `open_house` | Community Open House |
-| `safety_talk` | Safety Talk / Lecture |
-| `career_day` | Career Day Presentation |
-| `community_event` | Community Event Support |
+| Key                      | Label                                 |
+| ------------------------ | ------------------------------------- |
+| `fire_safety_demo`       | Fire Safety Demonstration             |
+| `station_tour`           | Station Tour                          |
+| `school_visit`           | School Visit / Classroom Presentation |
+| `cpr_first_aid`          | CPR / First Aid Class                 |
+| `smoke_detector_install` | Smoke Detector Installation           |
+| `open_house`             | Community Open House                  |
+| `safety_talk`            | Safety Talk / Lecture                 |
+| `career_day`             | Career Day Presentation               |
+| `community_event`        | Community Event Support               |
 
 ### Step 2: Set Up Pipeline Tasks
 
@@ -90,6 +91,7 @@ Pipeline tasks are the checklist steps your coordinator follows for each request
 Navigate to **Events Admin > Settings > Request Pipeline > Default Coordinator**.
 
 Select the member who should be auto-assigned all incoming requests. This is typically:
+
 - The **Public Education Officer** or **Community Outreach Coordinator**
 - A **Lieutenant** or **Captain** responsible for public programs
 - The **Chief** (for smaller departments)
@@ -102,16 +104,16 @@ Navigate to **Events Admin > Settings > Email Triggers**.
 
 Each status change can automatically send an email. Configure:
 
-| Trigger | Notify Requester | Notify Coordinator | Recommended |
-|---------|:---:|:---:|:---:|
-| On Submitted | Yes | Yes | On — confirms receipt and alerts coordinator |
-| On In Progress | Yes | — | On — tells requester someone is working on it |
-| On Scheduled | Yes | — | On — includes confirmed date |
-| On Postponed | Yes | — | On — explains the delay |
-| On Completed | Yes | — | On — thank you / follow-up |
-| On Declined | Yes | — | On — with a reason |
-| On Cancelled | Yes | — | On — confirms cancellation |
-| Days Before Event | Yes | Yes | On — 7 days and 1 day before |
+| Trigger           | Notify Requester | Notify Coordinator |                  Recommended                  |
+| ----------------- | :--------------: | :----------------: | :-------------------------------------------: |
+| On Submitted      |       Yes        |        Yes         | On — confirms receipt and alerts coordinator  |
+| On In Progress    |       Yes        |         —          | On — tells requester someone is working on it |
+| On Scheduled      |       Yes        |         —          |         On — includes confirmed date          |
+| On Postponed      |       Yes        |         —          |            On — explains the delay            |
+| On Completed      |       Yes        |         —          |          On — thank you / follow-up           |
+| On Declined       |       Yes        |         —          |              On — with a reason               |
+| On Cancelled      |       Yes        |         —          |          On — confirms cancellation           |
+| Days Before Event |       Yes        |        Yes         |         On — 7 days and 1 day before          |
 
 ### Step 5: Create the Public Form
 
@@ -135,6 +137,7 @@ Navigate to **Forms** and create a new form:
 **Typical audience**: Corporate offices, senior living communities, school staff, community centers, church groups.
 
 **What the department provides**:
+
 - 2-3 firefighters/volunteers
 - Burn pan and propane (for live extinguisher training)
 - Practice fire extinguishers (one per 5-8 participants)
@@ -142,11 +145,13 @@ Navigate to **Forms** and create a new form:
 - Handouts: kitchen fire safety, escape planning, smoke alarm placement
 
 **What the requester provides**:
+
 - Outdoor space approximately 20×20 feet (parking lot, field)
 - Access to a power outlet (for presentation, if indoors portion)
 - Closed-toe shoes for all participants
 
 **Pipeline tasks** (customize as needed):
+
 1. Review request and confirm date availability
 2. Chief/President approval
 3. Email volunteer signup to department — need 2-3 volunteers
@@ -165,17 +170,20 @@ Navigate to **Forms** and create a new form:
 **Typical audience**: Scout troops (earning fire safety badge), daycare/preschool groups, birthday party groups, school field trips, senior community outings.
 
 **What the department provides**:
+
 - 1-2 tour guides (on-duty crew or assigned volunteers)
 - Kid-friendly equipment to try on (helmet, child-size turnout coat)
 - Station areas: apparatus bay, kitchen/living area, dispatch, equipment room
 - Junior firefighter stickers/badges (for kids)
 
 **What the requester provides**:
+
 - Adult chaperones (1 per 5-8 children)
 - Group stays together during tour
 - Understanding that tour may be interrupted by emergency calls
 
 **Pipeline tasks**:
+
 1. Review request — confirm group size and age range
 2. Check station availability (not during training or maintenance days)
 3. Assign tour guide — preferably someone great with the audience age group
@@ -195,6 +203,7 @@ Navigate to **Forms** and create a new form:
 **Typical audience**: Elementary schools (K-5), after-school programs, Head Start programs.
 
 **What the department provides**:
+
 - 1-2 presenters
 - Age-appropriate materials:
   - **K-2**: Coloring books, "Sparky" take-home sheets, stickers
@@ -203,6 +212,7 @@ Navigate to **Forms** and create a new form:
 - Presenter in uniform (kids respond well to seeing the gear)
 
 **What the school provides**:
+
 - Gym, cafeteria, or outdoor area for presentation
 - Power outlet for projector (if indoors)
 - Student count per session
@@ -210,6 +220,7 @@ Navigate to **Forms** and create a new form:
 - Any accessibility notes (sensory sensitivities to sirens, mobility needs)
 
 **Pipeline tasks**:
+
 1. Review request — confirm school, grade levels, number of students
 2. Chief/President approval
 3. Coordinate with school administration (point of contact, schedule, building access)
@@ -229,6 +240,7 @@ Navigate to **Forms** and create a new form:
 **Typical audience**: Community groups, youth organizations (Explorer posts, Scouts), corporate teams, parent groups, coaches and lifeguards.
 
 **What the department provides**:
+
 - Certified CPR instructor(s)
 - CPR manikins (1 per 3 participants recommended)
 - AED trainers
@@ -236,11 +248,13 @@ Navigate to **Forms** and create a new form:
 - Participant handouts and reference cards
 
 **What the requester provides**:
+
 - Room with tables and chairs (or the department can host at the station)
 - Confirmed participant list (max 12 per instructor)
 - Participants wearing comfortable clothing (kneeling required)
 
 **Pipeline tasks**:
+
 1. Review request — confirm group size (max 12 per instructor)
 2. Verify instructor certifications are current
 3. Chief/President approval
@@ -260,6 +274,7 @@ Navigate to **Forms** and create a new form:
 **Typical audience**: Individual homeowners, neighborhood associations, senior communities, housing authorities, social service referrals.
 
 **What the department provides**:
+
 - Installation team (minimum 2 members per home visit)
 - Smoke detectors (10-year sealed lithium battery recommended)
 - Replacement batteries for existing detectors
@@ -267,10 +282,12 @@ Navigate to **Forms** and create a new form:
 - Fire safety information handouts
 
 **What the requester provides**:
+
 - Access to the home and permission to install
 - An adult present during installation
 
 **Pipeline tasks**:
+
 1. Review request — confirm address and number of homes
 2. Verify smoke detector inventory (request from supply if needed)
 3. Assign installation team (minimum 2 members)
@@ -288,6 +305,7 @@ Navigate to **Forms** and create a new form:
 **Typical audience**: General public, potential recruits, families, neighborhood.
 
 **What the department provides**:
+
 - Full department participation
 - Apparatus display (static, with walk-around access)
 - Equipment demonstrations (jaws of life, hose operation, etc.)
@@ -296,6 +314,7 @@ Navigate to **Forms** and create a new form:
 - Food and refreshments (optional — may need budget approval)
 
 **Pipeline tasks**:
+
 1. Select date and obtain Chief/President approval
 2. Form planning committee (assign committee lead)
 3. Email department — request volunteers and activity ideas
@@ -320,6 +339,7 @@ Below are ready-to-use email templates. Copy these into **Events > Settings > Em
 **Subject**: We Received Your Event Request — {{outreach_type}}
 
 **Body**:
+
 ```
 Dear {{contact_name}},
 
@@ -345,6 +365,7 @@ Thank you for thinking of us!
 **Subject**: Your {{outreach_type}} is Confirmed — {{event_date}}
 
 **Body**:
+
 ```
 Dear {{contact_name}},
 
@@ -369,6 +390,7 @@ We're looking forward to it!
 **Subject**: Directions to {{organization_name}} — Your Visit on {{event_date}}
 
 **Body**:
+
 ```
 Dear {{contact_name}},
 
@@ -408,6 +430,7 @@ See you on {{event_date}}!
 **Subject**: Reminder: Your {{outreach_type}} is Tomorrow!
 
 **Body**:
+
 ```
 Dear {{contact_name}},
 
@@ -431,6 +454,7 @@ We look forward to seeing you!
 **Subject**: Your {{outreach_type}} Has Been Postponed
 
 **Body**:
+
 ```
 Dear {{contact_name}},
 
@@ -457,6 +481,7 @@ cancel, visit your status page: {{status_link}}
 **Subject**: Thank You! — {{outreach_type}} Follow-Up
 
 **Body**:
+
 ```
 Dear {{contact_name}},
 

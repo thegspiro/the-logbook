@@ -9,7 +9,7 @@ and future development.
 ## How it runs
 
 One iteration = **one feature**. The next iteration starts when the previous
-feature is *done*, not on a wall-clock timer. That is the point of the
+feature is _done_, not on a wall-clock timer. That is the point of the
 completion-driven design: features vary from 300 to 15,000 lines, and a fixed
 15-minute tick either truncates the big ones or idles on the small ones.
 
@@ -22,12 +22,12 @@ without the loop to do exactly one feature and stop.
 
 ## The three files
 
-| File | Purpose |
-|------|---------|
-| [`PROGRESS.md`](./PROGRESS.md) | The tracker: feature inventory, rotation order, status, running log |
-| [`CHECKLIST.md`](./CHECKLIST.md) | What each iteration checks — the six dimensions plus the project-specific pitfalls |
-| [`_TEMPLATE.md`](./_TEMPLATE.md) | The shape of a per-feature findings file |
-| [`CROSS-CUTTING.md`](./CROSS-CUTTING.md) | Patterns spanning features (`AXC-n`), so one sweep closes the class |
+| File                                     | Purpose                                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`PROGRESS.md`](./PROGRESS.md)           | The tracker: feature inventory, rotation order, status, running log                |
+| [`CHECKLIST.md`](./CHECKLIST.md)         | What each iteration checks — the six dimensions plus the project-specific pitfalls |
+| [`_TEMPLATE.md`](./_TEMPLATE.md)         | The shape of a per-feature findings file                                           |
+| [`CROSS-CUTTING.md`](./CROSS-CUTTING.md) | Patterns spanning features (`AXC-n`), so one sweep closes the class                |
 
 Each completed feature gets `docs/app-review/<feature>.md`.
 
@@ -58,6 +58,6 @@ open and the owner-decision ones are mirrored into
   27 modules, security/tenant-isolation focus. Its cross-cutting patterns
   (XC-1/2/3) are inputs to this review, not repeats of it.
 - [`docs/review-log.md`](../review-log.md) — the older time-based `/loop`.
-  Superseded by this review for feature coverage; its owner-decision list is
-  still live.
+Superseded by this review for feature coverage; its owner-decision list is
+still live.
 </content>

@@ -23,12 +23,12 @@ The Elections module provides a complete election management system with ranked-
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/elections` | Elections List | Authenticated |
-| `/elections/:id` | Election Detail | Authenticated |
-| `/elections/settings` | Election Settings | `elections.manage` |
-| `/ballot` | Ballot Voting | Public (token-based, rate-limited) |
+| URL                   | Page              | Permission                         |
+| --------------------- | ----------------- | ---------------------------------- |
+| `/elections`          | Elections List    | Authenticated                      |
+| `/elections/:id`      | Election Detail   | Authenticated                      |
+| `/elections/settings` | Election Settings | `elections.manage`                 |
+| `/ballot`             | Ballot Voting     | Public (token-based, rate-limited) |
 
 ---
 
@@ -49,10 +49,10 @@ Voter eligibility for each ballot item is determined by the member's **membershi
 
 ### Membership Type vs Roles
 
-| Concept | Field | Purpose | Example |
-|---------|-------|---------|---------|
+| Concept             | Field                  | Purpose                                                  | Example                                    |
+| ------------------- | ---------------------- | -------------------------------------------------------- | ------------------------------------------ |
 | **Membership Type** | `User.membership_type` | Department classification; determines ballot eligibility | Active, Administrative, Life, Probationary |
-| **Role / Position** | `User.roles` | Assigned positions; determines system permissions | EMT, Quartermaster, Secretary, Chief |
+| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions        | EMT, Quartermaster, Secretary, Chief       |
 
 A member's role (e.g. EMT) does **not** make them eligible for "operational" ballot items. Their membership type (e.g. "active") does.
 
@@ -60,15 +60,15 @@ A member's role (e.g. EMT) does **not** make them eligible for "operational" bal
 
 Each ballot item has an `eligible_voter_types` field that controls who can vote on it. These map to membership types:
 
-| Voter Type | Eligible Membership Types | Use Case |
-|------------|--------------------------|----------|
-| `all` | Everyone | General resolutions, budget votes |
-| `operational` | Active | Operational officer elections (Chief, Captain, etc.) |
-| `administrative` | Administrative | Administrative-specific votes |
-| `regular` | Active + Life | Bylaw amendments, membership approvals |
-| `life` | Life | Life-member-only votes |
-| `probationary` | Probationary | Probationary-specific votes |
-| *(role slug)* | *(any member holding that role)* | Fine-grained restrictions by specific position |
+| Voter Type       | Eligible Membership Types        | Use Case                                             |
+| ---------------- | -------------------------------- | ---------------------------------------------------- |
+| `all`            | Everyone                         | General resolutions, budget votes                    |
+| `operational`    | Active                           | Operational officer elections (Chief, Captain, etc.) |
+| `administrative` | Administrative                   | Administrative-specific votes                        |
+| `regular`        | Active + Life                    | Bylaw amendments, membership approvals               |
+| `life`           | Life                             | Life-member-only votes                               |
+| `probationary`   | Probationary                     | Probationary-specific votes                          |
+| _(role slug)_    | _(any member holding that role)_ | Fine-grained restrictions by specific position       |
 
 Specific role slugs (e.g. `chief`, `secretary`) can also be used as a fallback for niche eligibility rules that go beyond membership type.
 
@@ -123,7 +123,7 @@ Attestation is only possible while voting is open — a batch still pending
 at close stays out of the certified results and the close writes a warning
 `election_manual_ballots_unattested_at_close` audit event.
 
-*(2026-08-12)* That exclusion now reaches **every** tally the close path
+_(2026-08-12)_ That exclusion now reaches **every** tally the close path
 runs, not just the published results: the runoff-advancement count and the
 membership-package Approve/Deny sync each carry a SQL predicate
 (`_is_attested_vote`) that skips votes belonging to a still-`pending`
@@ -195,7 +195,7 @@ ballot as a **named, reusable template** and apply it to next year's
 election instead of rebuilding it item by item.
 
 - **Configuration only, by construction.** A template snapshots the ballot
-  *structure* — items, positions, voting methods, victory conditions,
+  _structure_ — items, positions, voting methods, victory conditions,
   eligibility types — and never candidates, voter rosters, votes, tokens,
   attendance, or lifecycle state. The create schema is `extra="forbid"`,
   so a payload that tries to smuggle any of those in is rejected with 422
@@ -217,7 +217,7 @@ election instead of rebuilding it item by item.
   `20260812_0001`. Audit events `ballot_template_created` /
   `ballot_template_deleted` (category `elections`).
 
-The same batch hardened ballot definitions themselves (create *and*
+The same batch hardened ballot definitions themselves (create _and_
 update): ballot-item ids are validated (`^[A-Za-z0-9_-]+$`, unique per
 ballot), voting methods / victory conditions are checked against the known
 sets, `victory_percentage` is required for supermajority items, voter-type
@@ -345,8 +345,8 @@ details and agenda, the election configuration (voting method, victory
 condition, quorum, proxy availability, runoffs), a full ballot preview with
 candidates and statements, and the voter-eligibility roster.
 
-- **Two privacy variants**: the *member* variant lists eligible voters and
-  counts only; the *full* variant (leadership) adds per-member ineligibility
+- **Two privacy variants**: the _member_ variant lists eligible voters and
+  counts only; the _full_ variant (leadership) adds per-member ineligibility
   reasons and granted overrides. Membership-tier and attendance details are
   never broadcast to the general membership
 - **Editable recipients**: the send modal prefills from leadership or the
@@ -379,36 +379,36 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 - **Ballot preview matches reality**: The secretary's preview-ballot now uses the same eligibility logic as the real ballot filter (shared `annotate_ballot_items_for_user`) instead of a hand-rolled comparison that could disagree
 - **Attendance can't be forged at creation**: `attendees` removed from the election create payload; check-ins must go through the audited attendee endpoints
 - **Frontend fixes**: Non-managers no longer see a blank election detail page; `/elections/settings` route is permission-gated; exact candidate↔ballot-item matching ("Chief" no longer matches "Assistant Chief" items); election list responses excluded from the API cache
-- **Runoffs inherit the parent's rule set with a fresh salt** *(follow-up)*: auto-created runoffs previously dropped quorum, position eligibility, the meeting/event link, attendees, and voter overrides — and anonymous runoffs had **no anonymity salt** (voter hashes keyed with an empty string were pre-computable from user ids). Runoffs now inherit the rules and generate their own salt
-- **Same-meeting runoffs work in one click** *(follow-up)*: opening an election clamps a future start date to the open time (audited as `start_adjusted_to_open_time`), an election whose end date already passed can't be opened, and draft elections gained an **Edit Dates** modal (Start Now, 15-min/30-min/1-hour/1-day quick durations)
-- **Voting tokens hashed at rest** *(follow-up, ELEC-5)*: only SHA-256 hashes are stored; the raw token exists solely in the emailed ballot link (migration `20260731_0001` hashes existing rows in place — old links keep working)
-- **IP metadata purged at close** *(follow-up, ELEC-6)*: anonymous elections erase per-vote IP/user-agent when closed, and the forensics report returns a thresholded suspicious-IP set (`suspicious_ips`, `unique_ip_count`, `ip_metadata_purged`) instead of the full per-IP vote map
-- **Cloudflare email attachments** *(follow-up)*: the pre-meeting package PDF now attaches on the Cloudflare email backend too (base64 API attachments, 5 MiB cap with skip-and-warn)
-- **Ballot tokens never appear in URLs** *(follow-up, R-D3, 2026-07-29)*: the emailed link now carries the token in the URL **fragment** (`/ballot#token=…` — browsers never send fragments to any server), the voting page scrubs it from the address bar after capture, and the two GET read endpoints were replaced by `POST /elections/ballot/lookup` with the token in the body. Links emailed before the change (`?token=`) keep working until those tokens expire
-- **Position eligibility enforced for token ballots** *(follow-up, R-D4, 2026-07-29)*: positional elections' `position_eligibility` rules now apply to email-token voters too — eligible positions are snapshotted on the token at send time (`eligible_positions`, migration `20260801_0001`), enforced at vote time, and used to filter the positions/candidates the ballot page shows. Members eligible for no position are skipped at send time with a reason
-- **Method-aware token voting** *(follow-up, R-D5, 2026-07-29)*: approval and ranked-choice elections now work end-to-end by email ballot — the ballot page renders checkbox multi-select (approval / multi-vote) and per-candidate rank selects (ranked choice), submitted as `candidate_ids` / `rankings` on the bulk endpoint; the single-vote token endpoint mirrors the authenticated path's per-candidate/per-rank duplicate rules
-- **Anonymous elections keep voter IPs out of the audit log** *(follow-up, ELEC-6 residual, 2026-07-29)*: voter-action audit events no longer record an IP for anonymous elections (audit rows are hash-chained and can never be scrubbed, so this had to be a write-time fix; rows written earlier keep their IPs)
+- **Runoffs inherit the parent's rule set with a fresh salt** _(follow-up)_: auto-created runoffs previously dropped quorum, position eligibility, the meeting/event link, attendees, and voter overrides — and anonymous runoffs had **no anonymity salt** (voter hashes keyed with an empty string were pre-computable from user ids). Runoffs now inherit the rules and generate their own salt
+- **Same-meeting runoffs work in one click** _(follow-up)_: opening an election clamps a future start date to the open time (audited as `start_adjusted_to_open_time`), an election whose end date already passed can't be opened, and draft elections gained an **Edit Dates** modal (Start Now, 15-min/30-min/1-hour/1-day quick durations)
+- **Voting tokens hashed at rest** _(follow-up, ELEC-5)_: only SHA-256 hashes are stored; the raw token exists solely in the emailed ballot link (migration `20260731_0001` hashes existing rows in place — old links keep working)
+- **IP metadata purged at close** _(follow-up, ELEC-6)_: anonymous elections erase per-vote IP/user-agent when closed, and the forensics report returns a thresholded suspicious-IP set (`suspicious_ips`, `unique_ip_count`, `ip_metadata_purged`) instead of the full per-IP vote map
+- **Cloudflare email attachments** _(follow-up)_: the pre-meeting package PDF now attaches on the Cloudflare email backend too (base64 API attachments, 5 MiB cap with skip-and-warn)
+- **Ballot tokens never appear in URLs** _(follow-up, R-D3, 2026-07-29)_: the emailed link now carries the token in the URL **fragment** (`/ballot#token=…` — browsers never send fragments to any server), the voting page scrubs it from the address bar after capture, and the two GET read endpoints were replaced by `POST /elections/ballot/lookup` with the token in the body. Links emailed before the change (`?token=`) keep working until those tokens expire
+- **Position eligibility enforced for token ballots** _(follow-up, R-D4, 2026-07-29)_: positional elections' `position_eligibility` rules now apply to email-token voters too — eligible positions are snapshotted on the token at send time (`eligible_positions`, migration `20260801_0001`), enforced at vote time, and used to filter the positions/candidates the ballot page shows. Members eligible for no position are skipped at send time with a reason
+- **Method-aware token voting** _(follow-up, R-D5, 2026-07-29)_: approval and ranked-choice elections now work end-to-end by email ballot — the ballot page renders checkbox multi-select (approval / multi-vote) and per-candidate rank selects (ranked choice), submitted as `candidate_ids` / `rankings` on the bulk endpoint; the single-vote token endpoint mirrors the authenticated path's per-candidate/per-rank duplicate rules
+- **Anonymous elections keep voter IPs out of the audit log** _(follow-up, ELEC-6 residual, 2026-07-29)_: voter-action audit events no longer record an IP for anonymous elections (audit rows are hash-chained and can never be scrubbed, so this had to be a write-time fix; rows written earlier keep their IPs)
 
 ### Edge Cases (2026-07-28)
 
-| Scenario | Behavior |
-|----------|----------|
-| Token vote on an item the voter isn't eligible for | Rejected with the item title in the error; abstaining on it is allowed |
-| Legacy token issued before the migration | No item snapshot (`NULL`) — unrestricted, bounded by token expiry |
-| Test ballot vote followed by the sender's real vote | Both succeed; only the real vote counts |
-| Election closed before its end date with no winner | Runoff still created (when runoffs enabled) |
-| Approval voter approves two candidates for one position | Both votes recorded; duplicate candidate rejected |
-| Ranked-choice voter submits ranks 1–3 | All recorded atomically; duplicate rank or candidate rejected |
-| Reopen closed anonymous election with votes | Refused — create a new election instead |
-| Positionless token vote after an unrelated positioned vote | No longer blocked (filter previously degraded to a no-op) |
-| Runoff created from a quorum/position-restricted election | Inherits quorum, position eligibility, meeting/event link, attendees, and overrides — with a **fresh** anonymity salt of its own |
-| Runoff opened at the meeting (default start is +1h) | Opening clamps a future start to "now" — voting works immediately; draft dates are also editable via the new **Edit Dates** modal |
-| Opening an election whose end date already passed | Refused — update the dates first |
+| Scenario                                                               | Behavior                                                                                                                               |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Token vote on an item the voter isn't eligible for                     | Rejected with the item title in the error; abstaining on it is allowed                                                                 |
+| Legacy token issued before the migration                               | No item snapshot (`NULL`) — unrestricted, bounded by token expiry                                                                      |
+| Test ballot vote followed by the sender's real vote                    | Both succeed; only the real vote counts                                                                                                |
+| Election closed before its end date with no winner                     | Runoff still created (when runoffs enabled)                                                                                            |
+| Approval voter approves two candidates for one position                | Both votes recorded; duplicate candidate rejected                                                                                      |
+| Ranked-choice voter submits ranks 1–3                                  | All recorded atomically; duplicate rank or candidate rejected                                                                          |
+| Reopen closed anonymous election with votes                            | Refused — create a new election instead                                                                                                |
+| Positionless token vote after an unrelated positioned vote             | No longer blocked (filter previously degraded to a no-op)                                                                              |
+| Runoff created from a quorum/position-restricted election              | Inherits quorum, position eligibility, meeting/event link, attendees, and overrides — with a **fresh** anonymity salt of its own       |
+| Runoff opened at the meeting (default start is +1h)                    | Opening clamps a future start to "now" — voting works immediately; draft dates are also editable via the new **Edit Dates** modal      |
+| Opening an election whose end date already passed                      | Refused — update the dates first                                                                                                       |
 | Token holder votes for a position their membership type can't vote for | Rejected ("You are not eligible to vote for …") — omitting the position field can't bypass it (falls back to the candidate's position) |
-| Token restricted to one position casts that vote | Token marked fully used, even though the election has more positions |
-| Approval election by email ballot | Voter checks every candidate they support; one vote per checked candidate, duplicate candidate rejected |
-| Ranked-choice election by email ballot | Voter assigns unique ranks per candidate; submission order defines rank 1..n |
-| Old `?token=` ballot link (emailed before the fragment change) | Still works — the page falls back to the query string, then scrubs the URL |
+| Token restricted to one position casts that vote                       | Token marked fully used, even though the election has more positions                                                                   |
+| Approval election by email ballot                                      | Voter checks every candidate they support; one vote per checked candidate, duplicate candidate rejected                                |
+| Ranked-choice election by email ballot                                 | Voter assigns unique ranks per candidate; submission order defines rank 1..n                                                           |
+| Old `?token=` ballot link (emailed before the fragment change)         | Still works — the page falls back to the query string, then scrubs the URL                                                             |
 
 ---
 
@@ -438,16 +438,16 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 
 ### Edge Cases (2026-03-19)
 
-| Scenario | Behavior |
-|----------|----------|
-| Ballot email to recipient with no email | Skipped with reason logged; included in eligibility summary |
-| One failed email in batch | Per-recipient exception handling; other recipients still receive |
-| Proxy authorization cross-tenant | Blocked by `organization_id` filter — returns 404 |
-| Rollback history mutation | Uses `copy.deepcopy()` before appending |
-| Elections with only ballot items | Can be opened — `open_election` no longer requires candidates |
-| Eligibility summary email | Sent only to the user who triggered ballot dispatch |
-| No eligible voters found | Descriptive error instead of false success with 0 recipients |
-| Concurrent vote attempts | Database-level locking prevents double-voting race conditions |
+| Scenario                                | Behavior                                                         |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| Ballot email to recipient with no email | Skipped with reason logged; included in eligibility summary      |
+| One failed email in batch               | Per-recipient exception handling; other recipients still receive |
+| Proxy authorization cross-tenant        | Blocked by `organization_id` filter — returns 404                |
+| Rollback history mutation               | Uses `copy.deepcopy()` before appending                          |
+| Elections with only ballot items        | Can be opened — `open_election` no longer requires candidates    |
+| Eligibility summary email               | Sent only to the user who triggered ballot dispatch              |
+| No eligible voters found                | Descriptive error instead of false success with 0 recipients     |
+| Concurrent vote attempts                | Database-level locking prevents double-voting race conditions    |
 
 ---
 
@@ -473,25 +473,25 @@ GET    /api/v1/elections/{id}/eligibility-roster    # Full member eligibility br
 
 ### New Frontend Components (2026-03-24)
 
-| Component | Purpose |
-|-----------|---------|
+| Component              | Purpose                                                                |
+| ---------------------- | ---------------------------------------------------------------------- |
 | `ElectionWorkflowTabs` | Tabbed navigation with dynamic tab visibility based on election status |
-| `EligibilityRoster` | Secretary eligibility dashboard with search, filter, per-member detail |
-| `PublishResultsPanel` | Post-election result publishing and report email |
-| `RunoffChain` | Multi-stage election timeline visualization |
-| `ElectionSummaryCards` | Dashboard metrics cards on elections list page |
+| `EligibilityRoster`    | Secretary eligibility dashboard with search, filter, per-member detail |
+| `PublishResultsPanel`  | Post-election result publishing and report email                       |
+| `RunoffChain`          | Multi-stage election timeline visualization                            |
+| `ElectionSummaryCards` | Dashboard metrics cards on elections list page                         |
 
 ### Edge Cases (2026-03-24)
 
-| Scenario | Behavior |
-|----------|----------|
-| Election linked to non-business-meeting event | Now allowed (event type filter removed) |
-| Department email collision | Appends numeric suffix (john.smith2@dept.org) |
-| Cancelled election tabs | Only Ballot tab visible |
-| Results tab auto-select | Navigates to Results when election is closed |
-| Runoff chain for standalone election | Shows single-node chain |
-| Eligibility roster with 0 members | Empty state with message |
-| Secretary override on ineligible member | Blue row with override badge, eligible for all items |
+| Scenario                                      | Behavior                                             |
+| --------------------------------------------- | ---------------------------------------------------- |
+| Election linked to non-business-meeting event | Now allowed (event type filter removed)              |
+| Department email collision                    | Appends numeric suffix (john.smith2@dept.org)        |
+| Cancelled election tabs                       | Only Ballot tab visible                              |
+| Results tab auto-select                       | Navigates to Results when election is closed         |
+| Runoff chain for standalone election          | Shows single-node chain                              |
+| Eligibility roster with 0 members             | Empty state with message                             |
+| Secretary override on ineligible member       | Blue row with override badge, eligible for all items |
 
 ---
 
@@ -517,13 +517,13 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 
 ### Edge Cases (2026-03-22)
 
-| Scenario | Behavior |
-|----------|----------|
-| Member with role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items |
-| Email fails for one recipient in batch | Loop continues; summary shows per-recipient status |
-| Election linked to past meeting | Past meetings filtered out of dropdown |
-| No eligible voters after filtering | Descriptive error with reasons instead of false success |
-| Membership type not set on member | Falls back to "all" eligibility only |
+| Scenario                                                    | Behavior                                                |
+| ----------------------------------------------------------- | ------------------------------------------------------- |
+| Member with role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items             |
+| Email fails for one recipient in batch                      | Loop continues; summary shows per-recipient status      |
+| Election linked to past meeting                             | Past meetings filtered out of dropdown                  |
+| No eligible voters after filtering                          | Descriptive error with reasons instead of false success |
+| Membership type not set on member                           | Falls back to "all" eligibility only                    |
 
 ---
 
@@ -590,11 +590,11 @@ POST   /api/v1/elections/{id}/import-attendees   # Import event attendees into b
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Event with no checked-in attendees | Returns empty list with informational message |
-| Attendee already in ballot list | Skipped silently; count reflects only new additions |
-| Election linked to cancelled event | Link preserved; event shows cancelled badge |
+| Scenario                           | Behavior                                            |
+| ---------------------------------- | --------------------------------------------------- |
+| Event with no checked-in attendees | Returns empty list with informational message       |
+| Attendee already in ballot list    | Skipped silently; count reflects only new additions |
+| Election linked to cancelled event | Link preserved; event shows cancelled badge         |
 
 ---
 

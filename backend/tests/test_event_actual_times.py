@@ -133,7 +133,9 @@ async def test_record_times_api_returns_bad_request_for_invalid_effective_pair()
                 actual_start_time=BASE_TIME + timedelta(minutes=1)
             ),
             db=db,
-            current_user=SimpleNamespace(organization_id=uuid4()),
+            # ``id`` stands in for the acting user the endpoint now records as
+            # the finalizer when an end time closes the event.
+            current_user=SimpleNamespace(organization_id=uuid4(), id=uuid4()),
         )
 
     assert exc_info.value.status_code == 400

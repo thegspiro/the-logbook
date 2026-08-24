@@ -236,6 +236,18 @@ export const eventService = {
     return response.data;
   },
 
+  /**
+   * Reopen a finalized event so attendance can be corrected, then re-finalized.
+   * Requires the `events.reopen_attendance` permission — deliberately not part
+   * of `events.manage`, which is what finalized it.
+   */
+  async reopenAttendance(eventId: string, reason?: string): Promise<import('../types/event').Event> {
+    const response = await api.post<import('../types/event').Event>(`/events/${eventId}/reopen-attendance`, {
+      reason: reason?.trim() || undefined,
+    });
+    return response.data;
+  },
+
   async endEvent(eventId: string): Promise<{ checked_out_count: number; actual_end_time: string }> {
     const response = await api.post<{ checked_out_count: number; actual_end_time: string }>(
       `/events/${eventId}/end-event`

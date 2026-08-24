@@ -54,7 +54,7 @@ these services were built to close
 
 All four services read in full, plus every call site: the SoD helper's four
 callers, admin-continuity's five guard points, the data-export endpoint, and the
-audit-ship configuration. These are the *implementations* of controls the
+audit-ship configuration. These are the _implementations_ of controls the
 module-audit had deferred (FIN-4, AH-4, CS-8, TR-5, ORU-7), so the review's job
 here was less "find new bugs" and more **verify the deferred controls are
 correctly and completely wired, and reconcile the tracking docs with the code**.
@@ -71,11 +71,11 @@ trustworthy — the same problem A6 caught with ORU-9.
   (`separation_of_duties.py`) is deliberately tiny, raises a `ValueError`
   subclass so the endpoint layer's existing `except ValueError → 400` surfaces
   it unchanged, and **no-ops when either id is missing** — an unattributed
-  legacy row can't be *shown* to be self-approval, and failing closed there would
+  legacy row can't be _shown_ to be self-approval, and failing closed there would
   wedge pre-existing records. Its docstring names the four paths it closes and
   invites the fifth. 8 dedicated unit tests, all passing without a DB.
 - **All four wired call sites implement the control correctly** — verified each
-  pairs the *approver/actor* against the *creator/subject*, guards **only the
+  pairs the _approver/actor_ against the _creator/subject_, guards **only the
   approve action** (rejection/withdrawal of one's own record is correctly left
   open), and each carries a comment explaining the specific conflict:
   - Finance approval step (`finance_service.py:649`) — approver ≠ request creator.
@@ -88,14 +88,14 @@ trustworthy — the same problem A6 caught with ORU-9.
   `delete_user`, `change_member_status`, and `archive_member` at the endpoints;
   `assert_positions_retain_administrator` guards position reassignment
   (`users.py:728`); and `assert_role_change_retains_administrator` guards role
-  edit *and* delete — at the **service layer** (`role_service.py:275/300/380`),
+  edit _and_ delete — at the **service layer** (`role_service.py:275/300/380`),
   which is the better choice because it covers every caller, not just one
   endpoint. The "would this leave zero `members.manage` holders?" recount
   correctly applies proposed permissions, honors `"*"`/`"members.*"` wildcards,
   and counts rank defaults. (My first read flagged the role-edit path as
   unguarded because the endpoint file has no call — the guard is one layer down.)
 - **Data export is self-scoped by construction.** `export_user_data(current_user)`
-  drives a table registry where *every* section filters
+  drives a table registry where _every_ section filters
   `getattr(model, fk_attr) == user.id` — there is no code path that accepts an
   arbitrary user id, so a member can only export their own record. Rate-limited
   to 3/hour and audit-logged. This is the right shape for a right-of-access
@@ -115,7 +115,7 @@ the code before editing.
 ### OPS-1 — AH-4 is fixed, docs said flagged — ✅ DOC FIXED
 
 `admin-hours.md` and the module-audit tracker listed AH-4 (officers self-approving
-their own admin hours) as *flagged, product decision*. It is **fixed**:
+their own admin hours) as _flagged, product decision_. It is **fixed**:
 `admin_hours_service.py:739` calls `assert_different_person` on the approve
 action. Corrected the module-audit entry — and recorded the one real consequence
 the doc should carry: the fix is **unconditional**, not the configurable toggle
@@ -137,7 +137,7 @@ re-investigated and the open half isn't assumed closed.
 
 The severe case — one person raising a request **and approving it** — is now
 closed by the shared guard on the approval step (`finance_service.py:649`). What
-`KNOWN_LIMITATIONS` describes (the *disbursement* actions `mark_pr_paid` /
+`KNOWN_LIMITATIONS` describes (the _disbursement_ actions `mark_pr_paid` /
 `issue_check` / … under a single `finance.manage`) is genuinely still open: none
 of those six methods carries an actor≠creator check or a distinct permission.
 Updated the entry to record both halves, so the residual is understood as
@@ -146,7 +146,7 @@ alarming "one person can do everything."
 
 ### OPS-4 — TR-5 looked fixed but is not — ✅ DOC CLARIFIED (no status change)
 
-This is the one that went the *other* way, and the reason to verify rather than
+This is the one that went the _other_ way, and the reason to verify rather than
 pattern-match. The shared guard appears in `training_submission_service.py:289`,
 which looks like TR-5 being closed. It is not: that call is in the **manual**
 `review_submission` path, which the original finding already noted blocked
@@ -163,7 +163,7 @@ The `separation_of_duties.py` docstring names storefront as "the fifth path with
 an obvious thing to call," and it remains open (SF future-dev #3 from A1). Left
 flagged, but the `KNOWN_LIMITATIONS` entry now records that there are **two
 non-equivalent** fixes and the choice is a real one: (a) the cheap
-`assert_different_person` blocking a manager from marking their *own* order paid
+`assert_different_person` blocking a manager from marking their _own_ order paid
 or waived — mirrors AH-4, closes the self-dealing case now; or (b) a
 `storefront.disburse` permission tier — broader, closes requester≠disburser
 generally. Not implemented unilaterally because it changes a money workflow and
@@ -171,7 +171,7 @@ the maintainer's flag leaned toward the permission approach.
 
 ## Duplication
 
-None — the opposite. These four services *are* the de-duplication: one
+None — the opposite. These four services _are_ the de-duplication: one
 `assert_different_person` shared across finance, admin-hours, training and skills
 instead of four inline checks, and one admin-continuity module instead of a
 last-admin recount copy-pasted into every user-mutation path. This is the
@@ -207,13 +207,13 @@ the closest thing and is a good anchor; a short "SoD coverage" table in
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors (no code changed this iteration) |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ `test_separation_of_duties.py` 8/8 pass; broader ops selection errors are all `db_session` fixture failures against the sandbox's missing MySQL (32 matching lines). No code changed, so the full-suite baseline (2514 passed, 0 failed) is unaffected. |
+| Check                | Result                                                                                                                                                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors (no code changed this iteration)                                                                                                                                                                                                               |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                                                                                                                                            |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                                                                                                                                     |
+| `eslint`             | ✅ clean                                                                                                                                                                                                                                                   |
+| backend tests        | ✅ `test_separation_of_duties.py` 8/8 pass; broader ops selection errors are all `db_session` fixture failures against the sandbox's missing MySQL (32 matching lines). No code changed, so the full-suite baseline (2514 passed, 0 failed) is unaffected. |
 
 ---
 

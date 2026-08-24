@@ -9,6 +9,7 @@
 **Audited:** iteration 10.
 
 ## Verified good ✅
+
 - **Auth coverage:** all 14 endpoints authenticated. Broadcast/create/update/
   delete/stats/ack-report all require `notifications.manage` — a plain member
   cannot broadcast.
@@ -33,6 +34,7 @@
 ## Findings
 
 ### MSG-1 — LOW — Unescaped org name in test-email HTML — ✅ FIXED
+
 `_build_test_html` interpolated `organization.name` directly into the email
 HTML (twice) with no escaping, unlike the department-message path which escapes
 both title (`email_service._html.escape`) and body
@@ -42,6 +44,7 @@ inconsistency with the module's otherwise-correct escaping discipline.
 **Fix:** `html.escape` the org name at the source in `_build_test_html`.
 
 ### MSG-2 — LOW — Targeting lists not org-validated on create/update (XC-1, defense-in-depth) — ✅ FIXED (B10)
+
 `create_message` / `update_message` stored client-supplied `target_member_ids`
 and `target_roles` verbatim with no in-org check. **Not exploitable** for
 cross-org delivery (the org-scoped `_targeted_users` neutralizes foreign ids),
@@ -54,6 +57,7 @@ request-supplied values are checked, so a legacy stored role name is never
 re-validated. 5 unit tests added. See `docs/app-review/messaging.md`.
 
 ### MSG-3 — LOW / informational — Test-email sends to an arbitrary client address
+
 `POST /message-history/test-email` sends to a fully client-supplied `to_email`
 using org SMTP credentials. Gated behind `settings.manage`/
 `organization.update_settings` and logged with `sent_by`, so it's an org-admin
@@ -62,6 +66,7 @@ from an org-scoped user record. **Status:** noted (by design); a rate-limit /
 same-domain restriction could harden it if abuse is a concern.
 
 ## Notes
+
 - Non-security nuance: `get_inbox` applies `skip:skip+limit` in Python after
   building the full enriched list and returns no total — a pagination/perf smell,
   not a security issue. Flagged for future cleanup.

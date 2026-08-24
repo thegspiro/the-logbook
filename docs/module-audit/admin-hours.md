@@ -9,6 +9,7 @@ approve for compliance credit.
 isolation).
 
 ## Verified good ✅
+
 - **Auth coverage:** all 27 endpoints authed; writes/approvals require
   `admin_hours.manage`; 11 self-service endpoints use `get_current_user`.
 - **Self-service ownership is clean.** `clock_out` (id + user_id + ACTIVE),
@@ -27,7 +28,8 @@ isolation).
 
 ## Findings
 
-### AH-1 — HIGH — Members could self-credit *approved* time via `create_manual_entry` — ✅ FIXED
+### AH-1 — HIGH — Members could self-credit _approved_ time via `create_manual_entry` — ✅ FIXED
+
 Manual entries carry fully client-supplied `clock_in_at`/`clock_out_at`, but
 their status went through the same `_determine_post_clockout_status` as a
 server-timed clock-out — so for a `require_approval=False` category (or a
@@ -43,6 +45,7 @@ entries always require officer review. Verified the mock-based service tests
 (updated the one that asserted the old auto-approve).
 
 ### AH-2 — MEDIUM — `auto_close_stale_sessions` mutated every tenant — ✅ FIXED
+
 The per-org endpoint `POST /close-stale-sessions` (`admin_hours.manage`) called
 `auto_close_stale_sessions`, whose query selected ACTIVE entries **across all
 organizations** (no org filter) and rewrote their `clock_out_at`/`duration`/
@@ -53,6 +56,7 @@ tenant's live sessions.
 sweep all orgs. No behavior change for the cron.
 
 ### AH-3 — LOW — Auto-approved clock-outs left no `approved_at` — ✅ FIXED
+
 When a clock-out auto-approved, the entry was written APPROVED with
 `approved_by`/`approved_at` both `None` — an inconsistent audit trail vs
 `credit_event_attendance` (which stamps `approved_at`).
@@ -60,6 +64,7 @@ When a clock-out auto-approved, the entry was written APPROVED with
 to denote a system/auto approval).
 
 ### AH-4 — MEDIUM — Officers can approve their own entries (no segregation of duties) — ✅ FIXED
+
 `approve_or_reject` / `bulk_approve` didn't check `entry.user_id != approver_id`,
 so an `admin_hours.manage` holder could create a pending entry, edit its times,
 and self-approve.
@@ -75,6 +80,7 @@ module implements; a per-org SoD toggle remains a possible future refinement if 
 sole-officer workflow proves necessary.
 
 ### AH-5 — LOW — Minor scoping omissions — ✅ FIXED (app-review B15)
+
 `get_active_session`/`_get_active_session` read the caller's session + category
 by id without an org filter; `_check_overlap` filtered `user_id` not
 `organization_id`; `delete_category`'s active-session count omitted org. None

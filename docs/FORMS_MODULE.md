@@ -20,34 +20,34 @@ The Forms module allows organizations to create custom forms for both internal w
 
 ### Database Models
 
-| Model | Description |
-|-------|-------------|
-| `Form` | Form definition with name, description, category, status, public access settings |
-| `FormField` | Individual fields within a form with type, validation rules, and display options |
-| `FormSubmission` | Submitted form data with metadata (submitter info, IP, timestamps) |
-| `FormIntegration` | Links a form to a target module with field mappings |
+| Model             | Description                                                                      |
+| ----------------- | -------------------------------------------------------------------------------- |
+| `Form`            | Form definition with name, description, category, status, public access settings |
+| `FormField`       | Individual fields within a form with type, validation rules, and display options |
+| `FormSubmission`  | Submitted form data with metadata (submitter info, IP, timestamps)               |
+| `FormIntegration` | Links a form to a target module with field mappings                              |
 
 ### Enums
 
-| Enum | Values |
-|------|--------|
-| `FormStatus` | `draft`, `published`, `archived` |
-| `FormCategory` | `Operations`, `Membership`, `Training`, `Compliance`, `Events`, `HR`, `Finance`, `Custom` |
-| `FieldType` | `text`, `textarea`, `number`, `email`, `phone`, `date`, `time`, `datetime`, `select`, `multiselect`, `checkbox`, `radio`, `file`, `signature`, `section_header`, `member_lookup` |
-| `IntegrationTarget` | `membership`, `inventory` |
-| `IntegrationType` | `membership_interest`, `equipment_assignment` |
+| Enum                | Values                                                                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FormStatus`        | `draft`, `published`, `archived`                                                                                                                                                 |
+| `FormCategory`      | `Operations`, `Membership`, `Training`, `Compliance`, `Events`, `HR`, `Finance`, `Custom`                                                                                        |
+| `FieldType`         | `text`, `textarea`, `number`, `email`, `phone`, `date`, `time`, `datetime`, `select`, `multiselect`, `checkbox`, `radio`, `file`, `signature`, `section_header`, `member_lookup` |
+| `IntegrationTarget` | `membership`, `inventory`                                                                                                                                                        |
+| `IntegrationType`   | `membership_interest`, `equipment_assignment`                                                                                                                                    |
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `backend/app/models/forms.py` | SQLAlchemy models for all forms tables |
-| `backend/app/schemas/forms.py` | Pydantic request/response schemas |
+| File                                    | Purpose                                              |
+| --------------------------------------- | ---------------------------------------------------- |
+| `backend/app/models/forms.py`           | SQLAlchemy models for all forms tables               |
+| `backend/app/schemas/forms.py`          | Pydantic request/response schemas                    |
 | `backend/app/services/forms_service.py` | Business logic, sanitization, integration processing |
-| `backend/app/api/v1/endpoints/forms.py` | Authenticated API endpoints |
-| `backend/app/api/public/forms.py` | Public (no-auth) API endpoints |
-| `frontend/src/pages/FormsPage.tsx` | Admin interface for managing forms |
-| `frontend/src/pages/PublicFormPage.tsx` | Public-facing form renderer |
+| `backend/app/api/v1/endpoints/forms.py` | Authenticated API endpoints                          |
+| `backend/app/api/public/forms.py`       | Public (no-auth) API endpoints                       |
+| `frontend/src/pages/FormsPage.tsx`      | Admin interface for managing forms                   |
+| `frontend/src/pages/PublicFormPage.tsx` | Public-facing form renderer                          |
 
 ---
 
@@ -70,35 +70,35 @@ Draft  ──(publish)──>  Published  ──(archive)──>  Archived
 
 ### Authenticated Endpoints (require `forms.view` or `forms.manage`)
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/forms/` | `forms.view` | List all forms (with filtering) |
-| `POST` | `/api/v1/forms/` | `forms.manage` | Create a new form |
-| `GET` | `/api/v1/forms/summary` | `forms.view` | Get forms summary statistics |
-| `GET` | `/api/v1/forms/member-lookup?q=` | authenticated | Search members for lookup fields |
-| `GET` | `/api/v1/forms/{id}` | `forms.view` | Get form details with fields |
-| `PATCH` | `/api/v1/forms/{id}` | `forms.manage` | Update a form |
-| `DELETE` | `/api/v1/forms/{id}` | `forms.manage` | Delete a form |
-| `POST` | `/api/v1/forms/{id}/publish` | `forms.manage` | Publish a form |
-| `POST` | `/api/v1/forms/{id}/archive` | `forms.manage` | Archive a form |
-| `POST` | `/api/v1/forms/{id}/fields` | `forms.manage` | Add a field |
-| `PATCH` | `/api/v1/forms/{id}/fields/{fid}` | `forms.manage` | Update a field |
-| `DELETE` | `/api/v1/forms/{id}/fields/{fid}` | `forms.manage` | Delete a field |
-| `POST` | `/api/v1/forms/{id}/fields/reorder` | `forms.manage` | Reorder fields |
-| `POST` | `/api/v1/forms/{id}/submit` | authenticated | Submit a form (internal) |
-| `GET` | `/api/v1/forms/{id}/submissions` | `forms.manage` | List submissions |
-| `GET` | `/api/v1/forms/{id}/submissions/{sid}` | `forms.manage` | Get submission detail |
-| `DELETE` | `/api/v1/forms/{id}/submissions/{sid}` | `forms.manage` | Delete a submission |
-| `POST` | `/api/v1/forms/{id}/integrations` | `forms.manage` | Add integration |
-| `PATCH` | `/api/v1/forms/{id}/integrations/{iid}` | `forms.manage` | Update integration |
-| `DELETE` | `/api/v1/forms/{id}/integrations/{iid}` | `forms.manage` | Delete integration |
+| Method   | Path                                    | Permission     | Description                      |
+| -------- | --------------------------------------- | -------------- | -------------------------------- |
+| `GET`    | `/api/v1/forms/`                        | `forms.view`   | List all forms (with filtering)  |
+| `POST`   | `/api/v1/forms/`                        | `forms.manage` | Create a new form                |
+| `GET`    | `/api/v1/forms/summary`                 | `forms.view`   | Get forms summary statistics     |
+| `GET`    | `/api/v1/forms/member-lookup?q=`        | authenticated  | Search members for lookup fields |
+| `GET`    | `/api/v1/forms/{id}`                    | `forms.view`   | Get form details with fields     |
+| `PATCH`  | `/api/v1/forms/{id}`                    | `forms.manage` | Update a form                    |
+| `DELETE` | `/api/v1/forms/{id}`                    | `forms.manage` | Delete a form                    |
+| `POST`   | `/api/v1/forms/{id}/publish`            | `forms.manage` | Publish a form                   |
+| `POST`   | `/api/v1/forms/{id}/archive`            | `forms.manage` | Archive a form                   |
+| `POST`   | `/api/v1/forms/{id}/fields`             | `forms.manage` | Add a field                      |
+| `PATCH`  | `/api/v1/forms/{id}/fields/{fid}`       | `forms.manage` | Update a field                   |
+| `DELETE` | `/api/v1/forms/{id}/fields/{fid}`       | `forms.manage` | Delete a field                   |
+| `POST`   | `/api/v1/forms/{id}/fields/reorder`     | `forms.manage` | Reorder fields                   |
+| `POST`   | `/api/v1/forms/{id}/submit`             | authenticated  | Submit a form (internal)         |
+| `GET`    | `/api/v1/forms/{id}/submissions`        | `forms.manage` | List submissions                 |
+| `GET`    | `/api/v1/forms/{id}/submissions/{sid}`  | `forms.manage` | Get submission detail            |
+| `DELETE` | `/api/v1/forms/{id}/submissions/{sid}`  | `forms.manage` | Delete a submission              |
+| `POST`   | `/api/v1/forms/{id}/integrations`       | `forms.manage` | Add integration                  |
+| `PATCH`  | `/api/v1/forms/{id}/integrations/{iid}` | `forms.manage` | Update integration               |
+| `DELETE` | `/api/v1/forms/{id}/integrations/{iid}` | `forms.manage` | Delete integration               |
 
 ### Public Endpoints (no authentication required)
 
-| Method | Path | Rate Limit | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/public/v1/forms/{slug}` | 60/min/IP | Get public form by slug |
-| `POST` | `/api/public/v1/forms/{slug}/submit` | 10/min/IP | Submit public form |
+| Method | Path                                 | Rate Limit | Description             |
+| ------ | ------------------------------------ | ---------- | ----------------------- |
+| `GET`  | `/api/public/v1/forms/{slug}`        | 60/min/IP  | Get public form by slug |
+| `POST` | `/api/public/v1/forms/{slug}/submit` | 10/min/IP  | Submit public form      |
 
 ---
 
@@ -122,6 +122,7 @@ Each form is assigned a unique 12-character hex slug on creation (e.g., `a1b2c3d
 ### QR Codes
 
 The Share modal generates a QR code for any public form. Features:
+
 - High error correction (Level H) for reliable scanning from printed materials
 - Downloadable as PNG (for documents) or SVG (for scalable printing)
 - Designed to be printed and placed in physical locations (inventory rooms, station entrances, bulletin boards)
@@ -129,6 +130,7 @@ The Share modal generates a QR code for any public form. Features:
 ### Public Form Page
 
 The public form page (`/f/:slug`) is a standalone React page with:
+
 - Light theme (white background, blue accents) distinct from the internal dark theme
 - Organization name and form description header
 - All field types rendered with HTML5 input types
@@ -144,6 +146,7 @@ The public form page (`/f/:slug`) is a standalone React page with:
 ### Membership Interest
 
 When a public form has a **Membership** integration:
+
 - Form submissions are stored with mapped fields (e.g., form "Full Name" -> membership "first_name")
 - Data is available for admin review in the submissions list
 - Marked with `integration_processed = true` and results stored in `integration_result`
@@ -151,6 +154,7 @@ When a public form has a **Membership** integration:
 ### Equipment Assignment
 
 When an internal form has an **Inventory** integration:
+
 - Uses `member_lookup` fields to reference existing members
 - On submission, calls `InventoryService.assign_item_to_user()` with mapped field values
 - Automatically links equipment to the selected member
@@ -194,15 +198,15 @@ All form submissions (both public and authenticated) pass through `_sanitize_sub
 
 ### Public Form Protection
 
-| Layer | Protection |
-|-------|-----------|
-| Rate Limiting | 60 views/min, 10 submits/min per IP |
-| Daily Cap | Per-form daily limit (`PUBLIC_FORM_DAILY_LIMIT`) counted against **valid submissions only**; exceeding it returns `429` |
-| Honeypot | Hidden "website" field catches bots |
-| Slug Validation | Strict `^[a-f0-9]{12}$` pattern prevents injection |
-| Sanitization | HTML escape + type validation on all data |
-| DOMPurify | Frontend strips all HTML from server text |
-| Data Isolation | Public submissions flagged, IP/UA captured |
+| Layer           | Protection                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Rate Limiting   | 60 views/min, 10 submits/min per IP                                                                                     |
+| Daily Cap       | Per-form daily limit (`PUBLIC_FORM_DAILY_LIMIT`) counted against **valid submissions only**; exceeding it returns `429` |
+| Honeypot        | Hidden "website" field catches bots                                                                                     |
+| Slug Validation | Strict `^[a-f0-9]{12}$` pattern prevents injection                                                                      |
+| Sanitization    | HTML escape + type validation on all data                                                                               |
+| DOMPurify       | Frontend strips all HTML from server text                                                                               |
+| Data Isolation  | Public submissions flagged, IP/UA captured                                                                              |
 
 > **Daily cap semantics** _(2026-08-16)_: the cap is enforced inside
 > `FormsService.submit_public_form` (`enforce_daily_cap=True`), **after**
@@ -226,6 +230,7 @@ All form submissions (both public and authenticated) pass through `_sanitize_sub
 ### Membership Interest Form (Public)
 
 Pre-configured with 15 fields:
+
 - Personal info (name, email, phone, address)
 - Experience and availability
 - Emergency contact
@@ -235,6 +240,7 @@ Pre-configured with 15 fields:
 ### Equipment Assignment Form (Internal)
 
 Pre-configured with 10 fields:
+
 - Member lookup field (searches existing members)
 - Equipment details (type, serial number, condition)
 - Assignment metadata (date, notes, acknowledgment)
@@ -244,9 +250,9 @@ Pre-configured with 10 fields:
 
 ## Database Migrations
 
-| Migration | Description |
-|-----------|-------------|
-| `20260212_0100_create_forms_tables` | Creates `forms`, `form_fields`, `form_submissions` tables with all enums |
+| Migration                                         | Description                                                                            |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `20260212_0100_create_forms_tables`               | Creates `forms`, `form_fields`, `form_submissions` tables with all enums               |
 | `20260212_0200_add_public_forms_and_integrations` | Adds `member_lookup` to fieldtype enum, public form columns, `form_integrations` table |
 
 ### Running Migrations
@@ -260,9 +266,9 @@ alembic upgrade head
 
 ## Permissions
 
-| Permission | Grants |
-|------------|--------|
-| `forms.view` | View forms list, form details, submission data |
+| Permission     | Grants                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forms.view`   | View forms list, form details, submission data                                                                                                    |
 | `forms.manage` | All view permissions + create/edit/delete forms, manage fields, publish/archive, configure public access, manage integrations, delete submissions |
 
 Public form submission requires no permissions or authentication.
@@ -315,20 +321,22 @@ Public form submission requires no permissions or authentication.
 ### Integration Health Dashboard
 
 The FormsPage includes an integration health view that shows:
+
 - Processing status per submission (success, failed, pending)
 - Error details for failed integrations
 - **Reprocess** button to retry failed integration processing
 
 ### API Endpoints
 
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| `GET` | `/api/v1/forms/{id}/integrations/health` | `forms.manage` | Get integration health status |
+| Method | Path                                             | Permission     | Description                    |
+| ------ | ------------------------------------------------ | -------------- | ------------------------------ |
+| `GET`  | `/api/v1/forms/{id}/integrations/health`         | `forms.manage` | Get integration health status  |
 | `POST` | `/api/v1/forms/{id}/submissions/{sid}/reprocess` | `forms.manage` | Reprocess a failed integration |
 
 ### Field Mapping UI
 
 Integration configuration includes a visual field mapping interface:
+
 1. Select the target module (Membership or Inventory)
 2. Choose the integration type
 3. Map form fields to target module fields using dropdown selectors
@@ -339,13 +347,16 @@ Integration configuration includes a visual field mapping interface:
 ## Recent Changes (March 2026)
 
 ### August 17, 2026
-- **Auto-advance is bound to the submitting prospect**: `_auto_advance_pipeline_step` previously found *every* `ACTIVE` prospect sitting on the matching stage and completed the step for all of them — so one applicant's submission advanced the whole cohort behind them. It now takes the `FormSubmission` as an argument and filters `ProspectiveMember.form_submission_id == submission.id`, and the audit `action_result` records `form_submission_id` alongside `form_id`. A form submission is not evidence that unrelated prospects on the same stage have completed the form
+
+- **Auto-advance is bound to the submitting prospect**: `_auto_advance_pipeline_step` previously found _every_ `ACTIVE` prospect sitting on the matching stage and completed the step for all of them — so one applicant's submission advanced the whole cohort behind them. It now takes the `FormSubmission` as an argument and filters `ProspectiveMember.form_submission_id == submission.id`, and the audit `action_result` records `form_submission_id` alongside `form_id`. A form submission is not evidence that unrelated prospects on the same stage have completed the form
 
 ### March 14, 2026
+
 - **Auto-advance integration with pipeline stages**: When a `form_submission` pipeline stage has `auto_advance: true` in its configuration, submitting the linked form automatically advances the prospect to the next pipeline stage. The `forms_service.py` now checks for auto-advance configuration after processing a submission linked to a pipeline stage
 - **Auto-advance for document upload stages**: Similarly, `document_upload` pipeline stages with `auto_advance: true` auto-advance when all required documents are uploaded
 
 ### March 4, 2026
+
 - **Form-to-pipeline integration hardening (13 improvements)**: Server-side validation, label-based fallback for all integration types, O(N) cleanup query optimization, field compatibility checks before save, step update lifecycle fix
 - **Form data flow fix**: Fixed multiple issues where form submissions were not appearing in the prospective members pipeline — including field mapping failures on reprocessed submissions
 - **Duplicate prospect detection**: Email-based duplicate detection with coordinator notification when a prospect with the same email already exists
@@ -355,6 +366,7 @@ Integration configuration includes a visual field mapping interface:
 - **Modal click-through fix**: Modal backdrop no longer intercepts click events intended for dialog buttons (affected delete confirmations)
 
 ### March 3, 2026
+
 - **Integration health dashboard**: Added integration health view with result display and reprocess support
 - **Form dropdown selector**: New dropdown-based form selection for integration field mapping
 - **Survey results panel**: New `FormResultsPanel` with per-field aggregation

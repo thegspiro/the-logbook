@@ -9,6 +9,7 @@ thin wrapper over the singular `document_service.py` used by minutes),
 tenant isolation).
 
 ## Verified good ✅
+
 - **Auth coverage:** all 11 endpoints permission-gated (`documents.view` reads,
   `documents.manage` writes — `manage` is a leadership permission).
 - **Upload is well-hardened:** UUID on-disk filename (no user input in the
@@ -31,6 +32,7 @@ tenant isolation).
 ## Findings
 
 ### DOC-1 — MEDIUM (data retention) — `delete_document` orphaned the on-disk file — ✅ FIXED
+
 `delete_document` deleted the DB row but never removed the file under
 `/app/uploads/documents/<org>/<uuid>.<ext>`, so every "deleted" document — a
 potentially sensitive upload — persisted on disk indefinitely.
@@ -44,6 +46,7 @@ file paths before the cascade delete, and `os.remove`s them best-effort after th
 commit — same pattern as `delete_document`.
 
 ### DOC-2 — LOW (ACL fail-open) — `can_access_document` returned True on a missing folder — ✅ FIXED
+
 When a document referenced a `folder_id` whose folder row couldn't be resolved,
 `can_access_document` returned `True` (accessible). Low practical impact (folder
 delete cascades / nulls `folder_id`), but a fail-open ACL branch.
@@ -51,6 +54,7 @@ delete cascades / nulls `folder_id`), but a fail-open ACL branch.
 resolved. Documents with no folder remain org-level readable (unchanged).
 
 ### DOC-3 — LOW (validation fail-open) — `upload_document` silently accepted an invalid `folder_id` — ✅ FIXED
+
 The guard was `if folder and not can_access_folder(...)`, so when
 `get_folder_by_id` returned `None` (nonexistent or out-of-org folder) the check
 was skipped and the document was created with that unvalidated `folder_id`.
@@ -58,6 +62,7 @@ was skipped and the document was created with that unvalidated `folder_id`.
 access check.
 
 ### DOC-4 — LOW — `get_documents_summary` ignores the folder ACL
+
 `get_summary` aggregates `total_documents`/`total_folders`/`total_size_bytes`/
 `documents_this_month` across the **entire org**, including leadership-only,
 owner-only (member personal), and role-restricted folders — so a plain
@@ -67,6 +72,7 @@ owner-only (member personal), and role-restricted folders — so a plain
 behavior change to a stats endpoint; left for a deliberate decision.
 
 ### DOC-5 — LOW (design) — Folder ACL is per-folder, not hierarchical
+
 `can_access_folder` inspects only the folder's own `visibility`/`allowed_roles`,
 never its ancestor chain. Apparatus/facility per-item child folders are created
 `ORGANIZATION`-visibility with no `allowed_roles` even though their parent roots
@@ -78,16 +84,18 @@ desired). If leadership-only was intended, the ACL needs to walk the parent
 chain. Member personal folders are unaffected (individually `OWNER`).
 
 ### DOC-6 — LOW — Write-path FK/enum validation gaps (leadership-gated) — ✅ FIXED (app-review B8, 2026-08-06)
+
 - `update_document` applies `update_data` (incl. `folder_id`) via bare `setattr`
   with no org/existence/access check — a doc can be reassigned to any folder id.
 - `create_folder`/`update_folder` store `parent_id` / `owner_user_id` with no
   in-org verification.
 - `DocumentUpdate.status` is a free `Optional[str]` set via `setattr` with no
   validation against `DocumentStatus`.
-All are behind `documents.manage` (leadership), so these are data-integrity
-gaps, not privilege escalations. **Status:** flagged (XC-1 class).
+  All are behind `documents.manage` (leadership), so these are data-integrity
+  gaps, not privilege escalations. **Status:** flagged (XC-1 class).
 
 ## Notes
+
 - `uploader_name` / `folder_name` in `DocumentResponse` are never populated
   (no enrichment join) — always null; dead fields.
 - `get_folders` duplicates `can_access_folder` logic inline rather than calling

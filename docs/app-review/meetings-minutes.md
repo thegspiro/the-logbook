@@ -17,7 +17,7 @@ partially conflated them:
 
 - `app.schemas.minute` → `MinuteService` → the `minute.py` models (`Motion`,
   `ActionItem`). Here `priority` maps to a strict `ActionItemPriority` **ENUM**
-  (not the Integer column pass 3 cited — that Integer is on the *other* model),
+  (not the Integer column pass 3 cited — that Integer is on the _other_ model),
   and `status` maps to `MotionStatus` / `MinutesActionItemStatus`.
 - `app.schemas.meetings` → `MeetingsService` → the `meeting.py` models
   (`Meeting`, `MeetingActionItem`). Here `priority` **is** the bounded Integer
@@ -28,8 +28,8 @@ partially conflated them:
 (`Motion.status` on create/update, `ActionItem.priority`/`status` on
 create/update, and the inline motions/action-items in `create_minutes`) is
 coerced through the **enum constructor** in the service (`MotionStatus(data.status)`,
-`ActionItemPriority(data.priority)`, …). A bad value raises `ValueError` *in
-Python* before the bind, and every one of those endpoints runs inside
+`ActionItemPriority(data.priority)`, …). A bad value raises `ValueError` _in
+Python_ before the bind, and every one of those endpoints runs inside
 `handle_service_errors`, which turns `ValueError` into a clean **400** — never a
 500, never a silent `''`. This is the documented "coercion path raising caught
 ValueError" false-positive category. `MeetingsService`'s `priority` is a
@@ -123,7 +123,7 @@ existing meeting/minute tests **150 passed** (all DB-free).
 
 Re-verified pass 1 (MM-4 FK validation, MM-3-frontend permission, DASH-1
 consistency — intact). Then chased the module's distinctive risk — the
-**executive-session read restriction** — across *every* path that reads minutes,
+**executive-session read restriction** — across _every_ path that reads minutes,
 not just the four the restriction already covers. DASH-1 fixed one cross-module
 leak of executive content; this pass found another, in a different module.
 
@@ -157,7 +157,7 @@ runs first. 3 tests added (`TestPublishMinutesExecutiveGuard`): executive reject
 (as `.value` and as the enum), and the approved-gate-precedes-executive ordering.
 
 **Escape hatch recorded (future dev):** if an org deliberately wants to share an
-executive session with a *restricted* audience, that needs a real build (a
+executive session with a _restricted_ audience, that needs a real build (a
 restricted document folder, or a `minutes.view_executive` tier — the same tier
 MM-3's deferred half wants), not a one-click publish to `documents.view`. Noted in
 `KNOWN_LIMITATIONS.md`.
@@ -282,11 +282,12 @@ inconsistency (previously an aside) is resolved as MM-3-frontend.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `tsc --noEmit` | ✅ 0 errors |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check` | ✅ 503 files unchanged |
-| `eslint` | ✅ clean |
-| backend tests | ✅ **2517 passed, 0 failed**; 132 minute/meeting tests pass with the new validation. 648 errors, all `db_session` fixture (no MySQL). |
+| Check                | Result                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit`       | ✅ 0 errors                                                                                                                           |
+| `flake8 app/ tests/` | ✅ 0 violations                                                                                                                       |
+| `black --check`      | ✅ 503 files unchanged                                                                                                                |
+| `eslint`             | ✅ clean                                                                                                                              |
+| backend tests        | ✅ **2517 passed, 0 failed**; 132 minute/meeting tests pass with the new validation. 648 errors, all `db_session` fixture (no MySQL). |
+
 </content>

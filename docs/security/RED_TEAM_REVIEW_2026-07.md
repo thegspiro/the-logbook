@@ -21,6 +21,7 @@ code inspection during the review.
 
 > **Post-review remediation (2026-07-29):** items noted below have advanced since
 > the review date. In particular:
+>
 > - **Crypto (L-tier "Verified strong"):** field encryption migrated from Fernet
 >   (AES-128-CBC) to **AES-256-GCM** (authenticated, fails closed); "Fernet" is now
 >   the legacy read path only. Backfill: `backend/scripts/reencrypt_to_aesgcm.py`
@@ -37,13 +38,14 @@ code inspection during the review.
 >   `20260729_0001`).
 > - **Public-portal API key CPU-DoS:** IP rate limit now runs before bcrypt; keys
 >   carry a selective lookup prefix.
-> The per-item "Remediation status" table below predates these changes; treat this
-> note and the CHANGELOG as authoritative for current state.
+>   The per-item "Remediation status" table below predates these changes; treat this
+>   note and the CHANGELOG as authoritative for current state.
 
 > **Follow-on zero-trust review (2026-07-27):** a separate whole-stack pass
 > ("never trust, always verify") on branch `claude/zero-trust-security-review-cypp6z`
 > confirmed the foundation is strong and closed the remaining implicit-trust gaps.
 > Highlights (see the CHANGELOG for detail):
+>
 > - **Deployment posture (HIGH):** the base compose file hardcoded
 >   `ENVIRONMENT: development`, so the documented `docker compose up -d` path
 >   booted in dev mode and skipped the startup security gate. Production now
@@ -71,41 +73,44 @@ code inspection during the review.
 a documented follow-up — and M9, which verification found to be a non-issue).
 
 ### HIGH
-| ID | Finding | Status | Where |
-|----|---------|--------|-------|
-| H1 | Cross-tenant audit-log disclosure | ✅ Fixed | `security_monitoring.py` — both handlers org-scoped |
-| H2 | Role-assignment privilege escalation | ✅ Fixed | `users.py` + `roles.py` — permission-subset ceiling on assign/create/update/clone |
-| H3 | MFA brute-force + TOTP replay | ✅ Fixed | `mfa_service.py`, `auth.py`, migration `20260725_0001` |
-| H4 | Unkeyed audit hash chain | ✅ Fixed | `audit.py` HMAC-SHA256 + `hash_version`, migration `20260726_0001` |
-| H5 | Global-lockout rate-limit DoS | ✅ Fixed | `security_middleware.py` — `get_client_ip()` |
+
+| ID  | Finding                              | Status   | Where                                                                             |
+| --- | ------------------------------------ | -------- | --------------------------------------------------------------------------------- |
+| H1  | Cross-tenant audit-log disclosure    | ✅ Fixed | `security_monitoring.py` — both handlers org-scoped                               |
+| H2  | Role-assignment privilege escalation | ✅ Fixed | `users.py` + `roles.py` — permission-subset ceiling on assign/create/update/clone |
+| H3  | MFA brute-force + TOTP replay        | ✅ Fixed | `mfa_service.py`, `auth.py`, migration `20260725_0001`                            |
+| H4  | Unkeyed audit hash chain             | ✅ Fixed | `audit.py` HMAC-SHA256 + `hash_version`, migration `20260726_0001`                |
+| H5  | Global-lockout rate-limit DoS        | ✅ Fixed | `security_middleware.py` — `get_client_ip()`                                      |
 
 ### MEDIUM
-| ID | Finding | Status | Where |
-|----|---------|--------|-------|
-| M1 | Secure cookie dropped by http:// origin | ✅ Fixed | `auth.py` — force Secure in prod/staging |
-| M2 | Refresh rotation mass-logout | ✅ Fixed | `auth_service.py` grace window, migration `20260727_0001` |
-| M3 | Username enumeration | ✅ Fixed | `auth_service.py` dummy verify + `ACCOUNT_LOCKOUT_REVEAL=False` |
-| M4 | DNS-rebinding SSRF | ✅ Fixed | `url_validator.assert_outbound_url_safe()` at send time |
-| M5 | XXE in ePCR/NEMSIS import | ✅ Fixed | `epcr_import_service.py` → defusedxml |
-| M6 | Public-form abuse | ⚠️ Partial | daily cap + distributed limit added; CAPTCHA is a follow-up |
-| M7 | Webhook replay | ✅ Fixed | `webhook_replay.is_duplicate_webhook()` on all 3 inbound webhooks |
-| M8 | Public rate limiting not distributed | ✅ Fixed | `public_rate_limit()` (Redis-backed) |
-| M9 | Audit logs hard-deletable | ✅ N/A | Verified non-issue — no delete path on `audit_logs`; description corrected |
-| M10 | CSRF "no cookie ⇒ allow" | ✅ Fixed | `verify_csrf_token` — reject when session cookie present |
-| M11 | PII endpoints cacheable | ✅ Fixed | `apiCache.ts` — events rosters + facilities excluded |
+
+| ID  | Finding                                 | Status     | Where                                                                      |
+| --- | --------------------------------------- | ---------- | -------------------------------------------------------------------------- |
+| M1  | Secure cookie dropped by http:// origin | ✅ Fixed   | `auth.py` — force Secure in prod/staging                                   |
+| M2  | Refresh rotation mass-logout            | ✅ Fixed   | `auth_service.py` grace window, migration `20260727_0001`                  |
+| M3  | Username enumeration                    | ✅ Fixed   | `auth_service.py` dummy verify + `ACCOUNT_LOCKOUT_REVEAL=False`            |
+| M4  | DNS-rebinding SSRF                      | ✅ Fixed   | `url_validator.assert_outbound_url_safe()` at send time                    |
+| M5  | XXE in ePCR/NEMSIS import               | ✅ Fixed   | `epcr_import_service.py` → defusedxml                                      |
+| M6  | Public-form abuse                       | ⚠️ Partial | daily cap + distributed limit added; CAPTCHA is a follow-up                |
+| M7  | Webhook replay                          | ✅ Fixed   | `webhook_replay.is_duplicate_webhook()` on all 3 inbound webhooks          |
+| M8  | Public rate limiting not distributed    | ✅ Fixed   | `public_rate_limit()` (Redis-backed)                                       |
+| M9  | Audit logs hard-deletable               | ✅ N/A     | Verified non-issue — no delete path on `audit_logs`; description corrected |
+| M10 | CSRF "no cookie ⇒ allow"                | ✅ Fixed   | `verify_csrf_token` — reject when session cookie present                   |
+| M11 | PII endpoints cacheable                 | ✅ Fixed   | `apiCache.ts` — events rosters + facilities excluded                       |
 
 ### LOW / hardening
-| ID | Finding | Status |
-|----|---------|--------|
-| L1 | Dev compose used in prod | ✅ `docker-compose.prod.yml` override added |
-| L2 | Docs/DEBUG-in-prod non-blocking | ✅ Promoted to CRITICAL (blocks prod boot) |
-| L3 | Authz data cached | ✅ `/roles/user/`, `/roles/admin-access` excluded |
-| L4 | ReportLab markup injection | ✅ `equipment_check_pdf.py` escapes Paragraph inputs |
-| L5 | MFA recovery codes reversible | ✅ Hashed at rest + constant-time verify |
-| L6 | No request-body cap | ✅ `RequestSizeLimitMiddleware` |
-| L7 | OAuth no domain allowlist | ✅ Operator warning when Google allowlist unset |
-| L8 | display/calendar unthrottled | ✅ Per-IP rate limiting added |
-| L9 | Misc (SQL fragment, ENCRYPTION_KEY len, dead code) | ✅ Fixed |
+
+| ID  | Finding                                            | Status                                               |
+| --- | -------------------------------------------------- | ---------------------------------------------------- |
+| L1  | Dev compose used in prod                           | ✅ `docker-compose.prod.yml` override added          |
+| L2  | Docs/DEBUG-in-prod non-blocking                    | ✅ Promoted to CRITICAL (blocks prod boot)           |
+| L3  | Authz data cached                                  | ✅ `/roles/user/`, `/roles/admin-access` excluded    |
+| L4  | ReportLab markup injection                         | ✅ `equipment_check_pdf.py` escapes Paragraph inputs |
+| L5  | MFA recovery codes reversible                      | ✅ Hashed at rest + constant-time verify             |
+| L6  | No request-body cap                                | ✅ `RequestSizeLimitMiddleware`                      |
+| L7  | OAuth no domain allowlist                          | ✅ Operator warning when Google allowlist unset      |
+| L8  | display/calendar unthrottled                       | ✅ Per-IP rate limiting added                        |
+| L9  | Misc (SQL fragment, ENCRYPTION_KEY len, dead code) | ✅ Fixed                                             |
 
 **Testing note:** backend deps and MySQL/Redis are not available in the review
 environment, so the full pytest suite was not run here. All changed Python is
@@ -117,7 +122,7 @@ full suite and the two new Alembic migrations.
 > **Discovered while working (pre-existing, unrelated to these fixes):** two Alembic migration
 > files — `20260720_0001_add_department_message_deleted_at.py` and
 > `20260720_0001_add_training_positions_and_shift_status.py` — declare the **same** `revision =
-> "20260720_0001"` with the same `down_revision`. Duplicate revision ids collide in the Alembic
+"20260720_0001"` with the same `down_revision`. Duplicate revision ids collide in the Alembic
 > graph and will error on `alembic upgrade`. Fixing it means renaming one revision and re-pointing
 > the downstream `20260721_0001.down_revision`; validate with `alembic history`/`heads` in a live
 > environment before applying.
@@ -127,6 +132,7 @@ full suite and the two new Alembic migrations.
 ## HIGH
 
 ### H1 — Cross-tenant audit-log read & export (broken tenant isolation) **(verified)**
+
 **`backend/app/api/v1/endpoints/security_monitoring.py:350` (`GET /security/audit-log/entries`), `:435` (`GET /security/audit-log/export`)**
 
 The canonical audit endpoints in `audit_logs.py:60-64` correctly scope every query to the caller's
@@ -149,6 +155,7 @@ handlers, or delete the duplicate endpoints and route the UI to the already-corr
 Exclude system-level entries (`user_id IS NULL`) from org-scoped views.
 
 ### H2 — Privilege escalation to System Owner via role assignment **(verified)**
+
 **`backend/app/api/v1/endpoints/users.py:479` (`PUT /users/{id}/roles`), `:574` (`POST /users/{id}/roles/{role_id}`)**
 
 The handlers require only `users.update_positions` / `members.assign_positions` /
@@ -174,10 +181,11 @@ role set without separate higher authority. Block assigning `["*"]` except from 
 same subset check to `create_role`/`update_role`.
 
 ### H3 — MFA has no per-user brute-force lockout and TOTP codes are replayable
+
 **`backend/app/services/mfa_service.py:31-38` (`verify_totp`), `backend/app/api/v1/endpoints/auth.py:660-703` (`mfa_login`)**
 
 Two compounding gaps: (1) `mfa_login` never checks `locked_until` or increments a failure counter —
-the account lockout that guards the *password* step (`auth_service.py:206-227`) does not exist on the
+the account lockout that guards the _password_ step (`auth_service.py:206-227`) does not exist on the
 second factor; the only limiter is per-IP (5/60s). (2) `verify_totp` uses `valid_window=1` with **no
 record of the last-used time-step**, so a code stays valid for the full ±30s window and can be
 replayed.
@@ -193,6 +201,7 @@ failures into the same `failed_login_attempts`/`locked_until` lockout and check 
 top of `mfa_login`. Rate-limit `/mfa/login` per-user (subject from the `mfa_pending` token).
 
 ### H4 — Audit hash chain is unkeyed SHA-256 with a built-in full-chain rewrite path
+
 **`backend/app/core/audit.py:51-76` (`calculate_hash`), `:259-290` (`rehash_chain`)**
 
 The tamper-evidence chain uses plain `hashlib.sha256` with **no HMAC / no secret**, and
@@ -202,7 +211,7 @@ Checkpoints live in the same DB.
 **Exploit:** Anyone able to write audit rows (DB access, or by re-implementing the trivial keyless
 algorithm) can delete/alter entries and recompute a fully valid chain — `verify_integrity` reports
 `verified: True`. Combined with the `audit.manage` hard-delete permission (M9), this makes the audit
-trail tamper-*evident* only against naive edits, not a motivated actor — undermining the HIPAA
+trail tamper-_evident_ only against naive edits, not a motivated actor — undermining the HIPAA
 §164.312(b) immutability claim.
 
 **Fix:** Key the chain — `hmac.new(audit_key, data, sha256)` with a dedicated secret **not** stored in
@@ -210,6 +219,7 @@ the app DB. Anchor/sign checkpoints externally (WORM / append-only store). Remov
 `rehash_chain`.
 
 ### H5 — Login rate limiter keys the raw peer IP → global lockout DoS behind the proxy
+
 **`backend/app/core/security_middleware.py:414`**
 
 `check_rate_limit` uses `client_ip = request.client.host` instead of the proxy-aware
@@ -227,6 +237,7 @@ spoofing, but a real DoS and inconsistent with the careful XFF handling elsewher
 ## MEDIUM
 
 ### M1 — `Secure` cookie flag silently dropped by any `http://` allowed origin
+
 **`backend/app/api/v1/endpoints/auth.py:79-88` (`_set_auth_cookies`), `:285-294`**
 When `COOKIE_SECURE` is unset, `use_secure = not any(o.startswith("http://") …)`. One stray
 `http://` entry in `ALLOWED_ORIGINS` (a LAN IP, a legacy admin host) — even in production — drops
@@ -235,6 +246,7 @@ When `COOKIE_SECURE` is unset, `use_secure = not any(o.startswith("http://") …
 (or refuse to boot with an `http://` origin in prod).
 
 ### M2 — Refresh-token rotation has no grace window → mass session revocation / targeted logout DoS
+
 **`backend/app/services/auth_service.py:336-350`, `:408-415`**
 A refresh token not found in the DB is treated as theft and triggers `_revoke_all_user_sessions`.
 Two concurrent legitimate refreshes (multi-tab, app boot, retry) log the user out of **all** devices;
@@ -243,6 +255,7 @@ victim's sessions on demand. **Fix:** short rotation grace window, or per-sessio
 generation id — revoke only on a genuine older-generation reuse.
 
 ### M3 — Username enumeration via lockout reveal + locked-path timing
+
 **`backend/app/services/auth_service.py:184-203`**
 `ACCOUNT_LOCKOUT_REVEAL` defaults to revealing "Account temporarily locked… N minutes" (confirms the
 account exists), and the locked branch returns **before** the Argon2 verify, so locked (real) accounts
@@ -250,6 +263,7 @@ respond faster — defeating the dummy-hash timing defense used for unknown user
 `ACCOUNT_LOCKOUT_REVEAL=False`; run a dummy `verify_password` on the locked branch to equalize timing.
 
 ### M4 — SSRF via DNS rebinding (TOCTOU) in outbound integration requests
+
 **`backend/app/utils/url_validator.py:101-112`; re-resolved at send in `integration_services/webhook_service.py:97`, calcom/salesforce**
 Private-IP rejection happens only at config-save time; the stored URL is re-resolved at request time.
 An `integrations.manage` admin registers a domain returning a public IP during validation and
@@ -258,12 +272,14 @@ An `integrations.manage` admin registers a domain returning a public IP during v
 custom `httpx` transport that re-checks every resolved address against `_is_private_ip`.
 
 ### M5 — XXE / entity-expansion DoS in ePCR / NEMSIS XML import
+
 **`backend/app/services/integration_services/epcr_import_service.py:85`**
 `ElementTree.fromstring(file_content)` parses attacker-supplied XML with the stdlib parser
 ("not secure against maliciously constructed data"). Billion-laughs / quadratic-entity expansion →
 memory/CPU exhaustion; external-entity handling can add file-read/SSRF. **Fix:** `defusedxml`.
 
 ### M6 — Public form submission enables cross-org spam + side-effect abuse
+
 **`backend/app/api/v1/endpoints/forms.py:132-196`, `backend/app/services/forms_service.py:868-928`**
 Bot protection is honeypot-only (no CAPTCHA). Anyone with a form's 12-hex slug can POST unlimited
 submissions to **any** org's form, and each accepted submission auto-runs `_process_integrations`
@@ -272,6 +288,7 @@ vector. **Fix:** CAPTCHA (or PoW) on submit, per-form/day cap, gate integration 
 verification.
 
 ### M7 — No replay protection on inbound webhooks
+
 **`backend/app/api/public/salesforce_webhook.py:59`, `integrations_webhook.py:111/176`**
 HMAC verification covers authenticity but not freshness — no timestamp tolerance or nonce/delivery-ID
 dedup. A captured valid signed request can be replayed to re-advance pipeline stages or re-run
@@ -279,18 +296,21 @@ Salesforce sync. **Fix:** require a signed timestamp header (reject > N min skew
 delivery IDs.
 
 ### M8 — Public-route rate limiting is in-memory / per-process, not distributed
+
 **`backend/app/core/security_middleware.py:28-146` (used by forms/webhooks/portal); `public_portal_security.py:26-30`**
 The Redis-backed limiter exists and is used by auth routes, but public endpoints use an in-process
 limiter — multiplied by worker/container count, reset on restart. Undercuts M6/M7 protections.
 **Fix:** route public limits through the Redis limiter (fail-closed for these routes).
 
 ### M9 — Audit logs are hard-deletable by a permission (evidence destruction)
+
 **`backend/app/core/permissions.py:286` (`audit.manage` = "…delete audit/error logs"); `security_monitoring.py:710`**
 Combined with the keyless chain (H4), a privileged/compromised admin can hard-delete entries and
 leave no cryptographic trace. **Fix:** no hard delete — retention-based purge only, itself audited and
 externally anchored.
 
 ### M10 — CSRF "no cookie ⇒ allow" bypass branch
+
 **`backend/app/core/security_middleware.py:580-590`**
 When the `csrf_token` cookie is absent, the check returns without validating — the double-submit
 control depends entirely on `SameSite=Strict` being honored. WebSocket and `/onboarding/` paths skip
@@ -298,6 +318,7 @@ CSRF entirely (`:561`, `:573`). **Fix:** once a session exists, treat a missing 
 unsafe method as 403; keep SameSite as belt, not sole control.
 
 ### M11 — PII endpoints missing from the frontend SWR cache exclusion list
+
 **`frontend/src/utils/apiCache.ts:31-74`**
 `/events/` is not excluded, so `GET /events/{id}/rsvps` (attendance roster + names/status),
 `/eligible-members` (first/last/email), `/external-attendees`, `/check-in-monitoring` persist in the

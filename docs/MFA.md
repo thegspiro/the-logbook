@@ -32,7 +32,7 @@ default, and a department can **require** it for every member.
    set.
 4. Only after the second factor verifies are full session cookies issued.
 
-### OAuth Logins Are Challenged Too *(2026-08-12)*
+### OAuth Logins Are Challenged Too _(2026-08-12)_
 
 "Sign in with Google" / "Sign in with Microsoft" no longer bypasses the second
 factor. When the OAuth callback matches an account with `mfa_enabled`:
@@ -51,7 +51,7 @@ factor. When the OAuth callback matches an account with `mfa_enabled`:
    the provider and email; the OAuth CSRF `oauth_state` cookie is cleared on
    this branch so an abandoned challenge leaves no stale state.
 
-Why: OAuth verifies only the *primary* credential. Before this change, a
+Why: OAuth verifies only the _primary_ credential. Before this change, a
 compromised Google/Microsoft account (or IdP session) yielded a full Logbook
 session with the app-level TOTP never consulted.
 
@@ -79,18 +79,18 @@ require MFA for the whole department from **Settings → Authentication**
 
 ## API Reference
 
-| Method & Path | Auth | Purpose |
-|---------------|------|---------|
-| `POST /auth/login` | none | Password step; returns `{ mfa_required, mfa_token }` when MFA is enabled |
-| `POST /auth/mfa/login` | pending token | Verify second factor (`temp_token` + `code` or `recovery_code`); issues session |
-| `POST /auth/mfa/setup` | session | Begin enrollment; returns `{ secret, qr_code_url }` |
-| `POST /auth/mfa/verify-setup` | session | Confirm code, enable MFA, return one-time recovery codes |
-| `POST /auth/mfa/disable` | session | Verify a code and disable MFA |
-| `GET /auth/mfa/status` | session | `{ mfa_enabled, recovery_codes_remaining }` |
-| `POST /auth/mfa/recovery-codes` | session | Regenerate recovery codes (verifies a TOTP code), returns the new set once |
-| `GET /auth/mfa/policy` | `settings.manage` | Read org-wide MFA requirement |
-| `PUT /auth/mfa/policy` | `settings.manage` | Set org-wide MFA requirement |
-| `POST /users/{user_id}/reset-mfa` | `users.create` / `members.manage` | Admin: reset a member's MFA (lost device) |
+| Method & Path                     | Auth                              | Purpose                                                                         |
+| --------------------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
+| `POST /auth/login`                | none                              | Password step; returns `{ mfa_required, mfa_token }` when MFA is enabled        |
+| `POST /auth/mfa/login`            | pending token                     | Verify second factor (`temp_token` + `code` or `recovery_code`); issues session |
+| `POST /auth/mfa/setup`            | session                           | Begin enrollment; returns `{ secret, qr_code_url }`                             |
+| `POST /auth/mfa/verify-setup`     | session                           | Confirm code, enable MFA, return one-time recovery codes                        |
+| `POST /auth/mfa/disable`          | session                           | Verify a code and disable MFA                                                   |
+| `GET /auth/mfa/status`            | session                           | `{ mfa_enabled, recovery_codes_remaining }`                                     |
+| `POST /auth/mfa/recovery-codes`   | session                           | Regenerate recovery codes (verifies a TOTP code), returns the new set once      |
+| `GET /auth/mfa/policy`            | `settings.manage`                 | Read org-wide MFA requirement                                                   |
+| `PUT /auth/mfa/policy`            | `settings.manage`                 | Set org-wide MFA requirement                                                    |
+| `POST /users/{user_id}/reset-mfa` | `users.create` / `members.manage` | Admin: reset a member's MFA (lost device)                                       |
 
 ## Implementation Notes
 
@@ -145,7 +145,7 @@ After a reset the member re-enrolls from their own **Settings → Security**; if
 the org requires MFA, they are prompted to set it up again on next login. Admins
 cannot reset their own MFA via this endpoint (use your own Security settings).
 
-**Privilege ceiling** *(2026-08-12)*: both admin reset endpoints
+**Privilege ceiling** _(2026-08-12)_: both admin reset endpoints
 (`/reset-password` and `/reset-mfa`) refuse a target whose effective
 permissions exceed the caller's. Resetting credentials or stripping MFA is
 account takeover by construction, so a `members.manage` holder must not be

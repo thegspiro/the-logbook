@@ -8,6 +8,7 @@ helpers, the auth/token/cache handling, and the privileged log viewers.
 auth/token/cache, (C) hooks/utils.
 
 ## Verified good ✅
+
 - **No XSS sinks.** There is **no `dangerouslySetInnerHTML` anywhere** in the
   frontend. `simpleMarkdown.ts` and `LinkifiedText.tsx` render via
   `React.createElement`/JSX children (React auto-escapes) and gate link hrefs
@@ -39,7 +40,8 @@ auth/token/cache, (C) hooks/utils.
 ## Findings
 
 ### FE-1 — HIGH — Cross-user cached-PII leak on a shared tab (cache not cleared on logout/login) — ✅ FIXED
-`clearCache()` only ran **inside** `authService.logout()` *after* the logout POST
+
+`clearCache()` only ran **inside** `authService.logout()` _after_ the logout POST
 succeeded; if that POST threw (network blip / already-expired session — the common
 case on a shared terminal), `authStore.logout()` swallowed the error and its
 `finally` cleared `has_session` but **not the cache**. Login/register/MFA didn't
@@ -52,6 +54,7 @@ training records…).
 `register` (defense-in-depth for a user switch after a crash/uncleaned logout).
 
 ### FE-2 — MEDIUM — Member training/compliance PHI endpoints were cacheable — ✅ FIXED
+
 `UNCACHEABLE_PREFIXES` had fine-grained per-user training prefixes but omitted
 several org-wide, member-identifying ones, so their responses were cached (30s
 fresh / 90s stale): `/training/compliance-matrix`,
@@ -62,12 +65,14 @@ notes confined in iteration #22).
 **Fix:** added all of them to `UNCACHEABLE_PREFIXES`.
 
 ### FE-3 — MEDIUM — `/rsvp-history` slipped past the substring guard — ✅ FIXED
+
 `UNCACHEABLE_SUBSTRINGS` blocked `/rsvps` (event roster PII) but a specific event's
 `/rsvp-history` (per-member attendance/decline history) does not contain that
 substring, so it was cacheable.
 **Fix:** added `/rsvp-history` to `UNCACHEABLE_SUBSTRINGS`.
 
 ### FE-4 — MEDIUM/LOW — Notification/scheduled-email logs (recipient PII) cacheable — ✅ FIXED
+
 `/notifications/logs` (delivery logs with recipient identities) and
 `/email-templates/scheduled` (recipient PII) were not covered by the exclusion
 list.
@@ -76,12 +81,14 @@ sensitivity, high traffic, and now cleared on logout by FE-1 — was left cachea
 noted.)
 
 ### FE-5 — LOW — Onboarding refresh-failure retained the cache — ✅ FIXED
+
 On a refresh failure, the non-onboarding branch does a full `window.location`
 redirect (which clears the in-memory cache), but the onboarding branch skips the
 redirect and never called `clearCache()`.
 **Fix:** `clearCache()` now runs unconditionally before the redirect branch.
 
 ### FE-6 — MEDIUM (flagged) — PII drafts / offline queue survive logout on a shared device
+
 - `utils/shiftReportDrafts.ts` persists shift-report drafts (crew names, trainee
   evaluations, remarks — member PII) to `localStorage`, and the HIPAA idle-logout
   (`useIdleTimer.performLogout`) clears only `has_session` + `sessionStorage` — it
@@ -89,11 +96,12 @@ redirect and never called `clearCache()`.
   station kiosk can read prior members' evaluations via DevTools.
 - `utils/offlineQueue.ts` similarly leaves queued equipment-check payloads +
   photo blobs in IndexedDB across sessions.
-Purging on logout would drop unsaved/unsynced work, so whether drafts should
-survive a re-login is a product decision. **Status:** flagged (recommend purging
-the draft/queue stores on idle-logout for the HIPAA shared-kiosk posture).
+  Purging on logout would drop unsaved/unsynced work, so whether drafts should
+  survive a re-login is a product decision. **Status:** flagged (recommend purging
+  the draft/queue stores on idle-logout for the HIPAA shared-kiosk posture).
 
 ### FE-7 — LOW (flagged) — CSRF cookie decoding inconsistency + minor polish
+
 `apiClient.getCookie` decodes the `csrf_token` with `decodeURIComponent` while
 `authStore.getCsrfCookie` does not, so if the token ever contained
 percent-encodable chars the double-submit compare could false-reject (aligning it
@@ -104,6 +112,7 @@ optional DOMPurify hardening), and `useAppUpdate.dismiss` sets a sentinel build 
 before its refetch resolves (functional tidy-up). **Status:** flagged.
 
 ## Notes
+
 - Coverage caveat: `components/` (101 files) + `components/ux/` (28) were swept for
   raw-HTML sinks and the specific privileged-viewer render paths, not reviewed
   component-by-component. The XSS invariant (React child-escaping, no

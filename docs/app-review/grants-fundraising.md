@@ -222,9 +222,9 @@ fields accept `0` with no upper cap; full donor PII is exposed to `fundraising.v
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (2 services + 2 tests) | ✅ 0 violations |
-| `black --check` | ✅ unchanged |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_fundraising_service` + `test_grant_service` **40 passed** (+8 new). No DB needed for these files. |
+| Check                           | Result                                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `flake8` (2 services + 2 tests) | ✅ 0 violations                                                                                            |
+| `black --check`                 | ✅ unchanged                                                                                               |
+| `tsc --noEmit`                  | ✅ n/a — no frontend change                                                                                |
+| backend tests                   | ✅ `test_fundraising_service` + `test_grant_service` **40 passed** (+8 new). No DB needed for these files. |

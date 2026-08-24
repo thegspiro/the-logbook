@@ -3,7 +3,7 @@
 An ISO 27001 audit starts from documents, not code: an information-security
 policy, topic policies, a risk register, and a Statement of Applicability.
 The Logbook can't write your department's policies for you — but most policy
-*content* for this system is already determined by how the software works.
+_content_ for this system is already determined by how the software works.
 These skeletons pre-fill everything the platform enforces and mark every
 department-owned decision with `[DEPARTMENT: ...]`.
 
@@ -15,7 +15,7 @@ How to use them:
 3. Have leadership formally adopt them (minutes + signature), and revisit
    annually — auditors check the review cadence, not just the content.
 4. Evidence for each claim lives in [../COMPLIANCE.md](../COMPLIANCE.md)'s
-   control inventory: policy says *what*, that table says *where in code*.
+   control inventory: policy says _what_, that table says _where in code_.
 
 Files:
 

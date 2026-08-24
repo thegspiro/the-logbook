@@ -18,14 +18,14 @@ TypeError) left open.
 A fresh, exhaustive client-FK audit of the whole events surface (a sub-agent traced
 every create/update/convert/attendee/rsvp/recurring writer across all three files)
 confirmed the EV-8/BXC-1 `location_id` fixes hold on every event-write path — and
-found **two** location FKs the prior passes missed on the *adjacent* surfaces.
+found **two** location FKs the prior passes missed on the _adjacent_ surfaces.
 
 ### EV2-2 — MED — Two unvalidated `location_id` FKs (one a live cross-org read-leak) — ✅ FIXED
 
 **GAP 1 — `schedule_request` (event-request → event conversion) — a real read-leak.**
 `POST /event-requests/{id}/schedule` stored `event_location_id = data.location_id`
 **unconditionally** (event_requests.py), but only validated the location in-org
-*inside* the `if data.create_calendar_event:` branch (which reaches the EV-8
+_inside_ the `if data.create_calendar_event:` branch (which reaches the EV-8
 `create_event` check). With `create_calendar_event` **False — the default** — a
 foreign `location_id` was stored with no org check, and the response enrichment
 `_get_location_name` resolved it with **no org filter** — so a manager could
@@ -240,9 +240,9 @@ compound) — the AP-2 pattern, Pitfall #10.
 
 ## Completion gate
 
-| Check | Result |
-|-------|--------|
-| `flake8` (service + endpoint + test) | ✅ 0 violations |
-| `black --check` | ✅ formatted |
-| `tsc --noEmit` | ✅ n/a — no frontend change |
-| backend tests | ✅ `test_event_rsvp_waitlist` **15 passed** (+2 new EV-6). The `_event` mock factory was extended with `is_draft`/`end_datetime` defaults (not weakened). |
+| Check                                | Result                                                                                                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` (service + endpoint + test) | ✅ 0 violations                                                                                                                                           |
+| `black --check`                      | ✅ formatted                                                                                                                                              |
+| `tsc --noEmit`                       | ✅ n/a — no frontend change                                                                                                                               |
+| backend tests                        | ✅ `test_event_rsvp_waitlist` **15 passed** (+2 new EV-6). The `_event` mock factory was extended with `is_draft`/`end_datetime` defaults (not weakened). |

@@ -42,6 +42,11 @@ CALLER_SUPPLIED = {
     "maybe_count",
     "not_going_count",
     "user_rsvp_status",
+    # Resolved from a separate user lookup on the detail endpoint only, which
+    # is the one screen that names who closed the event. Its default of None
+    # is the honest value everywhere else, including the rows backfilled from
+    # the pre-column marker, which recorded no actor at all.
+    "attendance_finalized_by_name",
 }
 
 

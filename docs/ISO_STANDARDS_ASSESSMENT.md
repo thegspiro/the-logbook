@@ -12,10 +12,10 @@ at the implementation that exists today.
 
 **"ISO" means two different things in this codebase.** The fire service uses
 "ISO" for the Insurance Services Office **Public Protection Classification**
-(class 1–10 insurance grading). The Logbook already ships features for *that*
+(class 1–10 insurance grading). The Logbook already ships features for _that_
 ISO — readiness scoring and class estimation in
 `backend/app/services/compliance_officer_service.py` (`GET /iso-readiness`).
-This document is about the *other* ISO: the International Organization for
+This document is about the _other_ ISO: the International Organization for
 Standardization's management-system and technical standards (ISO/IEC 27001
 etc.), which `SECURITY.md` already names as aspirational targets alongside
 SOC 2 and HITRUST.
@@ -41,15 +41,15 @@ already implemented — several unusually well for a project this size.
 
 **Already in place**
 
-| Annex A theme | Implementation |
-|---|---|
-| Access control (A.5.15–5.18, A.8.2–8.5) | 96-permission RBAC catalog with wildcards (`backend/app/core/permissions.py`), org-scoped roles, `require_permission()` dependencies, route-level gating (`ProtectedRoute`) |
-| Authentication (A.8.5) | bcrypt/Argon2, TOTP MFA with encrypted secrets and hashed backup codes (`backend/app/services/mfa_service.py`), org-enforced MFA, account lockout, HIPAA §164.312 password history/age controls (`backend/app/core/config.py:150-163`), Google/Microsoft OIDC SSO |
-| Session security | httpOnly-cookie JWTs with refresh rotation + grace window, CSRF double-submit, HIPAA session timeout |
-| Logging & monitoring (A.8.15–8.16) | **Tamper-evident audit log**: keyed HMAC-SHA256 hash chain with no-downgrade guard and head-deletion detection (`backend/app/core/audit.py`), 242 distinct event types, integrity/checkpoint/export API (`endpoints/security_monitoring.py`), security-monitoring middleware, Sentry + Loguru |
-| Cryptography (A.8.24) | AES-256-GCM field encryption with PBKDF2 derivation (`backend/app/core/security.py:353-461`, `encrypted_types.py` failing closed on tamper), TLS 1.2/1.3-only nginx with HSTS/OCSP, strict CSP with no `unsafe-inline` scripts |
-| Secure development (A.8.25–8.31) | Strict TypeScript, CI lint/type/test gates, **Bandit + pip-audit in CI** (`.github/workflows/ci.yml`), `SafeCsvWriter`, SSRF/image-upload validators, per-module security audits with honest `docs/KNOWN_LIMITATIONS.md` |
-| Tenant isolation | Org-scoping rules enforced project-wide (CLAUDE.md Pitfall #14, XC-* audit finding classes) |
+| Annex A theme                           | Implementation                                                                                                                                                                                                                                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access control (A.5.15–5.18, A.8.2–8.5) | 96-permission RBAC catalog with wildcards (`backend/app/core/permissions.py`), org-scoped roles, `require_permission()` dependencies, route-level gating (`ProtectedRoute`)                                                                                                                   |
+| Authentication (A.8.5)                  | bcrypt/Argon2, TOTP MFA with encrypted secrets and hashed backup codes (`backend/app/services/mfa_service.py`), org-enforced MFA, account lockout, HIPAA §164.312 password history/age controls (`backend/app/core/config.py:150-163`), Google/Microsoft OIDC SSO                             |
+| Session security                        | httpOnly-cookie JWTs with refresh rotation + grace window, CSRF double-submit, HIPAA session timeout                                                                                                                                                                                          |
+| Logging & monitoring (A.8.15–8.16)      | **Tamper-evident audit log**: keyed HMAC-SHA256 hash chain with no-downgrade guard and head-deletion detection (`backend/app/core/audit.py`), 242 distinct event types, integrity/checkpoint/export API (`endpoints/security_monitoring.py`), security-monitoring middleware, Sentry + Loguru |
+| Cryptography (A.8.24)                   | AES-256-GCM field encryption with PBKDF2 derivation (`backend/app/core/security.py:353-461`, `encrypted_types.py` failing closed on tamper), TLS 1.2/1.3-only nginx with HSTS/OCSP, strict CSP with no `unsafe-inline` scripts                                                                |
+| Secure development (A.8.25–8.31)        | Strict TypeScript, CI lint/type/test gates, **Bandit + pip-audit in CI** (`.github/workflows/ci.yml`), `SafeCsvWriter`, SSRF/image-upload validators, per-module security audits with honest `docs/KNOWN_LIMITATIONS.md`                                                                      |
+| Tenant isolation                        | Org-scoping rules enforced project-wide (CLAUDE.md Pitfall #14, XC-* audit finding classes)                                                                                                                                                                                                   |
 
 **Gaps and the work to close them**
 
@@ -91,7 +91,7 @@ Items 1–5 are the engineering work; item 6 is documentation.
 
 ### ISO/IEC 29147 & 30111 — Vulnerability Disclosure and Handling
 
-Small, concrete, and fully achievable by the *project* itself.
+Small, concrete, and fully achievable by the _project_ itself.
 
 - `SECURITY.md` already has "Vulnerability Reporting" and "Incident Response"
   sections with a contact address — most of 29147 in substance.
@@ -118,7 +118,7 @@ one-paragraph conformance statement in `docs/ARCHITECTURE.md`.
 ### ISO/IEC 27701 — Privacy Information Management (extension of 27001)
 
 The Logbook stores PII and PHI (medical screening, emergency contacts) and the
-HIPAA work covers *confidentiality* well — but privacy standards demand
+HIPAA work covers _confidentiality_ well — but privacy standards demand
 **data-subject rights**, which are mostly absent. This is the largest genuine
 feature gap this assessment found:
 
@@ -130,7 +130,7 @@ feature gap this assessment found:
    portability does not.)
 3. **Partial erasure story:** soft delete is the default and an audited
    `user_hard_deleted` path exists (`endpoints/users.py`), but there is no
-   *anonymization* workflow that scrubs a departed member's PII while
+   _anonymization_ workflow that scrubs a departed member's PII while
    preserving the attendance/training history the department legally needs.
    The elections module already ships real cryptographic anonymization
    (per-election salt destroyed at close, `election_service.py:1262`) — the
@@ -147,7 +147,7 @@ regardless of any certification.
 
 ### ISO 22301 — Business Continuity Management
 
-Peculiarly important here: the customers are *emergency services*, and their
+Peculiarly important here: the customers are _emergency services_, and their
 intranet being down during an activation is an operational problem.
 
 - **Exists:** `scripts/backup.sh` is a genuinely complete backup/restore CLI
@@ -171,7 +171,7 @@ sidecar, restore verification). High value for the user base.
 
 ISO/IEC 40500 is WCAG 2.0 verbatim; practical work should target WCAG 2.2 AA
 (which subsumes it). US public-sector customers may be subject to ADA/Section
-508, and `SECURITY.md:151-211` already *claims* WCAG 2.1 AA — currently an
+508, and `SECURITY.md:151-211` already _claims_ WCAG 2.1 AA — currently an
 unverified assertion.
 
 - **Exists:** ~2,244 `aria-*` and ~505 `role=` attributes; first-class
@@ -197,7 +197,7 @@ coverage-ratchet approach.
   known: **no backend type-check (mypy) gate and no backend coverage gate in
   CI**, frontend coverage ratchet configured but not enforced in CI, no
   Playwright run in CI.
-- **ISO 15489 (records management):** relevant to *what the product does* —
+- **ISO 15489 (records management):** relevant to _what the product does_ —
   minutes, training records, and elections are records with authenticity and
   retention needs. The retention engine (27701 §4) and audit archival
   (27001 §1) are exactly what 15489 alignment asks for; treat it as a design
@@ -218,24 +218,24 @@ coverage-ratchet approach.
 
 ## Prioritized roadmap
 
-| # | Item | Standard(s) | Effort | Type | Status |
-|---|------|-------------|--------|------|--------|
-| 1 | Remove unused `pysaml2`/`python-ldap` deps (or implement SAML/LDAP) | 27001 A.8.8 | S | Code | ✅ 2026-07-31 (removed; docs corrected) |
-| 2 | `security.txt` endpoint + advisory lifecycle & breach-clock doc | 29147/30111 | S | Code + doc | ✅ 2026-07-31 (`/.well-known/security.txt`, config-driven) |
-| 3 | Dependabot config; make `npm audit` blocking; add gitleaks + Trivy + SBOM | 27001 A.8.8 | S | CI | ✅ 2026-07-31 (all parts — Trivy vuln sweep + Syft SBOM in supply-chain.yml) |
-| 4 | Privacy-policy + ToS pages (org-configurable content) | 27701 | S–M | Code | ✅ 2026-07-31 |
-| 5 | Audit-log archival job enforcing `HIPAA_AUDIT_RETENTION_DAYS` | 27001, 15489 | M | Code | ✅ 2026-07-31 (export-and-purge with attested chain hand-off) |
-| 6 | Off-host audit-log shipping (JSONL/syslog/webhook) | 27001 | M | Code | ✅ 2026-07-31 (HMAC-signed NDJSON webhook, watermarked) |
-| 7 | Fix broken `docs/BACKUP.md` / `docs/COMPLIANCE.md` links by writing them; DR runbook with RTO/RPO | 22301 | M | Doc | ✅ 2026-07-31 |
-| 8 | Compose-integrated backup sidecar + automated restore verification | 22301 | M | Code | ✅ 2026-07-31 (nightly sidecar + throwaway-schema restore drills; audit archives now on a persistent volume) |
-| 9 | Expand axe specs beyond Modal + a11y gate in CI | 40500/WCAG | M | CI + tests | ✅ 2026-07-31 (UX library + legal pages; keyboard audit still open) |
-| 10 | Encryption key versioning + rotation command | 27001 | M | Code | ✅ 2026-07-31 (legacy-key ring + rotate_encryption_key.py + KEY_ROTATION.md) |
-| 11 | Per-user data export endpoint | 27701 | M | Code | ✅ 2026-07-31 |
-| 12 | Member anonymization workflow (generalize elections pattern) | 27701 | M–L | Code | ✅ 2026-07-31 |
-| 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code | ✅ 2026-07-31 (log-class records; documents/minutes deliberately manual) |
-| 14 | Consent tracking model + UI | 27701 | M | Code | ✅ 2026-07-31 |
-| 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI | ◐ 2026-07-31 — coverage ratchets landed (backend 46/44, frontend raised); mypy needs a typing campaign first (4,927 errors measured, see COMPLIANCE.md) |
-| 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc | ✅ 2026-07-31 (docs/policies/ — 5 policies + SoA skeleton with [DEPARTMENT:] placeholders) |
+| #   | Item                                                                                              | Standard(s)  | Effort | Type       | Status                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------- | ------------ | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Remove unused `pysaml2`/`python-ldap` deps (or implement SAML/LDAP)                               | 27001 A.8.8  | S      | Code       | ✅ 2026-07-31 (removed; docs corrected)                                                                                                                 |
+| 2   | `security.txt` endpoint + advisory lifecycle & breach-clock doc                                   | 29147/30111  | S      | Code + doc | ✅ 2026-07-31 (`/.well-known/security.txt`, config-driven)                                                                                              |
+| 3   | Dependabot config; make `npm audit` blocking; add gitleaks + Trivy + SBOM                         | 27001 A.8.8  | S      | CI         | ✅ 2026-07-31 (all parts — Trivy vuln sweep + Syft SBOM in supply-chain.yml)                                                                            |
+| 4   | Privacy-policy + ToS pages (org-configurable content)                                             | 27701        | S–M    | Code       | ✅ 2026-07-31                                                                                                                                           |
+| 5   | Audit-log archival job enforcing `HIPAA_AUDIT_RETENTION_DAYS`                                     | 27001, 15489 | M      | Code       | ✅ 2026-07-31 (export-and-purge with attested chain hand-off)                                                                                           |
+| 6   | Off-host audit-log shipping (JSONL/syslog/webhook)                                                | 27001        | M      | Code       | ✅ 2026-07-31 (HMAC-signed NDJSON webhook, watermarked)                                                                                                 |
+| 7   | Fix broken `docs/BACKUP.md` / `docs/COMPLIANCE.md` links by writing them; DR runbook with RTO/RPO | 22301        | M      | Doc        | ✅ 2026-07-31                                                                                                                                           |
+| 8   | Compose-integrated backup sidecar + automated restore verification                                | 22301        | M      | Code       | ✅ 2026-07-31 (nightly sidecar + throwaway-schema restore drills; audit archives now on a persistent volume)                                            |
+| 9   | Expand axe specs beyond Modal + a11y gate in CI                                                   | 40500/WCAG   | M      | CI + tests | ✅ 2026-07-31 (UX library + legal pages; keyboard audit still open)                                                                                     |
+| 10  | Encryption key versioning + rotation command                                                      | 27001        | M      | Code       | ✅ 2026-07-31 (legacy-key ring + rotate_encryption_key.py + KEY_ROTATION.md)                                                                            |
+| 11  | Per-user data export endpoint                                                                     | 27701        | M      | Code       | ✅ 2026-07-31                                                                                                                                           |
+| 12  | Member anonymization workflow (generalize elections pattern)                                      | 27701        | M–L    | Code       | ✅ 2026-07-31                                                                                                                                           |
+| 13  | Org-configurable retention schedules + enforcement job                                            | 27701, 15489 | L      | Code       | ✅ 2026-07-31 (log-class records; documents/minutes deliberately manual)                                                                                |
+| 14  | Consent tracking model + UI                                                                       | 27701        | M      | Code       | ✅ 2026-07-31                                                                                                                                           |
+| 15  | Backend mypy + coverage gates; enforce frontend coverage in CI                                    | 25010        | M      | CI         | ◐ 2026-07-31 — coverage ratchets landed (backend 46/44, frontend raised); mypy needs a typing campaign first (4,927 errors measured, see COMPLIANCE.md) |
+| 16  | Policy set / Statement of Applicability skeleton from SECURITY.md                                 | 27001        | M      | Doc        | ✅ 2026-07-31 (docs/policies/ — 5 policies + SoA skeleton with [DEPARTMENT:] placeholders)                                                              |
 
 Effort: S = under a day, M = days, L = a week-plus.
 
