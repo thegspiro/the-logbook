@@ -273,7 +273,9 @@ def render_escpos(
             if symbology == SYMBOLOGY_QR:
                 out += _qr(value, available_dots)
                 # A QR carries no human-readable line of its own.
-                out += _LF + _text_line(value, characters)
+                # Unlike the length-prefixed QR payload, this line is part of
+                # the printer command stream, so remove ESC/POS control bytes.
+                out += _LF + _text_line(_clean(value), characters)
             else:
                 out += _code128(value, available_dots)
                 out += _LF
