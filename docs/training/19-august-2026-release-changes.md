@@ -47,8 +47,14 @@ persistent notices remain; calendar year is not “last 365 days.” Mobile card
 and breadcrumb/action targets must remain at least 44px.
 
 > **[SCREENSHOT NEEDED — populated station board with one pending message, one persistent notice, and conditional cards identified in the caption.]**
->
-> **[SCREENSHOT NEEDED — Admin Hours Summary on Calendar Year with at least two configured categories and visibly different thresholds.]**
+
+![The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against](./images/19-22-admin-hours-summary-year.png)
+
+_The period really is a calendar year — Jan 1 to today, not a rolling 365
+days — which is what the date range beside the heading states. The
+per-category approval thresholds are not on this screen: auto-approve and
+maximum-session limits are set on the **Categories** tab, and what the
+summary ranks is hours logged, not the limits they were logged under._
 
 ## Storefront
 

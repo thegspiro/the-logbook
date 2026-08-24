@@ -1,5 +1,52 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (ninth) — a year of admin hours, and a breakdown that named nothing
+
+`19-22`, opened and checked. **481 of 507 filled.**
+
+**Nothing had ever been logged against the admin-hours categories.** Six
+categories were seeded; the entries were not, so the Summary tab reported 0hrs
+across all three cards and "No completed entries match this reporting period"
+under a heading promising a ranking. `seed_admin_hours_entries` logs twelve
+sessions across the six categories and six members, spread through the calendar
+year, and leaves the three most recent pending so the Needs review card and the
+Pending Review tab are not zero.
+
+Two things about how it does that, both forced by the product and worth
+knowing: entries are raised **by the members themselves**, because
+`POST /admin-hours/entries` credits the caller and an administrator-run loop
+would credit one account with the department's whole year; and they are
+approved afterwards through the review endpoint, because a manual entry
+**always** lands pending on purpose — its times are client-supplied, and
+auto-approval would let a member self-credit backdated time.
+
+**The first fixture pass looked fine and left every entry pending.** The step
+guarded on a total (`total >= len(ENTRIES)`), so the run after the one that
+created all twelve but failed the review call skipped straight past the
+approvals. It now matches per entry on the description and drives the approvals
+off the _current_ pending list rather than off what this run happened to
+create.
+
+**Then the capture showed the real defect: the category breakdown rendered six
+nameless bars.** "hrs · entries · 0%", six times, under correct summary cards.
+`AdminHoursSummary.by_category` was `list[dict]`, and the alias generator that
+gives this module its camelCase responses only rewrites _declared_ fields — so
+the totals arrived as `totalHours` while the rows beneath them arrived as
+`total_hours`, and every key the tab reads (`categoryName`, `totalHours`,
+`entryCount`, `totalMinutes`) was undefined. Typed now, as
+`AdminHoursCategoryTotal`, with a test that walks the exact payload the service
+builds and fails on any snake_case key surviving into a row.
+
+This is Pitfall #5 with a twist worth naming: the mismatch was **one level
+down**. The outer field was declared and aliased correctly, so every top-level
+number on the screen was right — which is precisely why nobody would report it.
+The page reads as "no data", not as broken.
+
+**One more marker/product mismatch:** the marker asks for the summary showing
+"visibly different thresholds". The summary shows hours ranked by category; the
+auto-approve and maximum-session limits are configured on the **Categories**
+tab and are not on this screen at all. Said so beside the image.
+
 ## Captured 2026-08-24 (eighth) — the close-out override, and a template that resolves for nothing
 
 `03-81`, opened and checked. **480 of 507 filled.**

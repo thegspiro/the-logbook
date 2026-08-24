@@ -172,6 +172,29 @@ class AdminHoursApprovalAction(BaseModel):
     rejection_reason: Optional[str] = None
 
 
+class AdminHoursCategoryTotal(UTCResponseBase):
+    """One category's share of a summary period.
+
+    Typed rather than left as a bare ``dict``. The alias generator that gives
+    this module its camelCase responses only rewrites *declared* fields, so an
+    untyped list passed its snake_case keys straight through: the summary's own
+    totals arrived as ``totalHours`` while the rows beneath them arrived as
+    ``total_hours``. The breakdown then rendered six nameless bars reading
+    "hrs · entries · 0%" under a heading promising a ranking, while the cards
+    above it were correct — the shape of a defect nobody reports as a bug,
+    because the page looks like it merely has no data.
+    """
+
+    model_config = _RESPONSE_CONFIG
+
+    category_id: str
+    category_name: str
+    category_color: Optional[str] = None
+    total_minutes: int
+    total_hours: float
+    entry_count: int
+
+
 class AdminHoursSummary(UTCResponseBase):
     """Summary of hours for reporting"""
 
@@ -183,7 +206,7 @@ class AdminHoursSummary(UTCResponseBase):
     approved_entries: int = 0
     pending_hours: float = 0
     pending_entries: int = 0
-    by_category: list[dict]
+    by_category: list[AdminHoursCategoryTotal]
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
 

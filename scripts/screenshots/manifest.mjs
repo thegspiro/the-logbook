@@ -1391,6 +1391,26 @@ export async function openLegalHistory(page) {
   await page.waitForTimeout(400);
 }
 
+/**
+ * The Admin Hours Summary tab, on its calendar-year preset.
+ *
+ * Both the tab and the reporting period are local component state with no URL
+ * form, so each has to be clicked. "This calendar year" specifically, because
+ * the guide's point is that it is a calendar year rather than a rolling 365
+ * days, and the default preset is All time.
+ */
+export async function openAdminHoursSummary(page) {
+  await clickByName(/^Summary$/)(page);
+  await page
+    .getByRole("combobox")
+    .first()
+    .selectOption("year", { timeout: 20_000 });
+  await page
+    .getByText(/Where the hours came from/i)
+    .waitFor({ state: "visible", timeout: 20_000 });
+  await page.waitForTimeout(600);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -11151,6 +11171,16 @@ export const SHOTS = [
     viewport: CLOSEOUT_VIEWPORT,
     selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
+  },
+  {
+    id: "19-22-admin-hours-summary-year",
+    doc: "19-august-2026-release-changes.md",
+    line: 51,
+    anchor: "Admin Hours Summary on Calendar Year with at least two",
+    alt: "The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against",
+    route: "/admin-hours/manage",
+    prepare: openAdminHoursSummary,
+    fullPage: true,
   },
   {
     id: "03-43-time-off-request-form",

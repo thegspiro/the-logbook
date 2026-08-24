@@ -2711,6 +2711,157 @@ class Seeder:
 
     # -- scheduling: logged calls ------------------------------------
 
+    #: One line per entry: category name, hours, and what the member was doing.
+    #: Spread across every seeded category so the Summary's "where the hours
+    #: came from" ranking has something to rank, and sized so Administrative
+    #: Work — the one category that requires approval — carries the longest
+    #: sessions.
+    ADMIN_HOURS_ENTRIES = [
+        (
+            "Community Outreach",
+            3.0,
+            "Open house at Station 1 — tours and car seat checks.",
+        ),
+        (
+            "Community Outreach",
+            2.5,
+            "Fire prevention week visit to Oakville Elementary.",
+        ),
+        ("Fundraising", 4.0, "Pancake breakfast — setup, service and clean-up."),
+        ("Fundraising", 2.0, "Boot drive at the Route 7 intersection."),
+        (
+            "Administrative Work",
+            5.5,
+            "Quarterly NFIRS reconciliation and report filing.",
+        ),
+        (
+            "Administrative Work",
+            3.0,
+            "Grant application narrative for the SCBA replacement.",
+        ),
+        ("Station Maintenance", 4.0, "Bay floor resealing and apparatus bay lighting."),
+        ("Station Maintenance", 2.0, "Generator load test and fuel top-off."),
+        ("Meetings & Governance", 2.0, "Monthly business meeting."),
+        ("Meetings & Governance", 1.5, "Officers' meeting — staffing and budget."),
+        ("Volunteer Hours", 6.0, "County parade detail with Engine 1 and Ladder 4."),
+        ("Volunteer Hours", 3.5, "Standby coverage for the Founders Day 5K."),
+    ]
+
+    #: How many of the generated entries stay pending. The Summary card reports
+    #: approved and needs-review separately, so a fixture with none of the
+    #: latter shows one of its three numbers permanently at zero.
+    ADMIN_HOURS_PENDING = 3
+
+    def seed_admin_hours_entries(self) -> list[dict]:
+        """A calendar year of logged administrative hours, mostly approved.
+
+        Every Admin Hours screen reads the same collection, and the demo
+        database had none at all: the Summary tab reported 0hrs against three
+        cards and "No completed entries match this reporting period" under a
+        heading promising a ranking. The categories were seeded; nothing had
+        ever been logged against them.
+
+        Entries are raised by the members themselves rather than by the
+        administrator, because ``POST /admin-hours/entries`` credits the
+        caller — an administrator-created set would credit one account with the
+        department's whole year. They are then reviewed by the administrator,
+        which is also the only way to reach an approved state: a manual entry
+        always lands pending on purpose, since its times are client-supplied
+        and auto-approval would let a member self-credit backdated time.
+        """
+        categories = {
+            str(pick(c, "name")): str(pick(c, "id"))
+            for c in items(self.api.get("/admin-hours/categories"), "categories")
+        }
+        if not categories:
+            self.blocked.append("admin hours: no categories to log against")
+            return []
+        members = [
+            m
+            for m in items(self.api.get("/users?limit=200"), "users")
+            if pick(m, "username") not in (DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME)
+            and pick(m, "id")
+        ]
+        if not members:
+            self.blocked.append("admin hours: no members to log entries for")
+            return []
+
+        # Matched on the description, which is unique per line and is what the
+        # entry carries back. Guarding on a total instead let a run that
+        # created every entry but failed the review pass skip straight past the
+        # approvals on the next run, leaving twelve pending entries and an
+        # Approved card reading zero -- which is exactly what happened.
+        logged = {
+            str(pick(e, "description") or "")
+            for e in items(self.api.get("/admin-hours/entries?limit=200"), "entries")
+        }
+
+        created: list[dict] = []
+        for index, (name, hours, description) in enumerate(self.ADMIN_HOURS_ENTRIES):
+            category_id = categories.get(name)
+            if not category_id or description in logged:
+                continue
+            member = members[index % len(members)]
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), str(pick(member, "username"))
+            )
+            # Walked backwards through the year in three-week steps, all inside
+            # the current calendar year so the Summary's "This calendar year"
+            # preset — the one the guide's marker names — has every entry in
+            # range. Started mid-morning, which keeps a 6-hour session inside
+            # the same day in the organization's timezone.
+            day = TODAY - timedelta(days=21 * index + 4)
+            if day.year != TODAY.year:
+                day = date(TODAY.year, 1, 1) + timedelta(days=index)
+            start = datetime.combine(day, time(hour=9), tzinfo=ORG_TIMEZONE)
+            finish = start + timedelta(hours=hours)
+            try:
+                entry = session.post(
+                    "/admin-hours/entries",
+                    {
+                        "category_id": category_id,
+                        "clock_in_at": iso(start.astimezone(timezone.utc)),
+                        "clock_out_at": iso(finish.astimezone(timezone.utc)),
+                        "description": description,
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"admin hours: entry refused ({exc})")
+                continue
+            created.append(entry)
+
+        # Read back rather than reusing `created`, so the approvals happen on a
+        # re-run against entries an earlier run left pending. Newest first, so
+        # the few that stay pending are the recent ones -- which is what a real
+        # review queue looks like.
+        pending = sorted(
+            (
+                e
+                for e in items(
+                    self.api.get("/admin-hours/entries?limit=200"), "entries"
+                )
+                if str(pick(e, "status")) == "pending"
+            ),
+            key=lambda e: str(pick(e, "clock_in_at", "clockInAt") or ""),
+            reverse=True,
+        )
+        for entry in pending[self.ADMIN_HOURS_PENDING :]:
+            entry_id = pick(entry, "id")
+            if not entry_id:
+                continue
+            try:
+                self.api.post(
+                    f"/admin-hours/entries/{entry_id}/review",
+                    # `action`, not `status`: the review schema takes a verb
+                    # ("approve"/"reject"), unlike the scheduling reviews next
+                    # to it in this file, which take the resulting state.
+                    {"action": "approve"},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"admin hours: review refused ({exc})")
+                break
+        return created
+
     def seed_shift_calls(self) -> list[dict]:
         """Runs logged against past shifts.
 
@@ -12715,6 +12866,7 @@ class Seeder:
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
         self.step("shift calls", self.seed_shift_calls)
+        self.step("admin hours entries", self.seed_admin_hours_entries)
         self.step("scheduling requests", self.seed_scheduling_requests)
         training = self.step("training", self.seed_training) or {}
         self.step("course cohort", lambda: self.seed_course_cohort(members))
