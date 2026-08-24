@@ -184,7 +184,11 @@ const MedicalSuppliesPage: React.FC = () => {
             </button>
             {canManage && (
               <>
-                <Link to="/medical-supplies/categories" className="btn-icon" aria-label="Manage medical categories">
+                <Link
+                  to="/medical-supplies/categories"
+                  className="btn-icon"
+                  aria-label="Manage medical supply categories"
+                >
                   <Tag className="h-4 w-4" />
                 </Link>
                 <button

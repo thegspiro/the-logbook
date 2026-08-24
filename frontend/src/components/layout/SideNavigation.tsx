@@ -423,7 +423,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           ...(isModuleOn('medical_supplies')
             ? [
                 {
-                  label: 'Medical Categories',
+                  label: 'Medical Supply Categories',
                   path: '/medical-supplies/categories',
                   icon: Stethoscope,
                   anyPermission: ['inventory.manage_medical', 'inventory.manage'],
