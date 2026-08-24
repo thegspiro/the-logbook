@@ -258,7 +258,7 @@ describe('RequestsTab', () => {
     const user = userEvent.setup();
     renderWithRouter(<RequestsTab />);
 
-    expect((await screen.findByText(/Swap Requests/)).closest('button')).toHaveTextContent('(2)');
+    expect(await screen.findByRole('tab', { name: /Swap Requests/ })).toHaveTextContent('(2)');
     await user.click(await screen.findByRole('button', { name: /load more swap requests/i }));
     await waitFor(() =>
       expect(mockGetSwapRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 1, limit: 20 })
@@ -285,9 +285,7 @@ describe('RequestsTab', () => {
 
     await user.click(screen.getByRole('tab', { name: /time off/i }));
 
-    await waitFor(() => {
-      expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(2);
-      expect(mockGetTimeOffRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 0, limit: 20 });
-    });
+    await waitFor(() => expect(mockGetTimeOffRequests).toHaveBeenCalledTimes(2));
+    expect(mockGetTimeOffRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 0, limit: 20 });
   });
 });
