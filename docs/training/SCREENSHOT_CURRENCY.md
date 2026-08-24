@@ -1,5 +1,51 @@
 # Screenshot currency
 
+## Captured 2026-08-24 (fifteenth) — what applying a ballot template changes without saying so
+
+`19-25`/`19-26`, opened and checked. **490 filled, 11 remaining.** The picker
+half of the marker was already captured — as `14-22`, in the elections guide —
+so guide 19 links to it rather than photographing the same popover twice.
+
+**The rest of the marker was the part worth doing.** Applying a saved ballot
+writes the template's **voting method** and **write-in setting** over the
+election, and neither the two-step confirmation nor the picker row mentions it.
+The pair shows one draft before and after: one item becomes four (warned about),
+and Simple Majority becomes Ranked Choice (not warned about).
+
+**The first version of this pair was a demo artifact, and the check that caught
+it was reading the create form.** I had seeded the bylaw draft with
+`voting_method: "supermajority"` so the change would be visible. The create
+form's control is a single `<select>` whose options pair a method with a victory
+condition, and its "Supermajority Required (2/3)" is
+`simple_majority|supermajority` — **no option sets the method to
+`supermajority`**. The seed put the department in a state the product cannot
+produce, and the screenshot would have shown a value no reader could ever see.
+Re-seeded as the form writes it, with the _template_ carrying ranked choice
+instead — an officer ballot plausibly run that way, and the difference the pair
+needs.
+
+**The stronger finding is what did not change.** The apply overwrites the method
+and leaves the victory condition alone, so the draft is left asking for 67%
+under ranked choice; `positions` still names the bylaw article over four officer
+seats. And there is no editor for any of it: **Edit Dates** is dates, **Clone
+Election** is title/dates/candidates, so applying a template is the only control
+in the app that changes an election's voting method after creation. Both guides
+now say so, and guide 14's edge-case table carries the supermajority row.
+
+**Where the settings _can_ be read: Preview Ballot.** Its Election Details strip
+carries method, victory condition with percentage, Anonymous, write-ins and
+quorum together — the only screen that does. An earlier draft of the prose said
+these were visible nowhere on a draft election; reading `BallotPreviewModal`
+rather than the details card corrected it before it was committed.
+
+**`19-26` mutates the seed, and three shots now repair it.** It leaves the draft
+holding the template's four items, which breaks `14-21` and `14-22` — both match
+on "Ballot Items (1)". `openBylawDraft` resets the election before opening it,
+keyed on the item count rather than the method, and the seeder repairs it too
+for a database somebody else left mutated. The manifest's own guard only
+enforces that a mutating shot is last **within its guide**; the two shots it
+would have broken are in another one.
+
 ## Captured 2026-08-24 (fourteenth) — the outreach-form section, and the three forms it does not list
 
 `19-24`, opened and checked. **488 filled, 12 remaining.** Four existing captures in

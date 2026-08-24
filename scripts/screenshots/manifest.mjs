@@ -599,6 +599,92 @@ export function openStaffedShift(extraMatch) {
  * The seeder deliberately leaves the department on `detailed`, so a run that
  * captures nothing from this group leaves the demo database as it found it.
  */
+/**
+ * The seeded bylaw draft, put back the way the seeder leaves it.
+ *
+ * Applying a saved ballot template replaces the whole ballot *and* writes the
+ * template's own voting method over the election's — which is the subject of
+ * `19-26`, and which leaves this draft holding four officer seats at simple
+ * majority once that shot has run. Three shots read it in its seeded state
+ * (`14-21` and `14-22` match on "Ballot Items (1)"), so each restores what it
+ * needs rather than trusting manifest order or a fresh database. The seeder
+ * repairs it too, for the run that starts from a database somebody else left
+ * mutated.
+ *
+ * The draft is `simple_majority` with a two-thirds victory condition -- the
+ * create form's "Supermajority Required (2/3)", which is one control setting
+ * both. The saved template is ranked choice, so applying it visibly changes the
+ * method. A template carrying the election's own method would change nothing
+ * visible, and the silent overwrite the pair is about would have no picture.
+ */
+export async function resetBylawDraft(page) {
+  await page.evaluate(async () => {
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    const list = await (
+      await fetch("/api/v1/elections?limit=50", { credentials: "include" })
+    ).json();
+    const rows = Array.isArray(list) ? list : (list.elections ?? []);
+    const bylaw = rows.find((row) => row.title === "Bylaw Amendment Vote");
+    if (!bylaw) return;
+    // The list carries neither the voting method nor the ballot items, so
+    // whether a reset is needed can only be read from the detail.
+    const current = await (
+      await fetch(`/api/v1/elections/${bylaw.id}`, { credentials: "include" })
+    ).json();
+    // Keyed on the ballot, not the method: the item count is what the shots
+    // match on, and a reset that leaves four items behind is worse than none.
+    if (
+      (current.ballot_items ?? []).length === 1 &&
+      current.voting_method === "simple_majority"
+    ) {
+      return;
+    }
+    await fetch(`/api/v1/elections/${bylaw.id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      },
+      body: JSON.stringify({
+        ballot_items: [
+          {
+            id: "item-1",
+            type: "general_vote",
+            title: "Article VII Amendment",
+            description: "Vote for Article VII Amendment.",
+            position: "Article VII Amendment",
+            eligible_voter_types: ["all"],
+            vote_type: "approval",
+          },
+        ],
+        voting_method: "simple_majority",
+        victory_condition: "supermajority",
+        victory_percentage: 67,
+        allow_write_ins: true,
+      }),
+    });
+  });
+}
+
+/**
+ * Open the seeded bylaw draft's detail page, in its seeded state.
+ *
+ * Matched on title rather than "the first draft": which election that is
+ * depends on seed order, and the two shots either side of an applied template
+ * have to be looking at the same record.
+ */
+export async function openBylawDraft(page) {
+  await resetBylawDraft(page);
+  await openFirstFromApi(
+    "/elections?limit=50",
+    (id) => `/elections/${id}`,
+    "elections",
+    (election) => (election.title ?? "") === "Bylaw Amendment Vote",
+  )(page);
+}
+
 export function setCallTracking(mode) {
   return async (page) => {
     await page.evaluate(async (wanted) => {
@@ -8401,13 +8487,10 @@ export const SHOTS = [
     route: "/elections",
     prepare: async (page) => {
       // A draft election, because Save as Template is hidden on a closed one
-      // and the guide's steps say to build the ballot on a draft.
-      await openFirstFromApi(
-        "/elections?limit=50",
-        (id) => `/elections/${id}`,
-        "elections",
-        (election) => (election.status ?? "") === "draft",
-      )(page);
+      // and the guide's steps say to build the ballot on a draft. Reset first:
+      // the selector below reads "Ballot Items (1)", and `19-26` leaves this
+      // draft holding the four items of an applied template.
+      await openBylawDraft(page);
       const save = page.getByRole("button", { name: /^Save as Template$/ });
       await save.waitFor({ timeout: 20_000 });
       await save.click();
@@ -8426,12 +8509,7 @@ export const SHOTS = [
     alt: 'The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates',
     route: "/elections",
     prepare: async (page) => {
-      await openFirstFromApi(
-        "/elections?limit=50",
-        (id) => `/elections/${id}`,
-        "elections",
-        (election) => (election.status ?? "") === "draft",
-      )(page);
+      await openBylawDraft(page);
       const use = page.getByRole("button", { name: /^Use Template$/ });
       await use.waitFor({ timeout: 20_000 });
       await use.click();
@@ -11341,6 +11419,73 @@ export const SHOTS = [
     route: "/events/admin?tab=settings",
     prepare: clickByName(/^Public Form/),
     fullPage: true,
+  },
+  {
+    // The first half of the pair the marker asks for. Framed on the whole page
+    // rather than the ballot alone, because the two facts that change sit in
+    // different places: the item count inside the builder, and the voting
+    // method in the details card above it. "Simple Majority" here is the
+    // create form's "Supermajority Required (2/3)" -- one control that sets
+    // the method and the victory condition, and only the method is on display.
+    id: "19-25-ballot-template-settings-before",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "Ballot Builder → Your saved ballots, showing the visible template",
+    alt: "The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      const tab = page.locator("#tab-ballot");
+      await tab.waitFor({ timeout: 20_000 });
+      await tab.click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    // Applied through the picker rather than the API: the point of the pair is
+    // that nothing in the confirmation says the voting method is about to
+    // change, so the change has to arrive by the route a secretary takes.
+    //
+    // Must stay the last shot of guide 19 -- it leaves the draft holding the
+    // template's four officer seats under ranked choice. `openBylawDraft` puts
+    // it back for the shots that need it seeded, including the one above.
+    id: "19-26-ballot-template-settings-after",
+    doc: "19-august-2026-release-changes.md",
+    line: 33,
+    anchor: "__paired-with-19-25__",
+    alt: "The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice",
+    route: "/elections",
+    prepare: async (page) => {
+      await openBylawDraft(page);
+      const tab = page.locator("#tab-ballot");
+      await tab.waitFor({ timeout: 20_000 });
+      await tab.click({ timeout: 10_000 });
+      const use = page.getByRole("button", { name: /^Use Template$/ });
+      await use.waitFor({ timeout: 20_000 });
+      await use.click();
+      const popover = page.locator(
+        "div:has(> h4:text-is('Select a Template'))",
+      );
+      const saved = popover
+        .getByRole("button", { name: /Annual officer election/ })
+        .first();
+      await saved.waitFor({ timeout: 10_000 });
+      await saved.click();
+      await popover.getByRole("button", { name: /^Replace$/ }).click();
+      // Two toasts fire on a successful apply ("Ballot items saved", then
+      // "Applied ..."), and a toast cannot be removed from the DOM. Waited out
+      // instead: react-hot-toast's default is four seconds.
+      await page
+        .getByText(/^Applied "Annual officer election"$/)
+        .waitFor({ timeout: 20_000 });
+      await page
+        .getByText(/^Applied "Annual officer election"$/)
+        .waitFor({ state: "detached", timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+    mutatesSeedData: true,
   },
   {
     // 375 wide, not the 390 the rest of the mobile shots use: the marker names

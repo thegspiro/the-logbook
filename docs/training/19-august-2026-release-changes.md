@@ -30,8 +30,47 @@ confirmation; invalid/duplicate item IDs and voting methods are rejected;
 count quorum can exceed 100 but percentage quorum cannot. Manual paper ballots
 must be entered as an attested count and cannot exceed the eligible roster.
 
-> **[SCREENSHOT NEEDED — Ballot Builder → Your saved ballots, showing the visible template name, item count, replacement warning, and action buttons; seed one organization-owned template and no candidate/vote data. Follow with a before/apply/after election-settings capture because preserved settings are applied silently and are not summarized in the picker.]**
->
+The picker itself — the saved name, its item count, the "replaces current
+ballot" note and the two-step Replace confirmation — is pictured in
+[Elections → Applying one](./14-elections.md#applying-one), and that page is the
+one to follow for the steps.
+
+What the picker does not say is that a template carries the **voting method and
+write-in setting** of the election it was saved from, and applying one writes
+both over the election it lands on. Below is the same draft before and after
+applying "Annual officer election", a template saved from a ranked-choice
+officer ballot. One item becomes four, which the confirmation warned about — and
+the voting method changes from Simple Majority to Ranked Choice, which nothing
+warned about.
+
+![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority](./images/19-25-ballot-template-settings-before.png)
+
+![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice](./images/19-26-ballot-template-settings-after.png)
+
+Read the two cards together and the real hazard is the part that _did not_
+change. This draft was created as **Supermajority Required (2/3)** — one option
+in the create form that sets the voting method _and_ the victory condition. The
+apply overwrote the method and left the condition alone, so a bylaw amendment
+that must carry two-thirds is now to be decided by ranked choice, and its 67%
+threshold is still recorded underneath. **Positions** likewise still reads
+"Article VII Amendment" over a ballot of four officer seats, and write-ins —
+which the officer template had off — went off with the method.
+
+Only the method is on the details card. To see the rest, click **Preview
+Ballot** — the "Election Details" strip along the bottom of the preview carries
+the voting method, the victory condition with its percentage, Anonymous,
+Write-ins allowed and the quorum, which is the one place all of them appear
+together. **Check it after applying a template.**
+
+Then be deliberate about which election you apply one to, because there is no
+way back through the interface: **Edit Dates** edits dates, and **Clone
+Election** takes a title, dates and whether to carry the candidates. Neither
+touches the voting method — applying a template is in fact the only control in
+the app that changes it after an election exists. Treat a saved ballot as a
+starting point for a _new_ election rather than a change to a configured one,
+and if the method it brought is wrong for the vote, re-create the election with
+the pairing you need.
+
 > **[SCREENSHOT NEEDED — closed election results showing manual paper-ballot count and its roster-bound validation.]**
 
 ## Dashboard and admin hours

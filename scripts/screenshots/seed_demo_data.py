@@ -10236,6 +10236,8 @@ class Seeder:
                     break
         return [minutes]
 
+    BYLAW_ELECTION_TITLE = "Bylaw Amendment Vote"
+
     def seed_elections(self, minutes: list[dict] | None = None) -> list[dict]:
         elections = items(self.api.get("/elections"), "elections")
         titles = {e.get("title") for e in elections}
@@ -10247,7 +10249,7 @@ class Seeder:
                 start,
             ),
             (
-                "Bylaw Amendment Vote",
+                self.BYLAW_ELECTION_TITLE,
                 ["Article VII Amendment"],
                 start + timedelta(days=30),
             ),
@@ -10255,6 +10257,17 @@ class Seeder:
         for title, positions, opens in blueprint:
             if title in titles:
                 continue
+            # A bylaw amendment is the one vote a department cannot carry on a
+            # simple majority, so the draft that pictures one is configured the
+            # way its subject requires: two-thirds of those voting.
+            #
+            # Method stays `simple_majority`: the create form offers method and
+            # victory condition as one control, and its "Supermajority Required
+            # (2/3)" option is `simple_majority|supermajority`. There is no
+            # option that sets the method itself to `supermajority`, so seeding
+            # one would put the demo department in a state the product cannot
+            # produce.
+            supermajority = title == self.BYLAW_ELECTION_TITLE
             elections.append(
                 self.api.post(
                     "/elections",
@@ -10291,12 +10304,16 @@ class Seeder:
                         "allow_write_ins": True,
                         "results_visible_immediately": False,
                         "voting_method": "simple_majority",
-                        "victory_condition": "most_votes",
+                        "victory_condition": (
+                            "supermajority" if supermajority else "most_votes"
+                        ),
+                        **({"victory_percentage": 67} if supermajority else {}),
                         "quorum_type": "percentage",
                         "quorum_value": 50,
                     },
                 )
             )
+        self._restore_bylaw_draft(elections)
         self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
         self._seed_closed_election(elections, minutes or [])
@@ -10319,17 +10336,95 @@ class Seeder:
         ("Secretary", "all"),
     )
 
+    #: The bylaw draft as it is meant to stand: one issue, decided by two
+    #: thirds. The item carries no method of its own, so the builder reports it
+    #: as "Election default" and it follows whatever the election is set to —
+    #: which is the whole point of the pair that pictures this.
+    BYLAW_DRAFT_ITEMS = [
+        {
+            "id": "item-1",
+            "type": "general_vote",
+            "title": "Article VII Amendment",
+            "description": "Vote for Article VII Amendment.",
+            "position": "Article VII Amendment",
+            "eligible_voter_types": ["all"],
+            "vote_type": "approval",
+        }
+    ]
+
+    def _restore_bylaw_draft(self, elections: list[dict]) -> None:
+        """Put the bylaw draft back after a capture applied a template over it.
+
+        `19-25`/`19-26` picture what applying a saved ballot does to an
+        election's settings, which means one of them leaves this draft holding
+        the template's four officer seats under ranked choice. Re-seeding is how
+        a demo database is repaired, and the create loop above skips a title
+        that already exists — so without this the repair never happens and the
+        two shots that read "Ballot Items (1)" break on the next run.
+
+        Keyed on the ballot rather than the method: the method is what the
+        applied template changes, but the item count is what the shots match on,
+        and a repair that leaves four items behind is worse than none.
+        """
+        summary = next(
+            (e for e in elections if pick(e, "title") == self.BYLAW_ELECTION_TITLE),
+            None,
+        )
+        if not summary or pick(summary, "status") != "draft":
+            return
+        election_id = pick(summary, "id")
+        # The list response carries neither the voting method nor the ballot
+        # items, so whether a repair is needed can only be read from the
+        # detail. A create above returns the full record, but a pre-existing
+        # row arrives as a summary — and it is the pre-existing row this is for.
+        bylaw = self.api.get(f"/elections/{election_id}")
+        intact = (
+            len(bylaw.get("ballot_items") or []) == 1
+            and pick(bylaw, "voting_method") == "simple_majority"
+        )
+        if intact:
+            return
+        try:
+            self.api.patch(
+                f"/elections/{election_id}",
+                {
+                    "ballot_items": self.BYLAW_DRAFT_ITEMS,
+                    "voting_method": "simple_majority",
+                    "victory_condition": "supermajority",
+                    "victory_percentage": 67,
+                    "allow_write_ins": True,
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"bylaw draft restore: {exc}")
+
     def _seed_saved_ballot_template(self) -> None:
         """A reusable ballot snapshot, so the template picker is not empty.
 
         The picker's "Your saved ballots" section only renders when the
         organization has at least one — without this the guide's two template
         screenshots have nothing to photograph but the built-in item grid.
+
+        Saved under **ranked choice**, which is what an officer election that
+        elects one of several candidates is often run under, and which the
+        create form offers as a single option. It is also what gives `19-25` and
+        `19-26` something to show: a template carries the voting method of the
+        election it was saved from and writes it over the election it is applied
+        to, silently. A template saved under the same method as every seeded
+        election would demonstrate nothing.
         """
         existing = self.api.get("/elections/templates/saved-ballots")
         rows = existing if isinstance(existing, list) else items(existing, "templates")
-        if any(r.get("name") == self.SAVED_BALLOT_TEMPLATE_NAME for r in rows):
-            return
+        current = next(
+            (r for r in rows if r.get("name") == self.SAVED_BALLOT_TEMPLATE_NAME),
+            None,
+        )
+        if current:
+            if pick(current, "voting_method") == "ranked_choice":
+                return
+            # There is no update endpoint, and the name is unique per
+            # organization, so correcting a template means replacing it.
+            self.api.delete(f"/elections/templates/saved-ballots/{pick(current, 'id')}")
         try:
             self.api.post(
                 "/elections/templates/saved-ballots",
@@ -10348,12 +10443,12 @@ class Seeder:
                             "position": position,
                             "eligible_voter_types": [eligibility],
                             "vote_type": "candidate_selection",
-                            "voting_method": "simple_majority",
                         }
                         for index, (position, eligibility) in enumerate(
                             self.SAVED_BALLOT_TEMPLATE_ITEMS
                         )
                     ],
+                    "voting_method": "ranked_choice",
                 },
             )
         except ApiError as exc:
