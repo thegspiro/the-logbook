@@ -21,7 +21,7 @@ feature. The rotation cannot outrun its own review queue.
 | PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815) |
 | Branch      | `claude/security-review-mp`                                 |
 | Feature     | 08 Membership pipeline                                      |
-| CI          | fresh push after fixes, awaiting run                        |
+| CI          | green (16/16 checks) on current head 6b7c2074               |
 | Threads     | 5 Codex threads, all fixed/flagged, replied, and resolved   |
 | Last tended | 2026-08-25 — 5 fixed, 1 flagged, 1 more found+fixed; pushed |
 
