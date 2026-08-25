@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Photo-use consent is readable in one place, by the people who publish (2026-08-25)
+
+Every member can allow or refuse the use of their photo from their own
+settings, and the department has been collecting that answer for months. It
+was only ever readable one member at a time, from that member's profile —
+which is not a check anyone performs while choosing images for a newsletter,
+so in practice the answer was collected and never consulted.
+
+**Added**
+
+- **Photo Use Consent** (`/communications/photo-use-consent`, under Forms &
+  Comms) lists every member's answer in one place, with counts, a status
+  filter and a search. Members who **declined** and members who **never
+  answered** are counted separately: both mean "do not publish", but only one
+  of them describes somebody who can still be asked, so the second column
+  doubles as the follow-up list. Inactive members are hidden behind a toggle,
+  because a retired member's photo can still be in the archive.
+
+- **`users.view_consents`**, a permission that means only "read members'
+  privacy answers". It is seeded to the Communications Officer / PIO, the
+  Historian and Public Outreach positions, and backfilled onto existing
+  departments by `20260825_1900_c4a91b7e2f08`. The Historian and Public
+  Outreach share nothing with each other but broad grants like `users.view`,
+  which most officer positions hold — so letting them in on an existing
+  permission would have opened the roster to most of the department.
+
+The page **shows** consent; it does not enforce it. Nothing in the app
+publishes member photos on its own, so whoever publishes still has to look
+first. Anything built later that publishes photos from inside the app must
+check the consent itself.
+
 ### A membership applicant's file could reach a signer who could not otherwise view it (2026-08-25)
 
 **Fixed**
