@@ -37,6 +37,11 @@ router = APIRouter(
     tags=["public-salesforce-webhook"],
 )
 
+# A validly-signed request still comes from an external system; cap the
+# batch so a single request (rate-limited at 30/min, not per-record) can't
+# drive an unbounded number of DB round-trips per record.
+MAX_RECORDS_PER_WEBHOOK = 500
+
 
 async def _rate_limit_webhook(request: Request) -> None:
     """Rate limit inbound webhooks: 30/minute per IP, 5-minute lockout."""
@@ -146,6 +151,12 @@ async def salesforce_inbound_webhook(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Payload must include 'sobject' and 'records'",
+        )
+
+    if len(records) > MAX_RECORDS_PER_WEBHOOK:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Maximum {MAX_RECORDS_PER_WEBHOOK} records per webhook request",
         )
 
     # Build sync service

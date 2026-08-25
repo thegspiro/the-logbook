@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Salesforce inbound webhook now caps how many records one request can carry (2026-08-25)
+
+**Fixed**
+
+- A validly-signed Salesforce webhook request had no limit on the number of
+  `records` it could carry, and each record costs 1-2 DB queries. The
+  endpoint is rate-limited per-request (30/min), not per-record, so a single
+  oversized request — from anyone holding a valid or leaked webhook secret —
+  could drive an effectively unbounded amount of DB work inside that budget.
+  Requests over 500 records now get a 422 before any sync work runs.
+
 ### Rank validation now matches its own permission gate, and a first-load race no longer 500s (2026-08-25)
 
 **Fixed**

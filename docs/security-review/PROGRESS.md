@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                      |
-| ----------- | ------------------------------------------ |
-| PR          | none                                       |
-| Branch      | `claude/security-review-pub` (in progress) |
-| Feature     | 03 Public surface & webhooks               |
-| CI          | n/a — not yet opened                       |
-| Threads     | n/a                                        |
-| Last tended | n/a                                        |
+| Field       | Value                                    |
+| ----------- | ---------------------------------------- |
+| PR          | none (opening now)                       |
+| Branch      | `claude/security-review-pub`             |
+| Feature     | 03 Public surface & webhooks             |
+| CI          | n/a — not yet opened                     |
+| Threads     | n/a                                      |
+| Last tended | 2026-08-25 — review complete, opening PR |
 
 ---
 
@@ -54,7 +54,7 @@ data-carrying modules, then the supporting infrastructure.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | 🔄       |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳ #TBD  |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
@@ -151,4 +151,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   now rolls back and returns the already-seeded set. See
   `PERM-02-permissions-roles.md` for the full write-up. Next: 03 public
   surface & webhooks.
-- **03 Public surface & webhooks 🔄** — started 2026-08-25.
+- **03 Public surface & webhooks ⏳** — 6 of 12 files already carried thorough
+  prior coverage (`public-portal.md`, `integrations.md`, `forms.md`,
+  `storefront.md`); spot-checked and confirmed unchanged. `display.py` grew
+  3x (119→401 L, the new guest QR check-in feature) since the last audit —
+  re-read in full, verified tenant-safe and enumeration-resistant. Five files
+  (`finance_approvals.py`, `legal.py`, `responses.py`, `salesforce_webhook.py`,
+  `security_txt.py`) had no prior audit at all — read in full. **PUB-1
+  (LOW)** — the Salesforce inbound webhook had no cap on payload record
+  count; a validly-signed but oversized request could drive unbounded DB
+  work inside the per-request rate limit. Fixed with a 500-record cap.
+  **PUB-2 (NIT)** — documented two invariants that were already correct but
+  unexplained (`legal.py`'s single-org guard, the token-approval path's
+  intentional lack of a self-approval check) so neither gets "simplified"
+  into a regression later. **PUB-3 (INFO)** — recorded that the finance
+  approval tables are `create_all`-only by design, matching the documented
+  pattern elsewhere. See `PUB-03-public-surface-webhooks.md` for the full
+  write-up. Next: 04 storefront & payments.

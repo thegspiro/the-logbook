@@ -711,7 +711,14 @@ class FinanceService:
     async def approve_by_token(
         self, token: str, notes: Optional[str] = None
     ) -> ApprovalStepRecord:
-        """Approve a step via email token (for external approvers)"""
+        """Approve a step via email token (for external approvers).
+
+        Deliberately does not call assert_different_person() the way
+        approve_step() does: the token path's approver is an external party
+        named on the chain step (approver_type == "email"), with no Logbook
+        account/id to compare against record.acted_by. There is no requester
+        identity to self-approve as here.
+        """
         result = await self.db.execute(
             select(ApprovalStepRecord)
             .where(ApprovalStepRecord.approval_token == token)

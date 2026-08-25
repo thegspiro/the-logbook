@@ -72,6 +72,12 @@ async def get_legal_text(
     privacy_policy = None
     terms_of_service = None
     last_updated = None
+    # This endpoint has no org context (anonymous caller, no api key, no
+    # subdomain routing) -- `limit(2)` + `len(orgs) == 1` is the only thing
+    # standing between "serve the single deployment's text" and "guess which
+    # org's text to leak" on a multi-org deployment. Do not replace this with
+    # .first(): that would serve an arbitrary organization's legal text to
+    # every caller once a second org exists.
     if len(orgs) == 1:
         org = orgs[0]
         organization_name = org.name
