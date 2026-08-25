@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1806](https://github.com/thegspiro/the-logbook/pull/1806) |
-| Branch      | `claude/security-review-pub`                                |
-| Feature     | 03 Public surface & webhooks                                |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — opened                                         |
+| Field       | Value                                                                       |
+| ----------- | --------------------------------------------------------------------------- |
+| PR          | [#1806](https://github.com/thegspiro/the-logbook/pull/1806)                 |
+| Branch      | `claude/security-review-pub`                                                |
+| Feature     | 03 Public surface & webhooks                                                |
+| CI          | just opened; not yet checked                                                |
+| Threads     | 2 resolved (Codex P2: replay-fingerprint ordering; token self-approval gap) |
+| Last tended | 2026-08-25 — fixed 2 Codex-caught issues, replied, resolved                 |
 
 ---
 
