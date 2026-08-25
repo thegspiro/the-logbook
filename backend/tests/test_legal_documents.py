@@ -97,7 +97,35 @@ class TestWriteSettings:
             body="New notice.",
             effective_date=None,
         )
-        assert "privacy_policy_effective_date" not in org.settings["legal"]
+        # The key stays present, set to None, rather than being popped
+        # (Codex round-2 on #1826 / DOC-19): a popped key is indistinguishable
+        # from "never published under the per-type scheme" and would let
+        # effective_date_for's legacy fallback resurrect a stale date.
+        assert org.settings["legal"]["privacy_policy_effective_date"] is None
+
+    def test_publishing_without_a_date_does_not_resurrect_the_legacy_date(self):
+        # DOC-19 (Codex round-2 on #1826): an org still carrying the
+        # pre-migration shared "last_updated" key must not have it resurface
+        # on a *new* publish that explicitly leaves the date blank.
+        org = Organization(name="Falls Church VFD", slug="fcvfd")
+        org.settings = {
+            "legal": {
+                "privacy_policy": "Old notice.",
+                "last_updated": "Jan 1, 2026",
+            }
+        }
+        self._service()._write_settings(
+            org,
+            LegalDocumentType.PRIVACY_POLICY,
+            body="New notice.",
+            effective_date=None,
+        )
+        legal = org.settings["legal"]
+        assert legal["privacy_policy_effective_date"] is None
+        assert effective_date_for(legal, LegalDocumentType.PRIVACY_POLICY) is None
+        # The legacy key itself is untouched -- an unrelated document type
+        # that has never been republished still needs to read it.
+        assert legal["last_updated"] == "Jan 1, 2026"
 
     def test_preserves_unrelated_settings_keys(self):
         org = Organization(name="Falls Church VFD", slug="fcvfd")
@@ -202,6 +230,16 @@ class TestEffectiveDateFor:
 
     def test_no_date_anywhere_yields_none(self):
         assert effective_date_for({}, LegalDocumentType.PRIVACY_POLICY) is None
+
+    def test_explicit_none_per_type_key_does_not_fall_back(self):
+        # DOC-19 (Codex round-2 on #1826): an explicit None means "published
+        # under the per-type scheme, date intentionally left blank" -- it
+        # must win over the legacy key, not be treated as absent.
+        legal = {
+            "privacy_policy_effective_date": None,
+            "last_updated": "Feb 2, 2026",
+        }
+        assert effective_date_for(legal, LegalDocumentType.PRIVACY_POLICY) is None
 
 
 class TestPublishLocking:

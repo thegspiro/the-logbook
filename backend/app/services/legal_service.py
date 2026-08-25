@@ -59,10 +59,19 @@ def effective_date_for(legal: dict, document_type: LegalDocumentType) -> Optiona
     install that published under the old shared-date shape (pre-fix) doesn't
     lose its displayed date the moment this deploys — it will simply keep
     reading the old value until the document is republished with its own.
+
+    The fallback is keyed on *presence*, not truthiness (Codex round-2 on
+    #1826): ``_write_settings`` writes the per-type key on every publish under
+    the new scheme, even one with no effective date, specifically so a
+    genuinely-absent key means "never republished since the migration" and an
+    explicit ``None`` means "republished, and the admin cleared the date."
+    Falling back whenever the value was merely falsy conflated those two
+    cases and resurrected a stale legacy date onto text an admin had just
+    published with the date box left empty.
     """
-    date = legal.get(EFFECTIVE_DATE_KEY[document_type])
-    if date:
-        return date
+    date_key = EFFECTIVE_DATE_KEY[document_type]
+    if date_key in legal:
+        return legal.get(date_key) or None
     return legal.get(LEGACY_SHARED_DATE_KEY)
 
 
@@ -295,9 +304,19 @@ class LegalDocumentService:
             # date clears whatever date a *previous* revision of this same
             # type left behind rather than keeping it — a carried-over date
             # would misattribute the new text to an old revision's date.
-            if effective_date:
-                legal[date_key] = effective_date
-            else:
-                legal.pop(date_key, None)
+            #
+            # A publish with no date sets the key to ``None`` rather than
+            # popping it (Codex round-2 on #1826). Popping made "never
+            # published under the per-type scheme" and "published under the
+            # per-type scheme with the date explicitly left blank" both look
+            # like an absent key, so ``effective_date_for``'s legacy fallback
+            # could not tell them apart — it resurrected a stale
+            # ``last_updated`` from before this org's last migration-era
+            # publish onto text that was just published with no date at all.
+            # Setting an explicit ``None`` records "already on the new
+            # scheme, intentionally dateless" so the fallback only ever fires
+            # for an org that has never published this document type since
+            # the per-type keys shipped.
+            legal[date_key] = effective_date if effective_date else None
         settings["legal"] = legal
         organization.settings = settings

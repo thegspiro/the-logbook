@@ -401,6 +401,44 @@ class TestUpdateFolderPreservesExplicitNulls:
         with pytest.raises(ValueError, match="own descendants"):
             await svc.update_folder(root.id, org.id, {"parent_id": child.id})
 
+    @pytest.mark.parametrize("field", ["color", "icon"])
+    async def test_clearing_color_or_icon_is_rejected(self, db_session, field):
+        # DOC-20 (Codex round-2 on #1826): color/icon are DB-nullable but
+        # DocumentFolderResponse requires both as plain str -- persisting an
+        # explicit null 500s the *next* serialization of this row (including
+        # a plain folder listing), after the bad value is already committed.
+        # Must be rejected with a ValueError (-> 400) before it ever reaches
+        # apply_updates, not merely surface later as a serialization error.
+        org = Organization(name="Falls Church VFD", slug="fcvfd-doc-4")
+        db_session.add(org)
+        await db_session.flush()
+
+        folder = DocumentFolder(organization_id=org.id, name="Folder")
+        db_session.add(folder)
+        await db_session.flush()
+
+        svc = DocumentsService(db_session)
+        with pytest.raises(ValueError, match=f"'{field}' cannot be cleared"):
+            await svc.update_folder(folder.id, org.id, {field: None})
+
+    async def test_setting_color_and_icon_to_a_new_value_still_works(self, db_session):
+        # The rejection above is specific to null -- a real replacement value
+        # must still be written normally.
+        org = Organization(name="Falls Church VFD", slug="fcvfd-doc-5")
+        db_session.add(org)
+        await db_session.flush()
+
+        folder = DocumentFolder(organization_id=org.id, name="Folder")
+        db_session.add(folder)
+        await db_session.flush()
+
+        svc = DocumentsService(db_session)
+        updated = await svc.update_folder(
+            folder.id, org.id, {"color": "#000000", "icon": "star"}
+        )
+        assert updated.color == "#000000"
+        assert updated.icon == "star"
+
 
 if __name__ == "__main__":  # pragma: no cover
     import pytest

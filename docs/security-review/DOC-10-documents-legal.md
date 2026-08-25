@@ -29,6 +29,13 @@ the now-closed `claude/security-review-doc` branch; they landed as a new
 follow-up PR, #1826, against `main`. The Codex review threads on #1821 were
 each replied to with a link forward to #1826 and resolved there.
 
+**Round-2 (2026-08-25):** A Codex review of #1826's own fix commit
+(`dd0e40cd`) found three more issues — a real regression each in DOC-10's
+legacy-date fallback and DOC-12's null-handling, plus a test file
+(`test_public_legal.py`) the completion-gate command list had omitted, which
+let DOC-10's response-shape change break it silently. All three fixed;
+recorded as DOC-19 through DOC-21 below.
+
 ## Scope
 
 The rotation's feature 10 row lists three files
@@ -534,6 +541,104 @@ spirit of this rotation's "fix what's safe and small" rule. Flagged for an
 owner decision on scope and approach, same treatment as the existing
 DOC-4/DOC-5 flagged items. Recorded in `docs/KNOWN_LIMITATIONS.md`.
 
+---
+
+**Round-2 addendum (2026-08-25):** A Codex review of commit `dd0e40cd` on
+follow-up PR #1826 found three more issues in the fixes above — one real
+regression each in DOC-10's fallback and DOC-12's null-handling, plus a test
+file the completion-gate command list omitted. All three fixed in this pass.
+
+### DOC-19 — P2 — DOC-10's legacy-date fallback couldn't tell "never migrated" from "explicitly cleared" — ✅ FIXED
+
+`_write_settings`'s publish path popped a document type's per-type date key
+whenever a revision published with no `effective_date`, on the reasoning
+that a carried-over date would misattribute the new text to an old
+revision. That reasoning is right for a previous _per-type_ date, but the
+pop was indistinguishable from a key that had never been written at
+all — which is exactly the state `effective_date_for`'s legacy-fallback
+check was designed to detect. An org still carrying the pre-DOC-10 shared
+`last_updated` key that republished a document with the date box left blank
+got that stale legacy date resurrected onto the new text, silently
+misattributing it.
+
+Fixed by writing the per-type key on every publish, using an explicit
+`None` rather than popping it when no date is supplied. `effective_date_for`
+now branches on **key presence**, not truthiness: `date_key in legal` means
+this document type has been published at least once under the per-type
+scheme (whatever the value), so its value is trusted outright, `None`
+included; the legacy fallback fires only when the key has never been
+written for this document type at all. `revert_to_default`'s full pop of
+both keys is untouched — reverting removes the custom body entirely, and
+`LegalPage.tsx` never reads the date when there is no custom body to date,
+so there's nothing for that path to misattribute.
+
+One edge case worth naming rather than leaving implicit: an org that
+publishes privacy under the new scheme with a blank date, then _never
+touches terms_, keeps reading `last_updated` for terms indefinitely (by
+design — terms hasn't migrated yet) — but if that org's `last_updated` was
+itself set by privacy's last pre-migration publish, terms is now showing a
+date that described privacy's old text, not its own. This is the
+pre-existing DOC-10 finding #3 shape (one shared key covering two
+documents), not a new bug from this fix; it self-resolves the moment terms
+is republished, same as any other legacy-fallback install.
+
+Covered by `tests/test_legal_documents.py::TestWriteSettings::test_publishing_without_a_date_does_not_resurrect_the_legacy_date`
+and `TestEffectiveDateFor::test_explicit_none_per_type_key_does_not_fall_back`,
+plus `tests/test_public_legal.py::TestGetLegalText::test_republishing_one_document_stops_its_legacy_fallback`
+at the endpoint layer.
+
+### DOC-20 — P1 — Folder PATCH accepted a null `color`/`icon` the response schema can't serialize — ✅ FIXED
+
+DOC-12's fix routed `update_folder` through `apply_updates`, which honors an
+explicit `null` as "clear this field" whenever the underlying column is
+nullable — correct for `parent_id`/`owner_user_id`, but `DocumentFolder.color`
+and `.icon` are also DB-nullable (the columns predate their
+`"#3B82F6"`/`"folder"` defaults) while `DocumentFolderResponse` declares both
+as plain, non-`Optional` `str`. A client `PATCH`ing `{"color": null}` sailed
+through `apply_updates`, committed, and only failed when a response schema
+tried to serialize the row — a 500 raised _after_ the null was already
+persisted, and the poisoned row then broke every subsequent folder-listing
+response that included it too.
+
+Fixed in `update_folder` (`documents_service.py`): an explicit `null` for
+`color` or `icon` is rejected with a `ValueError` (→ 400 via the endpoint's
+existing `handle_service_errors`) before `apply_updates` ever runs, at the
+same layer as the other folder-specific checks (parent cycle, in-org FKs)
+already there. Chose rejection over widening the response schema to
+`Optional[str]`: neither the folder-icon renderer
+(`frontend/src/pages/DocumentsPage.tsx`, `folder.color || <fallback>`) nor
+any other frontend call site ever expects or handles a colorless/iconless
+folder — every folder is created with a default, and there is no feature
+asking to clear one back to "none." Setting a _new_, non-null value is
+unaffected.
+
+Covered by `tests/test_documents_access.py::TestUpdateFolderPreservesExplicitNulls::test_clearing_color_or_icon_is_rejected`
+(parametrized over both fields) and `::test_setting_color_and_icon_to_a_new_value_still_works`.
+
+### DOC-21 — P1 — `test_public_legal.py` was missing from the completion-gate command and broke silently — ✅ FIXED
+
+DOC-10 changed the public legal endpoint's response shape — one shared
+`lastUpdated` field became `privacyPolicyLastUpdated` /
+`termsOfServiceLastUpdated` — but `tests/test_public_legal.py` was not in
+the pytest invocation this rotation's commits ran
+(`test_documents_access.py tests/test_legal_documents.py
+tests/test_print_documents.py tests/test_changelog_fixes.py`), so its
+fixtures and assertions against the old shape kept passing in CI's eyes
+while asserting a key (`lastUpdated`) the endpoint no longer returns —
+they'd have failed the moment anyone ran this file, silently.
+
+Fixed by updating every fixture/assertion to the current per-document-type
+shape, and folding in the completion gate command below and going forward.
+Also added: a per-type-dates case (publishing one document's date and
+reading the other's independently), a legacy-fallback case for an org that
+never migrated, the DOC-19 republish-clears-fallback regression at the
+endpoint layer, and an oversized-effective-date truncation case
+(`_MAX_LEGAL_DATE_CHARS`) that had no coverage anywhere.
+
+No test in this file was previously covering the response shape at all
+after DOC-10 landed — every assertion against `lastUpdated` was dead code
+that happened to still exist as valid Python.
+
 ## Schema & migration notes
 
 `20260820_0135_06adc68a8b84_add_legal_document_revisions.py` reviewed in
@@ -577,17 +682,38 @@ Existing coverage otherwise still pins every invariant checked above:
 `tests/test_print_documents.py`, `tests/test_changelog_fixes.py` — 155
 backend tests total this pass, all passing.
 
+**Round-2 additions (2026-08-25, Codex on #1826):**
+
+- `tests/test_legal_documents.py::TestWriteSettings::test_publishing_without_a_date_does_not_resurrect_the_legacy_date`
+  and `TestEffectiveDateFor::test_explicit_none_per_type_key_does_not_fall_back`
+  — DOC-19.
+- `tests/test_documents_access.py::TestUpdateFolderPreservesExplicitNulls::test_clearing_color_or_icon_is_rejected`
+  (parametrized, both fields) and `::test_setting_color_and_icon_to_a_new_value_still_works`
+  — DOC-20.
+- `tests/test_public_legal.py` — every fixture/assertion updated off the
+  removed `lastUpdated` field; added a per-type-dates case, a
+  never-migrated legacy-fallback case, the DOC-19 regression at the
+  endpoint layer (`test_republishing_one_document_stops_its_legacy_fallback`),
+  and an oversized-effective-date truncation case — DOC-21.
+
+`tests/test_documents_access.py`, `tests/test_legal_documents.py`,
+`tests/test_print_documents.py`, `tests/test_changelog_fixes.py`,
+`tests/test_public_legal.py` — 171 backend tests total this round, all
+passing; full `pytest tests/` — 8156 passed, 22 skipped (pre-existing Docker
+skips, daemon unavailable in this environment), 0 failed.
+
 ## Completion gate
 
-| Check                                                                                                                             | Result                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `flake8`                                                                                                                          | pass (`app/`, `tests/`, `alembic/`)                                                                        |
-| `black --check`                                                                                                                   | pass                                                                                                       |
-| `isort --check-only`                                                                                                              | pass                                                                                                       |
-| `python3 scripts/validate_migrations.py --strict`                                                                                 | pass (357 migrations, single head)                                                                         |
-| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_changelog_fixes.py` | 155 passed                                                                                                 |
-| `npx tsc --noEmit` (frontend)                                                                                                     | pass — `LegalPage.tsx`/its tests changed for DOC-10                                                        |
-| `npx eslint .` (frontend)                                                                                                         | pass — 0 errors, 1 pre-existing warning in an unrelated file (`MyTrainingPage.tsx`, not touched this pass) |
+| Check                                                                                                                                                        | Result                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `flake8`                                                                                                                                                     | pass (`app/`, `tests/`, `alembic/`)           |
+| `black --check`                                                                                                                                              | pass                                          |
+| `isort --check-only`                                                                                                                                         | pass                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (358 migrations, single head)            |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_changelog_fixes.py tests/test_public_legal.py` | 171 passed                                    |
+| `pytest tests/` (full backend suite)                                                                                                                         | 8156 passed, 22 skipped, 0 failed             |
+| `npx tsc --noEmit` (frontend)                                                                                                                                | not run this round — no frontend file changed |
+| `npx eslint .` (frontend)                                                                                                                                    | not run this round — no frontend file changed |
 
 ## Next
 

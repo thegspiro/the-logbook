@@ -308,6 +308,21 @@ class DocumentsService:
                 label="owner",
             )
 
+        # DOC-20 (Codex round-2 on #1826): color/icon are DB-nullable (the
+        # column predates the "#3B82F6"/"folder" defaults) but
+        # DocumentFolderResponse declares both as plain, non-Optional str.
+        # apply_updates only rejects a null against a NOT NULL column, so an
+        # explicit `{"color": null}` would sail through, commit, and only
+        # fail when this (or any later) response tries to serialize the row
+        # -- a 500 after the bad value is already persisted, and a folder
+        # listing that happens to include this row breaks too. Reject the
+        # clear here, at the same layer as the other folder-specific
+        # validation above, rather than letting a DB-level nullable column
+        # stand in for a response-schema contract it doesn't enforce.
+        for _field in ("color", "icon"):
+            if _field in update_data and update_data[_field] is None:
+                raise ValueError(f"'{_field}' cannot be cleared; provide a value")
+
         apply_updates(folder, update_data)
 
         await self.db.commit()
