@@ -43,7 +43,7 @@ export const getCommunicationsRoutes = () => {
       <Route
         path="/communications/photo-use-consent"
         element={
-          <ProtectedRoute requiredPermission="users.view">
+          <ProtectedRoute requiredAnyPermission={['notifications.manage', 'members.manage', 'users.edit']}>
             <Suspense fallback={null}>
               <PhotoUseConsentPage />
             </Suspense>

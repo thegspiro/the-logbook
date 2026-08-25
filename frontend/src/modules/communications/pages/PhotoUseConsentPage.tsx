@@ -8,8 +8,12 @@
  * newsletter goes out rather than after.
  *
  * Read-only by design: consent belongs to the member, and a coordinator
- * ticking a box on their behalf would not be consent. Gated on `users.view`
- * at the route.
+ * ticking a box on their behalf would not be consent.
+ *
+ * Gated on notifications.manage (the PIO's own grant, and what gates this
+ * page's neighbours under Forms & Comms), members.manage, or users.edit —
+ * NOT users.view, which 25 of the 30 default positions carry and which would
+ * have made this a weaker gate than reading one member's consent.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -46,7 +50,7 @@ const STATUS_TILES: { value: ConsentStatus; icon: LucideIcon; caption: string }[
 
 function memberName(member: ConsentRosterMember): string {
   const name = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
-  return name || member.email || 'Unnamed member';
+  return name || 'Unnamed member';
 }
 
 const PhotoUseConsentPage: React.FC = () => {
@@ -85,7 +89,7 @@ const PhotoUseConsentPage: React.FC = () => {
     return members.filter((member) => {
       if (statusFilter !== 'all' && member.status !== statusFilter) return false;
       if (!term) return true;
-      return [memberName(member), member.email, member.membership_number, member.station]
+      return [memberName(member), member.membership_number, member.station]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term));
     });
@@ -235,7 +239,7 @@ const PhotoUseConsentPage: React.FC = () => {
                       <div className="min-w-0">
                         <p className="text-theme-text-primary truncate font-medium">{memberName(member)}</p>
                         <p className="text-theme-text-muted truncate text-xs">
-                          {member.membership_number ? `#${member.membership_number}` : member.email}
+                          {member.membership_number ? `#${member.membership_number}` : ''}
                           {/* Only worth saying when the toggle has let them in;
                               otherwise every row would read "active". */}
                           {includeInactive && member.member_status && member.member_status !== 'active' && (

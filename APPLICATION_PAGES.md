@@ -976,7 +976,7 @@ lot's number or expiration date require `equipment_check.manage` or
 | `/messages`                         | Messages                  | Authenticated          |
 | `/communications/messages`          | Message Administration    | `notifications.manage` |
 | `/communications/email-templates`   | Email Template Management | `settings.manage`      |
-| `/communications/photo-use-consent` | Photo Use Consent         | `users.view`           |
+| `/communications/photo-use-consent` | Photo Use Consent         | see note               |
 
 > **Photo Use Consent** _(2026-08-25)_ lists every member's answer to the
 > photo-use privacy choice they set in User Settings, so the PIO can check the
@@ -989,10 +989,23 @@ lot's number or expiration date require `equipment_check.manage` or
 > describes a member who can still be asked. Inactive members are hidden by
 > default (a retiree's photo can still be in the archive, so the toggle exists).
 >
-> Gated on `users.view`, not `members.view` — the latter is a baseline grant
-> every firefighter holds, and who agreed to be photographed is not roster-wide
-> reading. The Communications Officer / PIO, Historian and Public Outreach system
-> positions all hold `users.view`.
+> **Permission: `notifications.manage`, `members.manage`, or `users.edit`.**
+> `users.view` was the first choice and was wrong _(corrected in review)_: it
+> reads as a narrow grant but 25 of the 30 default positions carry it — the EMS
+> Supply Officer and Apparatus Officer among them — which would have made a
+> whole-department list a **weaker** gate than reading one member's consent via
+> `/users/{user_id}/consents` (`users.edit` or `members.manage`).
+> `notifications.manage` is what puts the PIO here: it is the grant that
+> distinguishes the Communications Officer, and it already gates this page's
+> neighbours under Forms & Comms. The Historian and Public Outreach positions
+> hold none of the three and do **not** see this page; grant them a position
+> carrying one if the department wants them to.
+>
+> The response deliberately carries **no contact fields**. The member directory
+> gates email behind the organization's contact-visibility setting, and a second
+> list carrying it unconditionally would quietly undo that — so the roster
+> returns only what identifies somebody on a photo call sheet: name, rank,
+> station, membership number.
 
 > The Email Templates page has a **Footers** tab _(2026-08-10)_. The footer used
 > to be copy-pasted into all 35 default bodies; it is now a named library on the

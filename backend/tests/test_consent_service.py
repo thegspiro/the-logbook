@@ -130,6 +130,18 @@ class TestConsentRoster:
             "Unasked",
         ]
 
+    async def test_roster_carries_no_contact_fields(self, db_session):
+        org = await _make_org(db_session)
+        await _add_member(db_session, org, "Private")
+
+        roster = await ConsentService(db_session).roster(org.id, ConsentType.PHOTO_USE)
+
+        # The member directory gates email on the org's contact-visibility
+        # setting. This list must not become a way around it.
+        assert "email" not in roster["members"][0]
+        assert "phone" not in roster["members"][0]
+        assert "mobile" not in roster["members"][0]
+
     async def test_roster_never_crosses_organizations(self, db_session):
         org_a = await _make_org(db_session, "A FD")
         org_b = await _make_org(db_session, "B FD")

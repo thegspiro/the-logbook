@@ -102,6 +102,11 @@ class ConsentService:
         explicit ``declined`` — the two are identical in effect (both mean
         "do not use") but not in remedy, since one of them is a member who
         can still be asked.
+
+        Returns **no contact fields**. The member directory gates email on the
+        organization's contact-visibility setting, and a second list carrying
+        it unconditionally would quietly undo that; name, rank, station and
+        membership number are what identify somebody on a photo call sheet.
         """
         conditions = [
             User.organization_id == organization_id,
@@ -115,7 +120,6 @@ class ConsentService:
                 User.id,
                 User.first_name,
                 User.last_name,
-                User.email,
                 User.photo_url,
                 User.rank,
                 User.station,
@@ -153,7 +157,6 @@ class ConsentService:
                     "user_id": str(row.id),
                     "first_name": row.first_name,
                     "last_name": row.last_name,
-                    "email": row.email,
                     "photo_url": row.photo_url,
                     "rank": row.rank,
                     "station": row.station,

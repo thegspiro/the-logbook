@@ -2395,8 +2395,20 @@ async def get_photo_use_roster(
     include_inactive: bool = Query(
         False, description="Include members who are not currently active"
     ),
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        # NOT users.view. That reads as a narrow grant and is not one: 25 of
+        # the 30 default positions carry it, the EMS Supply Officer and
+        # Apparatus Officer among them. Gating a whole-department list of who
+        # agreed to be photographed on it would have made this endpoint a
+        # *weaker* gate than the per-member ``/{user_id}/consents`` beside it
+        # (users.edit or members.manage) while returning strictly more.
+        #
+        # notifications.manage is what puts the PIO here — it is the grant
+        # that distinguishes the Communications Officer, and it is what gates
+        # this page's neighbours under Forms & Comms.
+        require_permission("notifications.manage", "members.manage", "users.edit")
+    ),
 ):
     """
     Every member's photo-use standing, for the PIO / communications officer
@@ -2408,17 +2420,15 @@ async def get_photo_use_roster(
     member's consent is theirs to set, so there is no admin write counterpart
     here, for the same reason ``/{user_id}/consents`` has none.
 
-    Gated on ``users.view`` rather than ``members.view``: the latter is a
-    baseline grant every firefighter holds, and who did or did not agree to
-    be photographed is not roster-wide reading.
-    """
-    user_perms = _collect_user_permissions(current_user)
-    if not _has_permission("users.view", user_perms):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to view photo use consents",
-        )
+    Deliberately carries **no contact fields**. The member directory gates
+    email behind the organization's contact-visibility setting; rather than
+    reimplement that here (and drift from it), this returns only what
+    identifies a member on a photo call sheet — name, rank, station, and
+    membership number.
 
+    **Permissions required:** notifications.manage, members.manage, or
+    users.edit
+    """
     from app.models.consent import ConsentType
     from app.services.consent_service import ConsentService
 

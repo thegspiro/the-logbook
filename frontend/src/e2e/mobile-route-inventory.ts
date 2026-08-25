@@ -163,6 +163,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/communications/photo-use-consent',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'admin roster behind notifications.manage; its table reflows to cards via rwd-table and every control comes from the shared 44px form utilities, so /messages remains the module representative',
+  },
+  {
     path: '/messages',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'ratchet',

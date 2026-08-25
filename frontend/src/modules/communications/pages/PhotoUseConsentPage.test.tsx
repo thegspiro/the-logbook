@@ -25,7 +25,6 @@ const makeMember = (overrides: Partial<ConsentRosterMember> = {}): ConsentRoster
   user_id: 'user-1',
   first_name: 'Dana',
   last_name: 'Agreed',
-  email: 'dana@example.org',
   photo_url: null,
   rank: 'firefighter',
   station: 'Station 1',
@@ -98,6 +97,15 @@ describe('PhotoUseConsentPage', () => {
 
     await user.click(declinedTile);
     expect(screen.getByText('Dana Agreed')).toBeInTheDocument();
+  });
+
+  it('carries no contact fields for the search to match on', async () => {
+    renderWithRouter(<PhotoUseConsentPage />);
+    expect(await screen.findByText('Dana Agreed')).toBeInTheDocument();
+
+    // The member directory gates email on the org's contact-visibility
+    // setting; this page must not be a way around it.
+    expect(screen.queryByText(/@example\.org/)).not.toBeInTheDocument();
   });
 
   it('searches by name', async () => {

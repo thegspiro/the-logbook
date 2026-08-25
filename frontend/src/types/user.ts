@@ -270,7 +270,6 @@ export interface ConsentRosterMember {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
-  email: string | null;
   photo_url: string | null;
   rank: string | null;
   station: string | null;
