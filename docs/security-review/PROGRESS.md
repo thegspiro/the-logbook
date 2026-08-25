@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1805](https://github.com/thegspiro/the-logbook/pull/1805) |
-| Branch      | `claude/security-review-perm`                               |
-| Feature     | 02 Permissions & roles                                      |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — opened                                         |
+| Field       | Value                                                              |
+| ----------- | ------------------------------------------------------------------ |
+| PR          | [#1805](https://github.com/thegspiro/the-logbook/pull/1805)        |
+| Branch      | `claude/security-review-perm`                                      |
+| Feature     | 02 Permissions & roles                                             |
+| CI          | pending on latest push                                             |
+| Threads     | 1 resolved (Codex P2: MissingGreenlet regression in seed-race fix) |
+| Last tended | 2026-08-25 — fixed Codex-caught regression, replied, resolved      |
 
 ---
 
