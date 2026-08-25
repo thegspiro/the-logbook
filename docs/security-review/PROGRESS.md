@@ -18,10 +18,10 @@ feature. The rotation cannot outrun its own review queue.
 
 | Field       | Value                                                            |
 | ----------- | ---------------------------------------------------------------- |
-| PR          | (opening)                                                        |
+| PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815)      |
 | Branch      | `claude/security-review-mp`                                      |
 | Feature     | 08 Membership pipeline                                           |
-| CI          | pending first push                                               |
+| CI          | fresh push, awaiting first run                                   |
 | Threads     | none yet                                                         |
 | Last tended | 2026-08-25 — re-verification pass, no new findings, docs-only PR |
 
