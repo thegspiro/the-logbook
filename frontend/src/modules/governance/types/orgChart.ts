@@ -5,26 +5,17 @@
  * backend serializes with `alias_generator=to_camel`.
  */
 
-/**
- * Where a seat's people come from.
- *
- * `manual` is leadership listing them outright — the only option for a holder
- * with no login. The other two follow the application's own record of who is
- * what, so the Chief's box tracks whoever currently holds the Chief's role
- * without anybody remembering to edit two screens after an election.
- */
-export const OrgChartHolderSource = {
-  MANUAL: 'manual',
-  POSITION: 'position',
-  RANK: 'rank',
-} as const;
-export type OrgChartHolderSource = (typeof OrgChartHolderSource)[keyof typeof OrgChartHolderSource];
-
 /** One person listed in a seat, already resolved to a name by the backend. */
 export interface OrgChartHolder {
   /** Present whenever the person has a member record here. */
   userId?: string | null;
   name: string;
+  /**
+   * True for somebody the application supplied because the seat is linked to
+   * their role, rather than somebody leadership typed in. An officer editing
+   * the seat needs to know which names they cannot remove from this screen.
+   */
+  fromLink?: boolean;
 }
 
 /** One seat on the department's chain of command. */
@@ -34,17 +25,20 @@ export interface OrgChartNode {
   title: string;
   /** What this seat is in charge of — the question the chart answers. */
   responsibility?: string | null;
-  /** Everybody in this seat. Empty means vacant. */
+  /**
+   * Everybody in this seat: whoever the linked role supplies, then the people
+   * leadership typed in. Empty means vacant.
+   */
   holders: OrgChartHolder[];
-  holderSource: OrgChartHolderSource;
+  /** At most one of these is set — a seat links to a role or a rank, not both. */
   positionId?: string | null;
   rankCode?: string | null;
   /**
-   * The role or rank this seat follows, resolved to its display name. Null on
-   * a manual seat, and also when the role it follows no longer exists — which
-   * is exactly when the seat reads as vacant.
+   * The role or rank this seat is linked to, resolved to its display name.
+   * Null on an unlinked seat, and also when the linked role no longer exists —
+   * at which point the seat falls back to its own list.
    */
-  sourceLabel?: string | null;
+  linkLabel?: string | null;
   /**
    * The seat's own published contact details. Never a holder's personal email
    * or phone — those are governed by the org's contact-visibility setting and
@@ -64,21 +58,34 @@ export interface OrgChartMemberOption {
 }
 
 /**
- * A role or rank a seat can follow. `holderCount` is shown in the picker
- * because a seat pointed at a role nobody holds renders as vacant, and finding
- * that out after saving reads as the link being broken.
+ * A role or rank a seat can be linked to.
+ *
+ * The current holders travel with the option so the editor can answer "who is
+ * the Chief?" the instant the role is picked — that immediate confirmation is
+ * the point of linking, and a second round trip would deliver it late enough
+ * to be missed.
  */
-export interface OrgChartPositionOption {
-  id: string;
-  name: string;
-  holderCount: number;
+export interface OrgChartLinkOption {
+  /** `position:<id>` or `rank:<code>` — one namespaced value, so roles and
+   *  ranks can share a single "which role is this?" list. */
+  value: string;
+  label: string;
+  holders: OrgChartHolder[];
 }
 
-export interface OrgChartRankOption {
-  code: string;
-  name: string;
-  holderCount: number;
-}
+/** Split a link option's namespaced value back into the two API fields. */
+export const parseLinkValue = (value: string): { positionId?: string; rankCode?: string } => {
+  if (value.startsWith('position:')) return { positionId: value.slice('position:'.length) };
+  if (value.startsWith('rank:')) return { rankCode: value.slice('rank:'.length) };
+  return {};
+};
+
+/** The namespaced value for a seat's current link, or '' when it has none. */
+export const linkValueOf = (node: { positionId?: string | null; rankCode?: string | null }): string => {
+  if (node.positionId) return `position:${node.positionId}`;
+  if (node.rankCode) return `rank:${node.rankCode}`;
+  return '';
+};
 
 export interface OrgChart {
   /** Depth-first: each parent immediately before its children. */
@@ -86,8 +93,8 @@ export interface OrgChart {
   canManage: boolean;
   /** The three lists below are populated only for a caller who can manage. */
   members: OrgChartMemberOption[];
-  positions: OrgChartPositionOption[];
-  ranks: OrgChartRankOption[];
+  roles: OrgChartLinkOption[];
+  ranks: OrgChartLinkOption[];
 }
 
 /** One person as the editor submits them: a member, a typed name, or both. */
@@ -101,7 +108,6 @@ export interface OrgChartNodeCreate {
   parentId?: string | undefined;
   responsibility?: string | undefined;
   holders?: OrgChartHolderInput[] | undefined;
-  holderSource?: OrgChartHolderSource | undefined;
   positionId?: string | undefined;
   rankCode?: string | undefined;
   contactEmail?: string | undefined;
@@ -115,13 +121,14 @@ export interface OrgChartNodeCreate {
  * `null` clears it (pitfall #1, update direction).
  *
  * `holders` is the exception, and deliberately so — it is a whole-collection
- * replace, so an omitted key leaves the people alone and `[]` empties the seat.
+ * replace, so an omitted key leaves the typed people alone and `[]` removes
+ * them. It never carries the linked role's holders; those are not the client's
+ * to send.
  */
 export interface OrgChartNodeUpdate {
   title?: string | undefined;
   responsibility?: string | null | undefined;
   holders?: OrgChartHolderInput[] | undefined;
-  holderSource?: OrgChartHolderSource | undefined;
   positionId?: string | null | undefined;
   rankCode?: string | null | undefined;
   contactEmail?: string | null | undefined;

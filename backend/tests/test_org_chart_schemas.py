@@ -117,36 +117,37 @@ class TestHolders:
         assert payload.model_dump(exclude_unset=True) == {"holders": []}
 
 
-class TestHolderSource:
-    def test_a_seat_following_a_role_must_say_which_role(self):
-        # Otherwise the seat resolves as permanently vacant with nothing on the
-        # screen to explain why.
-        with pytest.raises(ValidationError):
-            OrgChartNodeCreate(**{"title": "Chief", "holderSource": "position"})
-
-    def test_a_seat_following_a_rank_must_say_which_rank(self):
-        with pytest.raises(ValidationError):
-            OrgChartNodeCreate(**{"title": "Captains", "holderSource": "rank"})
-
-    def test_an_unknown_source_is_refused(self):
-        with pytest.raises(ValidationError):
-            OrgChartNodeCreate(**{"title": "Chief", "holderSource": "vibes"})
-
-    def test_the_unused_reference_is_cleared_rather_than_stored(self):
-        # Kept, it would come back into effect the next time somebody switched
-        # the source back, naming a role nobody chose.
+class TestTheLink:
+    def test_a_seat_can_be_linked_to_a_role_and_still_name_people(self):
+        # The whole distinction: the application supports the chart rather than
+        # defining it, so both travel in one payload.
         payload = OrgChartNodeCreate(
             **{
                 "title": "Chief",
-                "holderSource": "position",
-                "positionId": "p1",
-                "rankCode": "captain",
+                "positionId": "pos-1",
+                "holders": [{"displayName": "Rev. J. Alvarez"}],
             }
         )
-        assert payload.position_id == "p1"
+        assert payload.position_id == "pos-1"
+        assert [h.display_name for h in payload.holders] == ["Rev. J. Alvarez"]
+
+    def test_a_seat_cannot_be_linked_to_both_a_role_and_a_rank(self):
+        with pytest.raises(ValidationError):
+            OrgChartNodeCreate(
+                **{"title": "Chief", "positionId": "pos-1", "rankCode": "captain"}
+            )
+
+    def test_an_unlinked_seat_is_the_default(self):
+        payload = OrgChartNodeCreate(title="Trustees")
+        assert payload.position_id is None
         assert payload.rank_code is None
 
-    def test_an_update_that_never_mentions_the_source_is_not_refused(self):
-        # A rename must not be rejected for a reference it never sent.
+    def test_an_explicit_null_is_how_a_seat_is_unlinked(self):
+        # `exclude_unset` on the backend means an omitted key leaves the link
+        # alone, so unlinking has to be a null the payload actually carries.
+        payload = OrgChartNodeUpdate(**{"positionId": None})
+        assert payload.model_dump(exclude_unset=True) == {"position_id": None}
+
+    def test_an_update_that_never_mentions_the_link_leaves_it_alone(self):
         payload = OrgChartNodeUpdate(**{"title": "Fire Chief"})
         assert payload.model_dump(exclude_unset=True) == {"title": "Fire Chief"}

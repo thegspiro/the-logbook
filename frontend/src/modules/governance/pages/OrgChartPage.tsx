@@ -10,7 +10,7 @@ import { OrgChartDiagram } from '../components/OrgChartDiagram';
 import { OrgChartNodeModal, type OrgChartNodeDraft } from '../components/OrgChartNodeModal';
 import { OrgChartOutline } from '../components/OrgChartOutline';
 import { useOrgChartStore } from '../store/orgChartStore';
-import { OrgChartHolderSource, type OrgChartNode } from '../types/orgChart';
+import { parseLinkValue, type OrgChartNode } from '../types/orgChart';
 
 /**
  * Governance -> Organizational Chart.
@@ -19,8 +19,9 @@ import { OrgChartHolderSource, type OrgChartNode } from '../types/orgChart';
  * of the chart is curated by leadership rather than generated from positions or
  * permissions: the IT manager holds the wildcard grant and reports to the Chief
  * in real life, so a chart whose reporting lines came from application roles
- * would be one nobody in the department recognises. Who is *in* a seat may
- * follow a role or a rank, because there the application usually does know.
+ * would be one nobody in the department recognises. A seat may be *linked* to a
+ * role, which keeps the names in the box current without deciding anything else
+ * about it — the application supports the chart, it does not define it.
  *
  * Two layouts, because one does not serve both readers. The diagram is the
  * conventional boxes-and-connectors chart and is what a desktop opens on. A
@@ -78,7 +79,7 @@ const OrgChartPage: React.FC = () => {
       const haystack = [
         node.title,
         node.responsibility ?? '',
-        node.sourceLabel ?? '',
+        node.linkLabel ?? '',
         ...node.holders.map((holder) => holder.name),
       ]
         .join(' ')
@@ -113,18 +114,11 @@ const OrgChartPage: React.FC = () => {
 
   const handleSave = async (draft: OrgChartNodeDraft) => {
     const existing = editor?.node;
-    // The three source fields always travel together: sending one without the
-    // others would leave the backend re-validating a seat against a reference
-    // the editor was not looking at.
-    const holderFields = {
-      holderSource: draft.holderSource,
-      positionId: draft.holderSource === OrgChartHolderSource.POSITION ? draft.positionId : null,
-      rankCode: draft.holderSource === OrgChartHolderSource.RANK ? draft.rankCode : null,
-      holders: draft.holders.map((holder) => ({
-        userId: holder.userId || undefined,
-        displayName: holder.displayName || undefined,
-      })),
-    };
+    const link = parseLinkValue(draft.linkValue);
+    const holders = draft.holders.map((holder) => ({
+      userId: holder.userId || undefined,
+      displayName: holder.displayName || undefined,
+    }));
     try {
       if (existing) {
         // Update: every field the form owns travels on every save, and an
@@ -139,7 +133,12 @@ const OrgChartPage: React.FC = () => {
           contactEmail: draft.contactEmail || null,
           contactPhone: draft.contactPhone || null,
           isPublished: draft.isPublished,
-          ...holderFields,
+          // Both link fields on every save, so unlinking travels as an
+          // explicit null rather than as an omitted key the backend would
+          // read as "leave it alone".
+          positionId: link.positionId ?? null,
+          rankCode: link.rankCode ?? null,
+          holders,
         });
         // A changed reporting line is a second call: /move renumbers the
         // siblings the seat lands among, which a field update has no business
@@ -162,10 +161,9 @@ const OrgChartPage: React.FC = () => {
           contactEmail: draft.contactEmail || undefined,
           contactPhone: draft.contactPhone || undefined,
           isPublished: draft.isPublished,
-          holderSource: draft.holderSource,
-          positionId: draft.positionId || undefined,
-          rankCode: draft.rankCode || undefined,
-          holders: holderFields.holders,
+          positionId: link.positionId,
+          rankCode: link.rankCode,
+          holders,
         });
         toast.success('Position added');
       }
@@ -328,7 +326,7 @@ const OrgChartPage: React.FC = () => {
         defaultParentId={editor?.parentId}
         nodes={nodes}
         members={chart?.members ?? []}
-        positions={chart?.positions ?? []}
+        roles={chart?.roles ?? []}
         ranks={chart?.ranks ?? []}
         isSaving={isSaving}
         onCancel={() => setEditor(null)}

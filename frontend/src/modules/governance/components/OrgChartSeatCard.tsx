@@ -13,7 +13,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 
-import { OrgChartHolderSource, type OrgChartNode } from '../types/orgChart';
+import type { OrgChartNode } from '../types/orgChart';
 
 export interface SeatCardHandlers {
   onAddReport: (node: OrgChartNode) => void;
@@ -64,7 +64,6 @@ export const OrgChartSeatCard: React.FC<OrgChartSeatCardProps> = ({
   onNudge,
 }) => {
   const compact = variant === 'diagram';
-  const followsARole = node.holderSource !== OrgChartHolderSource.MANUAL;
   const PreviousIcon = compact ? ChevronLeft : ChevronUp;
   const NextIcon = compact ? ChevronRight : ChevronDown;
   const previousLabel = compact ? 'left' : 'up';
@@ -107,12 +106,13 @@ export const OrgChartSeatCard: React.FC<OrgChartSeatCardProps> = ({
             </ul>
           )}
 
-          {followsARole && node.sourceLabel ? (
+          {node.linkLabel ? (
+            // Says where the names came from. A reader looking at a name the
+            // chart did not choose deserves to know the roster is what put it
+            // there — and that it will stay right without anyone's attention.
             <p className="text-theme-text-muted mt-1.5 flex items-center gap-1 text-xs">
               <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
-              <span>
-                Follows the {node.sourceLabel} {node.holderSource === OrgChartHolderSource.POSITION ? 'role' : 'rank'}
-              </span>
+              <span>Linked to {node.linkLabel}</span>
             </p>
           ) : null}
         </div>

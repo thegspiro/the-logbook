@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithRouter } from '../../../test/utils';
-import { OrgChartHolderSource, type OrgChart, type OrgChartNode } from '../types/orgChart';
+import type { OrgChart, OrgChartNode } from '../types/orgChart';
 
 const mockGetChart = vi.fn();
 const mockCreateNode = vi.fn();
@@ -28,10 +28,9 @@ const node = (overrides: Partial<OrgChartNode> & Pick<OrgChartNode, 'id' | 'titl
   parentId: null,
   responsibility: null,
   holders: [],
-  holderSource: OrgChartHolderSource.MANUAL,
   positionId: null,
   rankCode: null,
-  sourceLabel: null,
+  linkLabel: null,
   contactEmail: null,
   contactPhone: null,
   sortOrder: 0,
@@ -68,10 +67,16 @@ const chart = (overrides: Partial<OrgChart> = {}): OrgChart => ({
   nodes: [chief, training, safety],
   canManage: false,
   members: [],
-  positions: [],
+  roles: [],
   ranks: [],
   ...overrides,
 });
+
+const chiefRole = {
+  value: 'position:pos-chief',
+  label: 'Fire Chief',
+  holders: [{ userId: 'user-9', name: 'John Doe' }],
+};
 
 /**
  * `window.matchMedia` is mocked to `matches: false` for the whole suite, so
@@ -124,17 +129,16 @@ describe('OrgChartPage', () => {
     expect(screen.getByText('Shelly Hernandez')).toBeInTheDocument();
   });
 
-  it('says which role a seat follows so its names are not mistaken for a hand-typed list', async () => {
+  it('says which role a seat is linked to so its names are not mistaken for a typed list', async () => {
     mockGetChart.mockResolvedValue(
       chart({
         nodes: [
           node({
             id: 'chief',
             title: 'Chief',
-            holderSource: OrgChartHolderSource.POSITION,
             positionId: 'pos-chief',
-            sourceLabel: 'Fire Chief',
-            holders: [{ userId: 'user-1', name: 'Shelly Hernandez' }],
+            linkLabel: 'Fire Chief',
+            holders: [{ userId: 'user-1', name: 'Shelly Hernandez', fromLink: true }],
           }),
         ],
       })
@@ -142,8 +146,34 @@ describe('OrgChartPage', () => {
     renderWithRouter(<OrgChartPage />);
 
     await screen.findByRole('heading', { name: /^Chief$/i });
-    expect(screen.getByText(/Follows the Fire Chief role/i)).toBeInTheDocument();
+    expect(screen.getByText(/Linked to Fire Chief/i)).toBeInTheDocument();
     expect(screen.getByText('Shelly Hernandez')).toBeInTheDocument();
+  });
+
+  it('shows a linked seat and the people typed into it side by side', async () => {
+    mockGetChart.mockResolvedValue(
+      chart({
+        nodes: [
+          node({
+            id: 'chief',
+            title: 'Chief',
+            positionId: 'pos-chief',
+            linkLabel: 'Fire Chief',
+            holders: [
+              { userId: 'user-1', name: 'Shelly Hernandez', fromLink: true },
+              { userId: null, name: 'Rev. J. Alvarez', fromLink: false },
+            ],
+          }),
+        ],
+      })
+    );
+    renderWithRouter(<OrgChartPage />);
+
+    // The application supports the chart rather than defining it: linking a
+    // role does not evict the co-chair leadership named by hand.
+    await screen.findByRole('heading', { name: /^Chief$/i });
+    expect(screen.getByText('Shelly Hernandez')).toBeInTheDocument();
+    expect(screen.getByText('Rev. J. Alvarez')).toBeInTheDocument();
   });
 
   it('marks a seat nobody holds as vacant rather than leaving a blank line', async () => {
@@ -245,7 +275,6 @@ describe('OrgChartPage', () => {
       contactEmail: 'training@department.org',
       contactPhone: null,
       isPublished: true,
-      holderSource: 'manual',
       positionId: null,
       rankCode: null,
       holders: [{ userId: 'user-2', displayName: undefined }],
@@ -282,7 +311,6 @@ describe('OrgChartPage', () => {
       contactEmail: undefined,
       contactPhone: undefined,
       isPublished: true,
-      holderSource: 'manual',
       positionId: undefined,
       rankCode: undefined,
       holders: [],
@@ -422,72 +450,115 @@ describe('OrgChartPage', () => {
     );
   });
 
-  it('points a seat at a role so it follows whoever holds it', async () => {
+  it('names who holds the role the moment it is chosen, before anything is saved', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true, roles: [chiefRole] }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Add position$/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Which role is this/i), 'position:pos-chief');
+
+    // The confirmation is the point of linking: an officer who cannot see it
+    // land has no reason to trust the box will keep itself current.
+    const answer = await screen.findByRole('status');
+    expect(answer).toHaveTextContent(/John Doe/);
+    expect(answer).toHaveTextContent(/holds Fire Chief in this application/i);
+  });
+
+  it('warns when the chosen role is one nobody currently holds', async () => {
     mockGetChart.mockResolvedValue(
       chart({
         canManage: true,
-        positions: [{ id: 'pos-chief', name: 'Fire Chief', holderCount: 1 }],
+        roles: [{ value: 'position:pos-empty', label: 'Zamboni Driver', holders: [] }],
+      })
+    );
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Add position$/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Which role is this/i), 'position:pos-empty');
+
+    // Accurate, but worth knowing before saving rather than after — otherwise
+    // an empty box reads as the link being broken.
+    expect(await screen.findByRole('status')).toHaveTextContent(/Nobody currently holds/i);
+  });
+
+  it('names the box after the role, and stops once the officer types their own title', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true, roles: [chiefRole] }));
+    mockCreateNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Add position$/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Which role is this/i), 'position:pos-chief');
+    expect(await screen.findByLabelText(/Position title/i)).toHaveValue('Fire Chief');
+
+    await userEvent.clear(screen.getByLabelText(/Position title/i));
+    await userEvent.type(screen.getByLabelText(/Position title/i), 'Chief');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockCreateNode).toHaveBeenCalled());
+    // The link supplies the names; the department still supplies the words.
+    expect(mockCreateNode).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Chief', positionId: 'pos-chief', rankCode: undefined })
+    );
+  });
+
+  it('links a seat to an operational rank through the same question', async () => {
+    mockGetChart.mockResolvedValue(
+      chart({
+        canManage: true,
+        ranks: [{ value: 'rank:captain', label: 'Captain', holders: [{ userId: 'u1', name: 'Dana Reyes' }] }],
       })
     );
     mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
     renderWithRouter(<OrgChartPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
-    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), 'position');
-    await userEvent.selectOptions(await screen.findByLabelText(/Which role/i), 'pos-chief');
+    await userEvent.selectOptions(await screen.findByLabelText(/Which role is this/i), 'rank:captain');
     await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
 
     await waitFor(() => expect(mockUpdateNode).toHaveBeenCalled());
     expect(mockUpdateNode).toHaveBeenCalledWith(
       'safety',
-      expect.objectContaining({ holderSource: 'position', positionId: 'pos-chief', rankCode: null })
+      expect.objectContaining({ positionId: null, rankCode: 'captain' })
     );
   });
 
-  it('says how many members hold a role before the seat is pointed at it', async () => {
+  it('unlinks a seat with an explicit null rather than by omitting the key', async () => {
     mockGetChart.mockResolvedValue(
       chart({
         canManage: true,
-        positions: [{ id: 'pos-empty', name: 'Zamboni Driver', holderCount: 0 }],
+        roles: [chiefRole],
+        nodes: [node({ id: 'chief', title: 'Chief', positionId: 'pos-chief', linkLabel: 'Fire Chief' })],
       })
     );
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
     renderWithRouter(<OrgChartPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
-    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), 'position');
-
-    // A role nobody holds shows the seat as vacant, which is accurate — but
-    // worth knowing before saving rather than after.
-    expect(await screen.findByRole('option', { name: /Zamboni Driver \(0 members\)/i })).toBeInTheDocument();
-  });
-
-  it('refuses to save a seat that follows a role without saying which one', async () => {
-    mockGetChart.mockResolvedValue(
-      chart({ canManage: true, positions: [{ id: 'pos-chief', name: 'Fire Chief', holderCount: 1 }] })
-    );
-    renderWithRouter(<OrgChartPage />);
-
-    await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
-    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), 'position');
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Chief/i }));
+    expect(await screen.findByLabelText(/Which role is this/i)).toHaveValue('position:pos-chief');
+    await userEvent.selectOptions(screen.getByLabelText(/Which role is this/i), '');
     await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Choose the role/i);
-    expect(mockUpdateNode).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockUpdateNode).toHaveBeenCalled());
+    // `exclude_unset` on the backend reads an omitted key as "leave it alone",
+    // so unlinking has to travel as a null the payload actually carries.
+    expect(mockUpdateNode).toHaveBeenCalledWith('chief', expect.objectContaining({ positionId: null, rankCode: null }));
   });
 
-  it('does not seed a role-sourced seat with the roster it happens to resolve to', async () => {
+  it('does not offer the linked role holders as rows the officer could delete', async () => {
     mockGetChart.mockResolvedValue(
       chart({
         canManage: true,
-        positions: [{ id: 'pos-chief', name: 'Fire Chief', holderCount: 1 }],
+        roles: [chiefRole],
         nodes: [
           node({
             id: 'chief',
             title: 'Chief',
-            holderSource: OrgChartHolderSource.POSITION,
             positionId: 'pos-chief',
-            sourceLabel: 'Fire Chief',
-            holders: [{ userId: 'user-1', name: 'Shelly Hernandez' }],
+            linkLabel: 'Fire Chief',
+            holders: [
+              { userId: 'user-9', name: 'John Doe', fromLink: true },
+              { userId: null, name: 'Rev. J. Alvarez', fromLink: false },
+            ],
           }),
         ],
       })
@@ -495,12 +566,44 @@ describe('OrgChartPage', () => {
     renderWithRouter(<OrgChartPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: /Edit Chief/i }));
-    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), 'manual');
 
-    // Seeding the current holders in would turn "follows the Fire Chief role"
-    // into a snapshot of it the moment somebody switched back to a typed list.
-    expect(screen.queryByDisplayValue('Shelly Hernandez')).not.toBeInTheDocument();
-    expect(screen.getByText(/Nobody yet/i)).toBeInTheDocument();
+    // Only the typed person is editable. Seeding the link's holders in as rows
+    // would turn a live link into a snapshot of it on the next save.
+    expect(await screen.findByDisplayValue('Rev. J. Alvarez')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('John Doe')).not.toBeInTheDocument();
+    expect(screen.getByText(/are listed automatically and are not repeated here/i)).toBeInTheDocument();
+  });
+
+  it('keeps the typed people when a seat gains a link', async () => {
+    mockGetChart.mockResolvedValue(
+      chart({
+        canManage: true,
+        roles: [chiefRole],
+        nodes: [
+          node({
+            id: 'chief',
+            title: 'Chief',
+            holders: [{ userId: null, name: 'Rev. J. Alvarez', fromLink: false }],
+          }),
+        ],
+      })
+    );
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Chief/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Which role is this/i), 'position:pos-chief');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockUpdateNode).toHaveBeenCalled());
+    // Adding a link is not a request to evict anybody.
+    expect(mockUpdateNode).toHaveBeenCalledWith(
+      'chief',
+      expect.objectContaining({
+        positionId: 'pos-chief',
+        holders: [{ userId: undefined, displayName: 'Rev. J. Alvarez' }],
+      })
+    );
   });
 
   it('says how many reports a removal will promote before it happens', async () => {

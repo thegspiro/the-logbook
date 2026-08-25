@@ -1,4 +1,4 @@
-"""Org chart: many people per seat, and seats that follow a role or rank
+"""Org chart: many people per seat, and seats linked to a role or rank
 
 Three changes to Governance -> Organizational Chart, all driven by the same
 observation: a box on a real org chart is a *seat*, and a seat is not the same
@@ -10,12 +10,13 @@ thing as one person.
    onto each of them and made the chart claim a hierarchy the department does
    not have.
 
-2. ``holder_source`` / ``position_id`` / ``rank_code``. A seat may now follow a
-   corporate position or an operational rank instead of naming people outright,
-   so the Chief's box tracks whoever currently holds the Chief's position
-   without anybody remembering to edit two screens after an election. The
-   *shape* of the chart stays hand-curated — see the model docstring for why
-   the permission tree and the real chain of command genuinely disagree.
+2. ``position_id`` / ``rank_code``. A seat may now be linked to a corporate
+   position or an operational rank, so the Chief's box lists whoever currently
+   holds the Chief's role without anybody remembering to edit two screens after
+   an election. The link *supplements* the seat's own list rather than replacing
+   it, and the *shape* of the chart stays hand-curated — see the model docstring
+   for why the permission tree and the real chain of command genuinely
+   disagree.
 
 3. The old single-holder columns ``user_id`` and ``display_name`` are backfilled
    into the new table and dropped. Leaving them as "the first holder" would give
@@ -77,16 +78,6 @@ def upgrade() -> None:
 
     columns = _column_names(inspector, _NODES)
 
-    if "holder_source" not in columns:
-        op.add_column(
-            _NODES,
-            sa.Column(
-                "holder_source",
-                sa.String(length=20),
-                nullable=False,
-                server_default="manual",
-            ),
-        )
     if "position_id" not in columns:
         # SET NULL, so nullable — MySQL rejects SET NULL on a NOT NULL column
         # with error 1830 (pitfall #2). Deleting a role must leave the seat
@@ -228,5 +219,3 @@ def downgrade() -> None:
         op.drop_column(_NODES, "position_id")
     if "rank_code" in columns:
         op.drop_column(_NODES, "rank_code")
-    if "holder_source" in columns:
-        op.drop_column(_NODES, "holder_source")

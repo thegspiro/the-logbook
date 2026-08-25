@@ -10,12 +10,6 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
-from app.models.org_chart import (
-    HOLDER_SOURCE_MANUAL,
-    HOLDER_SOURCE_POSITION,
-    HOLDER_SOURCE_RANK,
-    HOLDER_SOURCES,
-)
 from app.schemas.base import UTCResponseBase
 
 _RESPONSE_CONFIG = ConfigDict(
@@ -71,55 +65,15 @@ class OrgChartHolderInput(BaseModel):
         return self
 
 
-class _HolderSourceFields(BaseModel):
-    """The three fields that decide where a seat's holders come from.
-
-    Cross-validated rather than merely typed: a seat sourced from a position
-    with no ``position_id``, or from a rank with no ``rank_code``, resolves as
-    permanently vacant with nothing on the screen to explain why. Refusing it
-    at the schema is the only place that mismatch is still visible.
-    """
-
-    holder_source: str = Field(HOLDER_SOURCE_MANUAL, max_length=20)
-    position_id: Optional[str] = Field(None, max_length=36)
-    rank_code: Optional[str] = Field(None, max_length=100)
-
-    @field_validator("holder_source")
-    @classmethod
-    def _known_source(cls, v: str) -> str:
-        source = (v or "").strip().lower()
-        if source not in HOLDER_SOURCES:
-            raise ValueError(f"Unknown holder source: {v}")
-        return source
-
-    @field_validator("position_id", "rank_code")
-    @classmethod
-    def _optional_blank_to_none(cls, v: Optional[str]) -> Optional[str]:
-        return _blank_to_none(v)
-
-    @model_validator(mode="after")
-    def _source_matches_its_reference(self) -> "_HolderSourceFields":
-        if self.holder_source == HOLDER_SOURCE_POSITION and not self.position_id:
-            raise ValueError("Choose the role this position follows")
-        if self.holder_source == HOLDER_SOURCE_RANK and not self.rank_code:
-            raise ValueError("Choose the rank this position follows")
-        # The unused reference is cleared rather than left lying in the row:
-        # kept, it would silently come back into effect the next time somebody
-        # switched the source back, naming a role nobody chose.
-        if self.holder_source != HOLDER_SOURCE_POSITION:
-            self.position_id = None
-        if self.holder_source != HOLDER_SOURCE_RANK:
-            self.rank_code = None
-        return self
-
-
-class OrgChartNodeCreate(_HolderSourceFields):
+class OrgChartNodeCreate(BaseModel):
     """A new seat on the chart."""
 
     model_config = _REQUEST_CONFIG
 
     title: str = Field(..., max_length=150)
     parent_id: Optional[str] = Field(None, max_length=36)
+    position_id: Optional[str] = Field(None, max_length=36)
+    rank_code: Optional[str] = Field(None, max_length=100)
     responsibility: Optional[str] = Field(None, max_length=2000)
     holders: List[OrgChartHolderInput] = Field(
         default_factory=list, max_length=MAX_HOLDERS_PER_NODE
@@ -136,10 +90,23 @@ class OrgChartNodeCreate(_HolderSourceFields):
             raise ValueError("Title cannot be blank")
         return title
 
-    @field_validator("parent_id", "responsibility", "contact_email", "contact_phone")
+    @field_validator(
+        "parent_id",
+        "position_id",
+        "rank_code",
+        "responsibility",
+        "contact_email",
+        "contact_phone",
+    )
     @classmethod
     def _optional_blank_to_none(cls, v: Optional[str]) -> Optional[str]:
         return _blank_to_none(v)
+
+    @model_validator(mode="after")
+    def _one_link_at_most(self) -> "OrgChartNodeCreate":
+        if self.position_id and self.rank_code:
+            raise ValueError("A position can follow a role or a rank, not both")
+        return self
 
 
 class OrgChartNodeUpdate(BaseModel):
@@ -153,8 +120,8 @@ class OrgChartNodeUpdate(BaseModel):
 
     ``holders`` is a whole-collection replace rather than a patch, which is why
     it is the one field where an omitted key and an empty list differ in the
-    obvious way: omit it to leave the people alone, send ``[]`` to empty the
-    seat.
+    obvious way: omit it to leave the hand-listed people alone, send ``[]`` to
+    remove them.
     """
 
     model_config = _REQUEST_CONFIG
@@ -164,7 +131,6 @@ class OrgChartNodeUpdate(BaseModel):
     holders: Optional[List[OrgChartHolderInput]] = Field(
         None, max_length=MAX_HOLDERS_PER_NODE
     )
-    holder_source: Optional[str] = Field(None, max_length=20)
     position_id: Optional[str] = Field(None, max_length=36)
     rank_code: Optional[str] = Field(None, max_length=100)
     contact_email: Optional[str] = Field(None, max_length=320)
@@ -181,16 +147,6 @@ class OrgChartNodeUpdate(BaseModel):
             raise ValueError("Title cannot be blank")
         return title
 
-    @field_validator("holder_source")
-    @classmethod
-    def _known_source(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        source = v.strip().lower()
-        if source not in HOLDER_SOURCES:
-            raise ValueError(f"Unknown holder source: {v}")
-        return source
-
     @field_validator(
         "responsibility",
         "position_id",
@@ -203,20 +159,9 @@ class OrgChartNodeUpdate(BaseModel):
         return _blank_to_none(v)
 
     @model_validator(mode="after")
-    def _source_matches_its_reference(self) -> "OrgChartNodeUpdate":
-        """Only checked when the source itself is part of the payload.
-
-        An update that touches nothing but the title must not be refused for a
-        reference it never mentioned, so the guard runs only for a request that
-        is actually re-pointing the seat. The editor always sends the whole
-        source triple together, which is what makes that safe.
-        """
-        if self.holder_source is None:
-            return self
-        if self.holder_source == HOLDER_SOURCE_POSITION and not self.position_id:
-            raise ValueError("Choose the role this position follows")
-        if self.holder_source == HOLDER_SOURCE_RANK and not self.rank_code:
-            raise ValueError("Choose the rank this position follows")
+    def _one_link_at_most(self) -> "OrgChartNodeUpdate":
+        if self.position_id and self.rank_code:
+            raise ValueError("A position can follow a role or a rank, not both")
         return self
 
 
@@ -244,14 +189,22 @@ class OrgChartHolder(BaseModel):
     """One resolved person in a seat.
 
     ``name`` is the answer to "who is this?" — the typed override if there is
-    one, otherwise the linked member's name. ``user_id`` is present whenever
-    the person has a member record, whichever source produced them.
+    one, otherwise the member's own name. ``user_id`` is present whenever the
+    person has a member record here.
+
+    ``from_link`` marks somebody the application supplied because the seat is
+    linked to their role, as opposed to somebody leadership typed in. The
+    distinction is worth publishing: a reader looking at a name that the chart
+    did not choose deserves to know the roster is what put it there, and an
+    officer editing the seat needs to know which names they cannot delete from
+    this screen.
     """
 
     model_config = _RESPONSE_CONFIG
 
     user_id: Optional[str] = None
     name: str
+    from_link: bool = False
 
 
 class OrgChartNodeResponse(UTCResponseBase):
@@ -267,15 +220,16 @@ class OrgChartNodeResponse(UTCResponseBase):
     parent_id: Optional[str] = None
     title: str
     responsibility: Optional[str] = None
+    # Everyone in the seat: the linked role's holders first, then the people
+    # leadership listed by hand.
     holders: List[OrgChartHolder] = []
-    holder_source: str = HOLDER_SOURCE_MANUAL
     position_id: Optional[str] = None
     rank_code: Optional[str] = None
-    # The role or rank this seat follows, resolved to its display name so the
-    # reader is told *why* a seat lists who it lists without a second lookup.
-    # None for a manual seat, and also for a source whose target has since been
-    # deleted — which is exactly when the seat reads as vacant.
-    source_label: Optional[str] = None
+    # The role or rank this seat is linked to, resolved to its display name so
+    # the reader is told *why* a seat lists who it lists without a second
+    # lookup. None for an unlinked seat, and also for a link whose target has
+    # since been deleted — at which point the seat falls back to its own list.
+    link_label: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
     sort_order: int = 0
@@ -294,29 +248,24 @@ class OrgChartMemberOption(BaseModel):
     name: str
 
 
-class OrgChartPositionOption(BaseModel):
-    """A corporate position a seat can follow, and how many hold it now.
+class OrgChartLinkOption(BaseModel):
+    """A role or rank a seat can be linked to, and who holds it right now.
 
-    ``holder_count`` is shown in the picker because a seat pointed at a role
-    nobody holds renders as vacant, and finding that out after saving reads as
-    the feature being broken.
+    The names travel with the option rather than being fetched after the fact,
+    because the editor answers "who is the Chief?" the instant the role is
+    chosen — that immediate confirmation is the whole point of linking, and a
+    second round trip to produce it would make the answer arrive late enough to
+    be missed.
     """
 
     model_config = _RESPONSE_CONFIG
 
-    id: str
-    name: str
-    holder_count: int = 0
-
-
-class OrgChartRankOption(BaseModel):
-    """An operational rank a seat can follow."""
-
-    model_config = _RESPONSE_CONFIG
-
-    code: str
-    name: str
-    holder_count: int = 0
+    # "position:<uuid>" or "rank:<code>". One namespaced value so the editor
+    # can offer roles and ranks in a single "which role is this?" list without
+    # a second field asking which kind of thing was just picked.
+    value: str
+    label: str
+    holders: List[OrgChartHolder] = []
 
 
 class OrgChartResponse(BaseModel):
@@ -332,5 +281,6 @@ class OrgChartResponse(BaseModel):
     # chart: they are editing affordances, and the roster is not the chart's to
     # publish.
     members: List[OrgChartMemberOption] = []
-    positions: List[OrgChartPositionOption] = []
-    ranks: List[OrgChartRankOption] = []
+    # Corporate positions and operational ranks, each with who holds it now.
+    roles: List[OrgChartLinkOption] = []
+    ranks: List[OrgChartLinkOption] = []

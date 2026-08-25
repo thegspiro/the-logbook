@@ -10,27 +10,27 @@ everything about the tree here is about keeping a leadership-edited structure
 well-formed: no cycles, no runaway nesting, contiguous sibling ordering, and no
 seat that outlives its parent by disappearing with it.
 
-*Who fills* a seat is resolved at read time, from one of three sources: the
-people leadership listed by hand, whoever currently holds a corporate position,
-or whoever currently carries an operational rank. The last two are read from
-the roster on every request rather than copied into the chart, because a copy
-is a second answer to "who is the Chief" that goes stale the day after an
-election and gives nobody a reason to suspect it.
+*Who fills* a seat is resolved at read time. A seat may be linked to a
+corporate position or an operational rank, and whoever holds it in the
+application is listed in the box — read from the roster on every request rather
+than copied into the chart, because a copy is a second answer to "who is the
+Chief" that goes stale the day after an election and gives nobody a reason to
+suspect it.
+
+The link supplements the seat's own list rather than replacing it: a linked
+seat still shows the people leadership typed in, so a department can put the
+Chief's role on the Chief's box and still name an auxiliary co-chair who has no
+login. That is the whole distinction — the application supports the chart, it
+does not define it.
 """
 
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.operational_rank import OperationalRank
-from app.models.org_chart import (
-    HOLDER_SOURCE_MANUAL,
-    HOLDER_SOURCE_POSITION,
-    HOLDER_SOURCE_RANK,
-    OrgChartNode,
-    OrgChartNodeHolder,
-)
+from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.user import Position, User, UserStatus, user_positions
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -49,6 +49,12 @@ MAX_NODES = 500
 # service is also reached by onboarding and by tests, which do not go through
 # the request schema.
 MAX_HOLDERS_PER_NODE = 25
+
+# Namespace prefixes for the editor's single "which role is this?" list, which
+# offers corporate positions and operational ranks together. Kept here rather
+# than in the schema because the service is what builds the options.
+LINK_POSITION_PREFIX = "position:"
+LINK_RANK_PREFIX = "rank:"
 
 
 class OrgChartService:
@@ -125,7 +131,7 @@ class OrgChartService:
 
     async def _position_holders(
         self, organization_id: str, position_ids: Set[str]
-    ) -> Dict[str, List[Dict[str, str]]]:
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Active members currently holding each of ``position_ids``."""
         if not position_ids:
             return {}
@@ -139,18 +145,18 @@ class OrgChartService:
                 User.deleted_at.is_(None),
             )
         )
-        grouped: Dict[str, List[Dict[str, str]]] = {}
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
         for position_id, user in result.all():
             grouped.setdefault(str(position_id), []).append(
-                {"user_id": str(user.id), "name": _member_name(user)}
+                {"user_id": str(user.id), "name": _member_name(user), "from_link": True}
             )
         for holders in grouped.values():
-            holders.sort(key=lambda h: h["name"].lower())
+            holders.sort(key=lambda h: str(h["name"]).lower())
         return grouped
 
     async def _rank_holders(
         self, organization_id: str, rank_codes: Set[str]
-    ) -> Dict[str, List[Dict[str, str]]]:
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Active members currently carrying each of ``rank_codes``."""
         if not rank_codes:
             return {}
@@ -162,13 +168,13 @@ class OrgChartService:
                 User.deleted_at.is_(None),
             )
         )
-        grouped: Dict[str, List[Dict[str, str]]] = {}
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
         for user in result.scalars().all():
             grouped.setdefault(str(user.rank), []).append(
-                {"user_id": str(user.id), "name": _member_name(user)}
+                {"user_id": str(user.id), "name": _member_name(user), "from_link": True}
             )
         for holders in grouped.values():
-            holders.sort(key=lambda h: h["name"].lower())
+            holders.sort(key=lambda h: str(h["name"]).lower())
         return grouped
 
     async def _position_names(
@@ -200,8 +206,8 @@ class OrgChartService:
     async def _resolve_holders(
         self, organization_id: str, nodes: Sequence[OrgChartNode]
     ) -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[str, Optional[str]]]:
-        """Resolve every seat's people and its source label, in a fixed number
-        of queries regardless of how many seats the chart has."""
+        """Resolve every seat's people and its link label, in a fixed number of
+        queries regardless of how many seats the chart has."""
         node_ids = [str(n.id) for n in nodes]
         manual_rows = await self._manual_holder_rows(node_ids)
 
@@ -213,16 +219,8 @@ class OrgChartService:
         }
         names = await self._member_names(organization_id, linked_user_ids)
 
-        position_ids = {
-            str(n.position_id)
-            for n in nodes
-            if n.holder_source == HOLDER_SOURCE_POSITION and n.position_id
-        }
-        rank_codes = {
-            str(n.rank_code)
-            for n in nodes
-            if n.holder_source == HOLDER_SOURCE_RANK and n.rank_code
-        }
+        position_ids = {str(n.position_id) for n in nodes if n.position_id}
+        rank_codes = {str(n.rank_code) for n in nodes if n.rank_code}
 
         by_position = await self._position_holders(organization_id, position_ids)
         by_rank = await self._rank_holders(organization_id, rank_codes)
@@ -234,35 +232,39 @@ class OrgChartService:
 
         for node in nodes:
             node_id = str(node.id)
-            source = node.holder_source or HOLDER_SOURCE_MANUAL
-            if source == HOLDER_SOURCE_POSITION:
-                holders[node_id] = list(by_position.get(str(node.position_id), []))
+
+            if node.position_id:
+                linked = list(by_position.get(str(node.position_id), []))
                 labels[node_id] = position_names.get(str(node.position_id))
-            elif source == HOLDER_SOURCE_RANK:
-                holders[node_id] = list(by_rank.get(str(node.rank_code), []))
+            elif node.rank_code:
+                linked = list(by_rank.get(str(node.rank_code), []))
                 labels[node_id] = rank_names.get(str(node.rank_code))
             else:
-                resolved: List[Dict[str, Any]] = []
-                for row in manual_rows.get(node_id, []):
-                    linked = names.get(str(row.user_id)) if row.user_id else None
-                    # The typed override wins: it is how a department announces
-                    # a holder the member record cannot express, and how it
-                    # corrects one it can. A linked member who has since been
-                    # removed and has no override drops out entirely rather
-                    # than publishing a blank line in the box.
-                    name = row.display_name or linked
-                    if not name:
-                        continue
-                    resolved.append(
-                        {
-                            "user_id": (
-                                str(row.user_id) if row.user_id and linked else None
-                            ),
-                            "name": name,
-                        }
-                    )
-                holders[node_id] = resolved
+                linked = []
                 labels[node_id] = None
+
+            typed: List[Dict[str, Any]] = []
+            for row in manual_rows.get(node_id, []):
+                member_name = names.get(str(row.user_id)) if row.user_id else None
+                # The typed override wins: it is how a department announces a
+                # holder the member record cannot express, and how it corrects
+                # one it can. A linked member who has since been removed and has
+                # no override drops out entirely rather than publishing a blank
+                # line in the box.
+                name = row.display_name or member_name
+                if not name:
+                    continue
+                typed.append(
+                    {
+                        "user_id": (
+                            str(row.user_id) if row.user_id and member_name else None
+                        ),
+                        "name": name,
+                        "from_link": False,
+                    }
+                )
+
+            holders[node_id] = _merge_holders(linked, typed)
 
         return holders, labels
 
@@ -336,63 +338,40 @@ class OrgChartService:
         options.sort(key=lambda o: o["name"].lower())
         return options
 
-    async def list_position_options(self, organization_id: str) -> List[Dict[str, Any]]:
-        """Corporate positions a seat can follow, with how many hold each.
+    async def list_link_options(
+        self, organization_id: str
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """The roles and ranks a seat can be linked to, each with who holds it.
 
-        The count is part of the option because a seat pointed at a role nobody
-        holds renders as vacant, and discovering that only after saving reads
-        as the link being broken rather than the role being empty.
-        """
-        counts = await self.db.execute(
-            select(
-                user_positions.c.position_id,
-                func.count(user_positions.c.user_id),
-            )
-            .join(User, User.id == user_positions.c.user_id)
-            .where(
-                User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
-                User.deleted_at.is_(None),
-            )
-            .group_by(user_positions.c.position_id)
-        )
-        by_position = {str(pid): int(count) for pid, count in counts.all()}
-
-        result = await self.db.execute(
-            select(Position).where(Position.organization_id == organization_id)
-        )
-        options = [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "holder_count": by_position.get(str(p.id), 0),
-            }
-            for p in result.scalars().all()
-        ]
-        options.sort(key=lambda o: str(o["name"]).lower())
-        return options
-
-    async def list_rank_options(self, organization_id: str) -> List[Dict[str, Any]]:
-        """Operational ranks a seat can follow, with how many carry each.
+        Returned as ``(roles, ranks)`` for the editor's single "which role is
+        this?" list. The holders travel with the option so that choosing a role
+        can name its current holder immediately — that confirmation is what the
+        officer is linking *for*, and fetching it afterwards would deliver the
+        answer late enough to be missed.
 
         Deactivated ranks are left out of the picker but keep resolving on a
-        seat that already names one: dropping the seat's holders because
-        somebody retired a rank from the settings screen would rewrite the
-        published chart as a side effect of an unrelated edit.
+        seat that already names one: dropping a seat's holders because somebody
+        retired a rank from the settings screen would rewrite the published
+        chart as a side effect of an unrelated edit.
         """
-        counts = await self.db.execute(
-            select(User.rank, func.count(User.id))
-            .where(
-                User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
-                User.deleted_at.is_(None),
-                User.rank.is_not(None),
-            )
-            .group_by(User.rank)
+        positions = await self.db.execute(
+            select(Position).where(Position.organization_id == organization_id)
         )
-        by_rank = {str(code): int(count) for code, count in counts.all()}
+        position_rows = list(positions.scalars().all())
+        by_position = await self._position_holders(
+            organization_id, {str(p.id) for p in position_rows}
+        )
+        roles = [
+            {
+                "value": f"{LINK_POSITION_PREFIX}{p.id}",
+                "label": p.name,
+                "holders": by_position.get(str(p.id), []),
+            }
+            for p in position_rows
+        ]
+        roles.sort(key=lambda o: str(o["label"]).lower())
 
-        result = await self.db.execute(
+        rank_result = await self.db.execute(
             select(OperationalRank)
             .where(
                 OperationalRank.organization_id == organization_id,
@@ -400,14 +379,20 @@ class OrgChartService:
             )
             .order_by(OperationalRank.sort_order, OperationalRank.display_name)
         )
-        return [
+        rank_rows = list(rank_result.scalars().all())
+        by_rank = await self._rank_holders(
+            organization_id, {str(r.rank_code) for r in rank_rows}
+        )
+        ranks = [
             {
-                "code": str(r.rank_code),
-                "name": r.display_name,
-                "holder_count": by_rank.get(str(r.rank_code), 0),
+                "value": f"{LINK_RANK_PREFIX}{r.rank_code}",
+                "label": r.display_name,
+                "holders": by_rank.get(str(r.rank_code), []),
             }
-            for r in result.scalars().all()
+            for r in rank_rows
         ]
+
+        return roles, ranks
 
     # ------------------------------------------------------------------
     # Writes
@@ -570,10 +555,12 @@ class OrgChartService:
             )
 
         parent_id = payload.get("parent_id")
-        source = payload.get("holder_source") or HOLDER_SOURCE_MANUAL
         position_id = payload.get("position_id")
         rank_code = payload.get("rank_code")
         holders = list(payload.get("holders") or [])
+
+        if position_id and rank_code:
+            raise ValueError("A position can follow a role or a rank, not both")
 
         await self._validate_references(
             organization_id,
@@ -591,9 +578,8 @@ class OrgChartService:
             parent_id=parent_id,
             title=payload["title"],
             responsibility=payload.get("responsibility"),
-            holder_source=source,
-            position_id=position_id if source == HOLDER_SOURCE_POSITION else None,
-            rank_code=rank_code if source == HOLDER_SOURCE_RANK else None,
+            position_id=position_id,
+            rank_code=rank_code,
             contact_email=payload.get("contact_email"),
             contact_phone=payload.get("contact_phone"),
             is_published=payload.get("is_published", True),
@@ -603,10 +589,10 @@ class OrgChartService:
         self.db.add(node)
         await self.db.flush()
 
-        # Only a manual seat stores people. A seat following a role resolves
-        # them from the roster on every read, so keeping a list here as well
-        # would be a second answer to the same question.
-        if source == HOLDER_SOURCE_MANUAL and holders:
+        # Only the hand-listed people are stored. Whoever the link supplies is
+        # resolved from the roster on every read, so keeping a copy here would
+        # be a second answer to the same question.
+        if holders:
             await self._replace_holders(node, holders)
         return node
 
@@ -624,29 +610,23 @@ class OrgChartService:
         node = await self._require_node(organization_id, node_id)
 
         holders = updates.pop("holders", None)
-        source = updates.get("holder_source") or node.holder_source
-        source = source or HOLDER_SOURCE_MANUAL
+
+        # Read against the row's state after the payload is applied, not before:
+        # an update that sets a rank on a seat that already has a role has to be
+        # refused, and one that swaps a role for a rank must not be.
+        next_position = (
+            updates["position_id"] if "position_id" in updates else node.position_id
+        )
+        next_rank = updates["rank_code"] if "rank_code" in updates else node.rank_code
+        if next_position and next_rank:
+            raise ValueError("A position can follow a role or a rank, not both")
 
         await self._validate_references(
             organization_id,
-            position_id=(
-                updates.get("position_id") if source == HOLDER_SOURCE_POSITION else None
-            ),
-            rank_code=(
-                updates.get("rank_code") if source == HOLDER_SOURCE_RANK else None
-            ),
+            position_id=updates.get("position_id"),
+            rank_code=updates.get("rank_code"),
             holders=holders,
         )
-
-        # A seat that stops following a role must not keep pointing at it, and
-        # one that starts following a role must not keep the other source's
-        # reference alive underneath. Written here rather than left to the
-        # caller so every write path agrees on the cleared field.
-        if "holder_source" in updates:
-            if source != HOLDER_SOURCE_POSITION:
-                updates["position_id"] = None
-            if source != HOLDER_SOURCE_RANK:
-                updates["rank_code"] = None
 
         # apply_updates, not a `if value is not None` loop: an explicit null
         # here is a seat being unlinked from a role, and dropping it would
@@ -659,15 +639,12 @@ class OrgChartService:
         node.updated_by = updated_by
         await self.db.flush()
 
-        if source == HOLDER_SOURCE_MANUAL:
-            if holders is not None:
-                await self._replace_holders(node, holders)
-        else:
-            # The hand-listed people are dropped rather than kept dormant: left
-            # in place they would reappear the moment somebody switched the
-            # seat back to manual, republishing a roster that has since been
-            # superseded by an election.
-            await self._replace_holders(node, [])
+        # Unlinking never touches the typed list, and linking never replaces it.
+        # The two coexist by design: an officer who links the Chief's role to
+        # the Chief's box has not asked for the auxiliary co-chair they typed in
+        # last year to disappear.
+        if holders is not None:
+            await self._replace_holders(node, holders)
 
         return node
 
@@ -817,10 +794,27 @@ def _member_name(user: User) -> str:
     return joined or (getattr(user, "username", "") or "")
 
 
+def _merge_holders(
+    linked: List[Dict[str, Any]], typed: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Everyone in a seat: the link's holders, then the ones typed in.
+
+    A member who appears in both is listed once, in the linked position, using
+    the typed entry — that entry exists precisely to say how this department
+    announces them ("Chief Ramirez" rather than "Miguel Ramirez"), and the link
+    is what put them in the box, so it decides where they sit.
+    """
+    overrides = {h["user_id"]: h for h in typed if h.get("user_id")}
+    merged = [overrides.get(h["user_id"], h) for h in linked]
+    claimed = {h["user_id"] for h in linked if h.get("user_id")}
+    merged.extend(h for h in typed if h.get("user_id") not in claimed)
+    return merged
+
+
 def _serialize(
     node: OrgChartNode,
     holders: List[Dict[str, Any]],
-    source_label: Optional[str],
+    link_label: Optional[str],
     depth: int,
 ) -> Dict[str, Any]:
     return {
@@ -829,10 +823,9 @@ def _serialize(
         "title": node.title,
         "responsibility": node.responsibility,
         "holders": holders,
-        "holder_source": node.holder_source or HOLDER_SOURCE_MANUAL,
         "position_id": str(node.position_id) if node.position_id else None,
         "rank_code": node.rank_code,
-        "source_label": source_label,
+        "link_label": link_label,
         "contact_email": node.contact_email,
         "contact_phone": node.contact_phone,
         "sort_order": node.sort_order or 0,
@@ -846,4 +839,6 @@ __all__ = [
     "MAX_DEPTH",
     "MAX_NODES",
     "MAX_HOLDERS_PER_NODE",
+    "LINK_POSITION_PREFIX",
+    "LINK_RANK_PREFIX",
 ]
