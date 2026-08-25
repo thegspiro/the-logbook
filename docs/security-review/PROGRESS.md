@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                                                          |
-| ----------- | -------------------------------------------------------------------------------------------------------------- |
-| PR          | [#1809](https://github.com/thegspiro/the-logbook/pull/1809)                                                    |
-| Branch      | `claude/security-review-fin`                                                                                   |
-| Feature     | 05 Finance & approvals                                                                                         |
-| CI          | ✅ green — all 16 checks pass on the tending commit                                                            |
-| Threads     | 4 resolved (Codex P2: keep filtering in SQL, migration miscount, weak regression test, missed history commits) |
-| Last tended | 2026-08-25 — CI green (16/16), all 4 Codex threads resolved; awaiting merge                                    |
+| Field       | Value                                                                   |
+| ----------- | ----------------------------------------------------------------------- |
+| PR          | [#1810](https://github.com/thegspiro/the-logbook/pull/1810)             |
+| Branch      | `claude/security-review-elec`                                           |
+| Feature     | 06 Elections & ballots                                                  |
+| CI          | just opened; not yet checked                                            |
+| Threads     | 2 resolved (Codex P2: route-gating miscount, unbounded saved-templates) |
+| Last tended | 2026-08-25 — 2 Codex findings addressed, gates green                    |
 
 ---
 
@@ -56,8 +56,8 @@ data-carrying modules, then the supporting infrastructure.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳       |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳       |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜       |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
@@ -240,3 +240,42 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   corrected, though the current-code review this pass actually ran already
   covered that commit's effect. See `FIN-05-finance-approvals.md` for the
   full write-up. Next: 06 elections & ballots.
+- **05 Finance & approvals ✅ merged** — PR #1809 merged 2026-08-25 15:49
+  UTC.
+- **06 Elections & ballots ⏳** — the most heavily audited module in the
+  codebase (module audit + 13 R-findings + 5 R-D findings + 5 app-review
+  passes, all closed). File sizes have nearly doubled since the module-audit
+  header was written (`elections.py` 2,721→3,809 L, 46→65 routes;
+  `election_service.py` 4,616→7,962 L) with no discrete finding ever called
+  out for the growth — cross-checked the current route list against
+  everything every prior pass named and nearly all of it is accounted for
+  (voter-overrides, proxy-authorizations, manual-ballots, attendees,
+  eligibility-roster, package assembly — each individually documented across
+  the R/R-D/ELEC2 series; only the header counts were never bumped).
+  **One feature outside the module-audit/app-review/security-review doc set
+  found:** `SavedBallotTemplate` (migration `20260812_0001`) — org-scoped
+  list/create/delete, `elections.manage` gated, `extra="forbid"` schema
+  accepting only configuration fields (no election/voter/candidate/token/
+  result data), audit-logged. Access-control clean. Also re-verified all 31
+  `select(Election)` call sites in `election_service.py` for tenant
+  isolation (28 direct, 3 safe-by-construction) — no FIN-9-shaped unscoped
+  scan here. Corrected the stale endpoint/line counts in
+  `module-audit/elections.md` (NIT). **Two Codex review comments on the PR
+  both caught real issues**: (1) the route-inventory table's "61
+  permission-gated" claim conflated authenticated with permission-gated —
+  5 voter-facing routes (`check_eligibility`/`cast_vote`/`cast_bulk_votes`/
+  `get_results`/`cast_proxy_vote`) are authenticated-only by documented
+  design (self-scoped, not a gap), corrected to 56 gated + 5
+  authenticated-only + 4 public; (2) `SavedBallotTemplate`'s list/create
+  were recorded as clean when they're actually unbounded — no pagination on
+  the list, no per-org cap on creation — a real dimension-6 (abuse
+  resistance) gap the initial pass missed by checking access control only.
+  **ELEC-12 (LOW/MED, flagged, not fixed)** — both remedies are
+  behavior-change judgment calls (response-envelope pagination, an
+  arbitrary creation cap), so flagged rather than guessed; mirrored into
+  `KNOWN_LIMITATIONS.md`. Also caught in my own review before push: the
+  write-up initially claimed `SavedBallotTemplate` was "previously
+  undocumented," but `KNOWN_LIMITATIONS.md` already carries a 2026-08-12
+  ship-time entry on it (a different angle — schema tolerance, not access
+  control); corrected. See `ELEC-06-elections-ballots.md` for the full
+  write-up. Next: 07 users & organizations.
