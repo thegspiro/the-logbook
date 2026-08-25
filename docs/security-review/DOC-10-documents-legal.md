@@ -1,6 +1,6 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-25 · **PR:** #1821
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-25 · **PR:** #1827 (#1821 merged prematurely mid-review, capturing only DOC-7; #1827 carries the rest, rebased onto main — see PROGRESS.md)
 
 **Backend:** `endpoints/documents.py` (462 L, 11 routes), `services/documents_service.py` (998 L), `endpoints/station_documents.py` (102 L, 2 routes, new to this rotation), `services/print_document_service.py` (515 L, new), `endpoints/legal_documents.py` (340 L, 6 routes, new), `services/legal_service.py` (241 L, new), `schemas/legal.py`, `schemas/documents.py`, `models/document.py`, `models/legal.py`
 **Frontend:** `pages/legal/LegalPage.tsx` (public consumption path, read for XSS — see Verified good), `modules/governance/pages/LegalDocumentsPage.tsx` (not read in full — backend-only pass)
