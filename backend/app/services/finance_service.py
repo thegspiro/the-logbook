@@ -49,6 +49,7 @@ from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
+from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 
 def _apply_payment_totals(dues: MemberDues) -> None:
@@ -1083,13 +1084,15 @@ class FinanceService:
             if hasattr(model, "request_number")
             else model.report_number
         )
-        like_pattern = f"{prefix}-{year}-%"
+        # System-generated prefix, so the trailing % is a deliberate wildcard.
+        # Renamed off `like_pattern` so it cannot shadow the shared helper.
+        number_prefix = f"{prefix}-{year}-%"
         result = await self.db.execute(
             select(
                 func.max(cast(func.substring_index(number_col, "-", -1), Integer))
             ).where(
                 model.organization_id == org_id,
-                number_col.like(like_pattern),
+                number_col.like(number_prefix, escape=LIKE_ESCAPE_CHAR),
             )
         )
         highest = result.scalar() or 0

@@ -20,6 +20,7 @@ from app.models.notification import (
     MessageTargetType,
 )
 from app.models.user import Role, User, UserStatus
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class MessagingService:
@@ -121,11 +122,11 @@ class MessagingService:
             if not include_deleted:
                 q = q.where(DepartmentMessage.deleted_at.is_(None))
             if search and search.strip():
-                pattern = f"%{search.strip()}%"
+                pattern = like_pattern(search.strip())
                 q = q.where(
                     or_(
-                        DepartmentMessage.title.ilike(pattern),
-                        DepartmentMessage.body.ilike(pattern),
+                        DepartmentMessage.title.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                        DepartmentMessage.body.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     )
                 )
             if priority:

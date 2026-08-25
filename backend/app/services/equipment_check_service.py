@@ -42,6 +42,7 @@ from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class EquipmentCheckConflictError(ValueError):
@@ -4299,11 +4300,10 @@ class EquipmentCheckService:
         if item_name:
             # Escape LIKE wildcards so a literal % or _ in the filter doesn't
             # act as a wildcard (declare the escape char so it's honored).
-            safe_item = (
-                item_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
             base_q = base_q.where(
-                ShiftEquipmentCheckItem.item_name.ilike(f"%{safe_item}%", escape="\\")
+                ShiftEquipmentCheckItem.item_name.ilike(
+                    like_pattern(item_name), escape=LIKE_ESCAPE_CHAR
+                )
             )
 
         # Count

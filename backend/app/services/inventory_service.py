@@ -72,6 +72,7 @@ from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -892,16 +893,13 @@ class InventoryService:
         if active_only:
             query = query.where(InventoryVendor.is_active.is_(True))
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            term = f"%{safe_search}%"
+            term = like_pattern(search)
             query = query.where(
                 or_(
-                    InventoryVendor.name.ilike(term),
-                    InventoryVendor.account_number.ilike(term),
-                    InventoryVendor.email.ilike(term),
-                    InventoryVendor.phone.ilike(term),
+                    InventoryVendor.name.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryVendor.account_number.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryVendor.email.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryVendor.phone.ilike(term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
         result = await self.db.execute(query)
@@ -1587,21 +1585,26 @@ class InventoryService:
             query = query.where(InventoryItem.style == style)
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
                 or_(
-                    InventoryItem.name.ilike(search_term),
-                    InventoryItem.serial_number.ilike(search_term),
-                    InventoryItem.asset_tag.ilike(search_term),
-                    InventoryItem.barcode.ilike(search_term),
-                    InventoryItem.description.ilike(search_term),
-                    InventoryItem.manufacturer.ilike(search_term),
-                    InventoryItem.model_number.ilike(search_term),
-                    InventoryItem.size.ilike(search_term),
-                    InventoryItem.color.ilike(search_term),
+                    InventoryItem.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.serial_number.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    InventoryItem.asset_tag.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.barcode.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.description.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    InventoryItem.manufacturer.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    InventoryItem.model_number.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    InventoryItem.size.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.color.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
@@ -3217,14 +3220,13 @@ class InventoryService:
         )
 
         if search:
-            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            pattern = f"%{safe}%"
+            pattern = like_pattern(search)
             query = query.where(
                 or_(
-                    User.username.ilike(pattern),
-                    User.first_name.ilike(pattern),
-                    User.last_name.ilike(pattern),
-                    User.membership_number.ilike(pattern),
+                    User.username.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.membership_number.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
@@ -3354,8 +3356,7 @@ class InventoryService:
             return []
 
         org_id = str(organization_id)
-        safe_code = code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        search_term = f"%{safe_code}%"
+        search_term = like_pattern(code)
 
         # Priority-ordered fields to search
         field_names = ["barcode", "serial_number", "asset_tag", "name", "size", "color"]
@@ -3374,16 +3375,24 @@ class InventoryService:
             .where(
                 InventoryItem.organization_id == org_id,
                 InventoryItem.active.is_(True),
-                or_(*[col.ilike(search_term) for col in field_cols]),
+                or_(
+                    *[
+                        col.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                        for col in field_cols
+                    ]
+                ),
             )
             .options(selectinload(InventoryItem.category))
             .limit(limit * 2)  # fetch extra to allow dedup headroom
         )
         items = result.scalars().all()
 
-        # Determine the highest-priority matched field for each item
+        # Determine the highest-priority matched field for each item.
+        # Compare against the RAW code, not the LIKE-escaped pattern: a search
+        # for "50%" escapes to "50\\%", which never matches the stored value,
+        # so every hit would fall through to the "name" default.
         results: List[Tuple[InventoryItem, str, str]] = []
-        safe_lower = safe_code.lower()
+        safe_lower = code.lower()
         for item in items:
             matched_field = "name"
             matched_value = item.name or ""
@@ -5424,10 +5433,11 @@ class InventoryService:
         if search:
             # INV-5: escape LIKE wildcards, matching the other search methods —
             # otherwise a literal % or _ in the box is treated as a wildcard.
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q = q.where(
+                ReorderRequest.item_name.ilike(
+                    like_pattern(search), escape=LIKE_ESCAPE_CHAR
+                )
             )
-            q = q.where(ReorderRequest.item_name.ilike(f"%{safe_search}%"))
         q = q.options(
             selectinload(ReorderRequest.requester),
             selectinload(ReorderRequest.approver),
