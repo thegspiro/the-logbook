@@ -1,5 +1,45 @@
 # Screenshot currency
 
+## Captured 2026-08-25 (twenty-second) — label printers, and a marker that asked for two incompatible things
+
+`19-33-label-printers`. 505 of 514.
+
+The marker wanted RFC 5737 documentation addresses **and** "a status result
+visible on at least one so the reader sees what a healthy answer looks like".
+Those cannot both hold, and the reason is a real property of the feature rather
+than a fixture shortcoming.
+
+`app/utils/printer_transport.py` refuses any address outside
+`LABEL_PRINTER_ALLOWED_NETWORKS` before it opens a socket — loopback,
+link-local and reserved ranges are rejected outright, and everything else has
+to be inside an operator-listed CIDR. That setting is a **platform** setting
+(`app/core/config.py`), deliberately not tenant-managed, so that registering a
+printer cannot be turned into an SSRF primitive. **Its default is empty**,
+which disables direct network printing entirely. `192.0.2.x` is precisely the
+range no operator will ever list.
+
+So a healthy emerald status line is reachable in exactly two ways, and both are
+disqualifying: put a routable printer address in a public repository, or mock
+the response and photograph a lie.
+
+What was done instead: the shot shows the two registrations, which is the real
+part — the ZPL watch-desk printer badged **Default**, the ESC/POS one in the
+supply room, the label stock each resolves to (`Zebra 2" x 1"` and
+`80mm roll (3.1")`), and the per-printer **Check status** control the section's
+"status is per printer" claim is about. The guide gains a paragraph stating the
+allowlist, quoting the refusal text verbatim, and quoting the shape of a
+healthy line (`model · dpi · firmware`) so the reader knows what to expect
+without being shown a fabricated one.
+
+Worth noting on its own: the guide already said "Nothing checks the address
+when you save it, so registration will succeed either way and the failure
+appears at print or status time" — true, and verified, since both fixtures
+registered without complaint. What it did not say is that on a stock install
+the failure at status time is *guaranteed* and is not about the printer at all.
+That is the first thing to check, and it was missing.
+
+Seeded by `seed_label_printers`, which skips by name and is safe to re-run.
+
 ## Found 2026-08-25 — probing the My Admin Hours marker turned up a 500
 
 The twenty-second pass opens on the ten markers that arrived with this
