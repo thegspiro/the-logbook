@@ -235,7 +235,7 @@ class TestReopen:
     async def test_reopen_clears_the_lock_and_the_derived_durations(self):
         event = _event()
         derived = SimpleNamespace(attendance_duration_minutes=120)
-        db = _mock_db(_one(event), _all([derived]))
+        db = _mock_db(_one(event), _all([derived]), _one(event))
         svc = EventService(db)
 
         result, err = await svc.reopen_event_attendance("event-1", "org-1")
@@ -260,7 +260,7 @@ class TestReopen:
                 "room_setup": "hall",
             }
         )
-        db = _mock_db(_one(event), _all([]))
+        db = _mock_db(_one(event), _all([]), _one(event))
         svc = EventService(db)
 
         await svc.reopen_event_attendance("event-1", "org-1")
@@ -274,13 +274,47 @@ class TestReopen:
         committed state, and the write can be a silent no-op."""
         committed = {"attendance_finalized": True, "registration": {"limit": 5}}
         event = _event(custom_fields=committed)
-        db = _mock_db(_one(event), _all([]))
+        db = _mock_db(_one(event), _all([]), _one(event))
 
         await EventService(db).reopen_event_attendance("event-1", "org-1")
 
         assert event.custom_fields is not committed
         assert event.custom_fields["registration"] is not committed["registration"]
         assert committed["attendance_finalized"] is True
+
+    async def test_reopen_eager_loads_the_location_for_the_response(self):
+        """The endpoint serializes the reopened event through
+        _build_event_response, which reads event.location_obj. Loaded lazily
+        that is IO outside the greenlet context — MissingGreenlet, surfacing as
+        a 500 on every event that has a location, while location-less events
+        short-circuit and look fine.
+
+        The eager load sits on the post-commit re-read, not on the locked
+        fetch: FOR UPDATE is meant for the event row alone."""
+        reopened = _event()
+        db = _mock_db(_one(_event()), _all([]), _one(reopened))
+
+        result, err = await EventService(db).reopen_event_attendance("event-1", "org-1")
+
+        assert err is None
+        assert result is reopened
+        statement = db.execute.await_args.args[0]
+        loaded = {
+            str(element)
+            for option in statement._with_options
+            for element in option.path
+        }
+        assert "Event.location_obj" in loaded
+
+    async def test_an_event_deleted_mid_reopen_reports_not_found(self):
+        """The reopen itself has committed; there is simply no row left to
+        serialize, and a 404 says that better than a lazy-load crash."""
+        db = _mock_db(_one(_event()), _all([]), _one(None))
+
+        result, err = await EventService(db).reopen_event_attendance("event-1", "org-1")
+
+        assert result is None
+        assert err == "Event not found"
 
     async def test_reopening_an_open_event_is_refused(self):
         svc = EventService(_mock_db(_one(_event(finalized=False))))

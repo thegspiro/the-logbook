@@ -2321,7 +2321,25 @@ class EventService:
         event.updated_at = datetime.now(dt_timezone.utc)
 
         await self.db.commit()
-        await self.db.refresh(event)
+
+        # Re-read rather than refresh(): the endpoint serializes what this
+        # returns through _build_event_response, which reads location_obj, and
+        # the fetch above carries no eager loads on purpose — the row lock is
+        # for the event row alone. Left lazy, that read is IO outside the
+        # greenlet context and raises MissingGreenlet, which surfaced as a 500
+        # on reopening any event that has a location; events with no
+        # location_id short-circuit on the NULL FK and appeared to work.
+        reloaded = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
+        )
+        event = reloaded.scalar_one_or_none()
+        if not event:
+            # Deleted between the commit and this read. The reopen stands;
+            # there is simply nothing left to serialize.
+            return None, "Event not found"
 
         return event, None
 
