@@ -767,21 +767,6 @@ lot's number or expiration date require `equipment_check.manage` or
 | -------------------- | ----------------- | ------------------------ |
 | `/medical-screening` | Medical Screening | `medical_screening.view` |
 
-> **The route is not permission-gated, though this table said it was**
-> _(corrected 2026-08-16, found by `scripts/check_route_permissions.py`)_. Every
-> other module wraps its routes in `<ProtectedRoute requiredPermission=…>`;
-> `getMedicalScreeningRoutes()` returns a bare `<Route>`, so any signed-in member
-> can open the page.
->
-> **What actually protects the data is the API**, which enforces
-> `medical_screening.view` on every read — so a member without it gets an empty
-> or erroring screen rather than PHI, the same server-side-redaction pattern the
-> skills-testing print routes use. This is therefore a defence-in-depth and UX
-> gap rather than a disclosure: the member sees a broken page instead of a clean
-> "not authorized". **Adding the route gate would match every other module** and
-> is recorded in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) for an
-> owner decision, since it changes who can reach the URL.
-
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
 
 ---

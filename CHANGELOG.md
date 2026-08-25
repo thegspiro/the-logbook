@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Clearing certain medical-screening fields could crash the request (2026-08-25)
+
+**Fixed**
+
+- Editing a screening record or requirement and explicitly clearing its
+  status, screening type, or (for a requirement) its name returned a server
+  error instead of a clean rejection — those fields can't actually be
+  cleared, but the request used to fail with a raw database error rather
+  than a readable message. It now returns a normal validation error.
+
 ### A membership applicant's file could reach a signer who could not otherwise view it (2026-08-25)
 
 **Fixed**

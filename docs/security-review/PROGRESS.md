@@ -18,12 +18,12 @@ feature. The rotation cannot outrun its own review queue.
 
 | Field       | Value                                                       |
 | ----------- | ----------------------------------------------------------- |
-| PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815) |
-| Branch      | `claude/security-review-mp`                                 |
-| Feature     | 08 Membership pipeline                                      |
-| CI          | green (16/16 checks) on current head 6b7c2074               |
-| Threads     | 5 Codex threads, all fixed/flagged, replied, and resolved   |
-| Last tended | 2026-08-25 — 5 fixed, 1 flagged, 1 more found+fixed; pushed |
+| PR          | [#1816](https://github.com/thegspiro/the-logbook/pull/1816) |
+| Branch      | `claude/security-review-ms`                                 |
+| Feature     | 09 Medical screening (PHI)                                  |
+| CI          | fresh push, awaiting first run                              |
+| Threads     | none yet                                                    |
+| Last tended | 2026-08-25 — 2 fixed, 1 flagged, 1 doc correction; pushed   |
 
 ---
 
@@ -59,8 +59,8 @@ data-carrying modules, then the supporting infrastructure.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814 |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳       |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅ #1815 |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳       |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜       |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜       |
@@ -338,3 +338,29 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   37 PII-exposure tests/tsc, all green). See `MP-08-membership-pipeline.md`
   for the complete writeup, including the revision note explaining the
   draft-vs-final split. Next: 09 medical screening (PHI).
+- **08 Membership pipeline ✅ merged** — PR #1815 merged 2026-08-25 19:43
+  UTC.
+- **09 Medical screening (PHI) — 2 fixed, 1 re-flagged, 1 doc correction.**
+  Module-audit (MS-1–MS-3) and app-review (four passes, MS-1/MS-2/MS-3/
+  MS2-4/MS2-5) had no open findings — MS-1 (PHI plaintext) was closed in
+  app-review pass 4 via `EncryptedText`/`EncryptedJSON`; re-verified
+  genuinely intact (model columns, migration, reversibility all checked).
+  Reviewed the two pieces added since the 2026-08-09 baseline in full:
+  `GET /compliance/me` (self-scoped, structurally IDOR-safe — no id param —
+  minimal-detail response) and a new medical-screening → membership-pipeline
+  auto-advance integration (org-scoped and gated through the same
+  `_assert_movable`/stage-completion checks MP-08 reviewed). **MS-4** (doc
+  correction): `KNOWN_LIMITATIONS.md` and `APPLICATION_PAGES.md` both
+  claimed the frontend route was ungated; it was fixed the day before this
+  review (`05b8275b`, "gate 21 officer pages") and neither doc was updated —
+  both corrected. **MS-5** (fixed): `update_record`/`update_requirement`
+  wrote every field with a bare `setattr`, so an explicit null on a NOT NULL
+  column (`status`/`screening_type`/`name`) 500'd as a raw `IntegrityError`
+  instead of a clean 400 — the same failure shape MS2-5 fixed for an
+  out-of-enum string, just for the null case its validator doesn't cover.
+  Rewritten to use `apply_updates`. **MS-6** (flagged): unbounded
+  requirement/record lists, the same class as FIN-9/ELEC-12/USR-5/MP-10 —
+  first flagged in app-review pass 3 but never mirrored into
+  `KNOWN_LIMITATIONS.md` until now. Two more LOW items re-verified still
+  accurate, left open, not re-flagged. See `MS-09-medical-screening.md`.
+  Next: 10 documents & legal.
