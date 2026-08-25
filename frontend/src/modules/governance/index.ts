@@ -7,4 +7,11 @@ export { legalDocumentsService, orgChartService } from './services/api';
 export { useLegalDocumentsStore } from './store/legalDocumentsStore';
 export { useOrgChartStore } from './store/orgChartStore';
 export type { LegalDocumentState, LegalDocumentsOverview, LegalRevision } from './types/legal';
-export type { OrgChart, OrgChartMemberOption, OrgChartNode } from './types/orgChart';
+export { linkValueOf, parseLinkValue } from './types/orgChart';
+export type {
+  OrgChart,
+  OrgChartHolder,
+  OrgChartLinkOption,
+  OrgChartMemberOption,
+  OrgChartNode,
+} from './types/orgChart';

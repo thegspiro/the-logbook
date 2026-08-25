@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**254 tables · 4351 columns · 823 foreign keys**
+**255 tables · 4357 columns · 825 foreign keys**
 
 ---
 
@@ -448,6 +448,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`org_chart_node_holders`](#org_chart_node_holders) | `OrgChartNodeHolder` | 6 | One person leadership listed in a seat by hand. |
 | [`org_chart_nodes`](#org_chart_nodes) | `OrgChartNode` | 14 | One seat on the department's organizational chart. |
 
 ### Organization_Officer
@@ -6269,6 +6270,25 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Org_Chart
 
+### `org_chart_node_holders`
+
+**OrgChartNodeHolder** · `app/models/org_chart.py`
+
+> One person leadership listed in a seat by hand. These are stored; the people a seat gets from its link are not. Persisting the linked ones here as well would give the chart its own copy of the roster to go stale against the membership screen it is meant to follow — the whole point of the link is that there is one answer to "who is the Chief", not two.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `node_id` | VARCHAR(36) | no | FK, IDX |  | → `org_chart_nodes.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `display_name` | VARCHAR(200) | yes |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_org_chart_node_holders_node` (`node_id`, `sort_order`)
+
 ### `org_chart_nodes`
 
 **OrgChartNode** · `app/models/org_chart.py`
@@ -6282,8 +6302,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `parent_id` | VARCHAR(36) | yes | FK |  | → `org_chart_nodes.id` ON DELETE SET NULL |
 | `title` | VARCHAR(150) | no |  |  |  |
 | `responsibility` | TEXT | yes |  |  |  |
-| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `display_name` | VARCHAR(200) | yes |  |  |  |
+| `position_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE SET NULL |
+| `rank_code` | VARCHAR(100) | yes |  |  |  |
 | `contact_email` | VARCHAR(320) | yes |  |  |  |
 | `contact_phone` | VARCHAR(50) | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
@@ -9201,8 +9221,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `notification_logs` | `recipient_id` | SET NULL | yes |
 | `notification_rules` | `created_by` | NO ACTION | yes |
 | `org_calls` | `created_by` | SET NULL | yes |
+| `org_chart_node_holders` | `user_id` | SET NULL | yes |
 | `org_chart_nodes` | `updated_by` | SET NULL | yes |
-| `org_chart_nodes` | `user_id` | SET NULL | yes |
 | `organization_officers` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `user_id` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
@@ -9890,6 +9910,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_vendor_contacts` | `vendor_id` | CASCADE | no |
 | `reorder_requests` | `vendor_id` | SET NULL | yes |
 
+### → `positions` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `program_enrollments` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10027,12 +10055,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `meeting_motions` | `minutes_id` | CASCADE | no |
 | `minutes_action_items` | `minutes_id` | CASCADE | no |
 
-### → `positions` (2 references)
+### → `org_chart_nodes` (2 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
+| `org_chart_node_holders` | `node_id` | CASCADE | no |
+| `org_chart_nodes` | `parent_id` | SET NULL | yes |
 
 ### → `shift_equipment_checks` (2 references)
 
@@ -10259,12 +10287,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `org_call_responses` | `call_id` | CASCADE | no |
 
-### → `org_chart_nodes` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `org_chart_nodes` | `parent_id` | SET NULL | yes |
-
 ### → `public_portal_api_keys` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -10353,6 +10375,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `minutes_action_items` | `meeting_minutes`, `users` |
 | `onboarding_sessions` | — _(root table)_ |
 | `onboarding_status` | — _(root table)_ |
+| `org_chart_node_holders` | `org_chart_nodes`, `users` |
 | `organizations` | — _(root table)_ |
 | `password_history` | `users` |
 | `program_milestones` | `program_phases`, `training_programs` |

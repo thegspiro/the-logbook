@@ -288,7 +288,7 @@ from app.models.notification import (
 )
 from app.models.onboarding import OnboardingStatus
 from app.models.operational_rank import OperationalRank
-from app.models.org_chart import OrgChartNode
+from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_officer import OrganizationOfficer
 from app.models.public_portal import (
     PublicPortalAccessLog,
@@ -616,6 +616,7 @@ __all__ = [
     "OperationalRank",
     # Department office holders
     "OrgChartNode",
+    "OrgChartNodeHolder",
     "OrganizationOfficer",
     # Finance models
     "FiscalYear",
