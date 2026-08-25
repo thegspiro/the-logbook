@@ -7,6 +7,11 @@ answer or corrupt the tree: the depth-first order the page renders in, hiding a
 branch behind its hidden root, refusing a re-parent that would create a
 reporting loop, promoting reports instead of deleting them with their boss, and
 org-scoping every by-id write.
+
+Since 2026-08-25 a seat also holds several people, and may take them from a
+corporate position or an operational rank rather than a hand-typed list — so
+the resolution of each source, and the fact that switching source does not
+leave the previous one's people lying in the row, are pinned here too.
 """
 
 import uuid
@@ -68,12 +73,71 @@ async def _make_member(db: AsyncSession, org_id: str, first: str, last: str) -> 
     return user_id
 
 
+async def _make_position(db: AsyncSession, org_id: str, name: str) -> str:
+    position_id = str(uuid.uuid4())
+    await db.execute(
+        text(
+            "INSERT INTO positions (id, organization_id, name, slug, permissions) "
+            "VALUES (:id, :org, :name, :slug, '[]')"
+        ),
+        {
+            "id": position_id,
+            "org": org_id,
+            "name": name,
+            "slug": f"{name.lower().replace(' ', '-')}-{position_id[:8]}",
+        },
+    )
+    await db.flush()
+    return position_id
+
+
+async def _assign_position(db: AsyncSession, user_id: str, position_id: str) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO user_positions (user_id, position_id) "
+            "VALUES (:user, :position)"
+        ),
+        {"user": user_id, "position": position_id},
+    )
+    await db.flush()
+
+
+async def _make_rank(
+    db: AsyncSession,
+    org_id: str,
+    code: str,
+    display_name: str,
+    *,
+    is_active: bool = True,
+) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO operational_ranks "
+            "(id, organization_id, rank_code, display_name, sort_order, is_active) "
+            "VALUES (:id, :org, :code, :name, 0, :active)"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "org": org_id,
+            "code": code,
+            "name": display_name,
+            "active": is_active,
+        },
+    )
+    await db.flush()
+
+
 async def _add(
     service: OrgChartService, org_id: str, title: str, **kwargs
 ) -> OrgChartNode:
     payload = {"title": title, "is_published": True}
     payload.update(kwargs)
     return await service.create_node(org_id, payload=payload)
+
+
+def _names(node: dict) -> list:
+    """The people a resolved seat lists, in the order the chart shows them."""
+    return [holder["name"] for holder in node["holders"]]
 
 
 class TestChartShape:
@@ -131,20 +195,19 @@ class TestChartShape:
         org_id, admin_id = setup_org_and_admin
         service = OrgChartService(db_session)
 
-        await _add(service, org_id, "Fire Chief", user_id=admin_id)
+        await _add(service, org_id, "Fire Chief", holders=[{"user_id": admin_id}])
         await _add(
             service,
             org_id,
             "Chaplain",
-            user_id=admin_id,
-            display_name="Rev. J. Alvarez",
+            holders=[{"user_id": admin_id, "display_name": "Rev. J. Alvarez"}],
         )
 
         chart = await service.get_chart(org_id, include_unpublished=True)
         by_title = {n["title"]: n for n in chart}
 
-        assert by_title["Fire Chief"]["holder_name"] == "Admin User"
-        assert by_title["Chaplain"]["holder_name"] == "Rev. J. Alvarez"
+        assert _names(by_title["Fire Chief"]) == ["Admin User"]
+        assert _names(by_title["Chaplain"]) == ["Rev. J. Alvarez"]
 
     async def test_a_seat_with_nobody_in_it_reports_no_holder(
         self, db_session: AsyncSession, setup_org_and_admin
@@ -155,7 +218,7 @@ class TestChartShape:
 
         chart = await service.get_chart(org_id, include_unpublished=True)
 
-        assert chart[0]["holder_name"] is None
+        assert chart[0]["holders"] == []
 
 
 class TestOrgScoping:
@@ -168,7 +231,7 @@ class TestOrgScoping:
         service = OrgChartService(db_session)
 
         with pytest.raises(ValueError, match="Invalid member"):
-            await _add(service, org_id, "Treasurer", user_id=outsider)
+            await _add(service, org_id, "Treasurer", holders=[{"user_id": outsider}])
 
     async def test_a_seat_cannot_report_into_another_orgs_chart(
         self, db_session: AsyncSession, setup_org_and_admin
@@ -301,7 +364,7 @@ class TestReviewFindings:
     ):
         org_id, admin_id = setup_org_and_admin
         service = OrgChartService(db_session)
-        await _add(service, org_id, "Fire Chief", user_id=admin_id)
+        await _add(service, org_id, "Fire Chief", holders=[{"user_id": admin_id}])
 
         # How DELETE /users/{id} removes a member: the row stays, deleted_at is
         # stamped. Without the filter the departed member's name keeps being
@@ -314,7 +377,7 @@ class TestReviewFindings:
 
         chart = await service.get_chart(org_id, include_unpublished=True)
 
-        assert chart[0]["holder_name"] is None
+        assert chart[0]["holders"] == []
 
     async def test_the_parent_a_seat_leaves_is_renumbered_too(
         self, db_session: AsyncSession, setup_org_and_admin
@@ -411,23 +474,23 @@ class TestDelete:
 
 
 class TestUpdate:
-    async def test_an_explicit_null_clears_the_holder(
+    async def test_an_empty_holder_list_empties_the_seat(
         self, db_session: AsyncSession, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
         service = OrgChartService(db_session)
-        seat = await _add(service, org_id, "Quartermaster", user_id=admin_id)
-
-        # The payload the editor sends when the box is emptied. Dropping the
-        # null would acknowledge the change and leave the old name published
-        # (pitfall #1, update direction).
-        await service.update_node(
-            org_id, str(seat.id), updates={"user_id": None, "display_name": None}
+        seat = await _add(
+            service, org_id, "Quartermaster", holders=[{"user_id": admin_id}]
         )
 
+        # The payload the editor sends when the last person is removed. An
+        # empty list is the one way to say "nobody" — dropping it would
+        # acknowledge the change and leave the old name published (pitfall #1,
+        # update direction).
+        await service.update_node(org_id, str(seat.id), updates={"holders": []})
+
         chart = await service.get_chart(org_id, include_unpublished=True)
-        assert chart[0]["holder_name"] is None
-        assert chart[0]["user_id"] is None
+        assert chart[0]["holders"] == []
 
     async def test_an_omitted_key_leaves_the_column_alone(
         self, db_session: AsyncSession, setup_org_and_admin
@@ -435,7 +498,11 @@ class TestUpdate:
         org_id, admin_id = setup_org_and_admin
         service = OrgChartService(db_session)
         seat = await _add(
-            service, org_id, "Quartermaster", user_id=admin_id, responsibility="Gear"
+            service,
+            org_id,
+            "Quartermaster",
+            holders=[{"user_id": admin_id}],
+            responsibility="Gear",
         )
 
         await service.update_node(org_id, str(seat.id), updates={"title": "Gear Chief"})
@@ -443,7 +510,7 @@ class TestUpdate:
         chart = await service.get_chart(org_id, include_unpublished=True)
         assert chart[0]["title"] == "Gear Chief"
         assert chart[0]["responsibility"] == "Gear"
-        assert chart[0]["user_id"] == admin_id
+        assert chart[0]["holders"][0]["user_id"] == admin_id
 
     async def test_an_update_cannot_link_another_orgs_member(
         self, db_session: AsyncSession, setup_org_and_admin
@@ -456,7 +523,7 @@ class TestUpdate:
 
         with pytest.raises(ValueError, match="Invalid member"):
             await service.update_node(
-                org_id, str(seat.id), updates={"user_id": outsider}
+                org_id, str(seat.id), updates={"holders": [{"user_id": outsider}]}
             )
 
 
@@ -472,3 +539,281 @@ class TestMemberOptions:
         options = await service.list_member_options(org_id)
 
         assert [o["id"] for o in options] == [admin_id]
+
+
+class TestSeveralPeopleInOneSeat:
+    """Trustees, co-chairs, two assistant chiefs — one box, several names."""
+
+    async def test_a_seat_lists_everybody_in_the_order_leadership_set(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+
+        await _add(
+            service,
+            org_id,
+            "Trustees",
+            holders=[
+                {"display_name": "Jonathan Green"},
+                {"user_id": admin_id},
+                {"display_name": "Thomas Martin"},
+            ],
+        )
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+
+        # Not sorted: the order is leadership's statement about seniority on a
+        # board, and alphabetising it would silently rewrite that.
+        assert _names(chart[0]) == ["Jonathan Green", "Admin User", "Thomas Martin"]
+
+    async def test_replacing_the_list_does_not_leave_the_old_people_behind(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        service = OrgChartService(db_session)
+        seat = await _add(
+            service,
+            org_id,
+            "Trustees",
+            holders=[{"display_name": "Outgoing A"}, {"display_name": "Outgoing B"}],
+        )
+
+        await service.update_node(
+            org_id,
+            str(seat.id),
+            updates={"holders": [{"display_name": "Incoming"}]},
+        )
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+        assert _names(chart[0]) == ["Incoming"]
+
+    async def test_a_removed_member_leaves_their_co_chairs_standing(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        await _add(
+            service,
+            org_id,
+            "Trustees",
+            holders=[{"user_id": admin_id}, {"display_name": "Jonathan Green"}],
+        )
+
+        await db_session.execute(
+            text("UPDATE users SET deleted_at = :now WHERE id = :id"),
+            {"now": datetime(2026, 8, 25, tzinfo=timezone.utc), "id": admin_id},
+        )
+        await db_session.flush()
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+        assert _names(chart[0]) == ["Jonathan Green"]
+
+
+class TestSeatsThatFollowARole:
+    """A seat can name a corporate position instead of naming people."""
+
+    async def test_a_seat_lists_whoever_currently_holds_the_position(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        position_id = await _make_position(db_session, org_id, "Fire Chief")
+        await _assign_position(db_session, admin_id, position_id)
+
+        await _add(
+            service,
+            org_id,
+            "Chief",
+            holder_source="position",
+            position_id=position_id,
+        )
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+
+        assert _names(chart[0]) == ["Admin User"]
+        # The reader is told *why* the seat lists who it lists, without having
+        # to look the role up separately.
+        assert chart[0]["source_label"] == "Fire Chief"
+
+    async def test_the_chart_follows_the_roster_with_no_second_edit(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        position_id = await _make_position(db_session, org_id, "Fire Chief")
+        await _assign_position(db_session, admin_id, position_id)
+        await _add(
+            service,
+            org_id,
+            "Chief",
+            holder_source="position",
+            position_id=position_id,
+        )
+
+        successor = await _make_member(db_session, org_id, "Shelly", "Hernandez")
+        await db_session.execute(
+            text("DELETE FROM user_positions WHERE user_id = :u"), {"u": admin_id}
+        )
+        await _assign_position(db_session, successor, position_id)
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+
+        # Nobody touched the org chart screen. This is the whole point of the
+        # source: an election updates one place, not two.
+        assert _names(chart[0]) == ["Shelly Hernandez"]
+
+    async def test_a_position_nobody_holds_reads_as_vacant(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        service = OrgChartService(db_session)
+        position_id = await _make_position(db_session, org_id, "Fire Chief")
+
+        await _add(
+            service,
+            org_id,
+            "Chief",
+            holder_source="position",
+            position_id=position_id,
+        )
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+        assert chart[0]["holders"] == []
+        assert chart[0]["source_label"] == "Fire Chief"
+
+    async def test_a_seat_cannot_follow_another_orgs_role(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        other_org = await _make_org(db_session)
+        theirs = await _make_position(db_session, other_org, "Their Chief")
+        service = OrgChartService(db_session)
+
+        # Unvalidated, this would publish another department's roster into this
+        # department's chart on every read (pitfall #14c).
+        with pytest.raises(ValueError, match="Invalid role"):
+            await _add(
+                service,
+                org_id,
+                "Chief",
+                holder_source="position",
+                position_id=theirs,
+            )
+
+    async def test_switching_to_a_role_drops_the_hand_typed_people(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        position_id = await _make_position(db_session, org_id, "Fire Chief")
+        await _assign_position(db_session, admin_id, position_id)
+        seat = await _add(
+            service, org_id, "Chief", holders=[{"display_name": "Last Year's Chief"}]
+        )
+
+        await service.update_node(
+            org_id,
+            str(seat.id),
+            updates={"holder_source": "position", "position_id": position_id},
+        )
+        # Kept dormant, the old list would reappear the moment somebody
+        # switched the seat back to manual — republishing a name an election
+        # has since superseded.
+        await service.update_node(
+            org_id, str(seat.id), updates={"holder_source": "manual"}
+        )
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+        assert chart[0]["holders"] == []
+        assert chart[0]["position_id"] is None
+
+
+class TestSeatsThatFollowARank:
+    async def test_a_seat_lists_everybody_carrying_the_rank(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        await _make_rank(db_session, org_id, "captain", "Captain")
+        second = await _make_member(db_session, org_id, "Shelly", "Hernandez")
+        for user_id in (admin_id, second):
+            await db_session.execute(
+                text("UPDATE users SET rank = 'captain' WHERE id = :id"),
+                {"id": user_id},
+            )
+        await db_session.flush()
+
+        await _add(
+            service, org_id, "Captains", holder_source="rank", rank_code="captain"
+        )
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+
+        # Sorted by name: nobody chose this order, so the only defensible one
+        # is the one a reader can predict.
+        assert _names(chart[0]) == ["Admin User", "Shelly Hernandez"]
+        assert chart[0]["source_label"] == "Captain"
+
+    async def test_a_seat_cannot_follow_a_rank_this_org_does_not_have(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        other_org = await _make_org(db_session)
+        await _make_rank(db_session, other_org, "commodore", "Commodore")
+        service = OrgChartService(db_session)
+
+        with pytest.raises(ValueError, match="Invalid rank"):
+            await _add(
+                service,
+                org_id,
+                "Commodore",
+                holder_source="rank",
+                rank_code="commodore",
+            )
+
+
+class TestRoleAndRankOptions:
+    async def test_the_role_picker_reports_how_many_hold_each_role(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        held = await _make_position(db_session, org_id, "Fire Chief")
+        await _make_position(db_session, org_id, "Zamboni Driver")
+        await _assign_position(db_session, admin_id, held)
+
+        options = {
+            o["name"]: o["holder_count"]
+            for o in await service.list_position_options(org_id)
+        }
+
+        # A seat pointed at a role nobody holds renders as vacant; finding that
+        # out only after saving reads as the link being broken.
+        assert options["Fire Chief"] == 1
+        assert options["Zamboni Driver"] == 0
+
+    async def test_the_role_picker_only_offers_the_callers_own_roles(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        other_org = await _make_org(db_session)
+        await _make_position(db_session, other_org, "Their Chief")
+        await _make_position(db_session, org_id, "Our Chief")
+        service = OrgChartService(db_session)
+
+        options = await service.list_position_options(org_id)
+
+        assert [o["name"] for o in options] == ["Our Chief"]
+
+    async def test_the_rank_picker_leaves_out_retired_ranks(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        await _make_rank(db_session, org_id, "captain", "Captain")
+        await _make_rank(db_session, org_id, "commodore", "Commodore", is_active=False)
+        service = OrgChartService(db_session)
+
+        options = await service.list_rank_options(org_id)
+
+        assert [o["code"] for o in options] == ["captain"]

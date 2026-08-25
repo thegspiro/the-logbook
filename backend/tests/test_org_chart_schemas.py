@@ -33,13 +33,13 @@ class TestCasing:
 
 class TestBlankHandling:
     def test_a_whitespace_only_optional_field_is_stored_as_absent(self):
-        payload = OrgChartNodeCreate(title=" Fire Chief ", display_name="   ")
+        payload = OrgChartNodeCreate(title=" Fire Chief ", responsibility="   ")
         assert payload.title == "Fire Chief"
-        assert payload.display_name is None
+        assert payload.responsibility is None
 
     def test_an_omitted_key_stays_omitted_on_an_update(self):
-        payload = OrgChartNodeUpdate(**{"displayName": None})
-        assert payload.model_dump(exclude_unset=True) == {"display_name": None}
+        payload = OrgChartNodeUpdate(**{"responsibility": None})
+        assert payload.model_dump(exclude_unset=True) == {"responsibility": None}
 
 
 class TestNullTitle:
@@ -84,3 +84,69 @@ class TestMoveRequiresAParent:
     def test_a_blank_parent_is_read_as_the_top_of_the_chart(self):
         payload = OrgChartNodeMove(**{"parentId": "", "position": 0})
         assert payload.parent_id is None
+
+
+class TestHolders:
+    def test_a_seat_can_list_several_people(self):
+        payload = OrgChartNodeCreate(
+            **{
+                "title": "Trustees",
+                "holders": [
+                    {"displayName": "Jonathan Green"},
+                    {"userId": "u1", "displayName": "Chief Ramirez"},
+                ],
+            }
+        )
+        assert [h.display_name for h in payload.holders] == [
+            "Jonathan Green",
+            "Chief Ramirez",
+        ]
+
+    def test_a_person_with_neither_a_member_nor_a_name_is_refused(self):
+        # An entry naming nobody would render as a blank line in the box, which
+        # reads as a rendering bug rather than as an empty row somebody left.
+        with pytest.raises(ValidationError):
+            OrgChartNodeCreate(**{"title": "Trustees", "holders": [{}]})
+
+    def test_an_omitted_holder_list_leaves_the_people_alone(self):
+        payload = OrgChartNodeUpdate(**{"title": "Trustees"})
+        assert "holders" not in payload.model_dump(exclude_unset=True)
+
+    def test_an_empty_holder_list_is_a_deliberate_clear(self):
+        payload = OrgChartNodeUpdate(**{"holders": []})
+        assert payload.model_dump(exclude_unset=True) == {"holders": []}
+
+
+class TestHolderSource:
+    def test_a_seat_following_a_role_must_say_which_role(self):
+        # Otherwise the seat resolves as permanently vacant with nothing on the
+        # screen to explain why.
+        with pytest.raises(ValidationError):
+            OrgChartNodeCreate(**{"title": "Chief", "holderSource": "position"})
+
+    def test_a_seat_following_a_rank_must_say_which_rank(self):
+        with pytest.raises(ValidationError):
+            OrgChartNodeCreate(**{"title": "Captains", "holderSource": "rank"})
+
+    def test_an_unknown_source_is_refused(self):
+        with pytest.raises(ValidationError):
+            OrgChartNodeCreate(**{"title": "Chief", "holderSource": "vibes"})
+
+    def test_the_unused_reference_is_cleared_rather_than_stored(self):
+        # Kept, it would come back into effect the next time somebody switched
+        # the source back, naming a role nobody chose.
+        payload = OrgChartNodeCreate(
+            **{
+                "title": "Chief",
+                "holderSource": "position",
+                "positionId": "p1",
+                "rankCode": "captain",
+            }
+        )
+        assert payload.position_id == "p1"
+        assert payload.rank_code is None
+
+    def test_an_update_that_never_mentions_the_source_is_not_refused(self):
+        # A rename must not be rejected for a reference it never sent.
+        payload = OrgChartNodeUpdate(**{"title": "Fire Chief"})
+        assert payload.model_dump(exclude_unset=True) == {"title": "Fire Chief"}

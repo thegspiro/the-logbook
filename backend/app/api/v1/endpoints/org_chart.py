@@ -45,23 +45,28 @@ def _can_manage(user: User) -> bool:
 async def _chart_payload(db: AsyncSession, current_user: User) -> OrgChartResponse:
     """Build the response for whoever is asking.
 
-    A manager sees unpublished seats and the member picker; the general
-    membership sees the published chart only.
+    A manager sees unpublished seats and the pickers a seat is edited with —
+    the member roster, the corporate positions and the operational ranks. The
+    general membership sees the published chart only.
     """
     service = OrgChartService(db)
     can_manage = _can_manage(current_user)
     nodes = await service.get_chart(
         current_user.organization_id, include_unpublished=can_manage
     )
-    members = (
-        await service.list_member_options(current_user.organization_id)
-        if can_manage
-        else []
-    )
+    members = []
+    positions = []
+    ranks = []
+    if can_manage:
+        members = await service.list_member_options(current_user.organization_id)
+        positions = await service.list_position_options(current_user.organization_id)
+        ranks = await service.list_rank_options(current_user.organization_id)
     return OrgChartResponse(
         nodes=[OrgChartNodeResponse(**node) for node in nodes],
         can_manage=can_manage,
         members=members,
+        positions=positions,
+        ranks=ranks,
     )
 
 
@@ -126,7 +131,7 @@ async def update_org_chart_node(
         require_permission("orgchart.manage", "settings.manage")
     ),
 ):
-    """Edit a position — its title, holder, area, or published state."""
+    """Edit a position — its title, people, area, or published state."""
     service = OrgChartService(db)
     try:
         # exclude_unset so an omitted key means "leave it alone" while an

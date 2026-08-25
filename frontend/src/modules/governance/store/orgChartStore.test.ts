@@ -17,15 +17,18 @@ vi.mock('../services/api', () => ({
 }));
 
 import { useOrgChartStore } from './orgChartStore';
+import { OrgChartHolderSource, type OrgChart, type OrgChartNode } from '../types/orgChart';
 
-const chief = {
+const chief: OrgChartNode = {
   id: 'node-1',
   parentId: null,
   title: 'Fire Chief',
   responsibility: 'Everything operational.',
-  userId: 'user-1',
-  holderName: 'Dana Reyes',
-  displayName: null,
+  holders: [{ userId: 'user-1', name: 'Dana Reyes' }],
+  holderSource: OrgChartHolderSource.MANUAL,
+  positionId: null,
+  rankCode: null,
+  sourceLabel: null,
   contactEmail: null,
   contactPhone: null,
   sortOrder: 0,
@@ -33,8 +36,17 @@ const chief = {
   depth: 0,
 };
 
-const emptyChart = { nodes: [], canManage: true, members: [] };
-const oneNodeChart = { nodes: [chief], canManage: true, members: [{ id: 'user-1', name: 'Dana Reyes' }] };
+// Typed, so a schema change that this store passes through untouched still has
+// to be reflected here rather than surviving as a shape the API stopped
+// returning months ago.
+const emptyChart: OrgChart = { nodes: [], canManage: true, members: [], positions: [], ranks: [] };
+const oneNodeChart: OrgChart = {
+  nodes: [chief],
+  canManage: true,
+  members: [{ id: 'user-1', name: 'Dana Reyes' }],
+  positions: [],
+  ranks: [],
+};
 
 describe('useOrgChartStore', () => {
   beforeEach(() => {
