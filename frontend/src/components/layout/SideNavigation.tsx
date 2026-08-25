@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Shield,
   Building2,
+  Camera,
   UserCog,
   Globe,
   GraduationCap,
@@ -486,6 +487,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 path: '/communications/messages',
                 icon: Megaphone,
                 permission: 'notifications.manage',
+              },
+              {
+                label: 'Photo Use Consent',
+                path: '/communications/photo-use-consent',
+                icon: Camera,
+                permission: 'users.view',
               },
               ...(isModuleOn('forms')
                 ? [{ label: 'Forms', path: '/forms', icon: FormInput, permission: 'forms.manage' }]

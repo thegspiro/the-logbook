@@ -15,6 +15,8 @@ const MessagesAdminPage = lazyWithRetry(() => import('./pages/MessagesAdminPage'
 
 const MessagesInboxPage = lazyWithRetry(() => import('./pages/MessagesInboxPage'));
 
+const PhotoUseConsentPage = lazyWithRetry(() => import('./pages/PhotoUseConsentPage'));
+
 export const getCommunicationsRoutes = () => {
   return (
     <React.Fragment>
@@ -34,6 +36,16 @@ export const getCommunicationsRoutes = () => {
           <ProtectedRoute requiredPermission="notifications.manage">
             <Suspense fallback={null}>
               <MessagesAdminPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/communications/photo-use-consent"
+        element={
+          <ProtectedRoute requiredPermission="users.view">
+            <Suspense fallback={null}>
+              <PhotoUseConsentPage />
             </Suspense>
           </ProtectedRoute>
         }

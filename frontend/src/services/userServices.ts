@@ -246,6 +246,18 @@ export const userService = {
   },
 
   /**
+   * Every member's photo-use standing, for the PIO deciding which faces may
+   * appear in a newsletter or social post. Read-only: consent belongs to the
+   * member, and is set from their own settings page.
+   */
+  async getPhotoUseConsentRoster(includeInactive: boolean = false): Promise<import('../types/user').ConsentRoster> {
+    const response = await api.get<import('../types/user').ConsentRoster>('/users/consents/photo-use', {
+      params: { include_inactive: includeInactive },
+    });
+    return response.data;
+  },
+
+  /**
    * Delete a user (soft or hard delete)
    */
   async deleteUserWithMode(userId: string, hard: boolean = false): Promise<void> {

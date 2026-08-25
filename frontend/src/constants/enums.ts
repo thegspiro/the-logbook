@@ -617,3 +617,33 @@ export const MEETING_WEEKDAYS: { value: number; label: string; short: string }[]
   { value: 5, label: 'Saturday', short: 'Sat' },
   { value: 6, label: 'Sunday', short: 'Sun' },
 ];
+
+// ============================================
+// Member Consent (ISO/IEC 27701)
+// ============================================
+
+/**
+ * One member's standing on a single consent.
+ *
+ * `declined` and `not_answered` are identical in effect — both mean "do not
+ * use" — and are kept apart because only one of them describes a member who
+ * can still be asked.
+ */
+export const ConsentStatus = {
+  GRANTED: 'granted',
+  DECLINED: 'declined',
+  NOT_ANSWERED: 'not_answered',
+} as const;
+export type ConsentStatus = (typeof ConsentStatus)[keyof typeof ConsentStatus];
+
+export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
+  granted: 'Agreed',
+  declined: 'Declined',
+  not_answered: 'Not answered',
+};
+
+export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
+  granted: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  not_answered: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+};

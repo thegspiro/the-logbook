@@ -2390,6 +2390,45 @@ async def get_my_consents(
     return await ConsentService(db).list_for_user(current_user)
 
 
+@router.get("/consents/photo-use")
+async def get_photo_use_roster(
+    include_inactive: bool = Query(
+        False, description="Include members who are not currently active"
+    ),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Every member's photo-use standing, for the PIO / communications officer
+    choosing images for a newsletter, social post, or press release.
+
+    The consent is collected in User Settings and was, until this endpoint,
+    only readable one member at a time — which is not a workable check for
+    somebody selecting from a folder of incident photos. Read-only: a
+    member's consent is theirs to set, so there is no admin write counterpart
+    here, for the same reason ``/{user_id}/consents`` has none.
+
+    Gated on ``users.view`` rather than ``members.view``: the latter is a
+    baseline grant every firefighter holds, and who did or did not agree to
+    be photographed is not roster-wide reading.
+    """
+    user_perms = _collect_user_permissions(current_user)
+    if not _has_permission("users.view", user_perms):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view photo use consents",
+        )
+
+    from app.models.consent import ConsentType
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).roster(
+        organization_id=str(current_user.organization_id),
+        consent_type=ConsentType.PHOTO_USE,
+        include_inactive=include_inactive,
+    )
+
+
 @router.get("/{user_id}/consents")
 async def get_user_consents(
     user_id: UUID,
