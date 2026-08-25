@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                              |
-| ----------- | ------------------------------------------------------------------ |
-| PR          | [#1805](https://github.com/thegspiro/the-logbook/pull/1805)        |
-| Branch      | `claude/security-review-perm`                                      |
-| Feature     | 02 Permissions & roles                                             |
-| CI          | pending on latest push                                             |
-| Threads     | 1 resolved (Codex P2: MissingGreenlet regression in seed-race fix) |
-| Last tended | 2026-08-25 — fixed Codex-caught regression, replied, resolved      |
+| Field       | Value                                      |
+| ----------- | ------------------------------------------ |
+| PR          | none                                       |
+| Branch      | `claude/security-review-pub` (in progress) |
+| Feature     | 03 Public surface & webhooks               |
+| CI          | n/a — not yet opened                       |
+| Threads     | n/a                                        |
+| Last tended | n/a                                        |
 
 ---
 
@@ -53,8 +53,8 @@ data-carrying modules, then the supporting infrastructure.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳ #1805 |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜       |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | 🔄       |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
@@ -129,6 +129,12 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   2026-08-12); corrected in `auth-session.md`. See
   `AUTH-01-auth-session.md` for the full write-up. Next: 02 permissions &
   roles.
+- **02 Permissions & roles ✅ merged** — PR #1805 merged 2026-08-25. A Codex
+  review comment caught a real regression in the PERM-2 fix before merge
+  (a plain `db.rollback()` would have expired `current_user` and raised
+  `MissingGreenlet` on the next request-scoped access) — corrected to a
+  SAVEPOINT (`begin_nested`), verified empirically against a live DB
+  connection, replied, and resolved.
 - **02 Permissions & roles ⏳** — `roles.py`/`role_service.py`/
   `dependencies.py`/`core/permissions.py` carry an extremely thorough
   privilege-escalation history (module audit + 4 app-review passes through
@@ -145,3 +151,4 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   now rolls back and returns the already-seeded set. See
   `PERM-02-permissions-roles.md` for the full write-up. Next: 03 public
   surface & webhooks.
+- **03 Public surface & webhooks 🔄** — started 2026-08-25.
