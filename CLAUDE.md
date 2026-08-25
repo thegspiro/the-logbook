@@ -1131,6 +1131,48 @@ schema. On a freshly migrated database `scripts/repair_schema.py` still adds a
 dozen columns the models declare and no migration creates. Treat the models as
 the schema of record and migrations as alterations on top — not the reverse.
 
+### 24. A Capacity Check Is a Read-Then-Write, and Needs the Row Locked _(2026-08-25)_
+
+Anything with a limit — seats on a shift, `max_attendees` on an event, a role
+on an outreach signup sheet — is enforced by counting what is already there and
+then inserting. Two requests arriving together both read the count before
+either commits, both decide there is room, and the limit is exceeded by exactly
+the number of people who tapped at once. It is invisible in testing, because
+one request never races itself.
+
+`event_service` already gets this right, and is the pattern to copy: it locks
+the **event row** before counting "going" RSVPs, so no other transaction can
+commit an RSVP for that event until the decision is made.
+
+```python
+# WRONG — two members both see the last seat
+shift = await self.get_shift_by_id(shift_id, organization_id)
+occupied = await self.db.execute(select(func.count()).where(...))
+if occupied >= len(slots):
+    return None, "Position was filled"
+self.db.add(ShiftAssignment(...))
+
+# CORRECT — serialize the pair on the row everyone contends for
+shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
+```
+
+**Lock the parent, not the rows being counted.** The seats that would conflict
+do not exist yet, so there is nothing to lock; the shift/event/request row is
+the one thing both transactions already share.
+
+**Lock only where the limit is actually enforced.** Shift assignment locks for
+self-signup and not for an officer-made one, because an officer overfilling a
+crew is a call they are allowed to make on a busy night — serializing those
+would buy nothing and cost concurrency.
+
+Found on 2026-08-24 in the outreach role seats and the outreach signup sheet
+(two coordinators each creating a shift, one orphaned), and on 2026-08-25 in
+generic shift seat capacity, which had the same shape since it was written.
+
+**Rule:** when adding a feature with a cap, a quota, or a one-per-thing
+invariant, ask what happens if two requests arrive in the same millisecond. If
+the answer involves a count followed by an insert, lock the parent row.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

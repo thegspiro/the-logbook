@@ -1002,14 +1002,25 @@ class SchedulingService:
         )
 
     async def get_shift_by_id(
-        self, shift_id: UUID, organization_id: UUID
+        self, shift_id: UUID, organization_id: UUID, for_update: bool = False
     ) -> Optional[Shift]:
-        """Get a shift by ID"""
-        result = await self.db.execute(
+        """Get a shift by ID.
+
+        ``for_update`` locks the row for the caller's transaction. Seat
+        capacity is a read-then-write — count the occupants, then insert — so
+        two members claiming the last seat at the same moment both read the
+        same count and both get in. Locking the shift serializes them on one
+        row, the way ``event_service`` already locks the event row before
+        counting "going" RSVPs against ``max_attendees``.
+        """
+        query = (
             select(Shift)
             .where(Shift.id == str(shift_id))
             .where(Shift.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     # ============================================
@@ -2959,8 +2970,13 @@ class SchedulingService:
         flexibility to assign to cancelled/finalized/past shifts for records.
         """
         try:
-            # Verify shift belongs to org
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            # Verify shift belongs to org. Locked only for self-signup, which is
+            # the path that enforces capacity: an officer assigning a crew is
+            # allowed to overfill deliberately, so serializing those would cost
+            # concurrency to protect a limit that is not applied to them.
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=self_signup
+            )
             if not shift:
                 return None, "Shift not found"
 
