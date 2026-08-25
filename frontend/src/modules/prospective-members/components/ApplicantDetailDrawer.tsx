@@ -37,6 +37,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { DialogPortal } from '../../../components/DialogPortal';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { toDisplayString } from '../../../utils/displayValue';
 import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
@@ -245,7 +246,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const maskValue = (value: string) => (showPii ? value : '••••••••');
 
   return (
-    <>
+    <DialogPortal>
       {/* Overlay */}
       <div className="modal-overlay z-40" onClick={onClose} />
 
@@ -1096,6 +1097,6 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
           </>
         )}
       </div>
-    </>
+    </DialogPortal>
   );
 };
