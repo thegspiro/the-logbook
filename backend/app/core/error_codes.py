@@ -329,7 +329,7 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         ),
         resolution=(
             "Verify the current time against the event's schedule.",
-            "If the event ran long or started early, an event manager can "
+            "If the event ran long or started early, an event officer can "
             "record the attendance manually.",
         ),
     ),

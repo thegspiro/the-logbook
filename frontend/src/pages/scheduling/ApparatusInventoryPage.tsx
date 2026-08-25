@@ -404,7 +404,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   const short = (item.targetQuantity ?? 1) - (item.quantityOnTruck ?? item.targetQuantity ?? 0);
                   setSwapQuantity(Math.max(1, short));
                 }}
-                title={canManageStock ? undefined : 'Swaps from stock are recorded by an officer or supply manager'}
+                title={canManageStock ? undefined : 'Swaps from stock are recorded by an officer or the quartermaster'}
                 className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Repeat className="h-3.5 w-3.5" aria-hidden="true" /> Swap
