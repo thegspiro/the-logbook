@@ -15,7 +15,7 @@ DB is mocked; no MySQL.
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.training import ApprovalStatus
 from app.services.training_session_service import TrainingSessionService
@@ -123,3 +123,182 @@ class TestReopenTrainingSession:
 
         assert result is None
         assert err == "Training session not found"
+
+
+class TestRestatingCorrectedHours:
+    """PR #1791 review, P1: the progress ledger is idempotent per
+    (progress, source_type, source_id), so a re-finalize after a reopen applied
+    no delta at all — the training record moved to the corrected hours while the
+    pipeline kept the first finalize's figure. ``restate`` is the way through."""
+
+    def _service(self, existing_units):
+        from app.services.training_program_service import TrainingProgramService
+
+        db = MagicMock()
+        db.execute = AsyncMock()
+        db.commit = AsyncMock()
+        db.flush = AsyncMock()
+        db.add = MagicMock()
+        svc = TrainingProgramService(db)
+        progress = SimpleNamespace(
+            id="prog-1",
+            enrollment_id="enr-1",
+            enrollment=SimpleNamespace(user_id="user-1"),
+            progress_value=existing_units,
+            status="in_progress",
+        )
+        svc._get_org_scoped_progress = AsyncMock(return_value=progress)
+        credit = SimpleNamespace(id="cred-1", units=existing_units)
+        db.execute.return_value = _one(credit)
+        svc.revoke_requirement_credit = AsyncMock(return_value=(progress, None))
+        svc.update_requirement_progress = AsyncMock(return_value=(progress, None))
+        return svc, progress
+
+    async def _apply(self, svc, units, restate):
+        from app.models.training import ProgressCreditSource
+
+        return await svc.apply_requirement_credit(
+            progress_id="prog-1",
+            organization_id="org-1",
+            source_type=ProgressCreditSource.TRAINING_SESSION,
+            source_id="session-1",
+            units=units,
+            restate=restate,
+        )
+
+    async def test_without_restate_a_replay_stays_a_no_op(self):
+        svc, _ = self._service(existing_units=3.0)
+        await self._apply(svc, 5.0, restate=False)
+        svc.revoke_requirement_credit.assert_not_awaited()
+        svc.update_requirement_progress.assert_not_awaited()
+
+    async def test_restate_reverses_then_reapplies_when_hours_change(self):
+        svc, _ = self._service(existing_units=3.0)
+        await self._apply(svc, 5.0, restate=True)
+        svc.revoke_requirement_credit.assert_awaited_once()
+        # Fell through to the normal apply path with the corrected figure.
+        svc.update_requirement_progress.assert_awaited_once()
+
+    async def test_restate_with_identical_hours_changes_nothing(self):
+        """Re-finalizing without touching the times must stay a no-op — the
+        reversal churns enrollment rollup and phase state for nothing."""
+        svc, _ = self._service(existing_units=3.0)
+        await self._apply(svc, 3.0, restate=True)
+        svc.revoke_requirement_credit.assert_not_awaited()
+        svc.update_requirement_progress.assert_not_awaited()
+
+
+class TestRemovedAttendeeLosesCredit:
+    """PR #1791 review, P1: re-finalization wrote records for the current
+    roster and said nothing about anyone dropped from it, so a member removed
+    during a reopen kept the completed record and the pipeline credit."""
+
+    def _session_with_program(self):
+        session = _session()
+        session.program_id = "prog-1"
+        session.course_name = "Pump Ops"
+        session.course_id = None
+        session.category_id = None
+        return session
+
+    async def test_prior_roster_minus_current_is_reconciled(self):
+        session = self._session_with_program()
+        prior = SimpleNamespace(
+            attendee_data=[{"user_id": "kept-1"}, {"user_id": "removed-1"}],
+        )
+        record = SimpleNamespace(
+            hours_completed=4.0,
+            completion_date="2026-08-24",
+            status="completed",
+            updated_at=None,
+        )
+        enrollment = SimpleNamespace(id="enr-1")
+        progress = SimpleNamespace(id="prog-row-1")
+        db = _db(
+            _one(prior),  # newest prior approval
+            _one(enrollment),  # removed member's enrollment
+            _all([progress]),  # their requirement rows
+            _one(record),  # their training record
+        )
+        # The record lookup uses .scalars().first()
+        db.execute.side_effect = [
+            _one(prior),
+            _one(enrollment),
+            _all([progress]),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(first=lambda: record))),
+        ]
+        svc = TrainingSessionService(db)
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            revoke = AsyncMock(return_value=(None, None))
+            tps_cls.return_value.revoke_requirement_credit = revoke
+            await svc._revoke_credit_for_removed_attendees(
+                training_session=session,
+                event=SimpleNamespace(start_datetime=datetime(2026, 8, 24)),
+                current_user_ids={"kept-1"},
+                organization_id="org-1",
+                verified_by="chief-1",
+            )
+
+        revoke.assert_awaited_once()
+        assert revoke.await_args.kwargs["source_id"] == "session-1"
+        # The record is un-completed rather than deleted: nothing on
+        # TrainingRecord says which session created it.
+        assert record.hours_completed == 0
+        assert record.completion_date is None
+        assert record.status == "scheduled"
+
+    async def test_a_first_finalize_has_nothing_to_reconcile(self):
+        db = _db(_one(None))
+        svc = TrainingSessionService(db)
+
+        await svc._revoke_credit_for_removed_attendees(
+            training_session=self._session_with_program(),
+            event=SimpleNamespace(start_datetime=datetime(2026, 8, 24)),
+            current_user_ids={"kept-1"},
+            organization_id="org-1",
+            verified_by="chief-1",
+        )
+
+        db.commit.assert_not_awaited()
+
+    async def test_an_unchanged_roster_is_left_alone(self):
+        prior = SimpleNamespace(attendee_data=[{"user_id": "kept-1"}])
+        db = _db(_one(prior))
+        svc = TrainingSessionService(db)
+
+        await svc._revoke_credit_for_removed_attendees(
+            training_session=self._session_with_program(),
+            event=SimpleNamespace(start_datetime=datetime(2026, 8, 24)),
+            current_user_ids={"kept-1"},
+            organization_id="org-1",
+            verified_by="chief-1",
+        )
+
+        db.commit.assert_not_awaited()
+
+
+class TestReopenSerializesAgainstApproval:
+    async def test_reopen_locks_the_session_row(self):
+        db = _db(_one(_session()), _all([]))
+        await TrainingSessionService(db).reopen_training_session("session-1", "org-1")
+
+        stmt = str(
+            db.execute.await_args_list[0]
+            .args[0]
+            .compile(compile_kwargs={"literal_binds": True})
+        ).lower()
+        assert "for update" in stmt
+
+    async def test_reopen_locks_the_pending_approvals(self):
+        db = _db(_one(_session()), _all([]))
+        await TrainingSessionService(db).reopen_training_session("session-1", "org-1")
+
+        stmt = str(
+            db.execute.await_args_list[1]
+            .args[0]
+            .compile(compile_kwargs={"literal_binds": True})
+        ).lower()
+        assert "for update" in stmt
