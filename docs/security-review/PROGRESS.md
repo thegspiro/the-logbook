@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                              |
-| ----------- | ------------------------------------------------------------------ |
-| PR          | [#1805](https://github.com/thegspiro/the-logbook/pull/1805)        |
-| Branch      | `claude/security-review-perm`                                      |
-| Feature     | 02 Permissions & roles                                             |
-| CI          | pending on latest push                                             |
-| Threads     | 1 resolved (Codex P2: MissingGreenlet regression in seed-race fix) |
-| Last tended | 2026-08-25 — fixed Codex-caught regression, replied, resolved      |
+| Field       | Value                                                                       |
+| ----------- | --------------------------------------------------------------------------- |
+| PR          | [#1806](https://github.com/thegspiro/the-logbook/pull/1806)                 |
+| Branch      | `claude/security-review-pub`                                                |
+| Feature     | 03 Public surface & webhooks                                                |
+| CI          | just opened; not yet checked                                                |
+| Threads     | 2 resolved (Codex P2: replay-fingerprint ordering; token self-approval gap) |
+| Last tended | 2026-08-25 — fixed 2 Codex-caught issues, replied, resolved                 |
 
 ---
 
@@ -53,8 +53,8 @@ data-carrying modules, then the supporting infrastructure.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳ #1805 |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜       |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳ #1806 |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
@@ -129,6 +129,12 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   2026-08-12); corrected in `auth-session.md`. See
   `AUTH-01-auth-session.md` for the full write-up. Next: 02 permissions &
   roles.
+- **02 Permissions & roles ✅ merged** — PR #1805 merged 2026-08-25. A Codex
+  review comment caught a real regression in the PERM-2 fix before merge
+  (a plain `db.rollback()` would have expired `current_user` and raised
+  `MissingGreenlet` on the next request-scoped access) — corrected to a
+  SAVEPOINT (`begin_nested`), verified empirically against a live DB
+  connection, replied, and resolved.
 - **02 Permissions & roles ⏳** — `roles.py`/`role_service.py`/
   `dependencies.py`/`core/permissions.py` carry an extremely thorough
   privilege-escalation history (module audit + 4 app-review passes through
@@ -145,3 +151,33 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   now rolls back and returns the already-seeded set. See
   `PERM-02-permissions-roles.md` for the full write-up. Next: 03 public
   surface & webhooks.
+- **03 Public surface & webhooks ⏳** — 6 of 12 files already carried thorough
+  prior coverage (`public-portal.md`, `integrations.md`, `forms.md`,
+  `storefront.md`); spot-checked and confirmed unchanged. `display.py` grew
+  3x (119→401 L, the new guest QR check-in feature) since the last audit —
+  re-read in full, verified tenant-safe and enumeration-resistant. Five files
+  (`finance_approvals.py`, `legal.py`, `responses.py`, `salesforce_webhook.py`,
+  `security_txt.py`) had no prior audit at all — read in full. **PUB-1
+  (LOW)** — the Salesforce inbound webhook had no cap on payload record
+  count; a validly-signed but oversized request could drive unbounded DB
+  work inside the per-request rate limit. Fixed with a 500-record cap.
+  **A Codex review comment on the PR caught a real ordering bug in that
+  fix** — the cap check ran after the replay-fingerprint mark, so a
+  rejected oversized request still got fingerprinted "seen," and a
+  provider's retry of the same payload would be mistaken for an
+  already-handled duplicate (200) instead of being validated again. Fixed by
+  moving payload-shape validation before the replay check. **PUB-2 (NIT)** —
+  documented `legal.py`'s single-org guard, which was already correct but
+  unexplained. **PUB-4 (MED)** — **a second Codex review comment correctly
+  challenged this iteration's own initial conclusion**: the finance
+  token-approval path's lack of a self-approval check had been recorded as
+  "verified safe" on the reasoning that the token path has no Logbook
+  identity to compare — true for POSITION/PERMISSION/SPECIFIC_USER approver
+  types, but wrong for `EMAIL`-type steps, where the approver's identity
+  _is_ the literal email on the step. Fixed: `approve_by_token` now blocks
+  self-approval when the step's approver email matches the requester's,
+  unless the step explicitly sets `allow_self_approval`. **PUB-3 (INFO)** —
+  recorded that the finance approval tables are `create_all`-only by design,
+  matching the documented pattern elsewhere. See
+  `PUB-03-public-surface-webhooks.md` for the full
+  write-up. Next: 04 storefront & payments.

@@ -37,6 +37,11 @@ router = APIRouter(
     tags=["public-salesforce-webhook"],
 )
 
+# A validly-signed request still comes from an external system; cap the
+# batch so a single request (rate-limited at 30/min, not per-record) can't
+# drive an unbounded number of DB round-trips per record.
+MAX_RECORDS_PER_WEBHOOK = 500
+
 
 async def _rate_limit_webhook(request: Request) -> None:
     """Rate limit inbound webhooks: 30/minute per IP, 5-minute lockout."""
@@ -121,15 +126,6 @@ async def salesforce_inbound_webhook(
             detail="Invalid signature",
         )
 
-    # Replay protection: a captured, validly-signed request must not be
-    # reprocessed. Ack duplicates with 200 so the provider stops retrying.
-    if await is_duplicate_webhook(f"salesforce:{integration_id}", body):
-        logger.info(
-            "Ignoring duplicate Salesforce webhook for integration {}",
-            integration_id,
-        )
-        return {"status": "ignored", "reason": "duplicate"}
-
     try:
         payload = await request.json()
     except Exception:
@@ -147,6 +143,27 @@ async def salesforce_inbound_webhook(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Payload must include 'sobject' and 'records'",
         )
+
+    if len(records) > MAX_RECORDS_PER_WEBHOOK:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Maximum {MAX_RECORDS_PER_WEBHOOK} records per webhook request",
+        )
+
+    # Replay protection: a captured, validly-signed request must not be
+    # reprocessed. Ack duplicates with 200 so the provider stops retrying.
+    # Deliberately AFTER shape validation above: marking a delivery "seen"
+    # before it's known-valid would let a rejected (400/422) request poison
+    # the fingerprint, so a provider's identical retry of the same rejected
+    # payload gets treated as an already-handled duplicate (200) instead of
+    # being validated and rejected again -- silently dropping it forever
+    # once the provider stops retrying on that 200.
+    if await is_duplicate_webhook(f"salesforce:{integration_id}", body):
+        logger.info(
+            "Ignoring duplicate Salesforce webhook for integration {}",
+            integration_id,
+        )
+        return {"status": "ignored", "reason": "duplicate"}
 
     # Build sync service
     creds = build_salesforce_credentials(integration)
