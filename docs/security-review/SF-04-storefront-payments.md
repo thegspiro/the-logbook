@@ -1,6 +1,6 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 · **PR:** #TBD
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 · **PR:** #1807
 
 **Backend:** `app/api/v1/endpoints/storefront.py` (1650 L, 48 endpoints),
 `app/services/storefront_service.py` (3184 L),
