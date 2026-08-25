@@ -115,11 +115,76 @@ def _name_counts() -> dict:
 
 
 @functools.lru_cache(maxsize=1)
+def _defaults_leaf_occurrences() -> dict:
+    """How many times each leaf name appears in the defaults literal itself.
+
+    Not always one. Ten triggers each carry an ``enabled``, nine carry a
+    ``notify_requester``. Subtracting a flat 1 therefore compared a leaf that
+    appears ten times against a threshold of one, so those twenty-one keys
+    passed whether or not anything read them — a hole precisely where the
+    email-trigger switches this suite exists to watch live.
+    """
+    from collections import Counter
+
+    return Counter(leaf for _, leaf in _walk(EVENT_SETTINGS_DEFAULTS))
+
+
+@functools.lru_cache(maxsize=1)
 def _unread_keys() -> frozenset[str]:
     counts = _name_counts()
-    # One occurrence is the defaults literal itself.
+    in_defaults = _defaults_leaf_occurrences()
+    # A reader is an occurrence beyond the ones the defaults literal itself
+    # contributes.
     return frozenset(
-        path for path, key in _walk(EVENT_SETTINGS_DEFAULTS) if counts[key] <= 1
+        path
+        for path, key in _walk(EVENT_SETTINGS_DEFAULTS)
+        if counts[key] <= in_defaults[key]
+    )
+
+
+# Leaf names shared by more than one settings path. For these the check proves
+# a reader exists for the *shape* — `trigger_config.get("notify_requester")`
+# serves all nine triggers — but cannot prove any individual path is consumed.
+# That is the right granularity here, because one generic reader is genuinely
+# what reads them; what it does not cover is a new section reusing a name that
+# already occurs. The set is pinned so adding such a name is a decision
+# somebody makes on purpose rather than a silent free pass.
+_AMBIGUOUS_LEAVES = {
+    "enabled": "one per email trigger; read by send_request_notification",
+    "notify_assignee": "read generically by send_request_notification",
+    "notify_requester": "read generically by send_request_notification",
+}
+
+
+def test_ambiguous_leaf_names_are_declared():
+    """A new duplicated leaf name has to be looked at, not just absorbed.
+
+    Without this, adding `some_section.enabled` to the defaults would pass the
+    reader check on the strength of an unrelated `enabled` elsewhere.
+    """
+    duplicated = {
+        leaf for leaf, count in _defaults_leaf_occurrences().items() if count > 1
+    }
+    undeclared = sorted(duplicated - set(_AMBIGUOUS_LEAVES))
+
+    assert undeclared == [], (
+        "Settings key(s) whose leaf name is now shared by more than one path. "
+        "The reader check cannot tell those paths apart, so confirm a reader "
+        "really covers each and add the name to _AMBIGUOUS_LEAVES with the "
+        "reader that serves it:\n" + "\n".join(f"  {leaf}" for leaf in undeclared)
+    )
+
+
+def test_the_ambiguous_list_does_not_rot():
+    stale = sorted(
+        leaf
+        for leaf in _AMBIGUOUS_LEAVES
+        if _defaults_leaf_occurrences().get(leaf, 0) <= 1
+    )
+
+    assert stale == [], (
+        "These names are declared ambiguous but no longer appear more than "
+        "once in the defaults. Remove them:\n" + "\n".join(f"  {s}" for s in stale)
     )
 
 

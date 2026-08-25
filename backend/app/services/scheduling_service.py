@@ -2890,6 +2890,14 @@ class SchedulingService:
             )
             if excluded:
                 filled_query = filled_query.where(ShiftAssignment.id.notin_(excluded))
+            # FOR UPDATE, not for the locks but for the *read*: under InnoDB's
+            # default REPEATABLE READ a plain SELECT answers from the snapshot
+            # taken at the transaction's first read, which the endpoint already
+            # established before it got here. Holding the shift row lock does
+            # not refresh that snapshot, so a plain count still returns the
+            # tally from before the member who beat us to the seat committed.
+            # A locking read always sees the latest committed version.
+            filled_query = filled_query.with_for_update()
             filled = (await self.db.execute(filled_query)).scalar() or 0
             if filled >= shift.min_staffing:
                 return f"The last seat on this {context} was just claimed"
@@ -2917,6 +2925,8 @@ class SchedulingService:
                 occupied_query = occupied_query.where(
                     ShiftAssignment.id.notin_(excluded)
                 )
+            # Locking read — see the note on filled_query above.
+            occupied_query = occupied_query.with_for_update()
             occupied = (await self.db.execute(occupied_query)).scalar() or 0
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
@@ -2970,12 +2980,15 @@ class SchedulingService:
         flexibility to assign to cancelled/finalized/past shifts for records.
         """
         try:
-            # Verify shift belongs to org. Locked only for self-signup, which is
-            # the path that enforces capacity: an officer assigning a crew is
-            # allowed to overfill deliberately, so serializing those would cost
-            # concurrency to protect a limit that is not applied to them.
+            # Verify shift belongs to org, and lock the row on every path.
+            # The headcount cap (min_staffing) is waived for officer-made
+            # assignments, but the named-seat cap is not — a seat on a crew is
+            # one seat whoever fills it — so every caller reaches a capacity
+            # check and every caller needs the serialization. Locking only
+            # self-signup left two officers, or an officer racing a member,
+            # both counting the last Driver seat as free.
             shift = await self.get_shift_by_id(
-                shift_id, organization_id, for_update=self_signup
+                shift_id, organization_id, for_update=True
             )
             if not shift:
                 return None, "Shift not found"

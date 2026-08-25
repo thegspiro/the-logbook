@@ -1207,9 +1207,12 @@ class EventService:
             )
             self.db.add(rsvp)
 
-        # Check capacity if user is going (event row is locked, so this
-        # count is consistent — no other transaction can commit a new
-        # "going" RSVP for this event until we release the lock)
+        # Check capacity if user is going. The event row lock serializes the
+        # decision, but it does NOT make a plain count current: under InnoDB's
+        # default REPEATABLE READ a non-locking SELECT answers from the
+        # snapshot taken at this transaction's first read, so it can still
+        # report the tally from before the RSVP that beat us committed. The
+        # count below is a locking read for that reason.
         old_status_was_going = (
             existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
         )
@@ -1221,6 +1224,7 @@ class EventService:
             )
             if existing_rsvp:
                 capacity_query = capacity_query.where(EventRSVP.id != existing_rsvp.id)
+            capacity_query = capacity_query.with_for_update()
 
             # no_autoflush: the new RSVP was just add()ed as "going", and a
             # Query-invoked autoflush would insert it before the count runs —
@@ -1358,11 +1362,14 @@ class EventService:
         if attendance_is_finalized(event):
             return None
 
-        # Verify there is actually capacity before promoting
+        # Verify there is actually capacity before promoting. Locking read:
+        # the event row lock does not refresh this transaction's REPEATABLE
+        # READ snapshot, so a plain count can miss an RSVP committed since.
         going_count_result = await self.db.execute(
             select(func.count(EventRSVP.id))
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.status == RSVPStatus.GOING)
+            .with_for_update()
         )
         going_count = going_count_result.scalar() or 0
 

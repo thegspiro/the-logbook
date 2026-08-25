@@ -34,8 +34,44 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
-/** `<DateTimeQuarterHour ... value={x}` / `<input type="datetime-local" ... value={x}`. */
-const PICKER_VALUE = /value=\{([A-Za-z_$][\w$]*)\}/g;
+/**
+ * `<DateTimeQuarterHour ... value={x}` / `<input type="datetime-local" ... value={x}`.
+ *
+ * Member expressions are captured whole. `value={form.opensAt}` is the shape
+ * most of this tree's forms actually use — a single `form`/`data` state object
+ * rather than one useState per field — and matching only bare identifiers left
+ * every one of them unwatched.
+ */
+const PICKER_VALUE = /value=\{([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\}/g;
+
+const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The text up to and including the `(` of the call this index sits inside.
+ *
+ * Balances parentheses and braces walking backwards, so an already-closed call
+ * earlier in the same payload is skipped rather than mistaken for the opener.
+ * `service.save({ title: formatTitle(x), starts_at: startsAt })` is the case:
+ * the nearest `(` belongs to `formatTitle`, and taking it meant the unsafe
+ * `startsAt` was never tested.
+ */
+export const enclosingCallPrefix = (source: string, index: number): string | null => {
+  let parens = 0;
+  let braces = 0;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const char = source[i];
+    if (char === ')') parens += 1;
+    else if (char === '}') braces += 1;
+    else if (char === '(') {
+      if (parens === 0) return source.slice(0, i + 1);
+      parens -= 1;
+    } else if (char === '{') {
+      if (braces === 0) continue;
+      braces -= 1;
+    }
+  }
+  return null;
+};
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];
@@ -99,7 +135,7 @@ export const unconvertedPayloadKeys = (source: string): string[] => {
   if (bound.size === 0) return [];
   const offenders: string[] = [];
   for (const name of bound) {
-    const asPayloadValue = new RegExp(String.raw`(\w+):\s*${name}\b`, 'g');
+    const asPayloadValue = new RegExp(String.raw`(\w+):\s*${escapeForRegExp(name)}\b`, 'g');
     let m: RegExpExecArray | null;
     while ((m = asPayloadValue.exec(source))) {
       // `value: x` binds a control; it is not a payload.
@@ -113,16 +149,65 @@ export const unconvertedPayloadKeys = (source: string): string[] => {
       // Walk back to the call this literal sits in. Anything that is not an
       // API call is a prop or a local object, and the conversion belongs to
       // whoever finally sends it.
-      const before = source.slice(Math.max(0, m.index - 600), m.index);
-      const callStart = before.lastIndexOf('(');
-      if (callStart === -1) continue;
-      if (!API_CALL.test(before.slice(0, callStart + 1))) continue;
+      const prefix = enclosingCallPrefix(source, m.index);
+      if (prefix === null) continue;
+      if (!API_CALL.test(prefix)) continue;
 
       offenders.push(`${m[1]}: ${name}`);
     }
   }
   return offenders;
 };
+
+describe('the detector itself', () => {
+  // A source-walking guard that silently stops matching reads exactly like a
+  // clean tree. These pin the shapes it has to keep seeing.
+
+  it('sees a picker bound through a form-state object', () => {
+    expect(
+      unconvertedPayloadKeys(`
+        <DateTimeQuarterHour value={form.opensAt} />
+        void eventService.create({ opens_at: form.opensAt });
+      `)
+    ).toEqual(['opens_at: form.opensAt']);
+  });
+
+  it('is not fooled by an earlier call in the same payload', () => {
+    // The nearest '(' belongs to formatTitle; the enclosing call is save.
+    expect(
+      unconvertedPayloadKeys(`
+        <input type="datetime-local" value={startsAt} />
+        void eventService.save({ title: formatTitle(x), starts_at: startsAt });
+      `)
+    ).toEqual(['starts_at: startsAt']);
+  });
+
+  it('accepts a converted value', () => {
+    expect(
+      unconvertedPayloadKeys(`
+        <DateTimeQuarterHour value={form.opensAt} />
+        void eventService.create({ opens_at: localToUTC(form.opensAt, tz) });
+      `)
+    ).toEqual([]);
+  });
+
+  it('leaves a value handed to a parent alone', () => {
+    // The parent owns the conversion; flagging here would fail the correct
+    // presentational modals this tree already has.
+    expect(
+      unconvertedPayloadKeys(`
+        <DateTimeQuarterHour value={form.opensAt} />
+        onSubmit({ opens_at: form.opensAt });
+      `)
+    ).toEqual([]);
+  });
+
+  it('finds the enclosing call, not the nearest parenthesis', () => {
+    const source = 'service.save({ a: f(b), c: d })';
+    const prefix = enclosingCallPrefix(source, source.indexOf('c: d'));
+    expect(prefix).toBe('service.save(');
+  });
+});
 
 describe('local datetime integrity', () => {
   it('never sends a naive picker value straight into an API payload', () => {

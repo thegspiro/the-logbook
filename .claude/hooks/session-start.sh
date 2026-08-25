@@ -51,11 +51,22 @@ export DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME="$DB_NAME" DB_USER="$DB_USER" \
        JWT_SECRET=session-start-jwt-not-for-production
 
 # ── System packages ──────────────────────────────────────────────────────────
+# Each service is checked and installed on its own. A cached image that ships
+# MariaDB but not Redis is a real shape, and testing only for the database left
+# redis-server missing while `|| true` on the start swallowed the evidence —
+# the hook then announced both were ready.
+needed=""
 if ! command -v mariadbd >/dev/null 2>&1 && ! command -v mysqld >/dev/null 2>&1; then
-  log "installing mariadb-server and redis-server"
+  needed="$needed mariadb-server"
+fi
+if ! command -v redis-server >/dev/null 2>&1; then
+  needed="$needed redis-server"
+fi
+if [ -n "$needed" ]; then
+  log "installing:$needed"
   apt-get update -qq >/dev/null 2>&1 || true
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    mariadb-server redis-server >/dev/null 2>&1
+  # shellcheck disable=SC2086
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q $needed >/dev/null 2>&1
 fi
 
 # ── Python dependencies ──────────────────────────────────────────────────────
@@ -65,12 +76,23 @@ fi
 # pywebpush/http-ece are dropped: http-ece has no wheel for this Python and its
 # sdist build fails. Web push is an optional feature and tests/test_push_
 # service.py skips itself when py_vapid is missing, so the cost is one skip.
-if ! python3 -c "import fastapi" >/dev/null 2>&1; then
+#
+# The skip is keyed to a marker naming the requirements file's own checksum,
+# not to one importable package. A general-purpose image can ship FastAPI and
+# still be missing alembic, aiomysql or a pytest plugin, and `import fastapi`
+# called that environment complete — after which the schema build failed as a
+# warning and collection failed for reasons that read as unrelated. Keying the
+# marker to the checksum also reinstalls when requirements.txt changes.
+reqs_sum="$(sha1sum backend/requirements.txt | cut -d' ' -f1)"
+deps_marker="/var/tmp/.logbook-deps-$reqs_sum"
+if [ ! -f "$deps_marker" ]; then
   log "installing backend dependencies"
   grep -v '^pywebpush\|^http-ece' backend/requirements.txt > /tmp/session-reqs.txt
-  pip install -q --ignore-installed -r /tmp/session-reqs.txt >/dev/null 2>&1 || {
+  if pip install -q --ignore-installed -r /tmp/session-reqs.txt >/dev/null 2>&1; then
+    touch "$deps_marker"
+  else
     log "WARNING: backend dependency install reported errors"
-  }
+  fi
 fi
 
 # ── Node dependencies ────────────────────────────────────────────────────────
@@ -123,6 +145,14 @@ SQL
 if ! redis-cli ping >/dev/null 2>&1; then
   log "starting redis"
   redis-server --daemonize yes --save '' --appendonly no >/dev/null 2>&1 || true
+  for _ in $(seq 1 15); do
+    redis-cli ping >/dev/null 2>&1 && break
+    sleep 1
+  done
+fi
+if ! redis-cli ping >/dev/null 2>&1; then
+  log "ERROR: redis is not answering; anything cache- or session-backed will fail"
+  exit 0
 fi
 
 # ── Schema ───────────────────────────────────────────────────────────────────
@@ -132,12 +162,28 @@ fi
 log "building the schema (alembic upgrade head, then repair_schema)"
 (
   cd backend
-  python3 -m alembic upgrade head >/tmp/session-alembic.log 2>&1 || {
-    log "WARNING: alembic upgrade failed; see /tmp/session-alembic.log"
-  }
-  python3 scripts/repair_schema.py >/tmp/session-repair.log 2>&1 || {
-    log "WARNING: repair_schema failed; see /tmp/session-repair.log"
-  }
-)
+  # A failed upgrade is fatal to the point of this hook, so it stops here
+  # rather than falling through to repair_schema. CI stops at the same place;
+  # repair_schema builds the models' tables directly and would create enough
+  # schema for the local suite to pass green against a migration chain that
+  # is already broken — the exact false reassurance this hook exists to
+  # prevent. Report it and leave the database as CI would find it.
+  if ! python3 -m alembic upgrade head >/tmp/session-alembic.log 2>&1; then
+    log "ERROR: alembic upgrade head failed — CI will fail here too."
+    log "       Not running repair_schema: it would build the models' tables"
+    log "       directly and hide this behind a green local suite."
+    tail -n 15 /tmp/session-alembic.log | sed 's/^/       | /'
+    exit 1
+  fi
+  if ! python3 scripts/repair_schema.py >/tmp/session-repair.log 2>&1; then
+    log "ERROR: repair_schema failed; the schema is incomplete."
+    tail -n 15 /tmp/session-repair.log | sed 's/^/       | /'
+    exit 1
+  fi
+) || {
+  log "NOT ready — the schema did not build. DB-backed tests will not be"
+  log "            trustworthy until the error above is resolved."
+  exit 0
+}
 
 log "ready — backend tests can reach MariaDB and Redis"

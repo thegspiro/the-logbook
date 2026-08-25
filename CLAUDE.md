@@ -1238,38 +1238,73 @@ either commits, both decide there is room, and the limit is exceeded by exactly
 the number of people who tapped at once. It is invisible in testing, because
 one request never races itself.
 
-`event_service` already gets this right, and is the pattern to copy: it locks
-the **event row** before counting "going" RSVPs, so no other transaction can
-commit an RSVP for that event until the decision is made.
+It takes **two** changes, and the second is the one everybody misses.
+
+**1. Lock the parent row**, to serialize the decision:
 
 ```python
 # WRONG — two members both see the last seat
 shift = await self.get_shift_by_id(shift_id, organization_id)
-occupied = await self.db.execute(select(func.count()).where(...))
-if occupied >= len(slots):
-    return None, "Position was filled"
-self.db.add(ShiftAssignment(...))
 
-# CORRECT — serialize the pair on the row everyone contends for
+# CORRECT — serialize on the row everyone contends for
 shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
 ```
 
-**Lock the parent, not the rows being counted.** The seats that would conflict
-do not exist yet, so there is nothing to lock; the shift/event/request row is
-the one thing both transactions already share.
+Lock the parent, not the rows being counted: the seats that would conflict do
+not exist yet, so there is nothing to lock; the shift/event/request row is the
+one thing both transactions already share.
 
-**Lock only where the limit is actually enforced.** Shift assignment locks for
-self-signup and not for an officer-made one, because an officer overfilling a
-crew is a call they are allowed to make on a busy night — serializing those
-would buy nothing and cost concurrency.
+**2. Make the count itself a locking read**, or the lock buys nothing:
+
+```python
+# STILL WRONG — the row is locked and the count is stale anyway
+occupied = await self.db.execute(select(func.count()).where(...))
+
+# CORRECT
+occupied = await self.db.execute(select(func.count()).where(...).with_for_update())
+```
+
+Under InnoDB's default REPEATABLE READ — which is what this app runs, no
+`isolation_level` is set on the engine — a plain `SELECT` answers from the
+snapshot taken at the transaction's **first** read, and acquiring a row lock
+does not refresh it. Every one of these checks runs behind an endpoint that
+already loaded the shift or the event, so the snapshot predates the lock. The
+second transaction blocks, waits, acquires the lock, counts — and sees the
+tally from before the first one committed. Demonstrated on this schema:
+
+```
+T2 reads (snapshot taken)
+T1 locks parent, counts 0, inserts, commits
+T2 locks parent  ->  plain count: 0   locking count: 1   (truth: 1)
+```
+
+A locking read is defined to see the latest committed version, which is why it
+is the fix. `SELECT ... FOR UPDATE` on the count is not there for the lock.
+
+This is easy to get wrong and invisible in review, because the code reads as
+correct and the comment above it says so. `event_service` carried the comment
+"event row is locked, so this count is consistent" from the day it was written;
+the row was locked and the count was not consistent.
+
+**Enforce the lock wherever the limit is enforced.** Shift assignment briefly
+locked only for self-signup, on the reasoning that an officer may overfill a
+crew deliberately. Half true: the _headcount_ cap is waived for officers, the
+_named-seat_ cap is not — a seat on a crew is one seat whoever fills it — so
+two officers, or an officer racing a member, still raced for the last Driver
+seat. Check which caps actually run on each path before making the lock
+conditional on any of them.
 
 Found on 2026-08-24 in the outreach role seats and the outreach signup sheet
-(two coordinators each creating a shift, one orphaned), and on 2026-08-25 in
-generic shift seat capacity, which had the same shape since it was written.
+(two coordinators each creating a shift, one orphaned), on 2026-08-25 in
+generic shift seat capacity, which had the same shape since it was written, and
+the same day in all five capacity counts, which were locking the right row and
+then reading a stale number.
 
 **Rule:** when adding a feature with a cap, a quota, or a one-per-thing
 invariant, ask what happens if two requests arrive in the same millisecond. If
-the answer involves a count followed by an insert, lock the parent row.
+the answer involves a count followed by an insert, lock the parent row **and**
+make the count a locking read. `tests/test_capacity_locking.py` asserts both
+halves at every site.
 
 ## Environment Variables
 

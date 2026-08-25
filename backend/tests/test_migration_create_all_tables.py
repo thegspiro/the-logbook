@@ -68,22 +68,119 @@ def _tables_created_by_migrations(sources: dict[str, str]) -> set[str]:
     return created
 
 
+def _string_constants(text: str) -> dict[str, str]:
+    """Module-level ``_TABLE = "positions"`` bindings, which several guards use."""
+    return dict(re.findall(r"^(\w+)\s*=\s*[\"']([a-z0-9_]+)[\"']", text, re.MULTILINE))
+
+
+def _table_list_variables(text: str) -> set[str]:
+    """Names bound to a ``get_table_names()`` result, e.g. ``existing_tables``."""
+    return set(
+        re.findall(r"^\s*(\w+)\s*=\s*[^\n]*get_table_names\(\)", text, re.MULTILINE)
+    )
+
+
+def _guards_its_own_table(text: str) -> bool:
+    """True when a ``_has_column``-style helper checks the table it is given.
+
+    A migration whose helper returns False for a missing table is safe calling
+    ``_has_column("event_requests", ...)`` with no separate ``_has_table``, so
+    that shape has to count as guarding whatever table it is handed.
+    """
+    helper = re.search(r"def _has_column\(.*?\n(?=\S|\Z)", text, re.DOTALL)
+    return bool(helper and "_has_table(" in helper.group(0))
+
+
+def _guarded_tables(text: str) -> set[str]:
+    """Tables this migration actually checks for, by name.
+
+    A file-wide "is there a guard anywhere" test exempts every risky table in a
+    file that guards only one of them — a migration that correctly guards
+    ``skill_tests`` and then unconditionally alters ``event_requests`` reported
+    clean while a fresh upgrade still died on it.
+    """
+    constants = _string_constants(text)
+    guarded: set[str] = set()
+
+    def add(name: str) -> None:
+        if name in constants:
+            guarded.add(constants[name])
+
+    # _has_table("t") / inspector.has_table(bind, "t")
+    guarded.update(
+        re.findall(r"has_table\(\s*(?:[\w.]+\s*,\s*)?[\"']([a-z0-9_]+)[\"']", text)
+    )
+    for name in re.findall(r"has_table\(\s*(?:[\w.]+\s*,\s*)?(\w+)\s*\)", text):
+        add(name)
+
+    # "t" [not] in ...get_table_names()
+    guarded.update(
+        re.findall(
+            r"[\"']([a-z0-9_]+)[\"']\s+(?:not\s+)?in\s+[^\n]*get_table_names\(\)", text
+        )
+    )
+    for name in re.findall(
+        r"\b(\w+)\s+(?:not\s+)?in\s+[^\n]*get_table_names\(\)", text
+    ):
+        add(name)
+
+    # "t" [not] in existing_tables, where existing_tables holds the list
+    for variable in _table_list_variables(text):
+        guarded.update(
+            re.findall(
+                rf"[\"']([a-z0-9_]+)[\"']\s+(?:not\s+)?in\s+{re.escape(variable)}\b",
+                text,
+            )
+        )
+        for name in re.findall(
+            rf"\b(\w+)\s+(?:not\s+)?in\s+{re.escape(variable)}\b", text
+        ):
+            add(name)
+
+    # _has_column("t", "c") where the helper itself checks the table
+    if _guards_its_own_table(text):
+        guarded.update(re.findall(r"_has_column\(\s*[\"']([a-z0-9_]+)[\"']", text))
+        for name in re.findall(r"_has_column\(\s*(\w+)\s*,", text):
+            add(name)
+
+    return guarded
+
+
+def _returns_early_when_a_model_only_table_is_absent(
+    text: str, create_all_only: set[str]
+) -> bool:
+    """True for ``if "t" not in ...get_table_names(): return`` on a model table.
+
+    This exempts the whole file, and soundly: ``create_all()`` builds every
+    model-declared table in a single call, so if one create_all-only table is
+    present they all are. Two skills-testing migrations rely on exactly this —
+    they test ``skill_templates`` and then alter ``skill_tests`` — and both are
+    correct. The property does not hold for a migration-created table, which is
+    why the table named in the guard must itself be create_all-only.
+    """
+    pattern = re.compile(
+        r"if\s+[\"']([a-z0-9_]+)[\"']\s+not\s+in\s+[^\n]*get_table_names\(\)\s*:\s*\n"
+        r"\s*return\b"
+    )
+    return any(table in create_all_only for table in pattern.findall(text))
+
+
 def _find_offenders(sources: dict[str, str], create_all_only: set[str]) -> list[str]:
     """Migrations that alter a create_all-only table without checking for it.
 
-    Deliberately a text-level check: it looks for any table-existence guard in
-    the file rather than proving that guard wraps the risky call. Matching a
-    guard to its statement needs the AST and buys little — the failure this
-    exists to stop is a migration written with no such handling at all, which
-    contains none of these tokens anywhere.
+    The check is per table, not per file: each risky table must be named by a
+    guard of its own.
     """
     offenders = []
     for name, text in sorted(sources.items()):
         touched = (
             set(_TABLE_FIRST.findall(text)) | set(_TABLE_SECOND.findall(text))
         ) & create_all_only
-        if touched and not any(guard in text for guard in _GUARDS):
-            offenders.append(f"  {name} -> {', '.join(sorted(touched))}")
+        if _returns_early_when_a_model_only_table_is_absent(text, create_all_only):
+            continue
+        unguarded = touched - _guarded_tables(text)
+        if unguarded:
+            offenders.append(f"  {name} -> {', '.join(sorted(unguarded))}")
     return offenders
 
 
@@ -167,6 +264,61 @@ class TestTheDetectionItself:
         }
 
         assert _find_offenders(sources, self.CREATE_ALL_ONLY) == []
+
+    def test_a_guard_for_one_table_does_not_exempt_another(self):
+        """The load-bearing case for a per-table check.
+
+        A file-wide "is there a guard anywhere" test reported this clean while
+        a fresh `alembic upgrade head` still died on the second add_column.
+        """
+        sources = {
+            "0001_two_tables.py": (
+                "def _has_table(t):\n"
+                "    return t in sa.inspect(op.get_bind()).get_table_names()\n\n"
+                "def upgrade():\n"
+                '    if _has_table("skill_tests"):\n'
+                '        op.add_column("skill_tests", sa.Column("a", sa.String(1)))\n'
+                '    op.add_column("event_requests", sa.Column("b", sa.String(1)))\n'
+            )
+        }
+
+        offenders = _find_offenders(sources, {"event_requests", "skill_tests"})
+
+        assert len(offenders) == 1
+        assert "event_requests" in offenders[0]
+        assert "skill_tests" not in offenders[0]
+
+    def test_an_early_return_on_a_sibling_model_table_guards_the_file(self):
+        """`create_all()` builds every model table at once, so confirming one
+        confirms all. Two skills-testing migrations depend on this."""
+        sources = {
+            "0001_early_return.py": (
+                "def upgrade():\n"
+                '    if "skill_templates" not in inspect(op.get_bind()).get_table_names():\n'
+                "        return\n"
+                '    op.add_column("skill_tests", sa.Column("a", sa.String(1)))\n'
+            )
+        }
+
+        assert _find_offenders(sources, {"skill_templates", "skill_tests"}) == []
+
+    def test_an_early_return_on_a_migration_built_table_does_not(self):
+        """The exemption rests on the guard naming a create_all-only table.
+        `shifts` is built by a migration, so its presence proves nothing about
+        whether create_all has ever run."""
+        sources = {
+            "0001_early_return.py": (
+                "def upgrade():\n"
+                '    if "shifts" not in inspect(op.get_bind()).get_table_names():\n'
+                "        return\n"
+                '    op.add_column("event_requests", sa.Column("a", sa.String(1)))\n'
+            )
+        }
+
+        offenders = _find_offenders(sources, {"event_requests"})
+
+        assert len(offenders) == 1
+        assert "event_requests" in offenders[0]
 
     def test_a_table_migrations_do_create_is_ignored(self):
         sources = {
