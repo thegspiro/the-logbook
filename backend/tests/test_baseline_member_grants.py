@@ -44,6 +44,44 @@ def _baseline_permissions() -> set[str]:
     return granted
 
 
+#: Everything the 2026-08-25 ``notifications.view`` revocation covers. The
+#: baseline three plus the Engineer rank and the position that mirrors it —
+#: Engineer is a driver/operator, not an officer, and the Send Log is no more
+#: their business than a firefighter's.
+NOTIFICATIONS_REVOKED_SOURCES = BASELINE_SOURCES + (
+    ("engineer position", DEFAULT_POSITIONS, "engineer", "permissions"),
+    ("engineer rank", OPERATIONAL_RANKS, "engineer", "default_permissions"),
+)
+
+
+def test_notifications_view_is_not_a_baseline_grant():
+    """The Send Log it opens is scoped to the org, not to the recipient.
+
+    ``notifications.view`` gates ``GET /notifications/logs``, and
+    ``NotificationsService.get_logs`` filters on ``organization_id`` alone —
+    there is no recipient scoping anywhere on that path. ``NotificationLog``
+    stores ``recipient_email``, ``subject`` and ``message``, so a grant seeded
+    to the whole department let any member read the body of every notification
+    sent to every other member.
+
+    Withholding it costs a member nothing they can act on: their own inbox is
+    ``GET /notifications/my``, which depends on ``get_current_user`` and no
+    permission at all. What they lose is three admin tabs, one of which
+    (Email Templates) was already a dead end — its only control navigates to a
+    route requiring ``settings.manage``.
+
+    Revoked from the seeded rows by migration ``a1f7c34e9b02``; per the
+    ``compliance.view`` precedent, the registry edit alone would have left the
+    grant live on every department that has already onboarded.
+    """
+    for label, registry, slug, field in NOTIFICATIONS_REVOKED_SOURCES:
+        assert "notifications.view" not in registry[slug][field], (
+            f"the seeded {label} carries notifications.view, which opens the "
+            "org-wide Send Log — every member's notification subjects and "
+            "bodies, readable by anyone"
+        )
+
+
 def test_compliance_view_is_not_a_baseline_grant():
     """``compliance.view`` is an officer grant wearing a view grant's name.
 
