@@ -257,7 +257,7 @@ class TestSeparationOfDuties:
     def test_manager_review_still_refuses_participants(self):
         source = inspect.getsource(SchedulingService.review_swap_request)
         assert "Requesters cannot review their own swap requests" in source
-        assert "Target participants cannot manager-review swap requests" in source
+        assert "Target participants cannot officer-review swap requests" in source
 
     def test_participant_acceptance_is_open_to_any_member(self):
         for route in router.routes:
