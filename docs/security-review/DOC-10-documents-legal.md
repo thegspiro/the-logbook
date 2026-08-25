@@ -1,6 +1,6 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-25 · **PR:** #1821
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-25 · **PR:** #1821 (original), fixes landed in #1826 (follow-up — see revision note)
 
 **Backend:** `endpoints/documents.py` (462 L, 11 routes), `services/documents_service.py` (998 L), `endpoints/station_documents.py` (102 L, 2 routes, new to this rotation), `services/print_document_service.py` (515 L, new), `endpoints/legal_documents.py` (340 L, 6 routes, new), `services/legal_service.py` (241 L, new), `schemas/legal.py`, `schemas/documents.py`, `models/document.py`, `models/legal.py`
 **Frontend:** `pages/legal/LegalPage.tsx` (public consumption path, read for XSS — see Verified good), `modules/governance/pages/LegalDocumentsPage.tsx` (not read in full — backend-only pass)
@@ -22,6 +22,12 @@ and fixed in this pass; two are unbounded-list findings consistent with this
 rotation's established flag-not-fix pattern (FIN-9/ELEC-12/USR-5/MP-10/MS-6);
 one is a real, larger gap flagged for an owner decision rather than
 implemented here. See Findings below for per-item disposition.
+
+**#1821 merged (at its pre-fix commit) before this review round was
+resolved.** Per CLAUDE.md Pitfall #24, the fixes below were not pushed onto
+the now-closed `claude/security-review-doc` branch; they landed as a new
+follow-up PR, #1826, against `main`. The Codex review threads on #1821 were
+each replied to with a link forward to #1826 and resolved there.
 
 ## Scope
 
