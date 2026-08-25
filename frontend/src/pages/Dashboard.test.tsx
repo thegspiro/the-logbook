@@ -929,6 +929,24 @@ describe('Dashboard', () => {
       expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });
 
+    // Every permission here is granted to DEFAULT_POSITIONS["member"], so gating
+    // the tab on any of them put department-wide reporting in front of every
+    // firefighter in the department.
+    it.each(['inventory.view', 'apparatus.view', 'facilities.view', 'scheduling.view'])(
+      'stays hidden from a member holding only the baseline grant %s',
+      async (grant) => {
+        mockCheckPermission.mockImplementation((permission: string) => permission === grant);
+
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => {
+          expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
+        });
+        expect(screen.queryByRole('tab', { name: 'My Department' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Scheduling Operations')).not.toBeInTheDocument();
+      }
+    );
+
     it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);
 

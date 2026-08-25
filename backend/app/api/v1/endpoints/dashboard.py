@@ -210,7 +210,13 @@ async def get_asset_widgets(
             ]
         )
 
-    if user_has_permission(current_user, "apparatus.view"):
+    # Fleet readiness reporting, not the apparatus roster: every widget below
+    # links into a management view and `apparatus.view` is a baseline member
+    # grant, so viewing is not authority to see the department's deficiency
+    # and overdue-check tallies.  Mirrors the inventory gate above.
+    if user_has_permission(current_user, "apparatus.manage") or user_has_permission(
+        current_user, "settings.manage"
+    ):
         fleet = await ApparatusService(db).get_fleet_summary(org_id)
         defects = await db.scalar(
             select(func.count(Apparatus.id)).where(
@@ -267,7 +273,12 @@ async def get_asset_widgets(
             ]
         )
 
-    if user_has_permission(current_user, "facilities.view"):
+    # Same reasoning as apparatus: `facilities.view` is a baseline member
+    # grant, while overdue work orders and compliance deadlines are facility
+    # management reporting.
+    if user_has_permission(current_user, "facilities.manage") or user_has_permission(
+        current_user, "settings.manage"
+    ):
         maintenance = await db.scalar(
             select(func.count(FacilityMaintenance.id))
             .join(Facility, Facility.id == FacilityMaintenance.facility_id)
