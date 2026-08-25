@@ -436,6 +436,12 @@ describe('apiCache', () => {
     it('returns false for /users/ endpoints', () => {
       expect(isCacheable('/users/123')).toBe(false);
       expect(isCacheable('/users/me')).toBe(false);
+      // The photo-use consent roster is a member list (names, emails,
+      // membership numbers) and rides on the prefix rather than an entry of
+      // its own. Narrowing the prefix to '/users/' would still cover it, but
+      // it is asserted here so a future tidy-up of that entry cannot make a
+      // roster of the whole department cacheable in passing.
+      expect(isCacheable('/users/consents/photo-use')).toBe(false);
     });
 
     it('returns false for /security/ endpoints', () => {
