@@ -2420,10 +2420,18 @@ async def get_photo_use_roster(
         # *weaker* gate than the per-member ``/{user_id}/consents`` beside it
         # (users.edit or members.manage) while returning strictly more.
         #
-        # notifications.manage is what puts the PIO here — it is the grant
-        # that distinguishes the Communications Officer, and it is what gates
-        # this page's neighbours under Forms & Comms.
-        require_permission("notifications.manage", "members.manage", "users.edit")
+        # users.view_consents exists because the Historian and Public Outreach
+        # positions have a real claim on this page — a historian curates the
+        # photo archive — and share nothing with each other but broad grants
+        # (users.view, members.view, events.view). Widening to any of those
+        # would have reopened exactly what the paragraph above closed, so the
+        # grant they needed had to be one that means only this.
+        require_permission(
+            "users.view_consents",
+            "notifications.manage",
+            "members.manage",
+            "users.edit",
+        )
     ),
 ):
     """
@@ -2442,8 +2450,8 @@ async def get_photo_use_roster(
     identifies a member on a photo call sheet — name, rank, station, and
     membership number.
 
-    **Permissions required:** notifications.manage, members.manage, or
-    users.edit
+    **Permissions required:** users.view_consents, notifications.manage,
+    members.manage, or users.edit
     """
     from app.models.consent import ConsentType
     from app.services.consent_service import ConsentService

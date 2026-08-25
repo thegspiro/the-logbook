@@ -78,6 +78,11 @@ USERS_VIEW_CONTACT = Permission(
 USERS_UPDATE_POSITIONS = Permission(
     "users.update_positions", "Update user positions", PermissionCategory.USERS
 )
+USERS_VIEW_CONSENTS = Permission(
+    "users.view_consents",
+    "View member privacy consent records",
+    PermissionCategory.USERS,
+)
 
 MEMBERS_VIEW = Permission(
     "members.view", "View member list", PermissionCategory.MEMBERS
@@ -622,6 +627,7 @@ ALL_PERMISSIONS: list[Permission] = [
     USERS_EDIT,
     USERS_DELETE,
     USERS_VIEW_CONTACT,
+    USERS_VIEW_CONSENTS,
     USERS_UPDATE_POSITIONS,
     MEMBERS_VIEW,
     MEMBERS_MANAGE,
@@ -1614,6 +1620,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_MANAGE.name,
+            USERS_VIEW_CONSENTS.name,
         ],
     },
     "communications_officer": {
@@ -1636,6 +1643,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
+            USERS_VIEW_CONSENTS.name,
         ],
     },
     "historian": {
@@ -1654,6 +1662,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_MANAGE.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
+            USERS_VIEW_CONSENTS.name,
         ],
     },
     "apparatus_officer": {
