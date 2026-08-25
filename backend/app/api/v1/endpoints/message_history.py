@@ -34,6 +34,7 @@ from app.services.email_service import (
 )
 from app.services.email_theme import ACCENT_GREEN
 from app.services.officer_service import OfficerService
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
 
@@ -76,10 +77,10 @@ async def list_message_history(
         q = q.where(MessageHistory.status == s)
 
     if search:
-        pattern = f"%{search}%"
+        pattern = like_pattern(search)
         q = q.where(
-            (MessageHistory.subject.ilike(pattern))
-            | (MessageHistory.to_email.ilike(pattern))
+            (MessageHistory.subject.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+            | (MessageHistory.to_email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
         )
 
     if sent_after:

@@ -1174,7 +1174,7 @@ class StorefrontService:
         result = await self.db.execute(
             select(StoreOrder.order_number).where(
                 StoreOrder.organization_id == str(organization_id),
-                StoreOrder.order_number.like(f"{prefix}%"),
+                StoreOrder.order_number.like(f"{prefix}%", escape=LIKE_ESCAPE_CHAR),
             )
         )
         highest = 0
