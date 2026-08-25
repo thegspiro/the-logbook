@@ -1,6 +1,6 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 · **PR:** #TBD
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 · **PR:** #1806
 
 **Backend:** all 12 files under `app/api/public/` (2317 L total) —
 `portal.py`, `core/public_portal_security.py`, `calendar.py`, `display.py`,
