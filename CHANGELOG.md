@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two heads sharing a parent as a _warning_, so the one condition that breaks
   `alembic upgrade head` for everyone after a merge went green — silently, with
   both PRs passing and only the next person to migrate finding out. #1795 hit
-  exactly that when `main` landed a migration from the same parent. The CI step
-  runs `--strict`; multiple heads is the script's only warning class, so this
-  promotes that case and nothing else, and it is clean on `main` today.
+  exactly that when `main` landed a migration from the same parent. `--strict` is now implemented (the script had no argument parsing at all,
+  so the flag alone was inert — caught in review) and the CI step passes it.
+  Verified by forking the chain on purpose: exit 1 under `--strict`, exit 0
+  without.
 
 **Added**
 
@@ -27,9 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `require_permission(...)`. The tell was the composition: a grant every member
   holds, OR'd with an officer grant from a **different module**. Same-module
   `x.view` OR `x.manage` is the intended pattern and is used at some seventy
-  endpoints; cross-module pairing is the anomaly. The check finds zero today
-  and, with `compliance.view` restored to the baseline, finds exactly the one
-  endpoint that caused the problem.
+  endpoints; cross-module pairing is the anomaly. Review found the first draft
+  too narrow in two ways, both fixed: the elevated set is now derived from the
+  registry rather than matched on a `.manage` suffix, which was blind to
+  `events.edit`, `scheduling.assign`, `members.manage_id_cards` and
+  `inventory.manage_medical`; and the scan reads route-decorator
+  `dependencies=[...]` gates as well as signature ones, having previously
+  reached 1201 of 1202 while its own floor assertion looked healthy.
+
+  The rule exempts a gate that already names a baseline grant from the officer
+  grant's own module — `equipment_check.submit` beside `equipment_check.view`
+  means the endpoint is deliberately crew-facing. It flagged one endpoint on
+  introduction, recorded in `ALLOWED` as unadjudicated rather than quietly
+  waved through: `/supply/item-deployments` accepts `inventory.view` where the
+  sibling its docstring calls "the reverse" of it requires `inventory.manage`.
 
 **Documented**
 
