@@ -181,8 +181,8 @@ const NodeRow: React.FC<NodeRowProps> = ({
 
 interface EditorTarget {
   node?: OrgChartNode | undefined;
+  /** Pre-selected parent when opened from a seat's "add report" button. */
   parentId?: string | undefined;
-  parentTitle?: string | undefined;
 }
 
 const OrgChartPage: React.FC = () => {
@@ -243,13 +243,14 @@ const OrgChartPage: React.FC = () => {
   }, [nodes]);
 
   const handleSave = async (draft: OrgChartNodeDraft) => {
+    const existing = editor?.node;
     try {
-      if (editor?.node) {
+      if (existing) {
         // Update: every field the form owns travels on every save, and an
         // emptied box goes as an explicit null. Omitting the key would mean
         // "leave it alone" on the backend, so a cleared holder would survive
         // behind a success toast (pitfall #1, update direction).
-        await updateNode(editor.node.id, {
+        await updateNode(existing.id, {
           title: draft.title,
           userId: blankToNull(draft.userId),
           displayName: blankToNull(draft.displayName),
@@ -258,13 +259,23 @@ const OrgChartPage: React.FC = () => {
           contactPhone: blankToNull(draft.contactPhone),
           isPublished: draft.isPublished,
         });
+        // A changed reporting line is a second call: /move renumbers the
+        // siblings the seat lands among, which a field update has no business
+        // doing. Second, not first, so a rejected move still leaves the
+        // edits saved rather than discarding both.
+        if (draft.parentId !== (existing.parentId ?? '')) {
+          await moveNode(existing.id, {
+            parentId: draft.parentId || null,
+            position: nodes.filter((n) => (n.parentId ?? '') === draft.parentId && n.id !== existing.id).length,
+          });
+        }
         toast.success('Position updated');
       } else {
         // Create: blanks are omitted so an empty string never reaches a
         // validator that would reject it.
         await createNode({
           title: draft.title,
-          parentId: editor?.parentId || undefined,
+          parentId: draft.parentId || undefined,
           userId: draft.userId || undefined,
           displayName: draft.displayName || undefined,
           responsibility: draft.responsibility || undefined,
@@ -388,7 +399,7 @@ const OrgChartPage: React.FC = () => {
                 isSaving={isSaving}
                 canMoveUp={(position?.index ?? 0) > 0}
                 canMoveDown={!!position && position.index < position.total - 1}
-                onAddReport={(parent) => setEditor({ parentId: parent.id, parentTitle: parent.title })}
+                onAddReport={(parent) => setEditor({ parentId: parent.id })}
                 onEdit={(target) => setEditor({ node: target })}
                 onDelete={(target) => void handleDelete(target)}
                 onNudge={(target, direction) => void handleNudge(target, direction)}
@@ -401,7 +412,8 @@ const OrgChartPage: React.FC = () => {
       <OrgChartNodeModal
         isOpen={editor !== null}
         editingNode={editor?.node}
-        parentTitle={editor?.parentTitle}
+        defaultParentId={editor?.parentId}
+        nodes={nodes}
         members={chart?.members ?? []}
         isSaving={isSaving}
         onCancel={() => setEditor(null)}

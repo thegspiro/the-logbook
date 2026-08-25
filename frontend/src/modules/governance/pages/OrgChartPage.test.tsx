@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithRouter } from '../../../test/utils';
@@ -192,13 +192,139 @@ describe('OrgChartPage', () => {
     renderWithRouter(<OrgChartPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: /Add a position reporting to Fire Chief/i }));
-    expect(await screen.findByText(/This position will report to Fire Chief/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Reports to/i)).toHaveValue('chief');
 
     await userEvent.type(screen.getByLabelText(/Position title/i), 'Deputy Chief');
     await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
 
     await waitFor(() => expect(mockCreateNode).toHaveBeenCalled());
     expect(mockCreateNode).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'chief' }));
+  });
+
+  it('lets a position be added straight to the top of the chart', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    mockCreateNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Add position$/i }));
+    expect(await screen.findByLabelText(/Reports to/i)).toHaveValue('');
+
+    await userEvent.type(screen.getByLabelText(/Position title/i), 'Board of Directors');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockCreateNode).toHaveBeenCalled());
+    expect(mockCreateNode).toHaveBeenCalledWith(expect.objectContaining({ parentId: undefined }));
+  });
+
+  it('moves a position onto a different reporting line when it is re-parented', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
+    mockMoveNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Reports to/i), 'training');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    // Two calls, not one: /move renumbers the siblings the seat lands among,
+    // which a field update has no business doing.
+    await waitFor(() => expect(mockMoveNode).toHaveBeenCalled());
+    expect(mockMoveNode).toHaveBeenCalledWith('safety', { parentId: 'training', position: 0 });
+  });
+
+  it('does not move a position whose reporting line was left alone', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockUpdateNode).toHaveBeenCalled());
+    expect(mockMoveNode).not.toHaveBeenCalled();
+  });
+
+  it('promotes a position to the top of the chart', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
+    mockMoveNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Training Officer/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Reports to/i), '');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockMoveNode).toHaveBeenCalled());
+    // One root already exists, so the promoted seat lands after it.
+    expect(mockMoveNode).toHaveBeenCalledWith('training', { parentId: null, position: 1 });
+  });
+
+  it('keeps a position out of its own reporting-line list', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Fire Chief/i }));
+    const reportsTo = await screen.findByLabelText(/Reports to/i);
+
+    // Offering a choice the server will refuse is a worse answer than not
+    // offering it: the Chief cannot report to itself or to its own reports.
+    const options = within(reportsTo)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(options.some((label) => label?.includes('Fire Chief'))).toBe(false);
+    expect(options.some((label) => label?.includes('Training Officer'))).toBe(false);
+    expect(options[0]).toMatch(/Top of the chart/i);
+  });
+
+  it('records a holder who has no account here', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), '__external__');
+    await userEvent.type(await screen.findByLabelText(/Their name/i), 'Rev. J. Alvarez');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockUpdateNode).toHaveBeenCalled());
+    expect(mockUpdateNode).toHaveBeenCalledWith(
+      'safety',
+      expect.objectContaining({ userId: null, displayName: 'Rev. J. Alvarez' })
+    );
+  });
+
+  it('asks for the name of a holder who has no account rather than saving an anonymous seat', async () => {
+    mockGetChart.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Safety Officer/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), '__external__');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Enter the name of the person/i);
+    expect(mockUpdateNode).not.toHaveBeenCalled();
+  });
+
+  it('clears the typed name when a seat is set back to vacant', async () => {
+    mockGetChart.mockResolvedValue(
+      chart({
+        canManage: true,
+        nodes: [chief, { ...training, userId: null, holderName: 'Rev. J. Alvarez', displayName: 'Rev. J. Alvarez' }],
+      })
+    );
+    mockUpdateNode.mockResolvedValue(chart({ canManage: true }));
+    renderWithRouter(<OrgChartPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Edit Training Officer/i }));
+    await userEvent.selectOptions(await screen.findByLabelText(/Who holds it/i), '');
+    await userEvent.click(screen.getByRole('button', { name: /Save position/i }));
+
+    await waitFor(() => expect(mockUpdateNode).toHaveBeenCalled());
+    // The old name must not sit in a hidden field waiting to be republished.
+    expect(mockUpdateNode).toHaveBeenCalledWith(
+      'training',
+      expect.objectContaining({ userId: null, displayName: null })
+    );
   });
 
   it('says how many reports a removal will promote before it happens', async () => {

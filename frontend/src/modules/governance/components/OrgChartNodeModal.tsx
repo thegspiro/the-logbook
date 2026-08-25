@@ -5,6 +5,8 @@ import type { OrgChartMemberOption, OrgChartNode } from '../types/orgChart';
 
 export interface OrgChartNodeDraft {
   title: string;
+  /** '' means this seat sits at the top of the chart. */
+  parentId: string;
   userId: string;
   displayName: string;
   responsibility: string;
@@ -17,16 +19,30 @@ interface OrgChartNodeModalProps {
   isOpen: boolean;
   /** Set when editing; absent when adding a position. */
   editingNode?: OrgChartNode | undefined;
-  /** The seat the new position will report to, for the explanatory copy. */
-  parentTitle?: string | undefined;
+  /** Pre-selected parent when the editor was opened from a seat's "add report". */
+  defaultParentId?: string | undefined;
+  /** The whole chart, for the "Reports to" list. */
+  nodes: OrgChartNode[];
   members: OrgChartMemberOption[];
   isSaving: boolean;
   onCancel: () => void;
   onSave: (draft: OrgChartNodeDraft) => Promise<void>;
 }
 
+/**
+ * Sentinel for "held by somebody who has no account here".
+ *
+ * A first-class option rather than a blank-plus-override, because departments
+ * routinely put people on the chart who will never log in — a board member, a
+ * chaplain, a mutual-aid liaison, an auxiliary president. Expressing that as
+ * "leave the picker empty and fill in a field labelled *instead*" reads as a
+ * workaround for a case that is entirely normal.
+ */
+const EXTERNAL_HOLDER = '__external__';
+
 const EMPTY_DRAFT: OrgChartNodeDraft = {
   title: '',
+  parentId: '',
   userId: '',
   displayName: '',
   responsibility: '',
@@ -36,23 +52,54 @@ const EMPTY_DRAFT: OrgChartNodeDraft = {
 };
 
 /**
+ * Every seat at or beneath `rootId`.
+ *
+ * Used to keep a seat out of its own "Reports to" list: the server refuses a
+ * move that would make a position report to one of its own subordinates, and
+ * offering the choice only to reject it is a worse answer than not offering it.
+ */
+const descendantsOf = (nodes: OrgChartNode[], rootId: string): Set<string> => {
+  const childrenOf = new Map<string, string[]>();
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+    childrenOf.set(node.parentId, [...(childrenOf.get(node.parentId) ?? []), node.id]);
+  }
+  const found = new Set<string>([rootId]);
+  const queue = [rootId];
+  while (queue.length) {
+    const current = queue.shift() as string;
+    for (const child of childrenOf.get(current) ?? []) {
+      if (found.has(child)) continue;
+      found.add(child);
+      queue.push(child);
+    }
+  }
+  return found;
+};
+
+/**
  * Editor for one seat on the organizational chart.
  *
- * The title is the department's real one ("Fire Chief", "Training Committee
- * Chair"), not an application role — the two hierarchies disagree often enough
- * that the copy here says so, because an admin who assumes the chart is
- * generated from positions will not understand why it stays empty.
+ * Two things this screen deliberately does not borrow from the application's
+ * own model of the department: the title is free text rather than a Position,
+ * and the reporting line is whatever leadership picks rather than anything
+ * derived from permissions. A department can put its Fundraising Committee
+ * Chair under the President and its IT Manager under the Chief, neither of
+ * which any Position row would tell you.
  */
 export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
   isOpen,
   editingNode,
-  parentTitle,
+  defaultParentId,
+  nodes,
   members,
   isSaving,
   onCancel,
   onSave,
 }) => {
   const [draft, setDraft] = useState<OrgChartNodeDraft>(EMPTY_DRAFT);
+  /** '', a member id, or EXTERNAL_HOLDER. */
+  const [holderChoice, setHolderChoice] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Reseed on every open: a name typed for one seat must not be filed against
@@ -60,35 +107,65 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setValidationError(null);
-    setDraft(
-      editingNode
-        ? {
-            title: editingNode.title,
-            userId: editingNode.userId ?? '',
-            // Seeded from the stored override, not the resolved holder name —
-            // seeding from the resolved one would turn every linked member's
-            // name into a typed override the moment Save was pressed.
-            displayName: editingNode.displayName ?? '',
-            responsibility: editingNode.responsibility ?? '',
-            contactEmail: editingNode.contactEmail ?? '',
-            contactPhone: editingNode.contactPhone ?? '',
-            isPublished: editingNode.isPublished,
-          }
-        : EMPTY_DRAFT
-    );
-  }, [isOpen, editingNode]);
+    if (editingNode) {
+      setDraft({
+        title: editingNode.title,
+        parentId: editingNode.parentId ?? '',
+        userId: editingNode.userId ?? '',
+        // Seeded from the stored override, not the resolved holder name —
+        // seeding from the resolved one would turn every linked member's name
+        // into a typed override the moment Save was pressed.
+        displayName: editingNode.displayName ?? '',
+        responsibility: editingNode.responsibility ?? '',
+        contactEmail: editingNode.contactEmail ?? '',
+        contactPhone: editingNode.contactPhone ?? '',
+        isPublished: editingNode.isPublished,
+      });
+      setHolderChoice(editingNode.userId ? editingNode.userId : editingNode.displayName ? EXTERNAL_HOLDER : '');
+    } else {
+      setDraft({ ...EMPTY_DRAFT, parentId: defaultParentId ?? '' });
+      setHolderChoice('');
+    }
+  }, [isOpen, editingNode, defaultParentId]);
 
   const sortedMembers = useMemo(() => [...members].sort((a, b) => a.name.localeCompare(b.name)), [members]);
+
+  /** Seats this one may report to: everything except itself and its own reports. */
+  const parentOptions = useMemo(() => {
+    const excluded = editingNode ? descendantsOf(nodes, editingNode.id) : new Set<string>();
+    return nodes
+      .filter((node) => !excluded.has(node.id))
+      .map((node) => ({ id: node.id, label: `${'— '.repeat(node.depth)}${node.title}` }));
+  }, [nodes, editingNode]);
+
+  const isExternal = holderChoice === EXTERNAL_HOLDER;
+  const linkedMember = sortedMembers.find((m) => m.id === holderChoice);
+
+  const handleHolderChange = (value: string) => {
+    setHolderChoice(value);
+    setDraft((current) => ({
+      ...current,
+      userId: value === EXTERNAL_HOLDER || value === '' ? '' : value,
+      // A holder cleared to vacant should not keep the previous holder's name
+      // sitting in a hidden field, waiting to be republished on the next save.
+      displayName: value === '' ? '' : current.displayName,
+    }));
+  };
 
   const handleSave = async () => {
     if (!draft.title.trim()) {
       setValidationError('Give the position a title.');
       return;
     }
+    if (isExternal && !draft.displayName.trim()) {
+      setValidationError('Enter the name of the person who holds this position.');
+      return;
+    }
     setValidationError(null);
     await onSave({
       ...draft,
       title: draft.title.trim(),
+      userId: isExternal ? '' : draft.userId,
       displayName: draft.displayName.trim(),
       responsibility: draft.responsibility.trim(),
       contactEmail: draft.contactEmail.trim(),
@@ -114,10 +191,6 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
       }
     >
       <div className="space-y-4">
-        {!editingNode && parentTitle ? (
-          <p className="alert-info text-sm">This position will report to {parentTitle}.</p>
-        ) : null}
-
         <div>
           <label className="form-label" htmlFor="org-node-title">
             Position title
@@ -130,46 +203,95 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             placeholder="e.g. Training Officer"
           />
           <p className="text-theme-text-muted mt-2 text-xs">
-            The department&rsquo;s real title, as members would say it. This chart is maintained by hand and is not tied
-            to anyone&rsquo;s application role or permissions.
+            The department&rsquo;s real title, as members would say it. It does not have to match a position or role
+            that exists in this application — put down &ldquo;Fundraising Committee Chair&rdquo; or &ldquo;Station 2
+            House Captain&rdquo; even if nothing in the software is called that.
           </p>
         </div>
 
         <div>
-          <label className="form-label" htmlFor="org-node-member">
+          <label className="form-label" htmlFor="org-node-parent">
+            Reports to
+          </label>
+          <select
+            id="org-node-parent"
+            className="form-input"
+            value={draft.parentId}
+            onChange={(e) => setDraft({ ...draft, parentId: e.target.value })}
+          >
+            <option value="">Top of the chart — reports to nobody</option>
+            {parentOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-theme-text-muted mt-2 text-xs">
+            Your department&rsquo;s real reporting line, which need not match anything in the application. A position
+            cannot be listed under one of its own subordinates, so those are left out of this list.
+          </p>
+        </div>
+
+        <div>
+          <label className="form-label" htmlFor="org-node-holder">
             Who holds it
           </label>
           <select
-            id="org-node-member"
+            id="org-node-holder"
             className="form-input"
-            value={draft.userId}
-            onChange={(e) => setDraft({ ...draft, userId: e.target.value })}
+            value={holderChoice}
+            onChange={(e) => handleHolderChange(e.target.value)}
           >
-            <option value="">Vacant, or someone without a login</option>
+            <option value="">Vacant — nobody holds this right now</option>
+            <option value={EXTERNAL_HOLDER}>Someone who is not a member here</option>
             {sortedMembers.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.name}
               </option>
             ))}
           </select>
+          {!isExternal && !linkedMember ? (
+            <p className="text-theme-text-muted mt-2 text-xs">
+              A vacant seat still appears on the chart, so members can see the position exists and that nobody is in it.
+            </p>
+          ) : null}
         </div>
 
-        <div>
-          <label className="form-label" htmlFor="org-node-display-name">
-            Show this name instead (optional)
-          </label>
-          <input
-            id="org-node-display-name"
-            className="form-input"
-            value={draft.displayName}
-            onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
-            placeholder="e.g. Chaplain J. Alvarez"
-          />
-          <p className="text-theme-text-muted mt-2 text-xs">
-            For a holder with no account — a board member, a mutual-aid liaison — or to announce a linked member
-            differently. Leave blank to use the member&rsquo;s own name.
-          </p>
-        </div>
+        {isExternal ? (
+          <div>
+            <label className="form-label" htmlFor="org-node-display-name">
+              Their name
+            </label>
+            <input
+              id="org-node-display-name"
+              className="form-input"
+              value={draft.displayName}
+              onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
+              placeholder="e.g. Rev. J. Alvarez"
+            />
+            <p className="text-theme-text-muted mt-2 text-xs">
+              For a holder with no account here — a board member, a chaplain, an auxiliary officer, a mutual-aid
+              liaison. They appear on the chart exactly like anyone else.
+            </p>
+          </div>
+        ) : linkedMember ? (
+          <div>
+            <label className="form-label" htmlFor="org-node-display-name">
+              Show this name instead (optional)
+            </label>
+            <input
+              id="org-node-display-name"
+              className="form-input"
+              value={draft.displayName}
+              onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
+              placeholder={linkedMember.name}
+            />
+            <p className="text-theme-text-muted mt-2 text-xs">
+              Leave blank to use {linkedMember.name}&rsquo;s own name, which then stays correct if they update their
+              profile.
+            </p>
+          </div>
+        ) : null}
 
         <div>
           <label className="form-label" htmlFor="org-node-responsibility">
