@@ -10,6 +10,7 @@ org-scoping every by-id write.
 """
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import text
@@ -290,6 +291,72 @@ class TestMove:
             ("Auxiliary", 0),
             ("Fire Chief", 0),
         ]
+
+
+class TestReviewFindings:
+    """Regressions for the 2026-08-25 review of PR #1796."""
+
+    async def test_a_removed_member_stops_being_published_as_the_holder(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        service = OrgChartService(db_session)
+        await _add(service, org_id, "Fire Chief", user_id=admin_id)
+
+        # How DELETE /users/{id} removes a member: the row stays, deleted_at is
+        # stamped. Without the filter the departed member's name keeps being
+        # published to the whole membership.
+        await db_session.execute(
+            text("UPDATE users SET deleted_at = :now WHERE id = :id"),
+            {"now": datetime(2026, 8, 25, tzinfo=timezone.utc), "id": admin_id},
+        )
+        await db_session.flush()
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+
+        assert chart[0]["holder_name"] is None
+
+    async def test_the_parent_a_seat_leaves_is_renumbered_too(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        service = OrgChartService(db_session)
+        chief = await _add(service, org_id, "Fire Chief")
+        president = await _add(service, org_id, "President")
+        first = await _add(service, org_id, "Engine 1", parent_id=str(chief.id))
+        await _add(service, org_id, "Engine 2", parent_id=str(chief.id))
+
+        # Engine 1 leaves, so the Chief's remaining child must close the gap;
+        # otherwise Engine 2 keeps sort_order 1 and the next seat added under
+        # the Chief is handed 1 as well.
+        await service.move_node(
+            org_id, str(first.id), parent_id=str(president.id), position=0
+        )
+        await _add(service, org_id, "Engine 3", parent_id=str(chief.id))
+
+        chart = await service.get_chart(org_id, include_unpublished=True)
+        under_chief = [
+            (n["title"], n["sort_order"])
+            for n in chart
+            if n["parent_id"] == str(chief.id)
+        ]
+        assert under_chief == [("Engine 2", 0), ("Engine 3", 1)]
+
+    async def test_a_move_reports_the_parent_the_seat_left(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        service = OrgChartService(db_session)
+        chief = await _add(service, org_id, "Fire Chief")
+        deputy = await _add(service, org_id, "Deputy Chief", parent_id=str(chief.id))
+
+        # The audit entry records what actually changed, which needs the old
+        # placement as well as the new one.
+        _node, previous_parent_id = await service.move_node(
+            org_id, str(deputy.id), parent_id=None, position=0
+        )
+
+        assert previous_parent_id == str(chief.id)
 
 
 class TestDepthCap:

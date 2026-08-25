@@ -69,7 +69,11 @@ export interface OrgChartNodeUpdate {
 }
 
 export interface OrgChartNodeMove {
-  /** `null` makes the seat a root of the chart. */
-  parentId?: string | null | undefined;
+  /**
+   * Required, and `null` makes the seat a root of the chart. Not optional:
+   * omitting it would reach the backend as "promote to root" when the caller
+   * meant "reorder where it already is", which silently detaches a subtree.
+   */
+  parentId: string | null;
   position: number;
 }

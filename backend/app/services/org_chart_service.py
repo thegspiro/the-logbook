@@ -79,6 +79,12 @@ class OrgChartService:
             select(User).where(
                 User.id.in_(user_ids),
                 User.organization_id == organization_id,
+                # A removed member is soft-deleted (DELETE /users/{id} sets
+                # deleted_at and leaves the row), so without this filter their
+                # name keeps being published as the seat's holder to the whole
+                # membership indefinitely. Dropping them here resolves the seat
+                # as vacant, which is what it is.
+                User.deleted_at.is_(None),
             )
         )
         return {str(u.id): _member_name(u) for u in result.scalars().all()}
@@ -316,7 +322,12 @@ class OrgChartService:
         position: int,
         updated_by: Optional[str] = None,
     ) -> OrgChartNode:
-        """Re-parent and/or reorder a seat, renumbering its new siblings."""
+        """Re-parent and/or reorder a seat, renumbering the siblings on both
+        sides of the move.
+
+        Returns the seat and the id of the parent it left, which the endpoint
+        needs to record what actually changed in the audit log.
+        """
         node = await self._require_node(organization_id, node_id)
 
         if parent_id:
@@ -340,6 +351,8 @@ class OrgChartService:
             ):
                 raise ValueError("The chart is nested too deeply")
 
+        previous_parent_id = str(node.parent_id) if node.parent_id else None
+
         node.parent_id = parent_id
         node.updated_by = updated_by
         await self.db.flush()
@@ -354,7 +367,24 @@ class OrgChartService:
         for order, sibling in enumerate(siblings):
             sibling.sort_order = order
         await self.db.flush()
-        return node
+
+        # The parent this seat left keeps a hole in its ordering otherwise, and
+        # `_next_sort_order` counts siblings rather than reading the highest —
+        # so the next seat added there would be handed a sort_order an existing
+        # sibling already holds, and the tie would be broken by title rather
+        # than by "appended last".
+        if previous_parent_id != parent_id:
+            await self._renumber(organization_id, previous_parent_id)
+
+        return node, previous_parent_id
+
+    async def _renumber(self, organization_id: str, parent_id: Optional[str]) -> None:
+        """Make one parent's children contiguous from zero again."""
+        for order, sibling in enumerate(
+            await self._siblings(organization_id, parent_id)
+        ):
+            sibling.sort_order = order
+        await self.db.flush()
 
     async def delete_node(
         self,
@@ -384,11 +414,7 @@ class OrgChartService:
 
         # Renumber what is left where the seat used to sit, so the next insert
         # position is not competing with a hole in the sequence.
-        for order, sibling in enumerate(
-            await self._siblings(organization_id, promoted_to)
-        ):
-            sibling.sort_order = order
-        await self.db.flush()
+        await self._renumber(organization_id, promoted_to)
 
     async def _is_descendant(
         self, organization_id: str, candidate_id: str, ancestor_id: str

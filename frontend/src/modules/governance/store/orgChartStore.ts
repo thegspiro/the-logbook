@@ -50,12 +50,19 @@ export const useOrgChartStore = create<OrgChartState>((set) => {
     error: null,
 
     fetchChart: async () => {
-      set({ isLoading: true, error: null });
+      // `chart: null`, not just `isLoading: true`. A Zustand store outlives a
+      // logout — nothing resets module stores on the way out — so on a shared
+      // station computer the previous member's chart would render while the
+      // new member's request is still in flight, and stay on screen if that
+      // request failed. The page only shows its skeleton while `chart` is
+      // null, which is exactly the state a new session should start from.
+      set({ chart: null, isLoading: true, error: null });
       try {
         const chart = await orgChartService.getChart();
         set({ chart, isLoading: false });
       } catch (err: unknown) {
         set({
+          chart: null,
           isLoading: false,
           error: getErrorMessage(err, 'Could not load the organizational chart'),
         });

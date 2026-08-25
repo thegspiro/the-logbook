@@ -50,6 +50,32 @@ describe('useOrgChartStore', () => {
     expect(useOrgChartStore.getState().isLoading).toBe(false);
   });
 
+  it("drops the previous chart before loading, so one session cannot see another's", async () => {
+    useOrgChartStore.setState({ chart: oneNodeChart });
+    let chartDuringFetch: unknown = 'not captured';
+    mockGetChart.mockImplementation(() => {
+      chartDuringFetch = useOrgChartStore.getState().chart;
+      return Promise.resolve(emptyChart);
+    });
+
+    await useOrgChartStore.getState().fetchChart();
+
+    // The store outlives a logout, and the page only shows its skeleton while
+    // `chart` is null — so a surviving chart renders the previous member's
+    // organization while the new member's request is still in flight.
+    expect(chartDuringFetch).toBeNull();
+  });
+
+  it('does not fall back to the previous chart when the load fails', async () => {
+    useOrgChartStore.setState({ chart: oneNodeChart });
+    mockGetChart.mockRejectedValue(new Error('network'));
+
+    await useOrgChartStore.getState().fetchChart();
+
+    expect(useOrgChartStore.getState().chart).toBeNull();
+    expect(useOrgChartStore.getState().error).toBe('network');
+  });
+
   it('surfaces a load failure instead of showing an empty chart', async () => {
     mockGetChart.mockRejectedValue(new Error('network'));
     await useOrgChartStore.getState().fetchChart();

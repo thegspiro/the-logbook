@@ -168,7 +168,7 @@ async def move_org_chart_node(
     """Re-parent a position and/or reorder it among its siblings."""
     service = OrgChartService(db)
     try:
-        await service.move_node(
+        _node, previous_parent_id = await service.move_node(
             current_user.organization_id,
             node_id,
             parent_id=payload.parent_id,
@@ -180,6 +180,23 @@ async def move_org_chart_node(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
+    # Audited like every other mutation here: a reparent changes the published
+    # chain of command, which is a bigger claim about the department than the
+    # field edits next door that are already recorded.
+    await log_audit_event(
+        db=db,
+        event_type="org_chart_node_moved",
+        event_category="administration",
+        severity="info",
+        event_data={
+            "node_id": node_id,
+            "previous_parent_id": previous_parent_id,
+            "new_parent_id": payload.parent_id,
+            "position": payload.position,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     payload_out = await _chart_payload(db, current_user)
     await db.commit()
     return payload_out

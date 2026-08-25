@@ -116,8 +116,12 @@ class OrgChartNodeMove(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    # NULL means "make this a root of the chart".
-    parent_id: Optional[str] = Field(None, max_length=36)
+    # Required, but nullable: an explicit ``null`` means "make this a root of
+    # the chart". It has no default because a body of just ``{"position": 2}``
+    # would otherwise read as "promote to root" when the caller meant "reorder
+    # where it already is" — a partial request that silently detaches a whole
+    # subtree. Saying which parent is now part of asking for the move.
+    parent_id: Optional[str] = Field(..., max_length=36)
     # Index among the new parent's children; clamped server-side.
     position: int = Field(0, ge=0)
 
