@@ -2947,6 +2947,7 @@ class TrainingProgramService:
         mark_completed: bool = False,
         acting_user_id: Optional[UUID] = None,
         can_manage: bool = False,
+        restate: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """Idempotently apply source-backed progress to a requirement.
 
@@ -2961,6 +2962,13 @@ class TrainingProgramService:
         and the accrual is applied through ``update_requirement_progress`` (so
         percentage, auto-completion, enrollment rollup, and phase advancement all
         run exactly as for any other feed).
+
+        ``restate`` is for a caller whose source has *changed* rather than been
+        replayed — a reopened training session re-finalized with corrected
+        hours. It reverses the recorded credit and applies the new figure, so
+        the correction reaches the pipeline instead of being swallowed by the
+        idempotency above. Identical units are still a no-op. Leave it false for
+        ordinary feeds: replay safety is the default for a reason.
 
         ``progress_notes`` and ``mark_in_progress`` pass through to the updater so
         richer feeds (shift completion tracks call-type history and forces the
@@ -2993,10 +3001,34 @@ class TrainingProgramService:
                 RequirementProgressCredit.source_id == str(source_id),
             )
         )
-        if existing.scalar_one_or_none() is not None:
-            # Already credited from this source — the idempotent no-op that makes
-            # the feeds safe to replay.
-            return progress, None
+        existing_credit = existing.scalar_one_or_none()
+        if existing_credit is not None:
+            if not restate or float(existing_credit.units or 0) == float(units):
+                # Already credited from this source — the idempotent no-op that
+                # makes the feeds safe to replay.
+                return progress, None
+
+            # A restating caller is not replaying, it is correcting: the source
+            # still exists but now says a different number. Plain idempotency
+            # would drop the correction on the floor, which is how a reopened
+            # and re-finalized session left the member's training record showing
+            # the corrected hours while the pipeline kept the original figure.
+            # Reverse the old units through the normal reversal path — so the
+            # requirement percentage, enrollment rollup and phase state all
+            # unwind exactly as they accrued — then fall through and apply the
+            # new ones as a fresh credit.
+            _, revoke_error = await self.revoke_requirement_credit(
+                progress_id=progress_id,
+                organization_id=organization_id,
+                source_type=source_type,
+                source_id=source_id,
+                verified_by=verified_by,
+            )
+            if revoke_error:
+                return None, revoke_error
+            progress = await self._get_org_scoped_progress(progress_id, organization_id)
+            if progress is None:
+                return None, "Requirement progress not found"
 
         phase_before_id = None
         if mark_completed:
