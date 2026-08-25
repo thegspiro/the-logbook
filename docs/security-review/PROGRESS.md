@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1807](https://github.com/thegspiro/the-logbook/pull/1807) |
-| Branch      | `claude/security-review-sf`                                 |
-| Feature     | 04 Storefront & payments                                    |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — opened                                         |
+| Field       | Value                                                                                |
+| ----------- | ------------------------------------------------------------------------------------ |
+| PR          | [#1807](https://github.com/thegspiro/the-logbook/pull/1807)                          |
+| Branch      | `claude/security-review-sf`                                                          |
+| Feature     | 04 Storefront & payments                                                             |
+| CI          | just opened; not yet checked                                                         |
+| Threads     | 3 resolved (Codex P2: incomplete history sweep, real SoD gap, dropped carry-forward) |
+| Last tended | 2026-08-25 — fixed real SoD gap, corrected write-up, replied, resolved               |
 
 ---
 
