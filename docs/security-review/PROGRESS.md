@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                           |
-| ----------- | ------------------------------------------------------------------------------- |
-| PR          | [#1814](https://github.com/thegspiro/the-logbook/pull/1814)                     |
-| Branch      | `claude/security-review-usr`                                                    |
-| Feature     | 07 Users & organizations                                                        |
-| CI          | fresh run in progress on the tending commit                                     |
-| Threads     | 10 resolved (2 duplicates of one finding; see Log)                              |
-| Last tended | 2026-08-25 — 8 Codex findings addressed (6 fixed, 2 doc-corrected), gates green |
+| Field       | Value                                                            |
+| ----------- | ---------------------------------------------------------------- |
+| PR          | (opening)                                                        |
+| Branch      | `claude/security-review-mp`                                      |
+| Feature     | 08 Membership pipeline                                           |
+| CI          | pending first push                                               |
+| Threads     | none yet                                                         |
+| Last tended | 2026-08-25 — re-verification pass, no new findings, docs-only PR |
 
 ---
 
@@ -58,8 +58,8 @@ data-carrying modules, then the supporting infrastructure.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳       |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814 |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳       |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜       |
@@ -312,3 +312,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
     the cited helper-level tests don't exercise the actual route call sites).
     See `USR-07-users-organizations.md` for the full write-up. Next: 08
     membership pipeline.
+- **07 Users & organizations ✅ merged** — PR #1814 merged 2026-08-25 18:18
+  UTC.
+- **08 Membership pipeline — re-verification pass, no new findings.** The
+  module grew from 44 to 51 routes since the 2026-08-09 app-review baseline,
+  entirely through ordinary feature work (notably PR #1811, "drop closed
+  applications from the pipeline"), none of it run through this rotation.
+  Reviewed every commit and function touched since that baseline against all
+  seven checklist dimensions: closed-application gating (`_assert_open`,
+  wired at the three consequential call sites — election package creation,
+  ballot assignment, new interviews), the new single-record status endpoint
+  (shares `_apply_status_change` with the bulk path, which refuses to
+  set/clear `TRANSFERRED` — the P1 Codex already caught and fixed on #1811
+  itself), the multi-approval signer check (`_authorized_multi_approval_result`
+  re-verifies the caller's own held positions server-side; a client-supplied
+  `role` string cannot self-authorize), and the webhook auto-completion path
+  (org-scoped, and now reference-matched since the 2026-08-17 fix). All 51
+  routes enumerated; the self-prospect-access guard confirmed still
+  router-level and its list-filtering counterpart confirmed present on all 8
+  multi-prospect list/aggregate endpoints. No code changes — see
+  `MP-08-membership-pipeline.md`. Next: 09 medical screening (PHI).
