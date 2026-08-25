@@ -21,9 +21,9 @@ feature. The rotation cannot outrun its own review queue.
 | PR          | [#1809](https://github.com/thegspiro/the-logbook/pull/1809)                                                    |
 | Branch      | `claude/security-review-fin`                                                                                   |
 | Feature     | 05 Finance & approvals                                                                                         |
-| CI          | fresh run in progress on the tending commit                                                                    |
+| CI          | ✅ green — all 16 checks pass on the tending commit                                                            |
 | Threads     | 4 resolved (Codex P2: keep filtering in SQL, migration miscount, weak regression test, missed history commits) |
-| Last tended | 2026-08-25 — 4 Codex findings addressed, gates green                                                           |
+| Last tended | 2026-08-25 — CI green (16/16), all 4 Codex threads resolved; awaiting merge                                    |
 
 ---
 
