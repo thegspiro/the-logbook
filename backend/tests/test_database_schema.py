@@ -945,17 +945,23 @@ class TestSchemaCrossReferences:
         )
 
     def test_user_roles_junction_has_both_fks(self):
-        """The user_roles junction table must FK to both users and roles."""
-        user_roles = _tables.get("user_roles")
-        if user_roles is None:
-            pytest.skip("user_roles table not found")
+        """The user-position junction table must FK to both users and positions.
+
+        The ORM's ``user_roles`` name is a backward-compatible Python alias
+        for ``user_positions`` (models/user.py) — the live table is named
+        ``user_positions``, not ``user_roles``. Looking it up by the old name
+        always skipped this test silently rather than verifying anything.
+        """
+        user_positions = _tables.get("user_positions")
+        if user_positions is None:
+            pytest.skip("user_positions table not found")
         fk_targets = {
             fk.column.table.name
-            for col in user_roles.columns
+            for col in user_positions.columns
             for fk in col.foreign_keys
         }
-        assert "users" in fk_targets, "user_roles must FK to users"
-        assert "roles" in fk_targets, "user_roles must FK to roles"
+        assert "users" in fk_targets, "user_positions must FK to users"
+        assert "positions" in fk_targets, "user_positions must FK to positions"
 
     def test_event_rsvps_link_events_and_users(self):
         """Event RSVPs must connect events to users."""

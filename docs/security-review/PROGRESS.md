@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                   |
-| ----------- | ----------------------------------------------------------------------- |
-| PR          | [#1810](https://github.com/thegspiro/the-logbook/pull/1810)             |
-| Branch      | `claude/security-review-elec`                                           |
-| Feature     | 06 Elections & ballots                                                  |
-| CI          | just opened; not yet checked                                            |
-| Threads     | 2 resolved (Codex P2: route-gating miscount, unbounded saved-templates) |
-| Last tended | 2026-08-25 — 2 Codex findings addressed, gates green                    |
+| Field       | Value                                                                           |
+| ----------- | ------------------------------------------------------------------------------- |
+| PR          | [#1814](https://github.com/thegspiro/the-logbook/pull/1814)                     |
+| Branch      | `claude/security-review-usr`                                                    |
+| Feature     | 07 Users & organizations                                                        |
+| CI          | fresh run in progress on the tending commit                                     |
+| Threads     | 10 resolved (2 duplicates of one finding; see Log)                              |
+| Last tended | 2026-08-25 — 8 Codex findings addressed (6 fixed, 2 doc-corrected), gates green |
 
 ---
 
@@ -57,8 +57,8 @@ data-carrying modules, then the supporting infrastructure.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳       |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜       |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳       |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
@@ -279,3 +279,36 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   ship-time entry on it (a different angle — schema tolerance, not access
   control); corrected. See `ELEC-06-elections-ballots.md` for the full
   write-up. Next: 07 users & organizations.
+- **06 Elections & ballots ✅ merged** — PR #1810 merged 2026-08-25 16:59
+  UTC.
+- **07 Users & organizations ⏳** — the highest-risk surface by design
+  (privilege escalation): module audit iteration 21 (three parallel readers)
+  - 4 dedicated app-review passes, all closed except ORU-7c (unchanged).
+    Re-verified the privilege-ceiling functions, PII redaction gates, and
+    settings-secret redaction are still wired at every documented call site.
+    **An 8-issue Codex review round on the PR** corrected the initial pass's
+    "no defect found" conclusion — 6 fixed, 2 doc-corrected: **USR-1**
+    (leave-of-absence create/update/delete never wrote an audit event despite
+    the event types existing since the audit-history feature shipped — now
+    fixed, 3 tests), **USR-2** (MED — the audit-history query's actor-fallback
+    clause had no target check, so an event where the viewed member acted ON
+    someone else leaked that other member's event_data into the viewed
+    member's history — narrowed to only fire on genuinely self-inherent
+    events, DB-backed regression test verified to fail without the fix),
+    **USR-3** (two real, emitted audit event types — admin MFA reset,
+    compliance exemption change — were invisible in member history because
+    neither was in the endpoint's allowlist — added), **USR-4** (a schema
+    test looked up the pre-rename table name `user_roles` instead of
+    `user_positions` and had been silently skipping instead of verifying
+    anything — fixed, now passes for real), **USR-5** (flagged — the
+    "no defect" pass's unbounded-list dismissal was wrong: archived accounts
+    and leave records accumulate for an org's entire lifetime rather than
+    being bounded by current headcount; 2 more instances found in this
+    module's own files beyond the 2 the first pass checked; not fixed,
+    pagination is a response-envelope decision same as ELEC-12), plus a
+    corrected route-inventory claim (3 org-wide reads use bare `get_current_user`
+    with no self-check — already-audited ORU-8b pattern, not a gap) and a
+    corrected test-coverage claim (added a source-inspection guard test since
+    the cited helper-level tests don't exercise the actual route call sites).
+    See `USR-07-users-organizations.md` for the full write-up. Next: 08
+    membership pipeline.

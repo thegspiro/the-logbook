@@ -1722,6 +1722,30 @@ an owner decision elsewhere (FIN-7's export cap, the various CS-config
 thresholds). (Security review ELEC-12,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
+## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
+
+`list_users_with_roles` (`users.py:601`) and `get_archived_members`
+(`member_status.py:723`) return every matching row in the org with no
+pagination; `leave_widget_summary` (`member_leaves.py:50`) materializes every
+`active` leave to compute its counts, and `MemberLeaveService.list_leaves`
+(`member_leave_service.py`) runs an unbounded query before its two callers in
+`member_leaves.py` apply an in-memory slice. All four are `members.manage`-gated
+and org-scoped — not a leak.
+
+The reason this isn't self-limiting the way it first looks: `archive_member`
+changes `User.status` without deleting the row, so archived accounts
+accumulate for the organization's entire lifetime rather than being bounded
+by current headcount, and leave records aren't deleted either (`end_date`
+passing doesn't clear the `active` flag on its own — the deactivate endpoint
+does, and only when called). A department open for years pays a growing cost
+on every roster and leave-widget load, with no ceiling.
+
+Not fixed for the same reason as the saved-ballot-templates item above:
+pagination changes the response envelope for callers that currently expect
+the full list (the Members admin page, the leave dashboard widget), which is
+a frontend-affecting decision, not a drop-in. (Security review USR-5,
+`docs/security-review/USR-07-users-organizations.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
