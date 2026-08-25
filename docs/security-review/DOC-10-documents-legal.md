@@ -225,6 +225,20 @@ rig's manuals). Member personal folders remain unaffected
 `docs/KNOWN_LIMITATIONS.md`; no change needed there beyond noting the
 facility case is the same shape (done below).
 
+### DOC-7 — LOW — `_assert_may_modify` had zero test coverage — ✅ FIXED
+
+`_assert_may_modify` (`legal_documents.py:323-335`) is the only thing
+stopping a `legal.propose`-only holder from rewriting or discarding a
+colleague's draft under their own name — the separation-of-duties guard
+called out in the route inventory's note on `PUT`/`DELETE
+/legal/revisions/{id}`. Neither branch (author-may-edit-own,
+non-publisher-blocked-from-others, publisher/`settings.manage`-override) was
+exercised anywhere in the test suite; a regression here would have shipped
+silently. Added 4 direct unit tests exercising the function against a
+transient `LegalDocumentRevision`/`SimpleNamespace` user (no DB needed, since
+the guard reads only `created_by` and the caller's `positions`/`rank`):
+`tests/test_legal_documents.py::TestAssertMayModify`.
+
 ## Schema & migration notes
 
 `20260820_0135_06adc68a8b84_add_legal_document_revisions.py` reviewed in
@@ -235,22 +249,25 @@ tables since the last audit.
 
 ## Guard tests
 
-None added — no code changed this iteration. Existing coverage already pins
+`tests/test_legal_documents.py::TestAssertMayModify` — added this pass to
+close DOC-7 (see above); covers all four `_assert_may_modify` outcomes so a
+future regression in the separation-of-duties guard fails a unit test
+instead of shipping silently. Existing coverage otherwise already pins
 every invariant checked above:
 `tests/test_documents_access.py`, `tests/test_legal_documents.py`,
-`tests/test_print_documents.py`, `tests/test_changelog_fixes.py` — 124
+`tests/test_print_documents.py`, `tests/test_changelog_fixes.py` — 124 + 4
 tests, run in full this pass, all passing.
 
 ## Completion gate
 
-| Check                                             | Result                                                                                                                   |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `flake8`                                          | not applicable — no code changed                                                                                         |
-| `black --check`                                   | not applicable — no code changed                                                                                         |
-| `isort --check-only`                              | not applicable — no code changed                                                                                         |
-| `python3 scripts/validate_migrations.py --strict` | pass (357 migrations, single head)                                                                                       |
-| `pytest` — documents/legal/print test surface     | 124 passed (`test_documents_access.py`, `test_legal_documents.py`, `test_print_documents.py`, `test_changelog_fixes.py`) |
-| `npx tsc --noEmit`                                | not run — no frontend files changed                                                                                      |
+| Check                                             | Result                                                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8`                                          | pass (`tests/test_legal_documents.py`, the only file touched)                                                                                            |
+| `black --check`                                   | pass                                                                                                                                                     |
+| `isort --check-only`                              | pass                                                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict` | pass (357 migrations, single head)                                                                                                                       |
+| `pytest` — documents/legal/print test surface     | 128 passed (`test_documents_access.py`, `test_legal_documents.py` incl. new `TestAssertMayModify`, `test_print_documents.py`, `test_changelog_fixes.py`) |
+| `npx tsc --noEmit`                                | not run — no frontend files changed                                                                                                                      |
 
 ## Next
 

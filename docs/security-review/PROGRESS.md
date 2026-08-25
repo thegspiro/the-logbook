@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1821](https://github.com/thegspiro/the-logbook/pull/1821) |
-| Branch      | `claude/security-review-doc`                                |
-| Feature     | 10 Documents & legal                                        |
-| CI          | fresh push, awaiting first run                              |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — no new findings, docs-only; pushed             |
+| Field       | Value                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| PR          | [#1821](https://github.com/thegspiro/the-logbook/pull/1821)                                         |
+| Branch      | `claude/security-review-doc`                                                                        |
+| Feature     | 10 Documents & legal                                                                                |
+| CI          | green on prior push (16/16); fresh push, awaiting re-run                                            |
+| Threads     | none yet                                                                                            |
+| Last tended | 2026-08-25 — found DOC-7 (LOW, fixed): added missing test coverage for `_assert_may_modify`; pushed |
 
 ---
 
