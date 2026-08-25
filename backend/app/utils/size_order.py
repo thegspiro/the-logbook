@@ -26,8 +26,13 @@ S, M, MT, L, LT reads the way a size chart does.
 import re
 from typing import Optional, Tuple
 
-# Rank of each alpha size. Values are spaced so the numeric-extension rule
-# below ("5XL" -> XL's rank plus 5) cannot collide with a neighbour.
+# Gap between adjacent alpha sizes. The extension rule below ("4XL", "5XS")
+# steps by exactly this, so a computed rank lands on the same scale as the
+# explicit ones: 2XS/3XS are spelled out at 20 and 10, and stepping by 1
+# instead put 4XS at 27 — above 3XS and 2XS rather than below both.
+_SIZE_STEP = 10
+
+# Rank of each alpha size, spaced by _SIZE_STEP.
 _ALPHA_SIZES: dict[str, int] = {
     "XXXS": 10,
     "3XS": 10,
@@ -102,8 +107,8 @@ def _alpha_rank(token: str) -> Optional[int]:
         # 2XL is one step past XL, 3XL two steps, and so on; the small end
         # runs the other way (2XS is one step below XS).
         if base == "L":
-            return _ALPHA_SIZES["XL"] + (count - 1)
-        return _ALPHA_SIZES["XS"] - (count - 1)
+            return _ALPHA_SIZES["XL"] + (count - 1) * _SIZE_STEP
+        return _ALPHA_SIZES["XS"] - (count - 1) * _SIZE_STEP
 
     return None
 

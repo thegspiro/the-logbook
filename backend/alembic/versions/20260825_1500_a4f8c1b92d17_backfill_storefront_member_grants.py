@@ -118,25 +118,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    if "positions" not in sa.inspect(bind).get_table_names():
-        return
+    """No-op: this backfill records no provenance, so it cannot revoke safely.
 
-    for slug, grants in _BACKFILL.items():
-        rows = bind.execute(
-            sa.text(
-                "SELECT id, permissions FROM positions "
-                "WHERE slug = :slug AND is_system = 1"
-            ),
-            {"slug": slug},
-        ).fetchall()
+    The upgrade only *appends* grants that were missing, and nothing marks
+    which rows it touched. A downgrade that stripped every listed grant from
+    every matching system position would also revoke it from organizations
+    that onboarded after these grants entered the registry and so always had
+    them legitimately — putting the store back out of reach for exactly the
+    members this migration exists to serve, on a rollback that was supposed to
+    be a no-change.
 
-        for row in rows:
-            permissions = _load_permissions(row[1])
-            remaining = [p for p in permissions if p not in grants]
-            if len(remaining) == len(permissions):
-                continue
-            bind.execute(
-                sa.text("UPDATE positions SET permissions = :perms WHERE id = :id"),
-                {"perms": json.dumps(remaining), "id": row[0]},
-            )
+    Leaving a permission in place is the safe direction for a reversal here:
+    the grants are the seeded defaults for these positions either way, and an
+    organization that wants them gone can remove them in the position editor.
+    """

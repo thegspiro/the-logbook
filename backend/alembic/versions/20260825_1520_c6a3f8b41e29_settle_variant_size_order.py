@@ -41,6 +41,7 @@ depends_on = None
 
 
 # --- frozen copy of the size ranking, as of this revision -------------------
+_SIZE_STEP = 10
 _ALPHA_SIZES = {
     "XXXS": 10,
     "3XS": 10,
@@ -88,8 +89,8 @@ def _alpha_rank(token):
     if match:
         count = int(match.group(1)) if match.group(1) else len(match.group(2))
         if match.group(3) == "L":
-            return _ALPHA_SIZES["XL"] + (count - 1)
-        return _ALPHA_SIZES["XS"] - (count - 1)
+            return _ALPHA_SIZES["XL"] + (count - 1) * _SIZE_STEP
+        return _ALPHA_SIZES["XS"] - (count - 1) * _SIZE_STEP
     return None
 
 

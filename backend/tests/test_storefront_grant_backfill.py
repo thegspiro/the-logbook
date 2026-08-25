@@ -96,3 +96,23 @@ class TestCoverageHelper:
     def test_a_sibling_grant_does_not_cover(self):
         covered = _load_migration()._covered
         assert not covered(["storefront.view"], "storefront.manage")
+
+
+def test_downgrade_does_not_revoke_grants():
+    """The rollback must not take the store away from anyone.
+
+    The upgrade only appends missing grants and records no provenance, so a
+    downgrade that stripped every listed grant would also revoke it from
+    organizations that onboarded after these grants entered the registry and
+    always held them legitimately — putting the store back out of reach for
+    exactly the members this migration exists to serve, on a rollback that was
+    meant to change nothing.
+    """
+    module = _load_migration()
+    source = _MIGRATION.read_text()
+    downgrade_body = source[source.index("def downgrade() -> None:") :]
+
+    assert "UPDATE positions" not in downgrade_body
+    assert "DELETE" not in downgrade_body.upper().replace("DELETED", "")
+    # Callable and inert — it must not raise if Alembic ever runs it.
+    assert module.downgrade() is None

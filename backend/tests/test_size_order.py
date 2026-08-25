@@ -88,3 +88,43 @@ class TestNonSizeLabels:
     def test_sort_is_stable_for_equal_ranks(self):
         assert _order(["2XL", "XXL"]) == ["2XL", "XXL"]
         assert _order(["XXL", "2XL"]) == ["XXL", "2XL"]
+
+
+class TestExtendedSizesUseTheSameScale:
+    """Computed ranks must land on the same scale as the spelled-out ones.
+
+    ``2XS`` and ``3XS`` are explicit entries at 20 and 10. Stepping the
+    extension rule by 1 instead of by ``_SIZE_STEP`` put ``4XS`` at 27 —
+    between 2XS and XS rather than below every one of them.
+    """
+
+    def test_four_extra_small_sorts_below_the_spelled_out_ranks(self):
+        assert _order(["XS", "2XS", "3XS", "4XS"]) == ["4XS", "3XS", "2XS", "XS"]
+
+    def test_the_small_end_keeps_descending(self):
+        assert _order(["S", "XS", "2XS", "3XS", "4XS", "5XS"]) == [
+            "5XS",
+            "4XS",
+            "3XS",
+            "2XS",
+            "XS",
+            "S",
+        ]
+
+    def test_the_large_end_keeps_ascending(self):
+        assert _order(["4XL", "XL", "2XL", "L", "3XL"]) == [
+            "L",
+            "XL",
+            "2XL",
+            "3XL",
+            "4XL",
+        ]
+
+    def test_computed_rank_agrees_with_the_explicit_entry(self):
+        # 2XS/3XS are in the table; XXS/XXXS take the computed path. They must
+        # not disagree, or the same size sorts two ways depending on spelling.
+        assert size_sort_key("XXS", 0) == size_sort_key("2XS", 0)
+        assert size_sort_key("XXXS", 0) == size_sort_key("3XS", 0)
+
+    def test_a_length_modifier_still_sorts_inside_an_extended_size(self):
+        assert _order(["3XL", "2XLT", "2XL"]) == ["2XL", "2XLT", "3XL"]

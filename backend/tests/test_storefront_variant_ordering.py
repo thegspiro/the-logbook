@@ -7,6 +7,8 @@ form, the vendor purchase order — gets the same sequence without re-deriving
 it.
 """
 
+from types import SimpleNamespace
+
 from app.services.storefront_service import StorefrontService
 
 
@@ -62,3 +64,51 @@ class TestOrderedVariants:
         ordered = StorefrontService._ordered_variants(payloads)
         assert [v["sku"] for v in ordered] == ["S-1", "L-1"]
         assert ordered[0]["stock_quantity"] == 9
+
+
+class TestBuiltVariantsGetCanonicalIndices:
+    """The create path must assign the canonical index, not the client's.
+
+    ``_ordered_variants`` reorders the payloads, but ``_build_variant`` used to
+    prefer any truthy client ``sort_order`` over the enumerated one — and the
+    admin form always submits its own row indices. Creating [S, M, L, XS]
+    therefore stored XS at 3 and duplicated an index, so a newly created
+    product came back in the order it was typed rather than in size order.
+    """
+
+    @staticmethod
+    def _create(labels):
+        """Mimic ``create_product``: order the payloads, then build each one."""
+        product = SimpleNamespace(organization_id="o1", id="p1")
+        payloads = [
+            # The form sends its row index as sort_order, exactly like this.
+            {"label": label, "sort_order": index}
+            for index, label in enumerate(labels)
+        ]
+        built = [
+            StorefrontService._build_variant(
+                StorefrontService, product, payload, default_sort=index
+            )
+            for index, payload in enumerate(
+                StorefrontService._ordered_variants(payloads)
+            )
+        ]
+        return [(v.label, v.sort_order) for v in built]
+
+    def test_a_size_added_last_still_sorts_first(self):
+        assert self._create(["S", "M", "L", "XS"]) == [
+            ("XS", 0),
+            ("S", 1),
+            ("M", 2),
+            ("L", 3),
+        ]
+
+    def test_indices_are_unique_and_contiguous(self):
+        built = self._create(["S", "M", "L", "XS", "2XL", "XL"])
+        orders = [order for _, order in built]
+        assert orders == list(range(len(orders)))
+
+    def test_reading_back_by_sort_order_yields_size_order(self):
+        built = self._create(["XL", "S", "2XL", "M", "XS", "L"])
+        by_sort = [label for label, _ in sorted(built, key=lambda pair: pair[1])]
+        assert by_sort == ["XS", "S", "M", "L", "XL", "2XL"]

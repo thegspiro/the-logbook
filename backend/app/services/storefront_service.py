@@ -469,7 +469,12 @@ class StorefrontService:
             price_delta=_money(data.get("price_delta")),
             stock_quantity=data.get("stock_quantity"),
             is_active=data.get("is_active", True),
-            sort_order=data.get("sort_order") or default_sort,
+            # Server-owned, like the update path: ``_ordered_variants`` has
+            # already put the list in size order, so ``default_sort`` is the
+            # canonical index. Honouring a client ``sort_order`` here undid
+            # that — the form always submits its own row indices, so creating
+            # [S, M, L, XS] stored XS last and duplicated an index.
+            sort_order=default_sort,
         )
 
     @staticmethod

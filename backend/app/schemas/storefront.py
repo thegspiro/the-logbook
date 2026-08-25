@@ -689,14 +689,25 @@ class StoreOrderItemResponse(UTCResponseBase):
     fulfilled_quantity: int
 
     @model_validator(mode="after")
-    def _resolve_thread_color_hex(self):
-        # Left None on a line with no personalization, so the UI can tell
+    def _resolve_thread_color(self):
+        # A personalized line placed before this column existed stores NULL,
+        # and NULL means the historical gold — which is what the CSV export and
+        # the window tally already report for those rows. Resolving it here too
+        # keeps the order-detail swatch from silently disappearing on every
+        # pre-migration order while the vendor sheet says Gold.
+        #
+        # A line with nothing stitched stays unset, so the UI can still tell
         # "stitched in gold" from "nothing stitched".
-        self.personalization_thread_color_hex = (
-            thread_color_hex(self.personalization_thread_color)
-            if self.personalization_thread_color
-            else None
-        )
+        if self.personalization_text:
+            self.personalization_thread_color = normalize_thread_color(
+                self.personalization_thread_color
+            )
+            self.personalization_thread_color_hex = thread_color_hex(
+                self.personalization_thread_color
+            )
+        else:
+            self.personalization_thread_color = None
+            self.personalization_thread_color_hex = None
         return self
 
 
