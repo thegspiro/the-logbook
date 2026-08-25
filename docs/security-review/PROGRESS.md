@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                                                          |
-| ----------- | -------------------------------------------------------------------------------------------------------------- |
-| PR          | [#1809](https://github.com/thegspiro/the-logbook/pull/1809)                                                    |
-| Branch      | `claude/security-review-fin`                                                                                   |
-| Feature     | 05 Finance & approvals                                                                                         |
-| CI          | ✅ green — all 16 checks pass on the tending commit                                                            |
-| Threads     | 4 resolved (Codex P2: keep filtering in SQL, migration miscount, weak regression test, missed history commits) |
-| Last tended | 2026-08-25 — CI green (16/16), all 4 Codex threads resolved; awaiting merge                                    |
+| Field       | Value                                                     |
+| ----------- | --------------------------------------------------------- |
+| PR          | opening this iteration                                    |
+| Branch      | `claude/security-review-elec`                             |
+| Feature     | 06 Elections & ballots                                    |
+| CI          | not yet opened                                            |
+| Threads     | none yet                                                  |
+| Last tended | 2026-08-25 — no defects found, 1 NIT doc fix, gates green |
 
 ---
 
@@ -56,8 +56,8 @@ data-carrying modules, then the supporting infrastructure.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳       |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳       |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜       |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
@@ -240,3 +240,26 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   corrected, though the current-code review this pass actually ran already
   covered that commit's effect. See `FIN-05-finance-approvals.md` for the
   full write-up. Next: 06 elections & ballots.
+- **05 Finance & approvals ✅ merged** — PR #1809 merged 2026-08-25 15:49
+  UTC.
+- **06 Elections & ballots ⏳** — the most heavily audited module in the
+  codebase (module audit + 13 R-findings + 5 R-D findings + 5 app-review
+  passes, all closed). File sizes have nearly doubled since the module-audit
+  header was written (`elections.py` 2,721→3,809 L, 46→65 routes;
+  `election_service.py` 4,616→7,962 L) with no discrete finding ever called
+  out for the growth — cross-checked the current route list against
+  everything every prior pass named and nearly all of it is accounted for
+  (voter-overrides, proxy-authorizations, manual-ballots, attendees,
+  eligibility-roster, package assembly — each individually documented across
+  the R/R-D/ELEC2 series; only the header counts were never bumped).
+  **One genuinely new, previously-undocumented feature found:**
+  `SavedBallotTemplate` (migration `20260812_0001`, no prior pass mentions
+  it) — reviewed in full: org-scoped list/create/delete, `elections.manage`
+  gated, `extra="forbid"` schema accepting only configuration fields (no
+  election/voter/candidate/token/result data), audit-logged. Clean. Also
+  re-verified all 31 `select(Election)` call sites in `election_service.py`
+  for tenant isolation (28 direct, 3 safe-by-construction) — no FIN-9-shaped
+  unscoped scan here. **No defect found.** One NIT: corrected the stale
+  endpoint/line counts in `module-audit/elections.md`. See
+  `ELEC-06-elections-ballots.md` for the full write-up. Next: 07 users &
+  organizations.
