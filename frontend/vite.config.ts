@@ -10,13 +10,23 @@ import fs from 'fs';
 // for new deployments and prompt users to reload.
 const BUILD_ID = crypto.randomBytes(8).toString('hex');
 
+// When that build was produced, in UTC. The build ID is random hex and says
+// nothing about age, so on its own it cannot answer the question support
+// actually asks a member reading it out: "how far behind are you?" Stamped
+// once here so the running bundle carries its own release date, and written
+// to /version.json as well so a deploy can be confirmed with one curl.
+const BUILD_TIME = new Date().toISOString();
+
 function versionJsonPlugin(): Plugin {
   return {
     name: 'version-json',
     apply: 'build',
     closeBundle() {
       const outDir = path.resolve(import.meta.dirname, 'dist');
-      fs.writeFileSync(path.join(outDir, 'version.json'), JSON.stringify({ buildId: BUILD_ID }) + '\n');
+      fs.writeFileSync(
+        path.join(outDir, 'version.json'),
+        JSON.stringify({ buildId: BUILD_ID, builtAt: BUILD_TIME }) + '\n'
+      );
     },
   };
 }
@@ -84,6 +94,7 @@ function inlinePushWorkerPlugin(): Plugin {
 export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
   },
   plugins: [
     react(),
