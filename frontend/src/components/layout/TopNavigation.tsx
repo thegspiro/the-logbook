@@ -185,28 +185,26 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       ],
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
-    // Legal Documents is not behind a module flag: every deployment publishes
-    // /privacy and /terms, so the group has to appear for a department that
-    // runs neither elections nor minutes — which is also why the group's own
-    // path cannot assume /elections exists.
-    ...(isModuleOn('elections') || isModuleOn('minutes') || canReviewLegalDocuments
-      ? [
-          {
-            label: 'Governance',
-            path: isModuleOn('elections') ? '/elections' : '#',
-            subItems: [
-              ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
-              ...(isModuleOn('minutes')
-                ? [
-                    { label: 'Minutes', path: '/minutes' },
-                    { label: 'Action Items', path: '/action-items' },
-                  ]
-                : []),
-              ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
-            ],
-          } as NavItem,
-        ]
-      : []),
+    // Neither the org chart nor Legal Documents is behind a module flag: every
+    // deployment publishes /privacy and /terms, and the org chart is the one
+    // governance screen written for the general membership, so the group is
+    // unconditional — which is also why its own path cannot assume /elections
+    // exists.
+    {
+      label: 'Governance',
+      path: '/governance/org-chart',
+      subItems: [
+        { label: 'Org Chart', path: '/governance/org-chart' },
+        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
+        ...(isModuleOn('minutes')
+          ? [
+              { label: 'Minutes', path: '/minutes' },
+              { label: 'Action Items', path: '/action-items' },
+            ]
+          : []),
+        ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
+      ],
+    },
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission

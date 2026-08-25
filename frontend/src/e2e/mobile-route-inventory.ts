@@ -439,6 +439,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/governance/org-chart',
+    source: 'src/modules/governance/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'member-facing chain of command; indented outline must stay readable in one column on a phone',
+  },
+  {
     path: '/governance/legal',
     source: 'src/modules/governance/routes.tsx',
     coverage: 'exempt',

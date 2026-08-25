@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**253 tables · 4337 columns · 819 foreign keys**
+**254 tables · 4351 columns · 823 foreign keys**
 
 ---
 
@@ -441,6 +441,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`operational_ranks`](#operational_ranks) | `OperationalRank` | 10 | Configurable operational rank for a department. |
+
+### Org_Chart
+
+<sub>`app/models/org_chart.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`org_chart_nodes`](#org_chart_nodes) | `OrgChartNode` | 14 | One seat on the department's organizational chart. |
 
 ### Organization_Officer
 
@@ -6259,6 +6267,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_ranks_org_code` (`organization_id`, `rank_code`)
 
+## Org_Chart
+
+### `org_chart_nodes`
+
+**OrgChartNode** · `app/models/org_chart.py`
+
+> One seat on the department's organizational chart.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `parent_id` | VARCHAR(36) | yes | FK |  | → `org_chart_nodes.id` ON DELETE SET NULL |
+| `title` | VARCHAR(150) | no |  |  |  |
+| `responsibility` | TEXT | yes |  |  |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `display_name` | VARCHAR(200) | yes |  |  |  |
+| `contact_email` | VARCHAR(320) | yes |  |  |  |
+| `contact_phone` | VARCHAR(50) | yes |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `is_published` | BOOL | no |  | `1` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_org_chart_nodes_org_parent` (`organization_id`, `parent_id`)
+
 ## Organization_Officer
 
 ### `organization_officers`
@@ -8959,7 +8996,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (306 references)
+### → `users` (308 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9164,6 +9201,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `notification_logs` | `recipient_id` | SET NULL | yes |
 | `notification_rules` | `created_by` | NO ACTION | yes |
 | `org_calls` | `created_by` | SET NULL | yes |
+| `org_chart_nodes` | `updated_by` | SET NULL | yes |
+| `org_chart_nodes` | `user_id` | SET NULL | yes |
 | `organization_officers` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `user_id` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
@@ -9270,7 +9309,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (201 references)
+### → `organizations` (202 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9410,6 +9449,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `operational_ranks` | `organization_id` | CASCADE | no |
 | `org_call_responses` | `organization_id` | CASCADE | no |
 | `org_calls` | `organization_id` | CASCADE | no |
+| `org_chart_nodes` | `organization_id` | CASCADE | no |
 | `organization_officers` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
@@ -10218,6 +10258,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `org_call_responses` | `call_id` | CASCADE | no |
+
+### → `org_chart_nodes` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `org_chart_nodes` | `parent_id` | SET NULL | yes |
 
 ### → `public_portal_api_keys` (1 references)
 

@@ -19,6 +19,13 @@ _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
 )
 
+# Requests are camelCase too. The screen sends back the same casing the
+# responses arrive in — `documentType`, `changeNote` — and without this the
+# request models only bound the snake_case names, so every propose and every
+# draft edit came back 422. `populate_by_name` keeps the snake_case names
+# working for anything posting to the API directly (tests, scripts).
+_REQUEST_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
 # Matches the cap the public endpoint applies when serving custom text, so a
 # body that would be silently truncated on the way out is rejected on the way
 # in instead.
@@ -34,6 +41,8 @@ def _require_text(value: str, field: str) -> str:
 
 class LegalRevisionCreate(BaseModel):
     """A proposed revision to one public legal document."""
+
+    model_config = _REQUEST_CONFIG
 
     document_type: LegalDocumentType
     body: str = Field(..., max_length=MAX_BODY_CHARS)
@@ -61,6 +70,8 @@ class LegalRevisionCreate(BaseModel):
 
 class LegalRevisionUpdate(BaseModel):
     """Edit to a draft. Only drafts are editable; published text is history."""
+
+    model_config = _REQUEST_CONFIG
 
     body: Optional[str] = Field(None, max_length=MAX_BODY_CHARS)
     change_note: Optional[str] = Field(None, max_length=2000)
