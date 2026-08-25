@@ -18,6 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.org_chart import OrgChartNode
 from app.services.org_chart_service import MAX_DEPTH, OrgChartService
 
+# Every test here drives the service against a real database through the
+# `db_session` fixture, so they belong to the integration job. Without this the
+# unit job — which runs `-m "not integration"` with no database service — picks
+# them up and every one errors on connection refused.
+pytestmark = [pytest.mark.integration]
+
 
 async def _make_org(db: AsyncSession, name: str = "Second Dept") -> str:
     org_id = str(uuid.uuid4())

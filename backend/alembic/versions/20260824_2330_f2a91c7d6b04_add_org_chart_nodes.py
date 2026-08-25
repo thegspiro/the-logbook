@@ -26,7 +26,7 @@ grants the permission explicitly in the position editor, which is what a
 separately-registered permission is for.
 
 Revision ID: f2a91c7d6b04
-Revises: b7d1e04f92a3
+Revises: 31e2816df7c3
 Create Date: 2026-08-24 23:30:00.000000
 
 """
@@ -39,7 +39,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f2a91c7d6b04"
-down_revision: Union[str, None] = "b7d1e04f92a3"
+down_revision: Union[str, None] = "31e2816df7c3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
