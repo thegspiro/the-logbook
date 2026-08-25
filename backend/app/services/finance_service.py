@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import Integer, and_, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -808,11 +808,75 @@ class FinanceService:
         return record
 
     async def get_pending_approvals(self, user_id: str, org_id: str) -> list[dict]:
-        """Get all pending approval steps for the current user"""
+        """Get all pending approval steps for the current org.
+
+        FIN-9: the record query used to carry no organization filter at all,
+        scanning every tenant's PENDING approval steps and then running two
+        more queries per record (`_get_entity_info`, `get_current_pending_step`)
+        before `_get_entity_info`'s own org filter discarded anything that
+        wasn't this org's. The result was already org-confined; the query cost
+        wasn't. Resolving each entity type's org-scoped id set first and
+        filtering the record query on it keeps the same output — those ids are
+        exactly what `_get_entity_info` would have kept — while confining the
+        scan and the per-record follow-up queries to this organization.
+        """
+        pr_ids = (
+            (
+                await self.db.execute(
+                    select(PurchaseRequest.id).where(
+                        PurchaseRequest.organization_id == org_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        er_ids = (
+            (
+                await self.db.execute(
+                    select(ExpenseReport.id).where(
+                        ExpenseReport.organization_id == org_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        cr_ids = (
+            (
+                await self.db.execute(
+                    select(CheckRequest.id).where(
+                        CheckRequest.organization_id == org_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
         result = await self.db.execute(
             select(ApprovalStepRecord)
             .options(selectinload(ApprovalStepRecord.step))
-            .where(ApprovalStepRecord.status == ApprovalStepStatus.PENDING)
+            .where(
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                or_(
+                    and_(
+                        ApprovalStepRecord.entity_type
+                        == ApprovalEntityType.PURCHASE_REQUEST,
+                        ApprovalStepRecord.entity_id.in_(pr_ids),
+                    ),
+                    and_(
+                        ApprovalStepRecord.entity_type
+                        == ApprovalEntityType.EXPENSE_REPORT,
+                        ApprovalStepRecord.entity_id.in_(er_ids),
+                    ),
+                    and_(
+                        ApprovalStepRecord.entity_type
+                        == ApprovalEntityType.CHECK_REQUEST,
+                        ApprovalStepRecord.entity_id.in_(cr_ids),
+                    ),
+                ),
+            )
         )
         pending_records = list(result.scalars().all())
 

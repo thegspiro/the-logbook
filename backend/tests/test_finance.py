@@ -607,6 +607,102 @@ class TestApprovalChainService:
         approved = await service.approve_step(records[0].id, user_id, org_id=org_id)
         assert approved.status == ApprovalStepStatus.APPROVED
 
+    async def test_get_pending_approvals_is_confined_to_the_caller_org(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """FIN-9: the pending-approvals query carried no organization filter
+        at all, scanning every tenant's PENDING steps before
+        `_get_entity_info`'s own org check discarded anything foreign from the
+        response. Confirm a pending step belonging to a different org never
+        surfaces for this org's caller, and this org's own pending step still
+        does.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        other_org_id = str(uuid.uuid4())
+        other_admin_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+                "VALUES (:id, :name, :otype, :slug, :tz)"
+            ),
+            {
+                "id": other_org_id,
+                "name": "Other Finance Dept",
+                "otype": "fire_department",
+                "slug": f"fin-other-{other_org_id[:8]}",
+                "tz": "UTC",
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, last_name, "
+                "email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+            ),
+            {
+                "id": other_admin_id,
+                "org": other_org_id,
+                "un": f"finadmin-other-{other_admin_id[:8]}",
+                "fn": "Other",
+                "ln": "Admin",
+                "em": f"finadmin-other-{other_admin_id[:8]}@test.com",
+                "pw": "hashed",
+            },
+        )
+        await db_session.flush()
+
+        async def make_pending_pr(org, requester):
+            fy = await service.create_fiscal_year(
+                org_id=org,
+                created_by=requester,
+                name="FY-Pending",
+                start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
+            )
+            pr = await service.create_purchase_request(
+                org_id=org,
+                requested_by=requester,
+                fiscal_year_id=fy.id,
+                title="Radios",
+                estimated_amount=1000.00,
+            )
+            chain = await service.create_approval_chain(
+                org_id=org,
+                created_by=requester,
+                name="Chain",
+                applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+                is_default=True,
+                steps=[
+                    {
+                        "step_order": 1,
+                        "name": "Approve",
+                        "step_type": ApprovalStepType.APPROVAL,
+                        "approver_type": ApproverType.PERMISSION,
+                        "approver_value": "finance.approve",
+                    },
+                ],
+            )
+            await service.create_approval_records(
+                chain,
+                ApprovalEntityType.PURCHASE_REQUEST,
+                pr.id,
+                1000.00,
+                requester,
+            )
+            return pr
+
+        pr_mine = await make_pending_pr(org_id, user_id)
+        pr_other = await make_pending_pr(other_org_id, other_admin_id)
+
+        pending = await service.get_pending_approvals(user_id, org_id)
+
+        entity_ids = {a["entity_id"] for a in pending}
+        assert pr_mine.id in entity_ids
+        assert pr_other.id not in entity_ids
+
     async def test_denial_does_not_release_other_prs_encumbrance(
         self, db_session: AsyncSession, sample_org_data
     ):

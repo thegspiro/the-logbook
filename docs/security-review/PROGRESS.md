@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                                |
-| ----------- | ------------------------------------------------------------------------------------ |
-| PR          | [#1807](https://github.com/thegspiro/the-logbook/pull/1807)                          |
-| Branch      | `claude/security-review-sf`                                                          |
-| Feature     | 04 Storefront & payments                                                             |
-| CI          | just opened; not yet checked                                                         |
-| Threads     | 3 resolved (Codex P2: incomplete history sweep, real SoD gap, dropped carry-forward) |
-| Last tended | 2026-08-25 — fixed real SoD gap, corrected write-up, replied, resolved               |
+| Field       | Value                                |
+| ----------- | ------------------------------------ |
+| PR          | opening this iteration               |
+| Branch      | `claude/security-review-fin`         |
+| Feature     | 05 Finance & approvals               |
+| CI          | not yet opened                       |
+| Threads     | none yet                             |
+| Last tended | 2026-08-25 — FIN-9 fixed, PR opening |
 
 ---
 
@@ -55,8 +55,8 @@ data-carrying modules, then the supporting infrastructure.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳ #1807 |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳       |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜       |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
@@ -206,3 +206,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   flagged: added a regression test for the refund amount's `gt=0` constraint.
   See `SF-04-storefront-payments.md` for the full write-up. Next: 05 finance
   & approvals.
+- **04 Storefront & payments ✅ merged** — PR #1807 merged 2026-08-25 12:39
+  UTC.
+- **05 Finance & approvals ⏳** — the most heavily audited module in the
+  codebase before this pass even started (module audit + 4 app-review
+  passes); `finance.py`/`finance_service.py` have had zero logic commits since
+  the 2026-08-09 app-review, confirmed via git history. Re-verified FIN-1/2
+  (`_validate_finance_fks`, 13 call sites), FIN-3 (dues self-scoping), FIN-4
+  (`assert_different_person` disburse-side SoD), FIN-6 (dues-payment ledger +
+  idempotency) all hold unchanged. All 66 routes enumerated and confirmed
+  `require_permission`-gated. **FIN-9 (MED, fixed)** — `get_pending_approvals`
+  queried `ApprovalStepRecord` with no organization filter at all, scanning
+  every tenant's pending approval steps (not merely "the org-wide queue" the
+  prior passes' notes described) before the per-record `_get_entity_info`
+  call silently discarded anything foreign from the response — no data
+  leaked, but the query cost scaled with the whole platform's pending-approval
+  volume on every approver's inbox load. Fixed by resolving each entity
+  type's org-scoped id set first and filtering the record query on it before
+  the N+1 follow-up loop runs; output is unchanged (proven by a new
+  regression test), only the cross-tenant scan is eliminated. See
+  `FIN-05-finance-approvals.md` for the full write-up. Next: 06 elections &
+  ballots.
