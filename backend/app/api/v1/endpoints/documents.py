@@ -13,6 +13,7 @@ from uuid import UUID
 
 import magic
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -443,6 +444,56 @@ async def get_document(
         raise HTTPException(status_code=404, detail="Document not found")
     await service.attach_document_names(current_user.organization_id, [document])
     return document
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.view")),
+):
+    """Download a document's stored file.
+
+    ``DocumentResponse`` intentionally excludes ``file_path``, and until this
+    endpoint existed there was no way to retrieve an uploaded file's bytes at
+    all — a caller could upload and delete a document but never open it
+    (DOC-10 review finding, P1). Same ACL as ``GET /{document_id}``.
+    """
+    service = DocumentsService(db)
+    document = ensure_found(
+        await service.get_document_by_id(document_id, current_user.organization_id),
+        "Document",
+    )
+    if not await service.can_access_document(
+        document, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not document.file_path:
+        raise HTTPException(status_code=404, detail="Document file not found on disk")
+
+    # Defence-in-depth: ensure the stored path resolves inside the uploads
+    # directory before serving it, in case the DB value is ever tampered with.
+    resolved_path = os.path.realpath(document.file_path)
+    allowed_base = os.path.realpath(UPLOAD_DIR)
+    if (
+        not resolved_path.startswith(allowed_base + os.sep)
+        and resolved_path != allowed_base
+    ):
+        logger.warning(
+            f"Path traversal attempt blocked for document {document_id}: "
+            f"{document.file_path} resolved to {resolved_path}"
+        )
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not os.path.exists(resolved_path):
+        raise HTTPException(status_code=404, detail="Document file not found on disk")
+
+    return FileResponse(
+        path=resolved_path,
+        filename=document.file_name or document.name or "download",
+        media_type=document.file_type or "application/octet-stream",
+    )
 
 
 @router.patch("/{document_id}", response_model=DocumentResponse)

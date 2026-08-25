@@ -14,8 +14,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.documents import _parse_uuid_or_400, _resolve_document_name
-from app.models.document import DocumentFolder, FolderVisibility
+from app.api.v1.endpoints.documents import (
+    _parse_uuid_or_400,
+    _resolve_document_name,
+    download_document,
+)
+from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.user import Organization
 from app.services.documents_service import (
     DocumentsService,
@@ -400,6 +404,129 @@ class TestUpdateFolderPreservesExplicitNulls:
         svc = DocumentsService(db_session)
         with pytest.raises(ValueError, match="own descendants"):
             await svc.update_folder(root.id, org.id, {"parent_id": child.id})
+
+
+@pytest.mark.integration
+class TestDownloadDocument:
+    """DOC-10 finding #10 (P1): there was no way to retrieve an uploaded
+    document's bytes at all. ``download_document`` must apply the same
+    folder ACL ``get_document`` does, and must not serve a document with no
+    (or a tampered) file on disk.
+    """
+
+    async def _org_and_folder(self, db_session, slug, **folder_kwargs):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        folder = DocumentFolder(organization_id=org.id, name="Folder", **folder_kwargs)
+        db_session.add(folder)
+        await db_session.flush()
+        return org, folder
+
+    async def test_accessible_document_downloads(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, folder = await self._org_and_folder(db_session, "fcvfd-dl-1")
+        file_path = tmp_path / "stored.pdf"
+        file_path.write_bytes(b"%PDF-1.4 test")
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Doc",
+            file_name="report.pdf",
+            file_path=str(file_path),
+            file_type="application/pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+
+        user = _user(uid="caller-1", roles=[(["documents.view"], "member")])
+        user.organization_id = org.id
+        response = await download_document(
+            document.id, db=db_session, current_user=user
+        )
+        assert response.path == str(file_path)
+
+    async def test_leadership_only_folder_is_hidden_as_404_not_403(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        # Matches get_document: existence of a restricted document is never
+        # confirmed to a caller who cannot see it.
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, folder = await self._org_and_folder(
+            db_session, "fcvfd-dl-2", visibility=FolderVisibility.LEADERSHIP
+        )
+        file_path = tmp_path / "stored.pdf"
+        file_path.write_bytes(b"%PDF-1.4 test")
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Doc",
+            file_name="report.pdf",
+            file_path=str(file_path),
+            file_type="application/pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+
+        user = _user(uid="caller-1", roles=[(["documents.view"], "member")])
+        user.organization_id = org.id
+        with pytest.raises(HTTPException) as exc:
+            await download_document(document.id, db=db_session, current_user=user)
+        assert exc.value.status_code == 404
+
+    async def test_missing_file_on_disk_is_a_404(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, folder = await self._org_and_folder(db_session, "fcvfd-dl-3")
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Doc",
+            file_name="gone.pdf",
+            file_path=str(tmp_path / "never-written.pdf"),
+            file_type="application/pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+
+        user = _user(uid="caller-1", roles=[(["documents.view"], "member")])
+        user.organization_id = org.id
+        with pytest.raises(HTTPException) as exc:
+            await download_document(document.id, db=db_session, current_user=user)
+        assert exc.value.status_code == 404
+
+    async def test_path_outside_upload_dir_is_rejected(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        # Defence-in-depth: a tampered file_path outside UPLOAD_DIR must not
+        # be served even if the row and the file both genuinely exist.
+        upload_dir = tmp_path / "uploads"
+        upload_dir.mkdir()
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.documents.UPLOAD_DIR", str(upload_dir)
+        )
+        outside_file = tmp_path / "outside.pdf"
+        outside_file.write_bytes(b"%PDF-1.4 test")
+        org, folder = await self._org_and_folder(db_session, "fcvfd-dl-4")
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Doc",
+            file_name="outside.pdf",
+            file_path=str(outside_file),
+            file_type="application/pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+
+        user = _user(uid="caller-1", roles=[(["documents.view"], "member")])
+        user.organization_id = org.id
+        with pytest.raises(HTTPException) as exc:
+            await download_document(document.id, db=db_session, current_user=user)
+        assert exc.value.status_code == 403
 
 
 if __name__ == "__main__":  # pragma: no cover

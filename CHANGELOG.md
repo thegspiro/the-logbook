@@ -38,6 +38,38 @@ publishes member photos on its own, so whoever publishes still has to look
 first. Anything built later that publishes photos from inside the app must
 check the consent itself.
 
+### Documents could be uploaded but never downloaded, and a few other Documents/Legal fixes (2026-08-25)
+
+**Fixed**
+
+- There was no way to retrieve the bytes of an uploaded document at all —
+  members could upload and delete a file but never open or download it. A
+  Download action is now available wherever a document is listed, subject to
+  the same folder access rules as viewing it.
+- Uploading a document with the Document Name field left blank (advertised
+  in the UI as optional, defaulting to the file name) returned an error
+  instead of actually defaulting to the file name.
+- Uploading a document before any folder existed yet could fail with a
+  server error instead of simply uploading to no folder.
+- Clearing a folder's parent folder or owner, or clearing a document's
+  folder, via the edit form silently did nothing — the old value stayed in
+  place despite the request reporting success. Both now actually clear.
+- A folder could be moved so that it became its own parent (directly, or by
+  way of one of its own sub-folders), which made it disappear from folder
+  navigation. This is now rejected with a clear error.
+- A department publishing custom privacy-policy and terms-of-service text
+  with different revision dates could have publishing one silently change
+  the date shown on the other. Each document now keeps its own date.
+- Publishing two proposed revisions of the same legal document (privacy
+  policy or terms of service) at nearly the same time could leave both
+  marked as the live version, with the public page's actual content
+  decided by which write happened to land last. Publishing is now
+  serialized so this can't happen.
+- A failed receipt-printer connection returned the printer's configured
+  network address to whoever triggered the print — including staff with no
+  access to printer settings. It now returns a generic message; the details
+  are still recorded in the server log.
+
 ### Clearing certain medical-screening fields could crash the request (2026-08-25)
 
 **Fixed**

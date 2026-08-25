@@ -87,6 +87,7 @@ because the two share a boundary).
 | POST   | /documents/upload                                  | documents.manage                                                             | yes (+folder-ACL check)                   |
 | GET    | /documents/my-folder                               | documents.view                                                               | yes (self-scoped)                         |
 | GET    | /documents/{document_id}                           | documents.view                                                               | yes (+folder-ACL check)                   |
+| GET    | /documents/{document_id}/download                  | documents.view                                                               | yes (+folder-ACL check, DOC-18)           |
 | PATCH  | /documents/{document_id}                           | documents.manage                                                             | yes (+FK validation, DOC-6)               |
 | DELETE | /documents/{document_id}                           | documents.manage                                                             | yes                                       |
 | GET    | /documents/stats/summary                           | documents.view                                                               | yes (DOC-4: ignores folder ACL)           |
@@ -505,28 +506,53 @@ with the separate anonymous `GET /api/public/v1/legal` endpoint (already
 reviewed under feature 03), which shares no code path with it. No code
 change; the table above now shows the corrected paths.
 
-### DOC-18 — P1 — No authorized path exists to retrieve an uploaded document's bytes — 🚩 flagged, not fixed
+### DOC-18 — P1 — No authorized path exists to retrieve an uploaded document's bytes — ✅ FIXED
 
 `DocumentResponse` deliberately excludes `file_path`, and a repo-wide search
-of `endpoints/`, `services/`, and the Documents frontend page turns up no
+of `endpoints/`, `services/`, and the Documents frontend page turned up no
 `/documents/{id}/download` or any other file-serving route — and the
-frontend's document cards never request the bytes either. A member with
-`documents.manage` can upload a file and later delete it, but nothing in
-the application can ever open or download what was uploaded. The previous
-version of this file characterized `get_document` as "a direct content
-read" and described the surface as "sound" against injection/exposure
-dimensions; that framing assumed a download path existed to be sound or
-unsound. It does not exist, so there is nothing to secure yet — this is a
-missing-feature gap, not an access-control defect in what's there.
+frontend's document cards never requested the bytes either. A member with
+`documents.manage` could upload a file and later delete it, but nothing in
+the application could ever open or download what was uploaded. The
+version of this file that predates this finding characterized `get_document`
+as "a direct content read" and described the surface as "sound" against
+injection/exposure dimensions; that framing assumed a download path existed
+to be sound or unsound. It did not exist, so there was nothing to secure yet
+— a missing-feature gap, not an access-control defect in what was there.
 
-Not implemented in this pass: a correctly-ACL-checked download endpoint
-(reusing `can_access_document`'s folder-ACL logic) plus the frontend
-affordance to call it is a real feature addition — new route, new
-permission-check surface, a decision about whether to stream the file or
-redirect to a signed URL, and UI work — not a small, verifiable fix in the
-spirit of this rotation's "fix what's safe and small" rule. Flagged for an
-owner decision on scope and approach, same treatment as the existing
-DOC-4/DOC-5 flagged items. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+**Revised disposition:** an earlier revision of this finding flagged it as
+an owner decision, on the reasoning that a new route plus frontend affordance
+is a feature addition rather than a small verifiable fix. Reconsidered:
+`membership_pipeline.py::download_prospect_document` is an established,
+already-shipped precedent for exactly this shape in this codebase — a
+`GET .../{id}/download` route, ACL-checked through the same access function
+the record's own by-id read uses, `FileResponse` with a realpath containment
+check against path traversal. Mirroring a precedent that already exists,
+rather than inventing new design (streaming vs. signed URL, etc.), is within
+this rotation's "fix what's safe and verifiable" bar. Implemented:
+
+- `GET /documents/{document_id}/download` (`documents.py`) — same
+  `get_document_by_id` + `can_access_document` ACL as `GET /{document_id}`
+  (404, not 403, on a restricted document — existence isn't confirmed to a
+  caller who can't see it), a realpath containment check against `UPLOAD_DIR`
+  before serving (defence-in-depth against a tampered `file_path`), and a 404
+  if the row exists but the file is missing on disk.
+- `documentsService.downloadDocument()` (frontend) plus a Download action in
+  both the grid and list views of `DocumentsPage.tsx`, gated on
+  `documents.view` (not `documents.manage` — matching the endpoint's own
+  permission, since viewing and downloading are the same privilege level).
+- The upload form's `folder: 'general'` sentinel default (the same value
+  DOC-11 fixed the backend against 500ing on) is also fixed at its source:
+  the field now defaults to `''`, the folder `<select>` gained an explicit
+  "No folder" option, and `folder_id` is only sent when a real folder is
+  selected — so the normal "no folders exist yet" upload path no longer
+  submits a value that needs rejecting at all.
+
+Guard tests: `tests/test_documents_access.py::TestDownloadDocument` —
+accessible-document success, a leadership-only folder answering 404 not 403,
+a missing on-disk file, and a tampered out-of-`UPLOAD_DIR` path all rejected.
+Mirrored out of `docs/KNOWN_LIMITATIONS.md` now that it's fixed rather than
+flagged.
 
 ## Schema & migration notes
 
@@ -565,23 +591,34 @@ This pass added or extended:
 - `frontend/src/pages/legal/LegalPage.test.tsx` — 1 new case ("does not
   misdate terms with the privacy policy date") plus updated fixtures for
   DOC-10's response-shape change.
+- `tests/test_documents_access.py::TestDownloadDocument` — new class, 4
+  cases, for DOC-18: an accessible document downloads; a leadership-only
+  folder's document answers 404 not 403; a document row whose file is
+  missing on disk is a 404; a tampered `file_path` outside `UPLOAD_DIR` is
+  rejected with 403.
+- `tests/test_public_legal.py` — repaired: DOC-10's effective-date fix
+  (`lastUpdated` → `privacyPolicyLastUpdated`/`termsOfServiceLastUpdated`)
+  had changed the public endpoint's response shape without updating this
+  file's assertions, so 5 of its tests were failing against the pushed code.
 
 Existing coverage otherwise still pins every invariant checked above:
 `tests/test_documents_access.py`, `tests/test_legal_documents.py`,
-`tests/test_print_documents.py`, `tests/test_changelog_fixes.py` — 155
-backend tests total this pass, all passing.
+`tests/test_print_documents.py`, `tests/test_public_legal.py`,
+`tests/test_changelog_fixes.py` — 167 backend tests total across this
+feature's surface, all passing.
 
 ## Completion gate
 
-| Check                                                                                                                             | Result                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `flake8`                                                                                                                          | pass (`app/`, `tests/`, `alembic/`)                                                                        |
-| `black --check`                                                                                                                   | pass                                                                                                       |
-| `isort --check-only`                                                                                                              | pass                                                                                                       |
-| `python3 scripts/validate_migrations.py --strict`                                                                                 | pass (357 migrations, single head)                                                                         |
-| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_changelog_fixes.py` | 155 passed                                                                                                 |
-| `npx tsc --noEmit` (frontend)                                                                                                     | pass — `LegalPage.tsx`/its tests changed for DOC-10                                                        |
-| `npx eslint .` (frontend)                                                                                                         | pass — 0 errors, 1 pre-existing warning in an unrelated file (`MyTrainingPage.tsx`, not touched this pass) |
+| Check                                                                                                                                                        | Result                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `flake8`                                                                                                                                                     | pass (`app/`, `tests/`, `alembic/`)                                                                                 |
+| `black --check`                                                                                                                                              | pass                                                                                                                |
+| `isort --check-only`                                                                                                                                         | pass                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (357 migrations, single head)                                                                                  |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_changelog_fixes.py` | 167 passed                                                                                                          |
+| `npx tsc --noEmit` (frontend)                                                                                                                                | pass                                                                                                                |
+| `npx eslint .` (frontend, changed files only)                                                                                                                | pass — `DocumentsPage.tsx`, `documentsService.ts`, `LegalPage.tsx`, `LegalPage.test.tsx`, `LegalPage.a11y.test.tsx` |
+| `npx vitest run` (changed frontend test files)                                                                                                               | 12 passed                                                                                                           |
 
 ## Next
 

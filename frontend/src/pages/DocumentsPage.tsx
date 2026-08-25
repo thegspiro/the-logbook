@@ -14,6 +14,7 @@ import {
   File,
   ArrowLeft,
   Upload,
+  Download,
 } from 'lucide-react';
 import {
   documentsService,
@@ -59,7 +60,7 @@ const DocumentsPage: React.FC = () => {
   const [uploadForm, setUploadForm] = useState({
     name: '',
     description: '',
-    folder: 'general',
+    folder: '',
     file: null as File | null,
   });
 
@@ -156,10 +157,12 @@ const DocumentsPage: React.FC = () => {
       if (uploadForm.description.trim()) {
         formData.append('description', uploadForm.description.trim());
       }
-      formData.append('folder_id', uploadForm.folder);
+      if (uploadForm.folder) {
+        formData.append('folder_id', uploadForm.folder);
+      }
       await documentsService.uploadDocument(formData);
       setShowUploadModal(false);
-      setUploadForm({ name: '', description: '', folder: selectedFolder || 'general', file: null });
+      setUploadForm({ name: '', description: '', folder: selectedFolder || '', file: null });
       await fetchFolders();
       await fetchSummary();
       if (selectedFolder) {
@@ -193,6 +196,23 @@ const DocumentsPage: React.FC = () => {
     [selectedFolder, fetchFolders, fetchSummary, fetchDocuments]
   );
 
+  const handleDownloadDocument = useCallback(async (doc: DocumentRecord) => {
+    setError(null);
+    try {
+      const blob = await documentsService.downloadDocument(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.file_name || doc.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Unable to download document. Please check your connection and try again.');
+    }
+  }, []);
+
   const handleFolderSelect = useCallback((folderId: string) => {
     setSelectedFolder(folderId);
     setError(null);
@@ -208,7 +228,7 @@ const DocumentsPage: React.FC = () => {
     setUploadForm({
       name: '',
       description: '',
-      folder: selectedFolder || (folders.length > 0 && folders[0] ? folders[0].id : 'general'),
+      folder: selectedFolder || (folders.length > 0 && folders[0] ? folders[0].id : ''),
       file: null,
     });
     setShowUploadModal(true);
@@ -450,18 +470,30 @@ const DocumentsPage: React.FC = () => {
                             {formatDate(doc.created_at, tz)}
                           </p>
                         </div>
-                        {canManage && (
+                        <div className="flex shrink-0 items-start space-x-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setDeleteConfirm(doc.id);
+                              void handleDownloadDocument(doc);
                             }}
-                            className="text-theme-text-muted p-1 transition-all hover:text-red-800 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
-                            title="Delete document"
+                            className="text-theme-text-muted p-1 transition-all hover:text-amber-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-amber-400"
+                            title="Download document"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Download className="h-4 w-4" />
                           </button>
-                        )}
+                          {canManage && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm(doc.id);
+                              }}
+                              className="text-theme-text-muted p-1 transition-all hover:text-red-800 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
+                              title="Delete document"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -500,14 +532,12 @@ const DocumentsPage: React.FC = () => {
                         >
                           Uploaded
                         </th>
-                        {canManage && (
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium uppercase"
-                          >
-                            Actions
-                          </th>
-                        )}
+                        <th
+                          scope="col"
+                          className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium uppercase"
+                        >
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -536,17 +566,26 @@ const DocumentsPage: React.FC = () => {
                             {doc.file_type || '-'}
                           </td>
                           <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
-                          {canManage && (
-                            <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end space-x-1">
                               <button
-                                onClick={() => setDeleteConfirm(doc.id)}
-                                className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"
-                                title="Delete document"
+                                onClick={() => void handleDownloadDocument(doc)}
+                                className="text-theme-text-muted p-1 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
+                                title="Download document"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Download className="h-4 w-4" />
                               </button>
-                            </td>
-                          )}
+                              {canManage && (
+                                <button
+                                  onClick={() => setDeleteConfirm(doc.id)}
+                                  className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"
+                                  title="Delete document"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -675,6 +714,7 @@ const DocumentsPage: React.FC = () => {
                         onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
                         className="form-input focus:ring-amber-500"
                       >
+                        <option value="">No folder</option>
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.name}
