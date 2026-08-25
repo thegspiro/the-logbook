@@ -656,12 +656,23 @@ class TrainingSessionService:
 
         # Feed the pipeline after the approval+records commit — the real updater
         # commits internally, so it must run outside the transaction above.
+        #
+        # The session id is what arms the stale-credit sweep, and it is passed
+        # only when this finalize actually approved the records. A session that
+        # requires an officer's confirmation has no approved records yet, so
+        # ``pipeline_updates`` is deliberately empty — and sweeping against an
+        # empty destination set would reverse every credit the *previous*
+        # approval earned, the moment a leader reopens the session and before
+        # anyone has confirmed what replaces it. If the officer then never
+        # submits, those hours are simply gone. ``submit_training_approval``
+        # runs the sweep with the same session id once the new records are
+        # approved, which is the point at which the destination set is real.
         await self._apply_pipeline_updates(
             pipeline_updates,
             organization_id,
             finalized_by,
             can_manage_training,
-            session_id=str(training_session.id),
+            session_id=(None if requires_confirmation else str(training_session.id)),
         )
 
         # Notify training officers only when their confirmation is required;
@@ -779,17 +790,18 @@ class TrainingSessionService:
         if not training_session.program_id:
             return
 
-        enrollment_result = await self.db.execute(
-            select(ProgramEnrollment)
-            .where(ProgramEnrollment.user_id == str(user_id))
-            .where(ProgramEnrollment.program_id == str(training_session.program_id))
-            .where(
-                ProgramEnrollment.status.in_(
-                    (EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
-                )
-            )
+        # Same resolution as the crediting path, and for the same reason: a
+        # member who completed this program and enrolled again holds an ACTIVE
+        # row and a COMPLETED one, so a single-row fetch raises
+        # MultipleResultsFound. Here the caller logs and moves on, so the
+        # symptom is quieter and worse — the removed attendee simply keeps the
+        # credit this call exists to take back.
+        enrollment = await self._resolve_pipeline_enrollment(
+            user_id=user_id,
+            program_id=str(training_session.program_id),
+            session_id=str(training_session.id),
+            organization_id=organization_id,
         )
-        enrollment = enrollment_result.scalar_one_or_none()
         if enrollment is None:
             return
 
@@ -1531,24 +1543,46 @@ class TrainingSessionService:
         """
         credited_progress_ids: set = set()
         session_ids: set = set()
-        for user_id, program_id, requirement_id, hours, session_id in updates:
-            session_ids.add(str(session_id))
-            progress_id = await self._apply_pipeline_progress(
+        all_resolved = True
+        for user_id, program_id, requirement_id, hours, update_session_id in updates:
+            session_ids.add(str(update_session_id))
+            progress_id, resolved = await self._apply_pipeline_progress(
                 user_id=user_id,
                 program_id=program_id,
                 requirement_id=requirement_id,
                 hours_completed=hours,
                 organization_id=organization_id,
                 verified_by=verified_by,
-                session_id=session_id,
+                session_id=update_session_id,
                 can_manage_training=can_manage_training,
             )
             if progress_id:
                 credited_progress_ids.add(str(progress_id))
+            if not resolved:
+                all_resolved = False
 
         if session_id:
             session_ids.add(str(session_id))
         if not session_ids:
+            return
+
+        # The sweep reverses everything outside ``credited_progress_ids``, so it
+        # is only safe while that set is the complete picture of what this
+        # session still feeds. One unresolved update means it is not, and the
+        # two failure directions are not equally bad: leaving stale credit
+        # standing is visible and correctable on the next re-finalize, whereas
+        # revoking live credit because an update errored is silent and takes
+        # away hours the member actually earned. An events.manage caller
+        # without training.manage hits this deterministically on every
+        # attendee they do not own, which would otherwise turn one refused
+        # correction into a wholesale revocation.
+        if not all_resolved:
+            logger.warning(
+                "Skipping stale-credit reconciliation for session(s) {}: "
+                "at least one pipeline update could not be resolved, so the "
+                "current destination set is incomplete",
+                ", ".join(sorted(session_ids)),
+            )
             return
 
         from app.models.training import ProgressCreditSource
@@ -1570,6 +1604,88 @@ class TrainingSessionService:
                     session_id,
                 )
 
+    async def _resolve_pipeline_enrollment(
+        self,
+        user_id: str,
+        program_id: str,
+        session_id: str,
+        organization_id: UUID,
+    ) -> Optional[ProgramEnrollment]:
+        """Pick the one enrollment this session's credit belongs to.
+
+        COMPLETED counts as well as ACTIVE. When this session's own credit is
+        what carried the member over 100%, the enrollment is no longer active —
+        and an active-only lookup would then skip the correction for precisely
+        the member whose credit mattered most.
+        ``update_enrollment_progress`` already reactivates an enrollment whose
+        progress falls back below 100%, so a downward restatement lands
+        correctly rather than stranding a completion nobody earned.
+
+        Widening the status filter makes the result ambiguous, though, because
+        ``enroll_member`` rejects only an *active* enrollment: a member who
+        finished a program and was enrolled in it again holds a COMPLETED row
+        and an ACTIVE row at once. A ``scalar_one_or_none()`` over both raises
+        ``MultipleResultsFound``, which the caller's except clause swallows into
+        "unresolved" — so the re-enrolled member is the one who silently stops
+        being credited.
+
+        The order below resolves it. The enrollment already carrying this
+        session's credit wins, because a re-finalize is restating its own
+        earlier figure and that figure lives on the enrollment it was first
+        applied to; moving it to a newer enrollment would rewrite a completed
+        program's history. Failing that the active enrollment is the live one
+        and takes new credit, and the most recent completed enrollment is used
+        only when there is no active one to prefer. The ordering is what makes
+        that last tier a decision rather than whatever the database happened to
+        return first.
+        """
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .where(ProgramEnrollment.user_id == str(user_id))
+            .where(ProgramEnrollment.program_id == str(program_id))
+            .where(ProgramEnrollment.organization_id == str(organization_id))
+            .where(
+                ProgramEnrollment.status.in_(
+                    (EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
+                )
+            )
+            .order_by(ProgramEnrollment.enrolled_at.desc())
+        )
+        enrollments = list(result.scalars().all())
+        if not enrollments:
+            return None
+        if len(enrollments) == 1:
+            return enrollments[0]
+
+        from app.models.training import (
+            ProgressCreditSource,
+            RequirementProgressCredit,
+        )
+
+        credited = await self.db.execute(
+            select(RequirementProgress.enrollment_id)
+            .join(
+                RequirementProgressCredit,
+                RequirementProgressCredit.progress_id == RequirementProgress.id,
+            )
+            .where(
+                RequirementProgressCredit.source_type
+                == ProgressCreditSource.TRAINING_SESSION,
+                RequirementProgressCredit.source_id == str(session_id),
+                RequirementProgress.enrollment_id.in_([e.id for e in enrollments]),
+            )
+        )
+        credited_ids = {row[0] for row in credited.all()}
+        for enrollment in enrollments:
+            if enrollment.id in credited_ids:
+                return enrollment
+
+        for enrollment in enrollments:
+            if enrollment.status == EnrollmentStatus.ACTIVE:
+                return enrollment
+
+        return enrollments[0]
+
     async def _apply_pipeline_progress(
         self,
         user_id: str,
@@ -1580,13 +1696,21 @@ class TrainingSessionService:
         verified_by: UUID,
         session_id: str,
         can_manage_training: bool = False,
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], bool]:
         """
         Advance a member's linked pipeline requirement when a program-linked
         training session is approved.
 
-        Returns the ``progress_id`` it credited, so the caller can tell which
-        destinations this session still feeds and reverse the ones it does not.
+        Returns ``(progress_id, resolved)``. ``progress_id`` is the destination
+        this session now feeds, so the caller can tell which credit is current
+        and reverse the rest. ``resolved`` says whether that answer is
+        trustworthy, and the distinction is what keeps the caller's sweep from
+        destroying data: a member with no enrollment or no progress row has no
+        destination and is resolved (``(None, True)``) — there is genuinely
+        nothing here to keep. A permission refusal or an unexpected error is
+        NOT (``(None, False)``): the destination may well still be fed, we
+        simply could not confirm it, and a sweep that reads that silence as
+        "no longer fed" revokes credit the member earned.
 
         Routes through ``TrainingProgramService.apply_requirement_credit`` — the
         same real updater shift completion uses, wrapped in the idempotency
@@ -1604,27 +1728,14 @@ class TrainingSessionService:
         from app.services.training_program_service import TrainingProgramService
 
         try:
-            # Find the member's active enrollment in this program
-            # COMPLETED counts as well as ACTIVE. When this session's own
-            # credit is what carried the member over 100%, the enrollment is no
-            # longer active — and an active-only lookup would then skip the
-            # correction for precisely the member whose credit mattered most.
-            # update_enrollment_progress already reactivates an enrollment whose
-            # progress falls back below 100%, so a downward restatement lands
-            # correctly rather than stranding a completion nobody earned.
-            enrollment_result = await self.db.execute(
-                select(ProgramEnrollment)
-                .where(ProgramEnrollment.user_id == str(user_id))
-                .where(ProgramEnrollment.program_id == str(program_id))
-                .where(
-                    ProgramEnrollment.status.in_(
-                        (EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
-                    )
-                )
+            enrollment = await self._resolve_pipeline_enrollment(
+                user_id=user_id,
+                program_id=program_id,
+                session_id=session_id,
+                organization_id=organization_id,
             )
-            enrollment = enrollment_result.scalar_one_or_none()
             if not enrollment:
-                return None
+                return None, True
 
             # Find the requirement progress row for this enrollment
             progress_result = await self.db.execute(
@@ -1634,7 +1745,7 @@ class TrainingSessionService:
             )
             progress = progress_result.scalar_one_or_none()
             if not progress:
-                return None
+                return None, True
 
             program_service = TrainingProgramService(self.db)
             _, error = await program_service.apply_requirement_credit(
@@ -1662,8 +1773,8 @@ class TrainingSessionService:
                     f"Session pipeline feed failed: user={user_id} "
                     f"requirement={requirement_id}: {error}"
                 )
-                return None
-            return str(progress.id)
+                return None, False
+            return str(progress.id), True
         except Exception as e:
             logger.error(f"Failed to apply session pipeline progress: {e}")
-            return None
+            return None, False
