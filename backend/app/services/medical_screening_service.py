@@ -29,6 +29,7 @@ from app.schemas.medical_screening import (
     ScreeningRequirementCreate,
     ScreeningRequirementUpdate,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 
 
@@ -108,9 +109,10 @@ class MedicalScreeningService:
         requirement = await self.get_requirement(requirement_id, organization_id)
         if not requirement:
             return None
-        update_data = data.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(requirement, key, value)
+        # name and screening_type are NOT NULL columns; an explicit null on
+        # either used to reach db.flush() unguarded and 500 as a raw
+        # IntegrityError instead of the clean 400 apply_updates raises.
+        apply_updates(requirement, data.model_dump(exclude_unset=True))
         await self.db.flush()
         return requirement
 
@@ -237,9 +239,10 @@ class MedicalScreeningService:
         record = await self.get_record(record_id, organization_id)
         if not record:
             return None
-        update_data = data.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(record, key, value)
+        # screening_type and status are NOT NULL columns; an explicit null on
+        # either used to reach db.flush() unguarded and 500 as a raw
+        # IntegrityError instead of the clean 400 apply_updates raises.
+        apply_updates(record, data.model_dump(exclude_unset=True))
         if reviewed_by and data.status in ("passed", "failed", "waived"):
             from datetime import datetime, timezone
 
