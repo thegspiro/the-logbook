@@ -1141,6 +1141,44 @@ can be entirely inherited. The fix is a substantive push (merging the base
 branch in, which the PR usually needs anyway). Never an empty commit, and never
 a close-and-reopen.
 
+### 25. A `LIKE` Pattern Is Built by `like_pattern`, and the `ESCAPE` Clause Is Not Optional _(2026-08-25)_
+
+A user's search string reaches SQL as a **pattern**, not a literal. SQLAlchemy
+parameterizes the value, so this is not injection — but `%` and `_` inside that
+parameter are still wildcards. A member who types `%` gets every row the org
+has, and the paginated list's count query scans all of it.
+
+Escaping the term is only half the fix. `.ilike(pattern)` with no `ESCAPE`
+clause leaves the escape character up to MySQL's `sql_mode`: under
+`NO_BACKSLASH_ESCAPES` the backslashes are literal and every wildcard comes
+back. The escaping *looks* present in review and does nothing at runtime.
+
+```python
+# WRONG — the filter stops filtering the moment somebody types "%"
+pattern = f"%{search}%"
+q.where(Model.name.ilike(pattern))
+
+# WRONG — escaped, but the database was never told what the escape char is
+safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+q.where(Model.name.ilike(f"%{safe}%"))
+
+# CORRECT
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+q.where(Model.name.ilike(like_pattern(search), escape=LIKE_ESCAPE_CHAR))
+```
+
+**Rule:** never hand-roll the transform — `app/utils/sql_search.py` owns it, and
+the fifteen copies that existed before 2026-08-25 are why forty-seven call sites
+forgot the kwarg. Pass `escape=LIKE_ESCAPE_CHAR` on **every** `like`/`ilike`,
+including one whose pattern is system-generated (`"ORD-2026-%"`): it is inert
+there, and covering it is what leaves the invariant with no exceptions to
+maintain. `tests/test_like_escaping.py` enforces both halves.
+
+**Related:** when a query escapes a term for SQL and then re-checks the result
+in Python, the Python side compares against the **raw** input. Comparing against
+the escaped form is how the inventory barcode search came to report the wrong
+`matched_field` for any code containing `%`, `_` or `\`.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

@@ -41,6 +41,7 @@ from app.schemas.minute import (
     MotionUpdate,
 )
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class MinuteService:
@@ -282,18 +283,21 @@ class MinuteService:
             query = query.where(MeetingMinutes.status == status)
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
                 or_(
-                    MeetingMinutes.title.ilike(search_term, escape="\\"),
-                    MeetingMinutes.notes.ilike(search_term, escape="\\"),
-                    MeetingMinutes.old_business.ilike(search_term, escape="\\"),
-                    MeetingMinutes.new_business.ilike(search_term, escape="\\"),
-                    MeetingMinutes.agenda.ilike(search_term, escape="\\"),
-                    MeetingMinutes.announcements.ilike(search_term, escape="\\"),
+                    MeetingMinutes.title.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    MeetingMinutes.notes.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    MeetingMinutes.old_business.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    MeetingMinutes.new_business.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    MeetingMinutes.agenda.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    MeetingMinutes.announcements.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
                 )
             )
 
@@ -742,8 +746,7 @@ class MinuteService:
         matches to approved, non-executive minutes so unpublished drafts and
         executive-session snippets aren't surfaced to plain viewers.
         """
-        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        search_term = f"%{safe_query}%"
+        search_term = like_pattern(query)
 
         # Search across all text fields
         search_fields = [
@@ -768,7 +771,7 @@ class MinuteService:
             stmt = (
                 select(MeetingMinutes)
                 .where(MeetingMinutes.organization_id == str(organization_id))
-                .where(field.ilike(search_term, escape="\\"))
+                .where(field.ilike(search_term, escape=LIKE_ESCAPE_CHAR))
                 .order_by(MeetingMinutes.meeting_date.desc())
                 .limit(limit - len(results))
             )

@@ -48,7 +48,9 @@ reader can tell the difference between _checked and clean_ and _not checked_.
       eager-loaded back into a response — those are live disclosures.
 - [ ] **Self-scoping** — personal/inbox/"my" routes filter on the caller's own
       id, not just the org.
-- [ ] **Injection** — raw SQL, `.ilike()` without `escape="\\"`, unescaped user
+- [ ] **Injection** — raw SQL, `.ilike()` without `escape=LIKE_ESCAPE_CHAR`
+      (build the pattern with `app/utils/sql_search.like_pattern`; guarded by
+      `tests/test_like_escaping.py`), unescaped user
       text in email HTML (`html.escape`), CSV exports not using `SafeCsvWriter`
       (formula injection), ICS/vCard field escaping.
 - [ ] **Secrets** — credentials write-only and redacted on read; no secret
