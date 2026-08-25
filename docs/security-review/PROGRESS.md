@@ -21,9 +21,9 @@ feature. The rotation cannot outrun its own review queue.
 | PR          | [#1799](https://github.com/thegspiro/the-logbook/pull/1799)  |
 | Branch      | `claude/app-security-review-loop-7910yu`                     |
 | Feature     | SEC-00 cross-cutting baseline                                |
-| CI          | awaiting first run                                           |
-| Threads     | none yet                                                     |
-| Last tended | 2026-08-25 (opened)                                          |
+| CI          | Backend Lint failed on `isort`, fixed; re-running             |
+| Threads     | none (the Codex bot reported its own usage limit — no finding) |
+| Last tended | 2026-08-25 — merged `main` (conflict), fixed `isort`          |
 
 ---
 

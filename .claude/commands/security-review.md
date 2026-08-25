@@ -78,15 +78,26 @@ disposition (FIXED / OPEN / FLAGGED).
 ## Step 6 — Completion gate
 
 ```bash
-cd backend  && flake8 app/ tests/
-cd backend  && black --check app/ tests/
+cd backend  && flake8 app/ tests/ alembic/
+cd backend  && black --check app/ tests/ alembic/
+cd backend  && isort --check-only app/ tests/ alembic/
+cd backend  && python3 scripts/validate_migrations.py --strict
 cd backend  && python3 -m pytest tests/ -q -k "<what you touched>"
 cd frontend && npx tsc --noEmit
 cd frontend && npx eslint .
 ```
 
+Run **all three** linters, and against `alembic/` as well as `app/` and
+`tests/` — that is the path CI takes. **`isort` is the one that bites**, because
+it is not installed in a fresh sandbox and `flake8` and `black` both pass
+without it: SEC-00 shipped a green local gate and CI failed on a single
+misordered import. If a linter is missing, `pip install` it at CI's pinned
+version (see `.github/workflows/ci.yml` → Backend Lint) rather than noting it as
+unavailable — an import inserted programmatically is exactly the change `isort`
+exists to catch.
+
 Record each result in the findings file. Fix every failure, including
-pre-existing ones, per CLAUDE.md. If a tool is unavailable in the sandbox, say
+pre-existing ones, per CLAUDE.md. If a tool genuinely cannot be installed, say
 so explicitly — never report a gate you did not run.
 
 ## Step 7 — Update the docs

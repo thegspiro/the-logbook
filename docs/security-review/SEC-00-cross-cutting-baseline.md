@@ -259,8 +259,9 @@ passes.
 
 | Check | Result |
 | ----- | ------ |
-| `flake8 app/ tests/` | ✅ 0 violations |
-| `black --check app/ tests/` | ✅ all files unchanged |
+| `flake8 app/ tests/ alembic/` | ✅ 0 violations |
+| `black --check app/ tests/ alembic/` | ✅ 1216 files unchanged |
+| `isort --check-only app/ tests/ alembic/` | ✅ clean — see the note below |
 | `python3 -m pytest tests/ -k "<19 touched services>"` | ✅ **1715 passed, 1 skipped, 0 failed**, 325 errors |
 | `backend/scripts/validate_migrations.py` | ✅ 355 revisions, single head |
 | `tsc --noEmit` / `eslint .` | n/a — no frontend file changed this iteration |
@@ -282,6 +283,25 @@ The error count is identical, so nothing moved from passing to erroring. The
 standard AXC-1 set for a mechanical sweep, and it is the claim being made here:
 behaviour-neutral to the suite, not merely still green.
 
-`isort` is not installed in this sandbox and was **not** run; import placement
-was done with an AST pass that inserts after the last top-level import and was
-verified by `black` and `flake8`. CI runs the real `isort`.
+### The gate that was reported clean and was not
+
+`isort` was not installed in this sandbox and the first push went out without
+it, on the reasoning that `black` and `flake8` both passed and CI would run the
+real thing. CI did, and it failed: `storefront_service.py` had its
+`sql_search` import placed after `storefront_payments` instead of before it.
+
+The cause is specific and worth recording, because it is the one file where the
+import was not newly added — it already existed at line 58, my sweep stripped it
+along with the misplaced ones, and the AST pass that put it back inserts after
+the *last* top-level import rather than in sorted position. Every other file got
+a new import that happened to sort correctly; this one did not.
+
+`isort==8.0.1` (CI's pin) was then installed and run over `app/ tests/
+alembic/`. One line moved. `black`, `flake8` and the guard test were re-run
+after it and all still pass.
+
+**The lesson is in the command file now** (Step 6): run all three linters
+against `alembic/` too, and install a missing one at CI's pinned version rather
+than noting it as unavailable. An import inserted programmatically is precisely
+the change `isort` exists to catch, so "the other two linters passed" was never
+evidence about this one.

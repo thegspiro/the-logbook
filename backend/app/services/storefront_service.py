@@ -55,11 +55,11 @@ from app.services.storefront_notification_service import StorefrontNotificationS
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
     build_payment_option,
     build_payment_options,
 )
-from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 _CENTS = Decimal("0.01")
 
