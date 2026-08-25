@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` raised for every user except the
+  caller. The service loads the target member to decide which compliance
+  profiles apply to them, then reads `user.positions` — a lazy load, which
+  under asyncio raises `MissingGreenlet` rather than emitting the query. The
+  endpoint's own permission check exists precisely so an officer can read
+  somebody else's progress, and that was the only path that failed.
+
+  SQLAlchemy's identity map is what hid it: asking for your own compliance
+  resolves to the already-loaded `current_user`, whose positions the auth
+  dependency populated, so the endpoint answered correctly for anyone who
+  tried it on themselves. No screen calls it for another member yet, so this
+  is an API fix rather than a visible one.
+
 ### Community outreach requests: the settings now do what they say, and a confirmed date reaches the schedule (2026-08-24)
 
 **Fixed**

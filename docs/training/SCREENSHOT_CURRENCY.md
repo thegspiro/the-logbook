@@ -1,5 +1,37 @@
 # Screenshot currency
 
+## Found 2026-08-25 — probing the My Admin Hours marker turned up a 500
+
+The twenty-second pass opens on the ten markers that arrived with this
+release's own guide additions. Guide 19's *rebuilt My Admin Hours page* marker
+asks for "one configured requirement, so the category bars and the
+requirement-progress section are both populated", so the first question was
+what feeds that section. It is `GET /admin-hours/compliance/{user_id}` — and it
+answered 500 for every member except the one asking.
+
+`AdminHoursService.get_user_hours_compliance` loads the target member and then
+reads `user.positions` to pick the applicable compliance profiles. The query
+carried no eager load, so that read is deferred IO, which under asyncio raises
+`MissingGreenlet` instead of emitting a SELECT.
+
+What kept it hidden is worth writing down, because it is the reason a manual
+check would have called the endpoint healthy. SQLAlchemy's identity map answers
+`select(User).where(id == <me>)` with the `current_user` instance the auth
+dependency already loaded **with its positions**, so asking about yourself
+never lazy-loads anything. Only a lookup of somebody else reaches a fresh
+`User`. The endpoint's permission check exists solely to allow that lookup.
+
+Fixed with `selectinload(UserModel.positions)`, and
+`tests/test_admin_hours_compliance_lookup.py` covers it. The tests
+`expunge_all()` before calling the service — without that they exercise the
+masked path and pass against the unfixed code, which is the trap the endpoint
+itself fell into. All three fail with the fix reverted, with the same
+`MissingGreenlet`.
+
+No screen calls it for another member yet, so nothing in the guides was
+picturing the failure. It is recorded here because the screenshot pass is what
+found it.
+
 ## Corrected 2026-08-24 — four review findings on #1794, all real
 
 An automated reviewer read the PR and filed four. Every one held up; three were
