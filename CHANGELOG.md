@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Rank validation now matches its own permission gate, and a first-load race no longer 500s (2026-08-25)
+
+**Fixed**
+
+- **`GET /operational-ranks/validate` had no server-side permission check.**
+  Its only caller is the Settings rank screen, which is gated
+  `settings.manage` on the frontend — but the endpoint itself depended only on
+  `get_current_user`, so any authenticated member could call it directly and
+  see which members have a misconfigured rank. Now requires `settings.manage`,
+  matching its CRUD siblings in the same router.
+- **A brand-new organization's first rank-list load could 500 under
+  concurrency.** Two admins opening Settings at nearly the same moment could
+  both pass the "no ranks seeded yet" check and both attempt to seed the
+  defaults; the loser's insert hit the unique constraint and raised an
+  uncaught error instead of simply loading the ranks the winner had just
+  created. The seeding path now treats that race the same as "already
+  seeded."
+
 ### OAuth login now honors a deactivated organization (2026-08-25)
 
 **Fixed**
