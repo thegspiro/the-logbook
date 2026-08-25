@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                       |
-| ----------- | ------------------------------------------- |
-| PR          | none                                        |
-| Branch      | `claude/security-review-perm` (in progress) |
-| Feature     | 02 Permissions & roles                      |
-| CI          | n/a — not yet opened                        |
-| Threads     | n/a                                         |
-| Last tended | n/a                                         |
+| Field       | Value                                    |
+| ----------- | ---------------------------------------- |
+| PR          | none (opening now)                       |
+| Branch      | `claude/security-review-perm`            |
+| Feature     | 02 Permissions & roles                   |
+| CI          | n/a — not yet opened                     |
+| Threads     | n/a                                      |
+| Last tended | 2026-08-25 — review complete, opening PR |
 
 ---
 
@@ -53,7 +53,7 @@ data-carrying modules, then the supporting infrastructure.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | 🔄       |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳ #TBD  |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜       |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
@@ -129,4 +129,19 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   2026-08-12); corrected in `auth-session.md`. See
   `AUTH-01-auth-session.md` for the full write-up. Next: 02 permissions &
   roles.
-- **02 Permissions & roles 🔄** — started 2026-08-25.
+- **02 Permissions & roles ⏳** — `roles.py`/`role_service.py`/
+  `dependencies.py`/`core/permissions.py` carry an extremely thorough
+  privilege-escalation history (module audit + 4 app-review passes through
+  2026-08-09); spot-checked the ceiling machinery still holds unchanged (git
+  log: zero commits to those 3 files since). `officers.py`, `org_chart.py`,
+  and `operational_ranks.py` are new since that pass (added 2026-08-21/24) and
+  carry no prior audit — read in full. **PERM-1 (LOW)** — `GET
+/operational-ranks/validate` backs a `settings.manage`-gated screen but had
+  no server-side permission check of its own; any authenticated member could
+  call it directly and see which members have a misconfigured rank. Fixed to
+  match its CRUD siblings. **PERM-2 (LOW)** — `seed_defaults` had a narrow
+  concurrent-first-load race (two admins opening a brand-new org's Settings at
+  once) that surfaced as an uncaught 500 instead of the ranks simply loading;
+  now rolls back and returns the already-seeded set. See
+  `PERM-02-permissions-roles.md` for the full write-up. Next: 03 public
+  surface & webhooks.

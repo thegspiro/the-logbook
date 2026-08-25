@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.operational_rank import OperationalRank
@@ -95,7 +96,18 @@ class OperationalRankService:
             self.db.add(rank)
             ranks.append(rank)
 
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            # A brand-new org's very first load can race: two concurrent
+            # requests both see count == 0 and both attempt to seed. The
+            # `(organization_id, rank_code)` unique constraint stops the
+            # second insert from duplicating rows, but without this guard it
+            # surfaced as an uncaught 500 instead of "someone else already
+            # seeded it" — treat it the same as skip-when-ranks-exist.
+            await self.db.rollback()
+            return []
+
         # Refresh server-computed timestamps to prevent MissingGreenlet
         for rank in ranks:
             await self.db.refresh(rank, attribute_names=["created_at", "updated_at"])

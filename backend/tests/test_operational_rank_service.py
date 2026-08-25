@@ -7,11 +7,14 @@ rank_code guards, reorder, and the active-member rank validation that skips
 inactive/archived members. DB mocked; no MySQL.
 """
 
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
+from app.api.v1.endpoints import operational_ranks as ranks_ep
 from app.schemas.operational_rank import RankCreate, RankUpdate
 from app.services.operational_rank_service import DEFAULT_RANKS, OperationalRankService
 
@@ -72,6 +75,21 @@ class TestSeedDefaults:
         assert chief.eligible_positions is not deputy.eligible_positions
         chief.eligible_positions.append("mutated")
         assert "mutated" not in deputy.eligible_positions
+
+    async def test_concurrent_first_seed_rolls_back_instead_of_500(self):
+        # Regression: two concurrent first-loads for a brand-new org can both
+        # pass the count==0 check; the loser's flush hits the unique
+        # constraint. Must roll back and return [] rather than let an
+        # IntegrityError escape as an uncaught 500.
+        db = _db([_scalar(0)])
+        db.flush = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception("dup")))
+        db.rollback = AsyncMock()
+
+        out = await OperationalRankService(db).seed_defaults("org-1")
+
+        assert out == []
+        db.rollback.assert_awaited_once()
+        db.refresh.assert_not_called()
 
 
 class TestCrud:
@@ -144,6 +162,23 @@ class TestReorder:
         assert r1.sort_order == 5
         assert r2.sort_order == 2
         db.commit.assert_awaited()
+
+
+class TestValidateRouteGate:
+    """GET /validate backs a settings.manage-gated screen (SettingsPage's rank
+
+    section) but had no server-side permission check of its own — any
+    authenticated member could call it directly and see which members have a
+    misconfigured rank. Must match its CRUD siblings in this router.
+    """
+
+    def test_validate_route_requires_settings_manage(self):
+        dep = (
+            inspect.signature(ranks_ep.validate_ranks)
+            .parameters["current_user"]
+            .default
+        )
+        assert "settings.manage" in dep.dependency.required_permissions
 
 
 class TestValidateRanks:
