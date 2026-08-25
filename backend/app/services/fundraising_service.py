@@ -24,6 +24,7 @@ from app.models.grant import (
     PledgeStatus,
 )
 from app.utils.sql_ordering import nulls_last_asc
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 def _json_safe_amounts(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -148,13 +149,12 @@ class FundraisingService:
         if donor_type:
             query = query.where(Donor.donor_type == donor_type)
         if search:
-            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            pattern = f"%{safe}%"
+            pattern = like_pattern(search)
             query = query.where(
-                (Donor.first_name.ilike(pattern, escape="\\"))
-                | (Donor.last_name.ilike(pattern, escape="\\"))
-                | (Donor.email.ilike(pattern, escape="\\"))
-                | (Donor.company_name.ilike(pattern, escape="\\"))
+                (Donor.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (Donor.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
         query = query.order_by(Donor.last_name.asc(), Donor.first_name.asc())
         result = await self.db.execute(query)

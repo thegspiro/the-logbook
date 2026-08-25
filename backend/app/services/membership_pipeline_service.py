@@ -50,6 +50,7 @@ from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 @dataclass(frozen=True)
@@ -691,21 +692,20 @@ class MembershipPipelineService:
         against each column individually never hits.
         """
 
-        def _escape(value: str) -> str:
-            return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
         terms = [t for t in search.split() if t]
         if not terms:
             terms = [search]
 
         clauses = []
         for term in terms:
-            pattern = f"%{_escape(term)}%"
+            pattern = like_pattern(term)
             clauses.append(
                 or_(
-                    ProspectiveMember.first_name.ilike(pattern),
-                    ProspectiveMember.last_name.ilike(pattern),
-                    ProspectiveMember.email.ilike(pattern),
+                    ProspectiveMember.first_name.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    ProspectiveMember.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    ProspectiveMember.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )
         return and_(*clauses)
@@ -2555,7 +2555,9 @@ class MembershipPipelineService:
                     select(TrainingProgram)
                     .where(
                         TrainingProgram.organization_id == organization_id,
-                        TrainingProgram.name.ilike("%probationary%"),
+                        TrainingProgram.name.ilike(
+                            "%probationary%", escape=LIKE_ESCAPE_CHAR
+                        ),
                         TrainingProgram.active.is_(True),
                     )
                     .limit(1)

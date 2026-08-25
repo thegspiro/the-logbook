@@ -81,6 +81,7 @@ from app.services.skills_testing_service import (
     revert_test_pass_from_pipeline,
     viewer_positions_for,
 )
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
 
@@ -942,8 +943,7 @@ async def search_candidates(
 
     # Escape the LIKE wildcards a member could otherwise type: a bare "%" would
     # match every row, turning the search-only rule back into a full listing.
-    escaped = fragment.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    pattern = f"%{escaped}%"
+    pattern = like_pattern(fragment)
 
     full_name = func.concat(
         func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
@@ -955,7 +955,7 @@ async def search_candidates(
             User.organization_id == current_user.organization_id,
             User.status == UserStatus.ACTIVE,
             User.deleted_at.is_(None),
-            full_name.like(pattern, escape="\\"),
+            full_name.like(pattern, escape=LIKE_ESCAPE_CHAR),
         )
         .order_by(User.last_name, User.first_name)
         .limit(CANDIDATE_SEARCH_MAX_RESULTS)
