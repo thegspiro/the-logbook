@@ -2,7 +2,7 @@
 Training Module Configuration API Endpoints
 
 GET  /config          - Any authenticated member can read the visibility settings
-PUT  /config          - Training officers can update the visibility settings
+PUT  /config          - training.configure (or training.manage) to update them
 GET  /my-training     - Member's aggregated training data (respects visibility config)
 """
 
@@ -59,9 +59,17 @@ async def get_training_module_config(
 async def update_training_module_config(
     updates: TrainingModuleConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(
+        require_permission("training.configure", "training.manage")
+    ),
 ):
-    """Update training module configuration (training officers only)."""
+    """Update training module configuration.
+
+    ``training.configure`` is the grant this panel is really about — setting
+    how much of an officer's assessment the assessed member may read. It is
+    accepted alongside ``training.manage`` rather than replacing it so that a
+    department's own customized position keeps the access it already had.
+    """
     service = TrainingModuleConfigService(db)
     config = await service.update_config(
         organization_id=current_user.organization_id,
@@ -189,12 +197,18 @@ async def get_my_training_summary(
             TrainingRecord.completion_date >= month_start.date(),
         )
     )
-    result["hours_summary"] = {
+    # The counts stay regardless — "how many courses have I completed" is
+    # history, not hours, and the page's core stat row needs it. Only the two
+    # hour figures answer to ``show_training_hours``; a department that hides
+    # them must not have them handed back through the same payload.
+    hours_summary: dict[str, Any] = {
         "total_records": row[0],
-        "total_hours": float(row[1]),
-        "hours_this_month": float(month_result.scalar() or 0),
         "completed_courses": row[0],
     }
+    if is_officer or visibility.get("show_training_hours", True):
+        hours_summary["total_hours"] = float(row[1])
+        hours_summary["hours_this_month"] = float(month_result.scalar() or 0)
+    result["hours_summary"] = hours_summary
 
     # --- Requirements Summary (always returned for core stats) ---
     # Include ALL active requirements, not just annual
@@ -276,7 +290,24 @@ async def get_my_training_summary(
         "avg_compliance": avg_compliance,
     }
 
-    result["requirements_detail"] = requirements_detail
+    # ``cert_expired`` and ``blocks_activity`` exist only to surface a lapsed
+    # certification, so hiding certification status has to hide them too —
+    # otherwise the requirements list keeps rendering "Certification expired —
+    # renew ASAP" for a department that switched certification status off.
+    # The requirement still reports itself as unmet, with its progress bar, so
+    # what the member loses is the reason rather than the fact.
+    if not is_officer and not visibility.get("show_certification_status", True):
+        for detail in requirements_detail:
+            detail.pop("cert_expired", None)
+            detail.pop("blocks_activity", None)
+
+    # The *summary* (an average compliance percentage) is the core stat and
+    # always goes back. The per-requirement breakdown is what
+    # ``show_requirement_details`` names, and until now only the copy nested
+    # inside Pipeline Progress honoured it while this one — hours, due dates,
+    # overdue-by-N-days — was returned to everybody.
+    if is_officer or visibility.get("show_requirement_details", True):
+        result["requirements_detail"] = requirements_detail
 
     # --- Certification Status ---
     if is_officer or visibility.get("show_certification_status", True):
@@ -406,7 +437,9 @@ async def get_my_training_summary(
                 entry["areas_of_strength"] = sr.areas_of_strength
             if is_officer or visibility.get("show_areas_for_improvement", True):
                 entry["areas_for_improvement"] = sr.areas_for_improvement
-            if is_officer or visibility.get("show_officer_narrative", True):
+            # Alone among these, the narrative's column default is False —
+            # candid officer prose is opt-in, so the fallback has to match.
+            if is_officer or visibility.get("show_officer_narrative", False):
                 entry["officer_narrative"] = sr.officer_narrative
             if is_officer or visibility.get("show_skills_observed", True):
                 entry["skills_observed"] = sr.skills_observed
@@ -487,9 +520,10 @@ async def export_my_training(
     """Download the current member's own training history as CSV or PDF.
 
     Gated by the organization's ``allow_member_report_export`` setting so that
-    officers control whether members may export their own records. Omitting
-    ``start_date`` returns the member's entire history (e.g. for an outside
-    audit or a prospective employer).
+    officers control whether members may export their own records, and by the
+    same visibility flags the page honours — an export is not a way around
+    them. Omitting ``start_date`` returns the member's entire history (e.g.
+    for an outside audit or a prospective employer).
     """
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
@@ -499,10 +533,23 @@ async def export_my_training(
             detail="Member training export is disabled for this organization.",
         )
 
+    # The export is the training history, so it has to answer to the same
+    # flags the page does — otherwise enabling export hands back in a CSV
+    # exactly what ``show_training_history`` was set to withhold.
+    if not config.show_training_history:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Your department does not make training history visible to "
+                "members, so it cannot be exported."
+            ),
+        )
+
     from app.services.training_enhancement_service import ReportExportService
 
     export_service = ReportExportService(db)
     user_id = str(current_user.id)
+    include_certifications = bool(config.show_certification_status)
 
     try:
         if format == "pdf":
@@ -511,6 +558,7 @@ async def export_my_training(
                 current_user.organization_id,
                 start_date=start_date,
                 end_date=end_date,
+                include_certifications=include_certifications,
             )
             return StreamingResponse(
                 pdf_buf,
@@ -527,6 +575,7 @@ async def export_my_training(
             current_user.organization_id,
             start_date=start_date,
             end_date=end_date,
+            include_certifications=include_certifications,
         )
         return Response(
             content=csv_content,
@@ -544,7 +593,9 @@ async def export_my_training(
 @router.get("/skill-names")
 async def get_skill_evaluation_names(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(
+        require_permission("training.configure", "training.manage")
+    ),
 ):
     """Return a list of active SkillEvaluation names.
 

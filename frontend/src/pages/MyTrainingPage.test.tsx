@@ -29,7 +29,11 @@ vi.mock('../utils/dateFormatting', () => ({
   toLocalDateString: () => '2025-05-24',
 }));
 
-// Mock auth store
+// Mock auth store. `permissions` is mutable so a test can put the caller in a
+// role that may configure the panel — the settings tab is gated on the grant,
+// not on whether GET /config happened to return 200.
+const auth = vi.hoisted(() => ({ permissions: [] as string[] }));
+
 vi.mock('../stores/authStore', () => ({
   useAuthStore: vi.fn((selector) => {
     const state = {
@@ -39,8 +43,9 @@ vi.mock('../stores/authStore', () => ({
         last_name: 'User',
         email: 'test@example.com',
         role: { slug: 'member' },
-        permissions: [],
+        permissions: auth.permissions,
       },
+      checkPermission: (permission: string) => auth.permissions.includes(permission),
     };
     if (typeof selector === 'function') {
       return (selector as (s: typeof state) => unknown)(state);
@@ -117,6 +122,7 @@ const mockTrainingData = {
 describe('MyTrainingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.permissions = [];
     mockGetMyTraining.mockResolvedValue(mockTrainingData);
     mockGetConfig.mockResolvedValue({});
     mockGetVisibility.mockResolvedValue(mockTrainingData.visibility);
@@ -162,6 +168,101 @@ describe('MyTrainingPage', () => {
       expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: /export csv/i })).not.toBeInTheDocument();
+  });
+
+  describe('member visibility settings tab', () => {
+    it('is hidden from a member who cannot configure the panel', async () => {
+      renderWithRouter(<MyTrainingPage />);
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+      });
+
+      // The tab used to appear for everybody: it was gated on GET /config
+      // returning 200, and that endpoint is open to every authenticated
+      // member. A firefighter could read the department's disclosure policy
+      // and press a Save button that could only 403.
+      expect(screen.queryByRole('button', { name: /member visibility settings/i })).not.toBeInTheDocument();
+      expect(mockGetConfig).not.toHaveBeenCalled();
+    });
+
+    it('is shown to a membership coordinator holding training.configure', async () => {
+      auth.permissions = ['training.configure'];
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByRole('button', { name: /member visibility settings/i })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockGetConfig).toHaveBeenCalled();
+      });
+    });
+
+    it('is shown to a training officer holding training.manage', async () => {
+      auth.permissions = ['training.manage'];
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByRole('button', { name: /member visibility settings/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('visibility flags the page had stopped honouring', () => {
+    const withVisibility = (overrides: Record<string, boolean>) => ({
+      ...mockTrainingData,
+      visibility: { ...mockTrainingData.visibility, ...overrides },
+    });
+
+    it('hides the completed-hours stat when show_training_hours is off', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...withVisibility({ show_training_hours: false }),
+        // The backend withholds the figure too, rather than sending a number
+        // the page merely declines to draw.
+        hours_summary: { total_records: 15, completed_courses: 12 },
+      });
+      renderWithRouter(<MyTrainingPage />);
+
+      // The course count is history, not hours, and stays.
+      expect(await screen.findByText('Completed Courses')).toBeInTheDocument();
+      expect(screen.queryByText('Completed Hours')).not.toBeInTheDocument();
+    });
+
+    it('shows the completed-hours stat when show_training_hours is on', async () => {
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Completed Hours')).toBeInTheDocument();
+    });
+
+    it('hides the requirements breakdown when show_requirement_details is off', async () => {
+      mockGetMyTraining.mockResolvedValue(withVisibility({ show_requirement_details: false }));
+      renderWithRouter(<MyTrainingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Training Requirements')).not.toBeInTheDocument();
+      expect(screen.queryByText('Annual Training Hours')).not.toBeInTheDocument();
+    });
+
+    it('renders shift statistics, which show_shift_stats promised and no code drew', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        shift_stats: { shifts_completed: 4, hours_reported: 48, total_calls: 11, avg_rating: 4.5 },
+      });
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByText('Shift Statistics')).toBeInTheDocument();
+      expect(screen.getByText('Shifts Completed')).toBeInTheDocument();
+      expect(screen.getByText('11')).toBeInTheDocument();
+    });
+
+    it('omits shift statistics when show_shift_stats is off', async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...withVisibility({ show_shift_stats: false }),
+        shift_stats: { shifts_completed: 4, hours_reported: 48, total_calls: 11, avg_rating: 4.5 },
+      });
+      renderWithRouter(<MyTrainingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Shift Statistics')).not.toBeInTheDocument();
+    });
   });
 
   it('exports the member training record when enabled', async () => {

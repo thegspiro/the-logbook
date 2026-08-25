@@ -909,10 +909,16 @@ class ReportExportService:
         organization_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        include_certifications: bool = True,
     ) -> str:
         """Generate an individual training history CSV.
 
         A missing ``start_date`` means no lower bound (lifetime export).
+
+        ``include_certifications=False`` drops the certification columns, for
+        the member-facing export of a department that has switched
+        ``show_certification_status`` off. It defaults to True so an officer
+        pulling somebody's record gets the full sheet.
         """
         if not end_date:
             end_date = date.today()
@@ -931,6 +937,7 @@ class ReportExportService:
         records_result = await self.db.execute(query)
         records = records_result.scalars().all()
 
+        cert_headers = ["Certification #", "Issuing Agency", "Expiration Date"]
         output = io.StringIO()
         writer = SafeCsvWriter(output)
         writer.writerow(
@@ -941,9 +948,7 @@ class ReportExportService:
                 "Completion Date",
                 "Hours",
                 "Credit Hours",
-                "Certification #",
-                "Issuing Agency",
-                "Expiration Date",
+                *(cert_headers if include_certifications else []),
                 "Score",
                 "Instructor",
                 "Location",
@@ -956,6 +961,11 @@ class ReportExportService:
                 if hasattr(r.training_type, "value")
                 else str(r.training_type)
             )
+            cert_cells = [
+                r.certification_number or "",
+                r.issuing_agency or "",
+                str(r.expiration_date) if r.expiration_date else "",
+            ]
             writer.writerow(
                 [
                     r.course_name,
@@ -964,9 +974,7 @@ class ReportExportService:
                     str(r.completion_date) if r.completion_date else "",
                     f"{r.hours_completed:.1f}" if r.hours_completed else "0",
                     f"{r.credit_hours:.1f}" if r.credit_hours else "",
-                    r.certification_number or "",
-                    r.issuing_agency or "",
-                    str(r.expiration_date) if r.expiration_date else "",
+                    *(cert_cells if include_certifications else []),
                     f"{r.score:.1f}" if r.score else "",
                     r.instructor or "",
                     r.location or "",
@@ -1201,10 +1209,15 @@ class ReportExportService:
         organization_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        include_certifications: bool = True,
     ) -> io.BytesIO:
         """Generate an individual training history PDF.
 
         A missing ``start_date`` means no lower bound (lifetime export).
+
+        ``include_certifications=False`` drops the Cert # and Expires columns,
+        for the member-facing export of a department that has switched
+        ``show_certification_status`` off.
         """
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch
@@ -1275,9 +1288,9 @@ class ReportExportService:
             "Type",
             "Completed",
             "Hours",
-            "Cert #",
-            "Expires",
         ]
+        if include_certifications:
+            headers += ["Cert #", "Expires"]
         c.setFont("Helvetica-Bold", 8)
         for i, h in enumerate(headers):
             c.drawString(col_x[i], y, h)
@@ -1311,12 +1324,13 @@ class ReportExportService:
                 y,
                 f"{r.hours_completed:.1f}" if r.hours_completed else "0",
             )
-            c.drawString(col_x[4], y, (r.certification_number or "")[:15])
-            c.drawString(
-                col_x[5],
-                y,
-                str(r.expiration_date) if r.expiration_date else "",
-            )
+            if include_certifications:
+                c.drawString(col_x[4], y, (r.certification_number or "")[:15])
+                c.drawString(
+                    col_x[5],
+                    y,
+                    str(r.expiration_date) if r.expiration_date else "",
+                )
             y -= 14
 
         c.save()

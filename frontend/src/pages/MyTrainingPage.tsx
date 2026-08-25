@@ -272,7 +272,8 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
     <div className="space-y-6">
       <p className="text-theme-text-muted text-sm">
         Control what training data members can see on their personal training page. Officers and administrators always
-        see the full dataset regardless of these settings.
+        see the full dataset regardless of these settings. Withheld fields are left out of the API response, not merely
+        hidden on screen, and the member export honours them too.
       </p>
 
       {groups.map((group) => (
@@ -299,47 +300,6 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
           </div>
         </div>
       ))}
-
-      {/* Report Review Workflow */}
-      <div>
-        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Report Review Workflow</h4>
-        <div className="space-y-3">
-          <label className="bg-theme-surface hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors">
-            <div>
-              <p className="text-theme-text-primary text-sm font-medium">Require Review Before Visibility</p>
-              <p className="text-theme-text-muted text-xs">
-                Reports must be reviewed and approved before trainees can see them
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={getCurrentValue('report_review_required')}
-              onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
-              className="form-checkbox"
-            />
-          </label>
-
-          {getCurrentValue('report_review_required') && (
-            <div className="bg-theme-surface rounded-lg p-3">
-              <p className="text-theme-text-primary mb-1 text-sm font-medium">Review Role</p>
-              <p className="text-theme-text-muted mb-2 text-xs">
-                Who should review reports before they are visible to trainees?
-              </p>
-              <select
-                value={getStringValue('report_review_role') || 'training_officer'}
-                onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
-                className="form-input text-sm"
-              >
-                {REVIEW_ROLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Skills-test results — the department default. Individual templates and
           tests may override both settings; this is what applies when they
@@ -381,6 +341,63 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                 className="form-input text-sm"
               >
                 {SKILLS_RELEASE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* These last two groups are not visibility settings — they configure
+          the officer's shift-report form and the review it goes through.
+          They stay here rather than moving wholesale to Scheduling →
+          Shift Reports because that screen is gated on `scheduling.manage`,
+          which a training officer need not hold; presenting them under their
+          own heading is what stops them reading as things members can see. */}
+      <div className="border-theme-surface-border border-t pt-6">
+        <h3 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
+          Shift Report Configuration
+        </h3>
+        <p className="text-theme-text-muted mt-1 text-sm">
+          These change the report form officers fill in and who signs it off — not what members see. The same settings
+          appear under Scheduling → Shift Reports.
+        </p>
+      </div>
+
+      {/* Report Review Workflow */}
+      <div>
+        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Report Review Workflow</h4>
+        <div className="space-y-3">
+          <label className="bg-theme-surface hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors">
+            <div>
+              <p className="text-theme-text-primary text-sm font-medium">Require Review Before Visibility</p>
+              <p className="text-theme-text-muted text-xs">
+                Reports must be reviewed and approved before trainees can see them
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={getCurrentValue('report_review_required')}
+              onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
+              className="form-checkbox"
+            />
+          </label>
+
+          {getCurrentValue('report_review_required') && (
+            <div className="bg-theme-surface rounded-lg p-3">
+              <p className="text-theme-text-primary mb-1 text-sm font-medium">Review Role</p>
+              <p className="text-theme-text-muted mb-2 text-xs">
+                Who should review reports before they are visible to trainees?
+              </p>
+              <select
+                value={getStringValue('report_review_role') || 'training_officer'}
+                onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
+                className="form-input text-sm"
+              >
+                {REVIEW_ROLE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -492,7 +509,18 @@ const MyTrainingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
-  const [isOfficer, setIsOfficer] = useState(false);
+  // GET /config is open to every authenticated member — it has to be, the
+  // member page reads the visibility flags out of it — so a 200 from it says
+  // nothing about who may *edit* the settings. Gating the tab on that call
+  // succeeding showed every firefighter the department's disclosure policy
+  // and a Save button that could only 403. Ask the permission instead.
+  const canConfigure = useAuthStore(
+    (state) => state.checkPermission('training.configure') || state.checkPermission('training.manage')
+  );
+  // Falls back rather than trusting the stored tab: if the grant goes away
+  // while the settings tab is open, `activeTab` still says 'settings' and
+  // every branch below would decline to render, leaving a blank page.
+  const tab = canConfigure ? activeTab : 'overview';
   const [exporting, setExporting] = useState(false);
   // Training-history view defaults to the last 12 months; clearing the range
   // shows (and exports) the member's entire history.
@@ -505,7 +533,7 @@ const MyTrainingPage: React.FC = () => {
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [canConfigure]);
 
   const loadData = async () => {
     try {
@@ -514,13 +542,9 @@ const MyTrainingPage: React.FC = () => {
       const trainingData = await trainingModuleConfigService.getMyTraining();
       setData(trainingData);
 
-      // Try to load the full config (only works for officers)
-      try {
+      if (canConfigure) {
         const cfg = await trainingModuleConfigService.getConfig();
         setConfig(cfg);
-        setIsOfficer(true);
-      } catch {
-        setIsOfficer(false);
       }
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load training data'));
@@ -613,13 +637,13 @@ const MyTrainingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs (only show settings tab for officers) */}
-      {isOfficer && (
+      {/* Tabs (settings tab only for those who may edit the settings) */}
+      {canConfigure && (
         <div className="hscroll mb-6 flex gap-2">
           <button
             onClick={() => setActiveTab('overview')}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-              activeTab === 'overview'
+              tab === 'overview'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
@@ -629,7 +653,7 @@ const MyTrainingPage: React.FC = () => {
           <button
             onClick={() => setActiveTab('settings')}
             className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-              activeTab === 'settings'
+              tab === 'settings'
                 ? 'bg-red-800 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
@@ -641,17 +665,17 @@ const MyTrainingPage: React.FC = () => {
       )}
 
       {/* Settings Tab */}
-      {activeTab === 'settings' && config && (
+      {tab === 'settings' && config && (
         <Section title="Member Visibility Settings" icon={Shield} defaultOpen>
           <ConfigEditor config={config} onSave={handleConfigSave} />
         </Section>
       )}
 
       {/* Overview Tab */}
-      {activeTab === 'overview' && data && (
+      {tab === 'overview' && data && (
         <div className="space-y-6">
           {/* Records range + export toolbar */}
-          {(v?.show_training_history || v?.allow_member_report_export) && (
+          {v?.show_training_history && (
             <div className="card flex flex-wrap items-end justify-between gap-4 p-4">
               <div>
                 <DateRangePicker
@@ -691,7 +715,10 @@ const MyTrainingPage: React.FC = () => {
             </div>
           )}
 
-          {/* Core Stats Row (always visible) */}
+          {/* Core stats. The course count and the compliance percentage are
+              always shown; the hours figure is the one `show_training_hours`
+              names, and the backend withholds it too rather than sending a
+              number the page merely declines to draw. */}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             <StatCard
               icon={GraduationCap}
@@ -699,12 +726,14 @@ const MyTrainingPage: React.FC = () => {
               value={data.hours_summary?.completed_courses ?? 0}
               color="text-green-700 dark:text-green-400"
             />
-            <StatCard
-              icon={Clock}
-              label="Completed Hours"
-              value={formatHours(data.hours_summary?.total_hours)}
-              color="text-blue-700 dark:text-blue-400"
-            />
+            {v?.show_training_hours && (
+              <StatCard
+                icon={Clock}
+                label="Completed Hours"
+                value={formatHours(data.hours_summary?.total_hours)}
+                color="text-blue-700 dark:text-blue-400"
+              />
+            )}
             <StatCard
               icon={BarChart3}
               label="Requirements"
@@ -717,8 +746,10 @@ const MyTrainingPage: React.FC = () => {
             />
           </div>
 
-          {/* Outstanding Requirements */}
-          {data.requirements_detail && data.requirements_detail.length > 0 && (
+          {/* Outstanding Requirements. Gated on `show_requirement_details`,
+              which previously only reached the copy nested under Pipeline
+              Progress while this list ignored it. */}
+          {v?.show_requirement_details && data.requirements_detail && data.requirements_detail.length > 0 && (
             <Section title="Training Requirements" icon={ClipboardList}>
               <div className="space-y-3">
                 {/* Outstanding (not met) first, then met */}
@@ -997,6 +1028,38 @@ const MyTrainingPage: React.FC = () => {
                   No training records in the selected date range. Adjust or clear the date range above to see more.
                 </p>
               )}
+            </Section>
+          )}
+
+          {/* Shift Statistics. `show_shift_stats` had no reader at all: the
+              endpoint gated and returned these figures, the page never drew
+              them, and the setting's own description promised members could
+              see them. */}
+          {v?.show_shift_stats && data.shift_stats && data.shift_stats.shifts_completed > 0 && (
+            <Section title="Shift Statistics" icon={BarChart3}>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <StatCard
+                  icon={ClipboardList}
+                  label="Shifts Completed"
+                  value={data.shift_stats.shifts_completed}
+                  color="text-blue-700 dark:text-blue-400"
+                />
+                <StatCard
+                  icon={Clock}
+                  label="Hours Reported"
+                  value={formatHours(data.shift_stats.hours_reported)}
+                  color="text-green-700 dark:text-green-400"
+                />
+                <StatCard icon={AlertTriangle} label="Calls Responded" value={data.shift_stats.total_calls} />
+                {v?.show_performance_rating && data.shift_stats.avg_rating != null && (
+                  <StatCard
+                    icon={Star}
+                    label="Average Rating"
+                    value={`${data.shift_stats.avg_rating}/5`}
+                    color="text-yellow-700 dark:text-yellow-400"
+                  />
+                )}
+              </div>
             </Section>
           )}
 
