@@ -8,12 +8,29 @@ whatever was copied on the day it ran. Without this migration the Historian and
 Public Outreach positions would gain the grant on new departments and nowhere
 else — which is the failure CLAUDE.md pitfall 23 describes.
 
-Scoped to ``is_system = True`` deliberately. A department that has customized
-its own Historian position owns that row, and a migration has no business
-adding grants to it.
+**``is_system = True`` does not mean "untouched".** ``RoleService.update_role``
+deliberately allows a system position's ``permissions`` to be edited in place —
+its docstring reads "System roles can only have their permissions and
+description updated" — so the flag stays ``True`` on a position a department
+has customized. Scoping the backfill on it alone would silently re-grant a
+permission to a Historian whose department had deliberately cut it back, which
+is the opposite of what a backfill is for.
 
-Idempotent: a row that already carries the permission is skipped, so this is
-safe on an installation whose onboarding ran after the registry change.
+So a row is rewritten only when its stored permission set still equals the
+registry default this migration was written against, spelled out in
+``_PRIOR_DEFAULTS`` below. Anything else — a permission added, one removed, the
+set replaced wholesale — is a department's own decision about who may read its
+members' privacy answers, and is left alone. Those departments grant the
+permission themselves in Role Management if they want the page.
+
+``_PRIOR_DEFAULTS`` is frozen on purpose. It is a snapshot of
+``DEFAULT_POSITIONS`` as of this revision, not an import, because a migration
+must keep matching the rows it was written to match even after the registry
+moves on (the same reasoning as the inlined normalizer in
+``20260819_2037_1eeb053d59b7``).
+
+Idempotent: a row already carrying the permission no longer equals the prior
+default, so it is skipped — which is also why this is safe to re-run.
 
 Revision ID: c4a91b7e2f08
 Revises: e3b7c25f9a41
@@ -31,10 +48,54 @@ branch_labels = None
 depends_on = None
 
 _PERMISSION = "users.view_consents"
+
+# Snapshot of DEFAULT_POSITIONS at this revision — see the module docstring.
 # The Communications Officer already reaches the roster through
-# notifications.manage; it is listed anyway so the stored row states the grant
-# it actually relies on rather than reaching the page by a side door.
-_SLUGS = ("communications_officer", "historian", "public_outreach")
+# notifications.manage; it is included so the stored row states the grant it
+# relies on rather than arriving by a side door.
+_PRIOR_DEFAULTS = {
+    "communications_officer": {
+        "documents.view",
+        "events.create",
+        "events.edit",
+        "events.manage",
+        "events.view",
+        "locations.view",
+        "members.view",
+        "notifications.manage",
+        "notifications.view",
+        "organization.view",
+        "positions.view",
+        "users.view",
+        "users.view_contact",
+    },
+    "historian": {
+        "documents.manage",
+        "documents.view",
+        "events.view",
+        "meetings.view",
+        "members.view",
+        "minutes.view",
+        "notifications.view",
+        "organization.view",
+        "users.view",
+    },
+    "public_outreach": {
+        "events.create",
+        "events.edit",
+        "events.manage",
+        "events.view",
+        "locations.create",
+        "locations.edit",
+        "locations.manage",
+        "locations.view",
+        "members.view",
+        "organization.view",
+        "positions.view",
+        "users.view",
+        "users.view_contact",
+    },
+}
 
 
 def _load_permissions(raw):
@@ -54,7 +115,7 @@ def _rewrite(bind, slug, mutate):
     ).fetchall()
     for row in rows:
         permissions = _load_permissions(row.permissions)
-        updated = mutate(permissions)
+        updated = mutate(slug, permissions)
         if updated is None:
             continue
         bind.execute(
@@ -72,12 +133,12 @@ def upgrade() -> None:
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 
-    def add(permissions):
-        if _PERMISSION in permissions:
+    def add(slug, permissions):
+        if set(permissions) != _PRIOR_DEFAULTS[slug]:
             return None
         return permissions + [_PERMISSION]
 
-    for slug in _SLUGS:
+    for slug in _PRIOR_DEFAULTS:
         _rewrite(bind, slug, add)
 
 
@@ -86,10 +147,13 @@ def downgrade() -> None:
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 
-    def remove(permissions):
-        if _PERMISSION not in permissions:
+    def remove(slug, permissions):
+        # Mirror of the upgrade's guard: only take the grant back off a row
+        # that is otherwise exactly what the upgrade would have produced, so a
+        # department that has since edited the position keeps its own set.
+        if set(permissions) != _PRIOR_DEFAULTS[slug] | {_PERMISSION}:
             return None
         return [item for item in permissions if item != _PERMISSION]
 
-    for slug in _SLUGS:
+    for slug in _PRIOR_DEFAULTS:
         _rewrite(bind, slug, remove)

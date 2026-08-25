@@ -1009,6 +1009,13 @@ lot's number or expiration date require `equipment_check.manage` or
 > `20260825_1900_c4a91b7e2f08` — a registry change alone reaches new
 > departments only (CLAUDE.md pitfall 23).
 >
+> That backfill rewrites a stored position **only when its permission set still
+> equals the pre-change default**, not merely when `is_system` is true:
+> `RoleService.update_role` edits a system position's permissions in place, so
+> the flag stays true on one a department has customized. A department that has
+> changed its Historian keeps its own set and grants the permission itself in
+> Role Management if it wants the page.
+>
 > The response deliberately carries **no contact fields**. The member directory
 > gates email behind the organization's contact-visibility setting, and a second
 > list carrying it unconditionally would quietly undo that — so the roster

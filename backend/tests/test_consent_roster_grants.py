@@ -77,12 +77,7 @@ def test_broad_view_grants_do_not_reach_the_roster():
         )
 
 
-def test_migration_backfills_every_position_the_registry_seeds():
-    """A registry grant reaches only *new* departments (CLAUDE.md pitfall 23).
-
-    The backfill migration has to cover the same slugs, or the Historian on
-    every existing installation silently never gets the page.
-    """
+def _load_migration():
     path = (
         Path(__file__).resolve().parents[1]
         / "alembic/versions/20260825_1900_c4a91b7e2f08_grant_users_view_consents.py"
@@ -92,6 +87,36 @@ def test_migration_backfills_every_position_the_registry_seeds():
     assert spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
+    return migration
+
+
+def test_migration_backfills_every_position_the_registry_seeds():
+    """A registry grant reaches only *new* departments (CLAUDE.md pitfall 23).
+
+    The backfill migration has to cover the same slugs, or the Historian on
+    every existing installation silently never gets the page.
+    """
+    migration = _load_migration()
 
     assert migration._PERMISSION == PERMISSION
-    assert set(migration._SLUGS) == EXPECTED_HOLDERS
+    assert set(migration._PRIOR_DEFAULTS) == EXPECTED_HOLDERS
+
+
+def test_migration_snapshot_matches_the_registry_it_was_written_against():
+    """The backfill only rewrites rows still equal to the pre-change default.
+
+    ``is_system = True`` does not mean untouched — RoleService.update_role
+    edits a system position's permissions in place — so the snapshot is what
+    separates "never customized" from "a department's own decision". If it
+    drifts from what the registry held at that revision, the migration stops
+    matching the rows it was written for and silently backfills nothing.
+    """
+    migration = _load_migration()
+    for slug, expected in migration._PRIOR_DEFAULTS.items():
+        current = set(DEFAULT_POSITIONS[slug]["permissions"])
+        assert current == expected | {PERMISSION}, (
+            f"{slug}'s registry grants no longer equal the migration's frozen "
+            "snapshot plus the new permission. If this position's defaults "
+            "changed on purpose, the backfill needs its own revision rather "
+            "than an edit to the frozen one."
+        )
