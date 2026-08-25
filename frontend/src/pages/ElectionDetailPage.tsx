@@ -302,8 +302,12 @@ export const ElectionDetailPage: React.FC = () => {
       toast.success(`Added "${pkg.applicant_name}" to ballot`);
       setPendingPackages((prev) => prev.filter((p) => p.id !== pkg.id));
       void fetchElection();
-    } catch {
-      toast.error('Failed to add application to ballot');
+    } catch (err: unknown) {
+      // The refusal's own reason is the useful part — "This applicant is
+      // rejected and cannot be added to a ballot" tells the officer what
+      // happened; a fixed string leaves them retrying a button that will
+      // never work.
+      toast.error(getErrorMessage(err, 'Failed to add application to ballot'));
     } finally {
       setAssigningPackageId(null);
     }

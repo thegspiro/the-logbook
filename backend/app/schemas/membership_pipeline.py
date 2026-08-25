@@ -515,13 +515,42 @@ class BulkAdvanceRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
 
 
+class ProspectStatusChangeRequest(BaseModel):
+    """Schema for changing one prospect's status"""
+
+    status: str = Field(
+        ...,
+        description=(
+            "Target status: active, on_hold, approved, rejected, withdrawn "
+            "or inactive. 'transferred' is refused — it is set by converting "
+            "the applicant to a member, not by a status change."
+        ),
+    )
+    reason: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description=(
+            "Why the status changed. Recorded in the prospect's activity log — "
+            "it deliberately does not overwrite the coordinator notes field."
+        ),
+    )
+
+    _check_status = field_validator("status")(
+        _enum_validator(_PROSPECT_STATUSES, "status")
+    )
+
+
 class BulkStatusRequest(BaseModel):
     """Schema for changing the status of several prospects in one request"""
 
     prospect_ids: List[UUID] = Field(..., min_length=1, max_length=_MAX_BULK_PROSPECTS)
     status: str = Field(
         ...,
-        description="Target status: active, on_hold, approved, rejected, withdrawn",
+        description=(
+            "Target status: active, on_hold, approved, rejected, withdrawn "
+            "or inactive. 'transferred' is refused — see "
+            "ProspectStatusChangeRequest."
+        ),
     )
     reason: Optional[str] = Field(
         None,

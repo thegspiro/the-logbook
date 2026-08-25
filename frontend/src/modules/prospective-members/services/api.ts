@@ -28,7 +28,7 @@ import type {
   ApplicantListItem,
   ApplicantListFilters,
   ProspectSourceEvent,
-  ApplicantStatus,
+  SettableApplicantStatus,
   PaginatedApplicantList,
   AdvanceStageRequest,
   BulkActionResult,
@@ -646,6 +646,13 @@ export const applicantService = {
     filters?: ApplicantListFilters | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
+    /**
+     * Drop closed applications (rejected, withdrawn, inactive, converted).
+     * The board and the applicant table set this: a rejected applicant is out
+     * of the pipeline, not a card in the stage they were rejected at. The
+     * archive tabs leave it off and filter to one closed status instead.
+     */
+    openOnly?: boolean | undefined;
   }): Promise<PaginatedApplicantList> {
     const page = params?.page ?? 1;
     const pageSize = params?.pageSize ?? 25;
@@ -662,6 +669,9 @@ export const applicantService = {
             : params?.filters?.status,
           search: params?.filters?.search,
           event_id: params?.filters?.event_id,
+          // Omitted rather than sent as false, so the archive tabs' request
+          // URLs (and their cache keys) are unchanged by this parameter.
+          open_only: params?.openOnly ? true : undefined,
           limit: pageSize,
           offset,
         },
@@ -842,7 +852,11 @@ export const applicantService = {
    * overwrite the coordinator notes field, which the previous client-side
    * bulk path did on every selected record.
    */
-  async bulkSetStatus(applicantIds: string[], status: ApplicantStatus, reason?: string): Promise<BulkActionResult> {
+  async bulkSetStatus(
+    applicantIds: string[],
+    status: SettableApplicantStatus,
+    reason?: string
+  ): Promise<BulkActionResult> {
     const response = await api.post<BulkActionResult>('/prospective-members/prospects/bulk-status', {
       prospect_ids: applicantIds,
       status,
@@ -859,45 +873,41 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
-  async rejectApplicant(applicantId: string, reason?: string): Promise<Applicant> {
-    // Backend doesn't have a dedicated reject endpoint; use update with status
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'rejected',
-      notes: reason,
+  /**
+   * Change one applicant's status, recording `reason` in their activity log.
+   *
+   * These used to go through the update endpoint as `{ status, notes: reason }`,
+   * which wrote the reason over the coordinator's notes — the same bug that
+   * was fixed for the bulk path, still live on the single-record one. `notes`
+   * is the coordinator's running record of the applicant; the reason for a
+   * decision belongs in the activity log beside who made it and when.
+   */
+  async setApplicantStatus(applicantId: string, status: SettableApplicantStatus, reason?: string): Promise<Applicant> {
+    const response = await api.post<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}/status`, {
+      status,
+      reason: reason || undefined,
     });
     return mapProspectToApplicant(response.data);
+  },
+
+  async rejectApplicant(applicantId: string, reason?: string): Promise<Applicant> {
+    return this.setApplicantStatus(applicantId, 'rejected', reason);
   },
 
   async putOnHold(applicantId: string, reason?: string): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'on_hold',
-      notes: reason,
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'on_hold', reason);
   },
 
   async withdrawApplicant(applicantId: string, data?: WithdrawApplicantRequest): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'withdrawn',
-      notes: data?.reason,
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'withdrawn', data?.reason);
   },
 
   async resumeApplicant(applicantId: string): Promise<Applicant> {
-    // Resume by setting status back to active
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'active',
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'active');
   },
 
   async reactivateApplicant(applicantId: string, data?: ReactivateApplicantRequest): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'active',
-      notes: data?.notes,
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'active', data?.notes);
   },
 
   async getInactiveApplicants(params?: {
@@ -927,6 +937,40 @@ export const applicantService = {
       filters: {
         pipeline_id: params?.pipeline_id,
         status: 'withdrawn',
+        search: params?.search,
+      },
+      page: params?.page,
+      pageSize: params?.pageSize,
+    });
+  },
+
+  async getRejectedApplicants(params?: {
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): Promise<PaginatedApplicantList> {
+    return this.getApplicants({
+      filters: {
+        pipeline_id: params?.pipeline_id,
+        status: 'rejected',
+        search: params?.search,
+      },
+      page: params?.page,
+      pageSize: params?.pageSize,
+    });
+  },
+
+  async getConvertedApplicants(params?: {
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): Promise<PaginatedApplicantList> {
+    return this.getApplicants({
+      filters: {
+        pipeline_id: params?.pipeline_id,
+        status: 'converted',
         search: params?.search,
       },
       page: params?.page,

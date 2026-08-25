@@ -70,12 +70,22 @@ export const ProspectiveMembersPage: React.FC = () => {
     withdrawnTotalApplicants,
     withdrawnCurrentPage,
     withdrawnTotalPages,
+    rejectedApplicants,
+    rejectedTotalApplicants,
+    rejectedCurrentPage,
+    rejectedTotalPages,
+    convertedApplicants,
+    convertedTotalApplicants,
+    convertedCurrentPage,
+    convertedTotalPages,
     isLoading,
     isLoadingPipelines,
     isLoadingPipeline,
     isLoadingStats,
     isLoadingInactive,
     isLoadingWithdrawn,
+    isLoadingRejected,
+    isLoadingConverted,
     isReactivating,
     isPurging,
     error,
@@ -86,6 +96,8 @@ export const ProspectiveMembersPage: React.FC = () => {
     fetchApplicant,
     fetchInactiveApplicants,
     fetchWithdrawnApplicants,
+    fetchRejectedApplicants,
+    fetchConvertedApplicants,
     reactivateApplicant,
     purgeInactiveApplicants,
     setFilters,
@@ -498,7 +510,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         </>
       )}
 
-      {/* Active / Inactive Tabs */}
+      {/* Pipeline / archive tabs */}
       <div className="tab-scroll mb-4">
         <button
           onClick={() => setActiveTab('active')}
@@ -526,6 +538,21 @@ export const ProspectiveMembersPage: React.FC = () => {
           )}
         </button>
         <button
+          onClick={() => setActiveTab('rejected')}
+          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === 'rejected'
+              ? 'text-theme-text-primary border-red-500'
+              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
+          }`}
+        >
+          Rejected
+          {pipelineStats && pipelineStats.rejected_count > 0 && (
+            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
+              {pipelineStats.rejected_count}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('withdrawn')}
           className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'withdrawn'
@@ -537,6 +564,21 @@ export const ProspectiveMembersPage: React.FC = () => {
           {pipelineStats && pipelineStats.withdrawn_count > 0 && (
             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
               {pipelineStats.withdrawn_count}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('converted')}
+          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === 'converted'
+              ? 'text-theme-text-primary border-red-500'
+              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
+          }`}
+        >
+          Converted
+          {pipelineStats && pipelineStats.converted_count > 0 && (
+            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
+              {pipelineStats.converted_count}
             </span>
           )}
         </button>
@@ -620,7 +662,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             </button>
             {showFilters && (
               <div ref={dialogRef1} className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
-                {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map((status) => (
+                {(['active', 'on_hold'] as ApplicantStatus[]).map((status) => (
                   <button
                     key={status}
                     onClick={() => {
@@ -1037,6 +1079,167 @@ export const ProspectiveMembersPage: React.FC = () => {
         </div>
       )}
 
+      {/* Rejected Tab Content */}
+      {activeTab === 'rejected' && (
+        <div>
+          {isLoadingRejected ? (
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+            </div>
+          ) : rejectedApplicants.length === 0 ? (
+            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+              <XCircle className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No rejected applications</h3>
+              <p className="text-theme-text-muted text-sm">
+                Applicants the department declines are removed from the pipeline and kept here.
+              </p>
+            </div>
+          ) : (
+            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-theme-surface-border border-b">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Name
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Email
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Stage Reached
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Last Activity
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Days in Pipeline
+                    </th>
+                    <th scope="col" className="w-32 p-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rejectedApplicants.map((applicant) => (
+                    <tr
+                      key={applicant.id}
+                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
+                    >
+                      <td className="p-3">
+                        <div
+                          className="flex cursor-pointer items-center gap-2.5"
+                          onClick={() => {
+                            void fetchApplicant(applicant.id);
+                          }}
+                        >
+                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                            {getInitials(applicant.first_name, applicant.last_name)}
+                          </div>
+                          <span className="text-theme-text-secondary text-sm font-medium">
+                            {applicant.first_name} {applicant.last_name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        {applicant.current_stage_name ?? '—'}
+                      </td>
+                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
+                      </td>
+                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        {applicant.days_in_pipeline}d
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              void fetchApplicant(applicant.id);
+                            }}
+                            className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  await reactivateApplicant(applicant.id);
+                                  toast.success(`${applicant.first_name} reactivated`);
+                                } catch (err: unknown) {
+                                  toast.error(getErrorMessage(err, 'Failed to reactivate'));
+                                }
+                              })();
+                            }}
+                            disabled={isReactivating}
+                            className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            Reactivate
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rejectedTotalPages > 1 && (
+                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                  <p className="text-theme-text-muted text-sm">
+                    Page {rejectedCurrentPage} of {rejectedTotalPages} ({rejectedTotalApplicants} total)
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        void fetchRejectedApplicants(rejectedCurrentPage - 1);
+                      }}
+                      disabled={rejectedCurrentPage <= 1}
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => {
+                        void fetchRejectedApplicants(rejectedCurrentPage + 1);
+                      }}
+                      disabled={rejectedCurrentPage >= rejectedTotalPages}
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Info Note */}
+          {rejectedApplicants.length > 0 && (
+            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
+              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p className="text-theme-text-muted text-xs">
+                Rejected applications are out of the pipeline: they are off the board, cannot be put forward for
+                election and cannot be interviewed. Open one and expand its activity log to see the reason recorded with
+                the decision. Reactivating returns an applicant to the stage they were rejected at.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Withdrawn Tab Content */}
       {activeTab === 'withdrawn' && (
         <div>
@@ -1191,6 +1394,149 @@ export const ProspectiveMembersPage: React.FC = () => {
               <p className="text-theme-text-muted text-xs">
                 Withdrawn applications are from prospective members who voluntarily left the pipeline process. You can
                 reactivate them to place them back into the active pipeline at their previous stage.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Converted Tab Content */}
+      {activeTab === 'converted' && (
+        <div>
+          {isLoadingConverted ? (
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+            </div>
+          ) : convertedApplicants.length === 0 ? (
+            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+              <CheckCircle2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No converted applications</h3>
+              <p className="text-theme-text-muted text-sm">
+                Applicants voted in and transferred to membership are kept here with their application history.
+              </p>
+            </div>
+          ) : (
+            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-theme-surface-border border-b">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Name
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Email
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Final Stage
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Last Activity
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Days in Pipeline
+                    </th>
+                    <th scope="col" className="w-20 p-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {convertedApplicants.map((applicant) => (
+                    <tr
+                      key={applicant.id}
+                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
+                    >
+                      <td className="p-3">
+                        <div
+                          className="flex cursor-pointer items-center gap-2.5"
+                          onClick={() => {
+                            void fetchApplicant(applicant.id);
+                          }}
+                        >
+                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                            {getInitials(applicant.first_name, applicant.last_name)}
+                          </div>
+                          <span className="text-theme-text-secondary text-sm font-medium">
+                            {applicant.first_name} {applicant.last_name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        {applicant.current_stage_name ?? '—'}
+                      </td>
+                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
+                      </td>
+                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        {applicant.days_in_pipeline}d
+                      </td>
+                      <td className="p-3">
+                        {/* View only. These applicants are members now — there
+                            is no reactivating them, and the backend refuses it. */}
+                        <button
+                          onClick={() => {
+                            void fetchApplicant(applicant.id);
+                          }}
+                          className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {convertedTotalPages > 1 && (
+                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                  <p className="text-theme-text-muted text-sm">
+                    Page {convertedCurrentPage} of {convertedTotalPages} ({convertedTotalApplicants} total)
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        void fetchConvertedApplicants(convertedCurrentPage - 1);
+                      }}
+                      disabled={convertedCurrentPage <= 1}
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => {
+                        void fetchConvertedApplicants(convertedCurrentPage + 1);
+                      }}
+                      disabled={convertedCurrentPage >= convertedTotalPages}
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Info Note */}
+          {convertedApplicants.length > 0 && (
+            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
+              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p className="text-theme-text-muted text-xs">
+                These applicants were voted in and now hold member records. Their application history, documents and
+                interviews are kept here; manage the member themselves from the members list.
               </p>
             </div>
           )}
