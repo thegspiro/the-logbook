@@ -34,10 +34,36 @@ SETTINGS_KEY = {
     LegalDocumentType.TERMS_OF_SERVICE: "terms_of_service",
 }
 
+# Effective date, per document type — deliberately *not* one shared key.
+# Privacy and terms are independent documents with independent revision
+# histories; a single "last_updated" (the original shape) let publishing one
+# silently misdate the other, or inherit its date when published without one
+# of its own. Legacy installs that only ever published one document under the
+# old shared key are still read via the ``last_updated`` fallback below.
+EFFECTIVE_DATE_KEY = {
+    LegalDocumentType.PRIVACY_POLICY: "privacy_policy_effective_date",
+    LegalDocumentType.TERMS_OF_SERVICE: "terms_of_service_effective_date",
+}
+LEGACY_SHARED_DATE_KEY = "last_updated"
+
 PUBLIC_PATH = {
     LegalDocumentType.PRIVACY_POLICY: "/privacy",
     LegalDocumentType.TERMS_OF_SERVICE: "/terms",
 }
+
+
+def effective_date_for(legal: dict, document_type: LegalDocumentType) -> Optional[str]:
+    """The effective date to display for one document's live text.
+
+    Reads the per-type key first, falling back to the legacy shared key so an
+    install that published under the old shared-date shape (pre-fix) doesn't
+    lose its displayed date the moment this deploys — it will simply keep
+    reading the old value until the document is republished with its own.
+    """
+    date = legal.get(EFFECTIVE_DATE_KEY[document_type])
+    if date:
+        return date
+    return legal.get(LEGACY_SHARED_DATE_KEY)
 
 
 class LegalDocumentService:
@@ -89,6 +115,25 @@ class LegalDocumentService:
     async def get_organization(self, organization_id: str) -> Optional[Organization]:
         result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_organization_for_update(
+        self, organization_id: str
+    ) -> Optional[Organization]:
+        """Lock the organization row for the duration of a publish/revert.
+
+        Two concurrent publishes of the same document type both read the
+        current published revision, archive it, and mark their own row
+        published — same shape as CLAUDE.md pitfall #27 (a read-then-write
+        decision needs the row locked). ``settings`` lives on the
+        organization, and it is the only row that exists before a first
+        publish, so it is the parent lock rather than the revision row.
+        """
+        result = await self.db.execute(
+            select(Organization)
+            .where(Organization.id == organization_id)
+            .with_for_update()
         )
         return result.scalar_one_or_none()
 
@@ -160,7 +205,7 @@ class LegalDocumentService:
         if revision.status != LegalRevisionStatus.DRAFT:
             raise ValueError("Only drafts can be published")
 
-        organization = await self.get_organization(organization_id)
+        organization = await self._get_organization_for_update(organization_id)
         if organization is None:
             raise ValueError("Organization not found")
 
@@ -183,7 +228,7 @@ class LegalDocumentService:
         self, organization_id: str, document_type: LegalDocumentType
     ) -> None:
         """Drop the department's custom text so the built-in default shows."""
-        organization = await self.get_organization(organization_id)
+        organization = await self._get_organization_for_update(organization_id)
         if organization is None:
             raise ValueError("Organization not found")
         await self._archive_published(organization_id, document_type)
@@ -195,12 +240,21 @@ class LegalDocumentService:
     async def _archive_published(
         self, organization_id: str, document_type: LegalDocumentType
     ) -> None:
+        # A locking read, not a plain one: under InnoDB REPEATABLE READ (this
+        # app's default), a plain SELECT answers from the snapshot taken at
+        # the transaction's first read, which predates the organization-row
+        # lock above. Only a locking read is defined to see the latest
+        # committed version — the same "the count itself must be locking"
+        # half of pitfall #27, applied to this read-then-archive instead of a
+        # capacity count.
         result = await self.db.execute(
-            select(LegalDocumentRevision).where(
+            select(LegalDocumentRevision)
+            .where(
                 LegalDocumentRevision.organization_id == organization_id,
                 LegalDocumentRevision.document_type == document_type,
                 LegalDocumentRevision.status == LegalRevisionStatus.PUBLISHED,
             )
+            .with_for_update()
         )
         for previous in result.scalars().all():
             previous.status = LegalRevisionStatus.ARCHIVED
@@ -227,14 +281,23 @@ class LegalDocumentService:
         if not isinstance(legal, dict):
             legal = {}
         key = SETTINGS_KEY[document_type]
+        date_key = EFFECTIVE_DATE_KEY[document_type]
         if body is None:
             legal.pop(key, None)
+            legal.pop(date_key, None)
         else:
             legal[key] = body
-        # One date covers both documents in settings, so only touch it when the
-        # revision carries one — reverting the terms must not blank the date
-        # shown above a privacy notice that is still published.
-        if effective_date:
-            legal["last_updated"] = effective_date
+            # Each document type owns its own date key — the original shared
+            # "last_updated" let publishing one document silently misdate the
+            # other, or inherit its date when published without one of its
+            # own (DOC-10 finding #3). The date belongs to the revision, not
+            # to the document type, so publishing one without an effective
+            # date clears whatever date a *previous* revision of this same
+            # type left behind rather than keeping it — a carried-over date
+            # would misattribute the new text to an old revision's date.
+            if effective_date:
+                legal[date_key] = effective_date
+            else:
+                legal.pop(date_key, None)
         settings["legal"] = legal
         organization.settings = settings

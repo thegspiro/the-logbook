@@ -19,7 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.models.legal import LegalDocumentType
 from app.models.user import Organization
+from app.services.legal_service import effective_date_for
 
 router = APIRouter(prefix="/public/v1/legal", tags=["public-legal"])
 
@@ -71,7 +73,8 @@ async def get_legal_text(
     organization_name = None
     privacy_policy = None
     terms_of_service = None
-    last_updated = None
+    privacy_policy_last_updated = None
+    terms_of_service_last_updated = None
     # This endpoint has no org context (anonymous caller, no api key, no
     # subdomain routing) -- `limit(2)` + `len(orgs) == 1` is the only thing
     # standing between "serve the single deployment's text" and "guess which
@@ -89,13 +92,24 @@ async def get_legal_text(
         # as HTML, so org admins cannot inject markup into a public page.
         privacy_policy = _clean_text(legal.get("privacy_policy"))
         terms_of_service = _clean_text(legal.get("terms_of_service"))
-        # Revision date shown above custom text. The built-in defaults carry
-        # their own date in the frontend, so this applies to custom text only.
-        last_updated = _clean_text(legal.get("last_updated"), _MAX_LEGAL_DATE_CHARS)
+        # Revision date shown above custom text, per document — privacy and
+        # terms are independent documents with independent histories, so one
+        # shared date previously let publishing one silently misdate the
+        # other (DOC-10 finding #3). The built-in defaults carry their own
+        # date in the frontend, so this applies to custom text only.
+        privacy_policy_last_updated = _clean_text(
+            effective_date_for(legal, LegalDocumentType.PRIVACY_POLICY),
+            _MAX_LEGAL_DATE_CHARS,
+        )
+        terms_of_service_last_updated = _clean_text(
+            effective_date_for(legal, LegalDocumentType.TERMS_OF_SERVICE),
+            _MAX_LEGAL_DATE_CHARS,
+        )
 
     return {
         "organizationName": organization_name,
         "privacyPolicy": privacy_policy,
         "termsOfService": terms_of_service,
-        "lastUpdated": last_updated,
+        "privacyPolicyLastUpdated": privacy_policy_last_updated,
+        "termsOfServiceLastUpdated": terms_of_service_last_updated,
     }

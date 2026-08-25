@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.services.print_document_service import (
     MODULE_DOCUMENTS,
@@ -25,6 +26,7 @@ from app.services.print_document_service import (
 )
 from app.utils.escpos_renderer import render_escpos_document
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
+from app.utils.printer_transport import PrinterUnreachableError
 
 ORG = "org-1"
 TZ = "America/New_York"
@@ -564,6 +566,40 @@ class TestPrinterSelection:
         svc = PrintDocumentService(MagicMock())
         with pytest.raises(ValueError, match="Unknown document"):
             await svc.build(ORG, "payroll_run", "x", _viewer())
+
+
+class TestPrinterErrorRedaction:
+    """DOC-10 finding #7: /station-documents/print is reachable by ordinary
+    scheduling.view / equipment_check.submit holders, not just printer-config
+    admins — unlike labels.py's printer endpoints, which are gated on
+    settings.manage. The transport's own error message embeds the printer's
+    configured host/IP and port, so it must not reach this endpoint's caller
+    verbatim."""
+
+    async def test_printer_unreachable_error_is_redacted(self):
+        from app.api.v1.endpoints.station_documents import (
+            DocumentPrintBody,
+            print_station_document,
+        )
+
+        body = DocumentPrintBody(document="shift_roster", record_id="shift-1")
+        with patch(
+            "app.api.v1.endpoints.station_documents.PrintDocumentService.print_document",
+            AsyncMock(
+                side_effect=PrinterUnreachableError(
+                    "Could not connect to the printer at 10.0.0.7:9100."
+                )
+            ),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await print_station_document(
+                    body, db=MagicMock(), current_user=_viewer()
+                )
+
+        assert exc.value.status_code == 502
+        detail = str(exc.value.detail)
+        assert "10.0.0.7" not in detail
+        assert "9100" not in detail
 
 
 class TestDocumentRenderer:
