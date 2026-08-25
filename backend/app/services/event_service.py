@@ -694,7 +694,8 @@ class EventService:
 
         # Query all events in the series with start_datetime >= anchor's start
         result = await self.db.execute(
-            select(Event).where(
+            select(Event)
+            .where(
                 Event.organization_id == str(organization_id),
                 Event.is_cancelled.is_(False),
                 or_(
@@ -703,6 +704,7 @@ class EventService:
                 ),
                 Event.start_datetime >= anchor.start_datetime,
             )
+            .with_for_update()
         )
         future_events = result.scalars().all()
 
@@ -838,7 +840,9 @@ class EventService:
             )
         )
 
-        result = await self.db.execute(select(Event).where(*conditions))
+        result = await self.db.execute(
+            select(Event).where(*conditions).with_for_update()
+        )
         events = result.scalars().all()
 
         # Same door as delete_event_series: cancelling a closed occurrence
@@ -1001,7 +1005,9 @@ class EventService:
         if delete_future_only:
             conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
 
-        result = await self.db.execute(select(Event).where(*conditions))
+        result = await self.db.execute(
+            select(Event).where(*conditions).with_for_update()
+        )
         events = result.scalars().all()
 
         if not events:
@@ -2114,19 +2120,22 @@ class EventService:
                 if training_record is not None:
                     training_record.hours_completed = round(duration_minutes / 60.0, 2)
 
-        # Close the event in the SAME transaction that holds its row lock, and
-        # before crediting. Every attendance writer takes that lock too, so one
-        # arriving mid-finalize blocks here and then finds the event closed —
+        # Close the event and credit the hours in the SAME transaction that
+        # holds its row lock. Every attendance writer takes that lock too, so
+        # one arriving mid-finalize blocks and then finds the event closed —
         # rather than committing a check-in between the roster snapshot above
         # and the close, which left an attendee checked in, uncredited, and
         # behind a lock nobody could see a reason for.
         #
-        # Crediting deliberately runs after the commit: the roster can no longer
-        # change once the event is closed, so it needs no lock, and a mapping
-        # failure there costs only the hours credit — recoverable by reopening
-        # and finalizing again — instead of the whole finalize.
+        # Crediting is inside the lock rather than after it, which is a
+        # correction to the first cut of this: committing the close first
+        # released the lock while the credit loop was still running off a
+        # captured roster, so a reopen could land mid-loop and the stale writes
+        # would then overwrite a correction — or recreate credit on an event
+        # that had since been cancelled. Per-RSVP failures are already caught
+        # and logged below, and a hard failure now rolls the whole finalize
+        # back and leaves the event open, which is the honest outcome.
         self._stamp_attendance_finalized(event, finalized_by)
-        await self.db.commit()
 
         # Auto-credit event hours to admin hours categories via mappings
         admin_hours_service = AdminHoursService(self.db)
@@ -2157,10 +2166,10 @@ class EventService:
                 )
             except Exception:
                 logger.exception("Failed to credit admin hours for RSVP {}", rsvp.id)
-        await self.db.commit()
 
-        # Already stamped and committed above, inside the lock; this call is
-        # here for the notification archive. The re-stamp is a no-op.
+        # One commit closes the event and lands every credit together, then
+        # releases the row lock. _record_attendance_finalized re-stamps (a
+        # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
 
         return updated_count, None

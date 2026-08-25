@@ -657,7 +657,11 @@ class TrainingSessionService:
         # Feed the pipeline after the approval+records commit — the real updater
         # commits internally, so it must run outside the transaction above.
         await self._apply_pipeline_updates(
-            pipeline_updates, organization_id, finalized_by, can_manage_training
+            pipeline_updates,
+            organization_id,
+            finalized_by,
+            can_manage_training,
+            session_id=str(training_session.id),
         )
 
         # Notify training officers only when their confirmation is required;
@@ -779,7 +783,11 @@ class TrainingSessionService:
             select(ProgramEnrollment)
             .where(ProgramEnrollment.user_id == str(user_id))
             .where(ProgramEnrollment.program_id == str(training_session.program_id))
-            .where(ProgramEnrollment.status == EnrollmentStatus.ACTIVE)
+            .where(
+                ProgramEnrollment.status.in_(
+                    (EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
+                )
+            )
         )
         enrollment = enrollment_result.scalar_one_or_none()
         if enrollment is None:
@@ -1244,7 +1252,11 @@ class TrainingSessionService:
         # Feed the pipeline after the approval+records commit — the real updater
         # commits internally, so it must run outside the atomic block above.
         await self._apply_pipeline_updates(
-            pipeline_updates, organization_id, approved_by, can_manage_training
+            pipeline_updates,
+            organization_id,
+            approved_by,
+            can_manage_training,
+            session_id=str(approval.training_session_id),
         )
 
         await self._resync_admin_hours(
@@ -1501,12 +1513,27 @@ class TrainingSessionService:
         organization_id: UUID,
         verified_by: UUID,
         can_manage_training: bool = False,
+        session_id: Optional[str] = None,
     ) -> None:
         """Apply queued session→pipeline progress updates after the approval has
         committed. Each update commits independently; a failure on one is logged
-        and never blocks the others (the training records are already saved)."""
+        and never blocks the others (the training records are already saved).
+
+        Then sweep: anything this session previously credited that it no longer
+        feeds is reversed. Restating only the current destinations is not
+        enough on a re-finalize, because a reopen can change where the session
+        points. Correcting its program, requirement or category linkage moves
+        the credit to different requirement rows with different ``progress_id``
+        values, leaving the old ones standing and the member counted twice; and
+        correcting a member down to zero hours never queues an update at all
+        (the queue is gated on positive hours), so their previous credit would
+        otherwise survive the correction untouched.
+        """
+        credited_progress_ids: set = set()
+        session_ids: set = set()
         for user_id, program_id, requirement_id, hours, session_id in updates:
-            await self._apply_pipeline_progress(
+            session_ids.add(str(session_id))
+            progress_id = await self._apply_pipeline_progress(
                 user_id=user_id,
                 program_id=program_id,
                 requirement_id=requirement_id,
@@ -1516,6 +1543,32 @@ class TrainingSessionService:
                 session_id=session_id,
                 can_manage_training=can_manage_training,
             )
+            if progress_id:
+                credited_progress_ids.add(str(progress_id))
+
+        if session_id:
+            session_ids.add(str(session_id))
+        if not session_ids:
+            return
+
+        from app.models.training import ProgressCreditSource
+        from app.services.training_program_service import TrainingProgramService
+
+        program_service = TrainingProgramService(self.db)
+        for session_id in session_ids:
+            try:
+                await program_service.reverse_credits_for_source_except(
+                    organization_id=organization_id,
+                    source_id=session_id,
+                    keep_progress_ids=credited_progress_ids,
+                    source_type=ProgressCreditSource.TRAINING_SESSION,
+                    verified_by=verified_by,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to reconcile stale pipeline credit for session {}",
+                    session_id,
+                )
 
     async def _apply_pipeline_progress(
         self,
@@ -1527,10 +1580,13 @@ class TrainingSessionService:
         verified_by: UUID,
         session_id: str,
         can_manage_training: bool = False,
-    ) -> None:
+    ) -> Optional[str]:
         """
         Advance a member's linked pipeline requirement when a program-linked
         training session is approved.
+
+        Returns the ``progress_id`` it credited, so the caller can tell which
+        destinations this session still feeds and reverse the ones it does not.
 
         Routes through ``TrainingProgramService.apply_requirement_credit`` — the
         same real updater shift completion uses, wrapped in the idempotency
@@ -1549,15 +1605,26 @@ class TrainingSessionService:
 
         try:
             # Find the member's active enrollment in this program
+            # COMPLETED counts as well as ACTIVE. When this session's own
+            # credit is what carried the member over 100%, the enrollment is no
+            # longer active — and an active-only lookup would then skip the
+            # correction for precisely the member whose credit mattered most.
+            # update_enrollment_progress already reactivates an enrollment whose
+            # progress falls back below 100%, so a downward restatement lands
+            # correctly rather than stranding a completion nobody earned.
             enrollment_result = await self.db.execute(
                 select(ProgramEnrollment)
                 .where(ProgramEnrollment.user_id == str(user_id))
                 .where(ProgramEnrollment.program_id == str(program_id))
-                .where(ProgramEnrollment.status == EnrollmentStatus.ACTIVE)
+                .where(
+                    ProgramEnrollment.status.in_(
+                        (EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
+                    )
+                )
             )
             enrollment = enrollment_result.scalar_one_or_none()
             if not enrollment:
-                return
+                return None
 
             # Find the requirement progress row for this enrollment
             progress_result = await self.db.execute(
@@ -1567,7 +1634,7 @@ class TrainingSessionService:
             )
             progress = progress_result.scalar_one_or_none()
             if not progress:
-                return
+                return None
 
             program_service = TrainingProgramService(self.db)
             _, error = await program_service.apply_requirement_credit(
@@ -1595,5 +1662,8 @@ class TrainingSessionService:
                     f"Session pipeline feed failed: user={user_id} "
                     f"requirement={requirement_id}: {error}"
                 )
+                return None
+            return str(progress.id)
         except Exception as e:
             logger.error(f"Failed to apply session pipeline progress: {e}")
+            return None

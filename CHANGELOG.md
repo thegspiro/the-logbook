@@ -99,6 +99,30 @@ there and deferred deliberately as too large to bolt on.
   session's current category and course onto an existing training record, which
   is what makes reopening to fix a mis-filed session actually take effect
   instead of reporting success and leaving the old value in place.
+- **The series paths hold the rows they check.** `update_future_events`,
+  `cancel_series` and `delete_event_series` read the finalized state without
+  locking, so a bulk retime, cancel or delete could pass its check and then act
+  after a concurrent finalization committed — leaving credited hours attached
+  to event data that contradicts them.
+- **Crediting runs inside the event's row lock, not after it.** Committing the
+  close first released the lock while the credit loop was still working from a
+  captured roster, so a reopen landing mid-loop let stale writes overwrite a
+  correction, or recreate credit on an event since cancelled. One commit now
+  covers the close and every credit.
+- **A completed enrollment is no longer skipped.** Both the correction and the
+  revocation looked up enrollments with an `ACTIVE`-only filter, so when the
+  session's own credit was what carried a member past 100% — moving the
+  enrollment to `COMPLETED` — neither found anything to act on. Completed
+  enrollments are included; the progress updater already reactivates one whose
+  progress falls back below 100%.
+- **Credit left at a destination the session no longer feeds is reversed.**
+  Restating only the current destinations was not enough on a re-finalize: a
+  corrected program, requirement or category linkage moves the credit to
+  different requirement rows with different ledger keys, leaving the old ones
+  standing and the member counted twice, and a member corrected down to zero
+  hours is never queued for crediting at all, so their earlier credit survived
+  untouched. `reverse_credits_for_source_except` reconciles every ledger row
+  for the session against the destinations it now feeds.
 
 ### Three guards drawn from what #1795 got wrong (2026-08-24)
 
