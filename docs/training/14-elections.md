@@ -157,16 +157,26 @@ and apply it to next year's election:
 
 ![The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates](./images/14-22-ballot-template-picker.png)
 
+> **It replaces two things, and warns about one.** A template carries the
+> **voting method** and **write-in setting** of the election it was saved from,
+> and applying it writes both over the election you applied it to. The
+> confirmation is about the ballot; nothing on screen mentions the settings, and
+> the details card above the builder reports only the method. Click **Preview
+> Ballot** afterwards — its Election Details strip is where the method, the
+> victory condition and its percentage, and Write-ins allowed appear together.
+> [Guide 19 pictures the before and after](./19-august-2026-release-changes.md#elections-reuse-a-ballot-without-reusing-election-data).
+
 ### Edge Cases
 
-| Scenario                                                    | Behavior                                                                                                                                                             |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Two templates named "Annual Officers" and "annual officers" | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing |
-| Applying a template over a ballot you were editing          | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                         |
-| The member who saved a template leaves the department       | The template survives — it belongs to the organization, not its author                                                                                               |
-| Deleting a template used by past elections                  | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                            |
-| Applying the same template to two elections                 | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                             |
-| A template from another department                          | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                             |
+| Scenario                                                          | Behavior                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two templates named "Annual Officers" and "annual officers"       | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing                                                                      |
+| Applying a template over a ballot you were editing                | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                                                                                              |
+| The member who saved a template leaves the department             | The template survives — it belongs to the organization, not its author                                                                                                                                                                    |
+| Deleting a template used by past elections                        | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                                                                                                 |
+| Applying the same template to two elections                       | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                                                                                                  |
+| Applying a template to an election configured for a supermajority | The **method** is overwritten and the **victory condition is not**, leaving a 2/3 threshold recorded under whatever method the template brought. Nothing in the app edits an election's voting method afterwards — re-create the election |
+| A template from another department                                | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                                                                                                  |
 
 ---
 
@@ -515,6 +525,12 @@ paper vote can't be silently re-labeled as electronic (or vice versa).
 voters × allowed votes_ is rejected with the numbers spelled out. If the count
 really is correct (e.g., overrides admitted extra voters), an explicit
 **Allow over-count** override records it anyway — audited at warning severity.
+
+![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
+
+The override checkbox is not on the form until the guard has fired — there is
+no way to switch the check off in advance, and nothing is written when a batch
+is refused.
 
 ### Officer Attestation
 

@@ -1156,7 +1156,6 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
-            COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_SWAP.name,
             INVENTORY_VIEW.name,
@@ -1911,7 +1910,6 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
-            COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_SWAP.name,
             # Members perform shift/apparatus checks, and the check-flow

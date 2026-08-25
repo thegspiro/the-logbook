@@ -1,5 +1,691 @@
 # Screenshot currency
 
+## Corrected 2026-08-24 — four review findings on #1794, all real
+
+An automated reviewer read the PR and filed four. Every one held up; three were
+mine, one was in the committed early-check-in work.
+
+**P1 — the authenticated display endpoint was raising, not answering.**
+`can_check_in` was added to `QRCheckInData` as a *required* field. The public
+kiosk (`api/public/display.py`) was updated to pass it; the authenticated
+`/locations/{id}/display` (`api/v1/endpoints/locations.py`) constructs the same
+model field by field and was not — so it raised a `ValidationError` for any
+location with an event in its check-in window, which is the only state that
+endpoint exists to report. Reproduced by constructing the schema without the
+field before touching anything.
+
+Nothing caught it: `test_kiosk_check_in_window.py` covers the *query* that feeds
+the loop and stops there, and `test_public_display.py` covers the other
+endpoint. `tests/test_location_display_endpoint.py` is new and closes that gap —
+3 of its 4 cases fail with the fix reverted. The value is hardcoded `True` for
+the same reason `is_valid` is: the service filters on the strict window before
+this loop sees an event, and the permissive rule admits everything the strict
+one does.
+
+**P2 — `03-84` opened whichever platoon the rotation happened to put first.**
+The seeder prepared `existing[0]` of the generated three-day window and the
+manifest opened the first shift carrying any platoon; the shot then waits for a
+**"Platoon A Roster"** heading. Which platoon lands on day 35 depends on the
+rotation offset and therefore on today's date — green on the day it was written
+and a timeout on most others, and the two halves could disagree with each other
+besides. Both now select platoon A by name.
+
+**P2 — `_open_two_platoon_seats` was subtracting two members per re-seed.** It
+freed the last two assignments unconditionally, so six on shift became four,
+then two, and each pass raised another leave request. A database meant to be
+repairable by re-seeding drifted further from the capture every time. Now
+guarded on the roster's own statuses — one `available` and one `on_leave` is the
+state the shot needs, so that is what it checks for. Verified by re-seeding and
+confirming 6/1/1 holds.
+
+**P2 — `04-49` could be captured exactly once.** The fixture slides its event
+back into the early-arrival band on every run but never reset the member's RSVP,
+and a second check-in takes the ALREADY_CHECKED_IN path, which returns no notice
+at all. The reviewer's mechanism was slightly off — the shot waits on the notice
+itself (`role="status"` appears once on that page), so it would have timed out
+rather than captured the wrong screen — but the fixture was one-shot either way.
+The RSVP is now cleared each run. Verified the hard way: checked the member in
+through the API, re-seeded, checked in again, and the notice came back.
+
+**`04-49` is re-committed at a third of its size.** Re-capturing it was how the
+fix was proved, and `pngquant` was available here where it was not for the run
+that first captured it: 276 KB to 76 KB, same screen. `03-84`/`03-85` were
+re-captured too and their content did not change, so the committed bytes stand.
+
+## Captured 2026-08-24 (twenty-first) — the platoon roster, and the last marker closed
+
+`03-84`/`03-85`, opened and checked. **504 filled, 0 remaining** — every
+placeholder in the guides now has an image or the prose that replaced it.
+
+**The gap was structural, and it is worth stating plainly.** `Shift.platoon` is
+written in exactly one place: the recurring-pattern generator, for a pattern
+typed `platoon` whose `schedule_config` names its platoons. Neither
+`ShiftCreate` nor `ShiftUpdate` accepts the field. Every seeded shift was made
+by hand, so no shift in the demo department had a platoon, so the fill-in /
+hold-over roster had nothing to render — for anybody, on any screen. The
+department already had three platoons and an A/B/C pattern; the pattern had no
+`schedule_config`, which is what makes the generator take its single-track
+branch and write ordinary shifts.
+
+**The generator seats the whole platoon, which is a roster with nothing to
+say.** Two assignments are removed afterwards, the way a real shift loses them:
+one member is booked off with an approved request covering the date, so the
+roster reads **On leave**; one is simply free, which is the **Available** row
+with the **Assign** button an officer holds someone over with. Six on shift, one
+of each — all three states in one frame.
+
+**Generated five weeks out, deliberately.** Every board, dashboard card and
+open-shift count the guides already picture reads from the weeks around today.
+The roster shot opens its shift by id, so it does not need to be near today at
+all, and nothing else moves.
+
+**I broke `03-16` and put it back.** My first version re-dealt the platoon
+membership before generating — not realizing `seed_platoons` already assigns it,
+idempotently, and that the Platoon Management screen pictures the exact deal.
+The columns changed. The tell was almost missed: `/users` does not carry
+`platoon` at all, so every member reads `platoon: None` there whatever they are
+assigned — the list-shape trap again, and this time it made a populated feature
+look unseeded. `/scheduling/platoons/overview` is where the truth is. The deal
+is deterministic (`ids[i::3]` over the API's own order), so re-running it
+restored the committed image exactly, and the fixture now only reads the
+membership it finds.
+
+**Left behind:** one approved time-off request for 2026-09-28 from the
+mis-dealt run. It cannot be deleted — the API cancels only your own, and only
+before approval — and it is harmless: the member it belongs to is in another
+platoon now, and that date's shift is not hers. A fresh seed will not produce
+it.
+
+**One selector note.** The shift drawer is `div.drawer-panel`, laid out inside
+the page's own `main`. The `div.fixed.inset-0 > div` that the modal shots use
+matches nothing on this page.
+
+## Corrected 2026-08-24 — the early-check-in fix, found twice, and what the second copy was good for
+
+Both sessions independently found the same defect within the same hour: the self
+check-in page gated its button on a window it computed itself, so a Flexible
+event's documented one-hour early-arrival grace had no button to reach it
+through, and the notice the marker asks for could not be photographed. The
+committed fix and capture (`04-49-early-checkin-notice`) are the other
+session's.
+
+**Theirs is the better fix, and specifically here.** I replaced `is_valid` with
+the permissive answer; they added `can_check_in` beside it and left `is_valid`
+meaning what it meant, which is what the "Check-in Not Available" panel prints
+its time range from. They also found the public kiosk endpoint computing the
+permissive value under the strict name and fixed that too — a consumer I had not
+looked at. Overwriting a field two screens read is the kind of thing that passes
+its own test and shows up somewhere else a week later.
+
+**Kept from the duplicate: one test and the prose.** Their two regression tests
+cover the grace and the far-before case; neither covers **Strict**, which is the
+asymmetry a reader is most likely to get wrong — the same twenty minutes that a
+Flexible event admits with a notice is refused outright there. Without it, both
+branches of `_validate_check_in_window` are exercised only in the direction that
+says yes. The guide had the image and a caption; it now says what the notice is
+doing: the time is the organization's timezone rather than the reader's device,
+the check-in succeeded, and the grace is exactly an hour.
+
+**Not kept, and recorded rather than pushed:** returning the notice text in the
+QR payload so the page can say it _beside the button_ instead of only in the
+confirmation afterwards. The other session's fix deliberately discards that
+value, and adding a second surface for the same sentence is a design call for
+the owner, not something to slip into a screenshot pass.
+
+**One trap worth writing down, from the copy that lost.** `dev_env.sh` runs
+uvicorn **without `--reload`**. A backend fix is live in the source and not in
+the process, so a probe keeps reporting the old screen and the fix looks wrong.
+Restart the stack after touching backend code before concluding anything from a
+capture.
+
+**And one that looks like a code failure and is not.** Ten event tests failed on
+`Unknown column 'event_rsvps.early_check_in_minutes'`. `conftest.py`'s
+`create_all(checkfirst=True)` adds missing tables but never missing columns, and
+its docstring names the remedy: drop `intranet_test` and let it rebuild.
+
+## Captured 2026-08-24 — an early check-in the app could not reach, and a product bug fixed to get there
+
+`04-49`, opened and checked. **1 marker remaining.**
+
+**The button was never there to click.** The guide already documents that a
+Flexible event admits a tap up to an hour before its official window with an
+informational notice — `_validate_check_in_window` genuinely does this. What
+had never been exercised through the UI: `EventSelfCheckInPage` gates the
+whole "Check In to This Event" button on `qrData.is_valid`, and
+`get_qr_check_in_data` computes `is_valid` as the **strict** on-time window
+(`check_in_start <= now <= check_in_end`) — no early grace at all. A member
+arriving during the exact window the backend was built to admit saw
+"Check-in Not Available" and no way past it. The marker could not be captured
+as written because the feature it describes was unreachable, not because the
+seed data was missing.
+
+**Root cause, not a workaround.** Added `can_check_in` to `QRCheckInData` —
+computed with `_validate_check_in_window`, the same permissive check
+`self_check_in` itself enforces — and pointed the frontend's button gate at
+it instead of `is_valid`, which stays for the "Check-in Not Available" time-
+range display it already drove. Found in passing that the public kiosk
+endpoint (`app/api/public/display.py`) had _already_ been computing its own
+`is_valid` this permissive way, under the strict field name — the two call
+sites disagreed on what the same field name meant, which is exactly the
+class of bug `can_check_in`'s docstring now heads off by naming both
+concepts explicitly.
+
+**Two backend regression tests, two frontend.** `test_qr_data_can_check_in_true_during_flexible_early_grace`
+and its false-outside-the-band counterpart in `test_qr_check_in.py`; a
+`can_check_in: true` / `is_valid: false` case and updates to the four
+existing "outside the window" tests (which needed `can_check_in: false`
+added alongside `is_valid: false` — they were about the hard-block case, and
+without both flags they'd now exercise the wrong branch) in
+`EventSelfCheckInPage.test.tsx`. Also fixed the same tests' silent
+dependence on `is_valid` alone, which the fix would otherwise have left
+green for the wrong reason.
+
+**Seeded 90 minutes out, the midpoint of the admissible band.** `_validate_check_in_window`
+allows 60–120 minutes before a Flexible event's start (60 minutes before the
+official window opens, plus one more hour of grace); 90 minutes centers the
+capture in that hour so a few minutes' delay between seeding and capture
+doesn't fall outside it. Not `requires_rsvp`: `self_check_in` auto-creates
+the RSVP on first tap, and requiring one would also require an
+`rsvp_deadline` — a validator this fixture found the hard way, with a first
+`POST /events` returning a generic 422 until the actual constraint was read
+from `EventCreate.validate_dates`.
+
+## Corrected 2026-08-24 — two sessions filled the same two markers, and what survived from the losing copy
+
+Guide 19's deduct-mode marker and guide 09's candidate-scorecard marker were
+each captured twice, in parallel, by two sessions working this branch. The other
+session's captures are the ones in the repository (`19-30-skill-point-deduction`,
+`09-24-scorecard-print-candidate`); this entry records what the duplicate work
+was worth keeping and what was thrown away.
+
+**Discarded, because the committed capture is at least as good.** A second
+deduct-mode fixture, built by adding one deduct criterion to the existing
+weighted sheet rather than seeding a fourth template. Cheaper on demo data, and
+framed on the score panel alone; but the committed shot carries the result
+banner, so "passed" is visible in the picture rather than inferred from
+"Passing mark is 70% — met". Two deduct fixtures would have been worse than
+either. The redundant seeder fixture, template criterion and capture were
+dropped rather than merged.
+
+**Kept: three shots that were selecting their record by luck.** `09-23` and
+`09-24` are a pair — the same result under two accounts — and both matched
+"any validated pass"; `09-15` matched "any pass under 100". The deduction
+fixture gave all three a second candidate to choose from, and on this database
+the unpinned matcher already resolved to it: `09-23` would have opened Emeka
+Adeyemi's 90% record while `09-24`, which can only see the demo member's own
+tests, opened Nadia Belhaj's 78% — a pair captioned as one record and showing
+two. All three are now pinned to the 78% fixture that `seed_scored_test` fixes
+and comments.
+
+**Kept: the outreach form must not be answered by the form-submission seeder.**
+The other session fixed the `phone` field type that made those submissions fail
+(theirs is the better fix — an entry in the answer pool rather than a special
+case). But the generated outreach form carries an `event_request` integration:
+answering it four times opens four public event requests, on a queue the events
+step seeds deliberately with one, and `19-24`'s caption reads "0 submissions".
+Forms carrying an integration are now skipped entirely. Verified after a full
+re-seed: one request, from Dana Whitmore, and the form still at zero.
+
+**Kept: the guide-19 deduction section, rewritten around the committed
+fixture's numbers.** The marker had been closed with an image and a caption; the
+three rules that make the arithmetic legible were not written down anywhere —
+a deducting step does not enlarge the point pool, an unscored step is never
+charged, and the percentage clamps at zero while still listing every penalty.
+All three are in `build_score_breakdown`.
+
+**Also corrected:** `09-23`'s caption claimed "one failed step", which that
+print does not show — a non-critical `score` criterion is reported as its
+number, so the step reads "5 / 10" and the section tally counts it as neither
+passed nor failed. The caption now says what the image says. (A deduct-mode
+failure _is_ printed as `FAIL −10`; the two behave differently, which is worth
+knowing before reading a printed sheet for failures.)
+
+**Process note.** Both sessions also independently fixed the same two
+scheduling-seed refusals within the same hour. Duplicated work is the cost of
+two sessions on one branch; the guard against wasted effort is reading the
+other side before committing, not assuming your own copy is the one to keep.
+
+## Captured 2026-08-24 — a validation prompt, before and after the action that clears it
+
+`19-31`, `19-32`, opened and checked. **2 markers remaining.**
+
+**Triggered for real, not seeded pre-formed.** `event_validation` notifications
+are written only by the `post_event_validation` scheduled task, which looks at
+events that ended in the last two hours. Seeded a training event ending 45
+minutes ago and called `POST /scheduled/run-task?task=post_event_validation`
+directly — the same manual-trigger endpoint the seeder already uses for shift
+reminders — rather than waiting for the cron tick, which a capture run cannot
+do. Slides forward and clears `custom_fields` on every re-seed, the same
+pattern `seed_guest_check_in_event` already uses, so a capture run that
+already finalized this fixture gets a fresh "before" state rather than a
+closed window.
+
+**The pair's second half is a real mutation, and it is deliberately not
+`mutatesSeedData`.** That flag would force `19-32` to be the last shot of
+guide 19, and `19-26` already holds that position for unrelated election
+data with its own ordering dependencies (`openBylawDraft`, the four-item
+ballot). Placed `19-31`/`19-32` earlier in the array instead, which the
+guard's actual rule permits — it only refuses a _later_ entry in the same
+doc once a mutator is found, and nothing after `19-32` (specifically:
+`19-25`, `19-26`, and nothing else in guide 19) reads event or notification
+state. The mutation itself calls `POST /events/{id}/finalize-attendance` —
+the same endpoint the app's own End Event flow uses, and the one that runs
+`archive_related_notifications` — so the capture exercises the real
+completion path, not a shortcut around it.
+
+**Verified the count, not just presence.** `19-31`'s badge reads 7 unread;
+`19-32`'s reads 6. One notification gone, matching what the caption claims —
+checked by comparing the two images side by side rather than assuming the
+archive worked because the API call returned 200.
+
+## Captured 2026-08-24 — a deduct-mode step, on a sheet built to carry one
+
+`19-30`, opened and checked. **3 markers remaining.**
+
+**No seeded template used `score_mode: "deduct"`.** Of the three modes a
+pass/fail-judged criterion can carry — `none`, `points`, `deduct` — every
+existing sheet used only the first two, so the guide's claim that a failed
+step can cost fixed points without failing the whole test had nothing to
+photograph. Deliberately not added to the weighted sheet
+(`Handline Advance — Weighted Evaluation`): that template backs `09-22`,
+`09-23` and the candidate-disclosure pair two entries back, and a fourth
+criterion appearing there unexplained would raise more questions than the
+caption answers. A new template, `Ladder Raise — Point Deductions`, carries
+exactly one deduct-mode step for exactly this shot.
+
+**Checked against the API's own arithmetic, not paraphrased from the UI.**
+`GET .../tests/{id}` for the seeded result returns
+`earned: 47, available: 50, deducted: 10, percentage: 74, passing_percentage: 70,
+meets_threshold: true, critical_failures: []` — confirming both halves of the
+claim before the screenshot was taken: the deduction lands (net points drop
+by exactly 10) and it does not force a fail (critical_failures is empty, the
+result is `pass`). The score-breakdown panel's own "How this score was
+calculated" line — "47 of 50 points earned, −10 deducted = 74%. Passing mark
+is 70% — met." — states the configured pass rule the marker asks the caption
+to name.
+
+**Officer scoring view, not the print page.** `ScoreBreakdownPanel` renders
+deductions as their own line, itemized under the section they came from — the
+print page shows per-step marks but not this breakdown, so `/test/{id}/active`
+is the only screen that carries the arithmetic.
+
+**A fixed action bar duplicated across the page on the first attempt.** A
+`fullPage` capture of this route repeats a bottom "Back to Tests" bar mid-page,
+overlapping the Raise section it is meant to sit beneath — the same fixed-
+element artifact this pipeline has hit before, just not on this route yet.
+Everything the caption needs sits inside the first viewport, so this shot is
+not `fullPage`, and the bar renders once, correctly anchored at the bottom.
+
+## Resolved 2026-08-24 — the export field diff that has no screen to picture it
+
+Guide 17's personal-export marker, answered in prose. **4 markers remaining.**
+
+**A download is not a screen.** "Download my data" hands the browser a JSON
+file directly; nothing in the app renders it, so no screenshot of the export
+itself can exist — the same class of marker as the terminal-output one two
+entries back, resolved the same way: call the real endpoint, quote the real
+response, redact what needs redacting.
+
+**Called for real, twice, against the fixture `_ensure_demo_member_report`
+seeds** (previous entry). `GET /users/me/data-export` before and after
+disabling the five trainee-visibility toggles in Training settings
+(`show_officer_narrative`, `show_performance_rating`, `show_areas_of_strength`,
+`show_areas_for_improvement`, `show_skills_observed`), diffed, restored to
+their prior values afterward so no other capture is left running with the
+department's evaluation results hidden from every trainee.
+
+**The diff is field removal, not blanking.** Five keys disappear entirely —
+they are not present with a null or empty value — while every ordinary
+completion fact (date, hours, call count and types, tasks performed, review
+status) is identical in both. That distinction is what the guide's "ordinary
+completion facts remain exportable" edge case claims, and now the guide shows
+it verified rather than asserted.
+
+**Narrative text redacted, structure and counts real.** The seeded record's
+`performance_rating: 4`, its two `skills_observed` entries and one
+`tasks_performed` entry are the actual shapes the endpoint returned; only the
+free-text values inside them read `[redacted]`, per the marker's own
+instruction.
+
+## Captured 2026-08-24 (twentieth) — a mandatory event's default, a template's own, and who an open house brought in
+
+`04-46`, `04-47`, `04-48`, opened and checked. **5 markers remaining.**
+
+**Found first, fixed first: the scheduling seed step was aborting silently.**
+Reproducing this pass from a genuinely empty database (not a long-lived
+container) surfaced something every prior pass on this branch had a
+pre-populated roster to paper over. `ShiftEligibilityService.get_eligible_positions`
+gates every shift-assignment seat by rank, and the seeder's day-pool rotation
+picks a member for a seat without checking it — a member who happens to be
+one rank short of a slot is refused with "Member is no longer eligible for
+the {position} position." `is_expected_seat_refusal` already tolerated the
+driver/EVOC version of exactly this refusal; the general one wasn't in the
+list, so it re-raised, and the per-day loop that builds every shift died on
+the first occurrence. On this run that was the **second day**: 2 shifts
+existed where 67 belong, and everything downstream that reads shifts —
+crewed rosters, shift reports, the close-out fixture, the batch-report
+trainee — was empty or blocked in ways that read as separate failures.
+Widened the tolerance list to the same message pattern (any position, not
+only the driver's), and to the ordinary seat-taken race a re-seed produces
+when it tops up a shift a previous run already partly crewed
+("`was just claimed`" / "`filled after this request was submitted`").
+Neither is a seeding defect; both are the eligibility and contention rules
+working, on a roster the day-pool rotation does not pre-filter.
+
+**Second, the same failure mode one level up.** `_ensure_demo_member_report`
+— the fixture that guarantees the `auth: "member"` account has an approved
+shift-completion report — only ran inside the states-satisfied early return
+of `seed_shift_reports`. A run that completes every review state without
+happening to crew that one member onto a past shift's roster left her with
+nothing, silently, because the function that exists to prevent exactly that
+was gated behind the condition most likely to make it unnecessary. Made the
+call unconditional, and taught the fallback to seat her directly (with the
+same tolerance list) when no existing crew placement has her, rather than
+only searching for one that already does. Not yet needed by an image in this
+entry — the personal-export marker that reads it is still open — but it is
+what makes that fixture reachable at all on a fresh install.
+
+**A silent, deterministic form-submission failure, found the same way.**
+`_form_answer`'s type-keyed sample pool had no `"phone"` entry, so a `phone`
+field fell through to the generic `"text"` pool and submitted "Engine 1" —
+which the server correctly rejects as not a phone number. Added a
+phone-shaped pool; every form with a phone field now submits cleanly.
+
+**The markers themselves, once the department could seed properly:**
+
+- `04-46` is the mandatory counterpart to `04-44`: checking Mandatory
+  attendance on a new event with the audience untouched flips it to All
+  active members, per the edge case already written above the marker.
+- `04-47` is `04-46`'s pair, applied by hand the way `17-04` sits beside
+  `17-03` — the marker is one blockquote for both images, so only the first
+  fills it through `apply_placeholders`. "Weekly Company Drill" is seeded
+  non-mandatory with `reminder_target` explicitly overridden to `all`, which
+  is what "independently saved" means: the value does not derive from the
+  template's own mandatory flag. **Checked before writing the caption:**
+  `EventCreatePage.templateToInitialData` copies `reminder_target` from the
+  template into a new event same as every other default — the first draft
+  of this caption claimed the opposite without checking, and would have
+  taught the wrong thing.
+- `04-48` needed a Recruitment-type event that had actually produced
+  applicants, and nothing else in the seeder makes one — `19-10` captures
+  only the type picker on the create form. Three named guests signed in
+  through the public kiosk path (an attendee added by an officer creates no
+  pipeline card at all, so only the guest path produces this), giving the
+  Prospective Members card three rows instead of the single one a bare
+  reproduction would show.
+
+## Captured 2026-08-24 (nineteenth) — the candidate's own scorecard, redacted where the officer's is not
+
+`09-24`, opened and checked against `09-23`. **7 markers remaining.**
+
+**Same record, two prints.** The weighted-sheet test 09-23 already pictures
+had no candidate-side counterpart, so this reuses it rather than minting a
+new one: a template-level `result_disclosure` override of `scores` on
+`Handline Advance — Weighted Evaluation`, seeded right after the test that
+scores it. Officers are unaffected by the override — `resolve_disclosure_policy`
+only governs the candidate's own view — so 09-23 needed no re-capture.
+
+**Verified by diffing the two images, not by reading the code.** Same
+per-step marks (`9/10`, `5/10`, …), same section arithmetic, same 78%/PASS —
+and the officer's copy carries "Kinked at the stairwell turn and had to be
+reset." under **Examiner Notes** plus an **Overall Notes** section that the
+candidate's copy has neither of. That is the whole redaction the marker
+asked for, in one side-by-side.
+
+## Captured 2026-08-24 (eighteenth) — where a training session is wired to what it counts toward
+
+`19-29`, opened and checked. **8 markers remaining.**
+
+**The create wizard, not the edit card.** The marker names "requirement, course
+and program linkage", and the event-detail card that corrects those links
+afterwards (**Requirements & Programs**) never shows the course — it edits four
+ids and nothing else. Step 2 of the wizard carries all three in one frame, so
+that is what this is; the guide says where the same pickers reappear afterwards.
+
+**Nothing is written.** The wizard creates on step 4, and this stops at step 2 —
+no `mutatesSeedData` flag, and no training session added to a department that
+has none.
+
+**Framed on the wizard, not the page.** The wizard renders inside the training
+admin frame, whose headline cards would have put **"COMPLIANCE — could not be
+calculated"** across the top of a caption about linking a session. That reading
+is true of this database (the seeded members hold three records against 26
+requirements — the training-compliance seed gap already recorded here) and has
+nothing to do with the marker.
+
+**Three capture facts worth keeping:**
+
+- The **Select Course** label carries no `htmlFor` and the select no `id`, so
+  `getByLabel` cannot reach it. Located by its own placeholder option instead.
+  That file has **26 labels with no `htmlFor`** — a control with no accessible
+  name is a real accessibility defect, but it is a file-wide pattern rather than
+  a one-off, so it is recorded here for the owner rather than swept up inside a
+  screenshot change. Lint does not flag it: no jsx-a11y label rule is enabled.
+- Option labels carry codes — `PUMP - Pump Operations`,
+  `Driver / Operator Pipeline (DRV-OP)` — and `selectOption({ label })` matches
+  exactly. Each pick resolves its value by substring instead.
+- `main:has(h1:text-is('…'))` does not match a heading that also holds an icon.
+  Matched on the heading's inner `<span>`.
+
+**Order matters in the prepare, and the comment says so:** picking the course
+pre-fills the category and program from what the course declares, so the
+explicit picks are made after it. Reversed, the course selection overwrites them.
+
+## Captured 2026-08-24 (seventeenth) — the station board's feed, and a pin that did not pin
+
+`19-28`, opened and checked. **9 markers remaining.** One product defect found
+and fixed at root cause, with a regression test.
+
+**The defect.** `Dashboard.tsx` merges department messages with the member's own
+notifications into one feed and sorted the result by recency alone. The inbox
+arrives from the backend ordered pinned → persistent → newest
+(`messaging_service.get_inbox`), and the merge threw both away. Only five rows
+render, so a **pinned** "Station 2 bay doors out of service" sat below four
+routine notifications, and a persistent standing order dropped off the board as
+soon as five notifications arrived. The pin icon rendered beside the message
+either way — which is the part that misleads: an officer who pins an urgent
+notice has no way to tell it did nothing.
+
+Fixed by ranking pinned and persistent messages above the recency sort, matching
+what the backend already does for the messages list.
+`Dashboard.test.tsx` gains a test that fails without it: four items, the pinned
+one second-oldest and the persistent one oldest of all, asserted in the order
+the rail renders them.
+
+**Found by seeding, not by reading.** The marker wanted a persistent notice on
+the board and the seed had none — three announcements, all ordinary. Adding one
+put it at the top of the feed, and the reason it was at the top turned out to be
+that it was the newest thing in the department, not that it was persistent.
+
+**A test fixture that lied.** My first version of the regression test gave the
+notification a `created_at` and no `sent_at`. The feed sorts notifications on
+`sent_at` and falls back to `0`, so the notification sorted last and the
+assertion failed on an ordering the product gets right. `sent_at` is
+`server_default=func.now()` on the model, so a real row always has one; the
+fixture, not the code, was wrong. Left the `|| 0` alone — a shape the database
+cannot produce is not a bug to widen this change with.
+
+**Framed on the rail, not the board.** The marker asks for a "populated station
+board", and the board is already captured twice — `00-24` for the member's tab,
+`08-75`/`08-76` for the conditional cards, which is exactly what "conditional
+cards identified in the caption" is about. A third full-page dashboard would be
+the same screen under a different caption. What is nowhere else is a feed
+carrying a pinned announcement, a persistent notice and unread notifications at
+once, so that is what this shot is, and the guide links to the other two.
+
+**Title shortened twice, for the picture.** "Standing Order — Spotter Required
+When Backing" truncated at "Standing Order — Spotter …": the rail is 360px and
+the PERSISTENT badge takes about eleven characters of it. "Spotter Required"
+fits with the badge beside it. The truncation is correct behaviour, not a
+defect — but a caption about a standing order reads badly over a title cut in
+half.
+
+## Captured 2026-08-24 (sixteenth) — the roster bound, photographed where it is enforced
+
+`19-27`, opened and checked. **10 markers remaining.**
+
+**Half the marker asked for a screen that does not exist.** It wanted "closed
+election results showing manual paper-ballot count" — and a closed election's
+results show no paper figure at all. `ElectionResults.tsx` contains no reference
+to manual votes or batches, by design: recording a paper tally writes one
+ordinary vote row per ballot, so by the time results are drawn the paper votes
+_are_ the counts. What stays itemized is the Paper-Ballot Batches panel above
+the tab strip, already captured as `14-18`. Guide 19 links to it and says why
+there is nothing else to point at.
+
+**The other half is real, and it is a good picture.** The roster bound lives in
+the Record Paper Ballots dialog on an _open_ election: 14 + 10 ballots for a
+position with 22 eligible members is refused with all three numbers named —
+projected, eligible, cap — and the override checkbox renders only once the
+server has answered. One image carries the rule, the refusal and the escape
+hatch.
+
+**It writes nothing, so it needs no `mutatesSeedData` flag.** The batch is
+rejected before any vote row exists — checked by re-reading the open election's
+`total_votes` after the run, still 0.
+
+**Facts verified rather than paraphrased from the guide:** the cap is
+`eligible × votes-per-position`, multiplied by accepted candidates under
+approval voting; the separate "physical ballots in this stack" field is checked
+against the roster with no multiplier, because one member hands in one sheet;
+and the override is audited at `warning` severity while a normal batch is
+`info`. All four are in `record_manual_ballots`.
+
+**Also placed in guide 14.** The plausibility guard was already described there
+in prose, with no picture of it. The same image is referenced from both — which
+is established practice here (`19-09`, `19-10` and `06-24` are each in two
+guides) and does inflate `SCREENSHOT_STATUS.md`'s captured column by one, since
+that column counts image lines per guide rather than markers closed.
+
+## Captured 2026-08-24 (fifteenth) — what applying a ballot template changes without saying so
+
+`19-25`/`19-26`, opened and checked. **490 filled, 11 remaining.** The picker
+half of the marker was already captured — as `14-22`, in the elections guide —
+so guide 19 links to it rather than photographing the same popover twice.
+
+**The rest of the marker was the part worth doing.** Applying a saved ballot
+writes the template's **voting method** and **write-in setting** over the
+election, and neither the two-step confirmation nor the picker row mentions it.
+The pair shows one draft before and after: one item becomes four (warned about),
+and Simple Majority becomes Ranked Choice (not warned about).
+
+**The first version of this pair was a demo artifact, and the check that caught
+it was reading the create form.** I had seeded the bylaw draft with
+`voting_method: "supermajority"` so the change would be visible. The create
+form's control is a single `<select>` whose options pair a method with a victory
+condition, and its "Supermajority Required (2/3)" is
+`simple_majority|supermajority` — **no option sets the method to
+`supermajority`**. The seed put the department in a state the product cannot
+produce, and the screenshot would have shown a value no reader could ever see.
+Re-seeded as the form writes it, with the _template_ carrying ranked choice
+instead — an officer ballot plausibly run that way, and the difference the pair
+needs.
+
+**The stronger finding is what did not change.** The apply overwrites the method
+and leaves the victory condition alone, so the draft is left asking for 67%
+under ranked choice; `positions` still names the bylaw article over four officer
+seats. And there is no editor for any of it: **Edit Dates** is dates, **Clone
+Election** is title/dates/candidates, so applying a template is the only control
+in the app that changes an election's voting method after creation. Both guides
+now say so, and guide 14's edge-case table carries the supermajority row.
+
+**Where the settings _can_ be read: Preview Ballot.** Its Election Details strip
+carries method, victory condition with percentage, Anonymous, write-ins and
+quorum together — the only screen that does. An earlier draft of the prose said
+these were visible nowhere on a draft election; reading `BallotPreviewModal`
+rather than the details card corrected it before it was committed.
+
+**`19-26` mutates the seed, and three shots now repair it.** It leaves the draft
+holding the template's four items, which breaks `14-21` and `14-22` — both match
+on "Ballot Items (1)". `openBylawDraft` resets the election before opening it,
+keyed on the item count rather than the method, and the seeder repairs it too
+for a database somebody else left mutated. The manifest's own guard only
+enforces that a mutating shot is last **within its guide**; the two shots it
+would have broken are in another one.
+
+## Captured 2026-08-24 (fourteenth) — the outreach-form section, and the three forms it does not list
+
+`19-24`, opened and checked. **488 filled, 12 remaining.** Four existing captures in
+guide 07 re-taken because this shot's seed changes what they count.
+
+**The screen is real, and it was empty.** **Events -> Settings -> Public Form**
+lists forms returned by `/event-requests/forms`, which filters on the
+`event_request` integration — directly on `Form.integration_type`, or through a
+`FormIntegration` row for forms wired after the fact. The demo department's
+three hand-built forms have neither, so the section rendered nothing but its
+Generate button. Not a missing screen: a missing row.
+
+**Seeded through the button's own endpoint, not `POST /forms`.**
+`POST /event-requests/generate-form` is what sets the integration type, the
+twenty mapped fields and the public slug. A form posted to `/forms` with the
+same name would appear in the section while being wired to nothing behind it —
+a demo artifact that reads as working software. Generated as a draft, then
+published, because a draft renders only the "must be published before it can
+accept submissions" warning and never the public URL the caption is about.
+
+**The absence is the marker's subject, and no image can carry it.** Written into
+the guide instead: the three forms that are not in the list, named. A caption
+claiming a filter works, over a picture of one row, proves nothing on its own.
+
+**Four collateral re-captures, and the numbers are why.** A fourth published
+public form moves the Forms page cards from `3 / 1` to `4 / 2`, so `07-04`,
+`07-05`, `07-06` and `07-07` were re-taken rather than left reading a fleet size
+that no longer exists. `07-06` now opens the builder on the generated form —
+twenty fields across three section headers instead of five flat ones, which is a
+better picture of the builder than the one it replaces.
+
+**`pngquant` was not installed in this container**, and the first four captures
+went to disk at three times the size of the files they replaced (248 KB against
+84 KB). `capture.mjs` treats a missing pngquant as non-fatal and says so in a
+comment — correct for a capture, silent for a commit. Installed and re-run over
+the five files before staging. Worth knowing that the size regression is the
+only signal: nothing in the run output mentions it.
+
+## Captured 2026-08-24 (thirteenth) — Call Volume in both modes, and the calls that were not there
+
+`03-82`/`03-83`, opened and checked. **487 of 507 filled.**
+
+**The report was correct and useless.** Count-only Call Volume reads `OrgCall`
+rows, and the only ones in the database came from the close-out wizard fixture:
+four calls, all on one day, an average of `0.0` per day. That reads as a broken
+screen rather than as a quiet department.
+
+**`OrgCall` has no endpoint of its own.** The rows are written by step 2 of the
+close-out wizard, through `PATCH /scheduling/shifts/{id}/closeout/calls` — so a
+call history can only be built by recording counts against real shifts, which is
+also exactly how a count-only department's data comes to exist.
+`seed_count_only_calls` records an uneven run pattern across the roster: mostly
+EMS, a scatter of everything else, and quiet tours that ran nothing, so the
+report has a busiest day worth naming. Recording counts does not finalize
+anything, and the close-out fixture is excluded — `03-76` and `03-77` picture
+its call rows at specific values.
+
+**The pair is the lesson, and the numbers make it.** Same department, same
+period: count-only reports **52 unit responses**, detailed reports **18 total
+calls**. Neither is wrong — one counts what the trucks did, the other what
+happened — and all three stat cards rename themselves with the mode, which is
+what the guide's caution is about.
+
+**`Last 90 Days`, not the default.** The recorded calls sit in a three-week
+band; a year-to-date window spreads 52 of them across 236 days and reports
+`0.2/day`. Arithmetic that is right and reads as broken. Written into the
+helper so the next person does not re-derive it.
+
+**Found in passing:** the department was still on `count_only`, left there by an
+earlier capture run. That is the self-healing rule working as designed rather
+than a fault — every mode-dependent shot sets the mode it needs, because manifest
+order is not a contract.
+
+**Both halves went into `audit_baseline.txt`, and that is now the fourth and
+fifth this session.** The report renders inside a dialog, and a scrim is laid
+out against the initial containing block, so it cannot reach the reserved
+scrollbar gutter — the structural case the baseline documents. Two ordinary
+captures of an ordinary screen, flagged purely for having a scrim. The section
+stands at seven entries and will take every future modal shot on a light page.
+The baseline's own recommendation — retire the subtle tier, which after the
+canvas fix reports a constant rather than a regression — is worth someone
+acting on; still not from here.
+
 ## Flagged by the 2026-08-23 → 08-24 changes
 
 Full reason/data-path context in

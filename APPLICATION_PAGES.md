@@ -428,7 +428,7 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/import`               | CSV Import                | `inventory.manage` |
 | `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage` |
-| `/inventory/print-labels`         | Barcode Label Printing    | Authenticated      |
+| `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage` |
 
 > **Receiving a delivery and stocking the catalog are both one-pass jobs now** _(2026-08-10)_. Two modals open from the items list (`/inventory`, and the same screen at `/inventory/admin/items`):
 >
@@ -763,9 +763,9 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Medical Screening (2026-03-13)
 
-| URL                  | Page              | Permission        |
-| -------------------- | ----------------- | ----------------- |
-| `/medical-screening` | Medical Screening | **Authenticated** |
+| URL                  | Page              | Permission               |
+| -------------------- | ----------------- | ------------------------ |
+| `/medical-screening` | Medical Screening | `medical_screening.view` |
 
 > **The route is not permission-gated, though this table said it was**
 > _(corrected 2026-08-16, found by `scripts/check_route_permissions.py`)_. Every
@@ -881,19 +881,19 @@ lot's number or expiration date require `equipment_check.manage` or
 
 | URL                                   | Page                       | Permission                    |
 | ------------------------------------- | -------------------------- | ----------------------------- |
-| `/finance`                            | Finance Dashboard          | Authenticated                 |
-| `/finance/budgets`                    | Budgets                    | Authenticated                 |
-| `/finance/budgets/:id`                | Budget Detail              | Authenticated                 |
-| `/finance/purchase-requests`          | Purchase Requests          | Authenticated                 |
-| `/finance/purchase-requests/new`      | New Purchase Request       | Authenticated                 |
-| `/finance/purchase-requests/:id`      | Purchase Request Detail    | Authenticated                 |
-| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | Authenticated                 |
-| `/finance/expenses`                   | Expense Reports            | Authenticated                 |
-| `/finance/expenses/new`               | New Expense Report         | Authenticated                 |
-| `/finance/expenses/:id`               | Expense Report Detail      | Authenticated                 |
-| `/finance/check-requests`             | Check Requests             | Authenticated                 |
-| `/finance/check-requests/new`         | New Check Request          | Authenticated                 |
-| `/finance/check-requests/:id`         | Check Request Detail       | Authenticated                 |
+| `/finance`                            | Finance Dashboard          | `finance.view`                |
+| `/finance/budgets`                    | Budgets                    | `finance.view`                |
+| `/finance/budgets/:id`                | Budget Detail              | `finance.view`                |
+| `/finance/purchase-requests`          | Purchase Requests          | `finance.view`                |
+| `/finance/purchase-requests/new`      | New Purchase Request       | `finance.view`                |
+| `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.view`                |
+| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | `finance.view`                |
+| `/finance/expenses`                   | Expense Reports            | `finance.view`                |
+| `/finance/expenses/new`               | New Expense Report         | `finance.view`                |
+| `/finance/expenses/:id`               | Expense Report Detail      | `finance.view`                |
+| `/finance/check-requests`             | Check Requests             | `finance.view`                |
+| `/finance/check-requests/new`         | New Check Request          | `finance.view`                |
+| `/finance/check-requests/:id`         | Check Request Detail       | `finance.view`                |
 | `/finance/dues`                       | Dues                       | `finance.view`                |
 | `/finance/settings`                   | Finance Settings           | `finance.manage`              |
 | `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals` |
@@ -927,15 +927,15 @@ lot's number or expiration date require `equipment_check.manage` or
 
 | URL                             | Page                | Permission           |
 | ------------------------------- | ------------------- | -------------------- |
-| `/grants`                       | Grants Dashboard    | Authenticated        |
-| `/grants/opportunities`         | Grant Opportunities | Authenticated        |
-| `/grants/applications`          | Grant Applications  | Authenticated        |
+| `/grants`                       | Grants Dashboard    | `fundraising.view`   |
+| `/grants/opportunities`         | Grant Opportunities | `fundraising.view`   |
+| `/grants/applications`          | Grant Applications  | `fundraising.view`   |
 | `/grants/applications/new`      | New Application     | `fundraising.manage` |
-| `/grants/applications/:id`      | Grant Detail        | Authenticated        |
+| `/grants/applications/:id`      | Grant Detail        | `fundraising.view`   |
 | `/grants/applications/:id/edit` | Edit Application    | `fundraising.manage` |
-| `/grants/campaigns`             | Campaigns           | Authenticated        |
-| `/grants/donors`                | Donors              | Authenticated        |
-| `/grants/donations`             | Donations           | Authenticated        |
+| `/grants/campaigns`             | Campaigns           | `fundraising.view`   |
+| `/grants/donors`                | Donors              | `fundraising.view`   |
+| `/grants/donations`             | Donations           | `fundraising.view`   |
 | `/grants/reports`               | Fundraising Reports | `fundraising.view`   |
 
 ---
@@ -1024,7 +1024,7 @@ are opened from the corresponding module's list view.
 | `/members/:userId/id-card`          | Member ID card          | Authenticated                                |
 | `/members/scan`                     | Member badge scanner    | `users.view` **OR** `members.manage`         |
 | `/prospective-members/print-labels` | Applicant badges        | `prospective_members.view`                   |
-| `/inventory/print-labels`           | Inventory labels        | Authenticated                                |
+| `/inventory/print-labels`           | Inventory labels        | `inventory.manage`                           |
 | `/apparatus/print-labels`           | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`   |
 | `/facilities/print-labels`          | Facility / room labels  | `facilities.view` **OR** `facilities.manage` |
 | `/training/print/member`            | Member training history | Authenticated                                |

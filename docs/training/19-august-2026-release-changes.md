@@ -31,9 +31,78 @@ confirmation; invalid/duplicate item IDs and voting methods are rejected;
 count quorum can exceed 100 but percentage quorum cannot. Manual paper ballots
 must be entered as an attested count and cannot exceed the eligible roster.
 
-> **[SCREENSHOT NEEDED — Ballot Builder → Your saved ballots, showing the visible template name, item count, replacement warning, and action buttons; seed one organization-owned template and no candidate/vote data. Follow with a before/apply/after election-settings capture because preserved settings are applied silently and are not summarized in the picker.]**
->
-> **[SCREENSHOT NEEDED — closed election results showing manual paper-ballot count and its roster-bound validation.]**
+The picker itself — the saved name, its item count, the "replaces current
+ballot" note and the two-step Replace confirmation — is pictured in
+[Elections → Applying one](./14-elections.md#applying-one), and that page is the
+one to follow for the steps.
+
+What the picker does not say is that a template carries the **voting method and
+write-in setting** of the election it was saved from, and applying one writes
+both over the election it lands on. Below is the same draft before and after
+applying "Annual officer election", a template saved from a ranked-choice
+officer ballot. One item becomes four, which the confirmation warned about — and
+the voting method changes from Simple Majority to Ranked Choice, which nothing
+warned about.
+
+![The bylaw draft before a template is applied: one ballot item, and a details card reading Voting Method — Simple Majority](./images/19-25-ballot-template-settings-before.png)
+
+![The same draft immediately after applying the saved officer ballot: four items replacing the one, and the details card now reading Ranked Choice](./images/19-26-ballot-template-settings-after.png)
+
+Read the two cards together and the real hazard is the part that _did not_
+change. This draft was created as **Supermajority Required (2/3)** — one option
+in the create form that sets the voting method _and_ the victory condition. The
+apply overwrote the method and left the condition alone, so a bylaw amendment
+that must carry two-thirds is now to be decided by ranked choice, and its 67%
+threshold is still recorded underneath. **Positions** likewise still reads
+"Article VII Amendment" over a ballot of four officer seats, and write-ins —
+which the officer template had off — went off with the method.
+
+Only the method is on the details card. To see the rest, click **Preview
+Ballot** — the "Election Details" strip along the bottom of the preview carries
+the voting method, the victory condition with its percentage, Anonymous,
+Write-ins allowed and the quorum, which is the one place all of them appear
+together. **Check it after applying a template.**
+
+Then be deliberate about which election you apply one to, because there is no
+way back through the interface: **Edit Dates** edits dates, and **Clone
+Election** takes a title, dates and whether to carry the candidates. Neither
+touches the voting method — applying a template is in fact the only control in
+the app that changes it after an election exists. Treat a saved ballot as a
+starting point for a _new_ election rather than a change to a configured one,
+and if the method it brought is wrong for the vote, re-create the election with
+the pairing you need.
+
+### Paper ballots and the roster bound
+
+A tally taken in the room is entered from an **open** election — **Record Paper
+Ballots** — one count per accepted candidate. Every ballot is written as an
+ordinary vote row attributed to the officer who recorded it, which is why a
+closed election's results carry no separate "paper" figure: the paper votes are
+simply in the counts. What is itemized, and stays itemized after the election
+closes, is the **Paper-Ballot Batches** panel above the tabs — who recorded the
+batch, when, and which officers attested it. It is
+[pictured in the elections guide](./14-elections.md#paper-ballots--attestation).
+Until the required officers attest a batch, its votes are excluded from results,
+turnout and the vote count in the elections list.
+
+The roster bound is enforced where the tally is entered, not where it is read:
+
+![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
+
+Twenty-four ballots for a position with twenty-two eligible members is refused
+before a single vote row is written, and the message names all three numbers —
+the projected total, the eligible count, and the cap. The cap is not always the
+roster: an approval-voting position multiplies it by the number of accepted
+candidates, and a position allowing several votes multiplies it by that, because
+one member legitimately hands in more marks than ballots. The separate
+**Physical ballots in this stack** field has no multiplier at all — one member,
+one sheet — so it is checked against the roster directly.
+
+Nothing here is a lock. The checkbox that appears with the error records the
+override rather than removing the check, and the batch it creates is written to
+the audit log at `warning` severity, naming who overrode it. Use it when the
+tally is genuinely right — a proxy arrangement, a roster that changed mid-vote —
+and fix the count when it is not.
 
 ## Dashboard and admin hours
 
@@ -47,7 +116,32 @@ reading a message does not remove it mid-read, but it clears on the next load;
 persistent notices remain; calendar year is not “last 365 days.” Mobile cards
 and breadcrumb/action targets must remain at least 44px.
 
-> **[SCREENSHOT NEEDED — populated station board with one pending message, one persistent notice, and conditional cards identified in the caption.]**
+**My Updates** is the board's one feed: department announcements and your own
+notifications in a single list, in place of the three panels that used to
+restate each other. It asks for pending items only — a message you have read
+drops off on the next load — with two exceptions that are the point of the
+design.
+
+![My Updates on the station board: a pinned announcement and a standing order badged Persistent above the unread notifications, with the clear control only a manager sees](./images/19-28-station-board-messages.png)
+
+**Pinned first, then persistent, then newest.** The pinned bay-door notice at
+the top is four days older than the notifications under it, and the standing
+order below it is older still: neither is here because it is recent. A
+persistent notice is also exempt from the "unread only" filter, so it stays on
+the board after everyone has read it, and only the ✕ — which is a manager's
+control, and does not appear for an ordinary member — takes it off.
+
+_(Fixed in this release: the merged feed sorted purely by recency, which threw
+away both. The pin icon rendered all the same, so an officer pinning an urgent
+notice had no way to tell it had done nothing — and with five rows on screen, a
+standing order left the board as soon as five notifications arrived.)_
+
+Everything else on the board is conditional and this department shows it: the
+five rows above are all this feed holds, **Older Items** carries the rest, and
+the cards around it appear only where the module and the data apply.
+[Guide 8 pairs the same board under two accounts](./08-admin-reports.md#august-1923-2026-update--exports-and-dashboards)
+— one holding `finance.manage` and one without — which is the clearest reading
+of what "conditional" means here.
 
 ![The Admin Hours Summary on This calendar year: counted, approved and needs-review totals over a year of logged time, ranked by the category it was logged against](./images/19-22-admin-hours-summary-year.png)
 
@@ -141,7 +235,17 @@ reports count reviewed attendance.
 forms and events from another organization never appear; deleted interviewers
 remain as historical names rather than breaking an applicant record.
 
-> **[SCREENSHOT NEEDED — Event Settings outreach-form picker under an event-admin account, with a non-outreach form intentionally absent.]**
+![Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL](./images/19-24-outreach-form-section.png)
+
+The one thing the picture cannot show is what the list leaves out. This section
+asks `/event-requests/forms`, which returns only forms wired to the request
+pipeline — so the department's three other published forms (the near-miss
+report, turnout gear sizing, and the hand-built community request) are absent
+from it, and the section stays legible whatever else the Forms module
+accumulates. Two things count as wired: a form generated by the button below
+the list, and any form given an **Event Request** integration afterwards from
+the Forms page. Answers to a form with neither are collected as submissions and
+stop there; they do not open requests in the pipeline.
 
 ## Training sessions, programs, and skills tests
 
@@ -156,9 +260,72 @@ program does not delete a requirement it does not own; undated training cannot
 satisfy recency; members cannot read officer-only checklist/sign-off state; a
 resume conflict is scoped to the current test and is not blindly retried.
 
-> **[SCREENSHOT NEEDED — training-session edit flow with requirement, course, and program linkage populated from one organization.]**
->
-> **[SCREENSHOT NEEDED — skill result illustrating point deduction without automatic whole-test failure; caption the configured pass rule.]**
+### Linking a session to what it counts toward
+
+Step 2 of the training-session wizard is where a session is connected to the
+records it should feed: the **course** it teaches, the **category** its hours
+land in, the **requirement** attendance credits directly, and the **program**
+whose enrolled members it advances.
+
+![Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance](./images/19-29-training-session-linkage.png)
+
+The blue line under the pickers is the whole feature in one sentence — it
+restates the combination you have chosen in the terms the officer cares about
+("attendance will advance _this_ for members enrolled in _that_"), and it
+changes as you change the links. Choosing a course also pre-fills whatever that
+course already declares — the category and program above were filled by picking
+**PUMP - Pump Operations** — without overriding a choice already made.
+
+Two things worth knowing about the lists:
+
+- **Everything offered is this department's.** The pickers are loaded from the
+  organization's own categories, requirements and programs, and the server
+  checks every id again on save — a link to another department's record is
+  refused with a flat "Invalid training program" that does not reveal whether
+  the record exists. **Program Phase** has no organization of its own and is
+  scoped through the program it belongs to.
+- **A phase is not required to match the program above it.** Sessions generated
+  from a course cohort can carry a class-level phase from a different program,
+  so that combination is deliberately allowed rather than rejected.
+
+The same pickers appear on the event page afterwards, as **Requirements &
+Programs** — that is where a session created before a requirement existed, or
+linked to the wrong pipeline, gets corrected. Members already signed off keep
+the credit they were given; the links only steer what happens next.
+
+### A failed step that costs points without ending the test
+
+Every step on a skill sheet answers two separate questions, and the builder now
+asks them separately. **Critical** decides whether failing the step ends the
+test. **If this step is failed** decides what it costs: nothing, the step's own
+points, or — new here — a fixed number of points off the total.
+
+![A validated skill result's score breakdown: 47 of 50 points earned, a 10-point deduction on one failed step, netting 74% against the department's 70% pass mark -- PASS, with no critical failure](./images/19-30-skill-point-deduction.png)
+
+The candidate above lost ten points for climbing a ladder nobody had footed and
+still passed at 74%, because that step is not marked Critical. Read the first
+line as the subtraction it is: **47 of 50 points earned, −10 deducted = 74%**,
+with the pass mark stated underneath and the step that took the points named at
+the bottom. The gross total is deliberately left gross — a reader adding up the
+marks on the sheet arrives at 47, and a headline that had already netted the
+penalty off would look like an arithmetic error.
+
+Three rules behind that arithmetic are worth knowing before configuring one:
+
+- **A deducting step does not enlarge the point pool.** The sheet above is out
+  of 50 whether or not it lists the step, so a candidate who does it correctly
+  reads the same percentage as one testing on a sheet that never mentioned it.
+  Only the fault costs anything.
+- **A step left unscored is never charged.** A deduction is a recorded
+  judgement about what the candidate did, and an examiner who never marked the
+  step made no such judgement. (A blank _Critical_ step is a different matter,
+  and is reported as a critical failure in its own right.)
+- **Deductions can drive the total below zero, and the percentage stops at 0%.**
+  The individual penalties are still listed in full, so the clamp hides nothing.
+
+If the sheet carries no point-earning steps at all, there is nothing for a
+deduction to come off — the panel says so rather than quietly ignoring
+judgements the examiner did record.
 
 ## Notifications and integrations
 
@@ -174,9 +341,38 @@ not invalid credentials; every targeted department message still receives
 best-effort email, and Urgent adds SMS only when its consent/configuration gates
 pass.
 
-> **[SCREENSHOT NEEDED — same notification before and after completing its related action, with an unrelated notification still present.]**
->
-> **[SCREENSHOT NEEDED — Salesforce readiness/preview result with secrets and tokens visibly absent.]**
+![The notification inbox with an unread 'Validate attendance' prompt for a just-ended event, beside an unrelated shift-assignment notification](./images/19-31-notification-before-action.png)
+
+![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
+
+**Above: unread count 7. Below: 6.** Completing the event's related action — finalizing attendance — archived exactly the one notification tied to it: `archive_related_notifications` matches on category and the event's own id, so the "New Shift Assignment" notification, which names a different action entirely, is untouched.
+
+**Not pictured — and the property it was meant to show is better checked than
+photographed.** Readiness and preview both `404` unless a Salesforce integration
+is present and `CONNECTED`, and the panel holding their buttons does not render
+otherwise. Connecting means a real OAuth handshake against a real Salesforce org,
+which the demo department does not have and a screenshot harness cannot fake.
+
+What the marker is really asking is whether these results leak credentials. They
+do not, and it is structural rather than a matter of careful redaction — the
+readiness result is built from four keys and nothing else:
+
+| Key                        | Carries                                                                |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `connected`                | true/false                                                             |
+| `objects`                  | per-sObject: reachable, and the **names** of any missing custom fields |
+| `external_id_fields_ready` | true/false                                                             |
+| `ready`                    | true/false                                                             |
+
+There is no access token, no refresh token, no instance URL and no request body
+anywhere in it. The one free-text field is `error`, present only when the
+connection itself failed, and the client raises exactly two messages into it:
+"Salesforce authentication failed — the access token may be expired or revoked",
+and "Salesforce returned HTTP {status}". Neither quotes a credential or a
+response body.
+
+The preview result is counts — how many members would be created against how
+many matched — and names no Salesforce record ids.
 
 ## Installing: the wizard is now one tab, one sitting _(August 15)_
 

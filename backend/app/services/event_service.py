@@ -2386,10 +2386,17 @@ class EventService:
         org = org_result.scalar_one_or_none()
         org_timezone = org.timezone if org else None
 
-        # Check time window using the same logic as self_check_in
+        # `is_valid` is the strict on-time window, kept for the "Check-in Not
+        # Available" time-range display. `_validate_check_in_window` is the
+        # actual gate self_check_in enforces, and admits a Flexible/Window
+        # tap up to an hour early with a notice -- can_check_in mirrors that,
+        # so the button renders whenever a tap would actually succeed.
         now = datetime.now(dt_timezone.utc)
         check_in_start, check_in_end = self._get_check_in_window(event)
         is_valid = check_in_start <= now <= check_in_end
+        can_check_in, _early_error, _early_notice = self._validate_check_in_window(
+            event, now, org_timezone
+        )
 
         location_name = None
         if event.location_obj:
@@ -2411,6 +2418,7 @@ class EventService:
             "check_in_start": check_in_start.replace(tzinfo=None).isoformat() + "Z",
             "check_in_end": check_in_end.replace(tzinfo=None).isoformat() + "Z",
             "is_valid": is_valid,
+            "can_check_in": can_check_in,
             "location": event.location,
             "location_id": str(event.location_id) if event.location_id else None,
             "location_name": location_name,

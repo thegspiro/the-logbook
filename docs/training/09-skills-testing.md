@@ -1241,9 +1241,9 @@ than an oversight.
 
 ![A blank skill sheet as it prints: the sections, the criteria, and a marking box beside each step for the examiner to fill in by hand](./images/09-22-template-print-sheet.png)
 
-![A validated scorecard as it prints: per-step marks, the section arithmetic behind the 78% total, one failed step, and the examiner's note against it](./images/09-23-scorecard-print-officer.png)
+![A validated scorecard as it prints: per-step marks, the section arithmetic behind the 78% total, a step recorded 5 of 10 with the examiner's note explaining it, and the validating officer's sign-off](./images/09-23-scorecard-print-officer.png)
 
-> **[SCREENSHOT NEEDED — the same scorecard as seen by a candidate under `scores` disclosure, with the examiner's notes absent. Demo data: the template's result-disclosure override set to `scores`, viewed as the candidate. Capture beside the officer version above; the pair is the teaching point, either one alone is not.]**
+![The same validated scorecard printed by the candidate under scores disclosure: per-step marks and the section arithmetic, with the examiner's note absent](./images/09-24-scorecard-print-candidate.png)
 
 ---
 

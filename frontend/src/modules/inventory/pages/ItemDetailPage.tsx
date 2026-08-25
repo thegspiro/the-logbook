@@ -364,16 +364,23 @@ const ItemDetailPage: React.FC = () => {
           <Link to={backTo} className="btn-secondary btn-sm inline-flex items-center gap-1">
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
-          <Link
-            to={`/inventory/print-labels?ids=${id ?? ''}`}
-            className="btn-secondary btn-sm inline-flex items-center gap-1"
-          >
-            <Printer className="h-4 w-4" /> Print Barcode
-          </Link>
           {canManage && (
-            <button onClick={() => setShowEditModal(true)} className="btn-info btn-sm inline-flex items-center gap-1">
-              <Pencil className="h-4 w-4" /> Edit
-            </button>
+            <>
+              {/* Inside the manage gate with Edit: the label printer is
+                  quartermaster work and /inventory/print-labels requires
+                  inventory.manage, so offering it to the member who reached
+                  this page from their own issued gear would be a button that
+                  only ever lands on Access Denied. */}
+              <Link
+                to={`/inventory/print-labels?ids=${id ?? ''}`}
+                className="btn-secondary btn-sm inline-flex items-center gap-1"
+              >
+                <Printer className="h-4 w-4" /> Print Barcode
+              </Link>
+              <button onClick={() => setShowEditModal(true)} className="btn-info btn-sm inline-flex items-center gap-1">
+                <Pencil className="h-4 w-4" /> Edit
+              </button>
+            </>
           )}
         </div>
       </div>
