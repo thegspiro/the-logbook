@@ -1081,6 +1081,56 @@ class-level patch target and fails the test that leaves a mock behind, naming
 the attribute and restoring the original. If you see that failure, the fix is
 this rule, not a re-run.
 
+### 23. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
+
+**39 of this schema's 254 tables are never created by any migration.**
+`event_requests`, `prospects`, `positions`, the whole finance-approval set and
+more come into being when `main.py`'s `_fast_path_init()` calls `create_all()`
+and stamps Alembic at head — the deployment model
+`app/utils/enum_normalization` documents.
+
+That is deliberate, and it is also a trap, because **CI runs `alembic upgrade
+head` against an empty database** in the integration and contract jobs, before
+anything calls `create_all`. Reflecting a column on a table that is not there
+raises `NoSuchTableError`, and that kills the entire upgrade — not just the one
+step:
+
+```python
+# WRONG — dies on any database that has not started the app yet
+def _has_column(table: str, column: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    return column in {c["name"] for c in inspector.get_columns(table)}
+
+if not _has_column("event_requests", "staffing_shift_id"):
+    op.add_column("event_requests", sa.Column(...))
+
+# CORRECT — require the table as well as the absent column
+def _has_table(table: str) -> bool:
+    return table in sa.inspect(op.get_bind()).get_table_names()
+
+if _has_table("event_requests") and not _has_column("event_requests", "..."):
+    op.add_column("event_requests", sa.Column(...))
+```
+
+**Skipping is correct, not merely safe.** A table `create_all` builds later is
+built from the models, which already declare the new column.
+
+This was live on 2026-08-24: two migrations adding columns to `event_requests`
+failed on every fresh database, which is four red matrix jobs (MySQL 8.0 and
+MariaDB 10.11 × integration and contract), not one. Fifteen of the sixteen
+existing migrations that touch such a table already guarded; the pattern was
+simply undocumented.
+
+**Rule:** before altering a table in a migration, check whether any migration
+creates it. If none does, guard the step on the table's existence.
+`tests/test_migration_create_all_tables.py` enforces this and was clean when
+written, so any failure is new.
+
+**Related, same root:** `alembic upgrade head` alone does not produce a working
+schema. On a freshly migrated database `scripts/repair_schema.py` still adds a
+dozen columns the models declare and no migration creates. Treat the models as
+the schema of record and migrations as alterations on top — not the reverse.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.
