@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1814](https://github.com/thegspiro/the-logbook/pull/1814) |
-| Branch      | `claude/security-review-usr`                                |
-| Feature     | 07 Users & organizations                                    |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — no defect/gap found, gates green               |
+| Field       | Value                                                                           |
+| ----------- | ------------------------------------------------------------------------------- |
+| PR          | [#1814](https://github.com/thegspiro/the-logbook/pull/1814)                     |
+| Branch      | `claude/security-review-usr`                                                    |
+| Feature     | 07 Users & organizations                                                        |
+| CI          | fresh run in progress on the tending commit                                     |
+| Threads     | 8 addressed (Codex P2: see Log)                                                 |
+| Last tended | 2026-08-25 — 8 Codex findings addressed (6 fixed, 2 doc-corrected), gates green |
 
 ---
 
@@ -283,22 +283,32 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   UTC.
 - **07 Users & organizations ⏳** — the highest-risk surface by design
   (privilege escalation): module audit iteration 21 (three parallel readers)
-  - 4 dedicated app-review passes, all closed except ORU-7c (org-wide
-    `member` role mass-escalation, intended-but-sharp, unchanged). All 61
-    routes across `users.py`/`organizations.py`/`member_status.py`/
-    `member_leaves.py` enumerated for auth coverage — clean (one route uses
-    `require_all_permissions`, initially missed by a plain grep for
-    `require_permission`, caught by reading the route directly). Re-verified
-    the privilege-ceiling functions (`_enforce_role_grant_ceiling`,
-    `_enforce_rank_grant_ceiling`) are still wired at every documented call
-    site, closing ORU-1 and the CRITICAL ORU-7d rank-escalation path; the PII
-    redaction gates (ORU-8) on both `with-roles` callers; and settings-secret
-    redaction (ORU-2/3/5). Confirmed the 2026-08-16 `hire_date` restricted-field
-    fix (tier-advancement manipulation) is present and tested. Checked every
-    `.scalars().all()` call for the FIN-9/ELEC-12 unbounded-scan shape — two
-    candidates found (member roster, archived-members list) but recorded why
-    neither qualifies: both are bounded by real department headcount, not
-    accumulating user-generated data like a template library or an approval
-    queue. **No defect and no new flaggable gap found.** See
-    `USR-07-users-organizations.md` for the full write-up. Next: 08 membership
-    pipeline.
+  - 4 dedicated app-review passes, all closed except ORU-7c (unchanged).
+    Re-verified the privilege-ceiling functions, PII redaction gates, and
+    settings-secret redaction are still wired at every documented call site.
+    **An 8-issue Codex review round on the PR** corrected the initial pass's
+    "no defect found" conclusion — 6 fixed, 2 doc-corrected: **USR-1**
+    (leave-of-absence create/update/delete never wrote an audit event despite
+    the event types existing since the audit-history feature shipped — now
+    fixed, 3 tests), **USR-2** (MED — the audit-history query's actor-fallback
+    clause had no target check, so an event where the viewed member acted ON
+    someone else leaked that other member's event_data into the viewed
+    member's history — narrowed to only fire on genuinely self-inherent
+    events, DB-backed regression test verified to fail without the fix),
+    **USR-3** (two real, emitted audit event types — admin MFA reset,
+    compliance exemption change — were invisible in member history because
+    neither was in the endpoint's allowlist — added), **USR-4** (a schema
+    test looked up the pre-rename table name `user_roles` instead of
+    `user_positions` and had been silently skipping instead of verifying
+    anything — fixed, now passes for real), **USR-5** (flagged — the
+    "no defect" pass's unbounded-list dismissal was wrong: archived accounts
+    and leave records accumulate for an org's entire lifetime rather than
+    being bounded by current headcount; 2 more instances found in this
+    module's own files beyond the 2 the first pass checked; not fixed,
+    pagination is a response-envelope decision same as ELEC-12), plus a
+    corrected route-inventory claim (3 org-wide reads use bare `get_current_user`
+    with no self-check — already-audited ORU-8b pattern, not a gap) and a
+    corrected test-coverage claim (added a source-inspection guard test since
+    the cited helper-level tests don't exercise the actual route call sites).
+    See `USR-07-users-organizations.md` for the full write-up. Next: 08
+    membership pipeline.

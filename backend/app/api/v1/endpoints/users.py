@@ -20,7 +20,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -2133,6 +2133,8 @@ _AUDIT_EVENT_DESCRIPTIONS = {
     "leave_of_absence_created": "Leave of absence created",
     "leave_of_absence_updated": "Leave of absence updated",
     "leave_of_absence_deleted": "Leave of absence deactivated",
+    "admin_mfa_reset": "Two-factor authentication reset by administrator",
+    "compliance_exemption_changed": "Compliance exemption changed",
 }
 
 # The audit page's Event Type dropdown speaks a coarser vocabulary than the
@@ -2213,8 +2215,22 @@ async def get_member_audit_history(
                 AuditLog.event_data["updated_user_id"].as_string() == user_id_str,
                 AuditLog.event_data["deleted_user_id"].as_string() == user_id_str,
                 AuditLog.event_data["viewed_user_id"].as_string() == user_id_str,
-                # User performed the action on themselves
-                AuditLog.user_id == user_id_str,
+                # User performed a self-inherent action (no separate target
+                # recorded at all — e.g. updating their own profile). This
+                # must NOT fire whenever the user merely acted as the actor:
+                # an event with one of the target keys above pointing at
+                # someone else is already correctly included or excluded by
+                # those clauses on its own merits, and including it here too
+                # would leak that other member's event_data into this
+                # member's history under their name.
+                and_(
+                    AuditLog.user_id == user_id_str,
+                    AuditLog.event_data["target_user_id"].as_string().is_(None),
+                    AuditLog.event_data["new_user_id"].as_string().is_(None),
+                    AuditLog.event_data["updated_user_id"].as_string().is_(None),
+                    AuditLog.event_data["deleted_user_id"].as_string().is_(None),
+                    AuditLog.event_data["viewed_user_id"].as_string().is_(None),
+                ),
             )
         )
         .order_by(AuditLog.timestamp.desc())

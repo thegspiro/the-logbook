@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member's audit history could show unrelated actions performed on someone else (2026-08-25)
+
+**Fixed**
+
+- `GET /users/{id}/audit-history` included any event where the viewed member
+  was merely the _actor_, even when that event's real target was a different
+  member — so viewing officer A's history could surface "A reset B's MFA"
+  entries naming B, under a page described as A's own record. Now only
+  includes an actor-only event when it has no separate target recorded at
+  all (a genuine self-action); events with a target are decided solely by
+  whether that target is the viewed member.
+- Two real audit event types — an administrator resetting a member's
+  two-factor authentication, and a compliance exemption being granted or
+  revoked — were being recorded but were invisible in this history because
+  neither was in the endpoint's event-type allowlist. Both now appear.
+
+### Leave-of-absence changes left no audit trail (2026-08-25)
+
+**Fixed**
+
+- Creating, editing, or deactivating a member's leave of absence never wrote
+  an audit event, despite the audit-history system having supported these
+  event types since it shipped. All three actions are now recorded, each
+  naming the affected member.
+
 ### The finance approvals queue scanned every organization's pending steps (2026-08-25)
 
 **Fixed**
