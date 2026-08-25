@@ -8,6 +8,7 @@ document CRUD, and file uploads.
 import asyncio
 import os
 import uuid as uuid_lib
+from typing import Optional
 from uuid import UUID
 
 import magic
@@ -38,6 +39,34 @@ from app.services.documents_service import DocumentsService
 router = APIRouter()
 
 UPLOAD_DIR = "/app/uploads/documents"
+
+
+def _parse_uuid_or_400(value: str, field: str) -> UUID:
+    """Parse a client-supplied UUID string, or raise a clean 400.
+
+    ``UUID(value)`` raises ``ValueError`` on anything malformed, and letting
+    that escape unhandled becomes an unhandled 500 instead of a 4xx — hit in
+    practice by the upload form's own placeholder value ("general") sent as
+    ``folder_id`` when an organization has no folders yet.
+    """
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+
+
+def _resolve_document_name(name: Optional[str], filename: Optional[str]) -> str:
+    """The document's display name: the caller's, or derived from the file.
+
+    The upload form advertises the name field as "Optional - defaults to file
+    name" and omits it entirely when left blank, so a required ``Form(...)``
+    here 422'd on that exact, normal path.
+    """
+    stripped = (name or "").strip()
+    if stripped:
+        return stripped
+    return filename or "Untitled document"
+
 
 # Allowed MIME types for document uploads (validated via magic bytes, not HTTP headers)
 ALLOWED_DOCUMENT_MIME_TYPES = {
@@ -75,7 +104,7 @@ async def list_folders(
 ):
     """List document folders the current user can access"""
     service = DocumentsService(db)
-    parent_uuid = UUID(parent_id) if parent_id else None
+    parent_uuid = _parse_uuid_or_400(parent_id, "parent_id") if parent_id else None
     folders = await service.get_folders(
         current_user.organization_id, parent_uuid, current_user=current_user
     )
@@ -121,9 +150,14 @@ async def update_folder(
 ):
     """Update a document folder"""
     service = DocumentsService(db)
-    update_data = folder.model_dump(exclude_none=True)
+    # exclude_unset, not exclude_none: this is an update payload, so an
+    # explicit null (clearing parent_id/owner_user_id) must survive to the
+    # service as "clear this field", not be dropped as if never sent
+    # (CLAUDE.md pitfall #1's update-path mirror image).
+    update_data = folder.model_dump(exclude_unset=True)
     # Wrapped so a service-layer ValueError (an out-of-org parent/owner id,
-    # DOC-6) returns 400 rather than 500, matching create_folder.
+    # DOC-6, or a cyclic parent) returns 400 rather than 500, matching
+    # create_folder.
     async with handle_service_errors("Unable to update folder"):
         updated = await service.update_folder(
             folder_id, current_user.organization_id, update_data
@@ -160,7 +194,7 @@ async def list_documents(
 ):
     """List documents with optional filtering and folder access control"""
     service = DocumentsService(db)
-    folder_uuid = UUID(folder_id) if folder_id else None
+    folder_uuid = _parse_uuid_or_400(folder_id, "folder_id") if folder_id else None
 
     # Enforce folder-level access when listing by folder
     if folder_uuid:
@@ -205,20 +239,27 @@ async def list_documents(
 )
 async def upload_document(
     file: UploadFile = File(...),
-    name: str = Form(...),
+    name: str = Form(None),
     description: str = Form(None),
     folder_id: str = Form(None),
     tags: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.manage")),
 ):
-    """Upload a new document (with folder access control)"""
+    """Upload a new document (with folder access control).
+
+    ``name`` is optional — the upload form itself advertises "Optional -
+    defaults to file name" and omits the field entirely when left blank, so
+    a required ``Form(...)`` here 422'd on that exact, normal path. Falls back
+    to the uploaded filename, matching what the UI promises.
+    """
     service = DocumentsService(db)
+    name = _resolve_document_name(name, file.filename)
 
     # Enforce folder access if uploading into a specific folder
     if folder_id:
         folder = await service.get_folder_by_id(
-            UUID(folder_id), current_user.organization_id
+            _parse_uuid_or_400(folder_id, "folder_id"), current_user.organization_id
         )
         # Fail closed: a nonexistent or out-of-org folder must be rejected, not
         # silently accepted (which previously stored an unvalidated folder_id).
@@ -413,7 +454,10 @@ async def update_document(
 ):
     """Update a document's metadata"""
     service = DocumentsService(db)
-    update_data = doc.model_dump(exclude_none=True)
+    # exclude_unset, not exclude_none: an explicit null (clearing folder_id to
+    # move a document to org level) must reach the service as a clear, not be
+    # silently dropped (CLAUDE.md pitfall #1's update-path mirror image).
+    update_data = doc.model_dump(exclude_unset=True)
     # Wrapped so a service-layer ValueError (an out-of-org folder_id, DOC-6)
     # returns 400 rather than 500.
     async with handle_service_errors("Unable to update document"):

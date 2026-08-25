@@ -27,6 +27,7 @@ from app.models.document import (
     FolderVisibility,
 )
 from app.models.user import User
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -236,6 +237,41 @@ class DocumentsService:
         folders = result.scalars().all()
         return {f.id for f in folders if self.can_access_folder(f, user)}
 
+    async def _creates_cycle(
+        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
+    ) -> bool:
+        """True if *candidate_parent_id* is *folder_id* itself or one of its
+        own descendants — i.e. re-parenting under it would make the folder its
+        own ancestor.
+
+        `assert_in_org` only proves the candidate parent exists in the org; it
+        has no way to know it is the folder being moved (self-parenting) or
+        already sits underneath it (a cycle), either of which drops the folder
+        out of root-based navigation and can break cascade delete. Walks the
+        candidate's ancestor chain rather than the folder's descendants,
+        because the chain to the root is bounded by tree depth, while the
+        descendant subtree can be arbitrarily wide.
+        """
+        target = str(folder_id)
+        current: Optional[str] = str(candidate_parent_id)
+        seen: Set[str] = set()
+        while current:
+            if current == target:
+                return True
+            if current in seen:
+                # A pre-existing cycle we didn't create — stop rather than
+                # loop forever; it is not this call's job to repair it.
+                break
+            seen.add(current)
+            result = await self.db.execute(
+                select(DocumentFolder.parent_id).where(
+                    DocumentFolder.id == current,
+                    DocumentFolder.organization_id == str(organization_id),
+                )
+            )
+            current = result.scalar_one_or_none()
+        return False
+
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Optional[DocumentFolder]:
@@ -246,14 +282,22 @@ class DocumentsService:
 
         # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
         if "parent_id" in update_data:
+            new_parent_id = update_data["parent_id"]
             await assert_in_org(
                 self.db,
                 DocumentFolder,
-                update_data["parent_id"],
+                new_parent_id,
                 organization_id,
                 allow_none=True,
                 label="parent folder",
             )
+            if new_parent_id and await self._creates_cycle(
+                folder_id, new_parent_id, organization_id
+            ):
+                raise ValueError(
+                    "A folder cannot be moved into itself or one of its own "
+                    "descendants"
+                )
         if "owner_user_id" in update_data:
             await assert_in_org(
                 self.db,
@@ -264,8 +308,7 @@ class DocumentsService:
                 label="owner",
             )
 
-        for key, value in update_data.items():
-            setattr(folder, key, value)
+        apply_updates(folder, update_data)
 
         await self.db.commit()
         await self.db.refresh(folder)
@@ -475,8 +518,7 @@ class DocumentsService:
                 label="folder",
             )
 
-        for key, value in update_data.items():
-            setattr(document, key, value)
+        apply_updates(document, update_data)
 
         await self.db.commit()
         await self.db.refresh(document)

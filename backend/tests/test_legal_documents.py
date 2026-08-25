@@ -1,5 +1,6 @@
 """Tests for Governance -> Legal Documents (propose / publish workflow)."""
 
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +13,12 @@ from app.models.legal import (
     LegalRevisionStatus,
 )
 from app.models.user import Organization
-from app.services.legal_service import SETTINGS_KEY, LegalDocumentService
+from app.services.legal_service import (
+    EFFECTIVE_DATE_KEY,
+    SETTINGS_KEY,
+    LegalDocumentService,
+    effective_date_for,
+)
 from app.utils.model_updates import apply_updates
 
 
@@ -39,7 +45,7 @@ class TestWriteSettings:
             effective_date="March 3, 2026",
         )
         assert org.settings["legal"]["privacy_policy"] == "Our own notice."
-        assert org.settings["legal"]["last_updated"] == "March 3, 2026"
+        assert org.settings["legal"]["privacy_policy_effective_date"] == "March 3, 2026"
 
     def test_publishing_one_document_leaves_the_other_alone(self):
         org = Organization(name="Falls Church VFD", slug="fcvfd")
@@ -52,6 +58,46 @@ class TestWriteSettings:
         )
         assert org.settings["legal"]["terms_of_service"] == "Existing terms."
         assert org.settings["legal"]["privacy_policy"] == "New notice."
+
+    def test_publishing_one_document_does_not_misdate_the_other(self):
+        # Regression for DOC-10 finding #3: a single shared "last_updated"
+        # key let publishing privacy alone attribute its date to terms too,
+        # or (published without a date) inherit terms' existing date.
+        org = Organization(name="Falls Church VFD", slug="fcvfd")
+        org.settings = {
+            "legal": {
+                "terms_of_service": "Existing terms.",
+                "terms_of_service_effective_date": "Jan 1, 2026",
+            }
+        }
+        self._service()._write_settings(
+            org,
+            LegalDocumentType.PRIVACY_POLICY,
+            body="New privacy notice.",
+            effective_date="March 3, 2026",
+        )
+        legal = org.settings["legal"]
+        assert legal["privacy_policy_effective_date"] == "March 3, 2026"
+        assert legal["terms_of_service_effective_date"] == "Jan 1, 2026"
+
+    def test_publishing_without_a_date_clears_a_stale_one(self):
+        # The date belongs to the revision, not the document type: publishing
+        # a new revision with no effective_date must not leave a previous
+        # revision's date attributed to the new text.
+        org = Organization(name="Falls Church VFD", slug="fcvfd")
+        org.settings = {
+            "legal": {
+                "privacy_policy": "Old notice.",
+                "privacy_policy_effective_date": "Jan 1, 2026",
+            }
+        }
+        self._service()._write_settings(
+            org,
+            LegalDocumentType.PRIVACY_POLICY,
+            body="New notice.",
+            effective_date=None,
+        )
+        assert "privacy_policy_effective_date" not in org.settings["legal"]
 
     def test_preserves_unrelated_settings_keys(self):
         org = Organization(name="Falls Church VFD", slug="fcvfd")
@@ -70,8 +116,9 @@ class TestWriteSettings:
         org.settings = {
             "legal": {
                 "privacy_policy": "Custom notice.",
+                "privacy_policy_effective_date": "March 3, 2026",
                 "terms_of_service": "Custom terms.",
-                "last_updated": "March 3, 2026",
+                "terms_of_service_effective_date": "Jan 1, 2026",
             }
         }
         self._service()._write_settings(
@@ -79,10 +126,11 @@ class TestWriteSettings:
         )
         legal = org.settings["legal"]
         assert "privacy_policy" not in legal
+        assert "privacy_policy_effective_date" not in legal
+        # Each document's date is its own key, so reverting privacy cannot
+        # touch the still-published terms notice or its date.
         assert legal["terms_of_service"] == "Custom terms."
-        # The date belongs to whatever is still published; blanking it here
-        # would strip the revision date off a notice that never changed.
-        assert legal["last_updated"] == "March 3, 2026"
+        assert legal["terms_of_service_effective_date"] == "Jan 1, 2026"
 
     def test_survives_a_hand_edited_settings_column(self):
         # settings["legal"] is free-form JSON an admin may have typed.
@@ -112,6 +160,84 @@ class TestWriteSettings:
         # the platform default with no error anywhere.
         assert SETTINGS_KEY[LegalDocumentType.PRIVACY_POLICY] == "privacy_policy"
         assert SETTINGS_KEY[LegalDocumentType.TERMS_OF_SERVICE] == "terms_of_service"
+
+    def test_effective_date_keys_are_distinct_per_document(self):
+        # The whole point of DOC-10 finding #3's fix: one shared key can't
+        # come back by accident.
+        assert (
+            EFFECTIVE_DATE_KEY[LegalDocumentType.PRIVACY_POLICY]
+            != EFFECTIVE_DATE_KEY[LegalDocumentType.TERMS_OF_SERVICE]
+        )
+
+
+class TestEffectiveDateFor:
+    """The read side of the per-document-date fix, with a legacy fallback."""
+
+    pytestmark = pytest.mark.unit
+
+    def test_reads_the_per_type_key(self):
+        legal = {"terms_of_service_effective_date": "Jan 1, 2026"}
+        assert (
+            effective_date_for(legal, LegalDocumentType.TERMS_OF_SERVICE)
+            == "Jan 1, 2026"
+        )
+
+    def test_falls_back_to_the_legacy_shared_key(self):
+        # An install that published under the pre-fix shared key keeps
+        # showing its date until the document is republished.
+        legal = {"last_updated": "Feb 2, 2026"}
+        assert (
+            effective_date_for(legal, LegalDocumentType.PRIVACY_POLICY) == "Feb 2, 2026"
+        )
+
+    def test_per_type_key_wins_over_the_legacy_fallback(self):
+        legal = {
+            "privacy_policy_effective_date": "March 3, 2026",
+            "last_updated": "Feb 2, 2026",
+        }
+        assert (
+            effective_date_for(legal, LegalDocumentType.PRIVACY_POLICY)
+            == "March 3, 2026"
+        )
+
+    def test_no_date_anywhere_yields_none(self):
+        assert effective_date_for({}, LegalDocumentType.PRIVACY_POLICY) is None
+
+
+class TestPublishLocking:
+    """DOC-10 finding #8: two concurrent publishes of the same document type
+    must not both read the current published revision, archive it, and mark
+    their own row PUBLISHED — CLAUDE.md pitfall #27's read-then-write shape.
+
+    Checked by source inspection rather than two real concurrent connections,
+    the same approach `test_capacity_locking.py` uses for this exact class of
+    bug: a two-connection race is expensive to set up reliably in a suite that
+    runs against a shared MySQL instance, and a static check catches the same
+    regression a live race would — a lock nobody calls, or a plain read of the
+    very row the lock is meant to protect, is invisible in every test that
+    does not race itself.
+    """
+
+    pytestmark = pytest.mark.unit
+
+    def test_publish_locks_the_organization_row(self):
+        source = inspect.getsource(LegalDocumentService.publish)
+        assert "_get_organization_for_update" in source
+
+    def test_revert_locks_the_organization_row(self):
+        source = inspect.getsource(LegalDocumentService.revert_to_default)
+        assert "_get_organization_for_update" in source
+
+    def test_the_organization_lock_is_a_locking_read(self):
+        source = inspect.getsource(LegalDocumentService._get_organization_for_update)
+        assert "with_for_update" in source
+
+    def test_archive_published_is_a_locking_read(self):
+        # The lock above is not enough on its own: under REPEATABLE READ, a
+        # plain SELECT here would still answer from the snapshot taken before
+        # the lock was acquired.
+        source = inspect.getsource(LegalDocumentService._archive_published)
+        assert "with_for_update" in source
 
 
 class TestUpdateSemantics:
@@ -239,7 +365,7 @@ class TestLegalDocumentWorkflow:
         assert published.status == LegalRevisionStatus.PUBLISHED
         assert published.published_at is not None
         assert org.settings["legal"]["privacy_policy"] == "Our notice."
-        assert org.settings["legal"]["last_updated"] == "March 3, 2026"
+        assert org.settings["legal"]["privacy_policy_effective_date"] == "March 3, 2026"
 
     async def test_publishing_archives_the_previous_version(self, db_session):
         org = await self._org(db_session)
