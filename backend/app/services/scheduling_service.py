@@ -2910,25 +2910,30 @@ class SchedulingService:
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
 
-            if enforce_position_eligibility:
-                from app.services.shift_eligibility_service import (
-                    ShiftEligibilityService,
-                )
+        if enforce_position_eligibility:
+            from app.services.shift_eligibility_service import (
+                ShiftEligibilityService,
+            )
 
-                user_result = await self.db.execute(
-                    select(User).where(
-                        User.id == str(user_id),
-                        User.organization_id == str(organization_id),
-                    )
+            user_result = await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
                 )
-                user = user_result.scalar_one_or_none()
-                eligible = await ShiftEligibilityService(
-                    self.db
-                ).get_eligible_positions(user, str(organization_id), str(shift.id))
-                if str(position_value).lower() not in {
-                    str(value).lower() for value in eligible
-                }:
-                    return f"Member is no longer eligible for the {position_value} position"
+            )
+            user = user_result.scalar_one_or_none()
+            eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
+                user, str(organization_id), str(shift.id)
+            )
+            if not eligible:
+                return "Member is no longer eligible for this shift"
+            if (
+                slots
+                and position_value
+                and str(position_value).lower()
+                not in {str(value).lower() for value in eligible}
+            ):
+                return f"Member is no longer eligible for the {position_value} position"
 
         await self._check_driver_qualification(
             user_id=str(user_id),

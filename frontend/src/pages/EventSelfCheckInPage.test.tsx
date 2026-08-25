@@ -347,6 +347,7 @@ describe('EventSelfCheckInPage', () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -363,6 +364,7 @@ describe('EventSelfCheckInPage', () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -378,6 +380,7 @@ describe('EventSelfCheckInPage', () => {
       const earlyEndData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
         actual_end_time: '2026-01-25T19:00:00Z',
       };
 
@@ -390,10 +393,34 @@ describe('EventSelfCheckInPage', () => {
       });
     });
 
+    it("should show the check-in button during a Flexible event's early-arrival grace period", async () => {
+      // is_valid is strictly the on-time window and is false here, the same
+      // as a member arriving before a Flexible event's official window --
+      // but can_check_in (what a tap would actually be allowed to do,
+      // including the one-hour early grace) is true. The button must render
+      // on can_check_in, not is_valid, or an early-but-permitted member sees
+      // "Check-in Not Available" for a tap the backend would accept.
+      const earlyFlexibleData = {
+        ...mockQRCheckInData,
+        is_valid: false,
+        can_check_in: true,
+      };
+
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(earlyFlexibleData);
+
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /check in to this event/i })).toBeInTheDocument();
+        expect(screen.queryByText('Check-in Not Available')).not.toBeInTheDocument();
+      });
+    });
+
     it('should display time window correctly', async () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);

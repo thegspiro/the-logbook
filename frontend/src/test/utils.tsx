@@ -58,6 +58,7 @@ export const mockQRCheckInData: QRCheckInData = {
   check_in_start: '2026-01-25T17:00:00Z',
   check_in_end: '2026-01-25T20:00:00Z',
   is_valid: true,
+  can_check_in: true,
   actual_end_time: undefined,
   timezone: 'America/New_York',
 };

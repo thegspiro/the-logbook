@@ -579,6 +579,14 @@ class QRCheckInData(BaseModel):
     check_in_start: str
     check_in_end: str
     is_valid: bool
+    # `is_valid` is the strict on-time window (also used for the "Check-in
+    # Not Available" time-range display); `can_check_in` is what a tap would
+    # actually be allowed to do, including the Flexible/Window one-hour early
+    # grace `_validate_check_in_window` admits with a notice. They diverge
+    # only in that early-arrival window — without this field the UI had no
+    # way to tell the two apart and hid the Check In button for exactly the
+    # case the backend was built to admit.
+    can_check_in: bool
     location: Optional[str] = None
     location_id: Optional[str] = None
     location_name: Optional[str] = None

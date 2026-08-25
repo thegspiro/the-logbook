@@ -422,12 +422,16 @@ them.
 Member credit is a third thing again, and is never the shift's number restated.
 A member who came on at 0300 was not on the 2200 call.
 
-> **[SCREENSHOT NEEDED — Reports → Call Volume for a count-only department,
->
-> > showing the "Unit Responses" / "Avg Responses/Day" / "Peak Responses" stat
-> > cards and the footnote beneath them. Caption it alongside the same report for
-> > a detailed-mode department so a reader can see the labels differ and
-> > understand why]**
+![Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each](./images/03-82-call-volume-count-only.png)
+
+![The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone](./images/03-83-call-volume-detailed.png)
+
+_One department, one period, two modes. **52** against **18** — and neither
+number is wrong. The first counts what the trucks did and the second counts
+what happened, which is why the labels change with the mode rather than
+staying put. Read the label before you quote the figure; a grant application
+that says "52 calls" when the department ran 18 incidents is a real problem
+that starts as a screenshot._
 
 ### Read the report label before you quote the number
 
@@ -628,11 +632,34 @@ members that the rest of the schedule does not.
   implicitly. Anyone who used Platoon Management before and does not hold
   `scheduling.manage` will now get a permission error there.
 
-> **[SCREENSHOT NEEDED — the shift detail page as a scheduler with the
->
-> > hold-over roster populated, paired with the same shift as an ordinary member
-> > with the roster absent. Seed at least one member on approved leave so the
-> > availability distinction is visible, and caption which account is which.]**
+### The roster, and who sees it
+
+A shift tied to a platoon carries a second list under its crew board: every
+active member of that platoon, and what each of them is doing on that date.
+It is the panel an officer works from when a shift comes up short.
+
+![Platoon A's roster on a shift, as a scheduler: six members on shift, one on leave, and one available with an Assign control beside them](./images/03-84-platoon-roster-scheduler.png)
+
+_As a **scheduler**. Three states, and the middle one is the point: **On shift**
+is already assigned, **On leave** has approved time off covering the date, and
+**Available** is in the platoon, free, and one tap from being held over — which
+is what the **Assign** button beside Emeka Adeyemi does. Somebody on leave is
+listed rather than hidden, because "why is this shift short" and "who can I
+call" are the same question._
+
+![The same shift as an ordinary member: the crew board is there, the platoon roster is not, and nothing marks its absence](./images/03-85-platoon-roster-member.png)
+
+_As an **ordinary member**, scrolled to the same place. The crew board, the
+sign-up box and the calls below it are all there; the roster is simply not, and
+nothing says so. That is deliberate — it is availability information about other
+members, gated on `scheduling.assign` or `scheduling.manage`, or on being the
+shift's own named officer. A member sees no error and no empty panel._
+
+**A shift only has a platoon if a platoon pattern generated it.** The field is
+written by the recurring-pattern generator, for a pattern whose type is
+**Platoon** and whose configuration names its platoons; a shift created by hand
+carries none, and shows no roster however the department's members are
+organized.
 
 ---
 
