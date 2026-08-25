@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Reopening a finalized event returned 500, and error reports named nobody (2026-08-25)
+
+**Fixed**
+
+- **`POST /events/{id}/reopen-attendance` returned 500 for any event that has
+  a location.** `reopen_event_attendance` fetched the event with no eager
+  loads, and the endpoint serializes what it returns through
+  `_build_event_response`, whose first read is `event.location_obj`. Under the
+  async session that lazy load is IO outside the greenlet context, so it
+  raised `MissingGreenlet` — and it did so _after_ the reopen had committed,
+  so the lock was actually cleared while the chief saw a failure and the event
+  quietly stayed open. Events with no `location_id` short-circuit on the NULL
+  foreign key and never reach the load, which is why the endpoint passed
+  testing and failed on a real event. Every other path that builds an
+  `EventResponse` already carried the eager load; reopen was the one that did
+  not.
+
+**Changed**
+
+- **Error Monitoring names the affected member.** The detail block identified
+  them by the first eight characters of their UUID, which cannot be searched
+  for and does not answer the first question asked of a report — one member's
+  session, or the whole department. The list, stats and export endpoints now
+  resolve the stored id in a single batched, org-scoped query (pitfall #14a:
+  the id arrives from stored data, so the filter is what stops a stale row
+  naming another department's member) and return the member's name and
+  username. The page shows those with the full id beneath — full, because a
+  truncated one cannot be matched to a support ticket — and says
+  "Account not found" when the account has since been deleted, rather than
+  leaving an unexplained blank.
+
 ### Every LIKE pattern is escaped in one place, and the database is told so (2026-08-25)
 
 **Fixed**
@@ -22,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The inventory barcode search reported the wrong matched field.** After
   querying with the escaped pattern, `search_items_by_code` re-scanned the
-  results in Python against the *escaped* string instead of the raw input, so
+  results in Python against the _escaped_ string instead of the raw input, so
   scanning an asset tag containing `%`, `_` or `\` fell through to the
   `matched_field = "name"` default — the item was still found, it was just
   attributed to the wrong field. Pre-existing; surfaced by the `flake8` run
@@ -34,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Forty-seven escaped their input and then emitted `LIKE` with no `ESCAPE`
   clause. MySQL's default escape character depends on `sql_mode`, so under
   `NO_BACKSLASH_ESCAPES` the escaping is inert and every wildcard returns —
-  across all forty-seven at once, invisibly, because the escaping *looks*
+  across all forty-seven at once, invisibly, because the escaping _looks_
   present in review. The four system-generated patterns (`"ORD-2026-%"` and
   friends) carry the kwarg too: it is inert for them, and covering them is what
   leaves the invariant with no exceptions.
