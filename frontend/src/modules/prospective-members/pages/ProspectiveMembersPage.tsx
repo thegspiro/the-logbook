@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
+import { DialogPortal } from '../../../components/DialogPortal';
 import {
   Users,
   UserPlus,
@@ -1199,54 +1200,56 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
-        <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div ref={dialogRef2} className="modal-panel modal-panel-scroll w-full max-w-md">
-            <div className="p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
-                  <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
+        <DialogPortal>
+          <div className="modal-overlay z-50 flex items-center justify-center p-4">
+            <div ref={dialogRef2} className="modal-panel modal-panel-scroll w-full max-w-md">
+              <div className="p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
+                    <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-theme-text-primary text-lg font-bold">Confirm Purge</h2>
+                    <p className="text-theme-text-muted text-sm">This action cannot be undone</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-theme-text-primary text-lg font-bold">Confirm Purge</h2>
-                  <p className="text-theme-text-muted text-sm">This action cannot be undone</p>
-                </div>
+                <p className="text-theme-text-secondary mb-4 text-sm">
+                  You are about to permanently delete{' '}
+                  <strong className="text-theme-text-primary">{selectedInactive.size}</strong> inactive application(s)
+                  and all associated personal data. This protects your organization from holding unnecessary private
+                  information.
+                </p>
               </div>
-              <p className="text-theme-text-secondary mb-4 text-sm">
-                You are about to permanently delete{' '}
-                <strong className="text-theme-text-primary">{selectedInactive.size}</strong> inactive application(s) and
-                all associated personal data. This protects your organization from holding unnecessary private
-                information.
-              </p>
-            </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowPurgeConfirm(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      await purgeInactiveApplicants(Array.from(selectedInactive));
-                      toast.success(`Purged ${selectedInactive.size} application(s)`);
-                      setSelectedInactive(new Set());
-                    } catch {
-                      toast.error('Failed to purge applications');
-                    }
-                    setShowPurgeConfirm(false);
-                  })();
-                }}
-                disabled={isPurging}
-                className="btn-primary flex items-center gap-2 px-6"
-              >
-                {isPurging && <Loader2 className="h-4 w-4 animate-spin" />}
-                Permanently Delete
-              </button>
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  onClick={() => setShowPurgeConfirm(false)}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        await purgeInactiveApplicants(Array.from(selectedInactive));
+                        toast.success(`Purged ${selectedInactive.size} application(s)`);
+                        setSelectedInactive(new Set());
+                      } catch {
+                        toast.error('Failed to purge applications');
+                      }
+                      setShowPurgeConfirm(false);
+                    })();
+                  }}
+                  disabled={isPurging}
+                  className="btn-primary flex items-center gap-2 px-6"
+                >
+                  {isPurging && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Permanently Delete
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </DialogPortal>
       )}
 
       {/* Detail Drawer */}
@@ -1268,93 +1271,95 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Add Applicant Modal */}
       {showAddModal && (
-        <div className="modal-overlay z-50 flex items-center justify-center p-4">
-          <div ref={dialogRef3} className="modal-panel modal-panel-scroll w-full max-w-md">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="text-theme-text-muted mb-1 block text-sm">First Name *</label>
-                  <input
-                    type="text"
-                    value={newApplicant.first_name}
-                    onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
-                    className="form-input text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-theme-text-muted mb-1 block text-sm">Last Name *</label>
-                  <input
-                    type="text"
-                    value={newApplicant.last_name}
-                    onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
-                    className="form-input text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-theme-text-muted mb-1 block text-sm">Email *</label>
-                <input
-                  type="email"
-                  value={newApplicant.email}
-                  onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
-                  className="form-input text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-theme-text-muted mb-1 block text-sm">Phone</label>
-                <input
-                  type="tel"
-                  value={newApplicant.phone}
-                  onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
-                  className="form-input text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-theme-text-muted mb-1 block text-sm">Membership Type</label>
-                <select
-                  value={newApplicant.target_membership_type}
-                  onChange={(e) =>
-                    setNewApplicant({
-                      ...newApplicant,
-                      target_membership_type: e.target.value as 'regular' | 'administrative',
-                    })
-                  }
-                  className="form-input text-sm"
+        <DialogPortal>
+          <div className="modal-overlay z-50 flex items-center justify-center p-4">
+            <div ref={dialogRef3} className="modal-panel modal-panel-scroll w-full max-w-md">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
-                  <option value="regular">Regular Member</option>
-                  <option value="administrative">Administrative</option>
-                </select>
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-            </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleCreateApplicant();
-                }}
-                disabled={isCreating}
-                className="btn-primary flex items-center gap-2 px-6"
-              >
-                {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-                Add to Pipeline
-              </button>
+              <div className="space-y-4 p-6">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-theme-text-muted mb-1 block text-sm">First Name *</label>
+                    <input
+                      type="text"
+                      value={newApplicant.first_name}
+                      onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
+                      className="form-input text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-theme-text-muted mb-1 block text-sm">Last Name *</label>
+                    <input
+                      type="text"
+                      value={newApplicant.last_name}
+                      onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
+                      className="form-input text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-theme-text-muted mb-1 block text-sm">Email *</label>
+                  <input
+                    type="email"
+                    value={newApplicant.email}
+                    onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
+                    className="form-input text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-theme-text-muted mb-1 block text-sm">Phone</label>
+                  <input
+                    type="tel"
+                    value={newApplicant.phone}
+                    onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
+                    className="form-input text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-theme-text-muted mb-1 block text-sm">Membership Type</label>
+                  <select
+                    value={newApplicant.target_membership_type}
+                    onChange={(e) =>
+                      setNewApplicant({
+                        ...newApplicant,
+                        target_membership_type: e.target.value as 'regular' | 'administrative',
+                      })
+                    }
+                    className="form-input text-sm"
+                  >
+                    <option value="regular">Regular Member</option>
+                    <option value="administrative">Administrative</option>
+                  </select>
+                </div>
+              </div>
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void handleCreateApplicant();
+                  }}
+                  disabled={isCreating}
+                  className="btn-primary flex items-center gap-2 px-6"
+                >
+                  {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Add to Pipeline
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </DialogPortal>
       )}
     </div>
   );

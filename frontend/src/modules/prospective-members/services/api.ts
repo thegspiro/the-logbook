@@ -64,8 +64,8 @@ import type {
   InactivityAlertLevel,
   CurrentStageAction,
 } from '../types';
-import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
-import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus, defaultStageConfig } from '../types';
+import { StageType as StageTypeConst } from '../../../constants/enums';
 import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
@@ -162,42 +162,6 @@ function mapStepTypeToFrontend(
   return StageTypeConst.MANUAL_APPROVAL;
 }
 
-/** Provide a valid default StageConfig for a given stage type */
-function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
-  switch (stageType) {
-    case StageTypeConst.FORM_SUBMISSION:
-      return { form_id: '', form_name: '' };
-    case StageTypeConst.DOCUMENT_UPLOAD:
-      return { required_document_types: [], allow_multiple: true };
-    case StageTypeConst.ELECTION_VOTE:
-      return {
-        voting_method: VotingMethod.SIMPLE_MAJORITY,
-        victory_condition: VictoryCondition.MAJORITY,
-        eligible_voter_roles: [],
-        anonymous_voting: true,
-      };
-    case StageTypeConst.MEETING:
-      return { meeting_type: 'chief_meeting', meeting_description: '' };
-    case StageTypeConst.STATUS_PAGE_TOGGLE:
-      return { enable_public_status: true, custom_message: '' };
-    case StageTypeConst.AUTOMATED_EMAIL:
-      return {
-        email_subject: 'Welcome to the Membership Process',
-        include_welcome: true,
-        welcome_message: '',
-        include_faq_link: false,
-        faq_url: '',
-        include_next_meeting: false,
-        next_meeting_details: '',
-        include_status_tracker: false,
-        custom_sections: [],
-      };
-    case StageTypeConst.MANUAL_APPROVAL:
-    default:
-      return { approver_roles: [], require_notes: false };
-  }
-}
-
 /** Map a backend pipeline step response to a frontend PipelineStage */
 function mapStepToStage(step: BackendStepResponse): PipelineStage {
   const backendConfig = step.config ?? null;
@@ -208,11 +172,10 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
     name: step.name,
     description: step.description || undefined,
     stage_type: stageType,
-    config: backendConfig
-      ? { ...getDefaultStageConfig(stageType), ...backendConfig }
-      : getDefaultStageConfig(stageType),
+    config: backendConfig ? { ...defaultStageConfig(stageType), ...backendConfig } : defaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    inactivity_timeout_days: step.inactivity_timeout_days ?? null,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
     public_visible: step.public_visible ?? true,
     created_at: step.created_at,
@@ -292,8 +255,11 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   if (stage.notify_prospect_on_completion !== undefined)
     payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
   if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
-  if (stage.inactivity_timeout_days !== undefined)
-    payload.inactivity_timeout_days = stage.inactivity_timeout_days ?? undefined;
+  // An explicit null travels as null. Collapsing it to undefined drops the key,
+  // and the backend reads a dropped key as "leave this alone" — so unticking
+  // "use a custom timeout for this stage" was acknowledged with a success toast
+  // and the old override stayed in the database.
+  if (stage.inactivity_timeout_days !== undefined) payload.inactivity_timeout_days = stage.inactivity_timeout_days;
   return payload;
 }
 

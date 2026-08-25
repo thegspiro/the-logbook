@@ -185,6 +185,47 @@ class TestStepEmailTemplateValidation:
         mock_assert.assert_not_awaited()
 
 
+class TestStepInactivityOverride:
+    """A per-step inactivity override has to be clearable.
+
+    The step editor sends every field it owns on every save, so an explicit
+    ``None`` here means "the coordinator unticked the custom timeout", not
+    "leave it alone" — ``exclude_unset`` already dropped the fields nobody
+    touched. Skipping the null would acknowledge the save with a 200 and leave
+    the old override in place.
+    """
+
+    @staticmethod
+    def _svc_with_step(step):
+        svc = MembershipPipelineService(AsyncMock())
+        return svc, patch.object(
+            svc,
+            "get_pipeline",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(steps=[step]),
+        )
+
+    async def test_explicit_null_clears_the_override(self):
+        step = SimpleNamespace(
+            id="s1", name="Vote", config={}, inactivity_timeout_days=45
+        )
+        svc, pipeline_patch = self._svc_with_step(step)
+        with pipeline_patch:
+            await svc.update_step(
+                "s1", "pipe1", "org1", {"inactivity_timeout_days": None}
+            )
+        assert step.inactivity_timeout_days is None
+
+    async def test_absent_key_leaves_the_override_alone(self):
+        step = SimpleNamespace(
+            id="s1", name="Vote", config={}, inactivity_timeout_days=45
+        )
+        svc, pipeline_patch = self._svc_with_step(step)
+        with pipeline_patch:
+            await svc.update_step("s1", "pipe1", "org1", {"name": "Renamed"})
+        assert step.inactivity_timeout_days == 45
+
+
 class TestProspectDocumentStepValidation:
     """MP2-5 (pass 4): add_prospect_document rejects a client-supplied step_id
     that isn't in the prospect's own pipeline (the MP-5 sibling that was missed)."""
