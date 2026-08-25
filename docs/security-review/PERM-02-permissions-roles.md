@@ -1,6 +1,6 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 · **PR:** #TBD
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 · **PR:** #1805
 
 **Backend:** `app/api/dependencies.py` (381 L), `app/core/permissions.py`
 (1960 L), `app/api/v1/endpoints/roles.py` (691 L) +
