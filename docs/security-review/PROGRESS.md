@@ -16,14 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1816](https://github.com/thegspiro/the-logbook/pull/1816) |
-| Branch      | `claude/security-review-ms`                                 |
-| Feature     | 09 Medical screening (PHI)                                  |
-| CI          | fresh push, awaiting first run                              |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — 2 fixed, 1 flagged, 1 doc correction; pushed   |
+_None — #1816 merged 2026-08-25 22:39 UTC. See Log._
 
 ---
 
@@ -60,8 +53,8 @@ data-carrying modules, then the supporting infrastructure.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814 |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅ #1815 |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳       |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅ #1816 |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳       |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜       |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜       |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜       |
@@ -364,3 +357,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   `KNOWN_LIMITATIONS.md` until now. Two more LOW items re-verified still
   accurate, left open, not re-flagged. See `MS-09-medical-screening.md`.
   Next: 10 documents & legal.
+- **09 Medical screening (PHI) ✅ merged** — PR #1816 merged 2026-08-25
+  22:39 UTC. No Codex findings on this one — clean pass.
+- **10 Documents & legal — no new findings.** The rotation row bundles three
+  files, but only `documents.py` had ever been reviewed
+  (`docs/module-audit/documents.md` DOC-1–6,
+  `docs/app-review/documents.md` four passes); `station_documents.py` and
+  `legal_documents.py` — and their backing services — had no prior review at
+  all. Re-verified `documents.py`: DOC-1/2/3/6 still fixed; DOC-4 (summary
+  ignores folder ACL) and DOC-5 (ACL not hierarchical) still open, unchanged
+  — DOC-5 confirmed to extend identically to a facility-folder hierarchy
+  added since the last pass. First full review of the other two: the
+  station-document print path (shift roster / apparatus check sheet to a
+  receipt printer) correctly inherits scheduling's own pass-down-notes
+  access rule and equipment-check's own position-narrowing rather than
+  re-deriving looser ones; the legal-document propose/publish workflow is
+  org-scoped throughout, uses `apply_updates` correctly, and — checked
+  through to the frontend — the one path here where an authenticated write
+  reaches an anonymous audience (the public `/privacy`/`/terms` pages)
+  renders custom text as plain JSX, never `dangerouslySetInnerHTML`, so it
+  cannot inject markup. No code changes. See `DOC-10-documents-legal.md`.
+  Next: 11 inventory.
