@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                           |
-| ----------- | ------------------------------------------------------------------------------- |
-| PR          | [#1814](https://github.com/thegspiro/the-logbook/pull/1814)                     |
-| Branch      | `claude/security-review-usr`                                                    |
-| Feature     | 07 Users & organizations                                                        |
-| CI          | fresh run in progress on the tending commit                                     |
-| Threads     | 10 resolved (2 duplicates of one finding; see Log)                              |
-| Last tended | 2026-08-25 — 8 Codex findings addressed (6 fixed, 2 doc-corrected), gates green |
+| Field       | Value                                                       |
+| ----------- | ----------------------------------------------------------- |
+| PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815) |
+| Branch      | `claude/security-review-mp`                                 |
+| Feature     | 08 Membership pipeline                                      |
+| CI          | green (16/16 checks) on current head 6b7c2074               |
+| Threads     | 5 Codex threads, all fixed/flagged, replied, and resolved   |
+| Last tended | 2026-08-25 — 5 fixed, 1 flagged, 1 more found+fixed; pushed |
 
 ---
 
@@ -58,8 +58,8 @@ data-carrying modules, then the supporting infrastructure.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳       |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814 |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳       |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜       |
@@ -312,3 +312,29 @@ re-runs the whole-codebase sweeps against whatever has landed since.
     the cited helper-level tests don't exercise the actual route call sites).
     See `USR-07-users-organizations.md` for the full write-up. Next: 08
     membership pipeline.
+- **07 Users & organizations ✅ merged** — PR #1814 merged 2026-08-25 18:18
+  UTC.
+- **08 Membership pipeline — 5 fixed, 1 flagged (via Codex on the draft PR),
+  plus 1 more found and fixed while fixing one of those.** First drafted as a
+  "no new findings" re-verification pass; Codex's review of that draft PR
+  caught five real issues the draft had missed, and fixing one of them
+  (`update_prospect` dropping explicit nulls) surfaced a second, unguarded
+  path to the exact `TRANSFERRED`-manipulation bug PR #1811's own Codex
+  review had already fixed on the dedicated status endpoints — the generic
+  `PUT /prospects/{id}` reaches the same status column and had none of that
+  fix's guards. Fixed: the explicit-null drop itself (now routes through
+  `apply_updates`, this service's established pattern elsewhere); the second
+  `TRANSFERRED` path (closed the same way as the first); `/approve-step`
+  returning the full applicant record — DOB, address, coordinator notes — to
+  a signer authorized only by the role they hold, not by view permission
+  (now returns a minimal `{prospect_id, step_id, step_completed}` result);
+  and `PUT`/`DELETE /interviews/{id}` bypassing the router-wide self-access
+  guard, because those routes carry no `{prospect_id}` path parameter for it
+  to key on (added a dedicated `block_self_interview_access` dependency).
+  Flagged, not fixed: unbounded election-package listing/creation, the same
+  class as ELEC-12/USR-5 — pagination and a creation cap are both
+  behavior/contract changes needing an owner decision. Full completion gate
+  re-run after the fixes (flake8/black/isort/migrations/228 pipeline tests +
+  37 PII-exposure tests/tsc, all green). See `MP-08-membership-pipeline.md`
+  for the complete writeup, including the revision note explaining the
+  draft-vs-final split. Next: 09 medical screening (PHI).

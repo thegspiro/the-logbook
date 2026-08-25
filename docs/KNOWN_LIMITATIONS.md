@@ -1746,6 +1746,26 @@ the full list (the Members admin page, the leave dashboard widget), which is
 a frontend-affecting decision, not a drop-in. (Security review USR-5,
 `docs/security-review/USR-07-users-organizations.md`.)
 
+## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
+
+`GET /prospective-members/election-packages` (`list_election_packages`) runs
+`.scalars().all()` with no pagination or limit, and `POST
+/prospects/{id}/election-package` (`create_election_package`) imposes no
+per-prospect or per-organization cap — there is no unique constraint on
+`ProspectElectionPackage.prospect_id` and no "already has a ready package"
+check, so every call inserts a new row. Access control is sound — both are
+org-scoped and permission-gated (`elections.manage` / `prospective_members.*`)
+— so this is the same scaling concern as the two entries above, not a leak:
+repeated legitimate package regeneration (e.g. after editing coordinator
+notes) accumulates rows, each carrying a PII-bearing snapshot (documents,
+coordinator notes, config), without bound.
+
+Not fixed for the same reason as the two entries above: enforcing one ready
+package per prospect is a behavior change that could break an intended
+"regenerate before the vote" workflow, and pagination on the list endpoint is
+a response-envelope/frontend-contract change, not a drop-in. (Security review
+MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.

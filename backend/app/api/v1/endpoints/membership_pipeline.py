@@ -34,6 +34,7 @@ from app.api.dependencies import (
     user_has_permission,
 )
 from app.api.prospect_privacy import (
+    block_self_interview_access,
     block_self_prospect_access,
     get_hidden_prospect_ids,
 )
@@ -82,6 +83,7 @@ from app.schemas.membership_pipeline import (
     PurgeInactiveResponse,
     ReportStageGroupsUpdate,
     StepApprovalRequest,
+    StepApprovalResponse,
     StepReorderRequest,
     TransferProspectRequest,
     TransferProspectResponse,
@@ -1147,7 +1149,9 @@ async def complete_step(
     return prospect
 
 
-@router.post("/prospects/{prospect_id}/approve-step", response_model=ProspectResponse)
+@router.post(
+    "/prospects/{prospect_id}/approve-step", response_model=StepApprovalResponse
+)
 async def approve_step(
     prospect_id: UUID,
     data: StepApprovalRequest,
@@ -1164,7 +1168,14 @@ async def approve_step(
     The service only accepts an approval for a role the caller currently
     holds, so no broader permission gate is needed; the step completes (and
     the prospect advances) only when the last required role has signed.
+
+    Returns a minimal result, not the full prospect record: the caller is
+    authorized by the role they hold, not by prospective_members.view, and
+    the full record carries PII (DOB, address, coordinator notes) that
+    holding an approval role does not entitle them to see.
     """
+    from app.models.membership_pipeline import StepProgressStatus
+
     service = MembershipPipelineService(db)
     try:
         prospect = await service.record_step_approval(
@@ -1181,7 +1192,20 @@ async def approve_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
-    return prospect
+    progress = next(
+        (
+            p
+            for p in (prospect.step_progress or [])
+            if str(p.step_id) == str(data.step_id)
+        ),
+        None,
+    )
+    step_completed = bool(progress and progress.status == StepProgressStatus.COMPLETED)
+    return StepApprovalResponse(
+        prospect_id=prospect_id,
+        step_id=data.step_id,
+        step_completed=step_completed,
+    )
 
 
 @router.post("/prospects/{prospect_id}/skip-step", response_model=ProspectResponse)
@@ -2115,6 +2139,7 @@ async def create_interview(
 @router.put(
     "/interviews/{interview_id}",
     response_model=InterviewResponse,
+    dependencies=[Depends(block_self_interview_access)],
 )
 async def update_interview(
     interview_id: UUID,
@@ -2149,6 +2174,7 @@ async def update_interview(
 @router.delete(
     "/interviews/{interview_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(block_self_interview_access)],
 )
 async def delete_interview(
     interview_id: UUID,

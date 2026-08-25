@@ -497,6 +497,103 @@ class TestGuardOverHttp:
         assert activity.status_code == 404
 
 
+class TestInterviewRouteGuard:
+    """``/interviews/{interview_id}`` carries no ``{prospect_id}`` path
+    parameter, so the router-level guard above — keyed on that parameter —
+    never fires for it. block_self_interview_access resolves the interview
+    to its owning prospect and applies the same check, so a caller who holds
+    prospective_members.manage (a coordinator role a former applicant can
+    hold once transferred) still cannot act on an interview filed against
+    their own application by its id alone."""
+
+    def test_guard_is_registered_on_both_interview_routes(self):
+        from app.api.prospect_privacy import block_self_interview_access
+
+        for route in pipeline_endpoints.router.routes:
+            if route.path == "/interviews/{interview_id}":
+                registered = {
+                    dep.dependency
+                    for dep in route.dependencies
+                    if dep.dependency is not None
+                }
+                assert block_self_interview_access in registered, route.methods
+
+    async def test_own_interview_is_404_while_anothers_is_editable(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        org_id, viewer = org_and_viewer
+        await self._grant_manage(db_session, org_id, viewer)
+        svc = MembershipPipelineService(db_session)
+        mine = await _make_prospect(svc, org_id, email=viewer.email)
+        theirs = await _make_prospect(svc, org_id)
+        mine_interview = await svc.create_interview(
+            prospect_id=mine.id, organization_id=org_id, interviewer_id=viewer.id
+        )
+        theirs_interview = await svc.create_interview(
+            prospect_id=theirs.id, organization_id=org_id, interviewer_id=viewer.id
+        )
+
+        async with await self._client(db_session, viewer) as client:
+            own_update = await client.put(
+                f"/prospective-members/interviews/{mine_interview.id}",
+                json={"notes": "trying to edit my own file"},
+            )
+            own_delete = await client.delete(
+                f"/prospective-members/interviews/{mine_interview.id}"
+            )
+            other_update = await client.put(
+                f"/prospective-members/interviews/{theirs_interview.id}",
+                json={"notes": "legitimate coordinator note"},
+            )
+
+        assert own_update.status_code == 404
+        assert own_delete.status_code == 404
+        assert other_update.status_code == 200
+
+        # And the caller's own interview really was left alone.
+        untouched = await svc.get_interview(mine_interview.id, org_id)
+        assert untouched is not None
+        assert untouched.notes != "trying to edit my own file"
+
+    async def _client(self, db_session, viewer):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.core.database import get_db
+
+        app = FastAPI()
+        app.include_router(pipeline_endpoints.router, prefix="/prospective-members")
+        app.dependency_overrides[get_current_user] = lambda: viewer
+        app.dependency_overrides[get_db] = lambda: db_session
+        return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+    async def _grant_manage(self, db_session, org_id, viewer):
+        position_id = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO positions "
+                "(id, organization_id, name, slug, permissions) "
+                "VALUES (:id, :org, 'Coordinator', :slug, :perms)"
+            ),
+            {
+                "id": position_id,
+                "org": org_id,
+                "slug": f"coordinator-{position_id[:8]}",
+                "perms": '["prospective_members.manage"]',
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO user_positions (user_id, position_id) "
+                "VALUES (:uid, :pid)"
+            ),
+            {"uid": viewer.id, "pid": position_id},
+        )
+        await db_session.flush()
+        await db_session.refresh(viewer, ["positions"])
+
+
 # =========================================================================
 # 4. Client-supplied foreign keys
 # =========================================================================

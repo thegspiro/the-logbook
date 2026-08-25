@@ -456,6 +456,21 @@ class StepApprovalRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class StepApprovalResponse(BaseModel):
+    """Result of a signer's sign-off — deliberately not the full prospect.
+
+    /approve-step authorizes a caller by the role they hold, not by
+    prospective_members.view: a stage's configured approver roles are rarely
+    held by anyone with view access. Returning the full ProspectResponse
+    would hand that signer the applicant's DOB, address and coordinator
+    notes as a side effect of recording one sign-off.
+    """
+
+    prospect_id: UUID
+    step_id: UUID
+    step_completed: bool
+
+
 class AdvanceProspectRequest(BaseModel):
     """Schema for advancing a prospect to the next step"""
 
