@@ -35,11 +35,15 @@ branch_labels = None
 depends_on = None
 
 _PERMISSION = "training.configure"
+_PRIOR_ACCESS = "training.manage"
 
-# Every seeded position whose registry entry now carries the grant: the eight
-# that already held ``training.manage`` (five of them rank-mirroring), plus the
-# Membership Coordinator, which holds ``training.configure`` alone.
-_SLUGS = (
+# Seeded positions that hold the grant because they already configured
+# training through ``training.manage``. A department may edit a system
+# position's permissions (role_service permits exactly that on system roles),
+# so the backfill checks each row still *has* ``training.manage`` rather than
+# trusting the slug: re-granting configuration access to a captain an
+# administrator deliberately restricted would silently undo their decision.
+_MIRROR_SLUGS = (
     "fire_chief",
     "deputy_chief",
     "assistant_chief",
@@ -48,8 +52,15 @@ _SLUGS = (
     "president",
     "safety_officer",
     "training_officer",
-    "membership_coordinator",
 )
+
+# The Membership Coordinator is the exception, and unconditionally so. This is
+# a new capability rather than a rename of an old one, so no prior removal can
+# express an intent about it — there was nothing to remove. It is also the
+# reason the permission exists.
+_NEW_GRANT_SLUGS = ("membership_coordinator",)
+
+_SLUGS = _MIRROR_SLUGS + _NEW_GRANT_SLUGS
 
 
 def _load_permissions(raw):
@@ -82,6 +93,10 @@ def _apply(add: bool) -> None:
             has = _PERMISSION in permissions
             if add == has:
                 continue
+            if add and slug in _MIRROR_SLUGS and _PRIOR_ACCESS not in permissions:
+                # Customized: this department took training administration
+                # away from the position. Leave it taken away.
+                continue
             if add:
                 permissions.append(_PERMISSION)
             else:
@@ -101,5 +116,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Reversible: the grant is additive and the endpoints still accept
     # training.manage, so removing it only costs the Membership Coordinator
-    # the access this revision introduced.
+    # the access this revision introduced. Removal is unconditional — every
+    # seeded row carrying the permission got it from the upgrade above.
     _apply(add=False)

@@ -16,7 +16,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -32,6 +36,7 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.schemas.training_module_config import (
+    MEMBER_DISCLOSURE_FIELDS,
     MemberVisibilityResponse,
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
@@ -69,12 +74,29 @@ async def update_training_module_config(
     how much of an officer's assessment the assessed member may read. It is
     accepted alongside ``training.manage`` rather than replacing it so that a
     department's own customized position keeps the access it already had.
+
+    It does **not** carry the rest of this schema. The same payload can switch
+    shift reports off, rewrite the officer's report form, remap apparatus
+    skills and change the review workflow — a Membership Coordinator holding
+    only ``training.configure`` would otherwise be able to disable a system
+    they deliberately do not administer.
     """
+    requested = updates.model_dump(exclude_unset=True)
+    beyond_disclosure = sorted(set(requested) - MEMBER_DISCLOSURE_FIELDS)
+    if beyond_disclosure and not user_has_permission(current_user, "training.manage"):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "training.manage is required to change these settings: "
+                + ", ".join(beyond_disclosure)
+            ),
+        )
+
     service = TrainingModuleConfigService(db)
     config = await service.update_config(
         organization_id=current_user.organization_id,
         updated_by=str(current_user.id),
-        **updates.model_dump(exclude_unset=True),
+        **requested,
     )
     return config
 
@@ -122,6 +144,22 @@ async def get_my_training_summary(
         logger.warning(
             f"Failed to check training officer role for user {current_user.id}: {e}"
         )
+
+    # Report what this caller may actually see, not the raw org policy. Every
+    # branch below reads `is_officer or flag`, and the page then re-applies
+    # the same flags client-side — so an officer, exempt on the server, still
+    # had the sections hidden from them. One source of truth instead: the
+    # officer exemption is folded in here and the page just honours what it
+    # receives.
+    #
+    # `allow_member_report_export` is deliberately not folded in: the export
+    # endpoint has no officer exemption either (officers export through the
+    # reports screen), so flipping it would offer a button that 403s.
+    if is_officer:
+        visibility = {
+            key: (True if key.startswith("show_") else value)
+            for key, value in visibility.items()
+        }
 
     org_id = str(current_user.organization_id)
     user_id = str(current_user.id)
@@ -406,6 +444,16 @@ async def get_my_training_summary(
 
         result["enrollments"] = enrollment_list
 
+    # A report is visible to its trainee only once it is approved. The other
+    # member-facing reader of this data — ``/shift-completion/my-*`` — passes
+    # ``released_only=True`` for exactly this reason; these two queries did
+    # not, so a department running ``report_review_required`` showed the
+    # trainee draft, pending and flagged reports anyway. ``review_status``
+    # defaults to "approved", so a department not using review is unaffected.
+    released_only = (
+        [] if is_officer else [ShiftCompletionReport.review_status == "approved"]
+    )
+
     # --- Shift Reports ---
     if is_officer or visibility.get("show_shift_reports", True):
         sr_result = await db.execute(
@@ -413,6 +461,7 @@ async def get_my_training_summary(
             .where(
                 ShiftCompletionReport.organization_id == org_id,
                 ShiftCompletionReport.trainee_id == user_id,
+                *released_only,
             )
             .order_by(ShiftCompletionReport.shift_date.desc())
             .limit(50)
@@ -459,6 +508,7 @@ async def get_my_training_summary(
             ).where(
                 ShiftCompletionReport.organization_id == org_id,
                 ShiftCompletionReport.trainee_id == user_id,
+                *released_only,
             )
         )
         srow = stats_result.one()

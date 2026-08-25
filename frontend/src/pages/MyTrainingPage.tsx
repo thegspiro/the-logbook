@@ -117,6 +117,14 @@ const Section: React.FC<{
 interface ConfigEditorProps {
   config: TMConfig;
   onSave: (updates: Partial<TMConfig>) => Promise<void>;
+  /**
+   * Whether the caller holds `training.manage`. The disclosure settings above
+   * the divider answer to `training.configure`; everything below it — the
+   * review workflow and the rating scale — configures the shift-report system
+   * and the backend rejects it without `training.manage`. Offering controls
+   * that can only 403 is worse than not offering them.
+   */
+  canManageTraining: boolean;
 }
 
 const VISIBILITY_FIELDS: Array<{ key: keyof TMConfig; label: string; description: string; group: string }> = [
@@ -237,7 +245,7 @@ const DEFAULT_COMPETENCY_LABELS: Record<string, string> = {
   '5': 'Exemplary',
 };
 
-const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
+const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTraining }) => {
   const [draft, setDraft] = useState<Partial<TMConfig>>({});
   const [saving, setSaving] = useState(false);
 
@@ -351,133 +359,141 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
         </div>
       </div>
 
-      {/* These last two groups are not visibility settings — they configure
-          the officer's shift-report form and the review it goes through.
-          They stay here rather than moving wholesale to Scheduling →
-          Shift Reports because that screen is gated on `scheduling.manage`,
-          which a training officer need not hold; presenting them under their
-          own heading is what stops them reading as things members can see. */}
-      <div className="border-theme-surface-border border-t pt-6">
-        <h3 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
-          Shift Report Configuration
-        </h3>
-        <p className="text-theme-text-muted mt-1 text-sm">
-          These change the report form officers fill in and who signs it off — not what members see. The same settings
-          appear under Scheduling → Shift Reports.
-        </p>
-      </div>
-
-      {/* Report Review Workflow */}
-      <div>
-        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Report Review Workflow</h4>
-        <div className="space-y-3">
-          <label className="bg-theme-surface hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors">
-            <div>
-              <p className="text-theme-text-primary text-sm font-medium">Require Review Before Visibility</p>
-              <p className="text-theme-text-muted text-xs">
-                Reports must be reviewed and approved before trainees can see them
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={getCurrentValue('report_review_required')}
-              onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
-              className="form-checkbox"
-            />
-          </label>
-
-          {getCurrentValue('report_review_required') && (
-            <div className="bg-theme-surface rounded-lg p-3">
-              <p className="text-theme-text-primary mb-1 text-sm font-medium">Review Role</p>
-              <p className="text-theme-text-muted mb-2 text-xs">
-                Who should review reports before they are visible to trainees?
-              </p>
-              <select
-                value={getStringValue('report_review_role') || 'training_officer'}
-                onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
-                className="form-input text-sm"
-              >
-                {REVIEW_ROLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Rating Scale Configuration */}
-      <div>
-        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Rating Scale</h4>
-        <div className="space-y-3">
-          <div className="bg-theme-surface rounded-lg p-3">
-            <p className="text-theme-text-primary mb-1 text-sm font-medium">Rating Label</p>
-            <p className="text-theme-text-muted mb-2 text-xs">
-              How the rating field is labeled to officers (e.g. &quot;Performance Rating&quot;, &quot;Skills
-              Assessment&quot;)
+      {/* The shift-report half of this panel needs `training.manage`;
+          `training.configure` alone is refused for these fields by the
+          backend, so a Membership Coordinator is shown the disclosure
+          settings they own and not controls that would only 403. */}
+      {canManageTraining && (
+        <>
+          {/* These last two groups are not visibility settings — they configure
+            the officer's shift-report form and the review it goes through.
+            They stay here rather than moving wholesale to Scheduling →
+            Shift Reports because that screen is gated on `scheduling.manage`,
+            which a training officer need not hold; presenting them under their
+            own heading is what stops them reading as things members can see. */}
+          <div className="border-theme-surface-border border-t pt-6">
+            <h3 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
+              Shift Report Configuration
+            </h3>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              These change the report form officers fill in and who signs it off — not what members see. The same
+              settings appear under Scheduling → Shift Reports.
             </p>
-            <input
-              type="text"
-              value={getStringValue('rating_label') || 'Performance Rating'}
-              onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
-              placeholder="Performance Rating"
-              className="form-input text-sm"
-            />
           </div>
 
-          <div className="bg-theme-surface rounded-lg p-3">
-            <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Type</p>
-            <p className="text-theme-text-muted mb-2 text-xs">How the rating is displayed</p>
-            <select
-              value={currentScaleType}
-              onChange={(e) => {
-                const newDraft: Partial<TMConfig> = { ...draft, rating_scale_type: e.target.value };
-                // Set default labels when switching to competency
-                if (e.target.value === 'competency') {
-                  newDraft.rating_scale_labels = DEFAULT_COMPETENCY_LABELS;
-                }
-                setDraft(newDraft);
-              }}
-              className="form-input text-sm"
-            >
-              {RATING_SCALE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Report Review Workflow */}
+          <div>
+            <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Report Review Workflow</h4>
+            <div className="space-y-3">
+              <label className="bg-theme-surface hover:bg-theme-surface-hover flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Require Review Before Visibility</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Reports must be reviewed and approved before trainees can see them
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={getCurrentValue('report_review_required')}
+                  onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
+                  className="form-checkbox"
+                />
+              </label>
 
-          {(currentScaleType === 'competency' || currentScaleType === 'custom') && (
-            <div className="bg-theme-surface rounded-lg p-3">
-              <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Labels</p>
-              <p className="text-theme-text-muted mb-2 text-xs">Define labels for each level (1-5)</p>
-              <div className="space-y-2">
-                {[1, 2, 3, 4, 5].map((level) => {
-                  const labels = getLabelsValue();
-                  return (
-                    <div key={level} className="flex items-center gap-2">
-                      <span className="text-theme-text-muted w-6 text-center font-mono text-sm">{level}</span>
-                      <input
-                        type="text"
-                        value={labels[String(level)] || ''}
-                        onChange={(e) => {
-                          const updated = { ...getLabelsValue(), [String(level)]: e.target.value };
-                          setDraft({ ...draft, rating_scale_labels: updated });
-                        }}
-                        placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
-                        className="form-input-sm flex-1"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+              {getCurrentValue('report_review_required') && (
+                <div className="bg-theme-surface rounded-lg p-3">
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">Review Role</p>
+                  <p className="text-theme-text-muted mb-2 text-xs">
+                    Who should review reports before they are visible to trainees?
+                  </p>
+                  <select
+                    value={getStringValue('report_review_role') || 'training_officer'}
+                    onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
+                    className="form-input text-sm"
+                  >
+                    {REVIEW_ROLE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+
+          {/* Rating Scale Configuration */}
+          <div>
+            <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Rating Scale</h4>
+            <div className="space-y-3">
+              <div className="bg-theme-surface rounded-lg p-3">
+                <p className="text-theme-text-primary mb-1 text-sm font-medium">Rating Label</p>
+                <p className="text-theme-text-muted mb-2 text-xs">
+                  How the rating field is labeled to officers (e.g. &quot;Performance Rating&quot;, &quot;Skills
+                  Assessment&quot;)
+                </p>
+                <input
+                  type="text"
+                  value={getStringValue('rating_label') || 'Performance Rating'}
+                  onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
+                  placeholder="Performance Rating"
+                  className="form-input text-sm"
+                />
+              </div>
+
+              <div className="bg-theme-surface rounded-lg p-3">
+                <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Type</p>
+                <p className="text-theme-text-muted mb-2 text-xs">How the rating is displayed</p>
+                <select
+                  value={currentScaleType}
+                  onChange={(e) => {
+                    const newDraft: Partial<TMConfig> = { ...draft, rating_scale_type: e.target.value };
+                    // Set default labels when switching to competency
+                    if (e.target.value === 'competency') {
+                      newDraft.rating_scale_labels = DEFAULT_COMPETENCY_LABELS;
+                    }
+                    setDraft(newDraft);
+                  }}
+                  className="form-input text-sm"
+                >
+                  {RATING_SCALE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(currentScaleType === 'competency' || currentScaleType === 'custom') && (
+                <div className="bg-theme-surface rounded-lg p-3">
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">Scale Labels</p>
+                  <p className="text-theme-text-muted mb-2 text-xs">Define labels for each level (1-5)</p>
+                  <div className="space-y-2">
+                    {[1, 2, 3, 4, 5].map((level) => {
+                      const labels = getLabelsValue();
+                      return (
+                        <div key={level} className="flex items-center gap-2">
+                          <span className="text-theme-text-muted w-6 text-center font-mono text-sm">{level}</span>
+                          <input
+                            type="text"
+                            value={labels[String(level)] || ''}
+                            onChange={(e) => {
+                              const updated = { ...getLabelsValue(), [String(level)]: e.target.value };
+                              setDraft({ ...draft, rating_scale_labels: updated });
+                            }}
+                            placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
+                            className="form-input-sm flex-1"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {Object.keys(draft).length > 0 && (
         <div className="flex justify-end">
@@ -508,15 +524,16 @@ const MyTrainingPage: React.FC = () => {
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   // GET /config is open to every authenticated member — it has to be, the
   // member page reads the visibility flags out of it — so a 200 from it says
   // nothing about who may *edit* the settings. Gating the tab on that call
   // succeeding showed every firefighter the department's disclosure policy
   // and a Save button that could only 403. Ask the permission instead.
-  const canConfigure = useAuthStore(
-    (state) => state.checkPermission('training.configure') || state.checkPermission('training.manage')
-  );
+  const canManageTraining = useAuthStore((state) => state.checkPermission('training.manage'));
+  const canConfigureDisclosure = useAuthStore((state) => state.checkPermission('training.configure'));
+  const canConfigure = canConfigureDisclosure || canManageTraining;
   // Falls back rather than trusting the stored tab: if the grant goes away
   // while the settings tab is open, `activeTab` still says 'settings' and
   // every branch below would decline to render, leaving a blank page.
@@ -543,8 +560,18 @@ const MyTrainingPage: React.FC = () => {
       setData(trainingData);
 
       if (canConfigure) {
-        const cfg = await trainingModuleConfigService.getConfig();
-        setConfig(cfg);
+        // Deliberately caught separately. This request only feeds the
+        // settings tab; letting it reach the outer catch would replace a
+        // member overview that has already loaded with a full-page error
+        // because an editor-only fetch blipped.
+        try {
+          const cfg = await trainingModuleConfigService.getConfig();
+          setConfig(cfg);
+          setConfigError(null);
+        } catch (cfgErr: unknown) {
+          setConfig(null);
+          setConfigError(getErrorMessage(cfgErr, 'Failed to load the visibility settings'));
+        }
       }
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load training data'));
@@ -665,9 +692,15 @@ const MyTrainingPage: React.FC = () => {
       )}
 
       {/* Settings Tab */}
-      {tab === 'settings' && config && (
+      {tab === 'settings' && (
         <Section title="Member Visibility Settings" icon={Shield} defaultOpen>
-          <ConfigEditor config={config} onSave={handleConfigSave} />
+          {config ? (
+            <ConfigEditor config={config} onSave={handleConfigSave} canManageTraining={canManageTraining} />
+          ) : (
+            <div className="alert-error" role="alert">
+              {configError ?? 'Loading the visibility settings…'}
+            </div>
+          )}
         </Section>
       )}
 

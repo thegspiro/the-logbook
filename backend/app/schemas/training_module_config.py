@@ -207,6 +207,37 @@ class TrainingModuleConfigUpdate(BaseModel):
     manual_entry_default_duration_hours: Optional[float] = Field(None, gt=0, le=48)
 
 
+#: The subset of :class:`TrainingModuleConfigUpdate` that ``training.configure``
+#: alone may write — the disclosure policy this permission exists for.
+#:
+#: Everything outside it configures the department's shift-report *system*
+#: rather than what a member may read of their own file: whether shift reports
+#: are enabled at all, manual entry, which sections appear on the officer's
+#: form, apparatus skill/task mappings, the review workflow and the rating
+#: scale. Those keep requiring ``training.manage``, so a Membership
+#: Coordinator cannot switch off a system they do not administer.
+MEMBER_DISCLOSURE_FIELDS: frozenset[str] = frozenset(
+    {
+        "show_training_history",
+        "show_training_hours",
+        "show_certification_status",
+        "show_pipeline_progress",
+        "show_requirement_details",
+        "show_shift_reports",
+        "show_shift_stats",
+        "show_officer_narrative",
+        "show_performance_rating",
+        "show_areas_of_strength",
+        "show_areas_for_improvement",
+        "show_skills_observed",
+        "show_submission_history",
+        "allow_member_report_export",
+        "skills_result_disclosure",
+        "skills_result_release",
+    }
+)
+
+
 class MemberVisibilityResponse(BaseModel):
     """Lightweight response for members — just the boolean visibility flags."""
 

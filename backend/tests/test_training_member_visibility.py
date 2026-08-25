@@ -12,15 +12,17 @@ panel was reviewed end to end:
 """
 
 import ast
+import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.api.v1.endpoints.training_module_config import (
     export_my_training,
     get_my_training_summary,
 )
+from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.permissions import (
     ALL_PERMISSIONS,
     DEFAULT_POSITIONS,
@@ -28,6 +30,10 @@ from app.core.permissions import (
 )
 from app.models.training import TrainingModuleConfig
 from app.models.user import User
+from app.schemas.training_module_config import (
+    MEMBER_DISCLOSURE_FIELDS,
+    TrainingModuleConfigUpdate,
+)
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 _ENDPOINT_SOURCE = (
@@ -40,6 +46,19 @@ _MIGRATION_SOURCE = (
     Path(__file__).parents[1]
     / "alembic/versions/20260825_1400_e3b7c25f9a41_grant_training_configure.py"
 )
+
+
+def _migration_slugs() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Read ``_MIRROR_SLUGS`` and ``_NEW_GRANT_SLUGS`` out of the migration."""
+    migration = ast.parse(_MIGRATION_SOURCE.read_text())
+    found = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in migration.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in {"_MIRROR_SLUGS", "_NEW_GRANT_SLUGS"}
+    }
+    return found["_MIRROR_SLUGS"], found["_NEW_GRANT_SLUGS"]
 
 
 def _handler(name: str) -> ast.AsyncFunctionDef:
@@ -120,14 +139,7 @@ def test_every_seeded_training_configure_grant_is_covered_by_the_migration():
     ``DEFAULT_POSITIONS["fire_chief"]["permissions"]`` *is*
     ``OPERATIONAL_RANKS["fire_chief"]["default_permissions"]``.
     """
-    migration = ast.parse(_MIGRATION_SOURCE.read_text())
-    slugs = next(
-        ast.literal_eval(node.value)
-        for node in migration.body
-        if isinstance(node, ast.Assign)
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id == "_SLUGS"
-    )
+    mirror, new_grant = _migration_slugs()
 
     seeded = {
         slug
@@ -135,7 +147,29 @@ def test_every_seeded_training_configure_grant_is_covered_by_the_migration():
         if "training.configure" in position["permissions"]
     }
     assert seeded, "registry carries no training.configure grant to migrate"
-    assert seeded == set(slugs)
+    assert seeded == set(mirror) | set(new_grant)
+
+
+def test_migration_splits_mirror_grants_from_the_new_one():
+    """The two tiers are not interchangeable.
+
+    A department may edit a system position's permissions, so a slug that
+    carries ``training.configure`` only because it carried ``training.manage``
+    must be checked against the row's *current* grants — otherwise the
+    backfill re-grants configuration access to a captain an administrator
+    deliberately restricted. The Membership Coordinator is the exception: the
+    permission is new, so no prior removal can have expressed an intent about
+    it.
+    """
+    mirror, new_grant = _migration_slugs()
+
+    assert set(new_grant) == {"membership_coordinator"}
+    for slug in mirror:
+        assert "training.manage" in DEFAULT_POSITIONS[slug]["permissions"], slug
+    assert (
+        "training.manage"
+        not in DEFAULT_POSITIONS["membership_coordinator"]["permissions"]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +219,29 @@ async def _configure(db_session, org_id: str, **flags) -> None:
     await service.update_config(organization_id=org_id, updated_by=None, **flags)
 
 
+async def _grant_officer_position(db_session, org_id: str, user_id: str) -> None:
+    """Attach a position the endpoint's officer check recognizes."""
+    position_id = str(uuid.uuid4())
+    slug = TRAINING_OFFICER_ROLE_SLUGS[1]
+    await db_session.execute(
+        text(
+            "INSERT INTO positions (id, organization_id, name, slug, is_system) "
+            "VALUES (:i, :o, :n, :s, :y)"
+        ),
+        {"i": position_id, "o": org_id, "n": slug, "s": slug, "y": True},
+    )
+    await db_session.execute(
+        text("INSERT INTO user_positions (user_id, position_id) " "VALUES (:u, :p)"),
+        {"u": user_id, "p": position_id},
+    )
+    await db_session.flush()
+
+
+# The rest of this module drives the endpoint against a real database, so it
+# belongs to the integration job. The unit job runs `-m "not integration"`
+# with no database at all — an unmarked db_session test errors there rather
+# than failing informatively.
+@pytest.mark.integration
 async def test_hours_are_withheld_but_the_counts_survive(
     db_session, setup_org_and_admin
 ):
@@ -205,6 +262,7 @@ async def test_hours_are_withheld_but_the_counts_survive(
     assert summary["completed_courses"] == 0
 
 
+@pytest.mark.integration
 async def test_requirement_details_are_withheld_when_switched_off(
     db_session, setup_org_and_admin
 ):
@@ -220,6 +278,7 @@ async def test_requirement_details_are_withheld_when_switched_off(
     assert "requirements_summary" in result
 
 
+@pytest.mark.integration
 async def test_hiding_certification_status_hides_the_cert_derived_flags(
     db_session, setup_org_and_admin
 ):
@@ -236,6 +295,7 @@ async def test_hiding_certification_status_hides_the_cert_derived_flags(
         assert "blocks_activity" not in detail
 
 
+@pytest.mark.integration
 async def test_defaults_disclose_everything_the_page_already_showed(
     db_session, setup_org_and_admin
 ):
@@ -254,6 +314,7 @@ async def test_defaults_disclose_everything_the_page_already_showed(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 async def test_export_refused_when_history_is_hidden(db_session, setup_org_and_admin):
     """Enabling export must not hand back what the page withholds."""
     from fastapi import HTTPException
@@ -273,6 +334,7 @@ async def test_export_refused_when_history_is_hidden(db_session, setup_org_and_a
     assert excinfo.value.status_code == 403
 
 
+@pytest.mark.integration
 async def test_export_omits_certification_columns_when_hidden(db_session):
     """The CSV carried certification numbers and expiry unconditionally."""
     from app.services.training_enhancement_service import ReportExportService
@@ -288,3 +350,105 @@ async def test_export_omits_certification_columns_when_hidden(db_session):
     assert "Certification #" not in header
     assert "Expiration Date" not in header
     assert "Certification #" in full.splitlines()[0]
+
+
+# ---------------------------------------------------------------------------
+# Review findings, 2026-08-25
+# ---------------------------------------------------------------------------
+
+
+def test_disclosure_allowlist_covers_only_visibility_fields():
+    """``training.configure`` must not reach the shift-report system.
+
+    The update schema carries far more than disclosure policy — whether shift
+    reports exist at all, manual entry, the officer's form sections, apparatus
+    mappings, the review workflow and the rating scale. A Membership
+    Coordinator holding this permission alone would otherwise be able to
+    switch off a system they deliberately do not administer.
+    """
+    all_fields = set(TrainingModuleConfigUpdate.model_fields)
+
+    assert MEMBER_DISCLOSURE_FIELDS <= all_fields
+    operational = all_fields - MEMBER_DISCLOSURE_FIELDS
+    for field in (
+        "shift_reports_enabled",
+        "manual_entry_enabled",
+        "report_review_required",
+        "rating_scale_type",
+        "apparatus_type_skills",
+        "form_show_officer_narrative",
+    ):
+        assert field in operational, field
+    for field in ("show_officer_narrative", "skills_result_disclosure"):
+        assert field in MEMBER_DISCLOSURE_FIELDS, field
+
+
+def test_update_handler_checks_training_manage_for_operational_fields():
+    """The allowlist is enforced in the handler, not merely documented."""
+    source = ast.unparse(_handler("update_training_module_config"))
+    assert "MEMBER_DISCLOSURE_FIELDS" in source
+    assert "user_has_permission(current_user, 'training.manage')" in source
+
+
+@pytest.mark.integration
+async def test_officer_visibility_is_reported_as_effective(
+    db_session, setup_org_and_admin
+):
+    """Officers are exempt on the server; the payload has to say so.
+
+    The page re-applies these flags client-side, so returning the raw org
+    policy hid sections from the very people the endpoint had already decided
+    to exempt.
+    """
+    org_id, _ = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    await _configure(
+        db_session,
+        org_id,
+        show_training_hours=False,
+        show_shift_stats=False,
+        allow_member_report_export=False,
+    )
+
+    as_member = await get_my_training_summary(db=db_session, current_user=user)
+    assert as_member["visibility"]["show_training_hours"] is False
+
+    # Same caller, now holding a training-officer position.
+    #
+    # The position's *name* is set to the slug on purpose: the endpoint
+    # compares ``TRAINING_OFFICER_ROLE_SLUGS`` against ``Position.name``, not
+    # ``Position.slug``. That mismatch is a real defect — on a stock
+    # installation, where the seeded name is "Training Officer",
+    # ``is_officer`` never becomes True — but it is not this change's to fix,
+    # and the fixture has to match the code as it stands for the exemption to
+    # be exercised at all.
+    await _grant_officer_position(db_session, org_id, str(user.id))
+
+    # Drop the identity map before re-reading. The endpoint re-queries the
+    # user with selectinload(User.roles), but SQLAlchemy will not overwrite an
+    # already-populated collection on an instance it still holds, so without
+    # this the officer still looks position-less.
+    db_session.expunge_all()
+    user = await _member(db_session, setup_org_and_admin)
+
+    as_officer = await get_my_training_summary(db=db_session, current_user=user)
+
+    visibility = as_officer["visibility"]
+    assert all(v is True for k, v in visibility.items() if k.startswith("show_"))
+    # Not folded in: the export endpoint has no officer exemption either, so
+    # flipping this would offer a button that 403s.
+    assert visibility["allow_member_report_export"] is False
+
+
+def test_member_shift_queries_filter_on_release():
+    """Draft, pending and flagged reports must not reach the trainee.
+
+    ``/shift-completion/my-*`` passes ``released_only=True`` for exactly this
+    reason. These two queries did not, so the shift statistics — the average
+    rating above all — exposed an officer's assessment before approval.
+    """
+    source = ast.unparse(_handler("get_my_training_summary"))
+    assert "ShiftCompletionReport.review_status == 'approved'" in source
+    # Applied to both the report list and the aggregate, and only for members.
+    assert source.count("*released_only") == 2
+    assert "if is_officer else" in source

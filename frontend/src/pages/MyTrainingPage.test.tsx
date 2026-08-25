@@ -203,6 +203,51 @@ describe('MyTrainingPage', () => {
     });
   });
 
+  describe('settings panel scope', () => {
+    it('offers a training.configure holder only the disclosure settings', async () => {
+      auth.permissions = ['training.configure'];
+      mockGetConfig.mockResolvedValue({ report_review_required: false, rating_scale_type: 'stars' });
+      const user = userEvent.setup();
+      renderWithRouter(<MyTrainingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /member visibility settings/i }));
+
+      // The backend refuses these fields without training.manage, so showing
+      // them would be offering a control that can only 403.
+      expect(await screen.findByText(/Control what training data members can see/)).toBeInTheDocument();
+      expect(screen.queryByText('Shift Report Configuration')).not.toBeInTheDocument();
+      expect(screen.queryByText('Report Review Workflow')).not.toBeInTheDocument();
+      expect(screen.queryByText('Rating Scale')).not.toBeInTheDocument();
+    });
+
+    it('offers the shift-report half to a training.manage holder', async () => {
+      auth.permissions = ['training.manage'];
+      mockGetConfig.mockResolvedValue({ report_review_required: false, rating_scale_type: 'stars' });
+      const user = userEvent.setup();
+      renderWithRouter(<MyTrainingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /member visibility settings/i }));
+
+      expect(await screen.findByText('Shift Report Configuration')).toBeInTheDocument();
+      expect(screen.getByText('Report Review Workflow')).toBeInTheDocument();
+    });
+
+    it('keeps the overview usable when the settings fetch fails', async () => {
+      auth.permissions = ['training.manage'];
+      mockGetConfig.mockRejectedValue(new Error('config unavailable'));
+      renderWithRouter(<MyTrainingPage />);
+
+      // The overview loaded; an editor-only outage must not replace it with a
+      // full-page error.
+      expect(await screen.findByText('Completed Courses')).toBeInTheDocument();
+      expect(screen.queryByText(/config unavailable/)).not.toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /member visibility settings/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(/config unavailable/);
+    });
+  });
+
   describe('visibility flags the page had stopped honouring', () => {
     const withVisibility = (overrides: Record<string, boolean>) => ({
       ...mockTrainingData,
