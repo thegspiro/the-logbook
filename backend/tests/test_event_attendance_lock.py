@@ -542,6 +542,71 @@ class TestCustomFieldsCannotDropTheMarker:
         assert event.custom_fields["room"] == "bay"
 
 
+class TestLockIsAnAtomicTransition:
+    """PR #1791 review, P1: the guard was check-then-act. Finalize read the
+    event without a row lock and so did every writer, so a check-in could
+    commit between finalize's roster snapshot and the close — leaving that
+    member checked in, uncredited, and behind a lock with no way to see why."""
+
+    def _locked(self, statement) -> bool:
+        return (
+            "for update"
+            in str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+        )
+
+    async def test_finalize_takes_the_row_lock(self):
+        db = _mock_db(_one(None))
+        await EventService(db).finalize_event_attendance("event-1", "org-1")
+        assert self._locked(db.execute.await_args.args[0])
+
+    async def test_reopen_takes_the_row_lock(self):
+        db = _mock_db(_one(None))
+        await EventService(db).reopen_event_attendance("event-1", "org-1")
+        assert self._locked(db.execute.await_args.args[0])
+
+    async def test_every_attendance_writer_takes_it_too(self):
+        """A writer that reads the lock and then writes has to hold the row, or
+        it can act on a decision another transaction has already invalidated."""
+        svc_calls = [
+            ("check_in_attendee", lambda s: s.check_in_attendee("e", "u", "o")),
+            (
+                "manager_add_attendee",
+                lambda s: s.manager_add_attendee(
+                    event_id="e", user_id="u", organization_id="o", manager_id="m"
+                ),
+            ),
+            (
+                "override_rsvp_attendance",
+                lambda s: s.override_rsvp_attendance(
+                    event_id="e",
+                    user_id="u",
+                    organization_id="o",
+                    manager_id="m",
+                    override_data=SimpleNamespace(model_dump=lambda **_: {}),
+                ),
+            ),
+            ("remove_attendee", lambda s: s.remove_attendee("e", "u", "o")),
+            (
+                "record_actual_times",
+                lambda s: s.record_actual_times(
+                    event_id="e",
+                    organization_id="o",
+                    actual_start_time=None,
+                    actual_end_time=None,
+                ),
+            ),
+            ("end_event", lambda s: s.end_event("e", "o")),
+            ("self_check_in", lambda s: s.self_check_in("e", "u", "o")),
+            ("delete_event", lambda s: s.delete_event("e", "o")),
+        ]
+        for name, call in svc_calls:
+            db = _mock_db(_one(None))
+            await call(EventService(db))
+            assert self._locked(
+                db.execute.await_args.args[0]
+            ), f"{name} does not lock the event row"
+
+
 class TestNewQueriesAreOrgScoped:
     """Pitfall #14: every by-id read filters organization_id, including the
     ones whose id came from a row that was already scoped."""
