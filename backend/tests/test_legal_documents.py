@@ -1,7 +1,11 @@
 """Tests for Governance -> Legal Documents (propose / publish workflow)."""
 
-import pytest
+from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
+from app.api.v1.endpoints.legal_documents import _assert_may_modify
 from app.models.legal import (
     LegalDocumentRevision,
     LegalDocumentType,
@@ -145,6 +149,54 @@ class TestUpdateSemantics:
         revision = self._revision()
         with pytest.raises(ValueError, match="cannot be cleared"):
             apply_updates(revision, {"body": None})
+
+
+class TestAssertMayModify:
+    """The endpoint-layer guard on editing/deleting a draft.
+
+    A proposer may only touch their own draft; a publisher may tidy up
+    anyone's. Without this, any holder of ``legal.propose`` could rewrite or
+    discard a colleague's proposal and leave their own name on it — the one
+    thing a proposal record exists to prevent. Exercised directly (no DB):
+    both branches turn on ``user_has_permission``, which reads only the
+    transient ``positions``/``rank`` attributes.
+    """
+
+    pytestmark = pytest.mark.unit
+
+    def _revision(self, created_by="u-author"):
+        return LegalDocumentRevision(
+            organization_id="org-1",
+            document_type=LegalDocumentType.PRIVACY_POLICY,
+            body="Body.",
+            change_note="Note.",
+            created_by=created_by,
+        )
+
+    def _user(self, user_id, *, permissions=()):
+        return SimpleNamespace(
+            id=user_id,
+            positions=[SimpleNamespace(permissions=list(permissions))],
+            rank=None,
+        )
+
+    def test_the_author_may_modify_their_own_draft(self):
+        author = self._user("u-author")
+        _assert_may_modify(self._revision(created_by="u-author"), author)
+
+    def test_a_proposer_may_not_modify_someone_elses_draft(self):
+        other = self._user("u-other", permissions=("legal.propose",))
+        with pytest.raises(HTTPException) as exc:
+            _assert_may_modify(self._revision(created_by="u-author"), other)
+        assert exc.value.status_code == 403
+
+    def test_a_publisher_may_modify_anyones_draft(self):
+        publisher = self._user("u-publisher", permissions=("legal.publish",))
+        _assert_may_modify(self._revision(created_by="u-author"), publisher)
+
+    def test_settings_manage_may_modify_anyones_draft(self):
+        admin = self._user("u-admin", permissions=("settings.manage",))
+        _assert_may_modify(self._revision(created_by="u-author"), admin)
 
 
 @pytest.mark.integration
