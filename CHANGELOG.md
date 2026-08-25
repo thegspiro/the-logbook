@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The finance approvals queue scanned every organization's pending steps (2026-08-25)
+
+**Fixed**
+
+- `GET /finance/approvals/pending` (`get_pending_approvals`) carried no
+  organization filter on its underlying query, scanning every tenant's
+  pending purchase-request/expense-report/check-request approval steps and
+  running two follow-up queries per record before a later, org-scoped check
+  discarded anything that wasn't the caller's. No data ever leaked across
+  organizations, but the query cost of loading one department's approvals
+  inbox scaled with the whole platform's pending-approval volume. Now
+  resolves each organization's own pending entities first, so the scan and
+  its per-record follow-up queries are confined to the caller's organization;
+  the returned results are unchanged.
+
 ### A storefront manager could settle their own order's payment (2026-08-25)
 
 **Fixed**

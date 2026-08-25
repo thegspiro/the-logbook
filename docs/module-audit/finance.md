@@ -172,6 +172,13 @@ CI's unit job rather than needing MySQL. **Status:** fixed.
   `_advance_notification_steps`/`_check_all_steps_complete` and 7 call sites would
   churn the critical money-approval path for zero live benefit; the regression risk
   outweighs a redundant filter. Left flagged.
+  **Correction (security-review FIN-9, 2026-08-25):** the sibling method
+  `get_pending_approvals` — the query actually reachable from `GET
+/finance/approvals/pending` — carried no organization filter either, and
+  unlike these two was live: it scanned every tenant's pending approval steps
+  on every call, not merely "the org-wide queue" this doc previously implied.
+  Fixed to resolve each entity type's org-scoped id set before the record
+  query runs; see `docs/security-review/FIN-05-finance-approvals.md`.
 - Large-module caveat: `finance_service.py` (~1,930 L) was reviewed for security
   invariants (org-scoping, XC-1/3, financial correctness), not line-by-line. The
   invariants held on every path examined.
