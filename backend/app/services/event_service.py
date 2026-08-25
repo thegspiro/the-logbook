@@ -2230,10 +2230,16 @@ class EventService:
 
         The caller is responsible for audit-logging who reopened it and why.
         """
+        # location_obj is eager-loaded because the endpoint serializes the
+        # returned event through _build_event_response, which reads it. Left
+        # lazy, that read is IO outside the greenlet context and raises
+        # MissingGreenlet — a 500 on reopening any event that has a location,
+        # while events with no location_id short-circuit and appear to work.
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
 

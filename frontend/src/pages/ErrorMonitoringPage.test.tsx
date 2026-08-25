@@ -102,9 +102,35 @@ describe('ErrorMonitoringPage', () => {
     expect(screen.getByText(/PATCH\s+\/events\/42/)).toBeInTheDocument();
     expect(screen.getByText('Try the request again.')).toBeInTheDocument();
     expect(screen.getByText('ValueError: invalid event')).toBeInTheDocument();
-    expect(screen.getByText('12345678…')).toBeInTheDocument();
+    expect(screen.getByText('12345678-abcd-efgh-ijkl-123456789012')).toBeInTheDocument();
     expect(screen.getByText('https://example.test/assets/app.js:42:7')).toBeInTheDocument();
     expect(screen.getByText('Test Browser 1.0')).toBeInTheDocument();
+  });
+
+  it('names the affected member, so a report identifies who to call back', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({
+        userId: '3fb15bc7-0000-0000-0000-000000000001',
+        userName: 'Dana Reyes',
+        userUsername: 'dreyes',
+      }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    expect(screen.getByText('Dana Reyes (dreyes)')).toBeInTheDocument();
+    // The id stays alongside the name, and in full: support tickets quote it.
+    expect(screen.getByText('3fb15bc7-0000-0000-0000-000000000001')).toBeInTheDocument();
+  });
+
+  it('says so when the affected account no longer exists', async () => {
+    mockGetErrors.mockResolvedValue([makeError({ userId: '3fb15bc7-0000-0000-0000-000000000002' })]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    expect(screen.getByText('Account not found')).toBeInTheDocument();
   });
 
   it('shows the technical message alongside the message the member was shown', async () => {

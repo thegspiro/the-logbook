@@ -282,6 +282,24 @@ class TestReopen:
         assert event.custom_fields["registration"] is not committed["registration"]
         assert committed["attendance_finalized"] is True
 
+    async def test_reopen_eager_loads_the_location_for_the_response(self):
+        """The endpoint serializes the reopened event through
+        _build_event_response, which reads event.location_obj. Loaded lazily
+        that is IO outside the greenlet context — MissingGreenlet, surfacing as
+        a 500 on every event that has a location, while location-less events
+        short-circuit and look fine."""
+        db = _mock_db(_one(_event()), _all([]))
+
+        await EventService(db).reopen_event_attendance("event-1", "org-1")
+
+        statement = db.execute.await_args_list[0].args[0]
+        loaded = {
+            str(element)
+            for option in statement._with_options
+            for element in option.path
+        }
+        assert "Event.location_obj" in loaded
+
     async def test_reopening_an_open_event_is_refused(self):
         svc = EventService(_mock_db(_one(_event(finalized=False))))
         result, err = await svc.reopen_event_attendance("event-1", "org-1")
