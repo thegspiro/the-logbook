@@ -302,3 +302,112 @@ class TestReopenSerializesAgainstApproval:
             .compile(compile_kwargs={"literal_binds": True})
         ).lower()
         assert "for update" in stmt
+
+
+class TestCompletedEnrollmentsAreNotSkipped:
+    """PR #1798 review, P1: an ACTIVE-only enrollment lookup skips exactly the
+    member whose credit carried them over 100% — completing the program moves
+    the enrollment to COMPLETED, so neither the correction nor the revocation
+    found anything to act on."""
+
+    def _statuses_in(self, statement) -> str:
+        return str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+
+    async def test_revocation_looks_past_active(self):
+        session = _session()
+        session.program_id = "prog-1"
+        session.course_name = "Pump Ops"
+        db = _db(_one(None))
+        svc = TrainingSessionService(db)
+
+        await svc._revoke_pipeline_credit_for_user(
+            program_service=MagicMock(),
+            user_id="user-1",
+            training_session=session,
+            organization_id="org-1",
+            verified_by="chief-1",
+            source_type=None,
+        )
+
+        sql = self._statuses_in(db.execute.await_args.args[0])
+        assert "completed" in sql
+        assert "active" in sql
+
+    async def test_correction_looks_past_active(self):
+        db = _db(_one(None))
+        svc = TrainingSessionService(db)
+
+        await svc._apply_pipeline_progress(
+            user_id="user-1",
+            program_id="prog-1",
+            requirement_id="req-1",
+            hours_completed=4.0,
+            organization_id="org-1",
+            verified_by="chief-1",
+            session_id="session-1",
+        )
+
+        sql = self._statuses_in(db.execute.await_args.args[0])
+        assert "completed" in sql
+        assert "active" in sql
+
+
+class TestStaleDestinationsAreReconciled:
+    """PR #1798 review, P1: restating only the current destinations left credit
+    standing wherever the session used to point. A corrected linkage moves the
+    credit to different requirement rows (different progress_id), and a member
+    corrected to zero hours is never queued at all — both leave the old credit
+    in place unless the sweep reverses it."""
+
+    async def test_destinations_no_longer_fed_are_reversed(self):
+        db = _db()
+        svc = TrainingSessionService(db)
+        svc._apply_pipeline_progress = AsyncMock(return_value="progress-new")
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            sweep = AsyncMock(return_value=1)
+            tps_cls.return_value.reverse_credits_for_source_except = sweep
+            await svc._apply_pipeline_updates(
+                [("user-1", "prog-1", "req-new", 4.0, "session-1")],
+                "org-1",
+                "chief-1",
+                session_id="session-1",
+            )
+
+        sweep.assert_awaited_once()
+        # Only the destination just credited is kept; the old one is reversed.
+        assert sweep.await_args.kwargs["keep_progress_ids"] == {"progress-new"}
+        assert sweep.await_args.kwargs["source_id"] == "session-1"
+
+    async def test_an_all_zero_correction_still_sweeps(self):
+        """The queue is gated on positive hours, so correcting everyone to zero
+        queues nothing — and that is precisely when the old credit survives."""
+        db = _db()
+        svc = TrainingSessionService(db)
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            sweep = AsyncMock(return_value=1)
+            tps_cls.return_value.reverse_credits_for_source_except = sweep
+            await svc._apply_pipeline_updates(
+                [], "org-1", "chief-1", session_id="session-1"
+            )
+
+        sweep.assert_awaited_once()
+        assert sweep.await_args.kwargs["keep_progress_ids"] == set()
+
+    async def test_nothing_happens_without_a_session_to_reconcile(self):
+        db = _db()
+        svc = TrainingSessionService(db)
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            sweep = AsyncMock()
+            tps_cls.return_value.reverse_credits_for_source_except = sweep
+            await svc._apply_pipeline_updates([], "org-1", "chief-1")
+
+        sweep.assert_not_awaited()

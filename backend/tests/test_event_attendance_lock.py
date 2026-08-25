@@ -607,6 +607,74 @@ class TestLockIsAnAtomicTransition:
             ), f"{name} does not lock the event row"
 
 
+class TestBulkPathsHoldTheRowsToo:
+    """PR #1798 review, P1: the single-event fetches took the lock and the
+    series paths did not, so a bulk delete/cancel/retime could still pass its
+    finalized check and then act after finalization committed."""
+
+    def _locked(self, statement) -> bool:
+        return (
+            "for update"
+            in str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+        )
+
+    async def test_series_delete_locks_every_occurrence(self):
+        db = _mock_db(_all([]))
+        await EventService(db).delete_event_series("parent-1", "org-1")
+        assert self._locked(db.execute.await_args.args[0])
+
+    async def test_series_cancel_locks_every_occurrence(self):
+        db = _mock_db(_all([]))
+        await EventService(db).cancel_series("parent-1", "org-1", "weather")
+        assert self._locked(db.execute.await_args.args[0])
+
+
+class TestCreditRunsInsideTheLock:
+    """PR #1798 review, P1: committing the close before crediting released the
+    row lock while the credit loop was still running off a captured roster, so
+    a reopen could land mid-loop and the stale writes would overwrite the
+    correction. One commit now covers both."""
+
+    async def test_finalize_commits_once_after_crediting(self):
+        event = _event(finalized=False, event_type=None)
+        rsvp = SimpleNamespace(
+            id="rsvp-1",
+            user_id="user-1",
+            checked_in=True,
+            checked_in_at=event.start_datetime,
+            checked_out_at=event.end_datetime,
+            override_duration_minutes=None,
+            override_check_in_at=None,
+            attendance_duration_minutes=60,
+            early_check_in_minutes=None,
+        )
+        db = _mock_db(_one(event), _all([]), _all([rsvp]))
+        svc = EventService(db)
+
+        commits_when_credited = []
+        with patch("app.services.event_service.AdminHoursService") as ahs_cls, patch(
+            "app.services.event_service.NotificationsService"
+        ) as notif_cls:
+
+            async def _credit(**_kwargs):
+                # The close must already be staged, and nothing committed yet:
+                # that is what keeps the row lock held across the credit.
+                commits_when_credited.append(db.commit.await_count)
+                return 1
+
+            ahs_cls.return_value.credit_event_attendance = AsyncMock(
+                side_effect=_credit
+            )
+            notif_cls.return_value.archive_related_notifications = AsyncMock()
+            await svc.finalize_event_attendance("event-1", "org-1")
+
+        assert commits_when_credited == [0], (
+            "crediting ran after a commit, so the event row lock was already "
+            "released while stale credit writes were still landing"
+        )
+        assert event.attendance_finalized_at is not None
+
+
 class TestNewQueriesAreOrgScoped:
     """Pitfall #14: every by-id read filters organization_id, including the
     ones whose id came from a row that was already scoped."""

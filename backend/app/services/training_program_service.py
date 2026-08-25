@@ -3183,6 +3183,75 @@ class TrainingProgramService:
                 await self.db.commit()
         return result
 
+    async def reverse_credits_for_source_except(
+        self,
+        organization_id: UUID,
+        source_id: str,
+        keep_progress_ids: set,
+        source_type: Optional[ProgressCreditSource] = None,
+        verified_by: Optional[UUID] = None,
+    ) -> int:
+        """Reverse this source's credits everywhere it no longer feeds.
+
+        ``reverse_credits_for_source`` un-applies a source entirely, for a void
+        or a reversed approval. This is the reconciling variant: the source is
+        still valid but the set of requirements it feeds has *changed*, so
+        anything it credited outside the current set is stale and has to come
+        back off.
+
+        Two things reach this. A training session whose program, requirement or
+        category linkage was corrected during a reopen now feeds different
+        requirement rows, and the old ones carry a different ``progress_id`` —
+        so restating the new destinations would leave the old credit standing
+        and the member counted twice. And a member corrected down to zero hours
+        never reaches the crediting call at all (it is gated on positive
+        hours), so their previous credit would simply survive the correction.
+
+        Returns the number of credits reversed.
+        """
+        filters = [
+            RequirementProgressCredit.source_id == str(source_id),
+            TrainingProgram.organization_id == str(organization_id),
+        ]
+        if source_type is not None:
+            filters.append(RequirementProgressCredit.source_type == source_type)
+
+        result = await self.db.execute(
+            select(
+                RequirementProgressCredit.progress_id,
+                RequirementProgressCredit.source_type,
+            )
+            .join(
+                RequirementProgress,
+                RequirementProgressCredit.progress_id == RequirementProgress.id,
+            )
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .join(
+                TrainingProgram,
+                ProgramEnrollment.program_id == TrainingProgram.id,
+            )
+            .where(*filters)
+        )
+
+        keep = {str(pid) for pid in keep_progress_ids}
+        reversed_count = 0
+        for progress_id, row_source_type in result.all():
+            if str(progress_id) in keep:
+                continue
+            _, error = await self.revoke_requirement_credit(
+                progress_id=progress_id,
+                organization_id=organization_id,
+                source_type=row_source_type,
+                source_id=str(source_id),
+                verified_by=verified_by,
+            )
+            if error is None:
+                reversed_count += 1
+        return reversed_count
+
     async def reverse_credits_for_source(
         self,
         organization_id: UUID,
