@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from app.schemas.storefront import (
     StoreOrderCreate,
     StoreOrderPaymentRecord,
+    StoreOrderRefund,
     StoreOrderWindowCreate,
     StoreProductCreate,
     StoreSettingsUpdate,
@@ -114,6 +115,22 @@ class TestOrderValidation:
     def test_payment_amount_must_be_positive(self):
         with pytest.raises(ValidationError):
             StoreOrderPaymentRecord.model_validate({"amount": 0})
+
+    def test_refund_amount_must_be_positive(self):
+        # gt=0 is what the app-review flagged as enforced only by the schema
+        # constraint, with no regression test -- a refactor could drop it
+        # silently. A zero or negative refund would inflate amount_paid the
+        # same way a negative quantity would invert an order total.
+        with pytest.raises(ValidationError):
+            StoreOrderRefund.model_validate({"amount": 0})
+        with pytest.raises(ValidationError):
+            StoreOrderRefund.model_validate({"amount": -5})
+
+    def test_refund_amount_may_be_omitted(self):
+        # None means "refund the full remaining balance" -- must not be
+        # rejected by the same gt=0 constraint that guards an explicit amount.
+        refund = StoreOrderRefund.model_validate({})
+        assert refund.amount is None
 
 
 class TestProductValidation:

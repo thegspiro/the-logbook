@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                       |
-| ----------- | --------------------------------------------------------------------------- |
-| PR          | [#1806](https://github.com/thegspiro/the-logbook/pull/1806)                 |
-| Branch      | `claude/security-review-pub`                                                |
-| Feature     | 03 Public surface & webhooks                                                |
-| CI          | just opened; not yet checked                                                |
-| Threads     | 2 resolved (Codex P2: replay-fingerprint ordering; token self-approval gap) |
-| Last tended | 2026-08-25 — fixed 2 Codex-caught issues, replied, resolved                 |
+| Field       | Value                                    |
+| ----------- | ---------------------------------------- |
+| PR          | none (opening now)                       |
+| Branch      | `claude/security-review-sf`              |
+| Feature     | 04 Storefront & payments                 |
+| CI          | n/a — not yet opened                     |
+| Threads     | n/a                                      |
+| Last tended | 2026-08-25 — review complete, opening PR |
 
 ---
 
@@ -54,8 +54,8 @@ data-carrying modules, then the supporting infrastructure.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳ #1806 |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳ #TBD  |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜       |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜       |
@@ -181,3 +181,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   matching the documented pattern elsewhere. See
   `PUB-03-public-surface-webhooks.md` for the full
   write-up. Next: 04 storefront & payments.
+- **03 Public surface & webhooks ✅ merged** — PR #1806 merged 2026-08-25.
+- **04 Storefront & payments ⏳** — already the most heavily-audited module
+  in the codebase (module audit + 2 app-review passes, called "the
+  best-defended module reviewed to date"); re-verified all established
+  invariants hold unchanged, read the one file with no prior coverage
+  (`storefront_preview_service.py` — clean), and checked git history since
+  the last pass for anything undocumented (three commits, all UI/robustness,
+  no open security gap). **No new findings.** Found via git history, not
+  re-derivation, that module-audit's previously-open SF-4 (`storefront.order`
+  held by one endpoint) was resolved 2026-08-24 by a position-editor fix
+  (`_VIEW_IMPLIED_PERMISSIONS`) — corrected that doc to mark it resolved.
+  Closed one cheap test-coverage gap the 2026-08-08 app-review had flagged:
+  added a regression test for the refund amount's `gt=0` constraint (the
+  order-quantity half already had one). See `SF-04-storefront-payments.md`
+  for the full write-up. Next: 05 finance & approvals.
