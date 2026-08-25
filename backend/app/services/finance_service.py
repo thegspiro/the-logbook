@@ -820,39 +820,15 @@ class FinanceService:
         exactly what `_get_entity_info` would have kept — while confining the
         scan and the per-record follow-up queries to this organization.
         """
-        pr_ids = (
-            (
-                await self.db.execute(
-                    select(PurchaseRequest.id).where(
-                        PurchaseRequest.organization_id == org_id
-                    )
-                )
-            )
-            .scalars()
-            .all()
+        # Correlated existence subqueries, not materialized id lists: the
+        # database does the filtering against its own indexes rather than
+        # Python holding every purchase-request/expense-report/check-request
+        # id an org has ever created (Codex review, PR #1809).
+        pr_ids = select(PurchaseRequest.id).where(
+            PurchaseRequest.organization_id == org_id
         )
-        er_ids = (
-            (
-                await self.db.execute(
-                    select(ExpenseReport.id).where(
-                        ExpenseReport.organization_id == org_id
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        cr_ids = (
-            (
-                await self.db.execute(
-                    select(CheckRequest.id).where(
-                        CheckRequest.organization_id == org_id
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        er_ids = select(ExpenseReport.id).where(ExpenseReport.organization_id == org_id)
+        cr_ids = select(CheckRequest.id).where(CheckRequest.organization_id == org_id)
 
         result = await self.db.execute(
             select(ApprovalStepRecord)

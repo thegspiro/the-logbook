@@ -1,13 +1,14 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 · **PR:** TBD
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809)
 
 **Backend:** `api/v1/endpoints/finance.py` (66 routes), `services/finance_service.py`
 (~2,000 L), `api/public/finance_approvals.py` (token-scoped approve/deny)
 **Frontend:** `modules/finance`
-**Migrations:** `20260801_0011` (per-org request numbering), `20260802_0001`
-(`dues_payments` ledger) touch this feature's tables; the 12 finance tables
-themselves are `create_all`-only (see Schema & migration notes).
+**Migrations:** `20260801_0011` (per-org request numbering) alters existing
+tables; `20260802_0001` (`dues_payments` ledger) creates one of the 15 finance
+tables outright (conditionally — see Schema & migration notes). The other 14
+are `create_all`-only.
 
 ---
 
@@ -17,12 +18,29 @@ This is the most heavily audited module in the codebase before this iteration
 even starts: module-audit iteration 20, four app-review passes
 (2026-08-06/08/09 ×2), and the public token-approval routes were already
 covered in full by security-review 03 (`PUB-03-public-surface-webhooks.md`,
-PUB-4 fixed the `EMAIL`-approver self-approval gap there). Git history
-confirms `finance.py`/`finance_service.py` have had **zero logic commits**
-since the 2026-08-09 app-review pass — the only touch since is the 2026-08-25
-cross-cutting LIKE-escaping sweep, which renamed a local variable
-(`like_pattern` → `number_prefix`) to stop it shadowing the shared helper and
-changed no behavior.
+PUB-4 fixed the `EMAIL`-approver self-approval gap there).
+
+**Corrected (Codex review, PR #1809):** the original pass of this section
+claimed "zero logic commits" to `finance_service.py` since the 2026-08-09
+app-review, based on `git log --oneline -- <path>`. That claim was wrong, in
+the same way AUTH-01 and SF-04 already documented this repo's rewritten
+history can mislead a pathspec-filtered `git log` — a broader sweep (every
+commit's full `--name-only` diff, not history-simplified per path) surfaces
+two real logic commits that pathspec filtering missed: **`3dd2b28b`** (Aug 16,
+"consume approval tokens atomically" — added `.with_for_update()` and
+token-clearing to `approve_by_token`/`deny_by_token`) and **`d506246b`** (Aug
+25, the PUB-03 self-approval guard, already accounted for above). Both are
+real, targeted diffs (verified with `git show`, not the whole-file-rewrite
+artifact that same sweep also turned up for an unrelated Aug 13 commit
+touching this file — a squashed-history false positive, confirmed by its
+diff being a 2,273-line "new file" for a file that already existed). Neither
+changes this iteration's findings: the current code — which this iteration
+read in full, not the commit history — already reflects both fixes, and
+`approve_by_token`/`deny_by_token`'s locking and self-approval behavior were
+read and verified as part of this pass's own `finance_service.py` review.
+The corrected claim: **no logic commits to `finance_service.py` since Aug 16
+other than the two named above and the 2026-08-25 LIKE-escaping variable
+rename** — not "zero since Aug 9."
 
 Given that, this iteration's job was **re-verification against current code**
 plus the two checklist dimensions the prior passes gave the least explicit
@@ -150,25 +168,57 @@ platform-wide amplification factor on a page every finance-approver in every
 tenant loads routinely, and the amplification grows with the platform's total
 transaction volume rather than any single org's.
 
-**Fix:** resolve each of the three entity types' org-scoped id sets first
-(three cheap, indexed-by-`organization_id` queries), then filter the
-`ApprovalStepRecord` query to only those `(entity_type, entity_id)` pairs
-before the per-record loop runs. This is the same id set `_get_entity_info`
-was already implicitly computing one row at a time — the output is identical
-to before (proven by `test_get_pending_approvals_is_confined_to_the_caller_org`,
-which asserts a pending step from a second organization is absent from the
-result) — only the scan and the N+1 follow-up queries are now confined to the
-caller's own organization.
+**Fix:** filter the `ApprovalStepRecord` query itself to only the caller's
+organization's entities, via a correlated subquery per entity type
+(`entity_id.in_(select(PurchaseRequest.id).where(organization_id == org_id))`,
+and the same shape for expense reports and check requests) rather than a bare
+status filter. The database resolves and filters these against its own
+indexes in one query plan; nothing is materialized into Python first (an
+initial version of this fix did fetch each id set into a Python list before
+filtering — a Codex review comment on the PR caught that this repeats the
+same "no `all()` over an org-wide table" problem at one remove for a
+long-lived org with a large request history, and it was rewritten to the
+subquery form). Output is identical to before — those ids are exactly what
+`_get_entity_info` was already implicitly filtering to one row at a time —
+only the scan and the N+1 follow-up queries are now confined to the caller's
+own organization, proven by
+`test_get_pending_approvals_is_confined_to_the_caller_org`.
 
 ## Schema & migration notes
 
-All 12 finance tables (`fiscal_years`, `budget_categories`, `budgets`,
+**Corrected (Codex review, PR #1809):** the original pass of this section
+miscounted the module's tables (said 12, listed 15) and, worse, called all of
+them `create_all`-only — wrong for `dues_payments`, which
+`alembic/versions/20260802_0001_add_dues_payments_ledger.py` explicitly
+`create_table`s. My grep for the class-wide sweep matched only
+`create_table\(\s*["']name["']` on one line, and that migration puts the
+table-name string argument on the line _after_ `op.create_table(`, so it was
+missed the same mechanical way SEC-00 warns a copy-pasted, un-owned check can
+fail quietly.
+
+Of the 15 finance tables (`fiscal_years`, `budget_categories`, `budgets`,
 `approval_chains`, `approval_chain_steps`, `approval_step_records`,
 `purchase_requests`, `expense_reports`, `expense_line_items`,
 `check_requests`, `dues_schedules`, `member_dues`, `dues_payments`,
-`export_mappings`, `export_logs`) are **`create_all`-only** — no Alembic
-migration creates any of them; this matches SEC-00's documented, deliberate
-deployment shape (37 model-only tables platform-wide) and is not a finding.
+`export_mappings`, `export_logs`):
+
+- **14 are `create_all`-only** — no migration creates them, matching SEC-00's
+  documented, deliberate deployment shape (37 model-only tables
+  platform-wide). Not a finding.
+- **`dues_payments` is conditionally migration-created.** `20260802_0001`
+  creates the table and backfills one row per already-paid `member_dues`
+  record — but only when `member_dues` already exists at migration time (an
+  established install upgrading through this revision); on a fresh database,
+  where `member_dues` doesn't exist yet either, the migration no-ops
+  (`if not has_table("member_dues"): return`) and `create_all` builds
+  `dues_payments` from the model instead, same as its 14 siblings. This is
+  the CLAUDE.md Pitfall #26 pattern (a migration must tolerate a table only
+  `create_all` builds) applied correctly, not a defect — but the table is not
+  uniformly "`create_all`-only" the way the other 14 are, and describing it
+  that way risks a future migration treating it as never-migration-managed
+  when an established install's `dues_payments` in fact came from this
+  revision.
+
 Every `ondelete="SET NULL"` FK in `models/finance.py` (12 sites: budget
 category on budget, facility on budget, email-template on approval step,
 budget on PR/CR/expense-line, approver on PR/CR/expense-report,
@@ -180,13 +230,16 @@ merely by the codebase-wide SEC-00 sweep.
 
 - `test_get_pending_approvals_is_confined_to_the_caller_org`
   (`tests/test_finance.py`) — creates a pending purchase-request approval step
-  in each of two organizations and asserts `get_pending_approvals(org_id=A)`
-  returns org A's entity id and never org B's. Fails on reintroduction of the
-  unfiltered query (the assertion would still pass by luck under the old code
-  since `_get_entity_info` filtered on the way out, but the test's purpose —
-  recorded in its docstring — is to anchor FIN-9's fix so a future edit to
-  `_get_entity_info` that removes its own org filter would no longer have this
-  query-level backstop).
+  in each of two organizations and calls `get_pending_approvals(org_id=A)`.
+  Asserts two things, not one: (1) the returned list contains org A's entity
+  id and not org B's, and (2) — the part that actually detects a regression
+  to the unfiltered query — a spy wrapped around `_get_entity_info` never
+  receives org B's entity id at all. A first version of this test asserted
+  only (1), which a Codex review comment on the PR correctly pointed out
+  would pass against the pre-fix code too, since `_get_entity_info`'s own org
+  filter already kept the foreign entity out of the _response_ — it just
+  didn't stop the query from scanning it. The spy proves the record-level
+  query itself is org-confined, which is what FIN-9 actually fixed.
 
 ## Completion gate
 

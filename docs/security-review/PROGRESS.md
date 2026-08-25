@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1809](https://github.com/thegspiro/the-logbook/pull/1809) |
-| Branch      | `claude/security-review-fin`                                |
-| Feature     | 05 Finance & approvals                                      |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — opened, FIN-9 fixed, gates green               |
+| Field       | Value                                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| PR          | [#1809](https://github.com/thegspiro/the-logbook/pull/1809)                                                    |
+| Branch      | `claude/security-review-fin`                                                                                   |
+| Feature     | 05 Finance & approvals                                                                                         |
+| CI          | fresh run in progress on the tending commit                                                                    |
+| Threads     | 4 resolved (Codex P2: keep filtering in SQL, migration miscount, weak regression test, missed history commits) |
+| Last tended | 2026-08-25 — 4 Codex findings addressed, gates green                                                           |
 
 ---
 
@@ -210,20 +210,33 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   UTC.
 - **05 Finance & approvals ⏳** — the most heavily audited module in the
   codebase before this pass even started (module audit + 4 app-review
-  passes); `finance.py`/`finance_service.py` have had zero logic commits since
-  the 2026-08-09 app-review, confirmed via git history. Re-verified FIN-1/2
-  (`_validate_finance_fks`, 13 call sites), FIN-3 (dues self-scoping), FIN-4
-  (`assert_different_person` disburse-side SoD), FIN-6 (dues-payment ledger +
-  idempotency) all hold unchanged. All 66 routes enumerated and confirmed
-  `require_permission`-gated. **FIN-9 (MED, fixed)** — `get_pending_approvals`
-  queried `ApprovalStepRecord` with no organization filter at all, scanning
-  every tenant's pending approval steps (not merely "the org-wide queue" the
-  prior passes' notes described) before the per-record `_get_entity_info`
-  call silently discarded anything foreign from the response — no data
-  leaked, but the query cost scaled with the whole platform's pending-approval
-  volume on every approver's inbox load. Fixed by resolving each entity
-  type's org-scoped id set first and filtering the record query on it before
-  the N+1 follow-up loop runs; output is unchanged (proven by a new
-  regression test), only the cross-tenant scan is eliminated. See
-  `FIN-05-finance-approvals.md` for the full write-up. Next: 06 elections &
-  ballots.
+  passes). Re-verified FIN-1/2 (`_validate_finance_fks`, 13 call sites), FIN-3
+  (dues self-scoping), FIN-4 (`assert_different_person` disburse-side SoD),
+  FIN-6 (dues-payment ledger + idempotency) all hold unchanged. All 66 routes
+  enumerated and confirmed `require_permission`-gated. **FIN-9 (MED, fixed)**
+  — `get_pending_approvals` queried `ApprovalStepRecord` with no organization
+  filter at all, scanning every tenant's pending approval steps (not merely
+  "the org-wide queue" the prior passes' notes described) before the
+  per-record `_get_entity_info` call silently discarded anything foreign from
+  the response — no data leaked, but the query cost scaled with the whole
+  platform's pending-approval volume on every approver's inbox load. Fixed by
+  resolving each entity type's org-scoped id set first and filtering the
+  record query on it before the N+1 follow-up loop runs. **Four Codex review
+  comments on the PR all caught real issues and were fixed**: (1) the initial
+  fix materialized each entity type's id set into a Python list before
+  filtering — a large org's full request history — rewritten to pass
+  correlated subqueries into `.in_()` so the database does the filtering; (2)
+  the regression test only asserted on the returned list, which
+  `_get_entity_info`'s own filter would have passed even under the old,
+  unfiltered query — rewritten to spy on `_get_entity_info` and assert the
+  foreign record's id never reaches it; (3) the write-up's "12 finance
+  tables, all `create_all`-only" claim was wrong on both counts — 15 tables,
+  and `dues_payments` has a real (conditional) creating migration a
+  single-line-only grep pattern missed; corrected with the accurate
+  breakdown; (4) the "zero logic commits since Aug 9" premise was itself
+  wrong — a broader sweep (not path-filtered `git log`, which this repo's
+  rewritten history can mislead, per AUTH-01/SF-04) surfaced a real Aug 16
+  commit (`3dd2b28b`, token-approval locking) the original sweep missed;
+  corrected, though the current-code review this pass actually ran already
+  covered that commit's effect. See `FIN-05-finance-approvals.md` for the
+  full write-up. Next: 06 elections & ballots.

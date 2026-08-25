@@ -613,9 +613,14 @@ class TestApprovalChainService:
         """FIN-9: the pending-approvals query carried no organization filter
         at all, scanning every tenant's PENDING steps before
         `_get_entity_info`'s own org check discarded anything foreign from the
-        response. Confirm a pending step belonging to a different org never
-        surfaces for this org's caller, and this org's own pending step still
-        does.
+        response.
+
+        Asserting only on the returned list is not enough to catch a
+        regression back to that query: `_get_entity_info` already filtered on
+        the way out, so the old, unfiltered query would pass that assertion
+        too (Codex review, PR #1809). This spies on `_get_entity_info` itself
+        to prove the foreign record's id never reaches the per-record
+        loop — i.e. the *query*, not just the response, is org-confined.
         """
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
@@ -697,7 +702,23 @@ class TestApprovalChainService:
         pr_mine = await make_pending_pr(org_id, user_id)
         pr_other = await make_pending_pr(other_org_id, other_admin_id)
 
-        pending = await service.get_pending_approvals(user_id, org_id)
+        original_get_entity_info = service._get_entity_info
+        queried_entity_ids: list[str] = []
+
+        async def spy_get_entity_info(entity_type, entity_id, org):
+            queried_entity_ids.append(entity_id)
+            return await original_get_entity_info(entity_type, entity_id, org)
+
+        service._get_entity_info = spy_get_entity_info
+        try:
+            pending = await service.get_pending_approvals(user_id, org_id)
+        finally:
+            service._get_entity_info = original_get_entity_info
+
+        # The response being filtered isn't enough on its own — the record
+        # query itself must never have surfaced the other org's step.
+        assert pr_other.id not in queried_entity_ids
+        assert pr_mine.id in queried_entity_ids
 
         entity_ids = {a["entity_id"] for a in pending}
         assert pr_mine.id in entity_ids
