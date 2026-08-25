@@ -2390,6 +2390,55 @@ async def get_my_consents(
     return await ConsentService(db).list_for_user(current_user)
 
 
+@router.get("/consents/photo-use")
+async def get_photo_use_roster(
+    include_inactive: bool = Query(
+        False, description="Include members who are not currently active"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        # NOT users.view. That reads as a narrow grant and is not one: 25 of
+        # the 30 default positions carry it, the EMS Supply Officer and
+        # Apparatus Officer among them. Gating a whole-department list of who
+        # agreed to be photographed on it would have made this endpoint a
+        # *weaker* gate than the per-member ``/{user_id}/consents`` beside it
+        # (users.edit or members.manage) while returning strictly more.
+        #
+        # notifications.manage is what puts the PIO here — it is the grant
+        # that distinguishes the Communications Officer, and it is what gates
+        # this page's neighbours under Forms & Comms.
+        require_permission("notifications.manage", "members.manage", "users.edit")
+    ),
+):
+    """
+    Every member's photo-use standing, for the PIO / communications officer
+    choosing images for a newsletter, social post, or press release.
+
+    The consent is collected in User Settings and was, until this endpoint,
+    only readable one member at a time — which is not a workable check for
+    somebody selecting from a folder of incident photos. Read-only: a
+    member's consent is theirs to set, so there is no admin write counterpart
+    here, for the same reason ``/{user_id}/consents`` has none.
+
+    Deliberately carries **no contact fields**. The member directory gates
+    email behind the organization's contact-visibility setting; rather than
+    reimplement that here (and drift from it), this returns only what
+    identifies a member on a photo call sheet — name, rank, station, and
+    membership number.
+
+    **Permissions required:** notifications.manage, members.manage, or
+    users.edit
+    """
+    from app.models.consent import ConsentType
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).roster(
+        organization_id=str(current_user.organization_id),
+        consent_type=ConsentType.PHOTO_USE,
+        include_inactive=include_inactive,
+    )
+
+
 @router.get("/{user_id}/consents")
 async def get_user_consents(
     user_id: UUID,
