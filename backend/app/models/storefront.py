@@ -336,6 +336,10 @@ class StoreProduct(Base):
     personalization_price = Column(
         Numeric(10, 2), nullable=False, default=0, server_default="0"
     )
+    # Thread the vendor embroiders this product in. NULL means the department
+    # never chose one and gets the historical default (gold), so an existing
+    # catalog is unchanged by the setting appearing.
+    personalization_thread_color = Column(String(30), nullable=True)
 
     track_stock = Column(Boolean, nullable=False, default=False, server_default="0")
     stock_quantity = Column(Integer, nullable=True)
@@ -856,6 +860,11 @@ class StoreOrderItem(Base):
     # otherwise-identical lines with different text are deliberately separate
     # rows -- they are different physical goods.
     personalization_text = Column(String(200), nullable=True)
+    # Snapshot of the product's thread color at order time, alongside the
+    # product name and price that are already frozen here. The quartermaster
+    # can switch a product to white next season without rewriting what the
+    # vendor was told to stitch on an order placed in gold.
+    personalization_thread_color = Column(String(30), nullable=True)
 
     unit_price = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     quantity = Column(Integer, nullable=False, default=1, server_default="1")

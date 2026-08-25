@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { StoreProductCard } from './StoreProductCard';
+import { EmbroideryThreadColor } from '../types';
 import type { StorefrontProductOffer } from '../types';
 
 const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProductOffer => ({
@@ -20,6 +21,8 @@ const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProdu
   personalizationLabel: null,
   personalizationMaxLength: 16,
   personalizationPrice: '8.00',
+  personalizationThreadColor: EmbroideryThreadColor.GOLD,
+  personalizationThreadColorHex: '#c8a02c',
   availableQuantity: null,
   isAvailable: true,
   variants: [
@@ -105,6 +108,62 @@ describe('StoreProductCard', () => {
     await user.click(screen.getByRole('button', { name: /Add \$/ }));
 
     expect(onAdd).toHaveBeenCalledWith('v-m', 1, 'j. smith');
+  });
+
+  it('previews the embroidery in the thread the quartermaster chose', async () => {
+    const user = userEvent.setup();
+    render(
+      <StoreProductCard
+        offer={offer({
+          personalizationEnabled: true,
+          personalizationThreadColor: EmbroideryThreadColor.WHITE,
+          personalizationThreadColorHex: '#f5f5f4',
+        })}
+        onAdd={onAdd}
+      />
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: /Add name embroidery/ }));
+    await user.type(screen.getByRole('textbox', { name: /Add name embroidery/ }), 'J. SMITH');
+
+    // The preview stands in for the goods, so it has to show the thread the
+    // department actually orders rather than the gold it used to hardcode.
+    expect(screen.getByText('J. SMITH', { selector: 'span' })).toHaveStyle({ color: '#f5f5f4' });
+  });
+
+  it('falls back to gold when the offer carries no thread colour', async () => {
+    const user = userEvent.setup();
+    const bare = offer({ personalizationEnabled: true });
+    // A backend that predates the setting serves no hex at all.
+    delete (bare as Partial<typeof bare>).personalizationThreadColorHex;
+
+    render(<StoreProductCard offer={bare} onAdd={onAdd} />);
+
+    await user.click(screen.getByRole('checkbox', { name: /Add name embroidery/ }));
+    await user.type(screen.getByRole('textbox', { name: /Add name embroidery/ }), 'J. SMITH');
+
+    expect(screen.getByText('J. SMITH', { selector: 'span' })).toHaveStyle({ color: '#c8a02c' });
+  });
+
+  it('renders the size chips in the order the API served them', () => {
+    // Ordering is settled server-side (StorefrontService._ordered_variants), so
+    // the card must not re-sort and must not reverse what it was given.
+    render(
+      <StoreProductCard
+        offer={offer({
+          variants: [
+            { id: 'v-xs', label: 'XS', price: '60.00', availableQuantity: null, isAvailable: true },
+            { id: 'v-s', label: 'S', price: '62.00', availableQuantity: null, isAvailable: true },
+            { id: 'v-m', label: 'M', price: '65.00', availableQuantity: null, isAvailable: true },
+            { id: 'v-2xl', label: '2XL', price: '75.00', availableQuantity: null, isAvailable: true },
+          ],
+        })}
+        onAdd={onAdd}
+      />
+    );
+
+    const chips = screen.getAllByRole('button', { name: /^(XS|S|M|2XL)$/ });
+    expect(chips.map((chip) => chip.textContent)).toEqual(['XS', 'S', 'M', '2XL']);
   });
 
   it('keeps required personalization ticked and blocks add until it is filled', async () => {

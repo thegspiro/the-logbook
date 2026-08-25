@@ -24,6 +24,7 @@ import {
   type StoreWindowSummary,
 } from '../types';
 import { WindowFormModal } from './WindowFormModal';
+import { ThreadSwatch } from './ThreadSwatch';
 
 interface StoreWindowsTabProps {
   onChanged: () => void;
@@ -558,6 +559,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                       <th className="py-1 pr-2 font-medium">Item</th>
                       <th className="px-2 py-1 font-medium">Option</th>
                       <th className="px-2 py-1 font-medium">Personalization</th>
+                      <th className="px-2 py-1 font-medium">Thread</th>
                       <th className="px-2 py-1 text-center font-medium">Qty</th>
                       <th className="py-1 pl-2 text-right font-medium">Total</th>
                     </tr>
@@ -571,6 +573,13 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                         <td className="text-theme-text-primary py-1.5 pr-2">{row.productName}</td>
                         <td className="text-theme-text-secondary px-2 py-1.5">{row.variantLabel ?? '—'}</td>
                         <td className="text-theme-text-secondary px-2 py-1.5">{row.personalizationText ?? '—'}</td>
+                        <td className="text-theme-text-secondary px-2 py-1.5">
+                          {row.personalizationThreadColor ? (
+                            <ThreadSwatch color={row.personalizationThreadColor} />
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td className="text-theme-text-primary px-2 py-1.5 text-center font-medium">{row.quantity}</td>
                         <td className="text-theme-text-secondary py-1.5 pl-2 text-right">
                           {formatCurrency(Number(row.lineTotal))}
