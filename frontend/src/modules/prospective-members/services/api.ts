@@ -28,7 +28,7 @@ import type {
   ApplicantListItem,
   ApplicantListFilters,
   ProspectSourceEvent,
-  ApplicantStatus,
+  SettableApplicantStatus,
   PaginatedApplicantList,
   AdvanceStageRequest,
   BulkActionResult,
@@ -852,7 +852,11 @@ export const applicantService = {
    * overwrite the coordinator notes field, which the previous client-side
    * bulk path did on every selected record.
    */
-  async bulkSetStatus(applicantIds: string[], status: ApplicantStatus, reason?: string): Promise<BulkActionResult> {
+  async bulkSetStatus(
+    applicantIds: string[],
+    status: SettableApplicantStatus,
+    reason?: string
+  ): Promise<BulkActionResult> {
     const response = await api.post<BulkActionResult>('/prospective-members/prospects/bulk-status', {
       prospect_ids: applicantIds,
       status,
@@ -878,9 +882,9 @@ export const applicantService = {
    * is the coordinator's running record of the applicant; the reason for a
    * decision belongs in the activity log beside who made it and when.
    */
-  async setApplicantStatus(applicantId: string, status: ApplicantStatus, reason?: string): Promise<Applicant> {
+  async setApplicantStatus(applicantId: string, status: SettableApplicantStatus, reason?: string): Promise<Applicant> {
     const response = await api.post<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}/status`, {
-      status: FRONTEND_STATUS_TO_BACKEND[status] ?? status,
+      status,
       reason: reason || undefined,
     });
     return mapProspectToApplicant(response.data);
@@ -950,6 +954,23 @@ export const applicantService = {
       filters: {
         pipeline_id: params?.pipeline_id,
         status: 'rejected',
+        search: params?.search,
+      },
+      page: params?.page,
+      pageSize: params?.pageSize,
+    });
+  },
+
+  async getConvertedApplicants(params?: {
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): Promise<PaginatedApplicantList> {
+    return this.getApplicants({
+      filters: {
+        pipeline_id: params?.pipeline_id,
+        status: 'converted',
         search: params?.search,
       },
       page: params?.page,

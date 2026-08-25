@@ -99,15 +99,6 @@ describe('applicantService status changes', () => {
       reason: undefined,
     });
   });
-
-  it('maps the frontend "converted" status onto the backend name', async () => {
-    await applicantService.setApplicantStatus('p1', 'converted');
-
-    expect(mockPost).toHaveBeenCalledWith('/prospective-members/prospects/p1/status', {
-      status: 'transferred',
-      reason: undefined,
-    });
-  });
 });
 
 /** The query params of the single recorded GET. */
@@ -130,6 +121,16 @@ describe('applicantService list scoping', () => {
     const params = requestedParams();
     expect(params.status).toBe('rejected');
     // Omitted rather than false, so the archive request URLs are unchanged.
+    expect(params.open_only).toBeUndefined();
+  });
+
+  it('reaches converted applications by their backend status name', async () => {
+    // Their application history is only viewable from this page, and the
+    // active tab no longer carries them.
+    await applicantService.getConvertedApplicants({ page: 1, pageSize: 25 });
+
+    const params = requestedParams();
+    expect(params.status).toBe('transferred');
     expect(params.open_only).toBeUndefined();
   });
 });

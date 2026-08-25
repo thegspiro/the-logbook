@@ -2144,6 +2144,24 @@ class MembershipPipelineService:
         reject / hold / withdraw path kept doing through the update endpoint
         afterwards. Both now come through here.
         """
+        # TRANSFERRED is derived, not chosen: transfer_prospect sets it as it
+        # creates the User and stamps transferred_user_id / transferred_at.
+        # Setting it here would close the application, remove it from the
+        # pipeline and count it as a conversion in the stats with no member
+        # anywhere behind it; clearing it would put somebody who is already a
+        # member back on the board, under the active-email unique index.
+        # Neither direction is a status change, so neither is offered here.
+        if target == ProspectStatus.TRANSFERRED:
+            raise ValueError(
+                "Transferred is set by converting the applicant to a member. "
+                "Use the transfer endpoint rather than a status change."
+            )
+        if prospect.status == ProspectStatus.TRANSFERRED:
+            raise ValueError(
+                "This applicant is already a member, so their application "
+                "cannot be reopened from here."
+            )
+
         previous = (
             prospect.status.value
             if hasattr(prospect.status, "value")

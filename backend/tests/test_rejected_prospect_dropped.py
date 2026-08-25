@@ -98,7 +98,12 @@ class TestOpenOnlyListing:
 
         for status in CLOSED_PROSPECT_STATUSES:
             p = await _prospect(svc, org_id, pipeline.id)
-            await svc.set_prospect_status(p.id, org_id, status.value, admin_id)
+            if status == ProspectStatus.TRANSFERRED:
+                # Derived state — only transfer_prospect produces it.
+                p.status = status
+                await db_session.flush()
+            else:
+                await svc.set_prospect_status(p.id, org_id, status.value, admin_id)
 
         prospects, total = await svc.list_prospects(org_id, open_only=True)
 
@@ -215,6 +220,46 @@ class TestSingleStatusChange:
         p = await _prospect(svc, org_id, pipeline.id)
 
         assert await svc.set_prospect_status(p.id, _uid(), "rejected", admin_id) is None
+
+    async def test_transferred_cannot_be_set_by_a_status_change(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        """Transferred is stamped by transfer_prospect as it creates the User.
+
+        Setting it here would close the application and count it as a
+        conversion in the stats with no member behind it.
+        """
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id)
+
+        with pytest.raises(ValueError, match="transfer endpoint"):
+            await svc.set_prospect_status(p.id, org_id, "transferred", admin_id)
+
+        results = await svc.bulk_set_prospect_status(
+            [p.id], org_id, "transferred", admin_id
+        )
+        assert results[0]["succeeded"] is False
+        assert "transfer endpoint" in results[0]["error"]
+
+        refreshed = await svc.get_prospect(p.id, org_id)
+        assert refreshed.status == ProspectStatus.ACTIVE
+
+    async def test_a_member_cannot_be_put_back_on_the_board(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        """The mirror image: clearing transferred would return somebody who is
+        already a member to the pipeline, under the active-email index."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id)
+        p.status = ProspectStatus.TRANSFERRED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="already a member"):
+            await svc.set_prospect_status(p.id, org_id, "active", admin_id)
 
     async def test_reactivating_returns_a_closed_application_to_the_board(
         self, db_session: AsyncSession, org_and_admin

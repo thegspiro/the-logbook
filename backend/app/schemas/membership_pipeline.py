@@ -520,8 +520,11 @@ class ProspectStatusChangeRequest(BaseModel):
 
     status: str = Field(
         ...,
-        description="Target status: active, on_hold, approved, rejected, "
-        "withdrawn, inactive, transferred",
+        description=(
+            "Target status: active, on_hold, approved, rejected, withdrawn "
+            "or inactive. 'transferred' is refused — it is set by converting "
+            "the applicant to a member, not by a status change."
+        ),
     )
     reason: Optional[str] = Field(
         None,
@@ -543,7 +546,11 @@ class BulkStatusRequest(BaseModel):
     prospect_ids: List[UUID] = Field(..., min_length=1, max_length=_MAX_BULK_PROSPECTS)
     status: str = Field(
         ...,
-        description="Target status: active, on_hold, approved, rejected, withdrawn",
+        description=(
+            "Target status: active, on_hold, approved, rejected, withdrawn "
+            "or inactive. 'transferred' is refused — see "
+            "ProspectStatusChangeRequest."
+        ),
     )
     reason: Optional[str] = Field(
         None,

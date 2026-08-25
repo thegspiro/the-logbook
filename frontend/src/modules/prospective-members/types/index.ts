@@ -21,6 +21,17 @@ export const StepProgressStatus = {
 } as const;
 export type StepProgressStatus = (typeof StepProgressStatus)[keyof typeof StepProgressStatus];
 
+/**
+ * The statuses a coordinator can set directly.
+ *
+ * `converted` (backend `transferred`) is excluded: it is stamped by the
+ * transfer, which creates the member's User record, so setting it as a status
+ * would close the application and count a conversion with no member behind
+ * it. The backend refuses it on both status endpoints; this keeps the
+ * refusal from being reachable from here in the first place.
+ */
+export type SettableApplicantStatus = Exclude<ApplicantStatus, 'converted'>;
+
 export type InactivityTimeoutPreset = '3_months' | '6_months' | '1_year' | 'never' | 'custom';
 
 export type InactivityAlertLevel = 'normal' | 'warning' | 'critical';
