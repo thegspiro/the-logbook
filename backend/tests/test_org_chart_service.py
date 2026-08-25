@@ -74,6 +74,14 @@ async def _make_member(db: AsyncSession, org_id: str, first: str, last: str) -> 
     return user_id
 
 
+# `rank` is a reserved word in MySQL 8.0 — it became the RANK() window function
+# in 8.0.2 — so an unquoted `SET rank = …` is a 1064 syntax error there. MariaDB
+# 10.11 does not reserve it, which is why an unquoted version passes the MariaDB
+# job and fails the MySQL one. The application never hits this: SQLAlchemy quotes
+# the identifier for us, so only hand-written SQL like this has to.
+_SET_RANK = "UPDATE users SET `rank` = :code WHERE id = :id"
+
+
 async def _make_position(db: AsyncSession, org_id: str, name: str) -> str:
     position_id = str(uuid.uuid4())
     await db.execute(
@@ -794,9 +802,7 @@ class TestSeatsLinkedToARole:
         service = OrgChartService(db_session)
         position_id = await _make_position(db_session, org_id, "Fire Chief")
         await _make_rank(db_session, org_id, "captain", "Captain")
-        await db_session.execute(
-            text("UPDATE users SET rank = 'captain' WHERE id = :id"), {"id": admin_id}
-        )
+        await db_session.execute(text(_SET_RANK), {"code": "captain", "id": admin_id})
         await db_session.flush()
         seat = await _add(service, org_id, "Chief", position_id=position_id)
 
@@ -820,8 +826,8 @@ class TestSeatsLinkedToARank:
         second = await _make_member(db_session, org_id, "Shelly", "Hernandez")
         for user_id in (admin_id, second):
             await db_session.execute(
-                text("UPDATE users SET rank = 'captain' WHERE id = :id"),
-                {"id": user_id},
+                text(_SET_RANK),
+                {"code": "captain", "id": user_id},
             )
         await db_session.flush()
 
@@ -901,9 +907,7 @@ class TestLinkOptions:
         org_id, admin_id = setup_org_and_admin
         service = OrgChartService(db_session)
         await _make_rank(db_session, org_id, "commodore", "Commodore")
-        await db_session.execute(
-            text("UPDATE users SET rank = 'commodore' WHERE id = :id"), {"id": admin_id}
-        )
+        await db_session.execute(text(_SET_RANK), {"code": "commodore", "id": admin_id})
         await _add(service, org_id, "Commodore", rank_code="commodore")
         await db_session.execute(
             text("UPDATE operational_ranks SET is_active = 0 WHERE rank_code = :c"),
