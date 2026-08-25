@@ -8,6 +8,7 @@
 import React, { FormEventHandler, ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useDialog } from '../hooks/useDialog';
+import { DialogPortal } from './DialogPortal';
 
 interface ModalProps {
   isOpen: boolean;
@@ -88,35 +89,37 @@ export const Modal: React.FC<ModalProps> = ({
   const panelClasses = `modal-panel modal-body relative z-10 flex w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden text-left ${sizeClasses[size]}`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      aria-labelledby={titleId}
-      role="dialog"
-      aria-modal="true"
-      aria-describedby={ariaDescribedBy}
-      data-testid="modal-backdrop"
-      onClick={handleBackdropClick}
-    >
-      <div className="modal-overlay pointer-events-none" aria-hidden="true" />
-      {onSubmit ? (
-        <form
-          ref={modalRef as React.Ref<HTMLFormElement>}
-          className={panelClasses}
-          onSubmit={onSubmit}
-          data-testid="modal-panel"
-        >
-          {content}
-        </form>
-      ) : (
-        <div
-          ref={modalRef as React.Ref<HTMLDivElement>}
-          className={panelClasses}
-          tabIndex={-1}
-          data-testid="modal-panel"
-        >
-          {content}
-        </div>
-      )}
-    </div>
+    <DialogPortal>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        aria-labelledby={titleId}
+        role="dialog"
+        aria-modal="true"
+        aria-describedby={ariaDescribedBy}
+        data-testid="modal-backdrop"
+        onClick={handleBackdropClick}
+      >
+        <div className="modal-overlay pointer-events-none" aria-hidden="true" />
+        {onSubmit ? (
+          <form
+            ref={modalRef as React.Ref<HTMLFormElement>}
+            className={panelClasses}
+            onSubmit={onSubmit}
+            data-testid="modal-panel"
+          >
+            {content}
+          </form>
+        ) : (
+          <div
+            ref={modalRef as React.Ref<HTMLDivElement>}
+            className={panelClasses}
+            tabIndex={-1}
+            data-testid="modal-panel"
+          >
+            {content}
+          </div>
+        )}
+      </div>
+    </DialogPortal>
   );
 };

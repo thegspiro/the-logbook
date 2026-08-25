@@ -10,10 +10,11 @@
  * Read-only by design: consent belongs to the member, and a coordinator
  * ticking a box on their behalf would not be consent.
  *
- * Gated on notifications.manage (the PIO's own grant, and what gates this
- * page's neighbours under Forms & Comms), members.manage, or users.edit —
- * NOT users.view, which 25 of the 30 default positions carry and which would
- * have made this a weaker gate than reading one member's consent.
+ * Gated on users.view_consents, notifications.manage, members.manage, or
+ * users.edit — NOT users.view, which 25 of the 30 default positions carry and
+ * which would have made this a weaker gate than reading one member's consent.
+ * users.view_consents is what lets the Historian and Public Outreach positions
+ * in without widening to a grant that means something else.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';

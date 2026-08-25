@@ -4030,7 +4030,7 @@ class SchedulingService:
                 swap_request.target_user_id
             ):
                 return await reject(
-                    "Target participants cannot manager-review swap requests"
+                    "Target participants cannot officer-review swap requests"
                 )
 
             if status == SwapRequestStatus.APPROVED:
