@@ -971,12 +971,12 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                                 | Page                      | Permission                                                    |
-| ----------------------------------- | ------------------------- | ------------------------------------------------------------- |
-| `/messages`                         | Messages                  | Authenticated                                                 |
-| `/communications/messages`          | Message Administration    | `notifications.manage`                                        |
-| `/communications/email-templates`   | Email Template Management | `settings.manage`                                             |
-| `/communications/photo-use-consent` | Photo Use Consent         | any of `notifications.manage`, `members.manage`, `users.edit` |
+| URL                                 | Page                      | Permission                                                                           |
+| ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| `/messages`                         | Messages                  | Authenticated                                                                        |
+| `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
+| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
+| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
 
 > **Photo Use Consent** _(2026-08-25)_ lists every member's answer to the
 > photo-use privacy choice they set in User Settings, so the PIO can check the
@@ -997,9 +997,17 @@ lot's number or expiration date require `equipment_check.manage` or
 > `/users/{user_id}/consents` (`users.edit` or `members.manage`).
 > `notifications.manage` is what puts the PIO here: it is the grant that
 > distinguishes the Communications Officer, and it already gates this page's
-> neighbours under Forms & Comms. The Historian and Public Outreach positions
-> hold none of the three and do **not** see this page; grant them a position
-> carrying one if the department wants them to.
+> neighbours under Forms & Comms.
+>
+> **`users.view_consents` was added for the Historian and Public Outreach
+> positions** _(2026-08-25)_, who have a real claim on the page — a historian
+> curates the photo archive — but who share nothing with each other beyond
+> broad grants (`users.view`, `members.view`, `events.view`). Widening to any
+> of those would have reopened what the paragraph above closed, so the grant
+> had to be one that means only this. It is seeded to those two positions plus
+> the Communications Officer, and backfilled onto existing installations by
+> `20260825_1900_c4a91b7e2f08` — a registry change alone reaches new
+> departments only (CLAUDE.md pitfall 23).
 >
 > The response deliberately carries **no contact fields**. The member directory
 > gates email behind the organization's contact-visibility setting, and a second
