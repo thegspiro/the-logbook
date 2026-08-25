@@ -25,6 +25,12 @@ interface CrewBoardSlotProps {
   canAssign: boolean;
   isPast: boolean;
   isUserAssigned: boolean;
+  /**
+   * Whether the viewer may claim this particular seat. The signup endpoint is
+   * the real gate; this only decides whether to offer the button, so a seat
+   * they are not cleared for never invites a tap that can only be refused.
+   */
+  canSignUp: boolean;
   positionOptions: [string, string][];
   attendanceRecord: ShiftAttendanceRecord | undefined;
   tz: string;
@@ -51,6 +57,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   canAssign,
   isPast,
   isUserAssigned,
+  canSignUp,
   positionOptions,
   attendanceRecord,
   tz,
@@ -63,6 +70,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   onSignup,
 }) => {
   const isCurrentUser = assignment?.user_id === currentUserId;
+  const positionLabel = POSITION_LABELS[position] || position;
 
   return (
     <div
@@ -88,7 +96,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
               <PositionEditor
                 assignmentId={assignment.id}
                 currentPosition={assignment.position}
-                displayLabel={POSITION_LABELS[position] || position}
+                displayLabel={positionLabel}
                 positionOptions={positionOptions}
                 onSave={onPositionChange}
                 editable={canAssign && !isPast}
@@ -115,7 +123,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
             </div>
             <div>
               <p className="text-theme-text-muted text-sm capitalize">
-                {POSITION_LABELS[position] || position}
+                {positionLabel}
                 {!required && <span className="text-theme-text-muted ml-1 text-[10px]">(optional)</span>}
               </p>
               <p className="text-theme-text-muted text-xs">{required ? 'Open position' : 'Optional position'}</p>
@@ -150,6 +158,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
               {canAssign && (
                 <button
                   onClick={() => onAssignToPosition(position)}
+                  aria-label={`Assign someone as ${positionLabel}`}
                   className="inline-flex items-center gap-1 rounded-lg border border-violet-500/30 px-2.5 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-500/10 sm:px-3 dark:text-violet-400"
                 >
                   <UserPlus className="h-3 w-3" aria-hidden="true" />
@@ -157,10 +166,11 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                   <span className="sm:hidden">Assign</span>
                 </button>
               )}
-              {!isUserAssigned && (
+              {!isUserAssigned && canSignUp && (
                 <button
                   onClick={() => onSignup(position)}
                   disabled={pendingStates.signingUp}
+                  aria-label={`Sign myself up as ${positionLabel}`}
                   className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50 sm:px-3"
                 >
                   {pendingStates.signingUp ? (
