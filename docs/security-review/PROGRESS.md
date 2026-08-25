@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1804](https://github.com/thegspiro/the-logbook/pull/1804) |
-| Branch      | `claude/security-review-auth`                               |
-| Feature     | 01 Auth & session lifecycle                                 |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — opened                                         |
+| Field       | Value                                       |
+| ----------- | ------------------------------------------- |
+| PR          | none                                        |
+| Branch      | `claude/security-review-perm` (in progress) |
+| Feature     | 02 Permissions & roles                      |
+| CI          | n/a — not yet opened                        |
+| Threads     | n/a                                         |
+| Last tended | n/a                                         |
 
 ---
 
@@ -52,8 +52,8 @@ data-carrying modules, then the supporting infrastructure.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status   |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳ #1804 |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜       |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | 🔄       |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜       |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜       |
@@ -114,6 +114,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   session lifecycle.
 - **SEC-00 cross-cutting baseline ✅ merged** — PR #1799 merged 2026-08-25
   08:34:59Z.
+- **01 Auth & session lifecycle ✅ merged** — PR #1804 merged 2026-08-25.
 - **01 Auth & session lifecycle ⏳** — two prior app-review passes
   (`docs/app-review/auth-session.md`, 2026-08-05 and 2026-08-08) already did a
   six-lens sweep; this iteration re-verified those claims against current code
@@ -128,3 +129,4 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   2026-08-12); corrected in `auth-session.md`. See
   `AUTH-01-auth-session.md` for the full write-up. Next: 02 permissions &
   roles.
+- **02 Permissions & roles 🔄** — started 2026-08-25.
