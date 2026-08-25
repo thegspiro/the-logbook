@@ -27,6 +27,7 @@ from app.models.finance import (
     ApprovalStepRecord,
     ApprovalStepStatus,
     ApprovalStepType,
+    ApproverType,
     Budget,
     BudgetCategory,
     CheckRequest,
@@ -46,7 +47,10 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
-from app.services.separation_of_duties import assert_different_person
+from app.services.separation_of_duties import (
+    SeparationOfDutiesError,
+    assert_different_person,
+)
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
@@ -713,14 +717,18 @@ class FinanceService:
     ) -> ApprovalStepRecord:
         """Approve a step via email token (for external approvers).
 
-        Deliberately does not call assert_different_person() the way
-        approve_step() does: the token path's approver is an external party
-        named on the chain step (approver_type == "email"), with no Logbook
-        account/id to compare against record.acted_by. There is no requester
-        identity to self-approve as here.
+        Does not call assert_different_person() the way approve_step() does
+        -- the token path's approver has no Logbook account/id to compare
+        against a requester id. But an EMAIL-type approver's identity IS
+        knowable by address: if the step's approver_value is itself the
+        requester's own email, the requester received this approval token
+        and could approve their own request -- exactly the conflict
+        allow_self_approval exists to gate (see FINANCE_MODULE.md). Enforced
+        here unless the step explicitly opts in.
         """
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .options(selectinload(ApprovalStepRecord.step))
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
@@ -733,6 +741,27 @@ class FinanceService:
             timezone.utc
         ):
             raise ValueError("Approval token has expired")
+
+        step = record.step
+        if (
+            step is not None
+            and step.approver_type == ApproverType.EMAIL
+            and not step.allow_self_approval
+        ):
+            approver_email = (step.approver_value or "").strip().lower()
+            requester_email = await self._entity_creator_email(
+                record.entity_type, record.entity_id
+            )
+            if (
+                approver_email
+                and requester_email
+                and approver_email == requester_email.strip().lower()
+            ):
+                raise SeparationOfDutiesError(
+                    "This request's requester and this step's approver are "
+                    "the same person; self-approval is not allowed for this "
+                    "step."
+                )
 
         now = datetime.now(timezone.utc)
         record.status = ApprovalStepStatus.APPROVED
@@ -909,6 +938,23 @@ class FinanceService:
         model, requester_column = mapping
         result = await self.db.execute(
             select(requester_column).where(model.id == entity_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def _entity_creator_email(
+        self, entity_type: ApprovalEntityType, entity_id: str
+    ) -> Optional[str]:
+        """Email of whoever raised the request, for the token-approval path.
+
+        Only the email is checkable there (no Logbook actor id) — see
+        approve_by_token(). Returns None if the requester id can't be
+        resolved or that user no longer exists.
+        """
+        requester_id = await self._entity_creator_id(entity_type, entity_id)
+        if not requester_id:
+            return None
+        result = await self.db.execute(
+            select(User.email).where(User.id == requester_id)
         )
         return result.scalar_one_or_none()
 

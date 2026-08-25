@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A finance approval token could be used to approve your own request (2026-08-25)
+
+**Fixed**
+
+- The public token-based finance approval link (`approve_by_token`) never
+  checked whether the approver and the requester were the same person, for
+  an email-addressed approval step. If a chain step's approver email
+  happened to match the request's own submitter (plausible in a small
+  department, or by misconfiguration), that person could approve their own
+  purchase/expense/check request with no guard at all — contradicting the
+  documented invariant that self-approval is prevented by default at every
+  step. Now blocked unless the step explicitly sets `allow_self_approval`.
+
 ### The Salesforce inbound webhook now caps how many records one request can carry (2026-08-25)
 
 **Fixed**
@@ -16,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   endpoint is rate-limited per-request (30/min), not per-record, so a single
   oversized request — from anyone holding a valid or leaked webhook secret —
   could drive an effectively unbounded amount of DB work inside that budget.
+  A request over the cap is also no longer marked as a "seen" delivery
+  before it's validated, so a provider's retry of a corrected, smaller batch
+  isn't mistaken for a duplicate of the rejected one.
   Requests over 500 records now get a 422 before any sync work runs.
 
 ### Rank validation now matches its own permission gate, and a first-load race no longer 500s (2026-08-25)

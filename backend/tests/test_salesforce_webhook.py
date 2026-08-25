@@ -64,6 +64,33 @@ class TestRecordCountCap:
         assert exc.value.status_code == 422
         assert str(MAX_RECORDS_PER_WEBHOOK) in exc.value.detail
 
+    async def test_over_cap_payload_is_not_fingerprinted_as_seen(self, monkeypatch):
+        # Regression (Codex review, PR #1806): is_duplicate_webhook marks a
+        # delivery "seen" via SET NX the moment it's called. If a rejected
+        # (over-cap) request were fingerprinted anyway, an identical retry
+        # of that same oversized payload would hit the duplicate branch and
+        # get 200 -- which stops the provider from retrying -- even though
+        # the batch was never actually processed. The cap must be checked
+        # BEFORE the delivery is marked as seen.
+        db, _ = _db_with_integration()
+        payload = {
+            "sobject": "Contact",
+            "action": "updated",
+            "records": [{"Id": str(i)} for i in range(MAX_RECORDS_PER_WEBHOOK + 1)],
+        }
+        request = _signed_request(payload)
+
+        dup_check = AsyncMock(return_value=False)
+        monkeypatch.setattr(
+            "app.api.public.salesforce_webhook.is_duplicate_webhook", dup_check
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await salesforce_inbound_webhook("int-1", request, db=db, _rl=None)
+
+        assert exc.value.status_code == 422
+        dup_check.assert_not_awaited()
+
     async def test_at_the_cap_passes_the_check(self, monkeypatch):
         # Exactly at the cap must not be rejected by the cap check itself
         # (it may still fail later for unrelated reasons, which is fine --

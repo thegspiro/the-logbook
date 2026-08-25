@@ -126,15 +126,6 @@ async def salesforce_inbound_webhook(
             detail="Invalid signature",
         )
 
-    # Replay protection: a captured, validly-signed request must not be
-    # reprocessed. Ack duplicates with 200 so the provider stops retrying.
-    if await is_duplicate_webhook(f"salesforce:{integration_id}", body):
-        logger.info(
-            "Ignoring duplicate Salesforce webhook for integration {}",
-            integration_id,
-        )
-        return {"status": "ignored", "reason": "duplicate"}
-
     try:
         payload = await request.json()
     except Exception:
@@ -158,6 +149,21 @@ async def salesforce_inbound_webhook(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Maximum {MAX_RECORDS_PER_WEBHOOK} records per webhook request",
         )
+
+    # Replay protection: a captured, validly-signed request must not be
+    # reprocessed. Ack duplicates with 200 so the provider stops retrying.
+    # Deliberately AFTER shape validation above: marking a delivery "seen"
+    # before it's known-valid would let a rejected (400/422) request poison
+    # the fingerprint, so a provider's identical retry of the same rejected
+    # payload gets treated as an already-handled duplicate (200) instead of
+    # being validated and rejected again -- silently dropping it forever
+    # once the provider stops retrying on that 200.
+    if await is_duplicate_webhook(f"salesforce:{integration_id}", body):
+        logger.info(
+            "Ignoring duplicate Salesforce webhook for integration {}",
+            integration_id,
+        )
+        return {"status": "ignored", "reason": "duplicate"}
 
     # Build sync service
     creds = build_salesforce_credentials(integration)

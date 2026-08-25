@@ -111,26 +111,79 @@ explicit ceiling, and this one didn't.
 422 before any sync work runs, following the same shape as the existing
 `MAX_PHOTOS_PER_ITEM` cap pattern in `equipment_check.py`.
 
+**Fix, round 2 (caught by Codex review on the PR, before merge):** the first
+version of this fix placed the new cap check _after_ the existing
+`is_duplicate_webhook` replay guard. That guard marks a delivery "seen" via
+an atomic `SET NX` the moment it's called — so an over-cap request still got
+fingerprinted even though it was then rejected with 422. A provider's
+identical retry of that same oversized payload would hit the duplicate
+branch and get **200**, which stops the provider from retrying — silently
+dropping the batch forever instead of ever being retried at a size the cap
+allows. Fixed by moving all payload-shape validation (JSON parse, `sobject`/
+`records` presence, the record-count cap) **before** the replay check, so
+only a request that's actually going to be processed — or already
+duplicate-rejected on its own separate merits — gets fingerprinted.
+
 **Guard tests:** `tests/test_salesforce_webhook.py` —
 `test_rejects_payload_over_the_cap` (501 records → 422, matches the cap
-number) and `test_at_the_cap_passes_the_check` (exactly 500 records reaches
-the sync path, proving the boundary is inclusive rather than off-by-one).
+number), `test_at_the_cap_passes_the_check` (exactly 500 records reaches the
+sync path, proving the boundary is inclusive rather than off-by-one), and
+`test_over_cap_payload_is_not_fingerprinted_as_seen` (asserts
+`is_duplicate_webhook` is never awaited when the cap rejects a request —
+fails if the ordering regresses).
 
-### PUB-2 — NIT — Two invariants documented that were previously correct-but-unexplained — ✅ FIXED (comments only)
+### PUB-2 — NIT — `legal.py`'s single-org guard was correct but unexplained — ✅ FIXED (comment only)
 
-- **`legal.py:75`** — `len(orgs) == 1` is the only thing preventing a
-  multi-tenant deployment from leaking an arbitrary organization's legal text
-  to every anonymous caller (this endpoint has no org context — no API key,
-  no subdomain routing). The code was already correct; added a comment
-  naming the invariant so a future "simplify this to `.first()`" edit doesn't
-  reintroduce the leak.
-- **`finance_service.py:711-718`** — `approve_by_token`/`deny_by_token` don't
-  call `assert_different_person()` the way the authenticated `approve_step`
-  does. Verified this is not a gap: the token path's approver is an external
-  party named on the chain step with no Logbook account to compare against
-  `record.acted_by` — there is no requester identity to self-approve as.
-  Added a docstring note so this isn't re-flagged as a regression of the
-  separation-of-duties check on a future pass.
+`len(orgs) == 1` (`legal.py:75`) is the only thing preventing a multi-tenant
+deployment from leaking an arbitrary organization's legal text to every
+anonymous caller (this endpoint has no org context at all — no API key, no
+subdomain routing). The code was already correct; added a comment naming the
+invariant so a future "simplify this to `.first()`" edit doesn't reintroduce
+the leak.
+
+### PUB-4 — MED — Finance token-based approval had no self-approval guard, despite the documented invariant — ✅ FIXED
+
+**What:** `approve_by_token`/`deny_by_token` never called
+`assert_different_person()` the way the authenticated `approve_step` does.
+The initial pass through this file recorded that as **verified safe**,
+reasoning that the token path's approver has no Logbook account/id to
+compare against a requester id. **A Codex review comment on the PR correctly
+identified this reasoning as incomplete**, and it was wrong to close as a
+non-finding: for an `approver_type == EMAIL` step, the approver's identity
+_is_ knowable — it's the literal email address on `step.approver_value`.
+
+**Where:** `app/services/finance_service.py:711` (pre-fix).
+
+**Failure scenario:** if a chain step's `approver_value` is configured to
+the same email address as the person who submits the request it's meant to
+gate (plausible in a small department — e.g. a Treasurer step where the
+Treasurer is also the usual requester, or simple misconfiguration), that
+person receives the approval-request email themselves and can click through
+and approve their own purchase/expense/check request with **zero** guard —
+directly contradicting `docs/FINANCE_MODULE.md:181`'s documented invariant
+("`allow_self_approval`: By default false — prevents the requester from also
+being the approver at any step"). `allow_self_approval` exists specifically
+to gate this and defaults to `False`, but nothing read it on this path.
+
+**Fix:** `approve_by_token` now eager-loads `record.step` and, when
+`step.approver_type == ApproverType.EMAIL` and `not step.allow_self_approval`,
+resolves the requester's email (new `_entity_creator_email` helper, mirroring
+the existing `_entity_creator_id`) and compares it case-insensitively against
+`step.approver_value`. A match raises `SeparationOfDutiesError` (a
+`ValueError` subclass — the endpoint's existing `except ValueError → 400`
+mapping picks it up unchanged, no endpoint-layer change needed). Steps using
+`POSITION`/`PERMISSION`/`SPECIFIC_USER` approver types are untouched by this
+check (no email to compare — the original "no Logbook identity to compare
+against" reasoning does hold for those three, just not for `EMAIL`).
+`deny_by_token` is deliberately left unguarded, matching the existing
+`approve_step`/`deny_step` asymmetry: withdrawing your own request is not a
+separation-of-duties conflict, only approving it is.
+
+**Guard tests:** `tests/test_finance_approval_tokens.py` —
+`TestApproveByTokenSelfApprovalGuard` covers: rejects when the approver email
+matches the requester (case-insensitively), allows when the step explicitly
+sets `allow_self_approval=True`, allows when the emails differ, and allows
+all three non-`EMAIL` approver types unconditionally.
 
 ### PUB-3 — INFO — `ApprovalChain`/`ApprovalChainStep`/`ApprovalStepRecord` have no Alembic migration — not a defect, flagging for the record
 
@@ -150,9 +203,15 @@ behind these 12 files was touched this iteration.
 
 ## Guard tests added
 
-- `test_rejects_payload_over_the_cap` / `test_at_the_cap_passes_the_check`
+- `test_rejects_payload_over_the_cap` / `test_at_the_cap_passes_the_check` /
+  `test_over_cap_payload_is_not_fingerprinted_as_seen`
   (`tests/test_salesforce_webhook.py`) — fail if the record-count cap
-  regresses or its boundary becomes off-by-one.
+  regresses, its boundary becomes off-by-one, or the replay-fingerprint
+  ordering regresses.
+- `TestApproveByTokenSelfApprovalGuard` (5 tests,
+  `tests/test_finance_approval_tokens.py`) — fail if the token-approval
+  self-approval guard regresses, stops respecting `allow_self_approval`, or
+  starts blocking non-`EMAIL` approver types it shouldn't.
 
 ## Completion gate
 
@@ -162,6 +221,6 @@ behind these 12 files was touched this iteration.
 | `black --check app/ tests/ alembic/`                                    | ✅ unchanged                                                        |
 | `isort --check-only app/ tests/ alembic/`                               | ✅ clean                                                            |
 | `validate_migrations.py --strict`                                       | ✅ single head                                                      |
-| backend tests (scoped: finance/legal/public/webhook/salesforce/display) | ✅ 250 passed, 1 skipped (environment-only: py_vapid not installed) |
+| backend tests (scoped: finance/legal/public/webhook/salesforce/display) | ✅ 256 passed, 1 skipped (environment-only: py_vapid not installed) |
 | `tsc --noEmit`                                                          | ✅ 0 errors (no frontend files touched)                             |
 | `eslint .`                                                              | n/a — no frontend files touched                                     |

@@ -161,10 +161,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   (LOW)** — the Salesforce inbound webhook had no cap on payload record
   count; a validly-signed but oversized request could drive unbounded DB
   work inside the per-request rate limit. Fixed with a 500-record cap.
-  **PUB-2 (NIT)** — documented two invariants that were already correct but
-  unexplained (`legal.py`'s single-org guard, the token-approval path's
-  intentional lack of a self-approval check) so neither gets "simplified"
-  into a regression later. **PUB-3 (INFO)** — recorded that the finance
-  approval tables are `create_all`-only by design, matching the documented
-  pattern elsewhere. See `PUB-03-public-surface-webhooks.md` for the full
+  **A Codex review comment on the PR caught a real ordering bug in that
+  fix** — the cap check ran after the replay-fingerprint mark, so a
+  rejected oversized request still got fingerprinted "seen," and a
+  provider's retry of the same payload would be mistaken for an
+  already-handled duplicate (200) instead of being validated again. Fixed by
+  moving payload-shape validation before the replay check. **PUB-2 (NIT)** —
+  documented `legal.py`'s single-org guard, which was already correct but
+  unexplained. **PUB-4 (MED)** — **a second Codex review comment correctly
+  challenged this iteration's own initial conclusion**: the finance
+  token-approval path's lack of a self-approval check had been recorded as
+  "verified safe" on the reasoning that the token path has no Logbook
+  identity to compare — true for POSITION/PERMISSION/SPECIFIC_USER approver
+  types, but wrong for `EMAIL`-type steps, where the approver's identity
+  _is_ the literal email on the step. Fixed: `approve_by_token` now blocks
+  self-approval when the step's approver email matches the requester's,
+  unless the step explicitly sets `allow_self_approval`. **PUB-3 (INFO)** —
+  recorded that the finance approval tables are `create_all`-only by design,
+  matching the documented pattern elsewhere. See
+  `PUB-03-public-surface-webhooks.md` for the full
   write-up. Next: 04 storefront & payments.
