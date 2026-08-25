@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                         |
-| ----------- | --------------------------------------------- |
-| PR          | opening this iteration                        |
-| Branch      | `claude/security-review-usr`                  |
-| Feature     | 07 Users & organizations                      |
-| CI          | not yet opened                                |
-| Threads     | none yet                                      |
-| Last tended | 2026-08-25 — no defect/gap found, gates green |
+| Field       | Value                                                       |
+| ----------- | ----------------------------------------------------------- |
+| PR          | [#1814](https://github.com/thegspiro/the-logbook/pull/1814) |
+| Branch      | `claude/security-review-usr`                                |
+| Feature     | 07 Users & organizations                                    |
+| CI          | just opened; not yet checked                                |
+| Threads     | none yet                                                    |
+| Last tended | 2026-08-25 — no defect/gap found, gates green               |
 
 ---
 
