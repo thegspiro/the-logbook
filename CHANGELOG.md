@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### OAuth login now honors a deactivated organization (2026-08-25)
+
+**Fixed**
+
+- **A member of a deactivated organization could still sign in via Google or
+  Microsoft.** The 2026-08-12 fix made password login require
+  `organizations.active IS TRUE`, but `oauth_service._link_existing_user`
+  still scoped to the earliest-created org with no `active` filter, and — if
+  no org matched — silently dropped the org filter entirely rather than
+  failing closed. It now filters on `Organization.active.is_(True)` and
+  returns the same indistinguishable `"no_account"` error the password path
+  uses when no active org exists, so a deactivated org's OAuth-linked members
+  are rejected the same way password users already are.
+
 ### Reopening a finalized event returned 500, and error reports named nobody (2026-08-25)
 
 **Fixed**

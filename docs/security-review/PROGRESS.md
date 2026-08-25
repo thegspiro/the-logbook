@@ -52,7 +52,7 @@ data-carrying modules, then the supporting infrastructure.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status   |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | 🔄       |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳ #TBD  |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜       |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜       |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |
@@ -114,9 +114,17 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   session lifecycle.
 - **SEC-00 cross-cutting baseline ✅ merged** — PR #1799 merged 2026-08-25
   08:34:59Z.
-- **01 Auth & session lifecycle 🔄** — started 2026-08-25. Two prior app-review
-  passes (`docs/app-review/auth-session.md`, 2026-08-05 and 2026-08-08)
-  already did a six-lens sweep; this iteration re-verifies those claims
-  against current code and applies the security-review checklist dimensions
-  the app-review passes covered lightly (tenant isolation, injection, data
-  exposure, abuse resistance, schema integrity).
+- **01 Auth & session lifecycle ⏳** — two prior app-review passes
+  (`docs/app-review/auth-session.md`, 2026-08-05 and 2026-08-08) already did a
+  six-lens sweep; this iteration re-verified those claims against current code
+  (still accurate) and applied the checklist dimensions those passes covered
+  lightly. **AUTH-1 (MED)** — OAuth login never adopted the 2026-08-12
+  organization-active check that password login got, and fell back to an
+  unscoped user lookup (a latent tenant-isolation gap) when its org lookup
+  came back empty; fixed to filter on `Organization.active` and fail closed,
+  mirroring password login exactly. **AUTH-2 (NIT)** — the prior pass's route
+  count (25) and "refresh grace window intact" claim had both drifted from
+  current code (26 routes; the grace window was deliberately removed
+  2026-08-12); corrected in `auth-session.md`. See
+  `AUTH-01-auth-session.md` for the full write-up. Next: 02 permissions &
+  roles.
