@@ -235,6 +235,18 @@ TRAINING_VIEW = Permission(
 TRAINING_MANAGE = Permission(
     "training.manage", "Manage training records", PermissionCategory.TRAINING
 )
+# Configure the training module's org-level settings — chiefly the member
+# visibility panel, which decides how much of an officer's written assessment
+# the member being assessed may read. Deliberately separate from
+# ``training.manage``: setting disclosure policy is a records-administration
+# job (the Membership Coordinator's), while ``training.manage`` is the power
+# to create and edit anybody's training records. The endpoints accept either,
+# so roles that already held ``training.manage`` keep the access they had.
+TRAINING_CONFIGURE = Permission(
+    "training.configure",
+    "Configure training module settings",
+    PermissionCategory.TRAINING,
+)
 
 # Compliance
 COMPLIANCE_VIEW = Permission(
@@ -641,6 +653,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Modules
     TRAINING_VIEW,
     TRAINING_MANAGE,
+    TRAINING_CONFIGURE,
     COMPLIANCE_VIEW,
     COMPLIANCE_MANAGE,
     MEDICAL_SCREENING_VIEW,
@@ -917,6 +930,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -984,6 +998,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1045,6 +1060,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1094,6 +1110,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1113,6 +1130,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
         "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS
         + [
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
@@ -1303,6 +1321,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
@@ -1704,6 +1723,10 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SETTINGS_VIEW.name,
             LEGAL_PROPOSE.name,
             COMPLIANCE_VIEW.name,
+            # Sets how much of a member's own training file the member may
+            # read. Not accompanied by training.manage: the coordinator
+            # administers the disclosure policy, not the records themselves.
+            TRAINING_CONFIGURE.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
@@ -1722,6 +1745,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
@@ -1757,6 +1781,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
