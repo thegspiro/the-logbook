@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                       |
-| ----------- | ------------------------------------------- |
-| PR          | none                                        |
-| Branch      | `claude/security-review-auth` (in progress) |
-| Feature     | 01 Auth & session lifecycle                 |
-| CI          | n/a — not yet opened                        |
-| Threads     | n/a                                         |
-| Last tended | n/a                                         |
+| Field       | Value                                                       |
+| ----------- | ----------------------------------------------------------- |
+| PR          | [#1804](https://github.com/thegspiro/the-logbook/pull/1804) |
+| Branch      | `claude/security-review-auth`                               |
+| Feature     | 01 Auth & session lifecycle                                 |
+| CI          | just opened; not yet checked                                |
+| Threads     | none yet                                                    |
+| Last tended | 2026-08-25 — opened                                         |
 
 ---
 
@@ -52,7 +52,7 @@ data-carrying modules, then the supporting infrastructure.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status   |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳ #TBD  |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳ #1804 |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜       |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜       |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜       |

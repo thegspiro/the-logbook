@@ -1,6 +1,6 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 · **PR:** #TBD
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 · **PR:** #1804
 
 **Backend:** `app/api/v1/endpoints/auth.py` (1405 L, 26 endpoints),
 `app/services/auth_service.py` (970 L), `app/services/mfa_service.py` (121 L),
