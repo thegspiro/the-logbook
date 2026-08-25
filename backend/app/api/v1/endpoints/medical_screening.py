@@ -118,9 +118,15 @@ async def update_requirement(
 ):
     """Update a screening requirement."""
     service = MedicalScreeningService(db)
-    requirement = await service.update_requirement(
-        requirement_id, current_user.organization_id, data
-    )
+    try:
+        requirement = await service.update_requirement(
+            requirement_id, current_user.organization_id, data
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(exc),
+        )
     if not requirement:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -277,12 +283,18 @@ async def update_record(
 ):
     """Update a screening record."""
     service = MedicalScreeningService(db)
-    record = await service.update_record(
-        record_id,
-        current_user.organization_id,
-        data,
-        reviewed_by=current_user.id,
-    )
+    try:
+        record = await service.update_record(
+            record_id,
+            current_user.organization_id,
+            data,
+            reviewed_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(exc),
+        )
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

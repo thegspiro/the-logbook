@@ -16,14 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815) |
-| Branch      | `claude/security-review-mp`                                 |
-| Feature     | 08 Membership pipeline                                      |
-| CI          | green (16/16 checks) on current head 6b7c2074               |
-| Threads     | 5 Codex threads, all fixed/flagged, replied, and resolved   |
-| Last tended | 2026-08-25 — 5 fixed, 1 flagged, 1 more found+fixed; pushed |
+_None — #1815 merged 2026-08-25 19:43 UTC. See Log._
 
 ---
 
@@ -59,8 +52,8 @@ data-carrying modules, then the supporting infrastructure.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814 |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳       |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅ #1815 |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | 🔄       |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜       |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜       |
@@ -338,3 +331,5 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   37 PII-exposure tests/tsc, all green). See `MP-08-membership-pipeline.md`
   for the complete writeup, including the revision note explaining the
   draft-vs-final split. Next: 09 medical screening (PHI).
+- **08 Membership pipeline ✅ merged** — PR #1815 merged 2026-08-25 19:43
+  UTC.
