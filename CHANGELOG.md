@@ -102,9 +102,9 @@ there and deferred deliberately as too large to bolt on.
   snapshot and the close, leaving that member checked in, uncredited and behind
   a lock with nothing on screen to explain it. A writer arriving mid-finalize
   now blocks and then finds the event closed, which is the 409 it should always
-  have got. Crediting deliberately runs after that commit — the roster can no
-  longer change, so it needs no lock, and a mapping failure there costs only the
-  hours credit rather than the whole finalize.
+  have got. Crediting runs inside that same lock; an earlier draft of this
+  change ran it after the commit on the reasoning that a frozen roster needs no
+  lock, which is wrong — see the crediting bullet below.
 - **Reopening a training session serializes against its pending approval.**
   Both `reopen_training_session` and `submit_training_approval` lock the
   approval row, so an officer holding a page loaded before a reopen can no
@@ -154,6 +154,32 @@ there and deferred deliberately as too large to bolt on.
   hours is never queued for crediting at all, so their earlier credit survived
   untouched. `reverse_credits_for_source_except` reconciles every ledger row
   for the session against the destinations it now feeds.
+- **A failed pipeline update is no longer read as a revocation.** The sweep
+  above reverses every credit outside the set of destinations just credited, so
+  an update that _errored_ was indistinguishable from one the session no longer
+  feeds — and an `events.manage` caller without `training.manage` hits that
+  deterministically on every attendee they do not own, turning one refused
+  correction into a wholesale revocation of hours already earned. The feed now
+  reports whether each destination was resolved, and one unresolved answer
+  aborts the sweep for that session: stale credit left standing is visible and
+  corrects itself on the next re-finalize, whereas credit deleted on a guess
+  is silent and gone.
+- **A re-enrolled member is credited again.** Widening the enrollment lookup to
+  include `COMPLETED` made it ambiguous, because `enroll_member` rejects only an
+  _active_ enrollment — a member who finished a program and enrolled again holds
+  both rows, and the single-row fetch raised `MultipleResultsFound` into the
+  swallowing except clause. Enrollment selection is now explicit: the one
+  already carrying this session's credit wins (a re-finalize restates its own
+  earlier figure, which lives where it was first applied), then the active one,
+  then the most recent completed one.
+- **A pending confirmation no longer wipes the previous approval's credit.**
+  Reopening a session that requires an officer's confirmation queues no pipeline
+  updates by design — nothing is approved yet — but the reconciliation sweep ran
+  against that empty set anyway and reversed everything the _previous_ approval
+  had earned, before anyone confirmed what replaced it. If the officer never
+  submitted, the hours stayed gone. The sweep is now deferred to
+  `submit_training_approval`, which is the point at which the destination set is
+  real.
 
 ### Three guards drawn from what #1795 got wrong (2026-08-24)
 

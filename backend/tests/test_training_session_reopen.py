@@ -16,8 +16,9 @@ DB is mocked; no MySQL.
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
-from app.models.training import ApprovalStatus
+from app.models.training import ApprovalStatus, EnrollmentStatus
 from app.services.training_session_service import TrainingSessionService
 
 
@@ -334,7 +335,7 @@ class TestCompletedEnrollmentsAreNotSkipped:
         assert "active" in sql
 
     async def test_correction_looks_past_active(self):
-        db = _db(_one(None))
+        db = _db(_all([]))
         svc = TrainingSessionService(db)
 
         await svc._apply_pipeline_progress(
@@ -362,7 +363,7 @@ class TestStaleDestinationsAreReconciled:
     async def test_destinations_no_longer_fed_are_reversed(self):
         db = _db()
         svc = TrainingSessionService(db)
-        svc._apply_pipeline_progress = AsyncMock(return_value="progress-new")
+        svc._apply_pipeline_progress = AsyncMock(return_value=("progress-new", True))
 
         with patch(
             "app.services.training_program_service.TrainingProgramService"
@@ -411,3 +412,218 @@ class TestStaleDestinationsAreReconciled:
             await svc._apply_pipeline_updates([], "org-1", "chief-1")
 
         sweep.assert_not_awaited()
+
+
+class TestAFailedUpdateIsNotReadAsARevocation:
+    """PR #1802 review, P1: the sweep reverses everything outside the set of
+    destinations just credited, so an update that *failed* looked identical to
+    one the session no longer feeds. An events.manage caller without
+    training.manage hits that on every attendee they do not own, turning one
+    refused correction into a wholesale revocation of credit already earned."""
+
+    async def test_an_unresolved_update_aborts_the_sweep(self):
+        db = _db()
+        svc = TrainingSessionService(db)
+        # (None, False) — the updater refused; the destination may still be fed.
+        svc._apply_pipeline_progress = AsyncMock(return_value=(None, False))
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            sweep = AsyncMock(return_value=1)
+            tps_cls.return_value.reverse_credits_for_source_except = sweep
+            await svc._apply_pipeline_updates(
+                [("user-1", "prog-1", "req-1", 4.0, "session-1")],
+                "org-1",
+                "chief-1",
+                session_id="session-1",
+            )
+
+        sweep.assert_not_awaited()
+
+    async def test_one_failure_protects_the_whole_session(self):
+        """Partial knowledge is not partial safety: the keep set is incomplete
+        for every destination once any one of them is unresolved."""
+        db = _db()
+        svc = TrainingSessionService(db)
+        svc._apply_pipeline_progress = AsyncMock(
+            side_effect=[("progress-ok", True), (None, False)]
+        )
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            sweep = AsyncMock(return_value=1)
+            tps_cls.return_value.reverse_credits_for_source_except = sweep
+            await svc._apply_pipeline_updates(
+                [
+                    ("user-1", "prog-1", "req-1", 4.0, "session-1"),
+                    ("user-2", "prog-1", "req-1", 4.0, "session-1"),
+                ],
+                "org-1",
+                "chief-1",
+                session_id="session-1",
+            )
+
+        sweep.assert_not_awaited()
+
+    async def test_a_member_outside_the_pipeline_still_sweeps(self):
+        """(None, True) is resolved, not failed — no enrollment means no
+        destination to keep, which the sweep can act on safely. Conflating it
+        with a failure would disable reconciliation for the whole session."""
+        db = _db()
+        svc = TrainingSessionService(db)
+        svc._apply_pipeline_progress = AsyncMock(return_value=(None, True))
+
+        with patch(
+            "app.services.training_program_service.TrainingProgramService"
+        ) as tps_cls:
+            sweep = AsyncMock(return_value=1)
+            tps_cls.return_value.reverse_credits_for_source_except = sweep
+            await svc._apply_pipeline_updates(
+                [("user-1", "prog-1", "req-1", 4.0, "session-1")],
+                "org-1",
+                "chief-1",
+                session_id="session-1",
+            )
+
+        sweep.assert_awaited_once()
+        assert sweep.await_args.kwargs["keep_progress_ids"] == set()
+
+
+class TestReEnrollmentDoesNotStrandCredit:
+    """PR #1802 review, P1: widening the enrollment lookup to COMPLETED made it
+    ambiguous, because enroll_member rejects only an *active* enrollment. A
+    member who finished a program and enrolled again holds both rows, and
+    scalar_one_or_none() over the pair raises MultipleResultsFound — swallowed
+    into 'unresolved', so the re-enrolled member silently stops being credited."""
+
+    async def test_two_enrollments_do_not_raise(self):
+        completed = SimpleNamespace(id="enr-old", status=EnrollmentStatus.COMPLETED)
+        active = SimpleNamespace(id="enr-new", status=EnrollmentStatus.ACTIVE)
+        # No prior credit for this session -> the active enrollment is chosen.
+        db = _db(_all([completed, active]), MagicMock(all=MagicMock(return_value=[])))
+        svc = TrainingSessionService(db)
+
+        enrollment = await svc._resolve_pipeline_enrollment(
+            user_id="user-1",
+            program_id="prog-1",
+            session_id="session-1",
+            organization_id="org-1",
+        )
+
+        assert enrollment is active
+
+    async def test_the_enrollment_already_credited_wins(self):
+        """A re-finalize restates its own earlier figure, and that figure lives
+        on the enrollment it was first applied to. Moving it to the newer
+        enrollment would rewrite a completed program's history."""
+        completed = SimpleNamespace(id="enr-old", status=EnrollmentStatus.COMPLETED)
+        active = SimpleNamespace(id="enr-new", status=EnrollmentStatus.ACTIVE)
+        db = _db(
+            _all([completed, active]),
+            MagicMock(all=MagicMock(return_value=[("enr-old",)])),
+        )
+        svc = TrainingSessionService(db)
+
+        enrollment = await svc._resolve_pipeline_enrollment(
+            user_id="user-1",
+            program_id="prog-1",
+            session_id="session-1",
+            organization_id="org-1",
+        )
+
+        assert enrollment is completed
+
+    async def test_a_single_enrollment_needs_no_credit_lookup(self):
+        only = SimpleNamespace(id="enr-1", status=EnrollmentStatus.COMPLETED)
+        db = _db(_all([only]))
+        svc = TrainingSessionService(db)
+
+        enrollment = await svc._resolve_pipeline_enrollment(
+            user_id="user-1",
+            program_id="prog-1",
+            session_id="session-1",
+            organization_id="org-1",
+        )
+
+        assert enrollment is only
+        assert db.execute.await_count == 1
+
+
+class TestAPendingConfirmationDoesNotSweep:
+    """PR #1802 review, P1: passing the session id is what arms the sweep, and
+    a confirmation-required finalize leaves ``pipeline_updates`` empty on
+    purpose — the records are not approved yet. Sweeping against that empty set
+    reverses every credit the *previous* approval earned, the moment a leader
+    reopens the session and before anyone confirms what replaces it. If the
+    officer never submits, the hours are simply gone."""
+
+    def _finalizable(self, requires_confirmation: bool):
+        past = datetime.now(timezone.utc) - timedelta(hours=2)
+        # AttendeeApprovalData parses user_id as a UUID.
+        member_id = str(uuid4())
+        rsvp = SimpleNamespace(
+            user_id=member_id,
+            checked_in=True,
+            checked_in_at=past,
+            checked_out_at=past + timedelta(hours=1),
+            override_check_in_at=None,
+            override_check_out_at=None,
+            override_duration_minutes=None,
+        )
+        event = SimpleNamespace(
+            id="event-1",
+            title="Pump Ops Drill",
+            start_datetime=past,
+            end_datetime=past + timedelta(hours=1),
+            actual_end_time=None,
+            rsvps=[rsvp],
+        )
+        session = SimpleNamespace(
+            id="session-1",
+            organization_id="org-1",
+            event_id="event-1",
+            course_name="Pump Ops",
+            is_finalized=False,
+            approval_deadline_days=14,
+            require_completion_confirmation=requires_confirmation,
+        )
+        user = SimpleNamespace(
+            id=member_id,
+            first_name="Dana",
+            last_name="Reyes",
+            email="dana@example.org",
+        )
+        return session, event, user
+
+    async def _finalize(self, requires_confirmation: bool):
+        session, event, user = self._finalizable(requires_confirmation)
+        db = _db(_one(session), _one(event), _one(user))
+        svc = TrainingSessionService(db)
+        svc._revoke_credit_for_removed_attendees = AsyncMock()
+        svc._finalize_training_records = AsyncMock(return_value=[])
+        svc._notify_training_officers = AsyncMock()
+        svc._apply_pipeline_updates = AsyncMock()
+
+        approval, error = await svc.finalize_training_session(
+            training_session_id="session-1",
+            organization_id="org-1",
+            finalized_by="chief-1",
+        )
+        assert error is None, error
+        return svc
+
+    async def test_confirmation_required_withholds_the_session_id(self):
+        svc = await self._finalize(requires_confirmation=True)
+        svc._apply_pipeline_updates.assert_awaited_once()
+        assert svc._apply_pipeline_updates.await_args.kwargs["session_id"] is None
+
+    async def test_auto_approved_still_sweeps(self):
+        """The deferral must not disarm reconciliation for sessions that do
+        approve their records here — that is the corrected-to-zero case."""
+        svc = await self._finalize(requires_confirmation=False)
+        svc._apply_pipeline_updates.assert_awaited_once()
+        assert (
+            svc._apply_pipeline_updates.await_args.kwargs["session_id"] == "session-1"
+        )
