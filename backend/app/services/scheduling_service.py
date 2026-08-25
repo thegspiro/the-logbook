@@ -1002,14 +1002,25 @@ class SchedulingService:
         )
 
     async def get_shift_by_id(
-        self, shift_id: UUID, organization_id: UUID
+        self, shift_id: UUID, organization_id: UUID, for_update: bool = False
     ) -> Optional[Shift]:
-        """Get a shift by ID"""
-        result = await self.db.execute(
+        """Get a shift by ID.
+
+        ``for_update`` locks the row for the caller's transaction. Seat
+        capacity is a read-then-write — count the occupants, then insert — so
+        two members claiming the last seat at the same moment both read the
+        same count and both get in. Locking the shift serializes them on one
+        row, the way ``event_service`` already locks the event row before
+        counting "going" RSVPs against ``max_attendees``.
+        """
+        query = (
             select(Shift)
             .where(Shift.id == str(shift_id))
             .where(Shift.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     # ============================================
@@ -2879,6 +2890,14 @@ class SchedulingService:
             )
             if excluded:
                 filled_query = filled_query.where(ShiftAssignment.id.notin_(excluded))
+            # FOR UPDATE, not for the locks but for the *read*: under InnoDB's
+            # default REPEATABLE READ a plain SELECT answers from the snapshot
+            # taken at the transaction's first read, which the endpoint already
+            # established before it got here. Holding the shift row lock does
+            # not refresh that snapshot, so a plain count still returns the
+            # tally from before the member who beat us to the seat committed.
+            # A locking read always sees the latest committed version.
+            filled_query = filled_query.with_for_update()
             filled = (await self.db.execute(filled_query)).scalar() or 0
             if filled >= shift.min_staffing:
                 return f"The last seat on this {context} was just claimed"
@@ -2906,6 +2925,8 @@ class SchedulingService:
                 occupied_query = occupied_query.where(
                     ShiftAssignment.id.notin_(excluded)
                 )
+            # Locking read — see the note on filled_query above.
+            occupied_query = occupied_query.with_for_update()
             occupied = (await self.db.execute(occupied_query)).scalar() or 0
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
@@ -2959,8 +2980,16 @@ class SchedulingService:
         flexibility to assign to cancelled/finalized/past shifts for records.
         """
         try:
-            # Verify shift belongs to org
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            # Verify shift belongs to org, and lock the row on every path.
+            # The headcount cap (min_staffing) is waived for officer-made
+            # assignments, but the named-seat cap is not — a seat on a crew is
+            # one seat whoever fills it — so every caller reaches a capacity
+            # check and every caller needs the serialization. Locking only
+            # self-signup left two officers, or an officer racing a member,
+            # both counting the last Driver seat as free.
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
             if not shift:
                 return None, "Shift not found"
 

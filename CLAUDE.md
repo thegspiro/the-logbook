@@ -1151,7 +1151,7 @@ has, and the paginated list's count query scans all of it.
 Escaping the term is only half the fix. `.ilike(pattern)` with no `ESCAPE`
 clause leaves the escape character up to MySQL's `sql_mode`: under
 `NO_BACKSLASH_ESCAPES` the backslashes are literal and every wildcard comes
-back. The escaping *looks* present in review and does nothing at runtime.
+back. The escaping _looks_ present in review and does nothing at runtime.
 
 ```python
 # WRONG — the filter stops filtering the moment somebody types "%"
@@ -1178,6 +1178,133 @@ maintain. `tests/test_like_escaping.py` enforces both halves.
 in Python, the Python side compares against the **raw** input. Comparing against
 the escaped form is how the inventory barcode search came to report the wrong
 `matched_field` for any code containing `%`, `_` or `\`.
+
+### 26. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
+
+**39 of this schema's 254 tables are never created by any migration.**
+`event_requests`, `prospects`, `positions`, the whole finance-approval set and
+more come into being when `main.py`'s `_fast_path_init()` calls `create_all()`
+and stamps Alembic at head — the deployment model
+`app/utils/enum_normalization` documents.
+
+That is deliberate, and it is also a trap, because **CI runs `alembic upgrade
+head` against an empty database** in the integration and contract jobs, before
+anything calls `create_all`. Reflecting a column on a table that is not there
+raises `NoSuchTableError`, and that kills the entire upgrade — not just the one
+step:
+
+```python
+# WRONG — dies on any database that has not started the app yet
+def _has_column(table: str, column: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    return column in {c["name"] for c in inspector.get_columns(table)}
+
+if not _has_column("event_requests", "staffing_shift_id"):
+    op.add_column("event_requests", sa.Column(...))
+
+# CORRECT — require the table as well as the absent column
+def _has_table(table: str) -> bool:
+    return table in sa.inspect(op.get_bind()).get_table_names()
+
+if _has_table("event_requests") and not _has_column("event_requests", "..."):
+    op.add_column("event_requests", sa.Column(...))
+```
+
+**Skipping is correct, not merely safe.** A table `create_all` builds later is
+built from the models, which already declare the new column.
+
+This was live on 2026-08-24: two migrations adding columns to `event_requests`
+failed on every fresh database, which is four red matrix jobs (MySQL 8.0 and
+MariaDB 10.11 × integration and contract), not one. Fifteen of the sixteen
+existing migrations that touch such a table already guarded; the pattern was
+simply undocumented.
+
+**Rule:** before altering a table in a migration, check whether any migration
+creates it. If none does, guard the step on the table's existence.
+`tests/test_migration_create_all_tables.py` enforces this and was clean when
+written, so any failure is new.
+
+**Related, same root:** `alembic upgrade head` alone does not produce a working
+schema. On a freshly migrated database `scripts/repair_schema.py` still adds a
+dozen columns the models declare and no migration creates. Treat the models as
+the schema of record and migrations as alterations on top — not the reverse.
+
+### 27. A Capacity Check Is a Read-Then-Write, and Needs the Row Locked _(2026-08-25)_
+
+Anything with a limit — seats on a shift, `max_attendees` on an event, a role
+on an outreach signup sheet — is enforced by counting what is already there and
+then inserting. Two requests arriving together both read the count before
+either commits, both decide there is room, and the limit is exceeded by exactly
+the number of people who tapped at once. It is invisible in testing, because
+one request never races itself.
+
+It takes **two** changes, and the second is the one everybody misses.
+
+**1. Lock the parent row**, to serialize the decision:
+
+```python
+# WRONG — two members both see the last seat
+shift = await self.get_shift_by_id(shift_id, organization_id)
+
+# CORRECT — serialize on the row everyone contends for
+shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
+```
+
+Lock the parent, not the rows being counted: the seats that would conflict do
+not exist yet, so there is nothing to lock; the shift/event/request row is the
+one thing both transactions already share.
+
+**2. Make the count itself a locking read**, or the lock buys nothing:
+
+```python
+# STILL WRONG — the row is locked and the count is stale anyway
+occupied = await self.db.execute(select(func.count()).where(...))
+
+# CORRECT
+occupied = await self.db.execute(select(func.count()).where(...).with_for_update())
+```
+
+Under InnoDB's default REPEATABLE READ — which is what this app runs, no
+`isolation_level` is set on the engine — a plain `SELECT` answers from the
+snapshot taken at the transaction's **first** read, and acquiring a row lock
+does not refresh it. Every one of these checks runs behind an endpoint that
+already loaded the shift or the event, so the snapshot predates the lock. The
+second transaction blocks, waits, acquires the lock, counts — and sees the
+tally from before the first one committed. Demonstrated on this schema:
+
+```
+T2 reads (snapshot taken)
+T1 locks parent, counts 0, inserts, commits
+T2 locks parent  ->  plain count: 0   locking count: 1   (truth: 1)
+```
+
+A locking read is defined to see the latest committed version, which is why it
+is the fix. `SELECT ... FOR UPDATE` on the count is not there for the lock.
+
+This is easy to get wrong and invisible in review, because the code reads as
+correct and the comment above it says so. `event_service` carried the comment
+"event row is locked, so this count is consistent" from the day it was written;
+the row was locked and the count was not consistent.
+
+**Enforce the lock wherever the limit is enforced.** Shift assignment briefly
+locked only for self-signup, on the reasoning that an officer may overfill a
+crew deliberately. Half true: the _headcount_ cap is waived for officers, the
+_named-seat_ cap is not — a seat on a crew is one seat whoever fills it — so
+two officers, or an officer racing a member, still raced for the last Driver
+seat. Check which caps actually run on each path before making the lock
+conditional on any of them.
+
+Found on 2026-08-24 in the outreach role seats and the outreach signup sheet
+(two coordinators each creating a shift, one orphaned), on 2026-08-25 in
+generic shift seat capacity, which had the same shape since it was written, and
+the same day in all five capacity counts, which were locking the right row and
+then reading a stale number.
+
+**Rule:** when adding a feature with a cap, a quota, or a one-per-thing
+invariant, ask what happens if two requests arrive in the same millisecond. If
+the answer involves a count followed by an insert, lock the parent row **and**
+make the count a locking read. `tests/test_capacity_locking.py` asserts both
+halves at every site.
 
 ## Environment Variables
 

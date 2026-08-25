@@ -101,7 +101,7 @@ def parse_migration_file(filepath: Path) -> Dict[str, object]:
     }
 
 
-def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
+def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str], List[str]]:
     """
     Validate the migration chain.
 
@@ -189,7 +189,23 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
         for m in migrations:
             if m["revision"] in head_revisions:
                 head_files.append(f"{m['file']} ({m['revision']})")
-        warnings.append(f"Multiple heads detected (branching): {', '.join(head_files)}")
+        # An ERROR, not a warning. This script is the dedicated gate for the
+        # chain and CI runs it on every push, but a fork only ever produced a
+        # warning — so it exited 0 and the gate passed while `alembic upgrade
+        # head` was already broken with "Multiple head revisions". The thing
+        # that actually caught the two forks of 2026-08-24 was a pytest case
+        # in test_alembic_migrations.py, which means the general-purpose test
+        # suite was stricter than the check written for this exact problem.
+        #
+        # A fork is not a style preference: every deployment that runs
+        # `alembic upgrade head` fails outright until somebody resolves it, and
+        # on a repo where main merges several times an hour it happens to any
+        # branch carrying a migration.
+        errors.append(
+            f"Multiple heads detected (branching): {', '.join(head_files)}. "
+            f"`alembic upgrade head` fails until this is resolved — repoint "
+            f"the newer migration onto the other head, or merge them."
+        )
 
     # Print results
     print("\n" + "=" * 60)
