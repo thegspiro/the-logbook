@@ -22,7 +22,7 @@ feature. The rotation cannot outrun its own review queue.
 | Branch      | `claude/security-review-usr`                                                    |
 | Feature     | 07 Users & organizations                                                        |
 | CI          | fresh run in progress on the tending commit                                     |
-| Threads     | 8 addressed (Codex P2: see Log)                                                 |
+| Threads     | 10 resolved (2 duplicates of one finding; see Log)                              |
 | Last tended | 2026-08-25 — 8 Codex findings addressed (6 fixed, 2 doc-corrected), gates green |
 
 ---
