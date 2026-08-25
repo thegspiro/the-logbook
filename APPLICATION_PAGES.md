@@ -971,12 +971,12 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                                 | Page                      | Permission             |
-| ----------------------------------- | ------------------------- | ---------------------- |
-| `/messages`                         | Messages                  | Authenticated          |
-| `/communications/messages`          | Message Administration    | `notifications.manage` |
-| `/communications/email-templates`   | Email Template Management | `settings.manage`      |
-| `/communications/photo-use-consent` | Photo Use Consent         | see note               |
+| URL                                 | Page                      | Permission                                                    |
+| ----------------------------------- | ------------------------- | ------------------------------------------------------------- |
+| `/messages`                         | Messages                  | Authenticated                                                 |
+| `/communications/messages`          | Message Administration    | `notifications.manage`                                        |
+| `/communications/email-templates`   | Email Template Management | `settings.manage`                                             |
+| `/communications/photo-use-consent` | Photo Use Consent         | any of `notifications.manage`, `members.manage`, `users.edit` |
 
 > **Photo Use Consent** _(2026-08-25)_ lists every member's answer to the
 > photo-use privacy choice they set in User Settings, so the PIO can check the
