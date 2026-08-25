@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Three guards drawn from what #1795 got wrong (2026-08-24)
+
+**Changed**
+
+- **A forked migration chain now fails CI.** `validate_migrations.py` reported
+  two heads sharing a parent as a _warning_, so the one condition that breaks
+  `alembic upgrade head` for everyone after a merge went green — silently, with
+  both PRs passing and only the next person to migrate finding out. #1795 hit
+  exactly that when `main` landed a migration from the same parent. The CI step
+  runs `--strict`; multiple heads is the script's only warning class, so this
+  promotes that case and nothing else, and it is clean on `main` today.
+
+**Added**
+
+- **`tests/test_permission_gate_composition.py` checks gate _shape_, not
+  names.** `compliance.view` was not a badly-named permission — it opened no
+  page of its own, and only ever appeared as one alternative inside
+  `require_permission(...)`. The tell was the composition: a grant every member
+  holds, OR'd with an officer grant from a **different module**. Same-module
+  `x.view` OR `x.manage` is the intended pattern and is used at some seventy
+  endpoints; cross-module pairing is the anomaly. The check finds zero today
+  and, with `compliance.view` restored to the baseline, finds exactly the one
+  endpoint that caused the problem.
+
+**Documented**
+
+- **Pitfall 23 — a seeded rank grant reaches the database through a position.**
+  `operational_ranks` has no permissions column, which makes "ranks resolve at
+  runtime, so no migration is needed" sound obviously true. It is false:
+  `DEFAULT_POSITIONS["firefighter"]["permissions"]` _is_ the rank's list, and
+  onboarding writes a system position carrying a copy. That aliasing also
+  defeats naive analysis — a survey looking for `SOMETHING.name` literals sees
+  an empty list, because the entry is a reference, which is how the gap was
+  missed before review caught it.
+- **Pitfall 24 — do not reuse a branch name after its PR merges.** Correlated
+  with GitHub not firing `pull_request` workflows at all: on #1795 no workflow
+  ran for the first two commits over 45 minutes while `main` built normally.
+  GitHub also back-associates the old branch's runs with the new PR, so the
+  checks tab looks populated while nothing has run the new code. Causation
+  unproven and not reproducible on demand; a distinct branch name costs
+  nothing. Includes what to check when CI has not started, and the two ways
+  not to kick it.
+
 ### Community outreach requests: the settings now do what they say, and a confirmed date reaches the schedule (2026-08-24)
 
 **Fixed**

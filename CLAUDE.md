@@ -1081,6 +1081,66 @@ class-level patch target and fails the test that leaves a mock behind, naming
 the attribute and restoring the original. If you see that failure, the fix is
 this rule, not a re-run.
 
+### 23. A Seeded Rank Grant Reaches the Database Through a Position _(2026-08-24)_
+
+`operational_ranks` has no `permissions` column. Rank defaults resolve at
+runtime from `OPERATIONAL_RANKS` via `get_rank_default_permissions`, which
+makes "removing a grant from a rank needs no data migration" sound obviously
+true. It is false, and the reason is one line of aliasing:
+
+```python
+# permissions.py — DEFAULT_POSITIONS
+"firefighter": {
+    ...
+    "permissions": OPERATIONAL_RANKS["firefighter"]["default_permissions"],
+},
+```
+
+`DEFAULT_POSITIONS["firefighter"]["permissions"]` **is** the rank's list — the
+same object. Onboarding creates a system _position_ with slug `firefighter`
+carrying a copy of it, and `dependencies.py` unions every assigned position's
+stored permissions. So the rank's grants do reach the database, by way of a
+position, and an installation that already ran onboarding keeps them until a
+migration rewrites that row.
+
+This cost a review round on #1795: `compliance.view` was revoked from the
+`member` position only, and would have stayed live for everyone holding the
+Firefighter position on every existing department.
+
+It also defeats naive analysis. A survey that reads each role's body looking
+for `SOMETHING.name` literals sees an empty list under `firefighter`, because
+the entry is a reference — which is how the gap was missed in the first place.
+
+**Rule:** changing a seeded grant means changing the registry **and** writing a
+migration that covers every stored `positions` row carrying it — for a rank
+grant, both the `member`-style position and the rank-mirroring one. Scope the
+`UPDATE` to `is_system = True`: a department's own customized position is
+theirs. Verify the migration by running it against a real table rather than by
+reading it; `20260824_2140_31e2816df7c3` and its precedent
+`20260814_0004` are the shape to copy. `tests/test_baseline_member_grants.py`
+asserts the day-one grant set on all three registry entries by name, aliasing
+or not, so the persisted path is covered rather than inferred.
+
+### 24. Do Not Reuse a Branch Name After Its Pull Request Merges _(2026-08-24)_
+
+Start follow-up work on a new branch. Reusing the name of a branch whose PR has
+merged (and whose remote ref was deleted) is correlated with GitHub not firing
+`pull_request` workflows at all for the new PR: on #1795, no workflow of any
+kind ran for the first two commits over 45 minutes, while `main` kept building
+normally, and CI only started once a `main` merge produced a fresh head. GitHub
+also back-associates the _old_ branch's runs with the new PR, so the checks tab
+looks populated while nothing has actually run the new code — which is the part
+that can get a change merged unverified.
+
+Causation was never proven, and a stuck trigger is not reproducible on demand.
+A distinct branch name costs nothing, so it is not worth diagnosing twice.
+
+**If CI has not started within a few minutes of opening a PR**, check
+`actions_list` for runs against the head SHA specifically — a green checks tab
+can be entirely inherited. The fix is a substantive push (merging the base
+branch in, which the PR usually needs anyway). Never an empty commit, and never
+a close-and-reopen.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.
