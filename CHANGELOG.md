@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A storefront manager could settle their own order's payment (2026-08-25)
+
+**Fixed**
+
+- `record_payment` — the method `mark_order_paid`, `waive_order_payment`, and
+  `refund_order` all delegate to for the actual ledger mutation, and also
+  directly reachable via `POST /orders/{order_id}/payments` — had no
+  separation-of-duties check, unlike those three. A `storefront.manage`
+  holder who also owned the target order could record a payment against it
+  (including settling it in full) with no guard, bypassing the same control
+  the other three payment actions already enforce. Now blocked the same way,
+  unless the call comes from the automated reconciliation path (no human
+  actor to conflict with).
+
 ### A finance approval token could be used to approve your own request (2026-08-25)
 
 **Fixed**

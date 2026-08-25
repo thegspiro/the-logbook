@@ -124,9 +124,16 @@ folding into the sweep, but it is not a live defect today.
 
 ## Open / not changed
 
-- **SF-4 — LOW — `storefront.order` is held by one endpoint only.** Checkout
-  requires `storefront.order` while the rest of the member surface requires
-  `storefront.view`. Worth confirming the seeded member role grants both, or
-  members can browse the store and fail at checkout. Not changed: it depends on
-  seed/role data, which is an org-configuration question rather than a code
-  defect.
+- **SF-4 — LOW — `storefront.order` is held by one endpoint only — ✅ RESOLVED (2026-08-24, security review 04)**
+  Checkout requires `storefront.order` while the rest of the member surface
+  requires `storefront.view`; the concern was a position holding view without
+  order, letting a member browse the catalogue and 403 at checkout. Confirmed
+  this happened in practice via the position editor (a rebuilt position kept
+  only `module.view`/`module.manage`, with no way to re-submit the paired
+  permission) and is now fixed at the source: `_VIEW_IMPLIED_PERMISSIONS` in
+  `app/api/v1/onboarding.py` grants `storefront.order` alongside
+  `storefront.view` whenever a module is saved with View ticked and Manage
+  not, covering both a position built from scratch in the editor and an
+  existing position's default carried over on save. All fourteen seeded
+  positions holding `storefront.view` hold `storefront.order` too, with no
+  exception (documented at `onboarding.py:1821-1823`).

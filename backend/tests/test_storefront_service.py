@@ -33,6 +33,7 @@ from app.models.storefront import (
 )
 from app.models.user import Organization, User
 from app.schemas.storefront import StoreDashboardResponse
+from app.services.separation_of_duties import SeparationOfDutiesError
 from app.services.storefront_service import StorefrontService
 from app.utils.storefront_payments import build_payment_options
 
@@ -727,6 +728,9 @@ class TestPayments:
     async def test_recording_the_full_balance_marks_the_order_paid(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
+        # Separation of duties: the person recording the payment must not be
+        # the order's own member, so a second officer acts here.
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
         service = StorefrontService(db_session)
         await _enable_store(service, org)
         product = await _make_product(db_session, org, price=Decimal("45.00"))
@@ -734,13 +738,52 @@ class TestPayments:
         order = await service.create_order(org.id, member, _cart(product.id))
 
         updated = await service.record_payment(
-            order.id, org.id, Decimal("45.00"), str(member.id), notify_member=False
+            order.id, org.id, Decimal("45.00"), str(officer.id), notify_member=False
         )
         assert updated.payment_status == StorePaymentStatus.PAID
         assert updated.status == StoreOrderStatus.PAID
         assert updated.paid_at is not None
 
     async def test_a_partial_payment_leaves_a_balance(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.record_payment(
+            order.id, org.id, Decimal("20.00"), str(officer.id), notify_member=False
+        )
+        assert updated.payment_status == StorePaymentStatus.PARTIAL
+        assert updated.amount_paid == Decimal("20.00")
+
+    async def test_cannot_record_a_payment_on_your_own_order(self, db_session):
+        # Codex review (PR #1807): record_payment is the shared engine
+        # mark_order_paid/waive_order_payment/refund_order all delegate to,
+        # and it is also reachable directly via POST
+        # /orders/{order_id}/payments -- so the SoD check belongs on this
+        # method itself, not only on the mark-paid wrapper. Before this fix a
+        # storefront.manage holder who also owned the order could settle it
+        # through this route with no guard at all.
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        with pytest.raises(SeparationOfDutiesError):
+            await service.record_payment(
+                order.id, org.id, Decimal("45.00"), str(member.id), notify_member=False
+            )
+
+    async def test_reconciliation_may_record_a_payment_with_no_actor(self, db_session):
+        # The automated PayPal/reconciliation path passes actor_id=None --
+        # there is no human to conflict with, so it must stay exempt.
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
         service = StorefrontService(db_session)
@@ -750,10 +793,9 @@ class TestPayments:
         order = await service.create_order(org.id, member, _cart(product.id))
 
         updated = await service.record_payment(
-            order.id, org.id, Decimal("20.00"), str(member.id), notify_member=False
+            order.id, org.id, Decimal("45.00"), None, notify_member=False
         )
-        assert updated.payment_status == StorePaymentStatus.PARTIAL
-        assert updated.amount_paid == Decimal("20.00")
+        assert updated.payment_status == StorePaymentStatus.PAID
 
     async def test_a_member_report_never_settles_the_ledger(self, db_session):
         org = await _make_org(db_session)
@@ -830,7 +872,7 @@ class TestPayments:
         await _make_open_window(db_session, org)
         order = await service.create_order(org.id, member, _cart(product.id))
         await service.record_payment(
-            order.id, org.id, Decimal("20.00"), str(member.id), notify_member=False
+            order.id, org.id, Decimal("20.00"), str(officer.id), notify_member=False
         )
 
         updated = await service.mark_order_paid(
@@ -1001,7 +1043,7 @@ class TestPayments:
         await _make_open_window(db_session, org)
         order = await service.create_order(org.id, member, _cart(product.id))
         await service.record_payment(
-            order.id, org.id, Decimal("45.00"), str(member.id), notify_member=False
+            order.id, org.id, Decimal("45.00"), str(officer.id), notify_member=False
         )
 
         with pytest.raises(ValueError, match="cannot exceed"):
