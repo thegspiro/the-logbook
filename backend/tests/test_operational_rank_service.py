@@ -37,6 +37,14 @@ def _rows(rows):
     return MagicMock(all=MagicMock(return_value=rows))
 
 
+def _nested_transaction_cm():
+    """A working `async with db.begin_nested():` stand-in (success path)."""
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=cm)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return cm
+
+
 def _db(side_effect):
     db = MagicMock()
     db.execute = AsyncMock(side_effect=side_effect)
@@ -45,6 +53,7 @@ def _db(side_effect):
     db.flush = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
+    db.begin_nested = MagicMock(return_value=_nested_transaction_cm())
     return db
 
 
@@ -79,8 +88,26 @@ class TestSeedDefaults:
     async def test_concurrent_first_seed_rolls_back_instead_of_500(self):
         # Regression: two concurrent first-loads for a brand-new org can both
         # pass the count==0 check; the loser's flush hits the unique
-        # constraint. Must roll back and return [] rather than let an
-        # IntegrityError escape as an uncaught 500.
+        # constraint. Must return [] rather than let an IntegrityError escape
+        # as an uncaught 500.
+        db = _db([_scalar(0)])
+        db.flush = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception("dup")))
+
+        out = await OperationalRankService(db).seed_defaults("org-1")
+
+        assert out == []
+        db.refresh.assert_not_called()
+
+    async def test_concurrent_first_seed_uses_savepoint_not_full_rollback(self):
+        # A plain session-wide db.rollback() here would expire every object
+        # in the request's identity map, including `current_user` loaded
+        # earlier by get_current_user on the same request-scoped session --
+        # the endpoint's next access to current_user.organization_id would
+        # then need an implicit refresh outside the async greenlet context
+        # and raise MissingGreenlet (the same bug class as the
+        # reopen-attendance 500). The fix must use a SAVEPOINT
+        # (begin_nested), which only expires objects modified within it, and
+        # must never call the full session rollback() directly.
         db = _db([_scalar(0)])
         db.flush = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception("dup")))
         db.rollback = AsyncMock()
@@ -88,8 +115,8 @@ class TestSeedDefaults:
         out = await OperationalRankService(db).seed_defaults("org-1")
 
         assert out == []
-        db.rollback.assert_awaited_once()
-        db.refresh.assert_not_called()
+        db.begin_nested.assert_called_once()
+        db.rollback.assert_not_awaited()
 
 
 class TestCrud:

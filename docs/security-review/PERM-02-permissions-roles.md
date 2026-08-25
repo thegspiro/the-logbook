@@ -155,15 +155,39 @@ surfacing to the caller as a generic 500 instead of the ranks simply loading
 exploitable for privilege gain — a narrow reliability defect, not a tenant- or
 permission-boundary issue.
 
-**Fix:** wrapped the flush in `try/except IntegrityError`, rolling back and
-returning `[]` (the same return value as the already-existing
-skip-when-ranks-exist branch) — the subsequent `list_ranks` call in the
-endpoint then reads the winning request's rows normally.
+**Fix (revised after review):** the losing insert now runs inside a SAVEPOINT
+(`async with self.db.begin_nested():`), and only that savepoint is rolled back
+on `IntegrityError`, returning `[]` (the same value as the existing
+skip-when-ranks-exist branch). **The first version of this fix called a plain
+`self.db.rollback()`, which was itself a regression** — caught by an automated
+Codex review comment on the PR before merge. Verified empirically against a
+real MariaDB connection (not just by reasoning about it): a full-session
+`rollback()` expires every object in the request's identity map
+(`SessionTransaction._restore_snapshot(dirty_only=False)` in SQLAlchemy's
+source), including `current_user`, loaded earlier by `get_current_user` on the
+same request-scoped session. The endpoint's next access to
+`current_user.organization_id` (to call `list_ranks` right after
+`seed_defaults` returns) would then need an implicit refresh outside the async
+greenlet context and raise `MissingGreenlet` — reproduced directly against a
+real DB connection: the plain-rollback path raised
+`MissingGreenlet("greenlet_spawn has not been called...")` on the next
+attribute access, while the savepoint path did not. This is the same bug class
+as the `reopen_event_attendance` 500 (CHANGELOG 2026-08-25) — a lazy
+attribute/relationship load outside the greenlet context. A SAVEPOINT rollback
+only expires objects modified within it (`dirty_only=True` in the same
+SQLAlchemy method), leaving `current_user` untouched.
 
-**Guard test:**
+**Guard tests:**
 `TestSeedDefaults::test_concurrent_first_seed_rolls_back_instead_of_500` —
-forces `db.flush` to raise `IntegrityError` and asserts a rollback plus `[]`
-return instead of the exception propagating.
+forces `db.flush` to raise `IntegrityError` and asserts `[]` instead of the
+exception propagating.
+`TestSeedDefaults::test_concurrent_first_seed_uses_savepoint_not_full_rollback`
+— asserts `begin_nested()` was used and the full-session `rollback()` was
+**not** called, so a regression back to the plain-rollback form fails this
+test even though the mock-level behavior of the first test alone couldn't
+distinguish the two (mocks don't model SQLAlchemy's real expiration
+semantics — this is why the fix was verified against a real DB connection
+before being written up here, not just left to the mocked test suite).
 
 ## Schema & migration notes
 
@@ -190,6 +214,6 @@ No drift found between any of these 6 files' models and their migrations.
 | `black --check app/ tests/ alembic/`                           | ✅ unchanged                                                                                                            |
 | `isort --check-only app/ tests/ alembic/`                      | ✅ clean                                                                                                                |
 | `validate_migrations.py --strict`                              | ✅ single head                                                                                                          |
-| backend tests (scoped: rank/permission/role/officer/org_chart) | ✅ 488 passed, 3 skipped (environment-only: py_vapid not installed, 2 schema tests needing tables outside this feature) |
+| backend tests (scoped: rank/permission/role/officer/org_chart) | ✅ 489 passed, 3 skipped (environment-only: py_vapid not installed, 2 schema tests needing tables outside this feature) |
 | `tsc --noEmit`                                                 | ✅ 0 errors (no frontend files touched)                                                                                 |
 | `eslint .`                                                     | n/a — no frontend files touched                                                                                         |

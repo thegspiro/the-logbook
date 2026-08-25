@@ -93,19 +93,29 @@ class OperationalRankService:
                 # (and the module constant) to one mutable list.
                 eligible_positions=list(positions),
             )
-            self.db.add(rank)
             ranks.append(rank)
 
         try:
-            await self.db.flush()
-        except IntegrityError:
             # A brand-new org's very first load can race: two concurrent
             # requests both see count == 0 and both attempt to seed. The
             # `(organization_id, rank_code)` unique constraint stops the
-            # second insert from duplicating rows, but without this guard it
-            # surfaced as an uncaught 500 instead of "someone else already
-            # seeded it" — treat it the same as skip-when-ranks-exist.
-            await self.db.rollback()
+            # second insert from duplicating rows, but a plain session
+            # rollback() here would expire every object in the request's
+            # identity map — including `current_user`, loaded earlier by
+            # get_current_user on this same request-scoped session — and the
+            # endpoint's next synchronous access to current_user.organization_id
+            # would then need an implicit refresh outside the async greenlet
+            # context, raising MissingGreenlet (the same class of bug as the
+            # reopen-attendance 500, see CHANGELOG 2026-08-25). A SAVEPOINT
+            # (begin_nested) rollback only expires objects modified within it,
+            # leaving current_user untouched.
+            async with self.db.begin_nested():
+                for rank in ranks:
+                    self.db.add(rank)
+                await self.db.flush()
+        except IntegrityError:
+            # Someone else already seeded it — treat the same as
+            # skip-when-ranks-exist.
             return []
 
         # Refresh server-computed timestamps to prevent MissingGreenlet
