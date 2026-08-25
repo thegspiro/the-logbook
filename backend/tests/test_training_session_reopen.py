@@ -215,19 +215,14 @@ class TestRemovedAttendeeLosesCredit:
         )
         enrollment = SimpleNamespace(id="enr-1")
         progress = SimpleNamespace(id="prog-row-1")
+        # The enrollment lookup reads every candidate row (see
+        # _resolve_pipeline_enrollment); the record lookup uses .scalars().first()
         db = _db(
             _one(prior),  # newest prior approval
-            _one(enrollment),  # removed member's enrollment
+            _all([enrollment]),  # removed member's enrollment
             _all([progress]),  # their requirement rows
-            _one(record),  # their training record
-        )
-        # The record lookup uses .scalars().first()
-        db.execute.side_effect = [
-            _one(prior),
-            _one(enrollment),
-            _all([progress]),
             MagicMock(scalars=MagicMock(return_value=MagicMock(first=lambda: record))),
-        ]
+        )
         svc = TrainingSessionService(db)
 
         with patch(
@@ -627,3 +622,47 @@ class TestAPendingConfirmationDoesNotSweep:
         assert (
             svc._apply_pipeline_updates.await_args.kwargs["session_id"] == "session-1"
         )
+
+
+class TestRevocationResolvesEnrollmentToo:
+    """PR #1803 review follow-on: the crediting path was taught to disambiguate
+    a re-enrolled member's two enrollment rows, but its sibling on the
+    revocation side was left with the single-row fetch. That one is the quieter
+    failure — _revoke_credit_for_removed_attendees logs the exception and moves
+    on, so a member taken off a session simply keeps the credit the call exists
+    to take back."""
+
+    async def test_revocation_handles_two_enrollments(self):
+        session = _session()
+        session.program_id = "prog-1"
+        completed = SimpleNamespace(id="enr-old", status=EnrollmentStatus.COMPLETED)
+        active = SimpleNamespace(id="enr-new", status=EnrollmentStatus.ACTIVE)
+        progress = SimpleNamespace(id="prog-row-1")
+        db = _db(
+            _all([completed, active]),  # both enrollment rows
+            MagicMock(all=MagicMock(return_value=[])),  # no prior credit recorded
+            _all([progress]),  # requirement rows under the chosen enrollment
+        )
+        program_service = MagicMock()
+        program_service.revoke_requirement_credit = AsyncMock(return_value=(None, None))
+
+        await svc_revoke(db, program_service, session)
+
+        # Resolved rather than raised: the revocation actually happened.
+        program_service.revoke_requirement_credit.assert_awaited_once()
+        assert (
+            program_service.revoke_requirement_credit.await_args.kwargs["source_id"]
+            == "session-1"
+        )
+
+
+async def svc_revoke(db, program_service, session):
+    svc = TrainingSessionService(db)
+    await svc._revoke_pipeline_credit_for_user(
+        program_service=program_service,
+        user_id="user-1",
+        training_session=session,
+        organization_id="org-1",
+        verified_by="chief-1",
+        source_type=None,
+    )

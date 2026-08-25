@@ -790,17 +790,18 @@ class TrainingSessionService:
         if not training_session.program_id:
             return
 
-        enrollment_result = await self.db.execute(
-            select(ProgramEnrollment)
-            .where(ProgramEnrollment.user_id == str(user_id))
-            .where(ProgramEnrollment.program_id == str(training_session.program_id))
-            .where(
-                ProgramEnrollment.status.in_(
-                    (EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED)
-                )
-            )
+        # Same resolution as the crediting path, and for the same reason: a
+        # member who completed this program and enrolled again holds an ACTIVE
+        # row and a COMPLETED one, so a single-row fetch raises
+        # MultipleResultsFound. Here the caller logs and moves on, so the
+        # symptom is quieter and worse — the removed attendee simply keeps the
+        # credit this call exists to take back.
+        enrollment = await self._resolve_pipeline_enrollment(
+            user_id=user_id,
+            program_id=str(training_session.program_id),
+            session_id=str(training_session.id),
+            organization_id=organization_id,
         )
-        enrollment = enrollment_result.scalar_one_or_none()
         if enrollment is None:
             return
 
