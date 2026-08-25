@@ -69,21 +69,98 @@ for anything the existing docs don't yet reflect.
   hold `storefront.order` (documented and asserted at
   `onboarding.py:1821-1823`). Corrected `docs/module-audit/storefront.md` to
   mark SF-4 resolved rather than leaving it recorded as open.
-- **Git history since the 2026-08-08 pass shows no unaddressed security
-  regression.** Three substantive commits landed: a full frontend redesign of
-  the member storefront (UI only, no backend security surface), a fix for
-  `get_open_windows` not eager-loading `offerings` (a `MissingGreenlet` 500 on
-  the admin dashboard — the same bug class found and fixed in this
-  iteration's own PERM-02 pass, independently caught and fixed by the project
-  itself here), and three defects behind the module's release screenshots
-  (all frontend/UX, already fixed and tested). None left an open security
-  gap.
+- **Git history since the 2026-08-08 pass, re-audited (correction — see
+  below): no unaddressed regression beyond SF-6.** Frontend redesign of the
+  member storefront (UI only), the `get_open_windows` eager-load /
+  `MissingGreenlet` fix, three release-screenshot defects (frontend/UX),
+  cart/product-lock key canonicalization (case-insensitive `product_id`/
+  `variant_id` matching, so `ABC` and `abc` can no longer be tracked as
+  separate stock/limit buckets), a notice-recipient disclosure fix (store-wide
+  BCC announcements previously left the _first_ recipient's address visible
+  in `To:` — now sent individually so no recipient sees another's address),
+  and a new member-facing payment-method-change endpoint (self-scoped via
+  `get_order(..., user_id=user_id)`, blocked once `PAID`/`WAIVED`/
+  `PENDING_VERIFICATION`, method validated against the store's accepted
+  list) — all verified present in current code and correct. The one gap this
+  history should have caught the first time is SF-6.
+
+## Correction (added after initial review, before merge)
+
+**The claims above were wrong on first pass, caught by a Codex review comment
+on the PR.** The original text asserted "three commits… all UI/robustness…
+no open security gap" and reported "no new findings." Both were incorrect:
+
+1. **The git-history sweep was incomplete.** `git log --since` on this
+   repo's history cannot be trusted (documented already in `AUTH-01` —
+   history for this path was squashed/rewritten at some point, so commits
+   with dates _after_ the cutoff don't reliably surface, and some commit
+   hashes cited in review tooling don't resolve to objects in this shallow
+   clone even though their content is present in the current tree). Re-swept
+   by hand, cross-checking `git show <hash>` output against current file
+   content rather than trusting `--since`/ancestry: the five additional
+   commits above are real and their changes are live in the current
+   codebase. Four are correctness/hardening fixes already present and
+   correct (listed above). The fifth uncovered SF-6.
+2. **A real, live separation-of-duties bypass was missed.** See SF-6.
+3. **A still-open item from the prior app-review's future-development list
+   (unbounded `/orders/export`) was silently dropped instead of carried
+   forward.** Recorded below, unfixed — see "Carried forward, not fixed."
 
 ## Findings
 
-No new findings this iteration. One test-coverage gap from the prior
-app-review's future-development list was closed as a cheap, safe addition
-(see below); no code-behavior change was needed anywhere else.
+### SF-6 — MED — `record_payment` had no separation-of-duties check, unlike its three siblings — ✅ FIXED (see "Correction" above for how this was found)
+
+**What:** `mark_order_paid`, `waive_order_payment`, and `refund_order` all
+call `assert_different_person(actor_id, order.user_id, ...)` before mutating
+an order's payment state. `record_payment` — the method all three of those
+actually delegate to for the ledger mutation itself, and also directly
+exposed as its own endpoint — had no such check.
+
+**Where:** `app/services/storefront_service.py:1716` (pre-fix).
+
+**Failure scenario:** `mark_order_paid` calls
+`assert_different_person(...)` and then calls `self.record_payment(...)` to
+do the work — so the guard was on the wrapper, not the engine. `POST
+/orders/{order_id}/payments` calls `record_payment` directly, skipping the
+wrapper (and its guard) entirely. A `storefront.manage` holder who also owns
+the target order — a plausible overlap in a small department, and exactly
+the scenario `mark_order_paid`'s own inline comment names as the thing being
+guarded against — could settle their own order's balance (including
+flipping it to `PAID` when `mark_paid=True`, the default) through this route
+with no check at all. `apply_payment_event` (the manual "settle from a
+recorded payment event" admin action) also calls `record_payment` with the
+caller's real id and was equally unguarded through that second path.
+
+**Impact:** the prior app-review's "no separation of duties on payments" item
+treated this as one deliberate, accepted product decision spanning all four
+actions ("plausible for a small department… same product decision as
+FIN-4/AH-4"). That framing was accurate when it was written but went stale:
+at some point three of the four actions were given the guard (found via
+`git log -S"assert_different_person"`, itself dateless due to the squashed
+history), leaving `record_payment` as an inconsistency — an oversight against
+an established pattern, not a product decision anyone made about this
+specific method.
+
+**Fix:** added the same `assert_different_person` call directly inside
+`record_payment`, positioned before any mutation (mirroring
+`mark_order_paid`'s placement). No-ops when `actor_id` is `None` — the
+automated PayPal reconciliation path (`record_external_payment` →
+`apply_payment_event(..., actor_id=None)` → `record_payment`) is unaffected,
+verified by tracing that call chain. `mark_order_paid` keeps its own
+(now-redundant but harmless) check rather than removing it, to avoid
+touching a working, tested wrapper for no functional gain.
+
+Four existing tests incidentally called `record_payment` with the order's
+own member as `actor_id` — not testing self-approval, just written before
+the guard existed. Updated to use a distinct officer actor, matching the
+pattern already used everywhere else in the same file for exactly this
+reason.
+
+**Guard tests:** `tests/test_storefront_service.py` —
+`test_cannot_record_a_payment_on_your_own_order` (asserts
+`SeparationOfDutiesError` when `actor_id == order.user_id`) and
+`test_reconciliation_may_record_a_payment_with_no_actor` (confirms the
+`actor_id=None` exemption the automated path relies on still works).
 
 ### SF-5 — NIT — Refund amount's `gt=0` constraint had no regression test — ✅ FIXED (test only)
 
@@ -100,6 +177,18 @@ negative value) and `test_refund_amount_may_be_omitted` (confirms `None` —
 "refund the full balance" — is not caught by the same constraint). No
 production code changed; `StoreOrderRefund.amount` already had `gt=0`.
 
+## Carried forward, not fixed
+
+- **Order export is unbounded.** `GET /orders/export` pages through every
+  matching order into one in-memory list before building the CSV
+  (`storefront_service.py:2916-2953,2980-3015`). Already recorded as an open
+  future-development item in `docs/app-review/storefront.md:246-247`
+  ("Same shape as the export DoS noted in FIN-7… Scale limit"). Not
+  re-derived and not fixed here — flagging explicitly so this security pass
+  doesn't read as having cleared it. A fix needs a row cap or a required date
+  window, which is a behavior change belonging with a product decision, not
+  a drive-by in this iteration.
+
 ## Schema & migration notes
 
 No models touched this iteration. No drift found between any storefront
@@ -107,6 +196,11 @@ model and its migrations.
 
 ## Guard tests added
 
+- `test_cannot_record_a_payment_on_your_own_order` /
+  `test_reconciliation_may_record_a_payment_with_no_actor`
+  (`tests/test_storefront_service.py`) — fail if the `record_payment`
+  separation-of-duties guard regresses or the reconciliation exemption
+  breaks.
 - `test_refund_amount_must_be_positive` / `test_refund_amount_may_be_omitted`
   (`tests/test_storefront_schemas.py`) — close the last cheap test-coverage
   gap the 2026-08-08 app-review's future-development list identified.
@@ -119,6 +213,6 @@ model and its migrations.
 | `black --check app/ tests/ alembic/`      | ✅ unchanged                                                        |
 | `isort --check-only app/ tests/ alembic/` | ✅ clean                                                            |
 | `validate_migrations.py --strict`         | ✅ single head                                                      |
-| backend tests (scoped: `-k storefront`)   | ✅ 531 passed, 1 skipped (environment-only: py_vapid not installed) |
+| backend tests (scoped: `-k storefront`)   | ✅ 533 passed, 1 skipped (environment-only: py_vapid not installed) |
 | `tsc --noEmit`                            | ✅ 0 errors (no frontend files touched)                             |
 | `eslint .`                                | n/a — no frontend files touched                                     |

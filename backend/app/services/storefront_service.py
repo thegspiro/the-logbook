@@ -1732,6 +1732,15 @@ class StorefrontService:
             raise ValueError("A cancelled order cannot take a payment")
         if order.payment_status == StorePaymentStatus.WAIVED:
             raise ValueError("A waived order cannot take a payment")
+        # SoD (same control as mark_order_paid/waive_order_payment/refund_order):
+        # this is the shared engine those three delegate to, and it is also
+        # reachable directly via POST /orders/{order_id}/payments, so the
+        # check belongs here rather than only on the mark-paid wrapper --
+        # calling this method directly must not be a way around it. No-ops
+        # for the reconciliation path, which passes actor_id=None.
+        assert_different_person(
+            actor_id, order.user_id, action="record a payment on", record="order"
+        )
 
         applied = _money(amount)
         if applied <= 0:

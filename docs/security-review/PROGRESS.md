@@ -185,14 +185,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 - **04 Storefront & payments ⏳** — already the most heavily-audited module
   in the codebase (module audit + 2 app-review passes, called "the
   best-defended module reviewed to date"); re-verified all established
-  invariants hold unchanged, read the one file with no prior coverage
-  (`storefront_preview_service.py` — clean), and checked git history since
-  the last pass for anything undocumented (three commits, all UI/robustness,
-  no open security gap). **No new findings.** Found via git history, not
+  invariants hold unchanged and read the one file with no prior coverage
+  (`storefront_preview_service.py` — clean). Found via git history, not
   re-derivation, that module-audit's previously-open SF-4 (`storefront.order`
   held by one endpoint) was resolved 2026-08-24 by a position-editor fix
   (`_VIEW_IMPLIED_PERMISSIONS`) — corrected that doc to mark it resolved.
-  Closed one cheap test-coverage gap the 2026-08-08 app-review had flagged:
-  added a regression test for the refund amount's `gt=0` constraint (the
-  order-quantity half already had one). See `SF-04-storefront-payments.md`
-  for the full write-up. Next: 05 finance & approvals.
+  **A Codex review comment on the PR caught that the initial "no new
+  findings" conclusion was wrong on three counts**: the git-history sweep
+  had missed 5 real commits (this repo's history is squashed/rewritten, so
+  `--since` and ancestry checks can't be trusted — matches the same issue
+  AUTH-01 already documented); one of those 5 was a real gap — **SF-6 (MED)**
+  — `record_payment` (the shared engine `mark_order_paid`/
+  `waive_order_payment`/`refund_order` all delegate to, and also its own
+  directly-callable endpoint) had no separation-of-duties check unlike its
+  three siblings, letting a `storefront.manage` holder settle their own
+  order's payment; and a still-open prior-review item (unbounded
+  `/orders/export`) had been silently dropped instead of carried forward.
+  Fixed SF-6, carried the export item forward as still-open, corrected the
+  write-up. Closed one cheap test-coverage gap the 2026-08-08 app-review had
+  flagged: added a regression test for the refund amount's `gt=0` constraint.
+  See `SF-04-storefront-payments.md` for the full write-up. Next: 05 finance
+  & approvals.
