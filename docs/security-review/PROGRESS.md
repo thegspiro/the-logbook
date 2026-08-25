@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                   |
-| ----------- | ----------------------------------------------------------------------- |
-| PR          | [#1810](https://github.com/thegspiro/the-logbook/pull/1810)             |
-| Branch      | `claude/security-review-elec`                                           |
-| Feature     | 06 Elections & ballots                                                  |
-| CI          | just opened; not yet checked                                            |
-| Threads     | 2 resolved (Codex P2: route-gating miscount, unbounded saved-templates) |
-| Last tended | 2026-08-25 — 2 Codex findings addressed, gates green                    |
+| Field       | Value                                         |
+| ----------- | --------------------------------------------- |
+| PR          | opening this iteration                        |
+| Branch      | `claude/security-review-usr`                  |
+| Feature     | 07 Users & organizations                      |
+| CI          | not yet opened                                |
+| Threads     | none yet                                      |
+| Last tended | 2026-08-25 — no defect/gap found, gates green |
 
 ---
 
@@ -57,8 +57,8 @@ data-carrying modules, then the supporting infrastructure.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳       |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜       |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳       |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜       |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜       |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜       |
@@ -279,3 +279,26 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   ship-time entry on it (a different angle — schema tolerance, not access
   control); corrected. See `ELEC-06-elections-ballots.md` for the full
   write-up. Next: 07 users & organizations.
+- **06 Elections & ballots ✅ merged** — PR #1810 merged 2026-08-25 16:59
+  UTC.
+- **07 Users & organizations ⏳** — the highest-risk surface by design
+  (privilege escalation): module audit iteration 21 (three parallel readers)
+  - 4 dedicated app-review passes, all closed except ORU-7c (org-wide
+    `member` role mass-escalation, intended-but-sharp, unchanged). All 61
+    routes across `users.py`/`organizations.py`/`member_status.py`/
+    `member_leaves.py` enumerated for auth coverage — clean (one route uses
+    `require_all_permissions`, initially missed by a plain grep for
+    `require_permission`, caught by reading the route directly). Re-verified
+    the privilege-ceiling functions (`_enforce_role_grant_ceiling`,
+    `_enforce_rank_grant_ceiling`) are still wired at every documented call
+    site, closing ORU-1 and the CRITICAL ORU-7d rank-escalation path; the PII
+    redaction gates (ORU-8) on both `with-roles` callers; and settings-secret
+    redaction (ORU-2/3/5). Confirmed the 2026-08-16 `hire_date` restricted-field
+    fix (tier-advancement manipulation) is present and tested. Checked every
+    `.scalars().all()` call for the FIN-9/ELEC-12 unbounded-scan shape — two
+    candidates found (member roster, archived-members list) but recorded why
+    neither qualifies: both are bounded by real department headcount, not
+    accumulating user-generated data like a template library or an approval
+    queue. **No defect and no new flaggable gap found.** See
+    `USR-07-users-organizations.md` for the full write-up. Next: 08 membership
+    pipeline.
