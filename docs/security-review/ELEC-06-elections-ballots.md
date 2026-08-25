@@ -2,9 +2,10 @@
 
 **Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 · **PR:** TBD
 
-**Backend:** `api/v1/endpoints/elections.py` (3,809 L, 65 routes — 61 gated,
-4 intentionally public token routes), `services/election_service.py`
-(7,962 L), `services/quorum_service.py` (139 L)
+**Backend:** `api/v1/endpoints/elections.py` (3,809 L, 65 routes — 56
+`require_permission`-gated, 5 authenticated-only self-scoped, 4 intentionally
+public token routes), `services/election_service.py` (7,962 L),
+`services/quorum_service.py` (139 L)
 **Frontend:** `modules/elections`
 **Migrations:** all 7 election tables are migration-created (not
 `create_all`-only) — see Schema & migration notes.
@@ -32,10 +33,18 @@ _count_ at the top of `module-audit/elections.md` was simply never updated as
 each was added (the same class of drift AUTH-01 found in the auth module's
 route count). Corrected in `module-audit/elections.md`.
 
-**One genuinely new, previously undocumented feature was found:**
-`SavedBallotTemplate` (`models/election.py:32`, migration `20260812_0001`,
-2026-08-12) — organization-scoped, reusable ballot-item snapshots. No prior
-pass mentions it by name. Read in full below.
+**One feature outside the module-audit/app-review/security-review doc set was
+found:** `SavedBallotTemplate` (`models/election.py:32`, migration
+`20260812_0001`, 2026-08-12) — organization-scoped, reusable ballot-item
+snapshots. None of those three review series mentions it by name — but it is
+not entirely unreviewed: `docs/KNOWN_LIMITATIONS.md` already carries a
+2026-08-12 entry on it ("Saved Ballot Templates Accept Fields They Then
+Discard"), evidently written at ship time rather than by a later audit pass.
+That entry covers a schema-tolerance quirk (a stray key inside `ballot_items`
+is silently dropped, while one at the template's own level correctly 422s);
+this iteration's read confirms it is still accurate and did not re-derive
+it. Read in full below for the angles that entry doesn't cover
+(access control, tenant isolation, abuse resistance).
 
 **Read in full:** the `SavedBallotTemplate` model, schema, and its three
 endpoints (`GET/POST /templates/saved-ballots`, `DELETE
@@ -56,11 +65,28 @@ migration, a route-count change) suggesting undocumented change within them.
 
 ## Route inventory
 
-65 routes total. 61 carry `require_permission` (`elections.view` for reads,
-`elections.manage` for writes, `elections.configure_approvals`-style dedicated
-gates do not apply here — approval-adjacent actions use `elections.manage`
-uniformly). 4 are intentionally public (token is the credential, no
-`Depends` auth):
+**Corrected (Codex review, PR #1810):** the original pass of this section
+said "61 carry `require_permission`... 4 are intentionally public," which
+conflated _authenticated_ with _permission-gated_ for five self-scoped
+voter-facing routes. The accurate split is 56 `require_permission`-gated + 5
+authenticated-only (self-scoped) + 4 public = 65:
+
+- **56 routes** carry `require_permission` (`elections.view` for reads,
+  `elections.manage` for writes).
+- **5 routes are authenticated-only** (`Depends(get_current_user)`, no
+  permission string): `GET /{election_id}/eligibility` (`check_eligibility`),
+  `POST /{election_id}/vote` (`cast_vote`), `POST /{election_id}/vote/bulk`
+  (`cast_bulk_votes`), `GET /{election_id}/results` (`get_results`), and
+  `POST /{election_id}/proxy-vote` (`cast_proxy_vote`). This is not a gap —
+  it is the module's documented, audited design: these five do their own
+  eligibility/self-scoping rather than a coarse permission string (any org
+  member can attempt to vote; `check_voter_eligibility` inside the service
+  decides whether that specific member, on that specific election, actually
+  may — the ELEC-1 fix closed the one place this enforcement was missing).
+  `module-audit/elections.md`'s own Notes section already states this; the
+  route-inventory table just failed to reflect it accurately.
+- **4 routes are intentionally public** (token is the credential, no
+  `Depends` auth):
 
 | Route                               | Compensating control                            |
 | ----------------------------------- | ----------------------------------------------- |
@@ -86,7 +112,8 @@ R-D3's consolidation of two GET token-lookup routes into the single POST
   re-fetch (`:7071`) re-locks an election object already loaded and validated
   earlier in the same call. No unscoped scan of the FIN-9 shape exists here.
 - **`SavedBallotTemplate` (new feature, reviewed for the first time) is
-  clean.** List/create/delete are all `elections.manage`-gated and org-scoped
+  access-control clean, but not abuse-resistance clean (see ELEC-12).**
+  List/create/delete are all `elections.manage`-gated and org-scoped
   (`elections.py:397,421,467`); the create schema is `extra="forbid"` and
   accepts only name/description/ballot_items/voting_method/allow_write_ins —
   no election, voter, candidate, token, or result field, so a template cannot
@@ -114,8 +141,47 @@ R-D3's consolidation of two GET token-lookup routes into the single POST
 
 ## Findings
 
-No fixable defect found. One doc-accuracy correction (NIT, applied) and one
-informational item.
+One real gap (ELEC-12, flagged), one doc-accuracy correction (NIT, applied),
+and one informational item.
+
+### ELEC-12 — LOW/MED — `SavedBallotTemplate` list/create are unbounded — 🚩 FLAGGED
+
+**What:** `list_saved_ballot_templates` runs an organization-scoped query and
+returns `result.scalars().all()` with no pagination or limit
+(`elections.py:395-400`), and `save_ballot_template` imposes no per-org cap
+on how many templates can exist (`elections.py:408-452`). Caught by a Codex
+review comment on the PR — the original pass of this section recorded the
+endpoint as clean, which was correct on access control but wrong to call it
+clean under checklist dimension 6 (abuse resistance).
+
+**Where:** `backend/app/api/v1/endpoints/elections.py:395-400` (list),
+`:408-452` (create).
+
+**Failure scenario:** an `elections.manage` holder (a trusted role, not any
+member) creates templates without limit; each may carry up to 250 ballot
+items (`SavedBallotTemplateCreate.ballot_items`, `max_length=250`) with
+2,000-character descriptions. Every load of the Ballot Builder's saved-templates
+list materializes and serializes the organization's entire accumulated
+collection in one response, with cost scaling per-org rather than being
+capped.
+
+**Impact:** LOW under the current threat model (gated to `elections.manage`,
+not reachable by an ordinary member, and bounded per-item by the existing
+schema limits) but MED in shape — it is the same "no `all()` over an org-wide
+table" class flagged elsewhere in this rotation (e.g. FIN-7's unbounded
+transaction export), and nothing currently stops it from growing unbounded
+over the life of an organization.
+
+**Fix:** not applied. Both remedies are behavior changes needing a product
+decision rather than a mechanical fix: pagination on the list endpoint
+changes the response envelope (this codebase's established pattern is
+`PaginationParams` + slice, e.g. `finance.py`'s `list_member_dues`, but
+adopting it here is a frontend-affecting contract change, not a drop-in);
+a per-org creation cap needs an actual limit chosen by the org
+(the same open-ended question FIN-7's export cap and CS-config's other
+numeric limits were left to an owner decision). Flagged rather than guessed,
+per this review's own standing rule against a wrong fix in a judgment call.
+Mirrored into `KNOWN_LIMITATIONS.md`.
 
 ### ELEC-10 — NIT — Stale endpoint/line counts in `module-audit/elections.md` — ✅ FIXED
 
@@ -129,13 +195,15 @@ go unasked for four app-review passes. **Fix:** corrected with both the
 original and current numbers, and a pointer to this file for what the growth
 accounts for.
 
-### ELEC-11 — INFO — `SavedBallotTemplate` had no dedicated review until now
+### ELEC-11 — INFO — `SavedBallotTemplate` had no security-lens review until now
 
 Not a defect — recorded so a future reader doesn't assume "most audited
-module" implies "every table audited." The feature is two months newer than
-the iteration-5 audit and was added without a corresponding doc entry in any
-of the five subsequent app-review passes. Reviewed in full above; found
-clean. No action needed beyond this note.
+module" implies "every table security-reviewed." The feature is two months
+newer than the iteration-5 audit and was added without a corresponding entry
+in the module-audit or app-review series (it does have a `KNOWN_LIMITATIONS.md`
+entry from ship time, but that covers a schema-tolerance quirk, not access
+control/tenant isolation/abuse resistance — the angle this review adds, and
+where ELEC-12 was found). No action needed beyond this note.
 
 ## Schema & migration notes
 

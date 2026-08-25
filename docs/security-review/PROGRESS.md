@@ -252,14 +252,30 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   (voter-overrides, proxy-authorizations, manual-ballots, attendees,
   eligibility-roster, package assembly — each individually documented across
   the R/R-D/ELEC2 series; only the header counts were never bumped).
-  **One genuinely new, previously-undocumented feature found:**
-  `SavedBallotTemplate` (migration `20260812_0001`, no prior pass mentions
-  it) — reviewed in full: org-scoped list/create/delete, `elections.manage`
-  gated, `extra="forbid"` schema accepting only configuration fields (no
-  election/voter/candidate/token/result data), audit-logged. Clean. Also
-  re-verified all 31 `select(Election)` call sites in `election_service.py`
-  for tenant isolation (28 direct, 3 safe-by-construction) — no FIN-9-shaped
-  unscoped scan here. **No defect found.** One NIT: corrected the stale
-  endpoint/line counts in `module-audit/elections.md`. See
-  `ELEC-06-elections-ballots.md` for the full write-up. Next: 07 users &
-  organizations.
+  **One feature outside the module-audit/app-review/security-review doc set
+  found:** `SavedBallotTemplate` (migration `20260812_0001`) — org-scoped
+  list/create/delete, `elections.manage` gated, `extra="forbid"` schema
+  accepting only configuration fields (no election/voter/candidate/token/
+  result data), audit-logged. Access-control clean. Also re-verified all 31
+  `select(Election)` call sites in `election_service.py` for tenant
+  isolation (28 direct, 3 safe-by-construction) — no FIN-9-shaped unscoped
+  scan here. Corrected the stale endpoint/line counts in
+  `module-audit/elections.md` (NIT). **Two Codex review comments on the PR
+  both caught real issues**: (1) the route-inventory table's "61
+  permission-gated" claim conflated authenticated with permission-gated —
+  5 voter-facing routes (`check_eligibility`/`cast_vote`/`cast_bulk_votes`/
+  `get_results`/`cast_proxy_vote`) are authenticated-only by documented
+  design (self-scoped, not a gap), corrected to 56 gated + 5
+  authenticated-only + 4 public; (2) `SavedBallotTemplate`'s list/create
+  were recorded as clean when they're actually unbounded — no pagination on
+  the list, no per-org cap on creation — a real dimension-6 (abuse
+  resistance) gap the initial pass missed by checking access control only.
+  **ELEC-12 (LOW/MED, flagged, not fixed)** — both remedies are
+  behavior-change judgment calls (response-envelope pagination, an
+  arbitrary creation cap), so flagged rather than guessed; mirrored into
+  `KNOWN_LIMITATIONS.md`. Also caught in my own review before push: the
+  write-up initially claimed `SavedBallotTemplate` was "previously
+  undocumented," but `KNOWN_LIMITATIONS.md` already carries a 2026-08-12
+  ship-time entry on it (a different angle — schema tolerance, not access
+  control); corrected. See `ELEC-06-elections-ballots.md` for the full
+  write-up. Next: 07 users & organizations.

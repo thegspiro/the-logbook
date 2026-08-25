@@ -1700,6 +1700,28 @@ contain. That is a compatibility decision with an owner, not a correctness fix.
 Nothing is at risk in the meantime; the failure mode is a misleading 201, not a
 leak.
 
+## Elections — Saved Ballot Templates Have No List Bound or Creation Cap (2026-08-25)
+
+`GET /elections/templates/saved-ballots` (`list_saved_ballot_templates`)
+returns every template in the caller's organization with no pagination or
+limit, and `POST /elections/templates/saved-ballots` (`save_ballot_template`)
+imposes no per-org cap on how many can exist. Access control is sound —
+both are `elections.manage`-gated and org-scoped, and each template is
+already bounded per-item (250 ballot items, 2,000-character description,
+200-character name) — so this is a scaling concern, not a leak: an org that
+accumulates many templates over time pays a growing cost on every Ballot
+Builder load, with no ceiling.
+
+Not fixed because both remedies are behavior changes needing an owner
+decision: pagination changes the response envelope (this codebase's
+established `PaginationParams` + slice pattern, e.g. `finance.py`'s
+`list_member_dues`, is a drop-in for the backend but a frontend contract
+change for the Ballot Builder's template list); a creation cap needs an
+actual number picked by a human, the same kind of open-ended limit left to
+an owner decision elsewhere (FIN-7's export cap, the various CS-config
+thresholds). (Security review ELEC-12,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
