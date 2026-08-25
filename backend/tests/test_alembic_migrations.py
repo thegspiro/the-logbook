@@ -533,13 +533,14 @@ class TestValidateMigrationsScriptFailsOnAFork:
         spec = importlib.util.spec_from_file_location("_validate_migrations", script)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        # (is_valid, errors, warnings)
         return module.validate_migrations(tmp_path)
 
     def test_a_linear_chain_passes(self, tmp_path):
         self._write(tmp_path, "0001_base.py", "aaaa11112222", None)
         self._write(tmp_path, "0002_next.py", "bbbb11112222", "aaaa11112222")
 
-        is_valid, errors = self._validate(tmp_path)
+        is_valid, errors, _warnings = self._validate(tmp_path)
 
         assert is_valid is True
         assert errors == []
@@ -551,7 +552,7 @@ class TestValidateMigrationsScriptFailsOnAFork:
         self._write(tmp_path, "0002_ours.py", "bbbb11112222", "aaaa11112222")
         self._write(tmp_path, "0003_theirs.py", "cccc11112222", "aaaa11112222")
 
-        is_valid, errors = self._validate(tmp_path)
+        is_valid, errors, _warnings = self._validate(tmp_path)
 
         assert is_valid is False, (
             "A forked chain must FAIL the dedicated gate, not warn: "
