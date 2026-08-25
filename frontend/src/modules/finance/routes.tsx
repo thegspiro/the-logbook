@@ -44,11 +44,32 @@ export const getFinanceRoutes = () => {
   return (
     <React.Fragment>
       {/* Dashboard */}
-      <Route path="/finance" element={<FinanceDashboardPage />} />
+      <Route
+        path="/finance"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <FinanceDashboardPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Budgets */}
-      <Route path="/finance/budgets" element={<BudgetsPage />} />
-      <Route path="/finance/budgets/:id" element={<BudgetDetailPage />} />
+      <Route
+        path="/finance/budgets"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <BudgetsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/budgets/:id"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <BudgetDetailPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Settings (finance.manage required) */}
       <Route
@@ -69,20 +90,90 @@ export const getFinanceRoutes = () => {
       />
 
       {/* Purchase Requests */}
-      <Route path="/finance/purchase-requests" element={<PurchaseRequestsPage />} />
-      <Route path="/finance/purchase-requests/new" element={<PurchaseRequestFormPage />} />
-      <Route path="/finance/purchase-requests/:id" element={<PurchaseRequestDetailPage />} />
-      <Route path="/finance/purchase-requests/:id/edit" element={<PurchaseRequestFormPage />} />
+      <Route
+        path="/finance/purchase-requests"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <PurchaseRequestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/purchase-requests/new"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <PurchaseRequestFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/purchase-requests/:id"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <PurchaseRequestDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/purchase-requests/:id/edit"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <PurchaseRequestFormPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Expense Reports */}
-      <Route path="/finance/expenses" element={<ExpenseReportsPage />} />
-      <Route path="/finance/expenses/new" element={<ExpenseReportFormPage />} />
-      <Route path="/finance/expenses/:id" element={<ExpenseReportDetailPage />} />
+      <Route
+        path="/finance/expenses"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <ExpenseReportsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/expenses/new"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <ExpenseReportFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/expenses/:id"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <ExpenseReportDetailPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Check Requests */}
-      <Route path="/finance/check-requests" element={<CheckRequestsPage />} />
-      <Route path="/finance/check-requests/new" element={<CheckRequestFormPage />} />
-      <Route path="/finance/check-requests/:id" element={<CheckRequestDetailPage />} />
+      <Route
+        path="/finance/check-requests"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <CheckRequestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/check-requests/new"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <CheckRequestFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/check-requests/:id"
+        element={
+          <ProtectedRoute requiredPermission="finance.view">
+            <CheckRequestDetailPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Dues */}
       <Route
