@@ -160,4 +160,91 @@ describe('OpenShiftsTab', () => {
       expect(mockSignupForShift).toHaveBeenCalledWith('shift-2', { position: 'officer' });
     });
   });
+
+  // ==========================================================================
+  // Community outreach sheets ask for a role, not a riding position
+  // ==========================================================================
+  describe('outreach signup sheets', () => {
+    const outreachShift = {
+      id: 'shift-outreach',
+      shift_date: '2026-03-05',
+      start_time: '2026-03-05T14:00:00Z',
+      end_time: '2026-03-05T16:00:00Z',
+      attendee_count: 0,
+      is_outreach: true,
+      outreach_roles: [
+        { role: 'tour_guide', label: 'Tour Guide', total: 2, filled: 2, remaining: 0 },
+        { role: 'educator', label: 'Educator', total: 2, filled: 0, remaining: 2 },
+      ],
+      created_at: '2026-02-25T00:00:00Z',
+      updated_at: '2026-02-25T00:00:00Z',
+      organization_id: '1',
+    };
+
+    beforeEach(() => {
+      mockGetOpenShifts.mockResolvedValue([outreachShift]);
+      mockGetEligiblePositions.mockResolvedValue({ positions: ['volunteer'], is_excluded: false });
+    });
+
+    it('asks what the member will do instead of which seat they will ride', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      expect(await screen.findByLabelText('What would you like to do?')).toBeInTheDocument();
+      // The crew-position picker has no business on a school visit.
+      expect(screen.queryByLabelText('Position')).not.toBeInTheDocument();
+    });
+
+    it('offers only roles that still have a seat', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      await screen.findByLabelText('What would you like to do?');
+      expect(screen.getByRole('option', { name: 'Educator (2 needed)' })).toBeVisible();
+      expect(screen.queryByRole('option', { name: /Tour Guide/ })).not.toBeInTheDocument();
+    });
+
+    it('sends the chosen role with the signup', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      await screen.findByLabelText('What would you like to do?');
+      await user.click(screen.getByRole('button', { name: 'Confirm Sign Up' }));
+
+      await waitFor(() => {
+        expect(mockSignupForShift).toHaveBeenCalledWith('shift-outreach', {
+          position: 'volunteer',
+          outreach_role: 'educator',
+        });
+      });
+    });
+
+    it('falls back to the position picker when every role is taken', async () => {
+      // A fully staffed sheet has no role to offer; the shift is still an
+      // ordinary open shift and must not render an empty picker.
+      const user = userEvent.setup();
+      mockGetOpenShifts.mockResolvedValue([
+        {
+          ...outreachShift,
+          outreach_roles: [{ role: 'educator', label: 'Educator', total: 1, filled: 1, remaining: 0 }],
+        },
+      ]);
+      renderWithRouter(<OpenShiftsTab />);
+
+      const signupButtons = await screen.findAllByLabelText('Sign up for this shift');
+      await user.click(signupButtons[0]);
+
+      expect(await screen.findByLabelText('Position')).toBeInTheDocument();
+      expect(screen.queryByLabelText('What would you like to do?')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -536,6 +536,21 @@ EVENT_SETTINGS_DEFAULTS = {
         {"value": "career_talk", "label": "Career Talk"},
         {"value": "other", "label": "Other"},
     ],
+    # Roles a member fills at a community event. Deliberately a separate
+    # vocabulary from ShiftPosition: nobody rides a seat on an engine at a
+    # school visit, and "Firefighter / Driver / Officer" tells a member
+    # nothing about what they would actually be doing. Configurable because
+    # departments run different programmes — a smoke-trailer operator, a car
+    # seat technician, a puppet show — and a fixed list cannot hold those.
+    "outreach_roles": [
+        {"value": "tour_guide", "label": "Tour Guide"},
+        {"value": "educator", "label": "Educator"},
+        {"value": "facilitator", "label": "Facilitator"},
+        {"value": "demonstrator", "label": "Demonstrator"},
+        {"value": "greeter", "label": "Greeter"},
+        {"value": "apparatus_operator", "label": "Apparatus Operator"},
+        {"value": "setup_teardown", "label": "Setup & Teardown"},
+    ],
     "request_pipeline": {
         "min_lead_time_days": 21,
         "default_assignee_id": None,
@@ -591,13 +606,32 @@ EVENT_SETTINGS_DEFAULTS = {
                 "notify_assignee": True,
                 "notify_requester": True,
             },
+            # Internal hand-off: the coordinator hears about it, the member of
+            # the public does not. Reassignment used to reuse "on_submitted",
+            # which emailed the requester "we have received your request" again.
+            "on_assigned": {
+                "enabled": True,
+                "notify_assignee": True,
+                "notify_requester": False,
+            },
             "on_in_progress": {"enabled": True, "notify_requester": True},
             "on_scheduled": {"enabled": True, "notify_requester": True},
             "on_postponed": {"enabled": True, "notify_requester": True},
             "on_completed": {"enabled": True, "notify_requester": True},
             "on_declined": {"enabled": True, "notify_requester": True},
             "on_cancelled": {"enabled": True, "notify_requester": True},
-            "days_before_event": {"enabled": True, "days": [7, 1]},
+            # notify_requester matters: _send_request_notification only mails
+            # the requester when it is set, so without it the reminder task
+            # runs, marks the reminder sent, and delivers nothing.
+            "days_before_event": {
+                "enabled": True,
+                "notify_requester": True,
+                "days": [7, 1],
+            },
+            # Sent to the membership, not the requester: "we need help staffing
+            # this". Manual (a coordinator presses the button) — this entry is
+            # what lets a department turn the button off entirely.
+            "volunteer_call": {"enabled": True},
         },
     },
     "defaults": {

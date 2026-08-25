@@ -81,6 +81,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
 
   // Outreach type editing
   const [newTypeLabel, setNewTypeLabel] = useState('');
+  const [newRoleLabel, setNewRoleLabel] = useState('');
 
   // Custom event category editing
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
@@ -297,6 +298,37 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     );
   };
 
+  // ─── Outreach Roles ───────────────────────────────────────────────────────
+
+  const addOutreachRole = async () => {
+    if (!settings) return;
+    const label = newRoleLabel.trim();
+    if (!label) {
+      toast.error('Role name is required.');
+      return;
+    }
+
+    const value = toSlug(label);
+    if (settings.outreach_roles.some((r) => r.value === value)) {
+      toast.error('An outreach role with that name already exists.');
+      return;
+    }
+
+    const result = await saveSettings(
+      { outreach_roles: [...settings.outreach_roles, { value, label }] },
+      'Failed to add outreach role.'
+    );
+    if (result) setNewRoleLabel('');
+  };
+
+  const removeOutreachRole = (roleValue: string) => {
+    if (!settings) return;
+    void saveSettings(
+      { outreach_roles: settings.outreach_roles.filter((r) => r.value !== roleValue) },
+      'Failed to remove outreach role.'
+    );
+  };
+
   // ─── Request Pipeline ─────────────────────────────────────────────────────
 
   const updateLeadTime = (days: number) => {
@@ -495,6 +527,10 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onRemoveType={(v) => void removeOutreachType(v)}
             newTypeLabel={newTypeLabel}
             onNewTypeLabelChange={setNewTypeLabel}
+            onAddRole={() => void addOutreachRole()}
+            onRemoveRole={(v) => void removeOutreachRole(v)}
+            newRoleLabel={newRoleLabel}
+            onNewRoleLabelChange={setNewRoleLabel}
           />
         );
       case 'hour_tracking':

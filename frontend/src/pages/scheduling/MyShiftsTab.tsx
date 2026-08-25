@@ -535,7 +535,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                             {[shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean).join(' — ')}
                           </p>
                         )}
-                        <p className="text-theme-text-muted text-xs capitalize">Position: {assignment.position}</p>
+                        {/* On an outreach signup sheet the seat is a plain
+                            `volunteer` and the job the member chose lives on
+                            outreach_role — showing the position alone tells
+                            them they are a Volunteer and loses the role. */}
+                        <p className="text-theme-text-muted text-xs capitalize">
+                          {assignment.outreach_role_label
+                            ? `Role: ${assignment.outreach_role_label}`
+                            : `Position: ${assignment.position}`}
+                        </p>
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:hidden ${statusColor}`}
                         >

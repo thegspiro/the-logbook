@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**254 tables · 4346 columns · 822 foreign keys**
+**254 tables · 4351 columns · 823 foreign keys**
 
 ---
 
@@ -190,7 +190,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_request_activity`](#event_request_activity) | `EventRequestActivity` | 9 | Audit trail for event request pipeline actions. |
 | [`event_request_email_templates`](#event_request_email_templates) | `EventRequestEmailTemplate` | 12 | Reusable email templates for the event request pipeline. |
-| [`event_requests`](#event_requests) | `EventRequest` | 32 | Public outreach event request. |
+| [`event_requests`](#event_requests) | `EventRequest` | 35 | Public outreach event request. |
 
 ### Events
 
@@ -541,7 +541,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 14 | Requirement Progress model |
 | [`requirement_progress_credits`](#requirement_progress_credits) | `RequirementProgressCredit` | 10 | Idempotency ledger for automated requirement-progress credit. |
 | [`self_report_configs`](#self_report_configs) | `SelfReportConfig` | 14 | Self-Report Configuration model |
-| [`shift_assignments`](#shift_assignments) | `ShiftAssignment` | 14 | Assigns a specific member to a specific shift with a designated position. |
+| [`shift_assignments`](#shift_assignments) | `ShiftAssignment` | 15 | Assigns a specific member to a specific shift with a designated position. |
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
 | [`shift_completion_reports`](#shift_completion_reports) | `ShiftCompletionReport` | 28 | Shift Completion Report model |
@@ -552,7 +552,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
 | [`shift_time_off`](#shift_time_off) | `ShiftTimeOff` | 12 | Member request for time off / unavailability. |
-| [`shifts`](#shifts) | `Shift` | 29 | Shift model (Framework) |
+| [`shifts`](#shifts) | `Shift` | 30 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
@@ -2468,6 +2468,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `event_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
 | `task_completions` | JSON | yes |  | `dict()` |  |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
+| `staffing_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
+| `staffing_roles` | JSON | yes |  |  |  |
+| `volunteer_call_sent_at` | DATETIME | yes |  |  |  |
 | `status_token` | VARCHAR(64) | yes | UQ, UQ-IDX | `generate_status_token()` |  |
 | `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
@@ -7733,6 +7736,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
 | `assignment_status` | ENUM(`assigned`, `confirmed`, `declined`, `pending`, `cancelled`, `no_show`) | no |  | `assigned` |  |
+| `outreach_role` | VARCHAR(100) | yes |  |  |  |
 | `is_training` | BOOL | no |  | `0` |  |
 | `training_program_id` | VARCHAR(36) | yes | FK |  | → `training_programs.id` ON DELETE SET NULL |
 | `training_evaluator_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -8092,6 +8096,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `activities` | JSON | yes |  |  |  |
 | `pass_down_notes` | TEXT | yes |  |  |  |
 | `open_to_all_members` | BOOL | no |  | `0` |  |
+| `is_outreach` | BOOL | no |  | `0` |  |
 | `call_count` | INTEGER | yes |  |  |  |
 | `total_hours` | FLOAT | yes |  |  |  |
 | `closeout_step` | INTEGER | yes |  |  |  |
@@ -9613,6 +9618,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `shifts` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_requests` | `staffing_shift_id` | SET NULL | yes |
+| `org_call_responses` | `shift_id` | SET NULL | yes |
+| `shift_assignments` | `shift_id` | CASCADE | no |
+| `shift_attendance` | `shift_id` | CASCADE | no |
+| `shift_calls` | `shift_id` | CASCADE | no |
+| `shift_completion_reports` | `shift_id` | SET NULL | yes |
+| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
+| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
+| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
+
 ### → `training_categories` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -9667,19 +9686,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `prospect_id` | CASCADE | no |
 | `prospect_step_progress` | `prospect_id` | CASCADE | no |
 | `screening_records` | `prospect_id` | CASCADE | yes |
-
-### → `shifts` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `org_call_responses` | `shift_id` | SET NULL | yes |
-| `shift_assignments` | `shift_id` | CASCADE | no |
-| `shift_attendance` | `shift_id` | CASCADE | no |
-| `shift_calls` | `shift_id` | CASCADE | no |
-| `shift_completion_reports` | `shift_id` | SET NULL | yes |
-| `shift_equipment_checks` | `shift_id` | SET NULL | yes |
-| `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
-| `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
 ### → `training_requirements` (8 references)
 
