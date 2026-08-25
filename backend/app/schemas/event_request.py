@@ -9,7 +9,7 @@ assignment, scheduling with room booking, and postponement.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -96,6 +96,102 @@ class EventRequestSchedule(BaseModel):
         default=True,
         description="Whether to create a calendar Event record",
     )
+
+    @model_validator(mode="after")
+    def _end_after_start(self) -> "EventRequestSchedule":
+        """An end before the start books a negative-length room reservation.
+
+        The double-booking check compares the requested window against existing
+        events, so a reversed window overlaps nothing and the conflict guard
+        silently passes.
+        """
+        if self.event_end_date and self.event_end_date < self.event_date:
+            raise ValueError("event_end_date must not be before event_date")
+        return self
+
+
+class StaffingRoleNeed(BaseModel):
+    """How many people the department needs in one outreach role."""
+
+    role: str = Field(..., min_length=1, max_length=100)
+    count: int = Field(default=1, ge=1, le=50)
+
+
+class EventRequestStaffingCreate(BaseModel):
+    """Schema for opening a volunteer signup sheet on a scheduled request.
+
+    Roles, not crew positions: nobody rides a seat on an engine at a school
+    visit, so the sheet asks for tour guides and educators. Role values come
+    from the department's own ``events.outreach_roles`` setting, which is
+    checked server-side — a role nobody can select is a seat that never fills.
+    """
+
+    roles: List[StaffingRoleNeed] = Field(
+        ...,
+        min_length=1,
+        description='Roles needed, e.g. [{"role": "tour_guide", "count": 2}]',
+    )
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class EventRequestVolunteerSignup(UTCResponseBase):
+    """One member who has signed up to cover an outreach event."""
+
+    user_id: str
+    member_name: str
+    position: str
+    outreach_role: Optional[str] = None
+    outreach_role_label: Optional[str] = None
+    status: str
+    assigned_at: Optional[datetime] = None
+
+
+class StaffingRoleStatus(BaseModel):
+    """One role on the sheet, and how full it is."""
+
+    role: str
+    label: str
+    total: int
+    filled: int
+    remaining: int
+
+
+class EventRequestStaffingResponse(UTCResponseBase):
+    """Volunteer staffing state for a scheduled request."""
+
+    shift_id: Optional[str] = None
+    shift_date: Optional[datetime] = None
+    slots_total: int = 0
+    slots_filled: int = 0
+    roles: List[StaffingRoleStatus] = []
+    volunteers: List[EventRequestVolunteerSignup] = []
+    volunteer_call_sent_at: Optional[datetime] = None
+
+
+class EventRequestVolunteerCall(BaseModel):
+    """Schema for emailing the membership asking for help on a request."""
+
+    message: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Extra note from the coordinator, shown above the details",
+    )
+    membership_types: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Restrict the call to these membership types. Omit to email every "
+            "active member."
+        ),
+    )
+
+
+class EventRequestVolunteerCallResult(UTCResponseBase):
+    """Result of a volunteer call."""
+
+    message: str
+    recipients: int
+    skipped_opted_out: int
+    volunteer_call_sent_at: datetime
 
 
 class EventRequestPostpone(BaseModel):
@@ -230,6 +326,9 @@ class EventRequestResponse(UTCResponseBase):
     event_end_date: Optional[datetime] = None
     event_location_id: Optional[str] = None
     event_location_name: Optional[str] = None
+    staffing_shift_id: Optional[str] = None
+    staffing_roles: Optional[List[Dict[str, Any]]] = None
+    volunteer_call_sent_at: Optional[datetime] = None
     status_token: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -255,13 +354,20 @@ class EventRequestListItem(UTCResponseBase):
     assignee_name: Optional[str] = None
     task_completions: Optional[Dict[str, Any]] = None
     event_date: Optional[datetime] = None
+    staffing_shift_id: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class EventRequestPublicStatus(BaseModel):
-    """Public-facing status response (limited info, no internal notes)."""
+class EventRequestPublicStatus(UTCResponseBase):
+    """Public-facing status response (limited info, no internal notes).
+
+    UTCResponseBase, not BaseModel: MySQL hands back naive datetimes, and the
+    status page a requester opens ran them through ``new Date()``, which reads
+    an unmarked string as *local* time. A department in UTC-05:00 was telling
+    the public their 6pm demo was at 1pm.
+    """
 
     contact_name: str
     outreach_type: str

@@ -29,6 +29,12 @@ export interface Assignment {
   user_id: string;
   shift_id: string;
   position: string;
+  /**
+   * The job a member chose on a community outreach signup sheet. Null on a
+   * duty shift, where `position` already says it.
+   */
+  outreach_role?: string | null;
+  outreach_role_label?: string | null;
   /** Canonical status field, mirrored from the backend `assignment_status`. */
   status: AssignmentStatus;
   /** Raw backend field — prefer `status` in display code. */

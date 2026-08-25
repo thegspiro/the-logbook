@@ -139,6 +139,13 @@ class OutreachEventType(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
 
 
+class OutreachRole(BaseModel):
+    """A role a member can fill at a community outreach event."""
+
+    value: str = Field(..., min_length=1, max_length=100)
+    label: str = Field(..., min_length=1, max_length=200)
+
+
 class EventCategoryConfig(BaseModel):
     """A custom event category with value, label, and color."""
 
@@ -161,6 +168,7 @@ class EventSettingsUpdate(BaseModel):
     custom_event_categories: Optional[List[EventCategoryConfig]] = None
     visible_custom_categories: Optional[List[str]] = None
     outreach_event_types: Optional[List[OutreachEventType]] = None
+    outreach_roles: Optional[List[OutreachRole]] = None
     request_pipeline: Optional[RequestPipelineUpdate] = None
     defaults: Optional[EventDefaultsUpdate] = None
 

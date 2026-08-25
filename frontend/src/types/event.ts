@@ -532,6 +532,12 @@ export interface EventModuleSettings {
   };
   // Configurable outreach event types for the public request pipeline
   outreach_event_types: OutreachEventTypeConfig[];
+  /**
+   * Roles a member fills at a community outreach event. Separate from the crew
+   * positions on a duty shift on purpose — nobody is riding a seat on an engine
+   * at a school visit.
+   */
+  outreach_roles: OutreachRole[];
   // Configurable pipeline settings for event requests
   request_pipeline: RequestPipelineSettings;
 }
@@ -642,6 +648,10 @@ export interface EventRequest {
   event_end_date?: string;
   event_location_id?: string;
   event_location_name?: string;
+  /** Shift members sign up on to cover this event; null until signups are opened. */
+  staffing_shift_id?: string;
+  staffing_roles?: StaffingRoleNeed[];
+  volunteer_call_sent_at?: string;
   status_token?: string;
   created_at: string;
   updated_at: string;
@@ -663,7 +673,63 @@ export interface EventRequestListItem {
   assignee_name?: string;
   task_completions?: Record<string, TaskCompletion>;
   event_date?: string;
+  staffing_shift_id?: string;
   created_at: string;
+}
+
+/**
+ * A role a member fills at a community outreach event — tour guide, educator,
+ * facilitator. Deliberately a separate vocabulary from the crew positions on a
+ * duty shift: nobody is riding a seat on an engine at a school visit.
+ * Configurable per department in Events settings.
+ */
+export interface OutreachRole {
+  value: string;
+  label: string;
+}
+
+/** How many people the department needs in one outreach role. */
+export interface StaffingRoleNeed {
+  role: string;
+  count: number;
+}
+
+/** One role on a signup sheet, and how full it is. */
+export interface StaffingRoleStatus {
+  role: string;
+  label: string;
+  total: number;
+  filled: number;
+  remaining: number;
+}
+
+/** One member who has signed up to cover an outreach event. */
+export interface EventRequestVolunteer {
+  user_id: string;
+  member_name: string;
+  position: string;
+  outreach_role?: string;
+  outreach_role_label?: string;
+  status: string;
+  assigned_at?: string;
+}
+
+/** Volunteer staffing state for a scheduled request. */
+export interface EventRequestStaffing {
+  shift_id?: string;
+  shift_date?: string;
+  slots_total: number;
+  slots_filled: number;
+  roles: StaffingRoleStatus[];
+  volunteers: EventRequestVolunteer[];
+  volunteer_call_sent_at?: string;
+}
+
+export interface EventRequestVolunteerCallResult {
+  message: string;
+  recipients: number;
+  skipped_opted_out: number;
+  volunteer_call_sent_at: string;
 }
 
 export interface EventRequestPublicStatus {

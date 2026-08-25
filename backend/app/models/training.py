@@ -2932,6 +2932,13 @@ class Shift(Base):
         Boolean, default=False, nullable=False, server_default="0"
     )
 
+    # A community-outreach signup sheet opened from an event request, not a
+    # duty shift. Standing claims skip these: "every Saturday day shift" is a
+    # commitment to the department's regular coverage, and honouring it here
+    # would seat a member on a school visit they never volunteered for and
+    # spend one of the sheet's limited seats doing it.
+    is_outreach = Column(Boolean, default=False, nullable=False, server_default="0")
+
     # Summary totals — computed on finalization, also served live via API
     call_count = Column(Integer, nullable=True)
     total_hours = Column(Float, nullable=True)
@@ -3311,6 +3318,16 @@ class ShiftAssignment(Base):
         default=AssignmentStatus.ASSIGNED,
         server_default="assigned",
     )
+
+    # The job this member is doing at a community outreach event — tour guide,
+    # educator, facilitator — set only on shifts flagged ``is_outreach`` and
+    # NULL on every duty shift. It is a plain string, not a ShiftPosition:
+    # ``position`` is a MySQL ENUM whose labels are rewritten to the enum's own
+    # values at startup (see utils/enum_normalization), so an outreach role
+    # stored there would be rejected by the column or erased by that pass.
+    # ``position`` therefore stays ``volunteer`` for these seats and this
+    # column carries what the member actually signed up to do.
+    outreach_role = Column(String(100), nullable=True)
 
     # Training slot — when True this seat is a supervised training/rider
     # position. Optionally links the trainee's program and the evaluating

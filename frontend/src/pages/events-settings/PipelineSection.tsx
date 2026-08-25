@@ -110,7 +110,11 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           <Calendar className="text-theme-text-muted h-4 w-4" />
           <p className="text-theme-text-primary text-sm font-medium">Minimum Lead Time</p>
         </div>
-        <p className="text-theme-text-muted mb-3 text-xs">How far in advance must requests be submitted?</p>
+        <p className="text-theme-text-muted mb-3 text-xs">
+          How far in advance must requests be submitted? A public submission naming a date sooner than this is refused;
+          one arriving through a public form is accepted and flagged as short notice for the coordinator. Set to 0 to
+          accept any date.
+        </p>
         <div className="flex items-center gap-3">
           <input
             type="number"

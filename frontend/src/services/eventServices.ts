@@ -698,6 +698,38 @@ export const eventRequestService = {
     const response = await api.delete<{ message: string }>(`/event-requests/email-templates/${templateId}`);
     return response.data;
   },
+  async getStaffing(requestId: string): Promise<import('../types/event').EventRequestStaffing> {
+    const response = await api.get<import('../types/event').EventRequestStaffing>(
+      `/event-requests/${requestId}/staffing`
+    );
+    return response.data;
+  },
+  async getOutreachRoles(): Promise<import('../types/event').OutreachRole[]> {
+    const response = await api.get<{ roles: import('../types/event').OutreachRole[] }>(
+      '/event-requests/outreach-roles'
+    );
+    return response.data.roles;
+  },
+  async openStaffing(
+    requestId: string,
+    data: { roles: import('../types/event').StaffingRoleNeed[]; notes?: string | undefined }
+  ): Promise<import('../types/event').EventRequestStaffing> {
+    const response = await api.post<import('../types/event').EventRequestStaffing>(
+      `/event-requests/${requestId}/staffing`,
+      data
+    );
+    return response.data;
+  },
+  async sendVolunteerCall(
+    requestId: string,
+    data: { message?: string | undefined; membership_types?: string[] | undefined }
+  ): Promise<import('../types/event').EventRequestVolunteerCallResult> {
+    const response = await api.post<import('../types/event').EventRequestVolunteerCallResult>(
+      `/event-requests/${requestId}/volunteer-call`,
+      data
+    );
+    return response.data;
+  },
   async generateForm(): Promise<{ message: string; form_id: string; public_slug: string; public_url: string }> {
     const response = await api.post<{ message: string; form_id: string; public_slug: string; public_url: string }>(
       '/event-requests/generate-form'

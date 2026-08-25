@@ -121,8 +121,20 @@ export interface ShiftRosterSeat {
   user_id: string;
   user_name?: string | null;
   position?: string | null;
+  /** What this member is doing at an outreach event. Null on a duty shift. */
+  outreach_role?: string | null;
+  outreach_role_label?: string | null;
   status?: string | null;
   is_training?: boolean;
+}
+
+/** One role on a community-outreach signup sheet, and how full it is. */
+export interface OutreachRoleSlot {
+  role: string;
+  label: string;
+  total: number;
+  filled: number;
+  remaining: number;
 }
 
 export interface ShiftRecord {
@@ -146,6 +158,13 @@ export interface ShiftRecord {
   notes?: string;
   activities?: unknown;
   open_to_all_members?: boolean;
+  /**
+   * A community-outreach signup sheet rather than duty coverage. Its seats are
+   * named by outreach role (tour guide, educator) instead of by crew position,
+   * because nobody is riding a seat on an engine at a school visit.
+   */
+  is_outreach?: boolean;
+  outreach_roles?: OutreachRoleSlot[];
   attendee_count: number;
   /** Occupied seats. Empty on responses served before the roster existed. */
   roster?: ShiftRosterSeat[];
@@ -856,7 +875,7 @@ export const schedulingService = {
   // --- Shift Signup (member self-service) ---
   async signupForShift(
     shiftId: string,
-    data?: { position?: string }
+    data?: { position?: string; outreach_role?: string }
   ): Promise<ShiftSignupResponse & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
     const response = await api.post<
       ShiftSignupResponse & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }

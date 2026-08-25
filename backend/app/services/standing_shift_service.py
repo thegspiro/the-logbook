@@ -159,6 +159,12 @@ class StandingShiftService:
             shift, "is_finalized", False
         ):
             return False
+        # A community-outreach signup sheet is not the department's regular
+        # coverage, and its seats are counted: a standing claim landing on one
+        # both commits a member to an event they did not choose and takes a
+        # seat away from somebody who would have volunteered for it.
+        if getattr(shift, "is_outreach", False):
+            return False
         if apparatus_id and str(shift.apparatus_id or "") != str(apparatus_id):
             return False
         return self.shift_period(shift, tz) == claim_period

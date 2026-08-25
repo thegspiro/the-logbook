@@ -28,6 +28,10 @@ export interface OutreachSectionProps extends SettingsSectionProps {
   onRemoveType: (value: string) => void;
   newTypeLabel: string;
   onNewTypeLabelChange: (value: string) => void;
+  onAddRole: () => void;
+  onRemoveRole: (value: string) => void;
+  newRoleLabel: string;
+  onNewRoleLabelChange: (value: string) => void;
 }
 
 export interface OrgMember {
