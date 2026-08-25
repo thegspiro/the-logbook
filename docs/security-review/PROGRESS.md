@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field    | Value                                    |
-| -------- | ---------------------------------------- |
-| PR       | _(none yet — set on first push)_         |
-| Branch   | `claude/app-security-review-loop-7910yu` |
-| Feature  | SEC-00 cross-cutting baseline            |
-| CI       | not yet run                              |
-| Threads  | none                                     |
-| Last tended | 2026-08-25                            |
+| Field       | Value                                                        |
+| ----------- | ------------------------------------------------------------ |
+| PR          | [#1799](https://github.com/thegspiro/the-logbook/pull/1799)  |
+| Branch      | `claude/app-security-review-loop-7910yu`                     |
+| Feature     | SEC-00 cross-cutting baseline                                |
+| CI          | awaiting first run                                           |
+| Threads     | none yet                                                     |
+| Last tended | 2026-08-25 (opened)                                          |
 
 ---
 
@@ -51,7 +51,7 @@ data-carrying modules, then the supporting infrastructure.
 
 | #   | Feature                    | Prefix | Principal code                                                                          | Status |
 | --- | -------------------------- | ------ | --------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline     | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                            | ⏳     |
+| 00  | Cross-cutting baseline     | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                            | ⏳ #1799 |
 | 01  | Auth & session lifecycle   | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`             | ⬜     |
 | 02  | Permissions & roles        | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py` | ⬜ |
 | 03  | Public surface & webhooks  | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py` | ⬜ |

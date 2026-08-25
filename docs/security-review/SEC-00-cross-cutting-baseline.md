@@ -1,6 +1,6 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 · **PR:** _(this branch)_
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799)
 
 **Scope:** whole codebase — `backend/app/` (66 v1 endpoint files, 11 public
 endpoint files, 108 services, 42 model modules, 355 Alembic revisions).
