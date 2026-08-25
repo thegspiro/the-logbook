@@ -371,6 +371,121 @@ class TestClosedApplicationGates:
 
 
 # =========================================================================
+# 3b. The generic update endpoint cannot be used to work around the same
+#     TRANSFERRED guard, and an explicit null actually clears a field
+# =========================================================================
+
+
+class TestGenericUpdateStatusGuard:
+    """PUT /prospects/{id} reaches the same status column as the dedicated
+    status endpoint, through a second code path (update_prospect) that used
+    to have none of set_prospect_status's guards. Both must refuse the same
+    TRANSFERRED manipulation."""
+
+    async def test_transferred_cannot_be_set_via_the_generic_update(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id)
+
+        with pytest.raises(ValueError, match="cannot be set or cleared"):
+            await svc.update_prospect(
+                p.id, org_id, {"status": "transferred"}, updated_by=admin_id
+            )
+
+        refreshed = await svc.get_prospect(p.id, org_id)
+        assert refreshed.status == ProspectStatus.ACTIVE
+
+    async def test_a_member_cannot_be_put_back_on_the_board_via_generic_update(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id)
+        p.status = ProspectStatus.TRANSFERRED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="cannot be set or cleared"):
+            await svc.update_prospect(
+                p.id, org_id, {"status": "active"}, updated_by=admin_id
+            )
+
+    async def test_an_ordinary_status_change_via_generic_update_still_works(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        """The guard targets TRANSFERRED specifically — it must not block the
+        ordinary edits this endpoint has always allowed."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id)
+
+        await svc.update_prospect(
+            p.id, org_id, {"status": "on_hold"}, updated_by=admin_id
+        )
+
+        refreshed = await svc.get_prospect(p.id, org_id)
+        assert refreshed.status == ProspectStatus.ON_HOLD
+
+
+class TestGenericUpdateExplicitNull:
+    """CLAUDE.md Pitfall #1: an update payload built with exclude_unset=True
+    sends an explicit null to mean "clear this field". The old `if value is
+    not None` guard silently dropped it — the request returned 200 with the
+    old value still in the database."""
+
+    async def test_explicit_null_clears_referred_by(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id, referred_by=admin_id)
+        assert (await svc.get_prospect(p.id, org_id)).referred_by == admin_id
+
+        await svc.update_prospect(
+            p.id, org_id, {"referred_by": None}, updated_by=admin_id
+        )
+
+        refreshed = await svc.get_prospect(p.id, org_id)
+        assert refreshed.referred_by is None
+
+    async def test_explicit_null_clears_phone(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id, phone="555-0100")
+        assert (await svc.get_prospect(p.id, org_id)).phone == "555-0100"
+
+        await svc.update_prospect(p.id, org_id, {"phone": None}, updated_by=admin_id)
+
+        refreshed = await svc.get_prospect(p.id, org_id)
+        assert refreshed.phone is None
+
+    async def test_explicit_null_against_a_not_null_column_is_a_400_not_a_no_op(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        """email is NOT NULL on the model. Silently dropping the null (the
+        old behavior) is worse here than the previous status-only case: it
+        would return 200 while giving no indication the clear never
+        happened."""
+        org_id, admin_id = org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id)
+        p = await _prospect(svc, org_id, pipeline.id)
+
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await svc.update_prospect(
+                p.id, org_id, {"email": None}, updated_by=admin_id
+            )
+
+
+# =========================================================================
 # 4. The single-record status route is gated like the bulk one
 # =========================================================================
 

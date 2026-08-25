@@ -1186,18 +1186,44 @@ class MembershipPipelineService:
                 label="referring member",
             )
 
+        # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
+        # dedicated status endpoint refuses to set or clear it. This generic
+        # update reaches the same status column and must refuse it the same
+        # way, or it is a second, unguarded path to the exact bypass that
+        # guard exists to close.
+        if data.get("status") is not None:
+            target = self._parse_status(data["status"])
+            if (
+                target == ProspectStatus.TRANSFERRED
+                or prospect.status == ProspectStatus.TRANSFERRED
+            ):
+                raise ValueError(
+                    "Transferred is set by converting the applicant to a "
+                    "member and cannot be set or cleared through this update."
+                )
+
+        # Old values captured before the write, for the activity-log diff
+        # below. exclude_unset upstream means every key here was explicitly
+        # sent by the caller, so apply_updates must not drop an explicit
+        # null the way `if value is not None` used to (CLAUDE.md Pitfall #1):
+        # a client clearing e.g. referred_by got a 200 with the old value
+        # left in place.
+        updates = {
+            k: v for k, v in data.items() if k not in self._PROSPECT_PROTECTED_FIELDS
+        }
+        old_values = {k: getattr(prospect, k, None) for k in updates}
+
+        written = apply_updates(prospect, updates)
+
         changes = {}
-        for key, value in data.items():
-            if key in self._PROSPECT_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(prospect, key):
-                old_value = getattr(prospect, key)
-                if old_value != value:
-                    if key in self._SENSITIVE_ACTIVITY_FIELDS:
-                        changes[key] = {"changed": True}
-                    else:
-                        changes[key] = {"from": str(old_value), "to": str(value)}
-                    setattr(prospect, key, value)
+        for key in written:
+            new_value = getattr(prospect, key)
+            old_value = old_values.get(key)
+            if old_value != new_value:
+                if key in self._SENSITIVE_ACTIVITY_FIELDS:
+                    changes[key] = {"changed": True}
+                else:
+                    changes[key] = {"from": str(old_value), "to": str(new_value)}
 
         if changes:
             await self._log_activity(

@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                            |
-| ----------- | ---------------------------------------------------------------- |
-| PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815)      |
-| Branch      | `claude/security-review-mp`                                      |
-| Feature     | 08 Membership pipeline                                           |
-| CI          | fresh push, awaiting first run                                   |
-| Threads     | none yet                                                         |
-| Last tended | 2026-08-25 — re-verification pass, no new findings, docs-only PR |
+| Field       | Value                                                       |
+| ----------- | ----------------------------------------------------------- |
+| PR          | [#1815](https://github.com/thegspiro/the-logbook/pull/1815) |
+| Branch      | `claude/security-review-mp`                                 |
+| Feature     | 08 Membership pipeline                                      |
+| CI          | fresh push after fixes, awaiting run                        |
+| Threads     | 5 Codex threads, all addressed — see log                    |
+| Last tended | 2026-08-25 — 5 fixed, 1 flagged, 1 more found+fixed; pushed |
 
 ---
 
@@ -314,21 +314,27 @@ re-runs the whole-codebase sweeps against whatever has landed since.
     membership pipeline.
 - **07 Users & organizations ✅ merged** — PR #1814 merged 2026-08-25 18:18
   UTC.
-- **08 Membership pipeline — re-verification pass, no new findings.** The
-  module grew from 44 to 51 routes since the 2026-08-09 app-review baseline,
-  entirely through ordinary feature work (notably PR #1811, "drop closed
-  applications from the pipeline"), none of it run through this rotation.
-  Reviewed every commit and function touched since that baseline against all
-  seven checklist dimensions: closed-application gating (`_assert_open`,
-  wired at the three consequential call sites — election package creation,
-  ballot assignment, new interviews), the new single-record status endpoint
-  (shares `_apply_status_change` with the bulk path, which refuses to
-  set/clear `TRANSFERRED` — the P1 Codex already caught and fixed on #1811
-  itself), the multi-approval signer check (`_authorized_multi_approval_result`
-  re-verifies the caller's own held positions server-side; a client-supplied
-  `role` string cannot self-authorize), and the webhook auto-completion path
-  (org-scoped, and now reference-matched since the 2026-08-17 fix). All 51
-  routes enumerated; the self-prospect-access guard confirmed still
-  router-level and its list-filtering counterpart confirmed present on all 8
-  multi-prospect list/aggregate endpoints. No code changes — see
-  `MP-08-membership-pipeline.md`. Next: 09 medical screening (PHI).
+- **08 Membership pipeline — 5 fixed, 1 flagged (via Codex on the draft PR),
+  plus 1 more found and fixed while fixing one of those.** First drafted as a
+  "no new findings" re-verification pass; Codex's review of that draft PR
+  caught five real issues the draft had missed, and fixing one of them
+  (`update_prospect` dropping explicit nulls) surfaced a second, unguarded
+  path to the exact `TRANSFERRED`-manipulation bug PR #1811's own Codex
+  review had already fixed on the dedicated status endpoints — the generic
+  `PUT /prospects/{id}` reaches the same status column and had none of that
+  fix's guards. Fixed: the explicit-null drop itself (now routes through
+  `apply_updates`, this service's established pattern elsewhere); the second
+  `TRANSFERRED` path (closed the same way as the first); `/approve-step`
+  returning the full applicant record — DOB, address, coordinator notes — to
+  a signer authorized only by the role they hold, not by view permission
+  (now returns a minimal `{prospect_id, step_id, step_completed}` result);
+  and `PUT`/`DELETE /interviews/{id}` bypassing the router-wide self-access
+  guard, because those routes carry no `{prospect_id}` path parameter for it
+  to key on (added a dedicated `block_self_interview_access` dependency).
+  Flagged, not fixed: unbounded election-package listing/creation, the same
+  class as ELEC-12/USR-5 — pagination and a creation cap are both
+  behavior/contract changes needing an owner decision. Full completion gate
+  re-run after the fixes (flake8/black/isort/migrations/228 pipeline tests +
+  37 PII-exposure tests/tsc, all green). See `MP-08-membership-pipeline.md`
+  for the complete writeup, including the revision note explaining the
+  draft-vs-final split. Next: 09 medical screening (PHI).

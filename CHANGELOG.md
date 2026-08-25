@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A membership applicant's file could reach a signer who could not otherwise view it (2026-08-25)
+
+**Fixed**
+
+- `POST /prospects/{id}/approve-step`, the endpoint a role holder (chief,
+  president, ...) uses to record one sign-off on a multi-approval pipeline
+  stage, returned the applicant's full record — date of birth, address,
+  coordinator notes and all — as its response, even to a signer who held no
+  view permission on applicants at all. It now returns only whether the
+  stage completed.
+- `PUT`/`DELETE /interviews/{id}` were not covered by the check that stops a
+  member from acting on their own prospective-membership file, because those
+  routes identify the interview by its own id rather than the applicant's —
+  so a coordinator who had once been an applicant themselves could alter or
+  delete the interview record from their own vetting. Both routes are now
+  covered.
+- Editing a prospective member's profile (`PUT /prospects/{id}`) silently
+  ignored an explicit request to clear a field — sending "no phone number"
+  returned success while the old value stayed on file. It now actually
+  clears the field, the same way every other edit path in the app does.
+- That same edit endpoint could also be used to mark an applicant
+  "transferred" (become a member) without them actually being converted, or
+  to un-transfer an existing member back onto the applicant board — a gap in
+  a different endpoint that a related fix had already closed elsewhere. Both
+  are now refused here too.
+
 ### A member's audit history could show unrelated actions performed on someone else (2026-08-25)
 
 **Fixed**
