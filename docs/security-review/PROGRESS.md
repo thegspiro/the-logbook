@@ -22,7 +22,7 @@ feature. The rotation cannot outrun its own review queue.
 | Branch      | `claude/security-review-mp`                                 |
 | Feature     | 08 Membership pipeline                                      |
 | CI          | fresh push after fixes, awaiting run                        |
-| Threads     | 5 Codex threads, all addressed — see log                    |
+| Threads     | 5 Codex threads, all fixed/flagged, replied, and resolved   |
 | Last tended | 2026-08-25 — 5 fixed, 1 flagged, 1 more found+fixed; pushed |
 
 ---
