@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
+
+Follow-ups to #1791, which shipped the lock itself. Both were raised in review
+there and deferred deliberately as too large to bolt on.
+
+**Fixed**
+
+- **Finalizing is an atomic transition, not a check followed by a hope.**
+  Finalize, reopen and every attendance writer now take a `SELECT … FOR UPDATE`
+  row lock on the event, and finalize commits the close in the same transaction
+  that holds it. Previously a check-in could commit between finalize's roster
+  snapshot and the close, leaving that member checked in, uncredited and behind
+  a lock with nothing on screen to explain it. A writer arriving mid-finalize
+  now blocks and then finds the event closed, which is the 409 it should always
+  have got. Crediting deliberately runs after that commit — the roster can no
+  longer change, so it needs no lock, and a mapping failure there costs only the
+  hours credit rather than the whole finalize.
+- **Reopening a training session serializes against its pending approval.**
+  Both `reopen_training_session` and `submit_training_approval` lock the
+  approval row, so an officer holding a page loaded before a reopen can no
+  longer commit an approval against a session a leader has just opened for
+  correction. Whichever transaction reaches the row first wins and the other
+  sees its outcome.
+- **Corrected hours reach the pipeline.** The progress ledger is idempotent per
+  (progress, source, source id), so re-finalizing a reopened session applied no
+  delta at all: the training record moved to the corrected figure while
+  certification and phase totals kept the original. `apply_requirement_credit`
+  takes a `restate` flag that reverses the recorded credit through the normal
+  reversal path and applies the new one; identical hours stay a no-op.
+- **An attendee removed during a reopen loses the credit.** Re-finalization
+  wrote records for whoever was on the roster and said nothing about anyone
+  dropped from it, so a member taken off a session kept both the completed
+  training record and the pipeline credit. Re-finalizing now diffs the new
+  roster against the previous approval's and revokes what the earlier finalize
+  gave. The training record is reverted to not-completed rather than deleted —
+  nothing on `TrainingRecord` records which session created it, and the
+  check-in auto-create path writes one before finalization ever runs, so
+  deleting could destroy a record this session never authored.
+- **A corrected category reaches the record.** Re-finalizing copies the
+  session's current category and course onto an existing training record, which
+  is what makes reopening to fix a mis-filed session actually take effect
+  instead of reporting success and leaving the old value in place.
+
 ### Community outreach requests: the settings now do what they say, and a confirmed date reaches the schedule (2026-08-24)
 
 **Fixed**
