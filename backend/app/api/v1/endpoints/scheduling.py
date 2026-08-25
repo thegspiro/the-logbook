@@ -2573,9 +2573,17 @@ async def signup_for_shift(
         shift_id=str(shift_id),
     )
     if not eligible:
+        # Name the two things an admin can actually change. The bare
+        # "not eligible" this used to return sent members to a scheduling
+        # admin who had no more information than they did.
         raise HTTPException(
             status_code=403,
-            detail="You are not eligible to sign up for this shift.",
+            detail=(
+                "You are not eligible to sign up for this shift. None of its "
+                "positions are covered by your rank, the positions you hold, "
+                "or your completed training. Ask a scheduling admin to review "
+                "your rank and positions, or the positions on this shift."
+            ),
         )
     if position_value not in eligible:
         raise HTTPException(

@@ -3,9 +3,9 @@ Tests for the shift position eligibility service
 (app/services/shift_eligibility_service.py).
 
 Covers the self-service signup gate: open-to-all bypass, the membership-type
-exclusion, the rank/training/open-position union, intersection with a shift's
-defined positions, the training target_position mapping, settings updates
-(deepcopy-safe), and the EVOC soft-warning path. DB mocked; no MySQL.
+exclusion, the rank/position/training/open-position union, intersection with a
+shift's defined positions, the training target_position mapping, settings
+updates (deepcopy-safe), and the EVOC soft-warning path. DB mocked; no MySQL.
 """
 
 from datetime import date
@@ -49,6 +49,23 @@ def _scalars(items):
 
 def _user(rank="ff", membership_type="active"):
     return SimpleNamespace(id="u1", rank=rank, membership_type=membership_type)
+
+
+def _rank_rows(entries):
+    """operational_ranks rows as _get_slug_eligibility_map selects them."""
+    return _rows(
+        [
+            (code, positions, active)
+            for code, positions, active in (
+                (e[0], e[1], e[2] if len(e) > 2 else True) for e in entries
+            )
+        ]
+    )
+
+
+def _held_rows(slugs):
+    """The member's own position slugs, as _get_held_position_slugs sees them."""
+    return _rows([(slug,) for slug in slugs])
 
 
 def _member(user_id, rank="ff", membership_type="active", platoon=None):
@@ -110,15 +127,103 @@ class TestGetEligiblePositions:
 
     async def test_union_of_rank_training_and_open(self):
         org = _org(scheduling={"open_positions": ["ems"]})
-        # org, rank positions, training rows
-        db = _db([_one(org), _one(["driver"]), _rows([("officer",)])])
+        # org, rank map, held position slugs, training rows
+        db = _db(
+            [
+                _one(org),
+                _rank_rows([("ff", ["driver"])]),
+                _held_rows([]),
+                _rows([("officer",)]),
+            ]
+        )
         out = await ShiftEligibilityService(db).get_eligible_positions(_user(), "org-1")
         assert out == ["driver", "ems", "officer"]
+
+    async def test_held_position_confers_eligibility_without_a_rank(self):
+        # The reported defect: a department that models EMT as a *position*
+        # (onboarding's role setup creates one with slug "emt") and leaves
+        # User.rank unset had every one of its EMTs refused self-signup.
+        org = _org()
+        db = _db(
+            [
+                _one(org),
+                _rank_rows([("emt", ["ems", "firefighter"])]),
+                _held_rows(["emt", "member"]),
+                _rows([]),
+            ]
+        )
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1"
+        )
+        assert out == ["ems", "firefighter"]
+
+    async def test_held_position_falls_back_to_seed_defaults(self):
+        # An org onboarded before "emt" joined DEFAULT_RANKS has no row for it
+        # — seed_defaults only fires on an empty table — so the built-in
+        # default answers rather than leaving the member with nothing.
+        db = _db([_one(_org()), _rank_rows([]), _held_rows(["emt"]), _rows([])])
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1"
+        )
+        assert out == ["ems", "firefighter"]
+
+    async def test_configured_rank_row_overrides_the_default(self):
+        # An admin who narrows a rank gets what they configured, not the seed.
+        db = _db(
+            [
+                _one(_org()),
+                _rank_rows([("emt", ["ems"])]),
+                _held_rows(["emt"]),
+                _rows([]),
+            ]
+        )
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1"
+        )
+        assert out == ["ems"]
+
+    async def test_deactivated_rank_confers_nothing_despite_the_default(self):
+        # Deactivating a rank is an explicit act; the fallback must not undo it.
+        db = _db(
+            [
+                _one(_org()),
+                _rank_rows([("emt", ["ems", "firefighter"], False)]),
+                _held_rows(["emt"]),
+                _rows([]),
+            ]
+        )
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank="emt"), "org-1"
+        )
+        assert out == []
+
+    async def test_position_slug_that_is_not_operational_confers_nothing(self):
+        # Treasurer is a corporate position; it says nothing about riding.
+        db = _db(
+            [
+                _one(_org()),
+                _rank_rows([]),
+                _held_rows(["treasurer", "member"]),
+                _rows([]),
+            ]
+        )
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1"
+        )
+        assert out == []
 
     async def test_intersection_with_shift_positions(self):
         org = _org(scheduling={"open_positions": ["ems"]})
         shift = _shift(["driver", "officer"])
-        db = _db([_one(org), _one(shift), _one(["driver"]), _rows([("officer",)])])
+        db = _db(
+            [
+                _one(org),
+                _one(shift),
+                _rank_rows([("ff", ["driver"])]),
+                _held_rows([]),
+                _rows([("officer",)]),
+            ]
+        )
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(), "org-1", shift_id="sh1"
         )
@@ -131,7 +236,15 @@ class TestGetEligiblePositions:
         # full eligible set is returned rather than [].
         org = _org()
         shift = _shift([])  # no positions defined
-        db = _db([_one(org), _one(shift), _one(["driver"]), _rows([])])
+        db = _db(
+            [
+                _one(org),
+                _one(shift),
+                _rank_rows([("ff", ["driver"])]),
+                _held_rows([]),
+                _rows([]),
+            ]
+        )
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(), "org-1", shift_id="sh1"
         )
@@ -235,12 +348,16 @@ class TestPositionRoster:
     roster that disagrees with what signup enforces is worse than none.
     """
 
-    def _db_for(self, users, ranks, training, operators, org=None):
+    def _db_for(self, users, ranks, training, operators, org=None, held=None):
+        # ranks feeds two queries: the display-name map (active rows only) and
+        # the slug->positions map the eligibility decision reads.
         return _db(
             [
                 _one(org if org is not None else _org()),
                 _scalars(users),
-                _rows(ranks),
+                _rows([r[:3] for r in ranks if len(r) < 4 or r[3]]),
+                _rank_rows([(r[0], r[2], r[3] if len(r) > 3 else True) for r in ranks]),
+                _rows(held or []),
                 _rows(training),
                 _rows(operators),
             ]
@@ -376,16 +493,39 @@ class TestPositionRoster:
         assert member["apparatus_cleared"] == []
 
     async def test_inactive_rank_confers_nothing(self):
-        # _get_rank_map only returns active ranks, so a deactivated rank drops
-        # out of the map entirely.
+        # A deactivated rank resolves to no positions, so it can neither list
+        # the member here nor let them sign up.
         db = self._db_for(
-            users=[_member("u1", rank="retired_engineer")],
-            ranks=[],
+            users=[_member("u1", rank="engineer")],
+            ranks=[("engineer", "Engineer", ["driver"], False)],
             training=[],
             operators=[],
         )
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
         assert out["members"] == []
+
+    async def test_held_position_source_listed(self):
+        # Mirrors the signup gate: the roster must show the EMT-by-position
+        # member it now lets sign up, or the two disagree.
+        db = self._db_for(
+            users=[_member("u1", rank="")],
+            ranks=[("emt", "EMT", ["ems", "firefighter"])],
+            training=[],
+            operators=[],
+            held=[("u1", "emt", "EMT"), ("u1", "member", "Member")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
+        assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
+
+    async def test_rank_without_a_stored_row_uses_the_seed_label(self):
+        db = self._db_for(
+            users=[_member("u1", rank="emt")],
+            ranks=[],
+            training=[],
+            operators=[],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
+        assert out["members"][0]["sources"] == [{"type": "rank", "label": "EMT"}]
 
 
 class TestEvaluateDriverAssignment:

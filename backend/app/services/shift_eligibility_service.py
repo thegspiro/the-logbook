@@ -2,8 +2,8 @@
 Shift Position Eligibility Service
 
 Determines which shift positions a member is eligible to sign up for
-based on their rank, completed training programs, org-wide open
-positions, membership type, and EVOC certification levels.
+based on their rank, held positions, completed training programs,
+org-wide open positions, membership type, and EVOC certification levels.
 """
 
 import copy
@@ -27,9 +27,10 @@ from app.models.training import (
     Shift,
     TrainingProgram,
 )
-from app.models.user import Organization, User
+from app.models.user import Organization, Position, User, user_positions
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
+from app.services.operational_rank_service import DEFAULT_RANKS
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -49,6 +50,22 @@ DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
     "honorary",
     "prospective",
 ]
+
+# rank_code -> the shift positions that rank may fill, and rank_code -> label,
+# both derived from the seed set so there is one source of truth.
+#
+# These are the *fallback* for a code the organization has no
+# ``operational_ranks`` row for. ``seed_defaults`` only inserts when the table
+# is empty for the org, so a department onboarded before a code was added to
+# DEFAULT_RANKS never receives it — and without a fallback every member
+# carrying that code resolves to zero eligible positions and is refused
+# self-signup with no way to tell why.
+DEFAULT_RANK_ELIGIBILITY: Dict[str, List[str]] = {
+    code: list(positions) for code, _label, _order, positions in DEFAULT_RANKS
+}
+DEFAULT_RANK_LABELS: Dict[str, str] = {
+    code: label for code, label, _order, _positions in DEFAULT_RANKS
+}
 
 
 # Mirrors the pattern and length bound on CallTypeOption. Kept beside the
@@ -183,8 +200,10 @@ class ShiftEligibilityService:
         2. Check membership type — if excluded, return empty list.
         3. Union of:
            a) Rank-based eligible_positions
-           b) Training-completion-unlocked positions
-           c) Org-wide open positions
+           b) Position-based eligible_positions (the member's held
+              positions, resolved through the same rank config)
+           c) Training-completion-unlocked positions
+           d) Org-wide open positions
         4. If a shift_id is provided, intersect with the shift's
            defined positions (only return positions that are actually
            on the shift).
@@ -208,18 +227,22 @@ class ShiftEligibilityService:
 
         # ----- Step 3: Compute eligible positions -----
         eligible: Set[str] = set()
+        slug_map = await self._get_slug_eligibility_map(organization_id)
 
         # 3a: Rank-based
-        rank_positions = await self._get_rank_positions(user.rank, organization_id)
-        eligible.update(rank_positions)
+        eligible.update(self._positions_for_slugs([user.rank], slug_map))
 
-        # 3b: Training-completion-based
+        # 3b: Position-based
+        held_slugs = await self._get_held_position_slugs(str(user.id), organization_id)
+        eligible.update(self._positions_for_slugs(held_slugs, slug_map))
+
+        # 3c: Training-completion-based
         training_positions = await self._get_training_positions(
             str(user.id), organization_id
         )
         eligible.update(training_positions)
 
-        # 3c: Org-wide open positions
+        # 3d: Org-wide open positions
         eligible.update(self.get_open_positions(org))
 
         # ----- Step 4: Intersect with shift positions if given -----
@@ -244,8 +267,8 @@ class ShiftEligibilityService:
         """The same answer as ``get_eligible_positions``, for many shifts at once.
 
         Steps 1–3 above are about the *member* — their membership type, rank,
-        completed training, and the org's open positions — and do not vary by
-        shift. Asking per shift re-ran all of it and reloaded the same maps
+        held positions, completed training, and the org's open positions — and
+        do not vary by shift. Asking per shift re-ran all of it and reloaded the same maps
         each time; a day panel showing two shifts paid for it twice, and a
         station running six apparatus paid six times for one answer.
 
@@ -274,7 +297,12 @@ class ShiftEligibilityService:
 
         base: Set[str] = set()
         if not blocked:
-            base.update(await self._get_rank_positions(user.rank, organization_id))
+            slug_map = await self._get_slug_eligibility_map(organization_id)
+            base.update(self._positions_for_slugs([user.rank], slug_map))
+            held_slugs = await self._get_held_position_slugs(
+                str(user.id), organization_id
+            )
+            base.update(self._positions_for_slugs(held_slugs, slug_map))
             base.update(
                 await self._get_training_positions(str(user.id), organization_id)
             )
@@ -348,6 +376,8 @@ class ShiftEligibilityService:
         users = list(users_result.scalars().all())
 
         rank_map = await self._get_rank_map(organization_id)
+        slug_map = await self._get_slug_eligibility_map(organization_id)
+        held_map = await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
         operator_map = await self._get_operator_map(organization_id)
 
@@ -359,14 +389,23 @@ class ShiftEligibilityService:
 
             sources: List[Dict[str, Any]] = []
 
-            rank_entry = rank_map.get(user.rank or "")
-            if rank_entry and position in rank_entry["positions"]:
+            rank_code = user.rank or ""
+            rank_entry = rank_map.get(rank_code)
+            if position in slug_map.get(rank_code, []):
                 sources.append(
                     {
                         "type": "rank",
-                        "label": rank_entry["display_name"],
+                        "label": (
+                            rank_entry["display_name"]
+                            if rank_entry
+                            else DEFAULT_RANK_LABELS.get(rank_code, rank_code)
+                        ),
                     }
                 )
+
+            for held in held_map.get(str(user.id), []):
+                if position in slug_map.get(held["slug"], []):
+                    sources.append({"type": "position", "label": held["name"]})
 
             for program_name in training_map.get(str(user.id), []):
                 sources.append({"type": "training", "label": program_name})
@@ -540,21 +579,87 @@ class ShiftEligibilityService:
                     result.append(pos)
         return result
 
-    async def _get_rank_positions(
-        self, rank_code: Optional[str], organization_id: str
-    ) -> List[str]:
-        """Look up eligible positions for the user's rank."""
-        if not rank_code:
-            return []
+    async def _get_slug_eligibility_map(
+        self, organization_id: str
+    ) -> Dict[str, List[str]]:
+        """slug -> the shift positions it grants, for this organization.
+
+        One map answers for both an operational rank code and a held position's
+        slug, because the two share a vocabulary: onboarding's role setup
+        creates *positions* with ids ``captain``/``engineer``/``firefighter``/
+        ``emt``, the same codes ``operational_ranks`` seeds as rank codes. A
+        department that models EMT as a position rather than a rank is making a
+        naming choice, not declaring its EMTs ineligible to ride.
+
+        Precedence is deliberate: a stored row always wins, so an admin who
+        edits ``eligible_positions`` — or clears it, or deactivates the rank —
+        gets exactly what they configured, including the empty answer. The
+        built-in defaults fill in only for a code with no row at all.
+        """
         result = await self.db.execute(
-            select(OperationalRank.eligible_positions).where(
-                OperationalRank.organization_id == organization_id,
-                OperationalRank.rank_code == rank_code,
-                OperationalRank.is_active.is_(True),
+            select(
+                OperationalRank.rank_code,
+                OperationalRank.eligible_positions,
+                OperationalRank.is_active,
+            ).where(OperationalRank.organization_id == organization_id)
+        )
+        stored = {
+            rank_code: (list(positions or []) if is_active else [])
+            for rank_code, positions, is_active in result.all()
+        }
+        mapping = {
+            code: list(positions)
+            for code, positions in DEFAULT_RANK_ELIGIBILITY.items()
+            if code not in stored
+        }
+        mapping.update(stored)
+        return mapping
+
+    @staticmethod
+    def _positions_for_slugs(
+        slugs: List[Optional[str]], slug_map: Dict[str, List[str]]
+    ) -> Set[str]:
+        """Union the shift positions granted by every slug in ``slugs``."""
+        granted: Set[str] = set()
+        for slug in slugs:
+            if slug:
+                granted.update(slug_map.get(slug, []))
+        return granted
+
+    async def _get_held_position_slugs(
+        self, user_id: str, organization_id: str
+    ) -> List[str]:
+        """Slugs of the positions this member holds, org-scoped.
+
+        Queried rather than read off ``user.positions``: the caller hands us a
+        ``current_user`` loaded on another statement, and touching a lazy
+        relationship from here would emit IO outside the async greenlet.
+        """
+        result = await self.db.execute(
+            select(Position.slug)
+            .join(user_positions, Position.id == user_positions.c.position_id)
+            .where(
+                user_positions.c.user_id == user_id,
+                Position.organization_id == organization_id,
             )
         )
-        row = result.scalar_one_or_none()
-        return row if row else []
+        return [slug for (slug,) in result.all() if slug]
+
+    async def _get_held_position_map(
+        self, organization_id: str
+    ) -> Dict[str, List[Dict[str, str]]]:
+        """user_id -> the positions each member holds ({slug, name})."""
+        result = await self.db.execute(
+            select(user_positions.c.user_id, Position.slug, Position.name)
+            .join(Position, Position.id == user_positions.c.position_id)
+            .where(Position.organization_id == organization_id)
+        )
+        by_user: Dict[str, List[Dict[str, str]]] = {}
+        for user_id, slug, name in result.all():
+            if not slug:
+                continue
+            by_user.setdefault(str(user_id), []).append({"slug": slug, "name": name})
+        return by_user
 
     async def _get_training_positions(
         self, user_id: str, organization_id: str
