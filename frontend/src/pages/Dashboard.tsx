@@ -829,7 +829,10 @@ const Dashboard: React.FC = () => {
         unread: !msg.is_read,
         onClick: () => {
           if (!msg.is_read && !msg.is_persistent) void markMessageRead(msg.id);
-          void navigate('/messages');
+          // Deep-link to the message itself; its breadcrumb carries the member
+          // on to the full inbox, which tapping the feed row used to be the
+          // only way to reach.
+          void navigate(`/messages/${msg.id}`);
         },
         message: msg,
       });
@@ -1378,7 +1381,7 @@ const Dashboard: React.FC = () => {
                               equally invalid and split apart by the parser.
                               LinkifiedText stops click propagation on its
                               anchors, so following a link doesn't also fire the
-                              row's navigation to /messages. */}
+                              row's navigation to the message. */}
                           {msg ? (
                             <div
                               role="button"
@@ -1389,8 +1392,9 @@ const Dashboard: React.FC = () => {
                                 // linkified body can hold focusable anchors,
                                 // and Enter on one bubbles here — without this
                                 // guard the row would swallow the keypress and
-                                // navigate to /messages instead of opening the
-                                // link (the anchor's guard covers clicks only).
+                                // navigate to the message instead of opening
+                                // the link (the anchor's guard covers clicks
+                                // only).
                                 if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();

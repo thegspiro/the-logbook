@@ -574,6 +574,10 @@ export const messagesService = {
     const response = await api.get<InboxMessage[]>('/messages/inbox', { params });
     return asArray(response.data);
   },
+  async getInboxMessage(messageId: string): Promise<InboxMessage> {
+    const response = await api.get<InboxMessage>(`/messages/inbox/${messageId}`);
+    return response.data;
+  },
   async getUnreadCount(): Promise<{ unread_count: number }> {
     const response = await api.get<{ unread_count: number }>('/messages/inbox/unread-count');
     return response.data;
