@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                       |
-| ----------- | ----------------------------------------------------------- |
-| PR          | [#1810](https://github.com/thegspiro/the-logbook/pull/1810) |
-| Branch      | `claude/security-review-elec`                               |
-| Feature     | 06 Elections & ballots                                      |
-| CI          | just opened; not yet checked                                |
-| Threads     | none yet                                                    |
-| Last tended | 2026-08-25 — no defects found, 1 NIT doc fix, gates green   |
+| Field       | Value                                                                   |
+| ----------- | ----------------------------------------------------------------------- |
+| PR          | [#1810](https://github.com/thegspiro/the-logbook/pull/1810)             |
+| Branch      | `claude/security-review-elec`                                           |
+| Feature     | 06 Elections & ballots                                                  |
+| CI          | just opened; not yet checked                                            |
+| Threads     | 2 resolved (Codex P2: route-gating miscount, unbounded saved-templates) |
+| Last tended | 2026-08-25 — 2 Codex findings addressed, gates green                    |
 
 ---
 
