@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Every LIKE pattern is escaped in one place, and the database is told so (2026-08-25)
+
+**Fixed**
+
+- **Two search boxes interpolated raw user input into a SQL `LIKE` pattern.**
+  Typing `%` into the department-message admin search
+  (`messaging_service.py:124`) or the message-history search
+  (`message_history.py:80`) matched every row: the filter silently stopped
+  filtering, and the list's count query scanned the whole org's table behind
+  it. Both queries were correctly org-scoped, so this widened a result set
+  rather than crossing a tenant boundary — but a member searching `a_c` also
+  got `abc` back with nothing to indicate the term had been read as a pattern.
+
+- **The inventory barcode search reported the wrong matched field.** After
+  querying with the escaped pattern, `search_items_by_code` re-scanned the
+  results in Python against the *escaped* string instead of the raw input, so
+  scanning an asset tag containing `%`, `_` or `\` fell through to the
+  `matched_field = "name"` default — the item was still found, it was just
+  attributed to the wrong field. Pre-existing; surfaced by the `flake8` run
+  the cleanup below forced.
+
+**Changed**
+
+- **All 76 `like` / `ilike` calls now declare `escape=LIKE_ESCAPE_CHAR`.**
+  Forty-seven escaped their input and then emitted `LIKE` with no `ESCAPE`
+  clause. MySQL's default escape character depends on `sql_mode`, so under
+  `NO_BACKSLASH_ESCAPES` the escaping is inert and every wildcard returns —
+  across all forty-seven at once, invisibly, because the escaping *looks*
+  present in review. The four system-generated patterns (`"ORD-2026-%"` and
+  friends) carry the kwarg too: it is inert for them, and covering them is what
+  leaves the invariant with no exceptions.
+
+- **The wildcard-escaping transform has one implementation again.**
+  `app/utils/sql_search.py` was written to own it — its docstring names the
+  seven modules it had been copy-pasted into — but only `storefront_service.py`
+  ever imported it. Fifteen files carried their own copy, which is why
+  forty-seven of them forgot the `escape=` kwarg. All fifteen now call
+  `like_pattern()`.
+
+**Added**
+
+- **`backend/tests/test_like_escaping.py`** fails on reintroduction of either
+  half: a `like`/`ilike` call without the escape kwarg, or a second copy of the
+  transform. No allowlist, so it cannot go stale.
+
+- **`docs/security-review/`** — an application-wide, feature-by-feature security
+  rotation (35 iterations, ordered by risk) with a per-iteration checklist,
+  findings template, and a `/security-review` command that opens one pull
+  request per feature and tends it to green before starting the next.
+
+
 ### Three guards drawn from what #1795 got wrong (2026-08-24)
 
 **Changed**

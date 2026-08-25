@@ -28,6 +28,7 @@ from app.models.document import (
 )
 from app.models.user import User
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
@@ -376,14 +377,11 @@ class DocumentsService:
             query = query.where(Document.status == DocumentStatus.ACTIVE)
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
-                Document.name.ilike(search_term)
-                | Document.description.ilike(search_term)
-                | Document.tags.ilike(search_term)
+                Document.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                | Document.description.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                | Document.tags.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
             )
 
         # Count

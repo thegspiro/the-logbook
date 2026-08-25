@@ -80,6 +80,7 @@ from app.schemas.facilities import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many levels of room nesting are allowed (a top-level room is level 1).
 # Rooms within rooms are for real spatial containment — a storage cage inside
@@ -590,15 +591,14 @@ class FacilitiesService:
         if is_archived is not None:
             conditions.append(Facility.is_archived == is_archived)
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             conditions.append(
                 or_(
-                    Facility.name.ilike(search_term),
-                    Facility.facility_number.ilike(search_term),
-                    Facility.city.ilike(search_term),
+                    Facility.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Facility.facility_number.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    Facility.city.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
