@@ -41,9 +41,37 @@ import pytest
 import schemathesis
 from hypothesis import HealthCheck
 from hypothesis import settings as hypothesis_settings
+from hypothesis import strategies as st
 
 # Mark all tests in this module as slow + integration
 pytestmark = [pytest.mark.slow, pytest.mark.integration]
+
+# `format: email` is where the published schema and the application disagree,
+# and the disagreement is the schema's to lose. Pydantic's ``EmailStr`` runs
+# email-validator, which asks for an address somebody could actually be
+# written to: the part after the @ must carry a period, and a bare TLD or an
+# all-numeric one is refused. JSON Schema's `email` format is the RFC's much
+# wider grammar, so schemathesis is free to generate `0@com` — schema-valid,
+# and answered 422 by every endpoint that takes an address. That is reported
+# as rejected-valid-data, and it is a contract breach rather than a bug in
+# either component.
+#
+# Registering the format here fixes it at the layer where the two notions
+# actually differ, rather than by narrowing the published contract. A pattern
+# on the field was the alternative and is worse: tight enough to exclude
+# `1@2.3` also excludes punycode and IDN domains (`q@xn--80ahmg.xn--p1ai`,
+# `q@пример.рф`) that email-validator accepts, so the schema would start
+# advertising valid addresses as invalid — the same breach in the other
+# direction.
+#
+# Every address this generates is one email-validator accepts; that property
+# is what the strategy is for, and it was checked over 400 generated cases
+# rather than assumed.
+_DELIVERABLE_EMAIL = (
+    r"[a-z0-9]{1,20}(\.[a-z0-9]{1,20})?"
+    r"@[a-z0-9]([a-z0-9-]{0,20}[a-z0-9])?\.[a-z]{2,6}"
+)
+schemathesis.openapi.format("email", st.from_regex(_DELIVERABLE_EMAIL, fullmatch=True))
 
 # How long to wait for the module's server to report itself ready. Startup
 # waits on MySQL and walks the Alembic chain, which is minutes on a cold

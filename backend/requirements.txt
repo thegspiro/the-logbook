@@ -139,9 +139,13 @@ pytest-randomly==4.1.0
 pytest-timeout==2.4.0
 hypothesis==6.165.10  # schemathesis 4.x requires >=6.130.12
 schemathesis==4.25.0
-# Schemathesis 4.24.3 calls CanonicalSchema.is_satisfiable(), which was
-# removed in jsonschema-rs 0.50. An unbounded transitive upgrade made every
-# generated API contract case fail before sending a request.
+# Pinned because these two move together. 4.24.3 called
+# CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
+# unbounded transitive upgrade made every generated API contract case fail
+# before sending a request — which is what the pin below was holding back.
+# 4.25.0 no longer calls it, so 0.50 is safe with the schemathesis above and
+# the two were raised together. Keep raising them together: a jsonschema-rs
+# bump on its own is what broke it last time.
 jsonschema-rs==0.50.0
 faker==40.36.0
 
