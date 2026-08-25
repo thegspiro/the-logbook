@@ -16,7 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None — #1816 merged 2026-08-25 22:39 UTC. See Log._
+| Field       | Value                                                       |
+| ----------- | ----------------------------------------------------------- |
+| PR          | [#1821](https://github.com/thegspiro/the-logbook/pull/1821) |
+| Branch      | `claude/security-review-doc`                                |
+| Feature     | 10 Documents & legal                                        |
+| CI          | fresh push, awaiting first run                              |
+| Threads     | none yet                                                    |
+| Last tended | 2026-08-25 — no new findings, docs-only; pushed             |
 
 ---
 
