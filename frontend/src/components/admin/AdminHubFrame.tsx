@@ -67,6 +67,8 @@ interface AdminHubFrameProps<K extends string> {
    * in its own body passes a counter so the queue reflects the work.
    */
   refreshToken?: number | string | undefined;
+  /** A module with a richer, record-level queue in its body can hide the aggregate queue. */
+  showAttentionQueue?: boolean | undefined;
 
   children: React.ReactNode;
 }
@@ -84,6 +86,7 @@ export function AdminHubFrame<K extends string>({
   onTabChange,
   nav,
   refreshToken,
+  showAttentionQueue = true,
   children,
 }: AdminHubFrameProps<K>) {
   const [summary, setSummary] = useState<AdminHubSummary | null>(null);
@@ -177,7 +180,7 @@ export function AdminHubFrame<K extends string>({
             loading={loading && summary === null}
             className="order-2 sm:order-1"
           />
-          {summary && (
+          {summary && showAttentionQueue && (
             <AdminAttentionQueue items={summary.attention} moduleLabel={title} className="order-1 sm:order-2" />
           )}
           {error && !loading && (
