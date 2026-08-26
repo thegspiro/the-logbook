@@ -5,6 +5,7 @@ Tests for ISO readiness scoring, compliance attestation validation,
 record completeness evaluation, and annual compliance report helpers.
 """
 
+import uuid
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -305,6 +306,48 @@ class TestComplianceAttestationValidation:
                 },
                 attested_by="user-1",
             )
+
+    @pytest.mark.parametrize("bad_pct", [-1, 100.1, 250])
+    async def test_out_of_range_compliance_percentage_raises(self, bad_pct):
+        """The one current caller already bounds this via
+        AttestationCreate's Field(ge=0, le=100) — this re-checks it here so
+        the service stays safe to call directly, not only through that one
+        schema."""
+        mock_db = AsyncMock()
+        service = ComplianceAttestationService(mock_db)
+
+        with pytest.raises(ValueError, match="must be between 0 and 100"):
+            await service.create_attestation(
+                organization_id="org-1",
+                attestation_data={
+                    "period_type": "annual",
+                    "period_year": 2025,
+                    "compliance_percentage": bad_pct,
+                },
+                attested_by="user-1",
+            )
+
+    @pytest.mark.parametrize("edge_pct", [0, 100])
+    @patch(
+        "app.services.compliance_officer_service.log_audit_event",
+        new_callable=AsyncMock,
+    )
+    async def test_boundary_compliance_percentage_is_accepted(
+        self, mock_audit, edge_pct
+    ):
+        mock_db = AsyncMock()
+        service = ComplianceAttestationService(mock_db)
+
+        result = await service.create_attestation(
+            organization_id="org-1",
+            attestation_data={
+                "period_type": "annual",
+                "period_year": 2025,
+                "compliance_percentage": edge_pct,
+            },
+            attested_by="user-1",
+        )
+        assert result["compliance_percentage"] == edge_pct
 
     @patch(
         "app.services.compliance_officer_service.log_audit_event",
@@ -789,6 +832,82 @@ class TestRecordCompletenessEvaluate:
         )
         assert instructor_field["records_with_value"] == 1
         assert instructor_field["fill_rate_pct"] == 50.0
+
+
+class TestGetIncompleteRecords:
+    """The "incomplete" predicate is evaluated in SQL, not fetched-then-
+    filtered against a fixed scan window. An org with more completed
+    records than any fixed window would otherwise have older incomplete
+    records permanently invisible with no signal (no silent caps)."""
+
+    async def test_query_limits_on_the_caller_supplied_limit(self):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        db = AsyncMock()
+        db.execute = execute
+
+        service = RecordCompletenessService(db)
+        await service.get_incomplete_records("org-1", limit=17)
+
+        compiled = str(captured[0])
+        assert "LIMIT" in compiled.upper()
+        # The old hardcoded 500-row scan window must not survive.
+        assert "500" not in compiled
+
+    async def test_missing_field_predicate_is_evaluated_in_sql(self):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        db = AsyncMock()
+        db.execute = execute
+
+        service = RecordCompletenessService(db)
+        await service.get_incomplete_records("org-1")
+
+        compiled = str(captured[0]).lower()
+        assert "instructor" in compiled
+        assert "hours_completed" in compiled
+        assert "course_name" in compiled
+
+    async def test_reports_which_fields_are_missing_per_record(self):
+        record = MagicMock()
+        record.id = "rec-1"
+        record.course_name = "EMT Refresher"
+        record.user_id = "user-1"
+        record.completion_date = date(2025, 6, 1)
+        record.instructor = None
+        record.location = None
+        record.location_id = None
+        record.hours_completed = 4.0
+
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [record]
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=result)
+
+        service = RecordCompletenessService(db)
+        out = await service.get_incomplete_records("org-1")
+
+        assert out == [
+            {
+                "id": "rec-1",
+                "course_name": "EMT Refresher",
+                "user_id": "user-1",
+                "completion_date": "2025-06-01",
+                "missing_fields": ["instructor", "location"],
+            }
+        ]
 
 
 # ============================================
@@ -1303,6 +1422,50 @@ class TestContributedHoursService:
 
         assert result["members"][0]["name"] == "Bob High"
         assert result["members"][1]["name"] == "Alice Low"
+
+    async def test_hours_still_match_when_member_id_is_a_uuid_object(self):
+        """Same class of bug CS-9 (officer #6) fixed for ISO readiness:
+        member.id and the query's user_id column are both String(36) in
+        practice, but nothing enforces that at the Python level. If either
+        ever arrived as a UUID object instead of str, an unnormalized dict
+        key would silently drop the member's hours rather than match them."""
+        mock_db = AsyncMock()
+
+        member = MagicMock()
+        member.id = uuid.UUID("11111111-1111-1111-1111-111111111111")
+        member.first_name = "Jane"
+        member.last_name = "Doe"
+
+        members_result = MagicMock()
+        members_result.scalars.return_value.all.return_value = [member]
+
+        training_result = MagicMock()
+        training_result.__iter__ = MagicMock(
+            return_value=iter(
+                [(uuid.UUID("11111111-1111-1111-1111-111111111111"), 12.0)]
+            )
+        )
+
+        admin_result = MagicMock()
+        admin_result.__iter__ = MagicMock(
+            return_value=iter(
+                [(uuid.UUID("11111111-1111-1111-1111-111111111111"), 480)]
+            )  # 480 min = 8h
+        )
+
+        cat_result = MagicMock()
+        cat_result.__iter__ = MagicMock(return_value=iter([]))
+
+        mock_db.execute = AsyncMock(
+            side_effect=[members_result, training_result, admin_result, cat_result]
+        )
+
+        service = ContributedHoursService(mock_db)
+        result = await service.get_contributed_hours("org-1", year=2025)
+
+        assert result["members"][0]["training_hours"] == 12.0
+        assert result["members"][0]["admin_hours"] == 8.0
+        assert result["members"][0]["total_hours"] == 20.0
 
 
 # ============================================

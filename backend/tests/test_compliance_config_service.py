@@ -13,8 +13,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
-from app.models.compliance_config import ReportStatus
+from app.models.compliance_config import (
+    ComplianceConfig,
+    ComplianceProfile,
+    ReportStatus,
+)
+from app.schemas.compliance_config import ComplianceReportGenerate
 from app.services.compliance_config_service import (
     ComplianceConfigService,
     ComplianceReportService,
@@ -143,14 +150,45 @@ class TestConfigService:
         with pytest.raises(ValueError, match="Profile not found"):
             await ComplianceConfigService(db).update_profile("p1", "org-1", {})
 
-    async def test_update_profile_applies_non_null_fields(self):
+    async def test_update_profile_applies_fields_and_clears_an_explicit_null(self):
+        """apply_updates: a present, non-null field is written; an explicit
+        null clears it. The endpoint sends exclude_unset=True, so an omitted
+        key never reaches this method at all — a null that does arrive here
+        is the caller deliberately clearing the field."""
         profile = SimpleNamespace(id="p1", name="Old", description="keep")
         db = _db([_first(profile)])
         out = await ComplianceConfigService(db).update_profile(
             "p1", "org-1", {"name": "New", "description": None}
         )
         assert out.name == "New"
-        assert out.description == "keep"  # None is ignored
+        assert out.description is None
+
+    async def test_update_profile_name_cannot_be_nulled(self):
+        """`name` is NOT NULL on the model — apply_updates must reject an
+        explicit null with a clean ValueError (-> 400), not a flush-time
+        IntegrityError (-> 500)."""
+        profile = ComplianceProfile(id="p1", config_id="cfg-1", name="Old")
+        db = _db([_first(profile)])
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await ComplianceConfigService(db).update_profile(
+                "p1", "org-1", {"name": None}
+            )
+
+    async def test_update_profile_threshold_override_can_be_reset_to_default(self):
+        """compliant_threshold_override is nullable (null = use org default) —
+        a caller resetting a profile back to the org default must be able to
+        null it out, not just overwrite it with another number."""
+        profile = ComplianceProfile(
+            id="p1",
+            config_id="cfg-1",
+            name="Officers",
+            compliant_threshold_override=90.0,
+        )
+        db = _db([_first(profile)])
+        out = await ComplianceConfigService(db).update_profile(
+            "p1", "org-1", {"compliant_threshold_override": None}
+        )
+        assert out.compliant_threshold_override is None
 
     async def test_delete_profile_not_found(self):
         db = _db([_first(None)])
@@ -176,6 +214,37 @@ class TestConfigService:
                 "frequency": "annual",
             }
         ]
+
+
+class TestCreateOrUpdateConfig:
+    async def test_update_branch_applies_fields_via_apply_updates(self):
+        existing = ComplianceConfig(
+            id="cfg-1", organization_id="org-1", threshold_type="percentage"
+        )
+        refetched = ComplianceConfig(
+            id="cfg-1", organization_id="org-1", threshold_type="all_required"
+        )
+        db = _db([_first(existing), _first(refetched)])
+        out = await ComplianceConfigService(db).create_or_update_config(
+            "org-1", {"threshold_type": "all_required"}, updated_by="user-1"
+        )
+        assert out.threshold_type == "all_required"
+
+    async def test_first_write_race_is_a_clean_400_not_a_500(self):
+        """Two concurrent first-time saves for the same org both read config
+        as None and both attempt an insert; organization_id is unique, so
+        the loser's flush raises IntegrityError. That must surface as a
+        clean ValueError (-> 400), not an unhandled 500."""
+        db = _db([_first(None)])
+        db.flush = AsyncMock(
+            side_effect=IntegrityError("insert", {}, Exception("duplicate"))
+        )
+        db.rollback = AsyncMock()
+        with pytest.raises(ValueError, match="already exists"):
+            await ComplianceConfigService(db).create_or_update_config(
+                "org-1", {}, updated_by="user-1"
+            )
+        db.rollback.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +279,28 @@ class TestReportCrud:
             await ComplianceReportService(db).email_existing_report(
                 "rep-1", "org-1", ["x@y.org"]
             )
+
+
+# ---------------------------------------------------------------------------
+# ComplianceReportGenerate.report_type
+# ---------------------------------------------------------------------------
+
+
+class TestReportTypeSchema:
+    """The schema's allowed set must match the service's runtime check
+    (compliance_config_service.py's `if report_type not in (...)`) — a
+    scheduled auto-report task calls the service directly with
+    report_type="yearly", bypassing this schema, so both places have to
+    agree or one of the two paths silently diverges from the other."""
+
+    @pytest.mark.parametrize("value", ["monthly", "annual", "yearly"])
+    def test_known_values_are_accepted(self, value):
+        req = ComplianceReportGenerate(report_type=value, year=2025)
+        assert req.report_type == value
+
+    def test_unknown_value_is_rejected_at_the_schema_layer(self):
+        with pytest.raises(ValidationError):
+            ComplianceReportGenerate(report_type="weekly", year=2025)
 
 
 if __name__ == "__main__":  # pragma: no cover

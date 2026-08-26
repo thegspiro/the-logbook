@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A compliance officer's "what's missing" report silently stopped at the newest 500 records (2026-08-26)
+
+**Fixed**
+
+- `GET /incomplete-records` fetched only the 500 most-recently-completed
+  training records, then filtered for missing fields in Python and stopped
+  once it found enough. For any department with more than 500 completed
+  records, an incomplete one older than that window was permanently
+  invisible with no signal the scan wasn't complete. The missing-field check
+  now runs in SQL, so the result covers the whole organization.
+- `update_compliance_config` and `update_compliance_profile` discarded an
+  explicit `null` before it ever reached the database, so a profile's
+  threshold override (documented as "null = use org default") could never
+  actually be reset — only overwritten with another number. Both now
+  distinguish an omitted field (leave alone) from an explicit null (clear
+  it), and reject a null against a field that can't be empty with a clean
+  error instead of a database crash.
+- Two concurrent first-time saves of an organization's compliance
+  configuration could crash one of them with a raw database error instead of
+  a clean "already exists" message.
+- A department's total-hours report could silently drop a member's hours if
+  their id were ever loaded as a different data type than usual — hardened
+  to match the fix already in place for the ISO-readiness report.
+
 ### A skills-testing officer could void or return their own result, and the attempt cap could race (2026-08-26)
 
 **Fixed**
