@@ -73,13 +73,30 @@ def _registry_grants(slug: str) -> tuple[str, ...]:
     return tuple(g for g in _STOREFRONT_GRANTS if g in permissions)
 
 
+# A migration that runs *after* this backfill and gives the storefront grants
+# to thirteen more positions. Those slugs belong to it, not to this one.
+_LATER_CORPORATE_GRANT = (
+    Path(__file__).resolve().parents[1]
+    / "alembic"
+    / "versions"
+    / "20260826_0345_b3e8d1f45a27_grant_corporate_storefront_access.py"
+)
+
+
+def _granted_later() -> set[str]:
+    """Slugs whose storefront grants arrive in a later revision."""
+    return set(_load_module(_LATER_CORPORATE_GRANT, "_corp_storefront")._PRIOR_DEFAULTS)
+
+
 def _seeded_slugs_with_storefront() -> set[str]:
+    later = _granted_later()
     return {
         slug
         for slug, entry in DEFAULT_POSITIONS.items()
+        if slug not in later
         # A wildcard position already covers every storefront grant, so the
         # migration deliberately leaves it out rather than cluttering it.
-        if "*" not in (entry.get("permissions") or []) and _registry_grants(slug)
+        and "*" not in (entry.get("permissions") or []) and _registry_grants(slug)
     }
 
 
