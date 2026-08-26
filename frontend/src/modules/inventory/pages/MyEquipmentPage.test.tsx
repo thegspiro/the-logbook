@@ -207,6 +207,8 @@ describe('MyEquipmentPage', () => {
     await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    expect(screen.getByLabelText('How long do you need it?')).toBeInTheDocument();
+    expect(screen.getByText(/quartermaster will determine the final issue method/i)).toBeInTheDocument();
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
@@ -215,6 +217,26 @@ describe('MyEquipmentPage', () => {
     expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toMatchObject({
       item_id: 'avail-1',
       item_name: 'Spare Radio',
+      requested_duration: 'temporary',
     });
+  });
+
+  it('submits ongoing duration intent independently of fulfillment', async () => {
+    mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
+
+    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    await user.selectOptions(screen.getByLabelText('How long do you need it?'), 'ongoing');
+    await user.type(screen.getByPlaceholderText('Search available items...'), 'Radio');
+    await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    await waitFor(() =>
+      expect(mockCreateEquipmentRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ requested_duration: 'ongoing' })
+      )
+    );
   });
 });

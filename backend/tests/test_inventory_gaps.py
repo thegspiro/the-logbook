@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import (
     AssignmentType,
+    CheckOutRecord,
     EquipmentRequest,
     InventoryActionType,
     InventoryNotificationQueue,
@@ -277,6 +278,41 @@ class TestRetirementNotificationQueued:
 class TestEquipmentRequestFulfillment:
 
     @pytest.mark.asyncio
+    async def test_quartermaster_can_choose_checkout_without_changing_intent(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            requested_duration="ongoing",
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="checkout",
+        )
+
+        assert err is None
+        assert fulfilled.requested_duration == "ongoing"
+        assert fulfilled.fulfillment_type == "checkout"
+        checkout = await db_session.get(
+            CheckOutRecord, fulfilled.fulfillment_reference_id
+        )
+        assert checkout is not None
+        assert checkout.user_id == member_id
+
+    @pytest.mark.asyncio
     async def test_fulfill_pool_request_creates_issuance(
         self, db_session, setup_org_and_user
     ):
@@ -300,6 +336,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
         )
         assert err is None
         assert fulfilled.status == RequestStatus.FULFILLED
@@ -349,6 +386,7 @@ class TestEquipmentRequestFulfillment:
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
             expected_return_at=due,
+            fulfillment_type="assignment",
         )
         assert err is None
         assert fulfilled.fulfillment_type == "assignment"
@@ -387,6 +425,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
         )
         assert err is None
 
@@ -424,6 +463,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
         )
         assert fulfilled is None
         assert err is not None

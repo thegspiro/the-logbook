@@ -118,7 +118,7 @@ const MyEquipmentPage: React.FC = () => {
   const [reqSearch, setReqSearch] = useState('');
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
-  const [reqType, setReqType] = useState<'checkout' | 'assignment'>('checkout');
+  const [reqDuration, setReqDuration] = useState<'temporary' | 'ongoing'>('temporary');
   const [reqPriority, setReqPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
@@ -219,7 +219,7 @@ const MyEquipmentPage: React.FC = () => {
         item_id: reqSelected.id,
         category_id: reqSelected.category_id || undefined,
         quantity: reqSelected.tracking_type === 'pool' ? reqQty : 1,
-        request_type: reqType,
+        requested_duration: reqDuration,
         priority: reqPriority,
         reason: reqReason.trim() || undefined,
       });
@@ -238,7 +238,7 @@ const MyEquipmentPage: React.FC = () => {
     setReqSearch('');
     setReqResults([]);
     setReqSelected(null);
-    setReqType('checkout');
+    setReqDuration('temporary');
     setReqPriority('normal');
     setReqQty(1);
     setReqReason('');
@@ -416,7 +416,8 @@ const MyEquipmentPage: React.FC = () => {
                           {r.item_name}
                         </span>
                         <span className="text-theme-text-muted ml-0 block text-xs sm:ml-2 sm:inline">
-                          {r.request_type} &middot; {formatDate(r.created_at, tz)}
+                          {r.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'} &middot;{' '}
+                          {formatDate(r.created_at, tz)}
                         </span>
                       </div>
                       <span
@@ -682,15 +683,23 @@ const MyEquipmentPage: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Request Type</label>
+                <label className={labelClass} htmlFor="requested-duration">
+                  How long do you need it?
+                </label>
                 <select
-                  value={reqType}
-                  onChange={(e) => setReqType(e.target.value as 'checkout' | 'assignment')}
+                  id="requested-duration"
+                  value={reqDuration}
+                  onChange={(e) => setReqDuration(e.target.value as 'temporary' | 'ongoing')}
                   className={selectClass}
                 >
-                  <option value="checkout">Checkout</option>
-                  <option value="assignment">Assignment</option>
+                  <option value="temporary">Temporary — I expect to return it</option>
+                  <option value="ongoing">Ongoing — I need it as regular assigned gear</option>
                 </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Choose Temporary if you expect to return the item, or Ongoing if you need it as regular assigned gear.
+                  The quartermaster will determine the final issue method based on item availability and department
+                  policy.
+                </p>
               </div>
               <div>
                 <label className={labelClass}>Priority</label>

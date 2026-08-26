@@ -5952,6 +5952,7 @@ class InventoryService:
         request_id: UUID,
         organization_id: UUID,
         fulfilled_by: UUID,
+        fulfillment_type: str,
         item_id: Optional[UUID] = None,
         quantity: Optional[int] = None,
         expected_return_at: Optional[datetime] = None,
@@ -5961,8 +5962,8 @@ class InventoryService:
         or assignment, then mark the request fulfilled and link it back to the
         record that satisfied it.
 
-        Pool items are issued; individual items are checked out (for CHECKOUT
-        requests) or permanently assigned (otherwise). The created record's id
+        Pool items must be issued; individual items use the quartermaster's
+        explicit checkout or assignment choice. The created record's id
         is stored on the request so the two are traceable to each other.
         """
         try:
@@ -6023,9 +6024,26 @@ class InventoryService:
 
             qty = quantity or req.quantity or 1
             requester_id = UUID(req.requester_id)
-            request_type = self._enum_value(req.request_type)
+            chosen_fulfillment = self._enum_value(fulfillment_type)
+            if chosen_fulfillment not in {"checkout", "assignment", "issuance"}:
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, "A valid fulfillment type is required"
+            if (
+                item.tracking_type == TrackingType.POOL
+                and chosen_fulfillment != "issuance"
+            ):
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, "Pool-tracked stock must be fulfilled through an issuance"
+            if (
+                item.tracking_type != TrackingType.POOL
+                and chosen_fulfillment == "issuance"
+            ):
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return (
+                    None,
+                    "Individual items must be fulfilled through a checkout or assignment",
+                )
 
-            fulfillment_type: str
             reference_id: str
             try:
                 if item.tracking_type == TrackingType.POOL:
@@ -6038,9 +6056,9 @@ class InventoryService:
                         reason="Equipment request fulfillment",
                         override_allowance=override_allowance,
                     )
-                    fulfillment_type = "issuance"
+                    actual_fulfillment_type = "issuance"
                     reference_id = str(issuance.id) if issuance else ""
-                elif request_type == RequestType.CHECKOUT.value:
+                elif chosen_fulfillment == "checkout":
                     checkout, err = await self.checkout_item(
                         item_id=target_item_id,
                         user_id=requester_id,
@@ -6049,7 +6067,7 @@ class InventoryService:
                         expected_return_at=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
-                    fulfillment_type = "checkout"
+                    actual_fulfillment_type = "checkout"
                     reference_id = str(checkout.id) if checkout else ""
                 else:
                     assignment, err = await self.assign_item_to_user(
@@ -6070,7 +6088,7 @@ class InventoryService:
                         expected_return_date=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
-                    fulfillment_type = "assignment"
+                    actual_fulfillment_type = "assignment"
                     reference_id = str(assignment.id) if assignment else ""
             except Exception:
                 await self._revert_fulfillment_claim(request_id, organization_id)
@@ -6089,7 +6107,7 @@ class InventoryService:
                     EquipmentRequest.organization_id == str(organization_id),
                 )
                 .values(
-                    fulfillment_type=fulfillment_type,
+                    fulfillment_type=actual_fulfillment_type,
                     fulfillment_reference_id=reference_id,
                 )
             )
