@@ -49,6 +49,19 @@ interface CommandItem {
    * navigation's behavior.
    */
   hideWhenModuleOn?: string;
+  /**
+   * Hide this command unless the named module is on for the organization.
+   *
+   * The mirror of `hideWhenModuleOn`, and the one that matters now that every
+   * module's routes carry a `requiredModule` gate: without it the palette is
+   * the last surface still offering Training, Inventory, Elections and the
+   * rest to a department that retired them, and every one of those offers is
+   * a navigation into the "module is not enabled" refusal. Permissive while
+   * the module config is loading or absent, exactly as the navigation is —
+   * a module flag is not an access control, so an unknown answer shows the
+   * command rather than hiding it.
+   */
+  requiredModule?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -72,6 +85,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'training',
+    requiredModule: 'training',
     label: 'My Training',
     path: '/training/my-training',
     icon: GraduationCap,
@@ -80,6 +94,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'inventory',
+    requiredModule: 'inventory',
     label: 'Inventory',
     path: '/inventory',
     icon: Package,
@@ -92,6 +107,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'store',
+    requiredModule: 'storefront',
     label: 'Department Store',
     path: '/store',
     icon: Package,
@@ -104,6 +120,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'scheduling',
+    requiredModule: 'scheduling',
     label: 'Scheduling',
     path: '/scheduling',
     icon: Clock,
@@ -112,6 +129,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'facilities',
+    requiredModule: 'facilities',
     label: 'Facilities',
     path: '/facilities',
     icon: Building2,
@@ -148,6 +166,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'elections',
+    requiredModule: 'elections',
     label: 'Elections',
     path: '/elections',
     icon: Vote,
@@ -156,6 +175,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'minutes',
+    requiredModule: 'minutes',
     label: 'Meeting Minutes',
     path: '/minutes',
     icon: ClipboardList,
@@ -164,6 +184,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'notifications',
+    requiredModule: 'notifications',
     label: 'Notifications',
     path: '/notifications',
     icon: Bell,
@@ -190,13 +211,28 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'submit-training',
+    requiredModule: 'training',
     label: 'Submit Training',
     path: '/training/submit',
     icon: GraduationCap,
     section: 'Actions',
   },
-  { id: 'my-equipment', label: 'My Issued Gear', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
-  { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
+  {
+    id: 'my-equipment',
+    requiredModule: 'inventory',
+    label: 'My Issued Gear',
+    path: '/inventory/my-equipment',
+    icon: Package,
+    section: 'Actions',
+  },
+  {
+    id: 'my-store-orders',
+    requiredModule: 'storefront',
+    label: 'My Store Orders',
+    path: '/store/orders',
+    icon: Package,
+    section: 'Actions',
+  },
 
   // Admin
   {
@@ -209,6 +245,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'reports',
+    requiredModule: 'reports',
     label: 'Reports',
     path: '/reports',
     icon: BarChart3,
@@ -229,14 +266,15 @@ export const CommandPalette: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const { enabledModules } = useEnabledModules();
 
-  // Filter commands by permissions, module supersession, and search query
+  // Filter commands by permissions, module enablement, and search query
   const filteredCommands = useMemo(() => {
     const accessible = COMMANDS.filter(
       (cmd) =>
         (!cmd.permission || checkPermission(cmd.permission)) &&
         (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
         // enabledModules is null while loading/unconfigured — hide nothing then
-        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
+        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn)) &&
+        (!cmd.requiredModule || enabledModules === null || enabledModules.has(cmd.requiredModule))
     );
 
     if (!query.trim()) return accessible;

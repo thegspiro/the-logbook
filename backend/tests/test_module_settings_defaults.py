@@ -1,18 +1,23 @@
-"""Adding a module to ModuleSettings must not switch it off for anybody.
+"""Absence in a stored modules dict means the field's default, not False.
 
 Every installation past onboarding has a stored ``settings.modules`` dict
 listing the fields that existed the day it was written. Adding a field to
 ``ModuleSettings`` therefore always produces dicts with a key missing, and
-what that absence is read as decides whether the next module ships silently
-disabled across every department that upgrades.
+what that absence is read as decides what the next module does on upgrade.
 
-It has to mean "current behaviour" — the field's declared default — for the
-reason CLAUDE.md pitfall 19 gives: a resolver that reads absence as False
-turns a live module off on upgrade, and nobody connects the vanished screen to
-the deploy. This is not hypothetical. Finance and Medical Screening shipped
-with no ``ModuleSettings`` field at all, so they were unconditionally on;
-adding their fields under the old ``modules.get(f, False)`` resolver would
-have taken Finance away from every existing department at once.
+It has to mean the field's *declared default*, per CLAUDE.md pitfall 19 — a
+resolver that hardcodes False turns a live module off on upgrade and nobody
+connects the vanished screen to the deploy. That puts the decision where it
+can be read and argued with: on the field, one line above the module's name,
+rather than buried in a resolver that treats every module alike.
+
+Finance and Medical Screening are declared **off**, and the reasoning is on
+the fields in ``schemas/organization.py``. In short: neither was reachable
+from the navigation, so "on" was not a behaviour any department would notice
+losing — while Finance's dashboard cards were showing dues and cash-flow to
+departments that keep their books elsewhere, which is the complaint that
+started this. Pitfall 19 protects a module somebody is *using*; it does not
+require shipping one nobody asked for.
 """
 
 from types import SimpleNamespace
@@ -130,15 +135,53 @@ async def test_setup_stores_defaults_for_the_modules_it_never_offers():
         assert written[field] is False, field
 
 
-async def test_the_new_modules_default_on_because_they_had_no_switch_before():
-    """Finance and Medical Screening were unconditionally available."""
+async def test_finance_and_medical_screening_are_opt_in():
+    """ "Never enabled" has to mean off, or the switch answers nothing.
+
+    Both are settings-only modules — the setup wizard never asks about them —
+    so a True default would mean every department that has never heard of the
+    Finance module still gets its dues, cash-flow and budget cards on the
+    dashboard, which are the only link into ``/finance`` in the whole UI.
+    Pinned by name rather than by "is it in the opt-in block", because the
+    block a field sits in is a comment and this is the behaviour.
+    """
     defaults = ModuleSettings()
-    assert defaults.finance is True
-    assert defaults.medical_screening is True
+    assert defaults.finance is False
+    assert defaults.medical_screening is False
 
     enabled = defaults.get_enabled_modules()
-    assert "finance" in enabled
-    assert "medical_screening" in enabled
+    assert "finance" not in enabled
+    assert "medical_screening" not in enabled
+
+
+async def test_an_organization_that_never_configured_modules_has_finance_off():
+    """The end-to-end shape of the complaint, through the real resolver.
+
+    A dict written before either field existed is exactly what every upgraded
+    installation has, and the resolver must not read that silence as consent.
+    """
+    stored = {
+        field: getattr(ModuleSettings(), field)
+        for field in ModuleSettings.model_fields
+        if field not in ("finance", "medical_screening")
+    }
+    stored["training"] = True
+    stored["_user_configured"] = True
+
+    resolved = await _service()._resolve_module_settings({"modules": stored})
+
+    assert "finance" not in resolved.get_enabled_modules()
+    assert "medical_screening" not in resolved.get_enabled_modules()
+
+
+async def test_switching_finance_on_actually_enables_it():
+    """The gate has to be liftable, or it is a removal with extra steps."""
+    stored = {"finance": True, "_user_configured": True}
+
+    resolved = await _service()._resolve_module_settings({"modules": stored})
+
+    assert resolved.finance is True
+    assert "finance" in resolved.get_enabled_modules()
 
 
 async def test_resolving_an_empty_settings_dict_yields_the_declared_defaults():

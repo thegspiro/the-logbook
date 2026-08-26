@@ -755,18 +755,6 @@ class ModuleSettings(BaseModel):
         default=True, description="Prospective Members Pipeline module"
     )
     public_info: bool = Field(default=True, description="Public Information module")
-    # Both default True because they shipped with no switch at all, so "on" is
-    # the behaviour every existing installation already has. A new flag that
-    # defaults False would silently take a live module away on upgrade
-    # (CLAUDE.md pitfall 19: absence means current behaviour, never "off").
-    finance: bool = Field(
-        default=True,
-        description="Finance module (budgets, dues, expenses, purchase requests)",
-    )
-    medical_screening: bool = Field(
-        default=True,
-        description="Medical Screening module (physicals, clearances, expirations)",
-    )
 
     # ── Niche / premium modules (disabled by default) ──
     communications: bool = Field(
@@ -787,6 +775,31 @@ class ModuleSettings(BaseModel):
         description="Medical Supplies module (EMS stock, lot numbers, "
         "expiration tracking) — separate from gear and uniforms so a "
         "department can appoint its own supply officer",
+    )
+    # Opt-in, and deliberately not "preserve what the deployment does today".
+    # Both shipped with no ModuleSettings field, so the resolver's
+    # absent-key-means-default rule decides what an upgrade sees, and for
+    # these two "default" has to mean off: a department that never enabled
+    # Finance was still shown its dues, cash-flow and budget cards, which are
+    # the only link into /finance anywhere in the UI. Defaulting them on would
+    # have left that exact complaint unanswered on every installation that had
+    # not asked for the module. Medical Screening is the clearer case still —
+    # SideNavigation has always gated its entry on a field that did not exist,
+    # so the entry was hidden for every configured organization, and off is
+    # what restores that rather than what changes it.
+    #
+    # This is the documented exception to CLAUDE.md pitfall 19, not an
+    # oversight of it: the rule protects a module a department is *using*, and
+    # neither of these could be reached from the navigation. A department that
+    # does keep its books here turns Finance back on under Settings > Modules,
+    # where both now appear alongside the other opt-in modules.
+    finance: bool = Field(
+        default=False,
+        description="Finance module (budgets, dues, expenses, purchase requests)",
+    )
+    medical_screening: bool = Field(
+        default=False,
+        description="Medical Screening module (physicals, clearances, expirations)",
     )
 
     def get_enabled_modules(self) -> list[str]:

@@ -137,13 +137,21 @@ export interface AdminSummary {
   active_members: number;
   inactive_members: number;
   total_members: number;
-  training_completion_pct: number;
   upcoming_events_count: number;
-  overdue_action_items: number;
-  open_action_items: number;
-  recent_training_hours: number;
   recent_admin_hours: number;
   pending_admin_hours_approvals: number;
+  /**
+   * Null when the organization does not run the module that produces the
+   * figure — Training for the two training fields, Minutes for the two
+   * action-item ones. Distinct from 0, which is a real answer: a department
+   * genuinely at 0% compliance with no outstanding motions reports 0, and the
+   * dashboard shows it that card. Null means "we do not run this", and the
+   * card is dropped instead.
+   */
+  training_completion_pct: number | null;
+  recent_training_hours: number | null;
+  overdue_action_items: number | null;
+  open_action_items: number | null;
 }
 
 export interface OperationsItem {

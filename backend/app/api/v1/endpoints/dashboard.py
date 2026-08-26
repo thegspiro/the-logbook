@@ -390,16 +390,26 @@ class MainDashboardWidgets(BaseModel):
 
 
 class AdminSummary(BaseModel):
-    """Department-wide summary for Chiefs and admins."""
+    """Department-wide summary for Chiefs and admins.
+
+    The module-owned figures are ``None`` rather than ``0`` when the
+    department does not run the module that produces them, and the dashboard
+    omits the card entirely for a ``None``. Zero is a real answer here — a
+    department genuinely at 0% training compliance reads the same card — so
+    returning it for "we do not run Training" would put a compliance emergency
+    on the chief's dashboard for a module they switched off.
+    """
 
     active_members: int
     inactive_members: int
     total_members: int
-    training_completion_pct: float
+    # Training module
+    training_completion_pct: float | None = None
+    recent_training_hours: float | None = None
     upcoming_events_count: int
-    overdue_action_items: int
-    open_action_items: int
-    recent_training_hours: float
+    # Minutes module (meeting + minutes action items, merged)
+    overdue_action_items: int | None = None
+    open_action_items: int | None = None
     recent_admin_hours: float
     pending_admin_hours_approvals: int
 
@@ -916,8 +926,20 @@ async def get_admin_summary(
     Each query section is isolated so a failure in one module
     (e.g. training, events) does not prevent member counts from
     being returned.
+
+    A module the department does not run contributes nothing: its section is
+    skipped and its fields stay ``None``, so the dashboard drops the card
+    rather than showing a figure for a feature nobody here uses. This matters
+    more than it looks — ``settings.manage`` is the only gate on this
+    endpoint, so before it, every chief of every department saw a Training
+    Compliance percentage and an Action Items count whether or not Training
+    and Minutes were switched on, and both cards link into pages the module
+    gate now refuses.
     """
     org_id = current_user.organization_id
+    enabled = set(
+        (await OrganizationService(db).get_enabled_modules(org_id)).enabled_modules
+    )
 
     # ── Member counts (core — always required) ──
     result = await db.execute(
@@ -942,11 +964,12 @@ async def get_admin_summary(
     # Uses the same logic as the compliance-matrix endpoint: for each active
     # member, evaluate every active training requirement and compute the
     # percentage of members who are fully compliant.
-    training_pct = 0.0
-    try:
-        training_pct = await compute_org_compliance_pct(db, org_id)
-    except Exception as exc:
-        logger.warning("admin-summary: training compliance query failed: {}", exc)
+    training_pct: float | None = None
+    if "training" in enabled:
+        try:
+            training_pct = await compute_org_compliance_pct(db, org_id)
+        except Exception as exc:
+            logger.warning("admin-summary: training compliance query failed: {}", exc)
 
     # ── Upcoming events (rolling 30-day window) ──
     upcoming_events = 0
@@ -964,84 +987,103 @@ async def get_admin_summary(
     except Exception as exc:
         logger.warning("admin-summary: upcoming events query failed: {}", exc)
 
-    # ── Action items (overdue + open) from meetings ──
-    overdue_meeting = 0
-    open_meeting = 0
-    try:
-        result = await db.execute(
-            select(func.count(MeetingActionItem.id)).where(
-                MeetingActionItem.organization_id == org_id,
-                MeetingActionItem.status.in_(
-                    [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
-                ),
-                MeetingActionItem.due_date < date.today(),
+    # ── Action items (overdue + open) from meetings and minutes ──
+    # Both halves belong to the Minutes module, which owns /meetings and
+    # /minutes-records alike, so the merged total is None when it is off —
+    # not 0, which reads as "nothing outstanding" rather than "we do not
+    # track motions here", and links into a page the module gate refuses.
+    overdue_action_items: int | None = None
+    open_action_items: int | None = None
+    if "minutes" in enabled:
+        overdue_meeting = 0
+        open_meeting = 0
+        try:
+            result = await db.execute(
+                select(func.count(MeetingActionItem.id)).where(
+                    MeetingActionItem.organization_id == org_id,
+                    MeetingActionItem.status.in_(
+                        [
+                            ActionItemStatus.OPEN.value,
+                            ActionItemStatus.IN_PROGRESS.value,
+                        ]
+                    ),
+                    MeetingActionItem.due_date < date.today(),
+                )
             )
-        )
-        overdue_meeting = result.scalar() or 0
+            overdue_meeting = result.scalar() or 0
 
-        result = await db.execute(
-            select(func.count(MeetingActionItem.id)).where(
-                MeetingActionItem.organization_id == org_id,
-                MeetingActionItem.status.in_(
-                    [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
-                ),
+            result = await db.execute(
+                select(func.count(MeetingActionItem.id)).where(
+                    MeetingActionItem.organization_id == org_id,
+                    MeetingActionItem.status.in_(
+                        [
+                            ActionItemStatus.OPEN.value,
+                            ActionItemStatus.IN_PROGRESS.value,
+                        ]
+                    ),
+                )
             )
-        )
-        open_meeting = result.scalar() or 0
-    except Exception as exc:
-        logger.warning("admin-summary: meeting action items query failed: {}", exc)
+            open_meeting = result.scalar() or 0
+        except Exception as exc:
+            logger.warning("admin-summary: meeting action items query failed: {}", exc)
 
-    # ── Action items from minutes (scoped to organization via MeetingMinutes) ──
-    overdue_minutes = 0
-    open_minutes = 0
-    try:
-        result = await db.execute(
-            select(func.count(ActionItem.id))
-            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-            .where(
-                MeetingMinutes.organization_id == org_id,
-                ActionItem.status.in_(
-                    [
-                        MinutesActionItemStatus.PENDING.value,
-                        MinutesActionItemStatus.IN_PROGRESS.value,
-                    ]
-                ),
-                ActionItem.due_date < datetime.now(timezone.utc),
+        # ── Action items from minutes (scoped to organization via MeetingMinutes) ──
+        overdue_minutes = 0
+        open_minutes = 0
+        try:
+            result = await db.execute(
+                select(func.count(ActionItem.id))
+                .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+                .where(
+                    MeetingMinutes.organization_id == org_id,
+                    ActionItem.status.in_(
+                        [
+                            MinutesActionItemStatus.PENDING.value,
+                            MinutesActionItemStatus.IN_PROGRESS.value,
+                        ]
+                    ),
+                    ActionItem.due_date < datetime.now(timezone.utc),
+                )
             )
-        )
-        overdue_minutes = result.scalar() or 0
+            overdue_minutes = result.scalar() or 0
 
-        result = await db.execute(
-            select(func.count(ActionItem.id))
-            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-            .where(
-                MeetingMinutes.organization_id == org_id,
-                ActionItem.status.in_(
-                    [
-                        MinutesActionItemStatus.PENDING.value,
-                        MinutesActionItemStatus.IN_PROGRESS.value,
-                    ]
-                ),
+            result = await db.execute(
+                select(func.count(ActionItem.id))
+                .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+                .where(
+                    MeetingMinutes.organization_id == org_id,
+                    ActionItem.status.in_(
+                        [
+                            MinutesActionItemStatus.PENDING.value,
+                            MinutesActionItemStatus.IN_PROGRESS.value,
+                        ]
+                    ),
+                )
             )
-        )
-        open_minutes = result.scalar() or 0
-    except Exception as exc:
-        logger.warning("admin-summary: minutes action items query failed: {}", exc)
+            open_minutes = result.scalar() or 0
+        except Exception as exc:
+            logger.warning("admin-summary: minutes action items query failed: {}", exc)
+
+        overdue_action_items = overdue_meeting + overdue_minutes
+        open_action_items = open_meeting + open_minutes
 
     # ── Recent training hours (last 30 days) ──
-    recent_hours = 0.0
-    try:
-        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-        result = await db.execute(
-            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0)).where(
-                TrainingRecord.organization_id == org_id,
-                TrainingRecord.status == TrainingStatus.COMPLETED,
-                TrainingRecord.completion_date >= thirty_days_ago.date(),
+    recent_hours: float | None = None
+    if "training" in enabled:
+        try:
+            thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+            result = await db.execute(
+                select(
+                    func.coalesce(func.sum(TrainingRecord.hours_completed), 0)
+                ).where(
+                    TrainingRecord.organization_id == org_id,
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                    TrainingRecord.completion_date >= thirty_days_ago.date(),
+                )
             )
-        )
-        recent_hours = float(result.scalar() or 0)
-    except Exception as exc:
-        logger.warning("admin-summary: recent training hours query failed: {}", exc)
+            recent_hours = float(result.scalar() or 0)
+        except Exception as exc:
+            logger.warning("admin-summary: recent training hours query failed: {}", exc)
 
     # ── Admin hours (last 30 days) ──
     recent_admin_hours = 0.0
@@ -1073,10 +1115,12 @@ async def get_admin_summary(
         active_members=active_members,
         inactive_members=inactive_members,
         total_members=total_members,
-        training_completion_pct=round(training_pct, 1),
+        training_completion_pct=(
+            round(training_pct, 1) if training_pct is not None else None
+        ),
         upcoming_events_count=upcoming_events,
-        overdue_action_items=overdue_meeting + overdue_minutes,
-        open_action_items=open_meeting + open_minutes,
+        overdue_action_items=overdue_action_items,
+        open_action_items=open_action_items,
         recent_training_hours=recent_hours,
         recent_admin_hours=recent_admin_hours,
         pending_admin_hours_approvals=pending_admin_approvals,
@@ -1093,9 +1137,22 @@ async def get_unified_action_items(
     """
     Unified view of action items from both Meeting and Minutes modules.
     Merges results and returns them sorted by due date.
+
+    Both halves are owned by the Minutes module (``/meetings`` and
+    ``/minutes-records`` are gated on it), so a department that has switched
+    Minutes off gets an empty feed here rather than the same rows its own
+    module API now declines to serve. Without this the gate was a half-truth:
+    ``/api/v1/minutes-records`` answered 403 while this endpoint handed the
+    identical descriptions back through the dashboard.
     """
     org_id = current_user.organization_id
     items: list[ActionItemSummary] = []
+
+    enabled = set(
+        (await OrganizationService(db).get_enabled_modules(org_id)).enabled_modules
+    )
+    if "minutes" not in enabled:
+        return items
 
     # This unified feed merges two modules and is NOT permission-gated at the
     # route, so gate each half in-code exactly as its owning module does —

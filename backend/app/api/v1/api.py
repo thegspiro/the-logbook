@@ -96,9 +96,8 @@ def module_gate(module: str, label: str | None = None) -> list:
       always reports them, so a gate would be a permanent no-op.
     * **Cross-module infrastructure** — ``locations`` (the simplified stand-in
       the app serves when Facilities is off, so gating it on Facilities would
-      remove the fallback along with the feature), ``forms`` (the builder that
-      powers shift checkouts, equipment checks and training data collection,
-      and a core module in onboarding), ``labels`` and ``nfc_tags`` (printing
+      remove the fallback along with the feature), ``forms`` (see below),
+      ``labels`` and ``nfc_tags`` (printing
       and tag scanning for apparatus, facilities, prospects and members
       alike), ``email_templates`` (the templates behind mail the app sends
       regardless of which screens exist), and ``analytics`` and ``compliance``
@@ -107,6 +106,17 @@ def module_gate(module: str, label: str | None = None) -> list:
       security, platform analytics, scheduled tasks, and the dashboard and
       admin hub, which gate their own contents block by block because they
       deliberately span modules.
+
+    ``forms`` is the one module gated in the UI and deliberately not here,
+    and the asymmetry is the decision rather than an omission: the flag
+    governs whether a department builds its own forms, not whether the form
+    engine runs. Prospective Members' stage configuration lists published
+    forms and ``FieldRenderer`` calls ``/forms/member-lookup`` from inside
+    prospect applications and event requests, so gating this router would
+    break screens belonging to modules that are still switched on. The
+    builder screen carries the module gate instead, matching the navigation.
+    ``UI_ONLY_GATES`` in tests/test_module_api_gating.py holds the same
+    reasoning where the parity test can enforce it.
 
     ``admin_hours`` is ungated for a different reason: it is a real module
     with a frontend, a nav entry and its own permissions, but no

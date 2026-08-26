@@ -191,6 +191,34 @@ DELIBERATELY_UNGATED = {
     "/api/v1/analytics": "reads across several modules at once",
     "/api/v1/compliance": "reads across several modules at once",
     "/api/v1/admin-hours": "a real module, but it has no ModuleSettings field to gate on yet",
+    # Platform, session and cross-module surfaces. None of these is owned by a
+    # single module, so a gate would either be a permanent no-op (the
+    # essential modules always report enabled) or would take away a surface
+    # that spans modules.
+    "/api/v1/": "the API root itself",
+    "/api/v1/auth": "sign-in, refresh and MFA — reachable before any module is",
+    "/api/v1/users": "essential module",
+    "/api/v1/roles": "essential module",
+    "/api/v1/organization": "essential module; also where the switch itself lives",
+    "/api/v1/documents": "essential module",
+    "/api/v1/events": "essential module",
+    "/api/v1/event-requests": "public event requests; the form engine, not the Events screen",
+    "/api/v1/officers": "roster and org structure, not a module",
+    "/api/v1/operational-ranks": "roster and org structure, not a module",
+    "/api/v1/org-chart": "roster and org structure, not a module",
+    "/api/v1/legal-documents": "acknowledgements every member owes regardless of modules",
+    "/api/v1/station-documents": "documents, an essential module",
+    "/api/v1/label-preset": "label printing shared across modules",
+    "/api/v1/label-printers": "label printing shared across modules",
+    "/api/v1/onboarding": "first-run setup, which is what decides the modules",
+    "/api/v1/audit-logs": "platform surface",
+    "/api/v1/security": "platform surface",
+    "/api/v1/ip-security": "platform surface",
+    "/api/v1/errors": "platform surface",
+    "/api/v1/platform-analytics": "platform surface",
+    "/api/v1/scheduled": "platform task scheduling, unrelated to the Scheduling module",
+    "/api/v1/dashboard": "spans modules; gates its own blocks one at a time",
+    "/api/v1/admin-hub": "spans modules; gates its own metrics one at a time",
 }
 
 
@@ -227,6 +255,53 @@ def _gate_map() -> dict:
 
 def test_every_module_owned_api_root_is_gated():
     assert _gate_map() == EXPECTED_GATES
+
+
+def _all_api_roots() -> set:
+    """Every ``/api/v1`` root the built application serves."""
+    from fastapi.routing import APIRoute
+
+    from main import app
+
+    def expand(routes, prefix=""):
+        for route in routes:
+            if type(route).__name__ == "_IncludedRouter":
+                ctx = route.include_context
+                yield from expand(
+                    route.original_router.routes, prefix + (ctx.prefix or "")
+                )
+            elif isinstance(route, APIRoute):
+                yield prefix + route.path
+
+    return {
+        "/".join(path.split("/")[:4])
+        for path in expand(app.routes)
+        if path.startswith("/api/v1")
+    }
+
+
+def test_every_api_root_is_either_gated_or_a_recorded_exemption():
+    """The direction the map alone cannot pin.
+
+    ``test_every_module_owned_api_root_is_gated`` compares only the roots that
+    *have* a gate, so mounting a new module router with none changes nothing
+    it can see and it passes — the exact drift its docstring claims to catch.
+    Requiring the two lists to partition every root is what closes that: a new
+    router has to be gated or written down, and "written down" is a line in
+    DELIBERATELY_UNGATED that a reviewer reads.
+    """
+    unaccounted = _all_api_roots() - set(EXPECTED_GATES) - set(DELIBERATELY_UNGATED)
+    assert not unaccounted, (
+        "These API roots are neither gated on a module nor recorded as exempt. "
+        "Gate the router with module_gate(...), or add it to "
+        f"DELIBERATELY_UNGATED with the reason: {sorted(unaccounted)}"
+    )
+
+
+def test_no_exemption_outlives_the_router_it_describes():
+    """A stale exemption is a gate nobody notices is missing."""
+    stale = set(DELIBERATELY_UNGATED) - _all_api_roots()
+    assert not stale, f"exempted roots the app no longer serves: {sorted(stale)}"
 
 
 def test_the_exempt_roots_really_are_ungated():
@@ -292,6 +367,20 @@ def test_a_gated_frontend_module_gates_every_one_of_its_routes():
     assert not partial, f"modules with some routes left ungated: {partial}"
 
 
+# Gated in the UI and deliberately not in the API. One entry, and it should
+# stay a short list: the asymmetry is only defensible when the flag governs a
+# department's *screens* rather than the data behind them.
+UI_ONLY_GATES = {
+    "forms": (
+        "the flag governs whether this department builds its own forms, not "
+        "whether the form engine runs. Prospective Members' stage config "
+        "lists published forms and FieldRenderer calls /forms/member-lookup "
+        "from inside prospect applications and event requests, so gating the "
+        "router breaks screens belonging to modules that are still on."
+    ),
+}
+
+
 def test_the_frontend_and_the_api_agree_on_which_modules_are_gated():
     """The two halves protect the same set, or the switch is a half-truth.
 
@@ -299,11 +388,28 @@ def test_the_frontend_and_the_api_agree_on_which_modules_are_gated():
     stale tab — the defect this whole change exists to close. A module gated
     only in the API gives the member a broken screen instead of the
     "not enabled" explanation.
+
+    ``UI_ONLY_GATES`` is the exception list, and it is an exception list
+    rather than a loophole: an entry has to name why the module's data is
+    still needed by screens that are switched on.
     """
     api_modules = set(EXPECTED_GATES.values())
     ui_modules = {key for keys in _frontend_route_gates().values() for key in keys}
 
-    assert ui_modules == api_modules, (
-        f"gated in the UI only: {sorted(ui_modules - api_modules)}; "
-        f"gated in the API only: {sorted(api_modules - ui_modules)}"
+    assert ui_modules - api_modules <= set(UI_ONLY_GATES), (
+        "gated in the UI only, with no recorded reason: "
+        f"{sorted(ui_modules - api_modules - set(UI_ONLY_GATES))}"
+    )
+    assert (
+        not api_modules - ui_modules
+    ), f"gated in the API only: {sorted(api_modules - ui_modules)}"
+
+
+def test_a_ui_only_gate_is_still_gated_somewhere_in_the_ui():
+    """An exemption whose UI gate was removed is a flag that governs nothing."""
+    ui_modules = {key for keys in _frontend_route_gates().values() for key in keys}
+    orphaned = set(UI_ONLY_GATES) - ui_modules
+    assert not orphaned, (
+        "these modules are exempt from the API gate because the UI gates them, "
+        f"and the UI no longer does: {sorted(orphaned)}"
     )

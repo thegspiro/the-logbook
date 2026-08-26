@@ -21,7 +21,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.v1.endpoints.dashboard import get_asset_widgets, get_main_dashboard_widgets
+from app.api.v1.endpoints.dashboard import (
+    get_admin_summary,
+    get_asset_widgets,
+    get_main_dashboard_widgets,
+    get_unified_action_items,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,6 +43,8 @@ ALL_MODULES = [
     "inventory",
     "apparatus",
     "facilities",
+    "training",
+    "minutes",
 ]
 
 WIDGET_PERMISSIONS = ["finance.manage", "fundraising.view", "events.manage"]
@@ -177,3 +184,85 @@ async def test_every_asset_module_off_queries_nothing_at_all():
         response = await get_asset_widgets(db=db, current_user=_user())
 
     assert response.widgets == []
+
+
+# ── The aggregates that answer on permission alone ─────────────────────────
+#
+# ``/admin-summary`` and ``/action-items`` are gated on ``settings.manage``
+# and on nothing else, so before this every chief of every department was
+# shown a Training Compliance percentage and an Action Items count whether or
+# not those modules were on — and both cards link into pages the module gate
+# now refuses. A merged feed reading from two gated routers is the same defect
+# one layer up: ``/api/v1/minutes-records`` answered 403 while the dashboard
+# handed the identical action-item descriptions back.
+
+
+async def _summary(enabled: list[str]):
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=SimpleNamespace(scalar=lambda: 0))
+    modules_patch, _ = _patches(enabled, [])
+    with (
+        modules_patch,
+        patch(
+            "app.api.v1.endpoints.dashboard.compute_org_compliance_pct",
+            new=AsyncMock(return_value=42.0),
+        ),
+    ):
+        return await get_admin_summary(db=db, current_user=_user())
+
+
+async def test_admin_summary_reports_no_training_figure_without_the_module():
+    """None, not 0.
+
+    Zero is a real answer — a department genuinely at 0% compliance reports
+    it — so returning 0 for "we do not run Training" would put a compliance
+    emergency on the chief's dashboard for a module they switched off. The
+    frontend drops the card on None and shows it on 0.
+    """
+    summary = await _summary(_without("training"))
+
+    assert summary.training_completion_pct is None
+    assert summary.recent_training_hours is None
+    # Core member counts are unaffected — this is a per-module gate.
+    assert summary.active_members == 0
+    assert summary.total_members == 0
+
+
+async def test_admin_summary_reports_the_training_figure_when_the_module_is_on():
+    summary = await _summary(ALL_MODULES)
+
+    assert summary.training_completion_pct == 42.0
+    assert summary.recent_training_hours == 0.0
+
+
+async def test_admin_summary_reports_no_action_items_without_the_minutes_module():
+    """Both halves of the merged count belong to Minutes."""
+    summary = await _summary(_without("minutes"))
+
+    assert summary.open_action_items is None
+    assert summary.overdue_action_items is None
+
+
+async def test_admin_summary_reports_action_items_when_minutes_is_on():
+    summary = await _summary(ALL_MODULES)
+
+    assert summary.open_action_items == 0
+    assert summary.overdue_action_items == 0
+
+
+async def test_the_unified_action_item_feed_is_empty_without_the_minutes_module():
+    """Off must mean not asked, not asked-and-discarded.
+
+    ``db.execute`` raising is the assertion: a department that retired Minutes
+    should cost no query here, and should certainly not have the rows read and
+    then dropped.
+    """
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=AssertionError("no action item may be read"))
+    modules_patch, permission_patch = _patches(
+        _without("minutes"), ["minutes.view", "meetings.view"]
+    )
+    with modules_patch, permission_patch:
+        items = await get_unified_action_items(db=db, current_user=_user())
+
+    assert items == []

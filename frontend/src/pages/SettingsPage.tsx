@@ -256,18 +256,6 @@ const STANDARD_MODULES: ConfigurableModule[] = [
     description: 'Public-facing pages, community outreach, and fire safety education',
     icon: <Globe className="h-5 w-5" />,
   },
-  {
-    key: 'finance',
-    name: 'Finance',
-    description: 'Budgets, member dues, expenses, purchase requests, and check requests',
-    icon: <Wallet className="h-5 w-5" />,
-  },
-  {
-    key: 'medical_screening',
-    name: 'Medical Screening',
-    description: 'Member physicals, clearances, and expiration tracking',
-    icon: <HeartPulse className="h-5 w-5" />,
-  },
 ];
 
 /** Additional modules — disabled by default, opt-in */
@@ -314,6 +302,18 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     description:
       'Sell apparel and gear to members with open/close order windows, paid via Venmo, PayPal, cash, or check',
     icon: <Store className="h-5 w-5" />,
+  },
+  {
+    key: 'finance',
+    name: 'Finance',
+    description: 'Budgets, member dues, expenses, purchase requests, and check requests',
+    icon: <Wallet className="h-5 w-5" />,
+  },
+  {
+    key: 'medical_screening',
+    name: 'Medical Screening',
+    description: 'Member physicals, clearances, and expiration tracking',
+    icon: <HeartPulse className="h-5 w-5" />,
   },
   {
     key: 'medical_supplies',
