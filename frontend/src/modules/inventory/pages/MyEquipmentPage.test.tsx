@@ -207,14 +207,19 @@ describe('MyEquipmentPage', () => {
     await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
     await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
-    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toMatchObject({
+    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual({
+      category_id: undefined,
       item_id: 'avail-1',
       item_name: 'Spare Radio',
+      quantity: 1,
+      reason: undefined,
+      request_type: 'checkout',
     });
   });
 });

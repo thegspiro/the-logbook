@@ -119,7 +119,6 @@ const MyEquipmentPage: React.FC = () => {
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
   const [reqType, setReqType] = useState<'checkout' | 'assignment'>('checkout');
-  const [reqPriority, setReqPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
   const [reqSearching, setReqSearching] = useState(false);
@@ -220,7 +219,6 @@ const MyEquipmentPage: React.FC = () => {
         category_id: reqSelected.category_id || undefined,
         quantity: reqSelected.tracking_type === 'pool' ? reqQty : 1,
         request_type: reqType,
-        priority: reqPriority,
         reason: reqReason.trim() || undefined,
       });
       toast.success('Equipment request submitted');
@@ -239,7 +237,6 @@ const MyEquipmentPage: React.FC = () => {
     setReqResults([]);
     setReqSelected(null);
     setReqType('checkout');
-    setReqPriority('normal');
     setReqQty(1);
     setReqReason('');
   };
@@ -680,7 +677,7 @@ const MyEquipmentPage: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
               <div>
                 <label className={labelClass}>Request Type</label>
                 <select
@@ -690,18 +687,6 @@ const MyEquipmentPage: React.FC = () => {
                 >
                   <option value="checkout">Checkout</option>
                   <option value="assignment">Assignment</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Priority</label>
-                <select
-                  value={reqPriority}
-                  onChange={(e) => setReqPriority(e.target.value as 'normal' | 'high' | 'urgent')}
-                  className={selectClass}
-                >
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
                 </select>
               </div>
             </div>
