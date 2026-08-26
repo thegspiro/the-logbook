@@ -34,6 +34,7 @@ from app.services.operational_rank_service import DEFAULT_RANKS
 from app.services.qualification_service import (
     QualificationService,
     positions_for_qualifications,
+    qualification_label,
 )
 
 # Mapping from training program target_position values to the shift
@@ -380,15 +381,19 @@ class ShiftEligibilityService:
 
         Answers "who is cleared to drive?" in one query set rather than making
         an officer open each apparatus in turn. For each member it reports the
-        *sources* of their eligibility (rank, completed training, or the org's
-        open-position list), their current EVOC standing, and the apparatus
-        they hold an operator record on.
+        *sources* of their eligibility (rank, held position, qualification,
+        completed training, or the org's open-position list), their current
+        EVOC standing, and the apparatus they hold an operator record on.
 
-        Eligibility mirrors ``get_eligible_positions`` exactly — same union of
-        rank / training / open positions behind the same membership-type gate —
-        so the roster can never disagree with what self-signup enforces. The
-        per-shift narrowing is deliberately not applied: this is the
-        department-wide roster, not a roster for one shift.
+        Eligibility mirrors ``get_eligible_positions`` exactly — the same union
+        behind the same membership-type gate — so the roster can never disagree
+        with what self-signup enforces. Every source there has to appear here
+        too: a member the roster omits is also missing from
+        ``SchedulingService.get_trade_candidates``, so an officer looking for
+        cover would not be offered somebody the signup endpoint would happily
+        accept. Qualifications are resolved as of **today**, since a
+        department-wide roster is not asked about any particular shift; the
+        per-shift narrowing is deliberately not applied for the same reason.
         """
         org = await self._get_org(organization_id)
         if not org:
@@ -417,6 +422,9 @@ class ShiftEligibilityService:
         held_map = await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
         operator_map = await self._get_operator_map(organization_id)
+        qualification_map = await QualificationService(self.db).get_codes_by_member(
+            organization_id
+        )
 
         members: List[Dict[str, Any]] = []
         for user in users:
@@ -443,6 +451,12 @@ class ShiftEligibilityService:
             for held in held_map.get(str(user.id), []):
                 if position in slug_map.get(held["slug"], []):
                     sources.append({"type": "position", "label": held["name"]})
+
+            for code in qualification_map.get(str(user.id), []):
+                if position in positions_for_qualifications([code]):
+                    sources.append(
+                        {"type": "qualification", "label": qualification_label(code)}
+                    )
 
             for program_name in training_map.get(str(user.id), []):
                 sources.append({"type": "training", "label": program_name})

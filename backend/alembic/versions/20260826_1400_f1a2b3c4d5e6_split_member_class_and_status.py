@@ -115,16 +115,31 @@ def upgrade() -> None:
             {"cls": member_class, "status": member_status, "legacy": legacy},
         )
 
-    # Anything the column holds that is not one of the seven — it is a free
-    # string with no enum constraint, so unrecognised values genuinely occur —
-    # lands on the same default the model uses.
+    # A member with nothing recorded is a regular operational one: the column
+    # defaults to "active", so an empty value means the default rather than
+    # something unknown.
     bind.execute(
         sa.text(
             "UPDATE users SET member_class = :cls, member_status = :status "
-            "WHERE member_class IS NULL OR member_status IS NULL"
+            "WHERE TRIM(COALESCE(membership_type, '')) = ''"
         ),
         {"cls": _DEFAULT[0], "status": _DEFAULT[1]},
     )
+
+    # Everything else that is still NULL is left NULL, deliberately.
+    #
+    # `membership_type` also stores org-configurable **membership tier ids** —
+    # `POST /member-status/.../tier` validates the id against
+    # organization.settings["membership_tiers"] and writes it straight into
+    # this column, and the shipped defaults already include "senior". Those
+    # members satisfied neither an "operational" ballot restriction (which
+    # meant membership_type == "active") nor a "regular" one (in active, life).
+    #
+    # Defaulting them to operational/regular here would silently enrol every
+    # custom tier — senior, associate, cadet, whatever a department has
+    # configured — in ballots restricted to the operational regular body. NULL
+    # matches no class and no status, which is exactly their prior behaviour,
+    # and the readers derive from `membership_type` when they see it.
 
 
 def downgrade() -> None:

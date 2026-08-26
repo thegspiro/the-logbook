@@ -279,8 +279,6 @@ class ElectionService:
             return True
 
         from app.utils.membership import (
-            DEFAULT_CLASS,
-            DEFAULT_STATUS,
             MemberClass,
             MemberStatus,
             split_membership_type,
@@ -294,8 +292,14 @@ class ElectionService:
             member_class, member_status = split_membership_type(
                 getattr(user, "membership_type", None)
             )
-        member_class = (member_class or DEFAULT_CLASS).strip().lower()
-        member_status = (member_status or DEFAULT_STATUS).strip().lower()
+        # Deliberately not defaulted. Both stay None when the member's
+        # membership_type is an org-configured tier id ("senior") rather than
+        # one of the seven known values, and None matches no class and no
+        # status — which is what such a member matched before. Defaulting here
+        # would quietly enrol every custom tier in the operational regular
+        # body. The role-slug fallback below still applies to them.
+        member_class = (member_class or "").strip().lower()
+        member_status = (member_status or "").strip().lower()
 
         # Class checks — what kind of member, regardless of standing.
         if "operational" in role_types:

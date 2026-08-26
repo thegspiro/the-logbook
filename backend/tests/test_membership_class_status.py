@@ -48,11 +48,18 @@ class TestSplitAndDerive:
         assert member_class in MemberClass.ALL
         assert member_status in MemberStatus.ALL
 
-    @pytest.mark.parametrize("junk", [None, "", "   ", "not_a_membership_type"])
-    def test_unknown_values_land_on_the_default(self, junk):
-        # The column is a free string with no enum constraint, so unrecognised
-        # values genuinely occur and must not raise on a login path.
-        assert split_membership_type(junk) == (DEFAULT_CLASS, DEFAULT_STATUS)
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    def test_a_blank_value_takes_the_column_default(self, blank):
+        # Nothing recorded means the column default ("active"), which is a
+        # regular operational member.
+        assert split_membership_type(blank) == (DEFAULT_CLASS, DEFAULT_STATUS)
+
+    def test_an_unrecognised_value_is_left_unclassified(self):
+        # Not the same as blank, and the difference matters — see
+        # TestCustomTiersAreNotPromoted. The column is a free string that also
+        # holds membership tier ids, so unrecognised values genuinely occur;
+        # they must not raise on a login path, and must not be guessed at.
+        assert split_membership_type("not_a_membership_type") == (None, None)
 
     def test_case_and_whitespace_are_tolerated(self):
         assert split_membership_type("  Administrative ") == (
@@ -148,3 +155,60 @@ class TestOperationalIsAClassNotAStatus:
         member_class, member_status = split_membership_type("life")
         assert is_operational(member_class)
         assert member_status == MemberStatus.LIFE
+
+
+class TestCustomTiersAreNotPromoted:
+    """``membership_type`` also stores org-configurable membership **tier ids**.
+
+    ``POST /member-status/{id}/tier`` validates the id against
+    ``organization.settings["membership_tiers"]`` and writes it straight into
+    this column, and the shipped defaults already include ``senior``. So the
+    column's contents are not limited to the seven legacy values, and never
+    were.
+
+    Defaulting an unrecognised value to a regular operational member would
+    enrol every one of those tiers in categories they were never in: a Senior
+    Member satisfied neither an "operational" ballot restriction (which meant
+    ``== "active"``) nor a "regular" one (``in (active, life)``). Promoting
+    them silently widens the electorate of any ballot restricted to either.
+    """
+
+    @pytest.mark.parametrize(
+        "tier_id", ["senior", "associate", "cadet", "social", "exempt"]
+    )
+    def test_an_unknown_tier_resolves_to_no_class_and_no_status(self, tier_id):
+        assert split_membership_type(tier_id) == (None, None)
+
+    @pytest.mark.parametrize("tier_id", ["senior", "associate", "cadet"])
+    def test_an_unknown_tier_is_not_operational(self, tier_id):
+        member_class, _status = split_membership_type(tier_id)
+        assert not is_operational(member_class), (
+            f"tier {tier_id!r} would be enrolled in the operational body it "
+            "was never part of"
+        )
+
+    def test_senior_is_a_shipped_default_tier(self):
+        """Named explicitly because it is not hypothetical.
+
+        If the default tier list stops containing 'senior' this assertion
+        should be revisited rather than deleted — the point is that real,
+        shipped configuration puts non-legacy values in this column.
+        """
+        from app.schemas.organization import MembershipTierSettings
+
+        tier_ids = {tier.id for tier in MembershipTierSettings().tiers}
+        assert "senior" in tier_ids
+        assert split_membership_type("senior") == (None, None)
+
+    def test_an_empty_value_still_takes_the_default(self):
+        # Different case: nothing recorded means the column default ("active"),
+        # which is a regular operational member. Only *unrecognised* values are
+        # left unclassified.
+        assert split_membership_type(None) == (DEFAULT_CLASS, DEFAULT_STATUS)
+        assert split_membership_type("") == (DEFAULT_CLASS, DEFAULT_STATUS)
+
+    def test_is_operational_does_not_default_an_unset_class(self):
+        # The guard one layer down: defaulting here would reintroduce the
+        # widening the split above exists to prevent.
+        assert is_operational(None) is False
+        assert is_operational("") is False

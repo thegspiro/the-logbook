@@ -16,7 +16,7 @@ apparatus editor's did (#1833).
 from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Set
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.qualification import MemberQualification
@@ -86,16 +86,29 @@ class QualificationService:
 
     @staticmethod
     def _current_on(as_of: date):
-        """Filter for rows still current on ``as_of``.
+        """Filter for rows in force on ``as_of`` — both ends of the window.
 
-        A NULL ``expires_on`` never lapses. Note this is asked *as of the day
-        the member would work*, not as of today — a card that is valid now and
-        expires before the shift qualifies nobody to work it, which is the rule
-        EVOC certifications already follow for drivers.
+        A NULL ``expires_on`` never lapses and a NULL ``granted_on`` has always
+        been in force, so both nulls mean "no bound at that end" rather than
+        "unknown".
+
+        ``granted_on`` matters as much as the expiry and is easier to forget.
+        A department recording a member's upcoming Paramedic certification with
+        a future start date would otherwise have that member clear the medic
+        seat *today*, before they are certified — and a shift in the past would
+        show them as qualified for a night they had not yet earned. Asked as of
+        the day the member would work, not as of today, which is the rule EVOC
+        certifications already follow for drivers.
         """
-        return or_(
-            MemberQualification.expires_on.is_(None),
-            MemberQualification.expires_on >= as_of,
+        return and_(
+            or_(
+                MemberQualification.granted_on.is_(None),
+                MemberQualification.granted_on <= as_of,
+            ),
+            or_(
+                MemberQualification.expires_on.is_(None),
+                MemberQualification.expires_on >= as_of,
+            ),
         )
 
     async def get_member_codes(

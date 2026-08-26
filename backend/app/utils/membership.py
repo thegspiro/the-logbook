@@ -95,16 +95,32 @@ _OPERATIONAL_LEGACY = {
 
 def split_membership_type(
     membership_type: Optional[str],
-) -> Tuple[str, str]:
+) -> Tuple[Optional[str], Optional[str]]:
     """Legacy ``membership_type`` -> ``(member_class, member_status)``.
 
-    An unrecognised value resolves to a regular operational member, matching
-    the column default. The column is a free string with no enum constraint, so
-    unrecognised values genuinely occur.
+    Returns ``(None, None)`` for a value this map does not know, and that is
+    the important case rather than an edge one. ``membership_type`` also stores
+    **membership tier ids**, which are org-configurable: ``POST
+    /member-status/.../tier`` validates the id against
+    ``organization.settings["membership_tiers"]`` and writes it straight into
+    this column, and the shipped defaults already include ``senior``.
+
+    Defaulting an unknown value to a regular operational member would promote
+    every one of those tiers into categories they were never in. A Senior
+    Member satisfied neither "operational" (which meant ``== "active"``) nor
+    "regular" (``in (active, life)``) before; silently making them satisfy both
+    would widen the electorate of any ballot restricted to either. ``None``
+    means "this is not one of the seven, and we are not guessing" — it matches
+    no class and no status, which is exactly what the value did before.
+
+    An empty value is different and does resolve to the default: the column
+    defaults to ``"active"``, so a member with nothing recorded is a regular
+    operational one.
     """
-    return _SPLIT.get(
-        (membership_type or "").strip().lower(), (DEFAULT_CLASS, DEFAULT_STATUS)
-    )
+    key = (membership_type or "").strip().lower()
+    if not key:
+        return (DEFAULT_CLASS, DEFAULT_STATUS)
+    return _SPLIT.get(key, (None, None))
 
 
 def derive_membership_type(
@@ -138,5 +154,12 @@ def is_operational(member_class: Optional[str]) -> bool:
     class and status are separate questions. A life member is operational; so
     is a probationary one. Reading ``membership_type == "active"`` for this,
     as the election service did, answers a narrower question than it looks.
+
+    ``None`` is **not** operational. An unset class means the member's
+    ``membership_type`` is a custom tier this map does not know, and claiming
+    those for the operational body is the widening this function exists to
+    avoid — defaulting here would reintroduce it one layer down.
     """
-    return (member_class or DEFAULT_CLASS).strip().lower() == MemberClass.OPERATIONAL
+    if not member_class:
+        return False
+    return member_class.strip().lower() == MemberClass.OPERATIONAL

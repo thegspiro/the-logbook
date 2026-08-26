@@ -146,3 +146,44 @@ class TestQualificationsAreNotRanks:
         # Paramedic and Firefighter II are the motivating cases: real
         # credentials that were not expressible anywhere before this.
         assert {"paramedic", "firefighter_ii"} <= qualification_only
+
+
+class TestGrantDateGatesCurrencyToo:
+    """Both ends of the window, not just the expiry.
+
+    ``granted_on`` is the easier of the two to forget, and forgetting it fails
+    in the direction that matters: a department entering a member's *upcoming*
+    Paramedic certification with a future start date would have that member
+    clear the medic seat today, before they hold the credential. The same
+    filter answers historical questions, so a shift last month must not show
+    them as qualified for a night they had not yet earned.
+    """
+
+    @staticmethod
+    def _in_force(granted_on, expires_on, as_of):
+        """Mirror of QualificationService._current_on, on plain values."""
+        started = granted_on is None or granted_on <= as_of
+        unexpired = expires_on is None or expires_on >= as_of
+        return started and unexpired
+
+    def test_a_future_dated_credential_is_not_current_yet(self):
+        today = date.today()
+        starts = today + timedelta(days=30)
+        assert not self._in_force(starts, None, today)
+        assert self._in_force(starts, None, starts)
+
+    def test_a_credential_earned_after_the_shift_does_not_backdate(self):
+        today = date.today()
+        last_month = today - timedelta(days=30)
+        assert not self._in_force(today, None, last_month)
+
+    def test_a_null_grant_date_has_always_been_in_force(self):
+        # NULL at either end means "no bound at that end", not "unknown".
+        assert self._in_force(None, None, date(1990, 1, 1))
+
+    def test_both_ends_must_hold(self):
+        granted = date(2020, 1, 1)
+        expires = date(2021, 1, 1)
+        assert self._in_force(granted, expires, date(2020, 6, 1))
+        assert not self._in_force(granted, expires, date(2019, 6, 1)), "before grant"
+        assert not self._in_force(granted, expires, date(2022, 6, 1)), "after expiry"
