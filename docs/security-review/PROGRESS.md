@@ -16,13 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1903 (feature 21, admin hours) — open, subscribed. 8 fixes: cross-org
-`get_user_hours_compliance` leak, `clock_out` org scoping,
-`update_category` null-clear bug, a `clock_in` race, event-hour-mapping
-percentage race, `edit_pending_entry` guard parity, 4 `fromisoformat`
-500s, and 3 `source_rsvp_id` org filters. Per-org SoD toggle and a resync
-approval-integrity gap remain flagged (product decisions). See
-`docs/security-review/AH-21-admin-hours.md`.
+None — PR #1903 (feature 21, admin hours) merged. Next iteration starts feature 22 (grants & fundraising).
 
 ---
 
@@ -71,8 +65,8 @@ data-carrying modules, then the supporting infrastructure.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳ #1903        |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | 🔄              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
@@ -784,3 +778,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   scoped and 8845/8845 full backend suite pass. Findings doc:
   `docs/security-review/AH-21-admin-hours.md`. PR #1903 opened and
   subscribed. Next: 22 grants & fundraising, once #1903 merges.
+- **21 Admin hours ✅ merged** — PR #1903 merged 2026-08-26. Codex review
+  caught one real deadlock risk in the AH-11 fix before merge: the first
+  version of `update_event_hour_mapping`'s percentage-check locked only
+  the _other_ mappings for a source, excluding the target row being
+  updated. Two concurrent updates to two different mappings under the same
+  source could each lock the row the other was about to write to, then
+  each block writing their own row at flush — a lock-order inversion
+  InnoDB resolves by killing one side as a deadlock (surfaced as a 500).
+  Fixed by locking the complete set of mappings for the source — including
+  the target — in one query ordered consistently by id, so a second
+  transaction reaching the same source queues behind the first instead of
+  each holding what the other needs. `create_event_hour_mapping` doesn't
+  share this failure mode (a fresh INSERT never needs to acquire a write
+  lock on an existing row). Replied and resolved the review thread. Full
+  local completion gate re-verified green (8846/8846 full suite) before
+  the final push; CI came back 16/16 green with no further comments.
+  Next: 22 grants & fundraising.
