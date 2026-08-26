@@ -54,9 +54,12 @@ from app.services.separation_of_duties import assert_different_person
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.embroidery import (
+    normalize_personalization_method,
     normalize_thread_color,
+    personalization_verb,
     thread_color_hex,
     thread_color_label,
+    uses_thread_color,
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -1133,6 +1136,9 @@ class StorefrontService:
                     "personalization_thread_color_hex": thread_color_hex(
                         product.personalization_thread_color
                     ),
+                    "personalization_method": normalize_personalization_method(
+                        product.personalization_method
+                    ),
                     "available_quantity": available,
                     "is_available": available is None or available > 0,
                     "variants": variants,
@@ -1389,6 +1395,7 @@ class StorefrontService:
                     sku=line["sku"],
                     personalization_text=line["personalization_text"],
                     personalization_thread_color=line["personalization_thread_color"],
+                    personalization_method=line["personalization_method"],
                     unit_price=line["unit_price"],
                     quantity=line["quantity"],
                     line_total=line["line_total"],
@@ -1617,6 +1624,16 @@ class StorefrontService:
                     "personalization_thread_color": (
                         normalize_thread_color(
                             product.personalization_thread_color
+                        ).value
+                        # Engraving has no thread. Carrying one anyway is what
+                        # put "Gold" on the vendor sheet for a challenge coin.
+                        if personalization_text
+                        and uses_thread_color(product.personalization_method)
+                        else None
+                    ),
+                    "personalization_method": (
+                        normalize_personalization_method(
+                            product.personalization_method
                         ).value
                         if personalization_text
                         else None
@@ -2793,6 +2810,7 @@ class StorefrontService:
                 StoreOrderItem.sku,
                 StoreOrderItem.personalization_text,
                 StoreOrderItem.personalization_thread_color,
+                StoreOrderItem.personalization_method,
                 func.sum(StoreOrderItem.quantity),
                 func.max(StoreOrderItem.unit_price),
                 func.coalesce(func.sum(StoreOrderItem.line_total), Decimal("0")),
@@ -2811,6 +2829,7 @@ class StorefrontService:
                 StoreOrderItem.sku,
                 StoreOrderItem.personalization_text,
                 StoreOrderItem.personalization_thread_color,
+                StoreOrderItem.personalization_method,
             )
             .order_by(
                 StoreOrderItem.product_name,
@@ -2827,6 +2846,13 @@ class StorefrontService:
                 "personalization_text": personalization_text,
                 "personalization_thread_color": (
                     normalize_thread_color(thread_color)
+                    # An engraved line has no thread to name, and naming one
+                    # sends the vendor an instruction they cannot follow.
+                    if personalization_text and uses_thread_color(method)
+                    else None
+                ),
+                "personalization_method": (
+                    normalize_personalization_method(method)
                     if personalization_text
                     else None
                 ),
@@ -2841,6 +2867,7 @@ class StorefrontService:
                 sku,
                 personalization_text,
                 thread_color,
+                method,
                 quantity,
                 unit_price,
                 line_total,
@@ -3053,6 +3080,7 @@ class StorefrontService:
                 "Item",
                 "Option",
                 "Personalization",
+                "Method",
                 "Thread Color",
                 "SKU",
                 "Quantity",
@@ -3086,8 +3114,14 @@ class StorefrontService:
                         item.variant_label or "",
                         item.personalization_text or "",
                         (
+                            personalization_verb(item.personalization_method)
+                            if item.personalization_text
+                            else ""
+                        ),
+                        (
                             thread_color_label(item.personalization_thread_color)
                             if item.personalization_text
+                            and uses_thread_color(item.personalization_method)
                             else ""
                         ),
                         item.sku or "",

@@ -77,6 +77,15 @@ def test_broad_view_grants_do_not_reach_the_roster():
         )
 
 
+def _load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_migration():
     path = (
         Path(__file__).resolve().parents[1]
@@ -112,8 +121,23 @@ def test_migration_snapshot_matches_the_registry_it_was_written_against():
     matching the rows it was written for and silently backfills nothing.
     """
     migration = _load_migration()
+    # The storefront grants reached historian, public outreach and
+    # communications officer in a *later* revision, which carries its own
+    # backfill. Today's registry therefore holds two permissions this
+    # migration's frozen snapshot is right not to have: subtract them rather
+    # than editing the snapshot, which must keep matching the pristine rows
+    # this migration actually meets.
+    later_grants = set(
+        _load_module(
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "20260826_0345_b3e8d1f45a27_grant_corporate_storefront_access.py",
+            "_corp_storefront",
+        )._GRANTS
+    )
     for slug, expected in migration._PRIOR_DEFAULTS.items():
-        current = set(DEFAULT_POSITIONS[slug]["permissions"])
+        current = set(DEFAULT_POSITIONS[slug]["permissions"]) - later_grants
         assert current == expected | {PERMISSION}, (
             f"{slug}'s registry grants no longer equal the migration's frozen "
             "snapshot plus the new permission. If this position's defaults "

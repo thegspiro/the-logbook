@@ -17,7 +17,7 @@ vi.mock('react-hot-toast', () => ({
 
 import StorefrontPage from './StorefrontPage';
 import { useStorefrontStore } from '../store/storefrontStore';
-import { EmbroideryThreadColor } from '../types';
+import { EmbroideryThreadColor, PersonalizationMethod } from '../types';
 import type { Storefront, StorefrontProductOffer } from '../types';
 
 const product = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProductOffer => ({
@@ -37,6 +37,7 @@ const product = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontPro
   personalizationPrice: '0.00',
   personalizationThreadColor: EmbroideryThreadColor.GOLD,
   personalizationThreadColorHex: '#c8a02c',
+  personalizationMethod: PersonalizationMethod.EMBROIDERY,
   availableQuantity: null,
   isAvailable: true,
   variants: [],

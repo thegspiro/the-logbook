@@ -40,6 +40,7 @@ class _Product:
     personalization_max_length = 30
     personalization_price = Decimal("0")
     personalization_thread_color = None
+    personalization_method = None
     sort_order = 0
     internal_notes = None
     created_at = None

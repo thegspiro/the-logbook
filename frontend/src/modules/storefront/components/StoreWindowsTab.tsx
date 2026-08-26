@@ -25,6 +25,7 @@ import {
 } from '../types';
 import { WindowFormModal } from './WindowFormModal';
 import { ThreadSwatch } from './ThreadSwatch';
+import { methodLabel } from '../utils/personalization';
 
 interface StoreWindowsTabProps {
   onChanged: () => void;
@@ -559,6 +560,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                       <th className="py-1 pr-2 font-medium">Item</th>
                       <th className="px-2 py-1 font-medium">Option</th>
                       <th className="px-2 py-1 font-medium">Personalization</th>
+                      <th className="px-2 py-1 font-medium">Method</th>
                       <th className="px-2 py-1 font-medium">Thread</th>
                       <th className="px-2 py-1 text-center font-medium">Qty</th>
                       <th className="py-1 pl-2 text-right font-medium">Total</th>
@@ -573,7 +575,12 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                         <td className="text-theme-text-primary py-1.5 pr-2">{row.productName}</td>
                         <td className="text-theme-text-secondary px-2 py-1.5">{row.variantLabel ?? '—'}</td>
                         <td className="text-theme-text-secondary px-2 py-1.5">{row.personalizationText ?? '—'}</td>
+                        <td className="text-theme-text-secondary px-2 py-1.5 whitespace-nowrap">
+                          {row.personalizationText ? methodLabel(row.personalizationMethod) : '—'}
+                        </td>
                         <td className="text-theme-text-secondary px-2 py-1.5">
+                          {/* Engraved rows carry no colour — the backend drops
+                              it, so an engraver is never sent a thread. */}
                           {row.personalizationThreadColor ? (
                             <ThreadSwatch color={row.personalizationThreadColor} />
                           ) : (

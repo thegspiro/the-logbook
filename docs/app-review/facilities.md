@@ -3,6 +3,12 @@
 **Prefix:** `FAC2` · **Iteration:** B4 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
+**Correction (security-review 12, 2026-08-26):** FAC-4 ("search wired but
+not exposed"), flagged as still-open in every pass below, is closed as of
+this correction: `GET /facilities` and `GET /facilities/page` both accept
+and forward a `search` query parameter, and `FacilitiesDashboard.tsx` calls
+it. See `docs/security-review/FAC-12-facilities.md`.
+
 ---
 
 ## Pass 4 (2026-08-09) — invariants re-verified; no code change

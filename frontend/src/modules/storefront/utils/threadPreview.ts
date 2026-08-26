@@ -66,3 +66,18 @@ export const threadPreviewSurface = (hex: string): string =>
 /** Class for the "Preview" caption, legible on whichever backdrop was chosen. */
 export const threadPreviewCaption = (hex: string): string =>
   needsLightBackdrop(hex) ? 'text-slate-600' : 'text-slate-300';
+
+/** Surface for an engraved preview — cut into metal, so no thread colour.
+ *
+ *  Rendered as dark lettering on a pale brushed-metal ground rather than in a
+ *  colour: an engraver removes material, and showing coloured text would imply
+ *  a thread the vendor is not being sent.
+ */
+export const ENGRAVED_SURFACE =
+  'border-slate-400 bg-gradient-to-b from-slate-200 to-slate-300 dark:border-slate-500 dark:from-slate-300 dark:to-slate-400';
+
+/** Lettering colour for an engraved preview — reads as a cut, not a stitch. */
+export const ENGRAVED_TEXT = '#3f3f46';
+
+/** Caption colour legible on the engraved ground. */
+export const ENGRAVED_CAPTION = 'text-slate-600';
