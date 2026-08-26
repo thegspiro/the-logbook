@@ -70,6 +70,7 @@ fails if this document misses a curated code).
 | Code       | Meaning                                                        | What to do                                                                     |
 | ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | LB-ORG-001 | The account references an organization record that is missing. | Escalate to the system administrator — this is a data problem, not user error. |
+| LB-ORG-002 | The department has switched this module off under Settings → Modules. | Not a permission fault. Turn the module on if it is wanted; otherwise the caller is a stale tab or bookmark and should reload. |
 
 ## System (LB-SYS)
 

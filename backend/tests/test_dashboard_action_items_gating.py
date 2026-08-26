@@ -6,6 +6,12 @@ neither permission reads every action item's description org-wide (the XC-2
 re-exposure DASH-1 only closed the inner minutes restricted-split for). The
 meeting half needs meetings.view OR minutes.view; the minutes half needs
 minutes.view. DB mocked; no MySQL.
+
+The module gate sits in front of both halves and is patched out here rather
+than exercised — that the Minutes module switches the whole feed off is
+asserted in test_dashboard_module_gating.py. These tests are about what a
+caller may read once the department does run Minutes, so they hold it on and
+count only the action-item queries.
 """
 
 from types import SimpleNamespace
@@ -33,11 +39,19 @@ def _user():
     return SimpleNamespace(id="u1", organization_id="org-1", positions=[])
 
 
+def _minutes_on():
+    """Hold the module on, so ``db.execute`` counts action-item reads only."""
+    return patch(
+        "app.api.v1.endpoints.dashboard.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=SimpleNamespace(enabled_modules=["minutes"])),
+    )
+
+
 class TestActionItemsGating:
     async def test_member_with_no_permission_reads_nothing(self):
         db = MagicMock()
         db.execute = AsyncMock(return_value=_empty_result())
-        with patch(
+        with _minutes_on(), patch(
             "app.api.v1.endpoints.dashboard.user_has_permission",
             side_effect=_perms(),  # neither meetings.view nor minutes.view
         ):
@@ -49,7 +63,7 @@ class TestActionItemsGating:
     async def test_meetings_view_only_queries_only_the_meeting_half(self):
         db = MagicMock()
         db.execute = AsyncMock(return_value=_empty_result())
-        with patch(
+        with _minutes_on(), patch(
             "app.api.v1.endpoints.dashboard.user_has_permission",
             side_effect=_perms("meetings.view"),
         ):
@@ -61,7 +75,7 @@ class TestActionItemsGating:
         # minutes.view satisfies the meeting half's OR gate and the minutes half.
         db = MagicMock()
         db.execute = AsyncMock(return_value=_empty_result())
-        with patch(
+        with _minutes_on(), patch(
             "app.api.v1.endpoints.dashboard.user_has_permission",
             side_effect=_perms("minutes.view"),
         ):

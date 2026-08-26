@@ -114,12 +114,27 @@ class OrganizationService:
         modules = settings_dict.get("modules")
 
         if isinstance(modules, dict) and len(modules) > 0:
-            kwargs = {f: bool(modules.get(f, False)) for f in field_names}
-            ms = ModuleSettings(**kwargs)
+            # A key that is simply absent means "this field did not exist when
+            # the dict was written", not "off". Both writers (onboarding's
+            # configure_modules and update_module_settings) persist the whole
+            # field set, so the only way a field goes missing is that it was
+            # added to ModuleSettings afterwards — and reading those as False
+            # would switch a live module off for every existing installation
+            # on upgrade, which is the failure CLAUDE.md pitfall 19 is about.
+            # Letting Pydantic apply the field default instead makes absence
+            # mean "current behaviour", so a new module ships on where it was
+            # already on and off where it was designed to be opt-in.
+            stored = {f: bool(modules[f]) for f in field_names if f in modules}
+            ms = ModuleSettings(**stored)
 
             # If at least one module is enabled, or the user explicitly
             # configured modules via the Settings page, trust the dict.
-            any_enabled = any(getattr(ms, f) for f in field_names)
+            #
+            # Asked of what was actually stored, not of the resolved model: a
+            # field that is merely falling back to a True default is no
+            # evidence the stored dict survived onboarding's dual-write, and
+            # counting it would disarm the recovery path below.
+            any_enabled = any(stored.values())
             if any_enabled or modules.get("_user_configured"):
                 return ms
 
@@ -411,9 +426,14 @@ class OrganizationService:
             {f: getattr(resolved, f) for f in field_names},
         )
 
-        # Merge the incoming toggles and mark as explicitly configured
+        # Merge the incoming toggles and mark as explicitly configured.
+        # The resolved layer sits between the two so a field added to
+        # ModuleSettings since this dict was written is persisted at its
+        # resolved value rather than staying absent — otherwise the dict never
+        # self-heals and every read keeps depending on the default fallback.
         updated_modules = {
             **current_modules,
+            **{f: getattr(resolved, f) for f in field_names},
             **module_updates,
             "_user_configured": True,
         }

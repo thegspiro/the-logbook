@@ -60,6 +60,7 @@ import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStat
 import { requirementTarget } from '../utils/pipelineProgress';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
   addCalendarDays,
   formatCalendarDate,
@@ -183,6 +184,7 @@ const Dashboard: React.FC = () => {
   const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const canViewScheduling = checkPermission('scheduling.manage');
+  const { isModuleOn } = useEnabledModules();
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -1632,14 +1634,22 @@ const Dashboard: React.FC = () => {
                       loading={loadingAdmin}
                     />
 
-                    <DashboardStatCard
-                      label="Training Compliance"
-                      value={`${adminSummary?.training_completion_pct ?? 0}%`}
-                      icon={GraduationCap}
-                      iconColor="text-green-700 dark:text-green-400"
-                      description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
-                      loading={loadingAdmin}
-                    />
+                    {/*
+                      Null, not 0, is what says "this department does not run
+                      Training" — a genuine 0% still gets its card. Kept
+                      mounted while loading so the skeleton row does not
+                      reflow once the summary lands.
+                    */}
+                    {(loadingAdmin || adminSummary?.training_completion_pct != null) && (
+                      <DashboardStatCard
+                        label="Training Compliance"
+                        value={`${adminSummary?.training_completion_pct ?? 0}%`}
+                        icon={GraduationCap}
+                        iconColor="text-green-700 dark:text-green-400"
+                        description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
+                        loading={loadingAdmin}
+                      />
+                    )}
 
                     <DashboardStatCard
                       label="Upcoming Events"
@@ -1650,24 +1660,26 @@ const Dashboard: React.FC = () => {
                       loading={loadingAdmin}
                     />
 
-                    <DashboardStatCard
-                      label="Action Items"
-                      value={adminSummary?.open_action_items ?? 0}
-                      icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
-                      iconColor={
-                        (adminSummary?.overdue_action_items ?? 0) > 0
-                          ? 'text-red-700 dark:text-red-400'
-                          : 'text-yellow-700 dark:text-yellow-400'
-                      }
-                      description={
-                        (adminSummary?.overdue_action_items ?? 0) > 0
-                          ? `${adminSummary?.overdue_action_items} overdue`
-                          : 'All on track'
-                      }
-                      loading={loadingAdmin}
-                      onClick={() => void navigate('/action-items')}
-                      ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
-                    />
+                    {(loadingAdmin || adminSummary?.open_action_items != null) && (
+                      <DashboardStatCard
+                        label="Action Items"
+                        value={adminSummary?.open_action_items ?? 0}
+                        icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
+                        iconColor={
+                          (adminSummary?.overdue_action_items ?? 0) > 0
+                            ? 'text-red-700 dark:text-red-400'
+                            : 'text-yellow-700 dark:text-yellow-400'
+                        }
+                        description={
+                          (adminSummary?.overdue_action_items ?? 0) > 0
+                            ? `${adminSummary?.overdue_action_items} overdue`
+                            : 'All on track'
+                        }
+                        loading={loadingAdmin}
+                        onClick={() => void navigate('/action-items')}
+                        ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
+                      />
+                    )}
 
                     <DashboardStatCard
                       label="Admin Hours"
@@ -1687,7 +1699,14 @@ const Dashboard: React.FC = () => {
                 ))}
             </div>
 
-            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
+            {/*
+              The widget summary comes from /api/v1/scheduling, which the
+              module gate refuses outright when Scheduling is off — so
+              without this the department tab renders a card that can only
+              fail. The permission says who may see the crew figures; the
+              module flag says whether this department schedules here at all.
+            */}
+            {canViewScheduling && isModuleOn('scheduling') && <SchedulingWidgets timezone={tz} />}
 
             {canViewOrganization && setupProgress && (
               <OrganizationSetupWidget
