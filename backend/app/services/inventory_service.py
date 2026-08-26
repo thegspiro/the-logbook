@@ -15,6 +15,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
@@ -41,6 +42,7 @@ from app.models.inventory import (
     ItemType,
     ItemVariantGroup,
     MaintenanceRecord,
+    MaintenanceType,
     MemberSizePreferences,
     NFPAInspectionDetail,
     NFPAItemCompliance,
@@ -54,6 +56,7 @@ from app.models.inventory import (
     StorageArea,
     TrackingType,
     WriteOffRequest,
+    WriteOffReason,
     WriteOffStatus,
 )
 from app.models.location import Location
@@ -4702,44 +4705,72 @@ class InventoryService:
         if not item:
             return None, "Item not found"
 
-        # Check for duplicate pending return requests
+        # Bound client-supplied holding identifiers to this tenant before any
+        # ownership lookup (and before reporting whether a holding is active).
+        for model, value, label in (
+            (ItemAssignment, assignment_id, "assignment"),
+            (ItemIssuance, issuance_id, "issuance"),
+            (CheckOutRecord, checkout_id, "checkout"),
+        ):
+            await assert_in_org(
+                self.db, model, value, organization_id, allow_none=True, label=label
+            )
+
+        # Only a member who still physically holds this specific record may
+        # notify the quartermaster.  Do not trust an item id by itself.
+        holding = None
+        if return_type == "assignment" and assignment_id:
+            holding = (
+                await self.db.execute(
+                    select(ItemAssignment).where(
+                        ItemAssignment.id == str(assignment_id),
+                        ItemAssignment.item_id == str(item_id),
+                        ItemAssignment.user_id == str(requester_id),
+                        ItemAssignment.is_active.is_(True),
+                    )
+                )
+            ).scalar_one_or_none()
+        elif return_type == "issuance" and issuance_id:
+            holding = (
+                await self.db.execute(
+                    select(ItemIssuance).where(
+                        ItemIssuance.id == str(issuance_id),
+                        ItemIssuance.item_id == str(item_id),
+                        ItemIssuance.user_id == str(requester_id),
+                        ItemIssuance.is_returned.is_(False),
+                    )
+                )
+            ).scalar_one_or_none()
+            if holding and quantity_returning > holding.quantity_issued:
+                return (
+                    None,
+                    f"Cannot return {quantity_returning}; only {holding.quantity_issued} remain issued",
+                )
+        elif return_type == "checkout" and checkout_id:
+            holding = (
+                await self.db.execute(
+                    select(CheckOutRecord).where(
+                        CheckOutRecord.id == str(checkout_id),
+                        CheckOutRecord.item_id == str(item_id),
+                        CheckOutRecord.user_id == str(requester_id),
+                        CheckOutRecord.is_returned.is_(False),
+                    )
+                )
+            ).scalar_one_or_none()
+        if not holding:
+            return None, "No matching active holding was found for this member"
+
+        # Check for duplicate requested return requests
         dupe_query = (
             select(ReturnRequest)
             .where(ReturnRequest.organization_id == str(organization_id))
             .where(ReturnRequest.requester_id == str(requester_id))
             .where(ReturnRequest.item_id == str(item_id))
-            .where(ReturnRequest.status == ReturnRequestStatus.PENDING)
+            .where(ReturnRequest.status == ReturnRequestStatus.REQUESTED)
         )
         dupe_result = await self.db.execute(dupe_query)
         if dupe_result.scalar_one_or_none():
-            return None, "You already have a pending return request for this item"
-
-        # INV-4 (XC-1): the client may cite the assignment/issuance/checkout this
-        # return is against — each must be in the caller's org (all optional).
-        await assert_in_org(
-            self.db,
-            ItemAssignment,
-            assignment_id,
-            organization_id,
-            allow_none=True,
-            label="assignment",
-        )
-        await assert_in_org(
-            self.db,
-            ItemIssuance,
-            issuance_id,
-            organization_id,
-            allow_none=True,
-            label="issuance",
-        )
-        await assert_in_org(
-            self.db,
-            CheckOutRecord,
-            checkout_id,
-            organization_id,
-            allow_none=True,
-            label="checkout",
-        )
+            return None, "You already notified the quartermaster about this item"
 
         condition_enum = (
             ItemCondition(reported_condition)
@@ -4760,7 +4791,7 @@ class InventoryService:
             quantity_returning=quantity_returning,
             reported_condition=condition_enum,
             member_notes=member_notes,
-            status=ReturnRequestStatus.PENDING,
+            status=ReturnRequestStatus.REQUESTED,
         )
         self.db.add(request)
         await self.db.commit()
@@ -4800,13 +4831,17 @@ class InventoryService:
         reviewer_id: UUID,
         status: str,
         review_notes: Optional[str] = None,
-        override_condition: Optional[str] = None,
+        observed_condition: Optional[str] = None,
+        verified_identifier: Optional[str] = None,
+        received_quantity: Optional[int] = None,
+        follow_up: str = "auto",
     ) -> Tuple[bool, Optional[str]]:
         """
-        Approve or deny a return request.
+        Deny a request or receive the item in one atomic transaction.
 
-        On approval, executes the actual return operation (unassign, return to pool,
-        or check-in) using the appropriate service method.
+        A receipt is only accepted with an independent condition observation and,
+        for serialized gear, a matching barcode/asset/serial identifier.  The hold,
+        inventory state, inspection result, and follow-up are committed together.
         """
         result = await self.db.execute(
             select(ReturnRequest)
@@ -4817,7 +4852,7 @@ class InventoryService:
         if not req:
             return False, "Return request not found"
 
-        if req.status != ReturnRequestStatus.PENDING:
+        if req.status != ReturnRequestStatus.REQUESTED:
             return False, f"Request is already {req.status.value}"
 
         req.reviewed_by = str(reviewer_id)
@@ -4829,66 +4864,178 @@ class InventoryService:
             await self.db.commit()
             return True, None
 
-        # Approved — execute the actual return
-        condition_str = override_condition or req.reported_condition.value
-        condition_enum = ItemCondition(condition_str)
+        if not observed_condition:
+            return False, "Observed condition is required during physical receipt"
+        condition = ItemCondition(observed_condition)
+        now = datetime.now(timezone.utc)
+        item = await self._get_item_locked(UUID(str(req.item_id)), organization_id)
+        if not item:
+            return False, "Item not found"
 
-        req.status = ReturnRequestStatus.APPROVED
+        if item.tracking_type == TrackingType.INDIVIDUAL:
+            entered = (verified_identifier or "").strip()
+            valid = {
+                str(v).strip()
+                for v in (item.barcode, item.asset_tag, item.serial_number)
+                if v
+            }
+            if not entered:
+                return (
+                    False,
+                    "Barcode or asset verification is required for serialized items",
+                )
+            if entered not in valid:
+                return (
+                    False,
+                    "Scanned barcode or asset identifier does not match this item",
+                )
+            qty = 1
+        else:
+            qty = received_quantity
+            if qty is None:
+                return False, "Received quantity is required for pool items"
+            if qty != req.quantity_returning:
+                return False, "Received quantity must match the quantity being returned"
 
-        if req.return_type == ReturnRequestType.ASSIGNMENT:
-            success, error = await self.unassign_item(
-                item_id=UUID(str(req.item_id)),
-                organization_id=organization_id,
-                returned_by=reviewer_id,
-                return_condition=condition_enum,
-                return_notes=f"Return request #{req.id[:8]} — {review_notes or ''}".strip(),
-                expected_user_id=UUID(str(req.requester_id)),
-            )
-            if not success:
-                req.status = ReturnRequestStatus.PENDING
-                req.reviewed_by = None
-                req.reviewed_at = None
-                await self.db.commit()
-                return False, f"Failed to unassign: {error}"
+        req.status = ReturnRequestStatus.RECEIVED
+        req.observed_condition = condition
+        req.verified_identifier = verified_identifier
+        req.received_quantity = qty
+        note = f"Return request #{req.id[:8]} — {review_notes or ''}".strip()
 
-        elif req.return_type == ReturnRequestType.ISSUANCE:
-            if not req.issuance_id:
-                return False, "No issuance ID on this request"
-            success, error = await self.return_to_pool(
-                issuance_id=UUID(str(req.issuance_id)),
-                organization_id=organization_id,
-                returned_by=reviewer_id,
-                return_condition=condition_enum,
-                return_notes=f"Return request #{req.id[:8]} — {review_notes or ''}".strip(),
-                quantity_returned=req.quantity_returning,
-            )
-            if not success:
-                req.status = ReturnRequestStatus.PENDING
-                req.reviewed_by = None
-                req.reviewed_at = None
-                await self.db.commit()
-                return False, f"Failed to return to pool: {error}"
+        try:
+            if req.return_type == ReturnRequestType.ASSIGNMENT:
+                assignment = (
+                    await self.db.execute(
+                        select(ItemAssignment)
+                        .where(
+                            ItemAssignment.id == str(req.assignment_id),
+                            ItemAssignment.organization_id == str(organization_id),
+                            ItemAssignment.user_id == str(req.requester_id),
+                            ItemAssignment.is_active.is_(True),
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if not assignment:
+                    raise ValueError("Active assignment not found")
+                assignment.is_active = False
+                assignment.returned_date, assignment.returned_by = now, str(reviewer_id)
+                assignment.return_condition, assignment.return_notes = condition, note
+                item.assigned_to_user_id, item.assigned_date = None, None
+            elif req.return_type == ReturnRequestType.CHECKOUT:
+                checkout = (
+                    await self.db.execute(
+                        select(CheckOutRecord)
+                        .where(
+                            CheckOutRecord.id == str(req.checkout_id),
+                            CheckOutRecord.organization_id == str(organization_id),
+                            CheckOutRecord.user_id == str(req.requester_id),
+                            CheckOutRecord.is_returned.is_(False),
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if not checkout:
+                    raise ValueError("Active checkout not found")
+                checkout.is_returned, checkout.is_overdue = True, False
+                checkout.checked_in_at, checkout.checked_in_by = now, str(reviewer_id)
+                checkout.return_condition, checkout.damage_notes = condition, note
+            else:
+                issuance = (
+                    await self.db.execute(
+                        select(ItemIssuance)
+                        .where(
+                            ItemIssuance.id == str(req.issuance_id),
+                            ItemIssuance.organization_id == str(organization_id),
+                            ItemIssuance.user_id == str(req.requester_id),
+                            ItemIssuance.is_returned.is_(False),
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if not issuance:
+                    raise ValueError("Active issuance not found")
+                if qty > issuance.quantity_issued:
+                    raise ValueError(
+                        f"Cannot receive {qty}; only {issuance.quantity_issued} remain issued"
+                    )
+                item.quantity = (item.quantity or 0) + qty
+                item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
+                if qty == issuance.quantity_issued:
+                    issuance.is_returned = True
+                    issuance.returned_at, issuance.returned_by = now, str(reviewer_id)
+                    issuance.return_condition, issuance.return_notes = condition, note
+                else:
+                    issuance.quantity_issued -= qty
+                    issuance.return_notes = (
+                        (issuance.return_notes or "")
+                        + f"\nPartial return: {qty} — {note}"
+                    ).strip()
 
-        elif req.return_type == ReturnRequestType.CHECKOUT:
-            if not req.checkout_id:
-                return False, "No checkout ID on this request"
-            success, error = await self.checkin_item(
-                checkout_id=UUID(str(req.checkout_id)),
-                organization_id=organization_id,
-                checked_in_by=reviewer_id,
-                return_condition=condition_enum,
-                damage_notes=f"Return request #{req.id[:8]} — {req.member_notes or ''}".strip(),
-            )
-            if not success:
-                req.status = ReturnRequestStatus.PENDING
-                req.reviewed_by = None
-                req.reviewed_at = None
-                await self.db.commit()
-                return False, f"Failed to check in: {error}"
+            req.status = ReturnRequestStatus.INSPECTED
+            item.condition = condition
+            unsafe = condition in {
+                ItemCondition.POOR,
+                ItemCondition.DAMAGED,
+                ItemCondition.OUT_OF_SERVICE,
+            }
+            item.status = ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
 
-        req.status = ReturnRequestStatus.COMPLETED
-        await self.db.commit()
-        return True, None
+            chosen = follow_up
+            if chosen == "auto":
+                chosen = (
+                    "write_off"
+                    if condition == ItemCondition.OUT_OF_SERVICE
+                    else ("maintenance" if unsafe else "none")
+                )
+            if unsafe and chosen == "none":
+                raise ValueError(
+                    "Damaged, poor, or out-of-service gear requires a follow-up"
+                )
+            follow = None
+            if chosen == "maintenance":
+                follow = MaintenanceRecord(
+                    organization_id=str(organization_id),
+                    item_id=str(item.id),
+                    maintenance_type=MaintenanceType.REPAIR,
+                    scheduled_date=now.date(),
+                    condition_before=condition,
+                    description=note,
+                    notes=f"Member reported {req.reported_condition.value}; quartermaster observed {condition.value}",
+                    is_completed=False,
+                    created_by=str(reviewer_id),
+                )
+            elif chosen == "write_off":
+                follow = WriteOffRequest(
+                    organization_id=str(organization_id),
+                    item_id=str(item.id),
+                    item_name=item.name,
+                    item_serial_number=item.serial_number,
+                    item_asset_tag=item.asset_tag,
+                    item_value=item.purchase_price,
+                    reason=WriteOffReason.DAMAGED_BEYOND_REPAIR,
+                    description=note,
+                    status=WriteOffStatus.PENDING,
+                    requested_by=str(reviewer_id),
+                )
+            elif chosen == "charge_review":
+                if req.return_type != ReturnRequestType.ISSUANCE:
+                    raise ValueError(
+                        "Charge review is only available for pool issuances"
+                    )
+                issuance.charge_status = "pending"
+            if follow:
+                self.db.add(follow)
+                await self.db.flush()
+                req.follow_up_id = follow.id
+            req.follow_up_type = None if chosen == "none" else chosen
+            req.status = ReturnRequestStatus.COMPLETED
+            await self.db.commit()
+            return True, None
+        except (ValueError, SQLAlchemyError) as exc:
+            await self.db.rollback()
+            return False, str(exc)
 
     # ------------------------------------------------------------------
     # Issuance History (all issuances for a member, active + returned)

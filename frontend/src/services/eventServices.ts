@@ -963,6 +963,16 @@ export interface EquipmentRequestItem {
   reviewer_name?: string;
   reviewed_at?: string;
   review_notes?: string;
+  observed_condition?: string;
+  verified_identifier?: string;
+  received_quantity?: number;
+  follow_up_type?: string;
+  follow_up_id?: string;
+  observed_condition?: string;
+  verified_identifier?: string;
+  received_quantity?: number;
+  follow_up_type?: string;
+  follow_up_id?: string;
   fulfilled_by?: string;
   fulfilled_at?: string;
   fulfillment_type?: string;
@@ -1937,7 +1947,7 @@ export interface ReturnRequestItem {
   quantity_returning: number;
   reported_condition: string;
   member_notes?: string;
-  status: 'pending' | 'approved' | 'denied' | 'completed';
+  status: 'requested' | 'received' | 'inspected' | 'denied' | 'completed';
   reviewed_by?: string;
   reviewer_name?: string;
   reviewed_at?: string;

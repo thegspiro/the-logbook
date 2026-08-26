@@ -5676,7 +5676,10 @@ async def review_return_request(
         reviewer_id=current_user.id,
         status=data.status,
         review_notes=data.review_notes,
-        override_condition=data.override_condition,
+        observed_condition=data.observed_condition,
+        verified_identifier=data.verified_identifier,
+        received_quantity=data.received_quantity,
+        follow_up=data.follow_up,
     )
 
     if not success:

@@ -157,18 +157,13 @@ describe('MyEquipmentPage', () => {
     expect(screen.getByText('Work Gloves')).toBeInTheDocument();
   });
 
-  it('checks in an active checkout', async () => {
+  it('does not let a member mark an active checkout physically received', async () => {
     mockGetUserInventory.mockResolvedValue(fullInv);
-    const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Thermal Camera');
-
-    await user.click(screen.getByRole('button', { name: 'Check In' }));
-    await user.click(lastButton('Check In'));
-
-    await waitFor(() => expect(mockCheckInItem).toHaveBeenCalledTimes(1));
-    expect(mockCheckInItem.mock.calls[0]?.[0]).toBe('co-1');
-    expect(mockToastSuccess).toHaveBeenCalledWith('Item checked in');
+    expect(screen.queryByRole('button', { name: 'Check In' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Notify quartermaster of return/ })).not.toHaveLength(0);
+    expect(mockCheckInItem).not.toHaveBeenCalled();
   });
 
   it('submits a return request for an assignment', async () => {
@@ -177,8 +172,9 @@ describe('MyEquipmentPage', () => {
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Turnout Coat');
 
-    // The assignment row has the first "Request Return" button.
-    await user.click(firstButton(/Request Return/));
+    // The assignment row has the first notification action; this does not
+    // claim the member has already handed the gear in.
+    await user.click(firstButton(/Notify quartermaster of return/));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => expect(mockCreateReturnRequest).toHaveBeenCalledTimes(1));
