@@ -141,7 +141,13 @@ export const WaiverManagementPage: React.FC = () => {
       setError(null);
       const [leavesData, waiversData, membersData] = await Promise.all([
         memberStatusService.listLeavesOfAbsence({ active_only: false }),
-        memberStatusService.listTrainingWaivers({ active_only: false }),
+        // Degrades to an empty list rather than failing the page. Training
+        // waivers live behind the Training module's gate, so a department
+        // that does not run Training gets a 403 here — and inside a
+        // Promise.all that rejection took leave-of-absence management down
+        // with it, on a Membership screen that has nothing to do with
+        // Training. The waivers tab shows its empty state instead.
+        memberStatusService.listTrainingWaivers({ active_only: false }).catch(() => []),
         userService.getUsers(),
       ]);
       setLeaves(leavesData);

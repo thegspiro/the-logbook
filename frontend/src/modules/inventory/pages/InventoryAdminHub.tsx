@@ -355,8 +355,11 @@ export const InventoryAdminHub: React.FC = () => {
         subject: 'Pending gear request',
         party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
         when: dateLabel(request.created_at, 'Awaiting review', tz),
-        severity: request.priority === 'urgent' ? ('High' as const) : ('Medium' as const),
-        rank: request.priority === 'urgent' ? 2 : 4,
+        // RequestPriority tops out at "high" (low/normal/high); the earlier
+        // "urgent" comparison matched a value the backend cannot emit, so a
+        // top-priority gear request never got escalated in this queue.
+        severity: request.priority === 'high' ? ('High' as const) : ('Medium' as const),
+        rank: request.priority === 'high' ? 2 : 4,
         action: 'Review',
         href: `/inventory/admin/requests?request=${request.id}`,
       })),

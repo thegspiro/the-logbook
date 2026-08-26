@@ -91,6 +91,45 @@ class OrganizationService:
         "public_info": "public_info",
     }
 
+    @staticmethod
+    def _trusted_stored_modules(settings_dict: Dict[str, Any]) -> Optional[dict]:
+        """The stored per-field flags, when the dict is a real configuration.
+
+        ``None`` means the organization has not configured its modules — no
+        stored dict at all, or the every-field-False shape with no
+        ``_user_configured`` marker, which is onboarding's failed-dual-write
+        signature rather than a department's choice.
+
+        One implementation, because two callers ask the same question for
+        opposite purposes and must not drift: :meth:`_resolve_module_settings`
+        decides whether to trust the dict or fall back, and
+        :meth:`get_enabled_modules` reports the answer to the client as
+        ``configured`` so the navigation can tell "everything is switched off"
+        from "nothing has been chosen yet".
+
+        A key that is simply absent means "this field did not exist when the
+        dict was written", not "off". Both writers persist the whole field
+        set, so the only way a field goes missing is that it was added to
+        ``ModuleSettings`` afterwards — and reading those as False would
+        switch a live module off for every existing installation on upgrade,
+        which is the failure CLAUDE.md pitfall 19 is about. Absent keys are
+        left out here so Pydantic applies the declared default.
+
+        Trust is asked of what was actually *stored*, never of the resolved
+        model: a field merely falling back to a True default is no evidence
+        the dict survived onboarding, and counting it would disarm the
+        recovery path.
+        """
+        modules = settings_dict.get("modules")
+        if not isinstance(modules, dict) or not modules:
+            return None
+        stored = {
+            f: bool(modules[f]) for f in ModuleSettings.model_fields if f in modules
+        }
+        if any(stored.values()) or modules.get("_user_configured"):
+            return stored
+        return None
+
     async def _resolve_module_settings(
         self,
         settings_dict: Dict[str, Any],
@@ -111,36 +150,13 @@ class OrganizationService:
         to recover from failed dual-writes during onboarding.
         """
         field_names = list(ModuleSettings.model_fields.keys())
-        modules = settings_dict.get("modules")
 
-        if isinstance(modules, dict) and len(modules) > 0:
-            # A key that is simply absent means "this field did not exist when
-            # the dict was written", not "off". Both writers (onboarding's
-            # configure_modules and update_module_settings) persist the whole
-            # field set, so the only way a field goes missing is that it was
-            # added to ModuleSettings afterwards — and reading those as False
-            # would switch a live module off for every existing installation
-            # on upgrade, which is the failure CLAUDE.md pitfall 19 is about.
-            # Letting Pydantic apply the field default instead makes absence
-            # mean "current behaviour", so a new module ships on where it was
-            # already on and off where it was designed to be opt-in.
-            stored = {f: bool(modules[f]) for f in field_names if f in modules}
-            ms = ModuleSettings(**stored)
+        stored = self._trusted_stored_modules(settings_dict)
+        if stored is not None:
+            return ModuleSettings(**stored)
 
-            # If at least one module is enabled, or the user explicitly
-            # configured modules via the Settings page, trust the dict.
-            #
-            # Asked of what was actually stored, not of the resolved model: a
-            # field that is merely falling back to a True default is no
-            # evidence the stored dict survived onboarding's dual-write, and
-            # counting it would disarm the recovery path below.
-            any_enabled = any(stored.values())
-            if any_enabled or modules.get("_user_configured"):
-                return ms
-
-            # ALL modules are False and not user-confirmed — fall through
-            # to check OnboardingStatus as a safety net for failed
-            # dual-writes during onboarding.
+        # No stored dict, or the all-off shape that signals a failed
+        # onboarding dual-write — fall through to OnboardingStatus.
 
         # ── Migration from OnboardingStatus ──
         # OnboardingStatus is a system-wide singleton (single-org install) with
@@ -392,9 +408,14 @@ class OrganizationService:
                 organization_id,
             )
 
+        # Asked of org.settings *after* resolving, not of the dict we were
+        # handed: the OnboardingStatus migration inside the resolver writes a
+        # real configuration back, and reading the pre-resolution dict would
+        # report that organization as unconfigured for one more request.
         return EnabledModulesResponse(
             enabled_modules=enabled,
             module_settings=module_settings,
+            configured=self._trusted_stored_modules(org.settings or {}) is not None,
         )
 
     async def update_module_settings(
