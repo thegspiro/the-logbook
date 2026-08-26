@@ -99,14 +99,16 @@ class TestFundraisingReport:
 class TestUpdateCampaignTotal:
     async def test_sets_current_amount_from_sum(self):
         campaign = SimpleNamespace(id="c1", current_amount=0)
-        db = _db([_scalar(750), _one(campaign)])
+        # Campaign row lock happens first, then the (also locking) SUM read.
+        db = _db([_one(campaign), _scalar(750)])
         await FundraisingService(db)._update_campaign_total("c1", "org-1")
         assert campaign.current_amount == 750
 
     async def test_missing_campaign_is_noop(self):
-        db = _db([_scalar(750), _one(None)])
-        # Should not raise even when the campaign row is gone.
+        db = _db([_one(None)])
+        # Should not raise, and must not attempt the SUM query.
         await FundraisingService(db)._update_campaign_total("c1", "org-1")
+        db.execute.assert_awaited_once()
 
 
 class TestUpdateDonorStats:
@@ -119,7 +121,8 @@ class TestUpdateDonorStats:
             last_donation_date=None,
         )
         row = (500, 3, datetime(2026, 1, 1), datetime(2026, 6, 1))
-        db = _db([_row(row), _one(donor)])
+        # Donor row lock happens first, then the (also locking) aggregate read.
+        db = _db([_one(donor), _row(row)])
         await FundraisingService(db)._update_donor_stats("d1", "org-1")
         assert donor.total_donated == 500
         assert donor.donation_count == 3
@@ -134,16 +137,23 @@ class TestUpdateDonorStats:
             first_donation_date=None,
             last_donation_date=None,
         )
-        db = _db([_row((0, 0, None, None)), _one(donor)])
+        db = _db([_one(donor), _row((0, 0, None, None))])
         await FundraisingService(db)._update_donor_stats("d1", "org-1")
         assert donor.first_donation_date is None
         assert donor.last_donation_date is None
 
+    async def test_missing_donor_is_noop(self):
+        db = _db([_one(None)])
+        # Should not raise, and must not attempt the aggregate query.
+        await FundraisingService(db)._update_donor_stats("d1", "org-1")
+        db.execute.assert_awaited_once()
+
 
 class TestCreateDonation:
     async def test_completed_donation_rolls_up_aggregates(self):
-        # Two _entity_in_org checks (campaign, donor) resolve in-org.
-        db = _db([_one("c1"), _one("d1")])
+        # Two _entity_in_org checks (campaign, donor) resolve in-org, then
+        # the pre-insert campaign/donor locks (results discarded).
+        db = _db([_one("c1"), _one("d1"), MagicMock(), MagicMock()])
         svc = FundraisingService(db)
         svc._update_campaign_total = AsyncMock()
         svc._update_donor_stats = AsyncMock()
@@ -180,6 +190,85 @@ class TestCreateDonation:
         svc._update_donor_stats.assert_not_awaited()
 
 
+class TestDonationParentLockOrdering:
+    """Codex (PR #1904 review): Donation.campaign_id/donor_id are FK columns,
+    so inserting/updating a donation before locking its campaign/donor takes
+    an implicit shared FK-check lock on the parent ahead of the exclusive
+    FOR UPDATE lock the recompute takes — two concurrent completed donations
+    to the same campaign/donor deadlock. The parent locks must happen before
+    the donation is added to the session."""
+
+    async def test_create_locks_campaign_and_donor_before_adding_donation(self):
+        order = []
+
+        async def execute(stmt, *_a, **_kw):
+            order.append(("execute", str(stmt)))
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = "ok"
+            return result
+
+        db = MagicMock()
+        db.execute = execute
+        db.add = MagicMock(side_effect=lambda obj: order.append(("add", obj)))
+        db.flush = AsyncMock(side_effect=lambda: order.append(("flush", None)))
+        db.refresh = AsyncMock()
+
+        svc = FundraisingService(db)
+        svc._update_campaign_total = AsyncMock()
+        svc._update_donor_stats = AsyncMock()
+
+        await svc.create_donation(
+            "org-1",
+            {
+                "campaign_id": "c1",
+                "donor_id": "d1",
+                "amount": 100,
+                "payment_status": PaymentStatus.COMPLETED,
+            },
+            "user-1",
+        )
+
+        add_index = next(i for i, (kind, _) in enumerate(order) if kind == "add")
+        # The two entity_in_org validation checks come first (not locks);
+        # the last two execute calls before "add" are the FOR UPDATE locks.
+        lock_calls = [stmt for kind, stmt in order[:add_index] if kind == "execute"][
+            -2:
+        ]
+        assert len(lock_calls) == 2
+        assert all("FOR UPDATE" in stmt for stmt in lock_calls)
+        assert any("fundraising_campaigns" in stmt.lower() for stmt in lock_calls)
+        assert any("donors" in stmt.lower() for stmt in lock_calls)
+
+    async def test_update_locks_old_and_new_parents_before_flush(self):
+        donation = SimpleNamespace(
+            id="dn1", organization_id="o", campaign_id="cOLD", donor_id=None
+        )
+        order = []
+
+        async def execute(stmt, *_a, **_kw):
+            order.append(str(stmt))
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = donation
+            return result
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock(side_effect=lambda: order.append("FLUSH"))
+        svc = FundraisingService(db)
+        svc._update_campaign_total = AsyncMock()
+        svc._update_donor_stats = AsyncMock()
+
+        await svc.update_donation("dn1", "o", {"campaign_id": "cNEW"})
+
+        flush_index = order.index("FLUSH")
+        # Everything before FLUSH is: donation fetch, in-org check, then the
+        # two campaign locks (old + new) — both must render FOR UPDATE.
+        pre_flush = order[:flush_index]
+        lock_stmts = [s for s in pre_flush if "FOR UPDATE" in s]
+        assert len(lock_stmts) == 2
+        assert all("fundraising_campaigns" in s.lower() for s in lock_stmts)
+
+
 class TestUpdateDonationReassignment:
     """Editing a donation onto a different campaign/donor must recompute both
     the old and new parent, or the previous one is left overstated."""
@@ -188,8 +277,11 @@ class TestUpdateDonationReassignment:
         donation = SimpleNamespace(
             id="dn1", organization_id="o", campaign_id="cOLD", donor_id=None
         )
-        # Donation fetch, then the in-org check for the reassigned campaign.
-        svc = FundraisingService(_db([_one(donation), _one("cNEW")]))
+        # Donation fetch, the in-org check for the reassigned campaign, then
+        # the old+new campaign locks (results discarded).
+        svc = FundraisingService(
+            _db([_one(donation), _one("cNEW"), MagicMock(), MagicMock()])
+        )
         recomputed: list = []
         svc._update_campaign_total = AsyncMock(
             side_effect=lambda cid, org_id: recomputed.append(cid)
@@ -205,8 +297,11 @@ class TestUpdateDonationReassignment:
         donation = SimpleNamespace(
             id="dn1", organization_id="o", campaign_id=None, donor_id="dOLD"
         )
-        # Donation fetch, then the in-org check for the reassigned donor.
-        svc = FundraisingService(_db([_one(donation), _one("dNEW")]))
+        # Donation fetch, the in-org check for the reassigned donor, then
+        # the old+new donor locks (results discarded).
+        svc = FundraisingService(
+            _db([_one(donation), _one("dNEW"), MagicMock(), MagicMock()])
+        )
         svc._update_campaign_total = AsyncMock()
         recomputed: list = []
         svc._update_donor_stats = AsyncMock(

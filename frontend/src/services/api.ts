@@ -74,6 +74,8 @@ export type {
   DistributeItemsRequest,
   DistributeItemsResultItem,
   DistributeItemsResponse,
+  InventoryHoldingConflict,
+  InventoryTransferRequest,
   BatchReturnItem,
   BatchReturnRequest,
   BatchReturnResultItem,

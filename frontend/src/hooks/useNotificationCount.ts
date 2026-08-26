@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { create } from 'zustand';
 import { notificationsService } from '../services/api';
+import { useEnabledModules } from './useEnabledModules';
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -23,10 +24,19 @@ export const useNotificationCountStore = create<NotificationCountState>((set) =>
  * Pauses when the browser tab is hidden and refetches immediately
  * when the tab becomes visible again. Mount once in a layout-level
  * component; other consumers read `useNotificationCountStore` directly.
+ *
+ * Silent when the Notifications module is off. `/notifications` is gated, so
+ * the poller would otherwise ask a refusing endpoint every 60 seconds and on
+ * every tab focus, for every signed-in member, for as long as the department
+ * leaves the module off — and 403s reach the error reporter, so a deliberate
+ * configuration would read as a fault in the logs. Permissive while the
+ * module config is unknown, as every other gate is.
  */
 export function useNotificationPoller() {
   const setUnreadCount = useNotificationCountStore((s) => s.setUnreadCount);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const notificationsOn = isModuleOn('notifications');
 
   const fetchCount = useCallback(async () => {
     try {
@@ -52,6 +62,10 @@ export function useNotificationPoller() {
   }, []);
 
   useEffect(() => {
+    // Wait for the answer rather than firing one refused request first: the
+    // hook settles either way, so this only defers the first poll.
+    if (modulesLoading || !notificationsOn) return undefined;
+
     void fetchCount();
     startPolling();
 
@@ -69,7 +83,7 @@ export function useNotificationPoller() {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchCount, startPolling, stopPolling]);
+  }, [fetchCount, startPolling, stopPolling, modulesLoading, notificationsOn]);
 
   return fetchCount;
 }
