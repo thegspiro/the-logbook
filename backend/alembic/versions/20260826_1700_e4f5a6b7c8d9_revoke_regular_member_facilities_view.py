@@ -1,7 +1,7 @@
 """Restrict the facilities workspace to leadership and facility managers.
 
 Revision ID: e4f5a6b7c8d9
-Revises: e2c8f5a71d40
+Revises: 472a1e34aa84
 Create Date: 2026-08-26 17:00:00.000000
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "e4f5a6b7c8d9"
-down_revision = "e2c8f5a71d40"
+down_revision = "472a1e34aa84"
 branch_labels = None
 depends_on = None
 
