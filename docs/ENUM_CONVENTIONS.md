@@ -222,8 +222,6 @@ cc_roles = config.get("cc_roles", ["admin", "quartermaster", "chief"])
 | `ADMIN_NOTIFY_ROLE_SLUGS`     | admin, quartermaster, chief     | Drop/archive CC notifications  |
 | `LEADERSHIP_ROLE_SLUGS`       | chief, president, VP, secretary | Critical event alerts          |
 | `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief  | Training module officer checks |
-| `OPERATIONAL_ROLE_SLUGS`      | chief, asst_chief, captain, …   | Election eligibility           |
-| `ADMINISTRATIVE_ROLE_SLUGS`   | president, VP, secretary, …     | Election eligibility           |
 
 **Individual role slug constants:** `ROLE_TRAINING_OFFICER`, `ROLE_IT_MANAGER`,
 `ROLE_MEMBER`, `ROLE_CHIEF` — for point lookups like `Role.slug == ROLE_MEMBER`.

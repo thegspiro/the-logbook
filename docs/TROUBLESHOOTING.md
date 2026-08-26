@@ -5583,8 +5583,6 @@ grep -rn '\["admin".*"chief"\]\|\["chief".*"admin"\]' backend/app/ --include="*.
 | `ADMIN_NOTIFY_ROLE_SLUGS`     | admin, quartermaster, chief     | Drop/archive CC notifications |
 | `LEADERSHIP_ROLE_SLUGS`       | chief, president, VP, secretary | Critical event alerts         |
 | `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief  | Training module checks        |
-| `OPERATIONAL_ROLE_SLUGS`      | chief, asst_chief, captain, …   | Election eligibility          |
-| `ADMINISTRATIVE_ROLE_SLUGS`   | president, VP, secretary, …     | Election eligibility          |
 
 ---
 

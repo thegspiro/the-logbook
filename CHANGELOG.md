@@ -47,6 +47,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seeded one rank too many can delete it while one seeded too few has no
   indication anything is absent.
 
+  **This reaches new organizations only, and there is no migration.** The seed
+  fires solely into an empty table, so an EMS service already onboarded keeps
+  the fire ladder it was given and can edit the list by hand. Rewriting a
+  department's existing ranks would rename rows its members are already filed
+  under, which is worse than the wrong label. Note the contrast with the EMT
+  fix above: rank grants resolve from code at request time, so that one takes
+  effect for every existing installation the moment this deploys.
+
+  **Positions are not agency-aware, and were not changed here.** Onboarding
+  still seeds every `DEFAULT_POSITIONS` entry to every organization, so an
+  EMS-only department is still given "Fire Chief", "Engineer" and
+  "Firefighter" _positions_ — and positions, not ranks, are the primary source
+  of permissions. Until that is settled the two lists disagree on screen: the
+  rank reads "Chief" where the position beside it reads "Fire Chief". The
+  position registry is aliased into the rank registry (pitfall #23) and is
+  seeded once per organization at onboarding, so changing it is a data
+  migration rather than a registry edit, and it is left for its own change.
+
 - **A custom rank silently conferred nothing.** Rank defaults resolve from a
   code-level registry keyed by `rank_code`, so a rank a department invents for
   itself — Battalion Chief, Firefighter II — grants no permissions. That is
@@ -56,6 +74,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports `default_permission_count` and the rank editor marks a rank that
   grants none.
 
+**Changed**
+
+- **Who may assign the EMT rank has narrowed, as a consequence of the fix.**
+  `_assert_rank_within_caller_ceiling` refuses to let anyone set a rank that
+  grants more than they hold themselves. While `emt` resolved to an empty list
+  that check passed trivially for everybody; it now requires all seventeen
+  grants. Of the seeded positions that can manage members, Fire Chief, Deputy
+  Chief, Assistant Chief, Captain, IT Manager and President are unaffected,
+  while Vice President, Secretary, Assistant Secretary and Membership
+  Coordinator can no longer assign it — and get a logged privilege-escalation
+  attempt when they try. This is the same ceiling those positions already hit
+  on `firefighter`, so EMT now behaves like every other line rank rather than
+  being the one that slipped through; a department that wants its membership
+  coordinator to file EMTs should grant that position the rank's view
+  permissions.
+
 **Removed**
 
 - `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
@@ -63,11 +97,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   definition. They were not harmless: they read as a third authority on the
   rank vocabulary and agreed with neither real one, listing `chief` where the
   seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
-  not ranks at all and grant nothing.
+  not ranks at all and grant nothing. The two documentation tables that still
+  listed them — in `docs/ENUM_CONVENTIONS.md` and `docs/TROUBLESHOOTING.md`,
+  the latter under an instruction to import them — go with them.
 
 `tests/test_rank_registry_agreement.py` now asserts the seed and the
 permission registry describe the same set in both directions, so a rank cannot
 again be offered to departments while conferring nothing.
+`tests/test_operational_rank_service.py` and
+`RanksSettingsSection.test.tsx` cover the reported count and the badge it
+drives, including the stale-response case where the field is absent — the
+count must fall through to no badge rather than warning about every rank.
 
 ### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
 

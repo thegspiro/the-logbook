@@ -8,14 +8,17 @@ inactive/archived members. DB mocked; no MySQL.
 """
 
 import inspect
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import operational_ranks as ranks_ep
-from app.schemas.operational_rank import RankCreate, RankUpdate
+from app.core.permissions import get_rank_default_permissions
+from app.schemas.operational_rank import RankCreate, RankResponse, RankUpdate
 from app.services.operational_rank_service import (
     DEFAULT_RANKS,
     OperationalRankService,
@@ -333,3 +336,53 @@ class TestSeedSetFollowsAgencyType:
         for org_type in ("fire_department", "fire_ems_combined", "ems_only"):
             for code, _label, _order, _positions in default_ranks_for(org_type):
                 assert code in known, f"{org_type} seeds unknown rank code {code!r}"
+
+
+class TestDefaultPermissionCountIsReported:
+    """The editor cannot warn about a rank that grants nothing unless it is told.
+
+    ``RankResponse.default_permission_count`` resolves from the code-level
+    registry keyed by ``rank_code``, not from the stored row, so it is the only
+    thing that distinguishes a seeded rank from one a department invented for
+    itself. The two properties that matter are asserted here rather than left
+    to the frontend: that a seeded code reports a non-zero count, and that an
+    unknown one reports 0 instead of raising.
+    """
+
+    @staticmethod
+    def _response(rank_code: str) -> RankResponse:
+        return RankResponse(
+            id=uuid4(),
+            organization_id=uuid4(),
+            rank_code=rank_code,
+            display_name=rank_code.replace("_", " ").title(),
+            description=None,
+            sort_order=0,
+            is_active=True,
+            eligible_positions=None,
+            created_at=datetime(2026, 1, 1),
+            updated_at=datetime(2026, 1, 1),
+        )
+
+    @pytest.mark.parametrize("code", [c for c, _l, _o, _p in DEFAULT_RANKS])
+    def test_every_seeded_rank_reports_a_count(self, code):
+        assert self._response(code).default_permission_count > 0
+
+    def test_a_rank_a_department_invented_reports_zero(self):
+        # Not an error: conferring nothing is the documented design for a
+        # custom rank. Reporting it is what lets the editor say so.
+        assert self._response("battalion_chief").default_permission_count == 0
+
+    def test_the_count_serializes_under_its_snake_case_name(self):
+        """The frontend reads ``default_permission_count`` off the JSON.
+
+        ``UTCResponseBase`` sets no ``alias_generator``, so this response is
+        snake_case unlike the camelCase ones — a computed field that started
+        serializing under a camelCase alias would leave the badge reading
+        ``undefined``, which is falsy but never ``=== 0``, so the warning would
+        simply stop appearing with nothing to show for it.
+        """
+        payload = self._response("emt").model_dump()
+        assert payload["default_permission_count"] == len(
+            get_rank_default_permissions("emt")
+        )
