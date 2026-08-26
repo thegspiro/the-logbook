@@ -296,6 +296,7 @@ from app.models.public_portal import (
     PublicPortalConfig,
     PublicPortalDataWhitelist,
 )
+from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
 from app.models.skills_testing import SkillTemplate, SkillTest
@@ -614,6 +615,7 @@ __all__ = [
     "IPExceptionApprovalStatus",
     # Operational rank models
     "OperationalRank",
+    "MemberQualification",
     # Department office holders
     "OrgChartNode",
     "OrgChartNodeHolder",

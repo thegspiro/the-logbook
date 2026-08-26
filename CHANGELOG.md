@@ -7,11 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### A lapsed certification no longer keeps conferring a shift seat, and Paramedic is its own position (2026-08-26)
+### The medic seat nobody could fill, three source badges that looked identical, and a writer for member qualifications (2026-08-26)
 
 **Fixed**
 
-- The qualification roster listed a member's rank twice. Onboarding gives
+- **A Paramedic could not fill the Paramedic seat.** The medic seat was added
+  to `ShiftPosition` while the Paramedic qualification still cleared only
+  `ems`, so the seat could be put on a shift and nothing cleared anybody for
+  it — the unfillable-seat failure of #1833 from the member's side.
+  `test_qualification_service.py` guarded the forward direction (every seat a
+  qualification grants is one the API can name) but not the reverse; it now
+  asserts every seat is reachable from a rank or a qualification, so a seat
+  cannot again exist with nothing granting it.
+- **Three eligibility sources rendered as the same badge.** The roster emits
+  `rank`, `position`, `qualification`, `training` and `open`, and the page had
+  styles for only three. `position` and `qualification` both fell back to the
+  rank badge's icon and colour, so a Lieutenant who also held the Lieutenant
+  position and an EMT card showed three identical violet chips. Each source
+  now has its own icon and colour.
+- The roster listed a member's rank twice. Onboarding gives
   every member the system position mirroring their rank, and rank codes
   share a slug vocabulary with position slugs, so a Lieutenant resolved
   "lieutenant" on both the rank and held-position branches and each emitted
@@ -23,22 +37,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Added**
 
-- **A certification now confers a shift position, and stops conferring it
-  when it expires.** Eligibility previously came from rank, a held
-  position, a completed program, or the org's open-position list, and none
-  of those four expire — so a member who completed a paramedic program in
-  2019 stayed eligible for a medic seat forever unless an admin had
-  switched on `recert_enabled` for that program, which defaults to false.
-  `TrainingRecord` already held the department's real record of clearance
-  (`expiration_date`, `certification_number`, `issuing_agency`) and the
-  eligibility service never read it. A new
-  `training_courses.target_position` names the seat a current certification
-  in that course qualifies its holder to fill, and the record's own expiry
-  decides whether it still counts — on the same test the certification
-  alerts and the compliance hub already apply, so the three cannot
-  disagree. Set it per course under Training → Course Library ("Qualifies
-  For"); until a training officer sets it, certifications confer nothing
-  and eligibility behaves exactly as before.
+- **Completing a course now grants the qualification it certifies.**
+  `member_qualifications` is read by shift eligibility and had nothing writing
+  to it: a training officer recorded the class that happened, then had to grant
+  the qualification again on a different screen, and the second entry is the
+  one that gets forgotten — leaving a member certified on paper and
+  unqualified in the scheduler. `training_courses.grants_qualification` names
+  the code a course certifies, and `TrainingRecord` — which already carries the
+  completion date, the expiry, the certificate number and the issuing agency —
+  becomes the single place the fact is entered. Wired into all five paths that
+  write a training record, including CSV and historical import.
+
+  Backfilling an old class never pulls a live card's expiry backwards, so
+  importing history adds records without lapsing the certification a member is
+  actually working under. Set it per course under Training → Course Library
+  ("Certifies"); until a training officer does, completing a course grants
+  nothing and eligibility behaves exactly as before.
+
+- A qualification on the roster now carries the date it lapses, and turns amber
+  inside 60 days. The roster answers as of today, so without the date a card
+  expiring next week reads exactly like one good for another five years.
 - **Paramedic is a shift position distinct from EMT.** Both previously
   collapsed into one `ems` bucket, so a department staffing an ALS unit
   could not say a medic was required, and "was a paramedic, still an EMT"
@@ -55,13 +73,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   No rank seeds the medic seat: a licence is not something stripes confer, and
   granting it by rank would have put every chief on the medic roster with no
-  card behind them. It is earned only by a current certification. Enable it per
-  department under Scheduling Settings → Position Names.
+  card behind them. It is earned only by holding the Paramedic qualification.
+  Enable the seat per department under Scheduling Settings → Position Names.
 
 - The roster shows a certification's expiry beside the member, and switches
   the badge to amber within 60 days of it — an officer staffing next month
   sees the medic whose card runs out in three weeks rather than discovering
   it when the roster silently shortens.
+
+### Member class, member status, and qualifications become separate facts (2026-08-26)
+
+**Added**
+
+- **`member_class` and `member_status` on every member.** `membership_type`
+  held two independent facts in one column: what kind of member somebody is
+  (operational / administrative / social) and where they sit on the membership
+  ladder (prospective → probationary → regular → life → retired). Because they
+  shared a field, neither could be stated without losing the other — there was
+  no way to record a _probationary treasurer_, and nothing said whether a _life
+  member_ still rides.
+
+  The clearest symptom was in elections. `ElectionService` could only answer
+  "is this member operational" as `membership_type == "active"`, because that
+  was the one value that meant it — so a bylaws question put to the operational
+  members never reached anyone who had earned life membership, or anyone still
+  on probation. It now reads the member's **class**, and every operational
+  standing counts. "regular", "life" and "probationary" stay **status** checks,
+  because they name a status.
+
+  `membership_type` is kept and kept correct: ~160 call sites read it, and it
+  is now derived from the pair by `app/utils/membership.py`, reconciled on
+  every flush by a listener on `User`. Whichever side a caller writes wins, so
+  existing code is unchanged. The derivation is lossy in one direction on
+  purpose — the legacy vocabulary cannot express an administrative probationer
+  — and the two new columns are the authority when they disagree.
+
+  `honorary` backfills to the **social** class. That is not a new judgement
+  about honorary members; it is what the system already did with them, since
+  `honorary` has always sat in `DEFAULT_EXCLUDED_MEMBERSHIP_TYPES` beside
+  administrative and retired. Mapping them anywhere else would have widened
+  shift access on upgrade.
+
+  Neither column takes a database default, deliberately. A DDL default is
+  applied to raw-SQL inserts that name only `membership_type`, and would be
+  wrong for exactly the members who are not plain operational regulars —
+  silently promoting an administrative member into the operational class. NULL
+  means "nobody has set this" and readers derive from the legacy field; ORM
+  writes never leave it NULL.
+
+- **`member_qualifications` — what a member is certified to do.** Rank says
+  where a member sits in the chain of command; a qualification says what they
+  are trained to do. `User.rank` is one string, so a **Captain who is also a
+  Paramedic** — an entirely ordinary member of a volunteer department — had
+  nowhere to be recorded as both.
+
+  The standards already draw the line: Firefighter I/II is NFPA 1001,
+  apparatus operator is NFPA 1002, the officer ladder is NFPA 1021, and
+  EMT/Paramedic are EMS credentials on a separate track again.
+
+  Qualifications expire and ranks do not, which is the other half of why they
+  cannot share a column. Shift eligibility reads `expires_on` **as of the shift
+  date**, not as of today — the rule EVOC certifications already use for
+  drivers, and for the same reason: a card that is current when the roster is
+  built and expired when the truck rolls qualifies nobody to be on it. The
+  bulk path resolves this per distinct shift date rather than once per member,
+  since that is the one eligibility source that is not shift-independent.
+
+  The table starts empty. Nothing is inferred from existing rank or position
+  rows: a department that recorded somebody as an EMT _rank_ has said where
+  they sit, not which card they hold or when it expires, and inventing an
+  expiry date would be worse than having none.
+
+**Note**
+
+Ranks are unchanged. An EMS-only agency keeps EMT as its line rank, and a
+department that models EMT as a rank can carry on doing so — `emt` is now both
+a rank code and a qualification code, meaning two different things on purpose.
+Neither implies the other, and a department may use either or both.
+
+Admin screens for entering qualifications are not in this change; the model,
+the service and the eligibility reader are.
+
+### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
+
+**Fixed**
+
+- **A seeded rank that conferred no permissions at all.** Operational ranks
+  are seeded from `DEFAULT_RANKS` but resolve their permissions from a
+  separate registry, `OPERATIONAL_RANKS`, and the two had drifted: `emt` was
+  in the first and missing from the second. `get_rank_default_permissions("emt")`
+  answered `[]`, so a member whose only standing was the EMT rank held
+  nothing.
+
+  Unlike Firefighter there is no mirroring entry in `DEFAULT_POSITIONS`, so
+  nothing made up the difference — every other seeded rank had that backstop,
+  which is why the gap stayed invisible. EMT now carries the same
+  rank-and-file grants as Firefighter, from one shared list rather than two
+  that can drift.
+
+  **Firefighter and EMT are independent ranks, not a progression.** Plenty of
+  firefighters never certify as EMTs and plenty of EMTs never ride the engine;
+  neither implies the other. They share a permission list only because
+  standing at the bottom of the operational ladder is what decides what a
+  member may _see_, and that is the same question for both.
+
+- **An EMS-only agency was seeded a fire department's rank ladder.**
+  `seed_defaults` wrote the same eight ranks to every organization regardless
+  of `organization_type`, so an EMS-only service was handed "Fire Chief",
+  "Engineer" and "Firefighter" — a rank nobody there can ever hold. The seed
+  only ever fires into an empty table, so whatever it wrote on day one was
+  what the department lived with.
+
+  Ranks are now chosen by agency type: every agency gets the full officer
+  ladder, an EMS-only service gets EMT without Firefighter, and its
+  fire-specific labels are renamed (Chief, Driver / Operator). The rank
+  _codes_ stay shared across agency types deliberately — they key the
+  permission registry and the shift-eligibility fallback, so a code must mean
+  the same thing everywhere — and only the selection and labels vary. An
+  unknown or missing type falls back to the full set, because a department
+  seeded one rank too many can delete it while one seeded too few has no
+  indication anything is absent.
+
+- **A custom rank silently conferred nothing.** Rank defaults resolve from a
+  code-level registry keyed by `rank_code`, so a rank a department invents for
+  itself — Battalion Chief, Firefighter II — grants no permissions. That is
+  the intended design (positions are the primary source), but the editor
+  rendered a custom rank identically to a seeded one, leaving an admin to
+  discover it from a member who could not see anything. `RankResponse` now
+  reports `default_permission_count` and the rank editor marks a rank that
+  grants none.
+
+**Removed**
+
+- `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
+  `core.constants`. Each had exactly one reference in the codebase — its own
+  definition. They were not harmless: they read as a third authority on the
+  rank vocabulary and agreed with neither real one, listing `chief` where the
+  seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
+  not ranks at all and grant nothing.
+
+`tests/test_rank_registry_agreement.py` now asserts the seed and the
+permission registry describe the same set in both directions, so a rank cannot
+again be offered to departments while conferring nothing.
 
 ### Embroidery and engraving are not the same job (2026-08-26)
 

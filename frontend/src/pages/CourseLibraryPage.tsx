@@ -8,7 +8,7 @@ import { SkeletonCardGrid } from '../components/ux/Skeleton';
 import { Pagination } from '../components/ux/Pagination';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
-import { COURSE_TARGET_POSITIONS } from '../constants/enums';
+import { COURSE_QUALIFICATIONS } from '../constants/enums';
 import { formCoercions } from '../utils/formValues';
 import type {
   TrainingCourse,
@@ -49,7 +49,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
     instructor: '',
     max_participants: '',
     expiration_months: '',
-    target_position: '',
+    grants_qualification: '',
     category_ids: [] as string[],
     materials_required: '',
   });
@@ -68,7 +68,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
         instructor: course.instructor || '',
         max_participants: course.max_participants?.toString() || '',
         expiration_months: course.expiration_months?.toString() || '',
-        target_position: course.target_position || '',
+        grants_qualification: course.grants_qualification || '',
         category_ids: course.category_ids || [],
         materials_required: (course.materials_required || []).join('\n'),
       });
@@ -83,7 +83,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
         instructor: '',
         max_participants: '',
         expiration_months: '',
-        target_position: '',
+        grants_qualification: '',
         category_ids: [],
         materials_required: '',
       });
@@ -110,8 +110,8 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
       expiration_months: formData.expiration_months ? parseInt(formData.expiration_months) : undefined,
       // pick() sends an explicit null when editing: omitting the key means
       // "leave it alone" to a model_dump(exclude_unset=True) backend, so
-      // clearing the seat grant would silently keep conferring it.
-      target_position: pick(formData.target_position),
+      // clearing the grant would silently keep conferring it.
+      grants_qualification: pick(formData.grants_qualification),
       category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
       materials_required: formData.materials_required
         ? formData.materials_required.split('\n').filter((m) => m.trim())
@@ -298,27 +298,28 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 
           <div>
             <label
-              htmlFor="course-target-position"
+              htmlFor="course-grants-qualification"
               className="text-theme-text-secondary mb-1 block text-sm font-medium"
             >
-              Qualifies For
+              Certifies
             </label>
             <select
-              id="course-target-position"
-              value={formData.target_position}
-              onChange={(e) => setFormData({ ...formData, target_position: e.target.value })}
+              id="course-grants-qualification"
+              value={formData.grants_qualification}
+              onChange={(e) => setFormData({ ...formData, grants_qualification: e.target.value })}
               className="form-input text-sm"
             >
-              <option value="">Nothing — this course confers no shift position</option>
-              {COURSE_TARGET_POSITIONS.map((p) => (
+              <option value="">Nothing — this course certifies no qualification</option>
+              {COURSE_QUALIFICATIONS.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
                 </option>
               ))}
             </select>
             <p className="text-theme-text-muted mt-1 text-xs">
-              Members holding a current certification in this course may fill this shift position. The clearance ends on
-              the certification&apos;s expiration date, so a lapsed card stops counting on its own.
+              Completing this course grants the member this qualification, dated from the training record&apos;s
+              completion and expiry. The qualification decides which shift positions they may fill, and stops counting
+              on its own when the card lapses.
             </p>
           </div>
 
@@ -685,13 +686,13 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     <TypeBadge type={course.training_type} />
-                    {/* Which courses actually confer a shift seat is otherwise
+                    {/* Which courses actually certify something is otherwise
                         invisible until you open each one. */}
-                    {course.target_position && (
+                    {course.grants_qualification && (
                       <span className="rounded-sm bg-teal-500/15 px-2 py-0.5 text-xs text-teal-700 dark:text-teal-400">
-                        Qualifies:{' '}
-                        {COURSE_TARGET_POSITIONS.find((p) => p.value === course.target_position)?.label ??
-                          course.target_position}
+                        Certifies:{' '}
+                        {COURSE_QUALIFICATIONS.find((p) => p.value === course.grants_qualification)?.label ??
+                          course.grants_qualification}
                       </span>
                     )}
                     {!course.active && (

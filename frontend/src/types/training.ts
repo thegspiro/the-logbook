@@ -187,8 +187,8 @@ export interface TrainingCourse {
   credit_hours?: number;
   prerequisites?: string[];
   expiration_months?: number;
-  /** Shift position a current certification in this course confers. */
-  target_position?: string | null;
+  /** Qualification code completing this course grants its holder. */
+  grants_qualification?: string | null;
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
@@ -487,8 +487,8 @@ export interface TrainingCourseCreate {
   credit_hours?: number;
   prerequisites?: string[];
   expiration_months?: number;
-  /** Shift position a current certification in this course confers. */
-  target_position?: string | null;
+  /** Qualification code completing this course grants its holder. */
+  grants_qualification?: string | null;
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
@@ -504,8 +504,8 @@ export interface TrainingCourseUpdate {
   credit_hours?: number;
   prerequisites?: string[];
   expiration_months?: number;
-  /** Shift position a current certification in this course confers. */
-  target_position?: string | null;
+  /** Qualification code completing this course grants its holder. */
+  grants_qualification?: string | null;
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];

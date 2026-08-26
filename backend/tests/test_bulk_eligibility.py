@@ -39,7 +39,7 @@ def _service(
     held=(),
     grants=None,
     training=(),
-    certifications=(),
+    qualifications=(),
     open_positions=(),
     excluded=(),
 ):
@@ -53,7 +53,10 @@ def _service(
     service._get_slug_eligibility_map = AsyncMock(return_value=slug_map)
     service._get_held_position_slugs = AsyncMock(return_value=list(held))
     service._get_training_positions = AsyncMock(return_value=list(training))
-    service._get_certification_positions = AsyncMock(return_value=list(certifications))
+    # Qualifications are the one source resolved per shift *date* rather than
+    # once per member, because a certification can lapse between two shifts in
+    # the same query.
+    service._get_qualification_positions = AsyncMock(return_value=set(qualifications))
     return service
 
 
@@ -61,16 +64,6 @@ USER = SimpleNamespace(id=uuid4(), rank="ff", membership_type="active")
 
 
 class TestBulkEligibility:
-    async def test_a_current_certification_feeds_the_bulk_answer(self):
-        # The bulk path recomputes the member side once and reuses it across
-        # shifts. A term added to the single-shift union and forgotten here
-        # would let a day panel refuse the seat that the shift's own page
-        # offers.
-        shifts = [_shift("s1")]
-        service = _service(shifts, rank=["firefighter"], certifications=["paramedic"])
-        out = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
-        assert out["s1"] == ["firefighter", "paramedic"]
-
     async def test_computes_the_member_side_once_for_every_shift(self):
         shifts = [_shift("s1"), _shift("s2"), _shift("s3")]
         service = _service(shifts, rank=["firefighter"])

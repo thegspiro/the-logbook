@@ -906,6 +906,46 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     PROSPECTIVE_MEMBERS_VIEW.name,
 ]
 
+# What a rank-and-file member of the department can see, whatever their
+# discipline.
+#
+# Firefighter and EMT are **independent** ranks, not a progression: plenty of
+# firefighters never certify as EMTs, plenty of EMTs never ride the engine,
+# and an EMS-only agency has no firefighters at all. Neither implies the
+# other, and holding one says nothing about the other.
+#
+# They share this list because standing at the bottom of the operational
+# ladder is what decides what a member may *see*, and that is the same
+# question for both. Two copies would answer it differently within a release.
+# Anything added here is added to every rank-and-file member of every
+# department, which is what ``tests/test_baseline_member_grants.py`` exists to
+# make deliberate.
+#
+# Note the alias below: ``DEFAULT_POSITIONS["firefighter"]["permissions"]``
+# resolves to this same object, so onboarding writes these grants into a
+# system *position* too (CLAUDE.md pitfall #23).
+_LINE_MEMBER_PERMISSIONS = [
+    MEMBERS_VIEW.name,
+    ORGANIZATION_VIEW.name,
+    TRAINING_VIEW.name,
+    SCHEDULING_VIEW.name,
+    SCHEDULING_SWAP.name,
+    INVENTORY_VIEW.name,
+    STOREFRONT_VIEW.name,
+    STOREFRONT_ORDER.name,
+    MEETINGS_VIEW.name,
+    ELECTIONS_VIEW.name,
+    EVENTS_VIEW.name,
+    FORMS_VIEW.name,
+    MINUTES_VIEW.name,
+    DOCUMENTS_VIEW.name,
+    APPARATUS_VIEW.name,
+    FACILITIES_VIEW.name,
+    LOCATIONS_VIEW.name,
+    # No notifications.view — see the `member` position in
+    # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
+]
+
 OPERATIONAL_RANKS: dict[str, dict] = {
     "fire_chief": {
         "label": "Fire Chief",
@@ -1177,27 +1217,17 @@ OPERATIONAL_RANKS: dict[str, dict] = {
     "firefighter": {
         "label": "Firefighter",
         "priority": 10,
-        "default_permissions": [
-            MEMBERS_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            TRAINING_VIEW.name,
-            SCHEDULING_VIEW.name,
-            SCHEDULING_SWAP.name,
-            INVENTORY_VIEW.name,
-            STOREFRONT_VIEW.name,
-            STOREFRONT_ORDER.name,
-            MEETINGS_VIEW.name,
-            ELECTIONS_VIEW.name,
-            EVENTS_VIEW.name,
-            FORMS_VIEW.name,
-            MINUTES_VIEW.name,
-            DOCUMENTS_VIEW.name,
-            APPARATUS_VIEW.name,
-            FACILITIES_VIEW.name,
-            LOCATIONS_VIEW.name,
-            # No notifications.view — see the `member` position in
-            # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
-        ],
+        "default_permissions": _LINE_MEMBER_PERMISSIONS,
+    },
+    # Seeded by ``DEFAULT_RANKS`` since the rank list shipped, but missing
+    # from this registry until 2026-08-26 — so ``get_rank_default_permissions
+    # ("emt")`` answered ``[]`` and a member whose only standing was the EMT
+    # rank held nothing at all. Unlike Firefighter there is no mirroring entry
+    # in ``DEFAULT_POSITIONS``, so nothing else made up the difference.
+    "emt": {
+        "label": "EMT",
+        "priority": 5,
+        "default_permissions": _LINE_MEMBER_PERMISSIONS,
     },
 }
 

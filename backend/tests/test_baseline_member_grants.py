@@ -30,10 +30,16 @@ from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
 #:
 #: The registries also spell the field differently — positions store
 #: ``permissions``, ranks store ``default_permissions``.
+#:
+#: The EMT rank is the fourth, and shares Firefighter's list object rather
+#: than repeating it — same standing, different discipline. It is named here
+#: anyway: a future edit could split the two, and a source that stops aliasing
+#: must not thereby stop being checked.
 BASELINE_SOURCES = (
     ("member position", DEFAULT_POSITIONS, "member", "permissions"),
     ("firefighter position", DEFAULT_POSITIONS, "firefighter", "permissions"),
     ("firefighter rank", OPERATIONAL_RANKS, "firefighter", "default_permissions"),
+    ("emt rank", OPERATIONAL_RANKS, "emt", "default_permissions"),
 )
 
 

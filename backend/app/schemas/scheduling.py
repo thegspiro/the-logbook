@@ -1171,15 +1171,16 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
 class PositionEligibilitySource(BaseModel):
     """One reason a member holds a position.
 
-    ``type`` is ``rank``, ``position``, ``training``, ``certification`` or
-    ``open``; ``label`` names the specific rank, held position, completed
-    program or certification so an officer can see *why* without
-    cross-referencing the settings screens. Every type here needs a matching
-    entry in the roster page's ``SOURCE_STYLES`` — an unmapped one renders with
-    the rank badge's icon and colour, which reads as a duplicate rank rather
-    than as a distinct source.
+    ``type`` is ``rank``, ``position``, ``qualification``, ``training`` or
+    ``open``; ``label`` names the specific rank, held position, qualification
+    or completed program so an officer can see *why* without cross-referencing
+    the settings screens. Every type here needs a matching entry in the roster
+    page's ``SOURCE_STYLES`` — an unmapped one falls back to the rank badge's
+    icon and colour and reads as a duplicate rank rather than as a distinct
+    source, which is how three different source types came to render
+    identically.
 
-    ``expires_on`` is set only for ``certification``, and only when that card
+    ``expires_on`` is set only for ``qualification``, and only when that card
     actually expires. It is the one source that lapses without anyone editing a
     record, so the date is the difference between "cleared" and "cleared until
     March" on a screen used to staff future shifts.

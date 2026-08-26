@@ -17,7 +17,7 @@ from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
-from app.utils.positions import TRAINING_TARGET_VALUES
+from app.services.qualification_service import QUALIFICATIONS
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -102,26 +102,24 @@ class TrainingCategoryResponse(TrainingCategoryBase, UTCResponseBase):
 # Training Course Schemas
 
 
-def _validate_target_position(v: Optional[str]) -> Optional[str]:
-    """Reject a target_position the eligibility service cannot resolve.
+def _validate_grants_qualification(v: Optional[str]) -> Optional[str]:
+    """Reject a qualification code ``QUALIFICATIONS`` does not define.
 
     An unrecognised value is not a harmless typo: it is stored, shown back on
-    the course as though it were configured, and confers nothing -- a seat
-    grant that silently does nothing, which is worse than no field at all
-    because the training officer believes the seat is wired. Blank is coerced
-    to None so an emptied form field clears the grant rather than storing "".
-
-    Validated against the same vocabulary ``training_target_to_position``
-    resolves, so what the API accepts and what confers a seat cannot drift.
+    the course as though it were configured, and grants nothing -- because
+    ``positions_for_qualifications`` clears no seats for a code it has no entry
+    for. That is worse than no field at all, since the training officer
+    believes completing the course confers something. Blank is coerced to None
+    so an emptied form field clears the grant rather than storing "".
     """
     if v is None:
         return None
     cleaned = v.strip().lower()
     if not cleaned:
         return None
-    if cleaned not in TRAINING_TARGET_VALUES:
-        allowed = ", ".join(sorted(TRAINING_TARGET_VALUES))
-        raise ValueError(f"target_position must be one of: {allowed}")
+    if cleaned not in QUALIFICATIONS:
+        allowed = ", ".join(sorted(QUALIFICATIONS))
+        raise ValueError(f"grants_qualification must be one of: {allowed}")
     return cleaned
 
 
@@ -140,19 +138,19 @@ class TrainingCourseBase(BaseModel):
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None  # Categories this course belongs to
-    # The shift position a *current* certification in this course qualifies its
-    # holder to fill. Null for a course that confers no seat.
-    target_position: Optional[str] = Field(None, max_length=100)
+    # The qualification code completing this course grants. Null for a course
+    # that confers none.
+    grants_qualification: Optional[str] = Field(None, max_length=50)
 
     @field_validator("training_type")
     @classmethod
     def _validate_training_type(cls, v: str) -> str:
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
-    @field_validator("target_position")
+    @field_validator("grants_qualification")
     @classmethod
-    def _validate_target_position(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_target_position(v)
+    def _validate_grants_qualification(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_grants_qualification(v)
 
 
 class TrainingCourseCreate(TrainingCourseBase):
@@ -174,7 +172,7 @@ class TrainingCourseUpdate(BaseModel):
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None
-    target_position: Optional[str] = Field(None, max_length=100)
+    grants_qualification: Optional[str] = Field(None, max_length=50)
     active: Optional[bool] = None
 
     @field_validator("training_type")
@@ -182,10 +180,10 @@ class TrainingCourseUpdate(BaseModel):
     def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
-    @field_validator("target_position")
+    @field_validator("grants_qualification")
     @classmethod
-    def _validate_target_position(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_target_position(v)
+    def _validate_grants_qualification(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_grants_qualification(v)
 
 
 class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):

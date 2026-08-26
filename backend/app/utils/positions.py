@@ -20,18 +20,9 @@ grants ``"EMT"`` — not a rank, a held position, or a completed program — and
 ``ShiftPosition`` has no such member, so the API could not even name that seat.
 An ambulance built from the defaults therefore had an EMT seat no EMT could
 sign up for, and no setting could unblock it (see CHANGELOG 2026-08-26).
-
-The same vocabulary answers a second question: which seat a completed program
-or a held certification qualifies a member to fill
-(``training_target_to_position``). It lives here rather than beside its reader
-so the schema layer can validate a course's ``target_position`` against the
-set the eligibility service resolves it through — a value the API accepts and
-the resolver does not understand would be a seat grant that silently does
-nothing. Keeping it here is also what lets the ``emt`` -> ``ems`` alias be
-stated once instead of once per consumer.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # The seat vocabulary the rest of the system speaks: ``ShiftPosition`` on the
 # wire, ``operational_ranks.eligible_positions`` in config, and the rank
@@ -74,54 +65,6 @@ def canonical_position(name: str) -> str:
     if folded in CANONICAL_POSITIONS:
         return folded
     return cleaned
-
-
-# Program / course ``target_position`` values that are *not* seat names -- the
-# pipeline names departments actually type. Everything else a program or course
-# can target is a seat name (or an alias of one) and resolves through
-# ``canonical_position``, so ``emt`` maps to the EMS seat here for the same
-# reason it does anywhere else, stated once.
-_TRAINING_PIPELINE_TARGETS = {
-    "driver_candidate": "driver",
-    "aic": "officer",
-}
-
-# Everything a ``target_position`` may be spelled as. The schema layer validates
-# against this so a value the API accepts and the resolver cannot understand --
-# a seat grant that silently does nothing -- is refused at the door.
-TRAINING_TARGET_VALUES = (
-    frozenset(_TRAINING_PIPELINE_TARGETS)
-    | CANONICAL_POSITIONS
-    | frozenset(_POSITION_ALIASES)
-)
-
-
-def training_target_to_position(target: Optional[str]) -> str:
-    """The seat a program's or course's ``target_position`` qualifies for.
-
-    Completing a ``driver_candidate`` pipeline qualifies a member for the
-    ``driver`` seat; holding an ``emt`` certification qualifies them for the
-    ``ems`` one. Only the pipeline names need their own entry -- the rest are
-    seat names or aliases, and ``canonical_position`` already settles those.
-    """
-    if not target:
-        return ""
-    folded = target.strip().casefold()
-    if folded in _TRAINING_PIPELINE_TARGETS:
-        return _TRAINING_PIPELINE_TARGETS[folded]
-    return canonical_position(target)
-
-
-def training_targets_for(position: str) -> List[str]:
-    """Every ``target_position`` spelling that resolves to ``position``.
-
-    The reverse of ``training_target_to_position``. Lets a roster filter in SQL
-    rather than reading every certification a department holds and discarding
-    most of them in Python.
-    """
-    return sorted(
-        v for v in TRAINING_TARGET_VALUES if training_target_to_position(v) == position
-    )
 
 
 def normalize_stored_positions(positions: Any) -> Any:

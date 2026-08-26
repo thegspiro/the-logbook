@@ -377,21 +377,21 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
-// What a course's certification can qualify its holder to fill.
+// The qualification a course certifies its holder in. Values must match
+// QUALIFICATIONS in backend/app/services/qualification_service.py — a course
+// that names a code the backend does not know grants nothing, so a test parses
+// this list and asserts the two agree rather than letting it 422 on save.
 //
-// Every value here must be one the backend accepts: `TRAINING_TARGET_VALUES`
-// in app/utils/positions.py, resolved by `training_target_to_position`. The
-// API also accepts `ems` and `aic`, which are deliberately not offered because
-// each duplicates an entry below (`emt` and `officer`). A test parses this
-// list and asserts the two agree, so a value added here alone would fail
-// rather than 422 on somebody's save.
-export const COURSE_TARGET_POSITIONS: { value: string; label: string }[] = [
-  { value: 'firefighter', label: 'Firefighter' },
-  { value: 'driver_candidate', label: 'Driver/Operator' },
+// These are qualifications, not shift seats: which seats a qualification
+// clears is the backend's business (a Paramedic clears both the medic seat and
+// the EMS one), and duplicating that mapping here is how the two drift.
+export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
+  { value: 'firefighter_i', label: 'Firefighter I' },
+  { value: 'firefighter_ii', label: 'Firefighter II' },
+  { value: 'driver_operator', label: 'Driver / Operator' },
   { value: 'emt', label: 'EMT' },
+  { value: 'aemt', label: 'Advanced EMT' },
   { value: 'paramedic', label: 'Paramedic' },
-  { value: 'officer', label: 'Officer' },
-  { value: 'probationary', label: 'Probationary' },
 ];
 
 export const POSITION_LABELS: Record<string, string> = {

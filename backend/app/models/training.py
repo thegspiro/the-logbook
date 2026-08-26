@@ -227,16 +227,17 @@ class TrainingCourse(Base):
         Integer
     )  # How long before recertification needed (null = doesn't expire)
 
-    # The shift position a current certification in this course qualifies the
-    # holder to fill -- the credential-side counterpart to
-    # TrainingProgram.target_position. Null for a course that teaches something
-    # without conferring a seat (most continuing education).
+    # The qualification code (see app/services/qualification_service.py)
+    # completing this course grants its holder. Null for a course that teaches
+    # something without conferring one, which is most continuing education.
     #
-    # This is what separates "was a paramedic" from "is a paramedic": the seat
-    # follows the member's own certification record and its expiration_date, so
-    # a lapsed card stops conferring the position on its expiry with nobody
-    # having to remember to revoke anything.
-    target_position = Column(String(100), index=True)
+    # This is the writer half of member_qualifications. Without it a training
+    # officer has to record the certification twice -- once as the training
+    # record that actually happened, again as a qualification grant -- and the
+    # two drift the first time somebody forgets the second. The course already
+    # knows what it certifies; the record already knows when it was completed
+    # and when it expires.
+    grants_qualification = Column(String(50), index=True)
 
     # Course Details
     instructor = Column(String(255))

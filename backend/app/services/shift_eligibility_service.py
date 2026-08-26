@@ -25,16 +25,28 @@ from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
     Shift,
-    TrainingCourse,
     TrainingProgram,
-    TrainingRecord,
-    TrainingStatus,
 )
 from app.models.user import Organization, Position, User, user_positions
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 from app.services.operational_rank_service import DEFAULT_RANKS
-from app.utils.positions import training_target_to_position, training_targets_for
+from app.services.qualification_service import (
+    QualificationService,
+    positions_for_qualifications,
+    qualification_label,
+)
+
+# Mapping from training program target_position values to the shift
+# position they unlock upon completion.
+TRAINING_POSITION_MAP = {
+    "driver_candidate": "driver",
+    "officer": "officer",
+    "probationary": "probationary",
+    "firefighter": "firefighter",
+    "ems": "ems",
+    "aic": "officer",
+}
 
 # Default membership types excluded from self-service shift signup.
 DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
@@ -195,8 +207,9 @@ class ShiftEligibilityService:
            a) Rank-based eligible_positions
            b) Position-based eligible_positions (the member's held
               positions, resolved through the same rank config)
-           c) Training-completion-unlocked positions
-           d) Positions unlocked by a *current* certification
+           c) Qualification-based positions (what the member is *certified*
+              to do, as of the shift date)
+           d) Training-completion-unlocked positions
            e) Org-wide open positions
         4. If a shift_id is provided, intersect with the shift's
            defined positions (only return positions that are actually
@@ -230,19 +243,28 @@ class ShiftEligibilityService:
         held_slugs = await self._get_held_position_slugs(str(user.id), organization_id)
         eligible.update(self._positions_for_slugs(held_slugs, slug_map))
 
-        # 3c: Training-completion-based
+        # 3c: Qualification-based.
+        #
+        # Rank says where a member sits in the chain of command; a
+        # qualification says what they are trained to do, and the two are
+        # independent. A Captain may also be a Paramedic, and until
+        # qualifications existed there was nowhere to record the second half
+        # of that. Asked as of the shift date rather than today: a
+        # certification that is current now and lapses before the shift
+        # qualifies nobody to work it.
+        eligible.update(
+            await self._get_qualification_positions(
+                str(user.id), organization_id, self._shift_date(shift)
+            )
+        )
+
+        # 3d: Training-completion-based
         training_positions = await self._get_training_positions(
             str(user.id), organization_id
         )
         eligible.update(training_positions)
 
-        # 3d: Certification-based. Only unexpired cards count, so this is the
-        # one term that can shrink without anyone editing a record.
-        eligible.update(
-            await self._get_certification_positions(str(user.id), organization_id)
-        )
-
-        # 3e: Org-wide open positions
+        # 3d: Org-wide open positions
         eligible.update(self.get_open_positions(org))
 
         # ----- Step 4: Intersect with shift positions if given -----
@@ -267,11 +289,10 @@ class ShiftEligibilityService:
         """The same answer as ``get_eligible_positions``, for many shifts at once.
 
         Steps 1–3 above are about the *member* — their membership type, rank,
-        held positions, completed training, current certifications, and the
-        org's open positions — and do not vary by shift. Asking per shift re-ran
-        all of it and reloaded the same maps each time; a day panel showing two
-        shifts paid for it twice, and a station running six apparatus paid six
-        times for one answer.
+        held positions, completed training, and the org's open positions — and
+        do not vary by shift. Asking per shift re-ran all of it and reloaded the same maps
+        each time; a day panel showing two shifts paid for it twice, and a
+        station running six apparatus paid six times for one answer.
 
         Only the open-to-all check and the intersection with the shift's own
         positions are per shift, and both are pure work over rows this loads in
@@ -307,10 +328,22 @@ class ShiftEligibilityService:
             base.update(
                 await self._get_training_positions(str(user.id), organization_id)
             )
-            base.update(
-                await self._get_certification_positions(str(user.id), organization_id)
-            )
             base.update(self.get_open_positions(org))
+
+        # Qualifications are the one source that is *not* shift-independent:
+        # a certification current today may have lapsed by a shift three months
+        # out, and that shift must not offer the seat. Resolved per distinct
+        # shift date rather than per shift — a day panel has one date and a
+        # month view a few dozen, against one query each, so the base-computed-
+        # once shape survives.
+        quals_by_date: Dict[date, Set[str]] = {}
+        if not blocked:
+            for shift in shifts.values():
+                as_of = self._shift_date(shift)
+                if as_of not in quals_by_date:
+                    quals_by_date[as_of] = await self._get_qualification_positions(
+                        str(user.id), organization_id, as_of
+                    )
 
         answers: Dict[str, List[str]] = {}
         for shift_id in shift_ids:
@@ -328,6 +361,7 @@ class ShiftEligibilityService:
                 answers[str(shift_id)] = []
                 continue
             eligible = set(base)
+            eligible.update(quals_by_date.get(self._shift_date(shift), set()))
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
                 eligible &= shift_positions
@@ -347,22 +381,21 @@ class ShiftEligibilityService:
 
         Answers "who is cleared to drive?" in one query set rather than making
         an officer open each apparatus in turn. For each member it reports the
-        *sources* of their eligibility (rank, a held position, completed
-        training, a current certification, or the org's open-position list),
-        their current EVOC standing, and the apparatus they hold an operator
-        record on.
+        *sources* of their eligibility (rank, held position, qualification,
+        completed training, or the org's open-position list), their current
+        EVOC standing, and the apparatus they hold an operator record on.
 
-        A certification source carries its expiry, because it is the one source
-        that lapses on its own: an officer staffing next month needs to see the
-        medic whose card runs out in three weeks, not discover it when the
-        roster silently shortens.
-
-        Eligibility mirrors ``get_eligible_positions`` exactly — same union of
-        rank / position / training / certification / open behind the same
-        membership-type gate —
-        so the roster can never disagree with what self-signup enforces. The
-        per-shift narrowing is deliberately not applied: this is the
-        department-wide roster, not a roster for one shift.
+        Eligibility mirrors ``get_eligible_positions`` exactly — the same union
+        behind the same membership-type gate — so the roster can never disagree
+        with what self-signup enforces. Every source there has to appear here
+        too: a member the roster omits is also missing from
+        ``SchedulingService.get_trade_candidates``, so an officer looking for
+        cover would not be offered somebody the signup endpoint would happily
+        accept. Qualifications are resolved as of **today**, since a
+        department-wide roster is not asked about any particular shift; the
+        per-shift narrowing is deliberately not applied for the same reason.
+        Each one carries its expiry, because resolving as of today would
+        otherwise show a card that lapses next week as an unqualified grant.
         """
         org = await self._get_org(organization_id)
         if not org:
@@ -390,8 +423,10 @@ class ShiftEligibilityService:
         slug_map = await self._get_slug_eligibility_map(organization_id)
         held_map = await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
-        certification_map = await self._get_certification_map(organization_id, position)
         operator_map = await self._get_operator_map(organization_id)
+        qualification_map = await QualificationService(self.db).get_current_by_member(
+            organization_id
+        )
 
         members: List[Dict[str, Any]] = []
         for user in users:
@@ -431,21 +466,23 @@ class ShiftEligibilityService:
                     sources.append({"type": "position", "label": held["name"]})
                     credited_slugs.add(held["slug"])
 
+            for qualification in qualification_map.get(str(user.id), []):
+                code = qualification["code"]
+                if position in positions_for_qualifications([code]):
+                    sources.append(
+                        {
+                            "type": "qualification",
+                            "label": qualification_label(code),
+                            "expires_on": qualification["expires_on"],
+                        }
+                    )
+
             seen_programs: Set[str] = set()
             for program_name in training_map.get(str(user.id), []):
                 if program_name in seen_programs:
                     continue
                 seen_programs.add(program_name)
                 sources.append({"type": "training", "label": program_name})
-
-            for cert in certification_map.get(str(user.id), []):
-                sources.append(
-                    {
-                        "type": "certification",
-                        "label": cert["label"],
-                        "expires_on": cert["expires_on"],
-                    }
-                )
 
             if is_open:
                 sources.append({"type": "open", "label": "Open to all members"})
@@ -514,7 +551,7 @@ class ShiftEligibilityService:
     ) -> Dict[str, List[str]]:
         """user_id -> names of completed programs that unlock ``position``.
 
-        Uses the same ``training_target_to_position`` translation as
+        Uses the same ``TRAINING_POSITION_MAP`` translation as
         ``_get_training_positions`` so a ``driver_candidate`` program shows up
         on the driver roster.
         """
@@ -534,7 +571,7 @@ class ShiftEligibilityService:
 
         by_user: Dict[str, List[str]] = {}
         for user_id, program_name, target_position in result.all():
-            mapped = training_target_to_position(target_position)
+            mapped = TRAINING_POSITION_MAP.get(target_position, target_position)
             if mapped == position:
                 by_user.setdefault(str(user_id), []).append(program_name)
         return by_user
@@ -663,6 +700,31 @@ class ShiftEligibilityService:
                 granted.update(slug_map.get(slug, []))
         return granted
 
+    @staticmethod
+    def _shift_date(shift) -> date:
+        """The day the member would actually work, for currency checks.
+
+        Falls back to today when a shift carries no date, and when eligibility
+        is asked without a shift at all — a qualification list has to be
+        resolved as of *some* day, and today is the only defensible one when
+        no shift is in hand.
+        """
+        if shift is None:
+            return date.today()
+        value = getattr(shift, "shift_date", None) or getattr(shift, "start_time", None)
+        if value is None:
+            return date.today()
+        return value.date() if hasattr(value, "date") else value
+
+    async def _get_qualification_positions(
+        self, user_id: str, organization_id: str, as_of: date
+    ) -> Set[str]:
+        """Shift seats the member's current certifications clear them for."""
+        codes = await QualificationService(self.db).get_member_codes(
+            user_id, organization_id, as_of
+        )
+        return positions_for_qualifications(codes)
+
     async def _get_held_position_slugs(
         self, user_id: str, organization_id: str
     ) -> List[str]:
@@ -698,97 +760,6 @@ class ShiftEligibilityService:
             by_user.setdefault(str(user_id), []).append({"slug": slug, "name": name})
         return by_user
 
-    def _current_certification_clause(self):
-        """The department's test for "this certification still counts".
-
-        The same test ``cert_alert_service`` and ``admin_hub_service`` already
-        apply, so the roster, the expiry alerts and the compliance hub can
-        never disagree about whether a card is live. A null
-        ``expiration_date`` means the credential does not expire, not that it
-        has -- Firefighter I does not lapse, and treating null as expired would
-        quietly strip those members instead.
-        """
-        return (
-            TrainingRecord.status == TrainingStatus.COMPLETED,
-            or_(
-                TrainingRecord.expiration_date.is_(None),
-                TrainingRecord.expiration_date >= date.today(),
-            ),
-        )
-
-    async def _get_certification_positions(
-        self, user_id: str, organization_id: str
-    ) -> List[str]:
-        """Shift positions unlocked by the member's *current* certifications.
-
-        The credential path, and the only source that can lapse on its own.
-        Rank, held positions and completed programs are all sticky -- once
-        granted they persist until somebody edits a record -- so a member who
-        stopped renewing a licence stayed eligible indefinitely. A certification
-        stops conferring its seat the day it expires, with no sweep to run and
-        nothing for an officer to remember.
-        """
-        result = await self.db.execute(
-            select(TrainingCourse.target_position)
-            .join(TrainingRecord, TrainingRecord.course_id == TrainingCourse.id)
-            .where(
-                TrainingRecord.user_id == user_id,
-                TrainingRecord.organization_id == organization_id,
-                # Scoped on both sides of the join: a record must not pick up a
-                # seat grant from another department's course even if a stray
-                # course_id crossed tenants.
-                TrainingCourse.organization_id == organization_id,
-                TrainingCourse.target_position.isnot(None),
-                *self._current_certification_clause(),
-            )
-        )
-        positions = []
-        for (target_pos,) in result.all():
-            mapped = training_target_to_position(target_pos)
-            if mapped:
-                positions.append(mapped)
-        return positions
-
-    async def _get_certification_map(
-        self, organization_id: str, position: str
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """user_id -> current certifications conferring ``position``.
-
-        Carries each card's expiration so the roster can show *when* a member
-        stops being cleared, rather than only that they are. The furthest-out
-        expiry per course wins: a renewal is a new record beside the old one,
-        and reporting the superseded date would show a live medic as expiring
-        last year.
-        """
-        result = await self.db.execute(
-            select(
-                TrainingRecord.user_id,
-                TrainingRecord.course_name,
-                TrainingRecord.expiration_date,
-            )
-            .join(TrainingCourse, TrainingRecord.course_id == TrainingCourse.id)
-            .where(
-                TrainingRecord.organization_id == organization_id,
-                TrainingCourse.organization_id == organization_id,
-                TrainingCourse.target_position.in_(training_targets_for(position)),
-                *self._current_certification_clause(),
-            )
-        )
-
-        by_user: Dict[str, List[Dict[str, Any]]] = {}
-        for user_id, course_name, expiration_date in result.all():
-            held = by_user.setdefault(str(user_id), [])
-            existing = next((h for h in held if h["label"] == course_name), None)
-            if existing is None:
-                held.append({"label": course_name, "expires_on": expiration_date})
-                continue
-            # Keep the later expiry; a null one never expires and always wins.
-            if existing["expires_on"] is None or expiration_date is None:
-                existing["expires_on"] = None
-            elif expiration_date > existing["expires_on"]:
-                existing["expires_on"] = expiration_date
-        return by_user
-
     async def _get_training_positions(
         self, user_id: str, organization_id: str
     ) -> List[str]:
@@ -805,7 +776,7 @@ class ShiftEligibilityService:
         )
         positions = []
         for (target_pos,) in result.all():
-            mapped = training_target_to_position(target_pos)
+            mapped = TRAINING_POSITION_MAP.get(target_pos, target_pos)
             if mapped:
                 positions.append(mapped)
         return positions

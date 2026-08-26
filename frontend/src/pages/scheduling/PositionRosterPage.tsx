@@ -6,13 +6,13 @@
  *
  * Eligibility for a shift position comes from five independent sources OR'd
  * together (rank, a held position, completed training, a current
- * certification, the org's open-position list), so a member can hold a
+ * qualification, the org's open-position list), so a member can hold a
  * position for a reason that is not obvious from their profile. This page
  * shows the sources alongside each name, and pairs them with the member's EVOC
  * standing so the gap that matters is visible: someone whose rank lets them
  * sign up as a driver with no EVOC certification behind it.
  *
- * Only the certification source can lapse on its own -- rank, held positions
+ * Only the qualification source can lapse on its own -- rank, held positions
  * and completed programs all persist until somebody edits a record -- so it is
  * the one that carries its expiry date onto the badge.
  */
@@ -53,7 +53,7 @@ const POSITIONS = [
   'probationary',
 ] as const;
 
-// A certification inside this window still counts, but is close enough that an
+// A qualification inside this window still counts, but is close enough that an
 // officer staffing next month needs to see it now rather than discover it when
 // the roster quietly shortens.
 const EXPIRING_SOON_DAYS = 60;
@@ -67,11 +67,12 @@ type TabId = (typeof TABS)[number]['id'];
 
 // One entry per source type the roster endpoint emits. A type with no entry
 // here falls back to the rank styling, which is how a held-position source
-// spent its life masquerading as a second rank badge.
+// spent its life masquerading as a second rank badge -- and how a
+// qualification joined it when that source was added.
 const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string }> = {
   rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400' },
   position: { icon: Briefcase, className: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400' },
-  certification: { icon: BadgeCheck, className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400' },
+  qualification: { icon: BadgeCheck, className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400' },
   training: { icon: GraduationCap, className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
   open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400' },
 };
@@ -131,7 +132,7 @@ const PositionRosterPage: React.FC = () => {
         const style = SOURCE_STYLES[source.type] ?? SOURCE_STYLES.rank;
         const Icon = style?.icon ?? Shield;
 
-        // Only a certification carries an expiry, and only when it expires at
+        // Only a qualification carries an expiry, and only when it expires at
         // all. Inside the window the badge switches to the same amber the EVOC
         // warning uses, so "runs out in three weeks" reads as the caution it is
         // rather than as one more green tick.

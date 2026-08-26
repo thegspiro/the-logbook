@@ -16,7 +16,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import operational_ranks as ranks_ep
 from app.schemas.operational_rank import RankCreate, RankUpdate
-from app.services.operational_rank_service import DEFAULT_RANKS, OperationalRankService
+from app.services.operational_rank_service import (
+    DEFAULT_RANKS,
+    OperationalRankService,
+    default_ranks_for,
+)
 
 
 def _one(obj):
@@ -57,6 +61,15 @@ def _db(side_effect):
     return db
 
 
+def _seed_db(org_type="fire_department", count=0):
+    """A db whose first execute answers the count, the second the agency type.
+
+    ``seed_defaults`` reads ``Organization.organization_type`` to choose which
+    ranks to write, so the order of these two matters.
+    """
+    return _db([_scalar(count), _one(org_type)])
+
+
 class TestSeedDefaults:
     async def test_skips_when_ranks_exist(self):
         db = _db([_scalar(3)])
@@ -65,7 +78,7 @@ class TestSeedDefaults:
         db.add.assert_not_called()
 
     async def test_seeds_full_default_set(self):
-        db = _db([_scalar(0)])
+        db = _seed_db()
         out = await OperationalRankService(db).seed_defaults("org-1")
         assert len(out) == len(DEFAULT_RANKS)
         assert db.add.call_count == len(DEFAULT_RANKS)
@@ -75,7 +88,7 @@ class TestSeedDefaults:
 
     async def test_seeded_chief_ranks_do_not_alias_positions(self):
         # Regression: the chief ranks shared the same _CHIEF_POSITIONS list.
-        db = _db([_scalar(0)])
+        db = _seed_db()
         out = await OperationalRankService(db).seed_defaults("org-1")
         by_code = {r.rank_code: r for r in out}
         chief = by_code["fire_chief"]
@@ -90,7 +103,7 @@ class TestSeedDefaults:
         # pass the count==0 check; the loser's flush hits the unique
         # constraint. Must return [] rather than let an IntegrityError escape
         # as an uncaught 500.
-        db = _db([_scalar(0)])
+        db = _seed_db()
         db.flush = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception("dup")))
 
         out = await OperationalRankService(db).seed_defaults("org-1")
@@ -108,7 +121,7 @@ class TestSeedDefaults:
         # reopen-attendance 500). The fix must use a SAVEPOINT
         # (begin_nested), which only expires objects modified within it, and
         # must never call the full session rollback() directly.
-        db = _db([_scalar(0)])
+        db = _seed_db()
         db.flush = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception("dup")))
         db.rollback = AsyncMock()
 
@@ -281,3 +294,78 @@ class TestParamedicIsNotARankGrant:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestSeedSetFollowsAgencyType:
+    """An EMS-only service has no firefighters, and never will.
+
+    Firefighter and EMT are independent ranks, not two rungs of one ladder:
+    a member may hold either without the other. An EMS-only agency has the
+    same officer ladder as anyone else and no fire line at all, so seeding it
+    "Firefighter" hands it a rank nobody there can ever hold.
+
+    This only gets one chance to be right. ``seed_defaults`` fires solely into
+    an empty table, so whatever it writes on day one is what the department
+    lives with unless somebody edits the list by hand.
+    """
+
+    async def test_ems_only_is_not_seeded_a_firefighter_rank(self):
+        db = _seed_db("ems_only")
+        out = await OperationalRankService(db).seed_defaults("org-1")
+        codes = {r.rank_code for r in out}
+        assert "firefighter" not in codes
+        assert "emt" in codes, "an EMS agency still needs its line rank"
+
+    async def test_ems_only_keeps_the_whole_officer_ladder(self):
+        db = _seed_db("ems_only")
+        out = await OperationalRankService(db).seed_defaults("org-1")
+        codes = {r.rank_code for r in out}
+        for officer in (
+            "fire_chief",
+            "deputy_chief",
+            "assistant_chief",
+            "captain",
+            "lieutenant",
+        ):
+            assert officer in codes, f"EMS agencies have {officer} too"
+
+    async def test_ems_only_relabels_the_fire_specific_names(self):
+        db = _seed_db("ems_only")
+        out = await OperationalRankService(db).seed_defaults("org-1")
+        by_code = {r.rank_code: r for r in out}
+        # The code is shared so it keys the same permissions everywhere; only
+        # what the department reads on screen changes.
+        assert by_code["fire_chief"].display_name == "Chief"
+        assert by_code["engineer"].display_name == "Driver / Operator"
+
+    async def test_fire_department_still_gets_both_line_ranks(self):
+        db = _seed_db("fire_department")
+        out = await OperationalRankService(db).seed_defaults("org-1")
+        codes = {r.rank_code for r in out}
+        # Neither implies the other; a fire department runs EMS too and needs
+        # to be able to record a member who is one, the other, or both.
+        assert {"firefighter", "emt"} <= codes
+
+    async def test_combined_matches_fire(self):
+        assert default_ranks_for("fire_ems_combined") == default_ranks_for(
+            "fire_department"
+        )
+
+    @pytest.mark.parametrize("org_type", [None, "", "something_new"])
+    def test_unknown_agency_type_falls_back_to_the_full_set(self, org_type):
+        # Seeding too few is the worse failure: a department that is missing a
+        # rank has no indication anything is absent, whereas a spare one is
+        # visible in the editor and deletable.
+        assert default_ranks_for(org_type) == default_ranks_for("fire_department")
+
+    def test_every_seeded_code_is_a_known_rank_code(self):
+        """A per-agency label override must never invent a new code.
+
+        Codes key the permission registry and the shift-eligibility fallback,
+        so a code seeded for one agency and unknown elsewhere would confer
+        nothing — the EMT bug, re-created per agency type.
+        """
+        known = {code for code, _l, _o, _p in DEFAULT_RANKS}
+        for org_type in ("fire_department", "fire_ems_combined", "ems_only"):
+            for code, _label, _order, _positions in default_ranks_for(org_type):
+                assert code in known, f"{org_type} seeds unknown rank code {code!r}"

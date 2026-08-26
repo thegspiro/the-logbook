@@ -168,14 +168,14 @@ describe('PositionRosterPage', () => {
     expect(rankBadge.className).not.toEqual(positionBadge.className);
   });
 
-  it('shows a certification source with the date it lapses', async () => {
+  it('shows a qualification source with the date it lapses', async () => {
     mockGetPositionRoster.mockResolvedValue({
       position: 'paramedic',
       members: [
         {
           ...certifiedDriver,
           rank_display_name: null,
-          sources: [{ type: 'certification', label: 'Paramedic', expires_on: '2029-12-31' }],
+          sources: [{ type: 'qualification', label: 'Paramedic', expires_on: '2029-12-31' }],
         },
       ],
       excluded_membership_types: [],
@@ -188,7 +188,7 @@ describe('PositionRosterPage', () => {
     expect(await screen.findByText(/exp Dec 31, 2029/)).toBeInTheDocument();
   });
 
-  it('flags a certification that lapses inside the warning window', async () => {
+  it('flags a qualification that lapses inside the warning window', async () => {
     // Rendered in the same amber as the EVOC warning rather than as one more
     // green tick, so an imminent lapse reads as the caution it is.
     const soon = new Date();
@@ -204,8 +204,8 @@ describe('PositionRosterPage', () => {
           ...certifiedDriver,
           rank_display_name: null,
           sources: [
-            { type: 'certification', label: 'Paramedic', expires_on: soonISO },
-            { type: 'certification', label: 'Firefighter I', expires_on: null },
+            { type: 'qualification', label: 'Paramedic', expires_on: soonISO },
+            { type: 'qualification', label: 'Firefighter I', expires_on: null },
           ],
         },
       ],
@@ -219,7 +219,7 @@ describe('PositionRosterPage', () => {
     const expiring = await screen.findByTitle(/^Expires/);
     expect(expiring.className).toContain('amber');
 
-    // The non-expiring card keeps the ordinary certification styling.
+    // The non-expiring card keeps the ordinary qualification styling.
     expect(screen.getByText('Firefighter I').className).not.toContain('amber');
   });
 

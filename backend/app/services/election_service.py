@@ -251,15 +251,26 @@ class ElectionService:
         """
         Check if a user has any of the specified voter-type categories.
 
-        Eligibility is determined primarily by the member's
-        ``membership_type`` (department membership classification), with a
-        fallback to direct role-slug matching for custom/specific slugs.
+        Eligibility is determined primarily by the member's class and status
+        (``member_class`` / ``member_status``), with a fallback to direct
+        role-slug matching for custom/specific slugs.
+
+        "operational" and "administrative" read the member's **class**, which
+        is a separate question from how long they have been a member. They
+        previously read ``membership_type``, which held class and status in one
+        field and so could only answer "operational" as ``== "active"`` —
+        silently excluding every probationary, life and retired member from a
+        category that plainly includes them. A department putting a bylaws
+        question to its operational members was not reaching its life members.
+
+        "regular", "life" and "probationary" name a **status** and stay
+        status checks; they mean what they say.
 
         role_types can include:
         - "all" - everyone is eligible
-        - "operational" - members with membership_type "active"
-        - "administrative" - members with membership_type "administrative"
-        - "regular" - active or life members (membership_type in active, life)
+        - "operational" - members whose class is operational, at any status
+        - "administrative" - members whose class is administrative
+        - "regular" - regular or life members (the non-probationary voting body)
         - "life" - life members only (membership_type "life")
         - "probationary" - probationary members (membership_type "probationary")
         - Specific role slugs like "chief", "president", etc.
@@ -267,30 +278,54 @@ class ElectionService:
         if not role_types or "all" in role_types:
             return True
 
-        from app.models.user import MembershipType
+        from app.utils.membership import (
+            MemberClass,
+            MemberStatus,
+            split_membership_type,
+        )
 
-        member_type = getattr(user, "membership_type", None) or "active"
+        member_class = getattr(user, "member_class", None)
+        member_status = getattr(user, "member_status", None)
+        if not member_class or not member_status:
+            # A row written before the split, or a caller passing a stub. The
+            # legacy field still carries both facts, just fused.
+            member_class, member_status = split_membership_type(
+                getattr(user, "membership_type", None)
+            )
+        # Deliberately not defaulted. Both stay None when the member's
+        # membership_type is an org-configured tier id ("senior") rather than
+        # one of the seven known values, and None matches no class and no
+        # status — which is what such a member matched before. Defaulting here
+        # would quietly enrol every custom tier in the operational regular
+        # body. The role-slug fallback below still applies to them.
+        member_class = (member_class or "").strip().lower()
+        member_status = (member_status or "").strip().lower()
 
-        # Membership-type category checks
+        # Class checks — what kind of member, regardless of standing.
         if "operational" in role_types:
-            if member_type == MembershipType.ACTIVE:
+            if member_class == MemberClass.OPERATIONAL:
                 return True
 
         if "administrative" in role_types:
-            if member_type == MembershipType.ADMINISTRATIVE:
+            if member_class == MemberClass.ADMINISTRATIVE:
                 return True
 
-        # "regular" = active or life members (non-probationary voting members)
+        if "social" in role_types:
+            if member_class == MemberClass.SOCIAL:
+                return True
+
+        # Status checks — where on the ladder, regardless of class.
+        # "regular" is the non-probationary voting body: regular and life.
         if "regular" in role_types:
-            if member_type in (MembershipType.ACTIVE, MembershipType.LIFE):
+            if member_status in (MemberStatus.REGULAR, MemberStatus.LIFE):
                 return True
 
         if "life" in role_types:
-            if member_type == MembershipType.LIFE:
+            if member_status == MemberStatus.LIFE:
                 return True
 
         if "probationary" in role_types:
-            if member_type == MembershipType.PROBATIONARY:
+            if member_status == MemberStatus.PROBATIONARY:
                 return True
 
         # Fallback: check for direct role slug matches
