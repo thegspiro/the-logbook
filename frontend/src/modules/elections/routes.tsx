@@ -25,15 +25,17 @@ export const getElectionsRoutes = () => (
     <Route
       path="/elections"
       element={
-        <Suspense fallback={null}>
-          <ElectionsPage />
-        </Suspense>
+        <ProtectedRoute requiredModule="elections" moduleLabel="Elections">
+          <Suspense fallback={null}>
+            <ElectionsPage />
+          </Suspense>
+        </ProtectedRoute>
       }
     />
     <Route
       path="/elections/settings"
       element={
-        <ProtectedRoute requiredPermission="elections.manage">
+        <ProtectedRoute requiredModule="elections" moduleLabel="Elections" requiredPermission="elections.manage">
           <Suspense fallback={null}>
             <ElectionsSettingsPage />
           </Suspense>
@@ -43,9 +45,11 @@ export const getElectionsRoutes = () => (
     <Route
       path="/elections/:electionId"
       element={
-        <Suspense fallback={null}>
-          <ElectionDetailPage />
-        </Suspense>
+        <ProtectedRoute requiredModule="elections" moduleLabel="Elections">
+          <Suspense fallback={null}>
+            <ElectionDetailPage />
+          </Suspense>
+        </ProtectedRoute>
       }
     />
   </React.Fragment>

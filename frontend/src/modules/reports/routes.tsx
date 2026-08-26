@@ -17,7 +17,7 @@ export const getReportsRoutes = () => {
       <Route
         path="/reports"
         element={
-          <ProtectedRoute requiredPermission="reports.view">
+          <ProtectedRoute requiredModule="reports" moduleLabel="Reports" requiredPermission="reports.view">
             <Suspense fallback={null}>
               <ReportsPage />
             </Suspense>
