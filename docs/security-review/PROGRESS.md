@@ -16,7 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #1847 (feature 15, Scheduling — the Codex-round follow-up to the already-merged #1846) merged 2026-08-26 — see the rotation table and Log below. Next iteration starts feature 16 (Events & requests).
+| Field       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR          | [#1848](https://github.com/thegspiro/the-logbook/pull/1848)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Branch      | `claude/security-review-events`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Feature     | 16 Events & requests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| CI          | pending — just opened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Threads     | none yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Last tended | 2026-08-26 — opened. Re-verified EV-1..10/EV2-1/EV2-2 (module-audit + 4 app-review passes) still hold after events.py/event_requests.py/event_service.py grew 15-30% since the last full read; 1 new finding (EV-11, LOW, XC-1: create_recurring_event's template_id not org-validated), fixed. A first draft of the fix also wrongly touched create_event (EventCreate has no template_id field) — caught by the full test suite before this PR opened, reverted. Full write-up in `docs/security-review/EV-16-events-requests.md`. Full completion gate green, full 8557-test backend suite. |
 
 ---
 
@@ -60,7 +67,7 @@ data-carrying modules, then the supporting infrastructure.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅ #1838        |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅ #1842        |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅ #1846, #1847 |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | 🔄              |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⏳ #1848        |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜              |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜              |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜              |
@@ -554,3 +561,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   `SCH-15-scheduling.md` and `KNOWN_LIMITATIONS.md`; replied to and
   resolved the thread. All 16 CI checks green on the merged head, no
   merge conflict. Next: 16 events & requests.
+- **16 Events & requests — PR #1848 opened.** `events.py`,
+  `event_requests.py`, and `event_service.py` grew 15-30% since the last
+  full read (module-audit iteration 17 + 4 app-review passes,
+  2026-08-06..09); read all three in full plus the new
+  `event_request_service.py` (extracted from `event_requests.py`'s
+  endpoint file since the last audit). EV-1 through EV-10, EV2-1, EV2-2
+  all re-verified still fixed, no regressions. One new finding: EV-11
+  (LOW, XC-1) — `create_recurring_event`'s client-supplied `template_id`
+  was not org-validated, unlike `location_id` checked two lines above it
+  — fixed via the existing org-scoped `get_template()`. A first draft of
+  the fix also wrongly added the same check to `create_event`, based on
+  a misread of the schema (`EventCreate` has no `template_id` field at
+  all); this failed all 16 tests in `test_event_lifecycle.py` and was
+  caught and reverted by running the full suite before opening the PR,
+  not by external review. Full completion gate green, full 8557-test
+  backend suite. See `EV-16-events-requests.md` for the complete
+  write-up.

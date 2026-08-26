@@ -1,6 +1,6 @@
 # Security Review 16 — Events & Requests
 
-**Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 · **PR:** [#1848](https://github.com/thegspiro/the-logbook/pull/1848)
 
 **Backend:** `api/v1/endpoints/events.py` (3,313 L, 55 routes),
 `api/v1/endpoints/event_requests.py` (1,838 L, 23 routes — includes the
