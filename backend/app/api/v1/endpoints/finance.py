@@ -5,6 +5,7 @@ Handles fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, approval chains, and QuickBooks export.
 """
 
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -529,7 +530,7 @@ async def delete_chain_step(
 @router.get("/approval-chains/preview", response_model=ApprovalChainResponse)
 async def preview_approval_chain(
     entity_type: str = Query(...),
-    amount: float = Query(...),
+    amount: Decimal = Query(..., decimal_places=2),
     category_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
@@ -827,7 +828,7 @@ async def mark_pr_received(
 )
 async def mark_pr_paid(
     pr_id: str,
-    actual_amount: Optional[float] = Query(None),
+    actual_amount: Optional[Decimal] = Query(None, decimal_places=2),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
