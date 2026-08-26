@@ -468,7 +468,7 @@ const EventSelfCheckInPage: React.FC = () => {
                 </p>
                 {qrData?.actual_end_time && (
                   <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
-                    Note: This event was ended early by the event manager
+                    Note: This event was ended early by the event officer
                   </p>
                 )}
               </div>

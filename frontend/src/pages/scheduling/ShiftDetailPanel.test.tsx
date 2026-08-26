@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
+import { schedulingService } from '../../modules/scheduling/services/api';
 
 const shift = {
   id: 'shift-1',
@@ -38,6 +39,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShiftAttendance: vi.fn().mockResolvedValue([]),
     getShift: vi.fn().mockResolvedValue(null),
     getShiftHandoff: vi.fn().mockResolvedValue(null),
+    getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
   },
 }));
 
@@ -74,5 +76,62 @@ describe('ShiftDetailPanel close-out equipment checks', () => {
 
     expect(screen.getByText(/1 end-of-shift checklist still pending/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close out shift' })).toBeDisabled();
+  });
+});
+
+/**
+ * The crew board offers a seat only when the member can actually take it.
+ *
+ * Before this, every open seat carried a "Sign myself up" button and the
+ * signup endpoint answered 403 — the button was an invitation the server
+ * could only refuse.
+ */
+describe('ShiftDetailPanel crew board signup gating', () => {
+  const crewShift = {
+    ...shift,
+    // Far future so the panel does not treat this as a past shift, which
+    // suppresses every signup button on its own and would hide the defect.
+    shift_date: '2099-01-01',
+    start_time: '2099-01-01T08:00:00Z',
+    end_time: '2099-01-01T16:00:00Z',
+    apparatus_positions: [
+      { position: 'driver', required: true },
+      { position: 'ems', required: true },
+    ],
+  };
+
+  const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
+
+  beforeEach(() => {
+    mockEligibility.mockReset();
+  });
+
+  it('offers only the seat the member is cleared for', async () => {
+    mockEligibility.mockResolvedValue({ positions: ['ems'], is_excluded: false });
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: 'Sign myself up as EMT' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign myself up as Driver/Operator' })).not.toBeInTheDocument();
+  });
+
+  it('says why when no open seat is theirs to take', async () => {
+    mockEligibility.mockResolvedValue({ positions: [], is_excluded: false });
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/None of the open seats on this shift match/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sign myself up/ })).not.toBeInTheDocument();
+  });
+
+  it('still offers the seats when the eligibility lookup fails', async () => {
+    // Fail open on the affordance: the endpoint is the real gate, and taking
+    // self-signup away from everyone over a network blip is the worse outcome.
+    mockEligibility.mockRejectedValue(new Error('network down'));
+
+    renderWithRouter(<ShiftDetailPanel shift={crewShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findAllByRole('button', { name: /Sign myself up/ })).toHaveLength(2);
+    expect(screen.queryByText(/None of the open seats on this shift match/)).not.toBeInTheDocument();
   });
 });

@@ -1974,7 +1974,7 @@ class TestSwapRequests:
         )
 
         assert result is None
-        assert err == "Target participants cannot manager-review swap requests"
+        assert err == "Target participants cannot officer-review swap requests"
         persisted = await svc.get_swap_request_by_id(swap_id, uuid.UUID(org_id))
         assert persisted.status == SwapRequestStatus.PENDING
         assert persisted.reviewed_by is None

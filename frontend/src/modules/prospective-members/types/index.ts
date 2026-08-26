@@ -10,6 +10,10 @@
 
 // Import enum types from the canonical source and re-export
 import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import {
+  VotingMethod as VotingMethodValues,
+  VictoryCondition as VictoryConditionValues,
+} from '../../../constants/enums';
 export type { StageType, ApplicantStatus };
 
 /** Backend step progress status values (mirrors StepProgressStatus enum). */
@@ -271,6 +275,74 @@ export type StageConfig =
   | InterviewRequirementConfig
   | MultiApprovalConfig
   | MedicalScreeningStageConfig;
+
+/**
+ * The config every stage type starts from, and the shape a reader falls back to
+ * when a stored config is missing keys.
+ *
+ * One table, used by both the editor and the API read boundary. They used to
+ * keep separate copies and the copies drifted: the read boundary knew only
+ * seven of the twelve types and silently handed the manual-approval default to
+ * the other five, so a stored checklist / reference-check / multi-approval /
+ * medical-screening / interview stage came back without the array its editor
+ * maps over. Opening one took the whole page down with a TypeError (2026-08-25)
+ * — the stage could not be edited at all, let alone saved.
+ *
+ * Functions rather than literals: every caller gets its own arrays and nested
+ * objects, so editing one stage cannot mutate the default for the next.
+ */
+export const DEFAULT_STAGE_CONFIGS: Record<StageType, () => StageConfig> = {
+  form_submission: () => ({ form_id: '', form_name: '' }),
+  document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
+  election_vote: () => ({
+    voting_method: VotingMethodValues.SIMPLE_MAJORITY,
+    victory_condition: VictoryConditionValues.MAJORITY,
+    eligible_voter_roles: [],
+    anonymous_voting: true,
+  }),
+  manual_approval: () => ({ approver_roles: [], require_notes: false }),
+  meeting: () => ({ meeting_type: 'chief_meeting', meeting_description: '' }),
+  status_page_toggle: () => ({ enable_public_status: true, custom_message: '' }),
+  automated_email: () => ({
+    email_subject: 'Welcome to the Membership Process',
+    include_welcome: true,
+    welcome_message: '',
+    include_faq_link: false,
+    faq_url: '',
+    include_next_meeting: false,
+    next_meeting_details: '',
+    include_status_tracker: false,
+    custom_sections: [],
+    section_order: [...DEFAULT_EMAIL_SECTION_ORDER],
+  }),
+  reference_check: () => ({
+    required_count: 3,
+    reference_types: ['Professional', 'Personal'],
+    collect_method: 'manual',
+    require_all_before_advance: true,
+  }),
+  checklist: () => ({
+    items: [{ label: '' }],
+    require_all: true,
+  }),
+  interview_requirement: () => ({
+    required_count: 2,
+  }),
+  multi_approval: () => ({
+    required_approvers: [],
+    require_notes: false,
+    approval_order: 'any',
+  }),
+  medical_screening: () => ({
+    required_screenings: ['physical_exam'],
+    require_all_passed: true,
+  }),
+};
+
+/** The default config for a stage type, safe for an unknown/legacy value. */
+export function defaultStageConfig(stageType: StageType): StageConfig {
+  return (DEFAULT_STAGE_CONFIGS[stageType] ?? DEFAULT_STAGE_CONFIGS.manual_approval)();
+}
 
 // =============================================================================
 // Pipeline Stage
@@ -1026,7 +1098,8 @@ export interface BackendStepUpdatePayload {
   config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
-  inactivity_timeout_days?: number | undefined;
+  /** null clears the per-stage override; omitting the key leaves it untouched. */
+  inactivity_timeout_days?: number | null | undefined;
 }
 
 // =============================================================================

@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import {
   X,
   Users,
@@ -262,13 +263,38 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     [hasApparatusPositions, apparatusPositions]
   );
 
-  // Set default signup position
+  // Which seats on this shift this member may claim. The signup endpoint is
+  // the gate; these buttons are only the affordance — so offering a seat the
+  // server will refuse is what we are removing here, not adding a second rule.
+  const {
+    positions: eligiblePositions,
+    loading: eligibilityLoading,
+    error: eligibilityError,
+  } = useEligiblePositions(shift.id);
+
+  // The two ways of not knowing get opposite answers on purpose. While the
+  // lookup is in flight we withhold the button rather than show one that
+  // disappears under a thumb. If the lookup *failed* we offer it and let the
+  // server decide: taking self-signup away from the whole department over a
+  // network blip is the worse outcome, and the 403 explains itself.
+  const canSignUpFor = useCallback(
+    (position: string) => eligibilityError !== null || (!eligibilityLoading && eligiblePositions.includes(position)),
+    [eligibilityError, eligibilityLoading, eligiblePositions]
+  );
+
+  const signupOptions = useMemo(
+    () => positionOptions.filter(([value]) => canSignUpFor(value)),
+    [positionOptions, canSignUpFor]
+  );
+
+  // Keep the chosen position one the member can actually be signed up for —
+  // a stale selection left over from before eligibility resolved would submit
+  // a seat the endpoint refuses.
   useEffect(() => {
-    if (positionOptions.length > 0 && !signupPosition) {
-      const firstOption = positionOptions[0];
-      if (firstOption) setSignupPosition(firstOption[0]);
-    }
-  }, [positionOptions, signupPosition]);
+    setSignupPosition((current) =>
+      signupOptions.some(([value]) => value === current) ? current : (signupOptions[0]?.[0] ?? '')
+    );
+  }, [signupOptions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -858,6 +884,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     () => crewBoard?.filter((s) => !s.assignment).map((s) => s.position) || [],
     [crewBoard]
   );
+
+  // Seats are open but none of them are theirs to take. Say so once, under the
+  // board — a board of open seats with every button quietly missing reads as a
+  // broken page, which is the confusion this gating exists to end.
+  const showNoClaimableSeatNote =
+    !isPast &&
+    !isUserAssigned &&
+    !eligibilityLoading &&
+    eligibilityError === null &&
+    openPositions.length > 0 &&
+    !openPositions.some((position) => canSignUpFor(position));
 
   // Default the assign form to the first open position
   useEffect(() => {
@@ -1846,6 +1883,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     canAssign={canAssign}
                     isPast={isPast}
                     isUserAssigned={isUserAssigned}
+                    canSignUp={canSignUpFor(position)}
                     positionOptions={positionOptions}
                     attendanceRecord={assignment ? attendanceByUser.get(assignment.user_id) : undefined}
                     tz={tz}
@@ -1875,6 +1913,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   />
                 ))}
               </div>
+
+              {showNoClaimableSeatNote && (
+                <p className="text-theme-text-muted mt-2 text-xs">
+                  None of the open seats on this shift match your rank, the positions you hold, or your completed
+                  training, so there is nothing here for you to claim. A scheduling admin can review your rank and
+                  positions, or the positions on this shift.
+                </p>
+              )}
 
               {/* Extra assignments (not matching apparatus positions) */}
               {extraAssignments.length > 0 && (
@@ -2162,38 +2208,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           )}
 
           {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-          {!hasApparatusPositions && !isPast && !isUserAssigned && (
+          {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && (
             <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
               <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
                 <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
               </h3>
-              <div className="flex items-center gap-2">
-                <select
-                  value={signupPosition}
-                  onChange={(e) => setSignupPosition(e.target.value)}
-                  className={'flex-1 ' + inputCls}
-                >
-                  {positionOptions.map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => {
-                    void handleSignup();
-                  }}
-                  disabled={pending.signingUp}
-                  className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                >
-                  {pending.signingUp ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UserPlus className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  Sign myself up
-                </button>
-              </div>
+              {signupOptions.length === 0 ? (
+                <p className="text-theme-text-muted text-xs">
+                  No position on this shift matches your rank, the positions you hold, or your completed training. A
+                  scheduling admin can review your rank and positions, or the positions on this shift.
+                </p>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={signupPosition}
+                    onChange={(e) => setSignupPosition(e.target.value)}
+                    className={'flex-1 ' + inputCls}
+                  >
+                    {signupOptions.map(([val, label]) => (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      void handleSignup();
+                    }}
+                    disabled={pending.signingUp}
+                    className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {pending.signingUp ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Sign myself up
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

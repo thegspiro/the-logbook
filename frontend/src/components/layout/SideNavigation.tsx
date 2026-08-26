@@ -499,7 +499,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Photo Use Consent',
                 path: '/communications/photo-use-consent',
                 icon: Camera,
-                anyPermission: ['notifications.manage', 'members.manage', 'users.edit'],
+                anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],
               },
               ...(isModuleOn('forms')
                 ? [{ label: 'Forms', path: '/forms', icon: FormInput, permission: 'forms.manage' }]
