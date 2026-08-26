@@ -9,7 +9,7 @@ approval chains, and export operations.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.models.finance import (
@@ -44,8 +44,7 @@ def _enum_check(valid: set, field: str):
         normalized = value.lower() if isinstance(value, str) else value
         if normalized not in valid:
             raise ValueError(
-                f"Invalid {field} '{value}'. Must be one of: "
-                f"{', '.join(sorted(valid))}"
+                f"Invalid {field} '{value}'. Must be one of: {', '.join(sorted(valid))}"
             )
         return normalized
 
@@ -772,12 +771,31 @@ class ExportMappingResponse(UTCResponseBase):
     updated_at: datetime
 
 
+MAX_SYNCHRONOUS_EXPORT_DAYS = 366
+MAX_SYNCHRONOUS_EXPORT_RECORDS = 10_000
+
+
 class ExportRequest(BaseModel):
     """Request to generate an export"""
 
     date_range_start: datetime
     date_range_end: datetime
     file_format: str = "csv"
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.date_range_end < self.date_range_start:
+            raise ValueError("date_range_end must be on or after date_range_start")
+        if (self.date_range_end - self.date_range_start).total_seconds() > (
+            MAX_SYNCHRONOUS_EXPORT_DAYS * 24 * 60 * 60
+        ):
+            raise ValueError(
+                "Synchronous exports support a maximum date span of "
+                f"{MAX_SYNCHRONOUS_EXPORT_DAYS} days; narrow the date range"
+            )
+        if self.file_format != "csv":
+            raise ValueError("Only csv synchronous exports are supported")
+        return self
 
 
 class ExportLogResponse(UTCResponseBase):
@@ -794,6 +812,9 @@ class ExportLogResponse(UTCResponseBase):
     file_format: str
     exported_by: str
     exported_at: datetime
+    status: str
+    error_message: Optional[str] = None
+    completed_at: Optional[datetime] = None
 
 
 # ============================================
