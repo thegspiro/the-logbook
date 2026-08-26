@@ -22,10 +22,12 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { useApiRequest, useUnsavedChanges, useFormChanged } from '../hooks';
 import { ProgressIndicator, LoadingOverlay, ErrorAlert, BackButton, ThemeToggle } from '../components';
 import { HelpLink } from '../../../components/HelpLink';
-import { useOnboardingStore } from '../store';
+// OrganizationType comes from the store rather than being re-declared here: the
+// position step reads it back to offer the list the backend seeds, so the two
+// have to be one union.
+import { useOnboardingStore, type OrganizationType } from '../store';
 
 // Types
-type OrganizationType = 'fire_department' | 'ems_only' | 'fire_ems_combined';
 type IdentifierType = 'fdid' | 'state_id' | 'department_id';
 
 interface AddressData {
@@ -372,6 +374,7 @@ const OrganizationSetup: React.FC = () => {
   // Zustand store
   const departmentName = useOnboardingStore((state) => state.departmentName);
   const setDepartmentName = useOnboardingStore((state) => state.setDepartmentName);
+  const setOrganizationType = useOnboardingStore((state) => state.setOrganizationType);
   const logoData = useOnboardingStore((state) => state.logoData);
   const setLogoData = useOnboardingStore((state) => state.setLogoData);
 
@@ -688,6 +691,11 @@ const OrganizationSetup: React.FC = () => {
       // created it. Publishing before the request made downstream route guards
       // treat a failed submission as a completed organization step.
       setDepartmentName(formData.name);
+      // Published on the same terms and for the same reason as the name: the
+      // position step several screens later must offer the ranks and positions
+      // this agency actually has, and a failed submission must not leave that
+      // choice recorded.
+      setOrganizationType(formData.organizationType);
 
       toast.success('Organization created successfully!');
 

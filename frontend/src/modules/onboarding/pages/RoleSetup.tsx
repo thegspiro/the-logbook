@@ -31,7 +31,8 @@ import {
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
-import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
+import type { OrganizationType } from '../store';
+import { MODULE_REGISTRY, applyAgencyVocabulary, isAgencyFilteredOut, type ModuleDefinition } from '../config';
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 
@@ -133,8 +134,25 @@ const generateRolePermissions = (
 /**
  * Build position templates dynamically using the module registry.
  * This ensures new modules are included in position permissions automatically.
+ *
+ * `organizationType` narrows the operational ranks to the ones this kind of
+ * agency has, and renames the two that are fire-specific. Everything else is
+ * administrative or universal and is offered to everyone.
  */
-const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
+export const buildPositionTemplates = (
+  modules: ModuleDefinition[],
+  organizationType: OrganizationType = 'fire_department'
+) => {
+  const templates = buildAllPositionTemplates(modules);
+  return Object.fromEntries(
+    Object.entries(templates).map(([key, category]) => [
+      key,
+      { ...category, positions: applyAgencyVocabulary(category.positions, organizationType) },
+    ])
+  ) as typeof templates;
+};
+
+const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
   system: {
     name: 'System / Special',
     description: 'System administration and IT management positions',
@@ -511,28 +529,59 @@ const PositionSetup: React.FC = () => {
   const lastSaved = useOnboardingStore((state) => state.lastSaved);
   const savedPositionsConfig = useOnboardingStore((state) => state.positionsConfig);
   const setPositionsConfig = useOnboardingStore((state) => state.setPositionsConfig);
+  const organizationType = useOnboardingStore((state) => state.organizationType);
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
-  const positionTemplates = useMemo(() => buildPositionTemplates(MODULE_REGISTRY), []);
+  const positionTemplates = useMemo(
+    () => buildPositionTemplates(MODULE_REGISTRY, organizationType),
+    [organizationType]
+  );
+
+  // Flattened view of the agency-filtered templates, for reconciling a restored
+  // config against them. A custom position an admin invented has no template
+  // and is kept as-is.
+  const templatesById = useMemo(
+    () =>
+      new Map(
+        Object.values(positionTemplates).flatMap((category) =>
+          category.positions.map((position) => [position.id, position] as const)
+        )
+      ),
+    [positionTemplates]
+  );
 
   // Selected positions - restore from Zustand store if available, otherwise use defaults
   const [selectedPositions, setSelectedPositions] = useState<Record<string, RoleConfig>>(() => {
-    // Restore from persisted store if available
+    // Restore from persisted store if available.
+    //
+    // The restored map goes through the same agency filter as a fresh one, and
+    // has to. It is read from localStorage, so it can predate this filter
+    // existing — an EMS department that reached this step on an earlier build
+    // has `firefighter` sitting in its saved config, ticked. Submitting it does
+    // not merely show a position in error: `save_session_roles` finds no system
+    // position with that slug and *creates* one, putting back exactly the row
+    // the backend declined to seed. Names are refreshed from the template for
+    // the same reason, so a config saved as "Fire Chief" reads "Chief".
     if (savedPositionsConfig) {
       const restored: Record<string, RoleConfig> = {};
       for (const [posId, saved] of Object.entries(savedPositionsConfig)) {
+        const template = templatesById.get(posId);
+        if (!template && isAgencyFilteredOut(posId, organizationType)) continue;
         restored[posId] = {
           ...saved,
+          ...(template ? { name: template.name } : {}),
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
       return restored;
     }
 
-    // Build templates for initial state
-    const templates = buildPositionTemplates(MODULE_REGISTRY);
+    // Build templates for initial state. The store default is the full fire
+    // set, so a wizard resumed with a cleared store offers one position too
+    // many rather than silently hiding one.
+    const templates = buildPositionTemplates(MODULE_REGISTRY, organizationType);
 
     // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};
