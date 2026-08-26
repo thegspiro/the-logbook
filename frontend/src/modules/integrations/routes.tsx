@@ -18,7 +18,7 @@ export const getIntegrationsRoutes = () => {
       <Route
         path="/integrations"
         element={
-          <ProtectedRoute requiredPermission="settings.manage">
+          <ProtectedRoute requiredModule="integrations" moduleLabel="Integrations" requiredPermission="settings.manage">
             <Suspense fallback={null}>
               <IntegrationsPage />
             </Suspense>

@@ -80,7 +80,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/cohorts"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <CohortsPage />
           </ProtectedRoute>
         }
@@ -88,7 +88,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/cohorts/:cohortId"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <CohortDetailPage />
           </ProtectedRoute>
         }
@@ -98,7 +98,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/admin"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <TrainingAdminPage />
           </ProtectedRoute>
         }
@@ -110,7 +110,11 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/compliance-config"
         element={
-          <ProtectedRoute requiredAnyPermission={['settings.manage', 'compliance.manage']}>
+          <ProtectedRoute
+            requiredModule="training"
+            moduleLabel="Training"
+            requiredAnyPermission={['settings.manage', 'compliance.manage']}
+          >
             <ComplianceRequirementsConfigPage />
           </ProtectedRoute>
         }
@@ -147,7 +151,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/log-shift"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <ManualShiftReportPage />
           </ProtectedRoute>
         }
@@ -164,7 +168,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <SkillsTestingPage />
           </ProtectedRoute>
         }
@@ -172,7 +176,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/templates/new"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <SkillTemplateBuilderPage />
           </ProtectedRoute>
         }
@@ -180,7 +184,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/templates/:id"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <SkillTemplateBuilderPage />
           </ProtectedRoute>
         }
@@ -188,7 +192,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/templates/:id/edit"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <SkillTemplateBuilderPage />
           </ProtectedRoute>
         }
@@ -196,7 +200,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/new"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <StartSkillTestPage />
           </ProtectedRoute>
         }
@@ -204,7 +208,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/:testId"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <ActiveSkillTestPage />
           </ProtectedRoute>
         }
@@ -212,7 +216,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/:testId/active"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <ActiveSkillTestPage />
           </ProtectedRoute>
         }
@@ -225,7 +229,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/print/member"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <React.Suspense fallback={null}>
               <MemberTrainingPrintPage />
             </React.Suspense>
@@ -235,7 +239,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/print/program"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <React.Suspense fallback={null}>
               <ProgramPrintPage />
             </React.Suspense>
@@ -245,7 +249,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/print/compliance"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <React.Suspense fallback={null}>
               <CompliancePrintPage />
             </React.Suspense>
@@ -260,7 +264,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/print/template"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <React.Suspense fallback={null}>
               <SkillSheetPrintPage />
             </React.Suspense>
@@ -275,7 +279,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/print/scorecard"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
             <React.Suspense fallback={null}>
               <SkillTestScorecardPrintPage />
             </React.Suspense>

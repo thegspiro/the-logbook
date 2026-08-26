@@ -28,7 +28,11 @@ export const getProspectiveMembersRoutes = () => {
         path="/prospective-members/print-labels"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="prospective_members.view">
+            <ProtectedRoute
+              requiredModule="prospective_members"
+              moduleLabel="Prospective Members"
+              requiredPermission="prospective_members.view"
+            >
               <ProspectLabelPrintPage />
             </ProtectedRoute>
           </Suspense>
@@ -38,7 +42,11 @@ export const getProspectiveMembersRoutes = () => {
       <Route
         path="/prospective-members"
         element={
-          <ProtectedRoute requiredPermission="prospective_members.manage">
+          <ProtectedRoute
+            requiredModule="prospective_members"
+            moduleLabel="Prospective Members"
+            requiredPermission="prospective_members.manage"
+          >
             <Suspense fallback={null}>
               <ProspectiveMembersPage />
             </Suspense>
@@ -50,7 +58,11 @@ export const getProspectiveMembersRoutes = () => {
       <Route
         path="/prospective-members/settings"
         element={
-          <ProtectedRoute requiredPermission="prospective_members.manage">
+          <ProtectedRoute
+            requiredModule="prospective_members"
+            moduleLabel="Prospective Members"
+            requiredPermission="prospective_members.manage"
+          >
             <Suspense fallback={null}>
               <PipelineSettingsPage />
             </Suspense>
@@ -62,7 +74,11 @@ export const getProspectiveMembersRoutes = () => {
       <Route
         path="/prospective-members/:applicantId/interview"
         element={
-          <ProtectedRoute requiredPermission="prospective_members.manage">
+          <ProtectedRoute
+            requiredModule="prospective_members"
+            moduleLabel="Prospective Members"
+            requiredPermission="prospective_members.manage"
+          >
             <Suspense fallback={null}>
               <InterviewPage />
             </Suspense>

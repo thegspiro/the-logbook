@@ -33,7 +33,7 @@ export const getElectionsRoutes = () => (
     <Route
       path="/elections/settings"
       element={
-        <ProtectedRoute requiredPermission="elections.manage">
+        <ProtectedRoute requiredModule="elections" moduleLabel="Elections" requiredPermission="elections.manage">
           <Suspense fallback={null}>
             <ElectionsSettingsPage />
           </Suspense>
