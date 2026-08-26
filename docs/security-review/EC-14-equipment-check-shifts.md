@@ -1,6 +1,6 @@
 # Security Review 14 — Equipment Check & Shift Completion
 
-**Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 · **PR:** (opened this iteration)
+**Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (47 routes),
 `api/v1/endpoints/shift_completion.py` (21 routes),
