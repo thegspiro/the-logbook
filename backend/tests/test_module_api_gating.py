@@ -347,24 +347,107 @@ def _frontend_route_gates() -> dict:
     return gates
 
 
-def test_a_gated_frontend_module_gates_every_one_of_its_routes():
-    """A half-gated module is worse than an ungated one.
+# Routes inside a gated module that must stay open, each for a reason that
+# would break something real if the gate were added. Two kinds:
+#
+#   * token-authorized public pages — the caller has no session for the gate
+#     to resolve an organization from, and the token is what authorizes them;
+#   * the stand-ins the app serves *because* a module is off, where gating on
+#     that module would remove the fallback along with the feature.
+ROUTES_OPEN_BY_DESIGN = {
+    "/ballot": "public token vote from an emailed link",
+    "/display/:code": "public kiosk display, no session",
+    "/display/:code/events/:eventId/guest": "public kiosk display, no session",
+    "/f/:slug": "public form submission; answers /api/public/v1/forms",
+    "/application-status/:token": "an applicant checking their own application",
+    "/locations": "the stand-in served when Facilities is off",
+    "/apparatus-basic": "the stand-in served when Apparatus is off",
+}
 
-    One ungated route in an otherwise gated module is the bookmark that still
-    works, and nothing about the screen says it should not.
+
+def _module_routes() -> dict:
+    """module directory -> [(path, element source)] for every <Route>.
+
+    A plain split is accurate here because no module nests routes — App.tsx
+    owns the layout nesting — and ``test_module_routes_are_flat`` keeps that
+    true, since a nested route would make this parse silently wrong.
     """
     import re
     from pathlib import Path
 
     modules_dir = Path(__file__).resolve().parents[2] / "frontend" / "src" / "modules"
-    partial = {}
+    assert modules_dir.is_dir(), modules_dir
+    found = {}
     for routes_file in sorted(modules_dir.glob("*/routes.tsx")):
         source = routes_file.read_text()
-        protected = len(re.findall(r"<ProtectedRoute\b", source))
-        gated = len(re.findall(r"requiredModule=", source))
-        if gated and gated != protected:
-            partial[routes_file.parent.name] = f"{gated}/{protected} gated"
-    assert not partial, f"modules with some routes left ungated: {partial}"
+        routes = []
+        for segment in source.split("<Route")[1:]:
+            match = re.search(r'path="([^"]+)"', segment)
+            if match:
+                routes.append((match.group(1), segment))
+        found[routes_file.parent.name] = routes
+    return found
+
+
+def test_module_routes_are_flat():
+    """The parse above assumes it; a nested route would break it silently."""
+    from pathlib import Path
+
+    modules_dir = Path(__file__).resolve().parents[2] / "frontend" / "src" / "modules"
+    nested = [
+        f.parent.name
+        for f in sorted(modules_dir.glob("*/routes.tsx"))
+        if "</Route>" in f.read_text()
+    ]
+    assert not nested, (
+        "these modules nest their routes, so _module_routes() no longer reads "
+        f"them correctly: {nested}"
+    )
+
+
+def test_a_gated_frontend_module_gates_every_one_of_its_routes():
+    """A half-gated module is worse than an ungated one.
+
+    One ungated route in an otherwise gated module is the bookmark that still
+    works, and nothing about the screen says it should not.
+
+    This counts *routes*, not ``<ProtectedRoute>`` elements. The earlier
+    version compared those two counts, which meant a route carrying no
+    ``<ProtectedRoute>`` at all was invisible to it — and that is where the
+    real gap was: Training had fifteen member-facing routes with none, so the
+    module scored as fully gated while ``/training/my-training`` loaded on a
+    department that had switched Training off and then 403'd against its own
+    API. Elections, Scheduling and Inventory had the same shape.
+
+    A ``<Navigate>`` redirect needs no gate: it lands on the route it points
+    at, which carries one.
+    """
+    partial = {}
+    for module, routes in _module_routes().items():
+        source_has_gate = any("requiredModule=" in seg for _, seg in routes)
+        if not source_has_gate:
+            continue
+        ungated = [
+            path
+            for path, seg in routes
+            if "requiredModule=" not in seg
+            and "<Navigate" not in seg
+            and path not in ROUTES_OPEN_BY_DESIGN
+        ]
+        if ungated:
+            partial[module] = ungated
+    assert not partial, (
+        "routes inside a gated module with no module gate of their own. Add "
+        "the gate, or record the route in ROUTES_OPEN_BY_DESIGN with the "
+        f"reason it must stay open: {partial}"
+    )
+
+
+def test_no_route_is_exempt_after_it_stops_existing():
+    """A stale exemption is a gate nobody notices is missing."""
+    live = {path for routes in _module_routes().values() for path, _ in routes}
+    stale = set(ROUTES_OPEN_BY_DESIGN) - live
+    assert not stale, f"exempted routes no module declares any more: {sorted(stale)}"
 
 
 # Gated in the UI and deliberately not in the API. One entry, and it should

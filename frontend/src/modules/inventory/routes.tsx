@@ -69,9 +69,11 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/my-equipment"
         element={
-          <Suspense fallback={null}>
-            <MyEquipmentPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory">
+            <Suspense fallback={null}>
+              <MyEquipmentPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 
@@ -319,9 +321,11 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/items/:id"
         element={
-          <Suspense fallback={null}>
-            <ItemDetailPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory">
+            <Suspense fallback={null}>
+              <ItemDetailPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 

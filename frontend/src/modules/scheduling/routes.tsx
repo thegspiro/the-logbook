@@ -53,9 +53,11 @@ export const getSchedulingRoutes = () => {
       <Route
         path="/scheduling"
         element={
-          <Suspense fallback={null}>
-            <SchedulingPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <SchedulingPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
@@ -233,25 +235,31 @@ export const getSchedulingRoutes = () => {
       <Route
         path="/scheduling/checkin"
         element={
-          <Suspense fallback={null}>
-            <ShiftCheckInPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftCheckInPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/scheduling/checkin/print"
         element={
-          <Suspense fallback={null}>
-            <ShiftCheckInPrintPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftCheckInPrintPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/scheduling/shift-reports/print"
         element={
-          <Suspense fallback={null}>
-            <ShiftReportPrintPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftReportPrintPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
     </React.Fragment>
