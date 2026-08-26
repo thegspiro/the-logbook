@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The chief was missing from every notification meant to include them (2026-08-26)
+
+**Fixed**
+
+- **Role groups named position slugs no department is ever given.**
+  `LEADERSHIP_ROLE_SLUGS`, `ADMIN_NOTIFY_ROLE_SLUGS` and
+  `TRAINING_OFFICER_ROLE_SLUGS` are matched against `Position.slug`, and every
+  one of them named `"chief"`. The seeded chief's slug is `fire_chief`. So the
+  chief was silently absent from election rollback and deletion alerts, member
+  drop and auto-archive notices, the overdue-property report, and the store's
+  admin heads-up — and the election path reported a recipient count to whoever
+  rolled the election back that quietly excluded them. `"admin"`, which two of
+  the lists also named, has never been a position at all.
+
+  The groups now name **office keys**, expanded through `OFFICE_CATALOG` by a
+  new `position_slugs_for_offices`. That catalog's chief entry already knew
+  `fire_chief` and `chief` were one office; nothing else did. Expanding rather
+  than replacing matters: `chief` stays reachable, because an admin who names a
+  custom position "Chief" gets exactly that slug from `slugify` — which is why
+  this worked on some installations and not others, and so was never reported.
+  `"admin"` becomes `it_manager`, the System Owner position that actually
+  carries the authority these groups reach for.
+
+- **An officer check that could never be true.** `training_module_config`
+  compared `TRAINING_OFFICER_ROLE_SLUGS` against `Position.name` — the seeded
+  names are "Training Officer" and "Fire Chief" — so `is_officer` was
+  unconditionally `False` on every installation. A training officer opening
+  their own training page got the plain member's visibility policy: their own
+  history, hours and narrative hidden from them. Two independent defects in one
+  expression, both closed.
+
+- **`ROLE_CHIEF` is gone.** It was `"chief"`, a single slug. No single slug
+  answers "the chief", so the replacement is `CHIEF_POSITION_SLUGS`. Its
+  sharpest call site was `cert_alert_service`: an admin turning on "CC the chief
+  on escalation" got a toggle that could not do anything.
+
+- **Leadership members were emailed once per position held.**
+  `_notify_leadership` joined `User.roles` without `distinct`, so a member
+  holding `president` and the auto-assigned `member` came back twice — emailed
+  twice, and counted twice in the "N leadership members have been notified"
+  message. Pre-existing, and fixed here because making the chief match would
+  have added them to it. The join bought nothing: the positions were already
+  eager-loaded and the filter runs in Python.
+
+- **An EMS-only service was offered a fire department's apparatus.** The
+  scheduling defaults seated engine, ladder, tanker, brush, tower and hazmat for
+  every organization, and the settings panel unioned its own hardcoded copy of
+  that list over whatever the server sent — so those six were shown regardless,
+  with no control to remove them. They are now withheld from an EMS-only
+  agency, which keeps ambulance, rescue, boat, chief and utility. **Nothing is
+  invented**: no new apparatus type, no new staffing number.
+
+  The vehicle picker's fallback (`GET /scheduling/apparatus-options`) carried a
+  _second_ copy of the same eleven strings. `DEFAULT_APPARATUS_TYPES` is deleted
+  and the fallback reads the staffing templates directly — otherwise one of the
+  two would have been made agency-aware and the other not, and a new EMS
+  department would still have been offered Engine and Ladder as its entire
+  picker.
+
+**Scope**
+
+- **The scheduling change reaches existing organizations immediately.** Unlike
+  the rank and position seeds, nothing writes these defaults to a row —
+  `get_settings` reads the built-ins live on every request and folds a stored
+  row over them, and a row exists only once an admin has saved the panel. So
+  every organization that has never saved sees this on deploy; one that has
+  saved keeps what it saved. Templates already built are unaffected, because
+  their seats were copied at creation.
+- **Crew seats are untouched.** `"firefighter"` inside an apparatus default is a
+  `ShiftPosition` — a seat on a rig, a different namespace from rank codes and
+  position slugs — persisted verbatim into three untyped JSON columns and
+  cross-referenced by every organization's `eligible_positions`. Renaming one
+  would orphan those rows the way the `EMT`/`ems` divergence did, and would buy
+  nothing: an EMT is already eligible for a `firefighter` seat.
+- **Offline still shows the full set.** The frontend keeps the complete
+  fire-shaped copy as its offline and cold-cache fallback, because the browser
+  has no notion of the organization's agency type; the narrowing happens
+  server-side, where it is known.
+- **`compliance_officer` still resolves to nobody**, and `assistant_training_officer`
+  with it. Both are fallbacks behind `cert_alert_config`, which a department
+  fills in with its own slugs, so naming a position it may reasonably have
+  invented is the point. Recorded in `tests/test_role_group_slugs.py` as an
+  explicit exemption rather than left to be rediscovered.
+
+`tests/test_role_group_slugs.py` asserts every slug a role group produces is one
+a department can actually hold, and `tests/test_shift_settings_parity.py` closes
+the "kept in lockstep with the frontend" comment that nothing had been enforcing.
+
 ### An EMS-only agency was seeded a fire department's positions (2026-08-26)
 
 **Fixed**

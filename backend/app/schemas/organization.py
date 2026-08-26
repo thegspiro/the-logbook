@@ -436,7 +436,11 @@ class MemberDropNotificationSettings(BaseModel):
 
     cc_roles: List[str] = Field(
         default_factory=lambda: list(ADMIN_NOTIFY_ROLE_SLUGS),
-        description="Role names whose holders are automatically CC'd on drop notifications",
+        description=(
+            "Position *slugs* whose holders are automatically CC'd on drop "
+            "notifications. The consumer matches Position.slug, so a display "
+            "name will not match."
+        ),
     )
     cc_emails: List[str] = Field(
         default_factory=list,

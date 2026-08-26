@@ -217,14 +217,22 @@ cc_roles = config.get("cc_roles", ["admin", "quartermaster", "chief"])
 
 **Available role group constants:**
 
-| Constant                      | Roles                           | Used For                       |
-| ----------------------------- | ------------------------------- | ------------------------------ |
-| `ADMIN_NOTIFY_ROLE_SLUGS`     | admin, quartermaster, chief     | Drop/archive CC notifications  |
-| `LEADERSHIP_ROLE_SLUGS`       | chief, president, VP, secretary | Critical event alerts          |
-| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief  | Training module officer checks |
+| Constant                      | Roles                                | Used For                       |
+| ----------------------------- | ------------------------------------ | ------------------------------ |
+| `ADMIN_NOTIFY_ROLE_SLUGS`     | it_manager, quartermaster, chief*    | Drop/archive CC notifications  |
+| `LEADERSHIP_ROLE_SLUGS`       | chief*, president, VP, secretary     | Critical event alerts          |
+| `TRAINING_OFFICER_ROLE_SLUGS` | it_manager, training_officer, chief* | Training module officer checks |
+
+\* Office keys, expanded through `OFFICE_CATALOG` by
+`position_slugs_for_offices` — `chief` resolves to **both** `fire_chief`
+(what onboarding seeds) and `chief` (what a custom position named "Chief"
+gets). Naming a raw slug here is how the chief came to be silently absent
+from every one of these notifications until 2026-08-26.
 
 **Individual role slug constants:** `ROLE_TRAINING_OFFICER`, `ROLE_IT_MANAGER`,
-`ROLE_MEMBER`, `ROLE_CHIEF` — for point lookups like `Role.slug == ROLE_MEMBER`.
+`ROLE_MEMBER` — for point lookups like `Role.slug == ROLE_MEMBER`. There is
+deliberately no `ROLE_CHIEF`: no single slug answers "the chief", so use
+`CHIEF_POSITION_SLUGS` and an `IN` comparison.
 
 ---
 

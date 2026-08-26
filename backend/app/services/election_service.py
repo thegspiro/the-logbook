@@ -4908,9 +4908,15 @@ class ElectionService:
 
         leadership_roles = LEADERSHIP_ROLE_SLUGS
 
+        # No join to User.roles: it returned one row per position held, so a
+        # leadership member holding `president` and the auto-assigned `member`
+        # was emailed twice and counted twice in the "N leadership members have
+        # been notified" message shown to whoever rolled the election back. The
+        # positions are already eager-loaded, and the filter below is in Python,
+        # so the join bought nothing. Matches the sibling query in
+        # get_package_recipients.
         users_result = await self.db.execute(
             select(User)
-            .join(User.roles)
             .where(User.organization_id == str(organization_id))
             .where(User.is_active.is_(True))
             .options(selectinload(User.roles))
