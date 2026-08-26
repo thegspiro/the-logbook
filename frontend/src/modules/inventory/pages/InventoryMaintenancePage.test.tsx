@@ -8,6 +8,7 @@ const mockGetMaintenanceDueItems = vi.fn();
 const mockGetItems = vi.fn();
 const mockGetItemMaintenanceHistory = vi.fn();
 const mockCreateMaintenanceRecord = vi.fn();
+const mockUpdateItem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -15,6 +16,7 @@ vi.mock('../../../services/api', () => ({
     getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
     getItemMaintenanceHistory: (...a: unknown[]) => mockGetItemMaintenanceHistory(...a) as unknown,
     createMaintenanceRecord: (...a: unknown[]) => mockCreateMaintenanceRecord(...a) as unknown,
+    updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
   },
 }));
 
@@ -86,6 +88,7 @@ describe('InventoryMaintenancePage', () => {
     mockGetItems.mockResolvedValue({ items: [], total: 0 });
     mockGetItemMaintenanceHistory.mockResolvedValue([]);
     mockCreateMaintenanceRecord.mockResolvedValue({});
+    mockUpdateItem.mockResolvedValue({});
   });
 
   it('shows the empty state when nothing is due', async () => {
@@ -105,23 +108,57 @@ describe('InventoryMaintenancePage', () => {
     expect((await screen.findAllByText('Helmet')).length).toBeGreaterThan(0);
   });
 
-  it('logs a maintenance record', async () => {
+  it('schedules work with only a due date and task description', async () => {
     mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
     const user = userEvent.setup();
     renderWithRouter(<InventoryMaintenancePage />);
     await screen.findAllByText('Helmet');
 
     await user.click(firstButton('Log Maintenance'));
-    await user.type(await screen.findByPlaceholderText('Describe the maintenance performed...'), 'Replaced shell');
+    await user.type(await screen.findByPlaceholderText('Describe the maintenance task...'), 'Inspect shell');
+    await user.type(screen.getByLabelText('Due Date *'), '2026-09-01');
     await user.click(screen.getByRole('button', { name: 'Save Record' }));
 
     await waitFor(() => expect(mockCreateMaintenanceRecord).toHaveBeenCalledTimes(1));
     expect(mockCreateMaintenanceRecord.mock.calls[0]?.[0]).toMatchObject({
       item_id: 'it-1',
-      description: 'Replaced shell',
-      performed_by: 'Quartermaster',
+      description: 'Inspect shell',
+      scheduled_date: '2026-09-01',
+      is_completed: false,
     });
-    expect(mockToastSuccess).toHaveBeenCalledWith('Maintenance record logged');
+    expect(mockToastSuccess).toHaveBeenCalledWith('Maintenance record saved');
+  });
+
+  it('opens an incomplete repair and confirms the out-of-service transition', async () => {
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Open repair' }));
+    expect(screen.getByText('This will mark the item out of service.')).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Describe the maintenance task...'), 'Broken strap');
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+    await waitFor(() =>
+      expect(mockCreateMaintenanceRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ maintenance_type: 'repair', is_completed: false })
+      )
+    );
+  });
+
+  it('requires and records inspection results without showing completion-only fields', async () => {
+    mockGetMaintenanceDueItems.mockResolvedValue([makeItem()]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryMaintenancePage />);
+    await screen.findAllByText('Helmet');
+    await user.click(firstButton('Log Maintenance'));
+    await user.click(screen.getByRole('button', { name: 'Record inspection' }));
+    expect(screen.queryByLabelText('Cost ($)')).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Describe the maintenance task...'), 'Safety inspection');
+    await user.click(screen.getByRole('button', { name: 'Save Record' }));
+    expect(mockToastError).toHaveBeenCalledWith('Select a pass/fail result');
+    await user.click(screen.getByLabelText(/fail/i));
+    expect(screen.getByText('This will mark the item out of service.')).toBeInTheDocument();
   });
 
   it('loads maintenance history for a selected item', async () => {

@@ -938,6 +938,41 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
 
     item_id: UUID
 
+    @model_validator(mode="after")
+    def validate_maintenance_workflow(self):
+        """Keep scheduling, inspection, and completion records internally consistent."""
+        inspection_types = {
+            "inspection",
+            "routine_inspection",
+            "advanced_inspection",
+            "independent_inspection",
+        }
+        maintenance_type = str(self.maintenance_type)
+        if hasattr(self.maintenance_type, "value"):
+            maintenance_type = self.maintenance_type.value
+
+        if not self.description or not self.description.strip():
+            raise ValueError("Task description or performed work is required")
+        if (
+            not self.is_completed
+            and not self.scheduled_date
+            and maintenance_type != "repair"
+        ):
+            raise ValueError("Due date is required for scheduled work")
+        if self.completed_date and not self.is_completed:
+            raise ValueError("Completion date is only allowed for completed work")
+        if self.is_completed and not self.completed_date:
+            raise ValueError("Completion date is required for completed work")
+        if (
+            maintenance_type in inspection_types
+            and self.is_completed
+            and self.passed is None
+        ):
+            raise ValueError("A pass/fail result is required for inspections")
+        if maintenance_type not in inspection_types and self.passed is not None:
+            raise ValueError("Pass/fail result is only allowed for inspections")
+        return self
+
 
 class MaintenanceRecordUpdate(BaseModel):
     """Schema for updating a maintenance record"""
