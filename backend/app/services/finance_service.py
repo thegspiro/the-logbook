@@ -56,6 +56,21 @@ from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 
+class BudgetLimitExceededError(Exception):
+    """A proposed finance transaction would exceed its organization's budget.
+
+    This is a stable domain error (rather than a persistence error) so API
+    adapters can consistently report a conflict.  Overspending is deliberately
+    fail-closed: purchase requests, check requests, and individual expense
+    report lines have no override path, including for finance administrators.
+    """
+
+    code = "budget_limit_exceeded"
+
+    def __init__(self) -> None:
+        super().__init__("Insufficient available budget")
+
+
 def _apply_payment_totals(dues: MemberDues) -> None:
     """Re-derive the aggregate columns on ``dues`` from its payment ledger.
 
@@ -1019,7 +1034,7 @@ class FinanceService:
                 if entity.budget_id:
                     await self._encumber_budget(
                         entity.budget_id,
-                        float(entity.estimated_amount),
+                        entity.estimated_amount,
                         entity.organization_id,
                     )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
@@ -1393,11 +1408,16 @@ class FinanceService:
 
         # Move from encumbered to spent
         if pr.budget_id:
-            amount = float(pr.actual_amount or pr.estimated_amount)
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount), org_id
+            amount = pr.actual_amount or pr.estimated_amount
+            # One locked mutation avoids briefly counting both the existing
+            # encumbrance and the resulting spend.  It also permits an actual
+            # amount up to the remaining budget after releasing the estimate.
+            await self._mutate_budget(
+                pr.budget_id,
+                org_id,
+                encumbered_delta=-pr.estimated_amount,
+                spent_delta=amount,
             )
-            await self._add_to_spent(pr.budget_id, amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -1614,7 +1634,7 @@ class FinanceService:
         # Add to spent for each line item's budget
         for item in er.line_items:
             if item.budget_id:
-                await self._add_to_spent(item.budget_id, float(item.amount), org_id)
+                await self._add_to_spent(item.budget_id, item.amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
@@ -1748,7 +1768,7 @@ class FinanceService:
         cr.check_date = check_date or datetime.now(timezone.utc)
 
         if cr.budget_id:
-            await self._add_to_spent(cr.budget_id, float(cr.amount), org_id)
+            await self._add_to_spent(cr.budget_id, cr.amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
@@ -2299,6 +2319,12 @@ class FinanceService:
     # Budget Helpers
     # ========================================
 
+    # Overspend policy: every purchase-request encumbrance, issued check, and
+    # expense-report line must fit within amount_budgeted. Equality is allowed;
+    # exceeding the limit is not. There is intentionally no administrative or
+    # approval-based override: adding one requires an explicit permission,
+    # audit trail, and API contract rather than an implicit bypass here.
+    #
     # These helpers mutate a Budget's running totals. The budget_id ultimately
     # originates from a client-supplied FK on the referencing PR/CR/expense, so
     # every fetch is org-scoped to the referencing record's organization — a
@@ -2307,46 +2333,51 @@ class FinanceService:
     # organization_id, which is always the caller's own org (records are
     # org-stamped on create).
     async def _encumber_budget(
-        self, budget_id: str, amount: float, org_id: str
+        self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(
-                Budget.id == budget_id,
-                Budget.organization_id == org_id,
-            )
+        await self._mutate_budget(
+            budget_id, org_id, encumbered_delta=Decimal(str(amount))
         )
-        budget = result.scalar_one_or_none()
-        if budget:
-            budget.amount_encumbered = budget.amount_encumbered + Decimal(str(amount))
-            await self.db.flush()
 
     async def _release_encumbrance(
-        self, budget_id: str, amount: float, org_id: str
+        self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(
-                Budget.id == budget_id,
-                Budget.organization_id == org_id,
-            )
+        await self._mutate_budget(
+            budget_id, org_id, encumbered_delta=-Decimal(str(amount))
         )
-        budget = result.scalar_one_or_none()
-        if budget:
-            budget.amount_encumbered = max(
-                Decimal("0"),
-                budget.amount_encumbered - Decimal(str(amount)),
-            )
-            await self.db.flush()
 
-    async def _add_to_spent(self, budget_id: str, amount: float, org_id: str) -> None:
+    async def _add_to_spent(self, budget_id: str, amount: Decimal, org_id: str) -> None:
+        await self._mutate_budget(budget_id, org_id, spent_delta=Decimal(str(amount)))
+
+    async def _mutate_budget(
+        self,
+        budget_id: str,
+        org_id: str,
+        *,
+        spent_delta: Decimal = Decimal("0"),
+        encumbered_delta: Decimal = Decimal("0"),
+    ) -> None:
+        """Apply budget deltas under a row lock and enforce the hard ceiling."""
         result = await self.db.execute(
-            select(Budget).where(
+            select(Budget)
+            .where(
                 Budget.id == budget_id,
                 Budget.organization_id == org_id,
             )
+            .with_for_update()
         )
         budget = result.scalar_one_or_none()
         if budget:
-            budget.amount_spent = budget.amount_spent + Decimal(str(amount))
+            new_spent = budget.amount_spent + Decimal(spent_delta)
+            new_encumbered = budget.amount_encumbered + Decimal(encumbered_delta)
+            # Releases are idempotently bounded at zero, preserving the former
+            # behavior while ensuring the ceiling check uses the final totals.
+            new_spent = max(Decimal("0"), new_spent)
+            new_encumbered = max(Decimal("0"), new_encumbered)
+            if new_spent + new_encumbered > budget.amount_budgeted:
+                raise BudgetLimitExceededError()
+            budget.amount_spent = new_spent
+            budget.amount_encumbered = new_encumbered
             await self.db.flush()
 
     async def _validate_finance_fks(self, org_id: str, data: dict) -> None:
