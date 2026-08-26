@@ -14,7 +14,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.users import (
-    _assert_rank_is_configured,
+    _canonical_rank_or_400,
     _enforce_rank_grant_ceiling,
 )
 
@@ -83,18 +83,19 @@ class TestRankIsConfigured:
     """
 
     @staticmethod
-    def _service(known: bool):
+    def _service(canonical):
+        """A rank service resolving every input to ``canonical`` (None = unknown)."""
         service = MagicMock()
-        service.is_known_rank = AsyncMock(return_value=known)
+        service.resolve_rank_code = AsyncMock(return_value=canonical)
         return service
 
     async def test_an_unconfigured_rank_is_refused(self):
         with patch(
             "app.api.v1.endpoints.users.OperationalRankService",
-            return_value=self._service(False),
+            return_value=self._service(None),
         ):
             with pytest.raises(HTTPException) as exc:
-                await _assert_rank_is_configured("fire_cheif", "org-1", MagicMock())
+                await _canonical_rank_or_400("fire_cheif", "org-1", MagicMock())
         assert exc.value.status_code == 400
         # The message has to name the typo and where to fix it; "not
         # qualified" three screens later is what this replaces.
@@ -104,9 +105,9 @@ class TestRankIsConfigured:
     async def test_a_configured_rank_passes(self):
         with patch(
             "app.api.v1.endpoints.users.OperationalRankService",
-            return_value=self._service(True),
+            return_value=self._service("firefighter"),
         ):
-            await _assert_rank_is_configured("firefighter", "org-1", MagicMock())
+            await _canonical_rank_or_400("firefighter", "org-1", MagicMock())
 
     @pytest.mark.parametrize("blank", [None, "", "   "])
     async def test_clearing_a_rank_stays_allowed(self, blank):
@@ -116,13 +117,13 @@ class TestRankIsConfigured:
         normally does — so the guard must not turn "remove this rank" into a
         400. It also must not spend a query deciding that.
         """
-        service = self._service(False)
+        service = self._service(None)
         with patch(
             "app.api.v1.endpoints.users.OperationalRankService",
             return_value=service,
         ):
-            await _assert_rank_is_configured(blank, "org-1", MagicMock())
-        service.is_known_rank.assert_not_awaited()
+            await _canonical_rank_or_400(blank, "org-1", MagicMock())
+        service.resolve_rank_code.assert_not_awaited()
 
     async def test_the_create_path_uses_the_same_guard(self):
         """Three endpoints write a rank; all three have to refuse the same one.
@@ -137,10 +138,17 @@ class TestRankIsConfigured:
 
         for name in ("create_member", "update_user_profile"):
             source = inspect.getsource(getattr(users_ep, name))
-            assert "_assert_rank_is_configured" in source, (
+            assert "_canonical_rank_or_400" in source, (
                 f"{name} writes User.rank without checking it is a rank the "
                 "department has; a typo there fails silently at signup"
             )
+        # Checking is only half of it: the canonical value has to be the one
+        # that gets stored, or the check waves through a string that matches
+        # no dictionary key downstream.
+        create_src = inspect.getsource(users_ep.create_member)
+        assert "rank=canonical_rank," in create_src
+        update_src = inspect.getsource(users_ep.update_user_profile)
+        assert 'update_data["rank"] = await _canonical_rank_or_400' in update_src
 
     async def test_the_prospect_transfer_path_checks_too(self):
         """The third writer, and the one furthest from the users endpoints.
@@ -158,8 +166,10 @@ class TestRankIsConfigured:
         )
 
         source = inspect.getsource(MembershipPipelineService._do_transfer)
-        assert "is_known_rank" in source
+        assert "resolve_rank_code" in source
         assert "rank_not_configured_message" in source
+        # And stores what it resolved, rather than the caller's spelling.
+        assert "rank = canonical" in source
 
     async def test_every_path_refuses_in_the_same_words(self):
         """A member told "not configured" by one screen and something else by
@@ -172,10 +182,10 @@ class TestRankIsConfigured:
         assert "fire_cheif" in message
         with patch(
             "app.api.v1.endpoints.users.OperationalRankService",
-            return_value=self._service(False),
+            return_value=self._service(None),
         ):
             with pytest.raises(HTTPException) as exc:
-                await _assert_rank_is_configured("fire_cheif", "org-1", MagicMock())
+                await _canonical_rank_or_400("fire_cheif", "org-1", MagicMock())
         assert exc.value.detail == message
 
 

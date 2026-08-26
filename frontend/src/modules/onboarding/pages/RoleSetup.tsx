@@ -134,6 +134,25 @@ const generateRolePermissions = (
  * Build position templates dynamically using the module registry.
  * This ensures new modules are included in position permissions automatically.
  */
+/**
+ * Positions the members category used to offer, which are really a member's
+ * class and status rather than a job they hold. They are set on the member
+ * record now, and migration c3d4e5f6a7b8 recovers the standing of anyone who
+ * already holds one.
+ *
+ * Kept as a named list because an in-flight onboarding session persists its
+ * position picks to localStorage: without this, resuming a session started
+ * before the change re-creates exactly what the migration just retired.
+ */
+const RETIRED_STANDING_SLUGS = new Set([
+  'probationary_member',
+  'junior_member',
+  'life_member',
+  'administrative_member',
+  'social_member',
+  'exempt_member',
+]);
+
 const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
   system: {
     name: 'System / Special',
@@ -487,6 +506,14 @@ const PositionSetup: React.FC = () => {
     if (savedPositionsConfig) {
       const restored: Record<string, RoleConfig> = {};
       for (const [posId, saved] of Object.entries(savedPositionsConfig)) {
+        // A session started before these stopped being offered still has them
+        // in localStorage, and this restore is what would put them back:
+        // handleContinue submits whatever is here, recreating the
+        // permission-bearing positions *after* the recovery migration has
+        // already reclassified those members. Dropped by slug rather than by
+        // "not in the current templates", which would also discard the custom
+        // positions a department built in this very session.
+        if (RETIRED_STANDING_SLUGS.has(posId)) continue;
         restored[posId] = {
           ...saved,
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,

@@ -2449,13 +2449,19 @@ class MembershipPipelineService:
             )
 
             rank_service = OperationalRankService(self.db)
-            if not await rank_service.is_known_rank(
+            canonical = await rank_service.resolve_rank_code(
                 str(prospect.organization_id), str(rank)
-            ):
+            )
+            if canonical is None:
                 return {
                     "success": False,
                     "message": rank_not_configured_message(str(rank)),
                 }
+            # Store the canonical spelling, not the caller's. The conversion UI
+            # suggests display-cased values ("Firefighter"), which would match
+            # no dictionary key downstream and leave the new member with no
+            # permissions and no eligible seats.
+            rank = canonical
 
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(

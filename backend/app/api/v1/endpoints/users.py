@@ -258,7 +258,7 @@ async def create_member(
     await _enforce_rank_grant_ceiling(
         current_user, user_data.rank, db, get_client_ip(request)
     )
-    await _assert_rank_is_configured(
+    canonical_rank = await _canonical_rank_or_400(
         user_data.rank, str(current_user.organization_id), db
     )
 
@@ -288,7 +288,8 @@ async def create_member(
         date_of_birth=user_data.date_of_birth,
         hire_date=user_data.hire_date,
         # Department info
-        rank=user_data.rank,
+        # Canonical spelling, not the caller's — see _canonical_rank_or_400.
+        rank=canonical_rank,
         station=user_data.station,
         platoon=user_data.platoon,
         # Address
@@ -718,10 +719,10 @@ async def _enforce_role_grant_ceiling(
                 )
 
 
-async def _assert_rank_is_configured(
+async def _canonical_rank_or_400(
     rank: Optional[str], organization_id: str, db: AsyncSession
-) -> None:
-    """Refuse a rank the organization does not have.
+) -> Optional[str]:
+    """Refuse a rank the organization does not have; return the one it does.
 
     ``User.rank`` is a plain ``String(100)`` with no foreign key, so until now
     any string at all could be stored — and a typo does not fail loudly. It
@@ -734,16 +735,25 @@ async def _assert_rank_is_configured(
     This asks the same question one step earlier, where it can still be
     answered by refusing the write.
 
-    Clearing a rank stays allowed — an empty value is "no rank", not a bad one.
+    **Callers must store the value this returns, not the one they passed in.**
+    Checking a normalized string and then persisting the caller's original
+    re-creates the exact failure being guarded against — ``" firefighter "``
+    would clear the check and then match no dictionary key downstream, leaving
+    the member with no permissions and no seats.
+
+    Clearing a rank stays allowed — an empty value is "no rank", not a bad one
+    — and comes back as ``None`` so the caller writes the cleared value.
     """
     if rank is None or not str(rank).strip():
-        return
+        return None
     service = OperationalRankService(db)
-    if not await service.is_known_rank(organization_id, str(rank)):
+    canonical = await service.resolve_rank_code(organization_id, str(rank))
+    if canonical is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=rank_not_configured_message(str(rank)),
         )
+    return canonical
 
 
 async def _enforce_rank_grant_ceiling(
@@ -1473,7 +1483,7 @@ async def update_user_profile(
         # settings.manage/security.manage. Only enforced on an actual change.
         if "rank" in update_data and update_data["rank"] != user.rank:
             await _enforce_rank_grant_ceiling(perm_user, update_data["rank"], db, None)
-            await _assert_rank_is_configured(
+            update_data["rank"] = await _canonical_rank_or_400(
                 update_data["rank"], str(current_user.organization_id), db
             )
 

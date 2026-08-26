@@ -52,3 +52,36 @@ describe('RoleSetup does not offer membership standing as a position', () => {
     expect(SOURCE).toContain("id: 'member'");
   });
 });
+
+describe('a session started before the change does not re-create them', () => {
+  // The screen no longer *offers* these, but an onboarding session in flight
+  // persists its picks to localStorage, and the restore path submits whatever
+  // it finds. Without a filter there, resuming such a session writes the
+  // permission-bearing positions back — after the recovery migration has
+  // already reclassified those members, so the two disagree again and nothing
+  // reconciles them.
+
+  it('filters the retired slugs out of restored state', () => {
+    expect(SOURCE).toContain('RETIRED_STANDING_SLUGS.has(posId)');
+  });
+
+  it.each(STANDING_SLUGS)('lists %s as retired', (slug) => {
+    const set = SOURCE.slice(
+      SOURCE.indexOf('const RETIRED_STANDING_SLUGS'),
+      SOURCE.indexOf('const buildPositionTemplates')
+    );
+    expect(set).toContain(`'${slug}'`);
+  });
+
+  it('filters by slug rather than by "not in the current templates"', () => {
+    // The tempting general fix is to drop anything the templates no longer
+    // define. That would also discard every custom position a department built
+    // in this same session, which the screen explicitly supports creating.
+    const restoreBlock = SOURCE.slice(
+      SOURCE.indexOf('Restore from persisted store if available'),
+      SOURCE.indexOf('Build templates for initial state')
+    );
+    expect(restoreBlock).toContain('RETIRED_STANDING_SLUGS');
+    expect(restoreBlock).not.toContain('positionTemplates');
+  });
+});
