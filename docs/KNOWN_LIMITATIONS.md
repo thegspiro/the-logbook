@@ -1783,6 +1783,28 @@ SQL-level pagination is a response-envelope/frontend-contract change, not a
 drop-in. Mirrored here for the first time in this security review pass.
 (Security review MS-6, `docs/security-review/MS-09-medical-screening.md`.)
 
+## Inventory — Two Cross-Member Reads Sit Behind the Baseline `.view` Grant (2026-08-26)
+
+`GET /allowances/check/{user_id}/{category_id}` (allowance usage count) and
+`GET /members/{user_id}/size-preferences` (stored uniform/PPE measurements)
+both let any authenticated member look up another named member's data by id
+using only `inventory.view` — the permission every seeded Member position
+holds. This is the same class of gap the `ccea2576`/`d7be097b` commits closed
+across most of this module (item history, active/overdue checkouts, the
+members-inventory roster) and that this review's own INV-7 finding closed on
+the departure-clearance-by-id route, but these two were not part of either
+sweep.
+
+Not fixed here because, unlike INV-7, this module has no established
+precedent for what the intended gate is: INV-7 had an identically-shaped
+sibling route (`/users/{user_id}/clearance`) already gated
+self-or-quartermaster, making the fix mechanical. Allowance usage and size
+data may be legitimately visible to more roles than clearance/checkout
+detail (e.g. an officer approving an allowance request, or a future
+supply-ordering workflow needing a colleague's size) — narrowing the gate is
+a product decision about who should see it, not a mechanical match. (Security
+review INV-8/INV-9, `docs/security-review/INV-11-inventory.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.

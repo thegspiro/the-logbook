@@ -21,6 +21,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -481,7 +482,18 @@ async def print_labels(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PrinterUnreachableError as e:
         # 502, not 500: the application worked and a downstream device did not,
-        # which is the difference between "try again" and "call support".
-        raise HTTPException(status_code=502, detail=str(e))
+        # which is the difference between "try again" and "call support". But
+        # unlike the settings.manage-gated test/status/probe routes above,
+        # this endpoint is reachable by anyone holding the module's own
+        # .view permission — the transport's message embeds the printer's
+        # configured host/IP/port, which those callers have no business
+        # learning (the station-document print path fixed the identical
+        # leak the same way). Log the real error, return a generic one.
+        logger.error(f"Label print failed for module {data.module}: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="The printer could not be reached. Contact whoever manages "
+            "the label printer.",
+        )
     await db.commit()
     return result
