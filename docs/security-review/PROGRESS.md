@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1905 (feature 23, medical supplies) merged. Next iteration starts feature 24 (meetings & minutes).
+PR #1906 (feature 24, meetings & minutes) — open, awaiting CI/review.
 
 ---
 
@@ -68,7 +68,7 @@ data-carrying modules, then the supporting infrastructure.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⏳              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
@@ -876,3 +876,32 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   over its usage limit for security reviews on this PR (no review
   produced); CI passed clean on the first push, no fix round needed.
   Next: 24 meetings & minutes.
+- **24 Meetings & minutes** — no prior module-audit or app-review pass
+  exists for this feature, the first review of `meetings.py`/`minutes.py`
+  and their two services (3,059 L combined). Read via four parallel agents,
+  one per file; `quorum_service.py` pulled in afterward once three of the
+  four independently flagged it as vote-legitimacy-critical and directly
+  reachable from minutes' own quorum routes. **MM-5 (MED, most notable)**
+  the minutes approval workflow had no separation of duties — the same
+  person could submit minutes and immediately approve their own submission.
+  Fixed with the shared `assert_different_person` guard already used for
+  finance requests, skills tests, and admin hours — its own module docstring
+  invites exactly this. **MM-1** `update_action_item` in both services
+  persisted a reassigned owner with no in-org check, unlike its own
+  create-path sibling. **MM-2** five update methods used blind `setattr`
+  instead of `apply_updates`; two `meetings.py` endpoints used
+  `exclude_none` instead of `exclude_unset`, making field-clearing
+  structurally impossible. **MM-3/MM-4** `create_from_event` and
+  `QuorumService.calculate_quorum` both had a read-then-write race with no
+  lock (Pitfall #27) — event-bridging uniqueness and the quorum status
+  itself; both fixed with a locking read. **MM-6** motion and action-item
+  CRUD, and quorum-config overrides, had no audit trail while every other
+  minutes mutation did — a recorded vote tally could be silently edited
+  with no trace; all seven endpoints now log. **MM-7** a malformed UUID
+  query param crashed with an unhandled 500. Nothing left flagged — every
+  finding had a mechanical fix, all applied. Full local completion gate
+  green: flake8/black/isort clean, migrations validated (no schema
+  change), 203/203 meetings+minutes+quorum scoped and 8908/8908 full
+  backend suite pass. Findings doc:
+  `docs/security-review/MM-24-meetings-minutes.md`. PR #1906 opened and
+  subscribed. Next: 25 messaging & notifications, once #1906 merges.

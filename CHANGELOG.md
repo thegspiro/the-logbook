@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A secretary could submit and approve their own meeting minutes; a foreign member could be assigned an action item (2026-08-27)
+
+**Fixed**
+
+- The same person could submit meeting minutes for approval and then
+  approve their own submission, with no second person involved — the
+  same self-certification gap already closed for finance requests,
+  skills tests, and admin hours. Approving minutes now requires someone
+  other than whoever submitted them.
+- Reassigning an action item on a meeting or a set of minutes to a
+  different owner didn't check that owner belonged to the same
+  department, unlike creating a new action item, which already did.
+- Editing a meeting, meeting minutes, a motion, or an action item and
+  clearing certain required fields could produce a generic server error
+  instead of a clear message. Clearing a meeting's notes or location
+  (which are optional) previously did nothing at all — the old value
+  silently stuck around.
+- Two coordinators bridging the same calendar event into meeting minutes
+  at the same time could both succeed, leaving two duplicate draft
+  minutes for one meeting. Two check-ins recalculating a meeting's
+  quorum at the same time could similarly overwrite each other's count.
+- Adding, editing, or deleting a motion or an action item on a set of
+  minutes, and changing a meeting's quorum override, left no record of
+  who made the change — every other edit to minutes already did.
+
 ### Editing a medical supply, item, or category could turn a cleared field into a server error instead of a clear message (2026-08-27)
 
 **Fixed**
