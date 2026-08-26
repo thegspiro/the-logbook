@@ -5,6 +5,7 @@ Endpoints for user management and listing.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import (
@@ -61,6 +62,10 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
     assert_positions_retain_administrator,
+)
+from app.services.operational_rank_service import (
+    OperationalRankService,
+    rank_not_configured_message,
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
@@ -252,6 +257,9 @@ async def create_member(
     # that outranks their own permissions.
     await _enforce_rank_grant_ceiling(
         current_user, user_data.rank, db, get_client_ip(request)
+    )
+    await _assert_rank_is_configured(
+        user_data.rank, str(current_user.organization_id), db
     )
 
     # Auto-generate membership number if not provided and auto-generation is on
@@ -708,6 +716,34 @@ async def _enforce_role_grant_ceiling(
                         "beyond your own."
                     ),
                 )
+
+
+async def _assert_rank_is_configured(
+    rank: Optional[str], organization_id: str, db: AsyncSession
+) -> None:
+    """Refuse a rank the organization does not have.
+
+    ``User.rank`` is a plain ``String(100)`` with no foreign key, so until now
+    any string at all could be stored — and a typo does not fail loudly. It
+    resolves to no eligible seats and no default permissions, so the member
+    silently cannot sign up for anything, which reads as the application being
+    broken rather than as a mistyped rank.
+
+    The codebase already knew: ``OperationalRankService.validate_ranks``
+    exists to *report* members whose stored rank matches no configured one.
+    This asks the same question one step earlier, where it can still be
+    answered by refusing the write.
+
+    Clearing a rank stays allowed — an empty value is "no rank", not a bad one.
+    """
+    if rank is None or not str(rank).strip():
+        return
+    service = OperationalRankService(db)
+    if not await service.is_known_rank(organization_id, str(rank)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=rank_not_configured_message(str(rank)),
+        )
 
 
 async def _enforce_rank_grant_ceiling(
@@ -1437,6 +1473,9 @@ async def update_user_profile(
         # settings.manage/security.manage. Only enforced on an actual change.
         if "rank" in update_data and update_data["rank"] != user.rank:
             await _enforce_rank_grant_ceiling(perm_user, update_data["rank"], db, None)
+            await _assert_rank_is_configured(
+                update_data["rank"], str(current_user.organization_id), db
+            )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:

@@ -2437,6 +2437,26 @@ class MembershipPipelineService:
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
 
+        # A rank that matches nothing the department has configured resolves to
+        # no eligible seats and no default permissions, so the new member is
+        # created unable to sign up for anything with nothing to explain why.
+        # Refused here rather than reported later, in the same words the user
+        # endpoints use.
+        if rank and str(rank).strip():
+            from app.services.operational_rank_service import (
+                OperationalRankService,
+                rank_not_configured_message,
+            )
+
+            rank_service = OperationalRankService(self.db)
+            if not await rank_service.is_known_rank(
+                str(prospect.organization_id), str(rank)
+            ):
+                return {
+                    "success": False,
+                    "message": rank_not_configured_message(str(rank)),
+                }
+
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(
             organization_id=prospect.organization_id,

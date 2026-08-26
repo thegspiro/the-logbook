@@ -27,7 +27,13 @@ from app.models.training import (
     Shift,
     TrainingProgram,
 )
-from app.models.user import Organization, Position, User, user_positions
+from app.models.user import (
+    Organization,
+    Position,
+    User,
+    UserStatus,
+    user_positions,
+)
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 from app.services.operational_rank_service import DEFAULT_RANKS
@@ -190,6 +196,34 @@ class ShiftEligibilityService:
     # Eligibility resolution
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _account_is_active(user) -> bool:
+        """Whether this member's account is in a state that can work a shift.
+
+        ``User.status`` and the member's *standing* are two different axes that
+        share three spellings, and nothing reconciles them: retiring somebody
+        through ``POST /member-status/{id}/status`` sets ``status`` and never
+        touches ``membership_type``, so a retired member reads as a regular
+        operational one to every rule that consults membership.
+
+        ``get_position_roster`` already filters ``User.is_active`` and so gets
+        this right; self-signup did not, which made the roster stricter than the
+        endpoint it exists to mirror. Fresh logins are blocked either way —
+        ``AuthService`` checks ``is_active`` — but a session opened before the
+        status change outlives it, because ``get_current_user`` does not
+        re-check and 239 endpoints depend on it rather than on
+        ``get_current_active_user``.
+
+        Absent status means "not a real User row" — a stub, or a caller passing
+        a lighter object — and is left alone rather than guessed at. The gate is
+        for the values that explicitly say the account is no longer active.
+        """
+        status_value = getattr(user, "status", None)
+        if status_value is None:
+            return True
+        raw = getattr(status_value, "value", status_value)
+        return str(raw) == UserStatus.ACTIVE.value
+
     async def get_eligible_positions(
         self,
         user: User,
@@ -199,6 +233,8 @@ class ShiftEligibilityService:
         """Compute the set of shift positions the user may sign up for.
 
         Resolution order:
+        0. Check account status — a member whose account is no longer active
+           is eligible for nothing, including an open-to-all shift.
         1. If a shift_id is provided and the shift is marked
            ``open_to_all_members``, return all positions defined on
            that shift (bypasses membership type and rank checks).
@@ -217,6 +253,13 @@ class ShiftEligibilityService:
         """
         org = await self._get_org(organization_id)
         if not org:
+            return []
+
+        # ----- Step 0: Account status -----
+        # Ahead of the open-to-all bypass, deliberately. "Open to all members"
+        # waives the membership-type and rank checks; it does not make a
+        # dropped, suspended or archived account a member again.
+        if not self._account_is_active(user):
             return []
 
         # ----- Step 1: Check for open-to-all shift -----
@@ -288,7 +331,8 @@ class ShiftEligibilityService:
     ) -> Dict[str, List[str]]:
         """The same answer as ``get_eligible_positions``, for many shifts at once.
 
-        Steps 1–3 above are about the *member* — their membership type, rank,
+        Steps 0–3 above are about the *member* — their account status,
+        membership type, rank,
         held positions, completed training, and the org's open positions — and
         do not vary by shift. Asking per shift re-ran all of it and reloaded the same maps
         each time; a day panel showing two shifts paid for it twice, and a
@@ -303,6 +347,12 @@ class ShiftEligibilityService:
 
         org = await self._get_org(organization_id)
         if not org:
+            return {shift_id: [] for shift_id in shift_ids}
+
+        # Ahead of everything else, matching get_eligible_positions: an
+        # account that is no longer active is not eligible for an open-to-all
+        # shift either, and there is nothing left to look up once that is true.
+        if not self._account_is_active(user):
             return {shift_id: [] for shift_id in shift_ids}
 
         result = await self.db.execute(

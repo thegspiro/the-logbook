@@ -402,9 +402,21 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
       },
     ],
   },
+  // One entry, deliberately. This category used to offer Probationary,
+  // Junior, Life, Administrative, Social and Exempt "positions" too — but
+  // those are a member's *class* and *status*, not a job they hold, and
+  // creating them here wrote a permission-bearing position for each. That
+  // contradicted the taxonomy the User model documents ("membership types
+  // carry no permissions") and left a member's standing recorded in two
+  // unconnected places: `member_class`/`member_status` on the member, and a
+  // held position nothing on the backend reads.
+  //
+  // Standing is set on the member record now. "Regular Member" stays, because
+  // it is the genuine baseline position every member holds — it is in the
+  // backend's DEFAULT_POSITIONS and carries the day-one grant set.
   members: {
     name: 'Member Positions',
-    description: 'Standard and special member access levels',
+    description: 'The baseline access every member holds',
     positions: [
       {
         id: 'member',
@@ -413,54 +425,6 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         icon: Users,
         priority: 10,
         permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'probationary_member',
-        name: 'Probationary Member',
-        description: 'New members with limited access during their trial period',
-        icon: UserPlus,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'junior_member',
-        name: 'Junior Member',
-        description: 'Youth or junior participants with restricted access',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'life_member',
-        name: 'Life Member',
-        description: 'Long-serving members with honorary status',
-        icon: BadgeCheck,
-        priority: 10,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'administrative_member',
-        name: 'Administrative Member',
-        description: 'Members focused on administrative and support duties',
-        icon: Briefcase,
-        priority: 8,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'social_member',
-        name: 'Social / Associate Member',
-        description: 'Non-operational members involved socially',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'exempt_member',
-        name: 'Exempt / Retired Member',
-        description: 'Former active members with limited access',
-        icon: BadgeCheck,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
       },
     ],
   },

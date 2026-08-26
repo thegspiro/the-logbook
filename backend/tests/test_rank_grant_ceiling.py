@@ -13,7 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.users import _enforce_rank_grant_ceiling
+from app.api.v1.endpoints.users import (
+    _assert_rank_is_configured,
+    _enforce_rank_grant_ceiling,
+)
 
 
 def _user(perms):
@@ -62,6 +65,118 @@ class TestRankGrantCeiling:
         caller = _user(["members.manage"])
         db = MagicMock()
         await _enforce_rank_grant_ceiling(caller, "not_a_real_rank", db, None)
+
+
+class TestRankIsConfigured:
+    """The other half of the pair, and the reason the ceiling alone is not enough.
+
+    ``test_unknown_rank_carries_no_permissions`` above is correct and is also
+    the whole problem: an unrecognised rank clears the escalation ceiling
+    precisely because it grants nothing. So the ceiling waves through exactly
+    the value that then breaks the member — ``fire_cheif`` resolves to no
+    default permissions and no eligible seats, and every shift signup is
+    refused with no indication that a typo is the cause.
+
+    ``OperationalRankService.validate_ranks`` already existed to *report*
+    members whose stored rank matches nothing. This asks the same question one
+    step earlier, where it can still be answered by refusing the write.
+    """
+
+    @staticmethod
+    def _service(known: bool):
+        service = MagicMock()
+        service.is_known_rank = AsyncMock(return_value=known)
+        return service
+
+    async def test_an_unconfigured_rank_is_refused(self):
+        with patch(
+            "app.api.v1.endpoints.users.OperationalRankService",
+            return_value=self._service(False),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await _assert_rank_is_configured("fire_cheif", "org-1", MagicMock())
+        assert exc.value.status_code == 400
+        # The message has to name the typo and where to fix it; "not
+        # qualified" three screens later is what this replaces.
+        assert "fire_cheif" in exc.value.detail
+        assert "configured" in exc.value.detail
+
+    async def test_a_configured_rank_passes(self):
+        with patch(
+            "app.api.v1.endpoints.users.OperationalRankService",
+            return_value=self._service(True),
+        ):
+            await _assert_rank_is_configured("firefighter", "org-1", MagicMock())
+
+    @pytest.mark.parametrize("blank", [None, "", "   "])
+    async def test_clearing_a_rank_stays_allowed(self, blank):
+        """An empty value is "no rank", not a bad one.
+
+        A member can hold no operational rank at all — an administrative member
+        normally does — so the guard must not turn "remove this rank" into a
+        400. It also must not spend a query deciding that.
+        """
+        service = self._service(False)
+        with patch(
+            "app.api.v1.endpoints.users.OperationalRankService",
+            return_value=service,
+        ):
+            await _assert_rank_is_configured(blank, "org-1", MagicMock())
+        service.is_known_rank.assert_not_awaited()
+
+    async def test_the_create_path_uses_the_same_guard(self):
+        """Three endpoints write a rank; all three have to refuse the same one.
+
+        A member *created* at a mistyped rank is the worse of the two cases: no
+        one watches a new record fail to appear on a shift roster, and the
+        department has no reason to suspect the rank field.
+        """
+        import inspect
+
+        from app.api.v1.endpoints import users as users_ep
+
+        for name in ("create_member", "update_user_profile"):
+            source = inspect.getsource(getattr(users_ep, name))
+            assert "_assert_rank_is_configured" in source, (
+                f"{name} writes User.rank without checking it is a rank the "
+                "department has; a typo there fails silently at signup"
+            )
+
+    async def test_the_prospect_transfer_path_checks_too(self):
+        """The third writer, and the one furthest from the users endpoints.
+
+        ``_do_transfer`` creates a User from a prospect with a caller-supplied
+        rank. It returns its refusals as ``{"success": False, "message": ...}``
+        rather than raising, which is the convention its endpoint translates to
+        a 400 — so the check has to live in that shape rather than reuse the
+        endpoint helper.
+        """
+        import inspect
+
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        source = inspect.getsource(MembershipPipelineService._do_transfer)
+        assert "is_known_rank" in source
+        assert "rank_not_configured_message" in source
+
+    async def test_every_path_refuses_in_the_same_words(self):
+        """A member told "not configured" by one screen and something else by
+        another has no way to tell they are the same problem."""
+        from app.services.operational_rank_service import (
+            rank_not_configured_message,
+        )
+
+        message = rank_not_configured_message("fire_cheif")
+        assert "fire_cheif" in message
+        with patch(
+            "app.api.v1.endpoints.users.OperationalRankService",
+            return_value=self._service(False),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await _assert_rank_is_configured("fire_cheif", "org-1", MagicMock())
+        assert exc.value.detail == message
 
 
 if __name__ == "__main__":  # pragma: no cover

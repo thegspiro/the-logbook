@@ -62,6 +62,31 @@ DEFAULT_RANKS = [
     ("emt", "EMT", 7, ["ems", "firefighter"]),
 ]
 
+#: Every code the seed knows, whatever agency type it is written for.
+#:
+#: A rank is accepted on write if it is a stored row for the organization *or*
+#: one of these. The second half matters: the seed only fires into an empty
+#: table, so a department onboarded before a code joined DEFAULT_RANKS has no
+#: row for it while the eligibility fallback still honours it. Validating
+#: against stored rows alone would refuse a rank the rest of the system treats
+#: as valid — the shape of the EMT bug in #1833.
+DEFAULT_RANK_CODES = frozenset(code for code, _l, _o, _p in DEFAULT_RANKS)
+
+
+def rank_not_configured_message(rank: str) -> str:
+    """The refusal every write path gives for an unknown rank.
+
+    One wording, because a member told "not configured" by one screen and
+    something else by another has no way to tell they are the same problem.
+    It has to name the value — a typo is invisible until it is quoted back —
+    and say where to fix it.
+    """
+    return (
+        f"'{rank}' is not a rank this department has configured. "
+        "Add it under Settings → Ranks first, or pick an existing one."
+    )
+
+
 # Rank codes seeded for each agency type, and the labels that differ.
 #
 # Firefighter and EMT are independent ranks, not two rungs of one ladder: a
@@ -334,6 +359,33 @@ class OperationalRankService:
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
+
+    async def is_known_rank(self, organization_id: str, rank_code: str) -> bool:
+        """Whether ``rank_code`` is a rank this organization actually has.
+
+        Accepts a code two ways, and the second matters: a stored
+        ``operational_ranks`` row, **or** one of the built-in seed codes. The
+        seed only ever fires into an empty table, so a department onboarded
+        before a code joined ``DEFAULT_RANKS`` has no row for it while the
+        eligibility fallback still honours it. Rejecting those here would
+        refuse a rank the rest of the system treats as valid — the exact shape
+        of the EMT bug in #1833.
+
+        ``validate_ranks`` reports mismatches that are already stored; this is
+        the same question asked before one can be.
+        """
+        code = (rank_code or "").strip()
+        if not code:
+            return False
+        if code in DEFAULT_RANK_CODES:
+            return True
+        result = await self.db.execute(
+            select(OperationalRank.id).where(
+                OperationalRank.organization_id == organization_id,
+                OperationalRank.rank_code == code,
+            )
+        )
+        return result.scalar_one_or_none() is not None
 
     async def validate_ranks(
         self,
