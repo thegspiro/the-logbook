@@ -454,7 +454,7 @@ export const InventoryAdminHub: React.FC = () => {
       <MemberPickerModal
         isOpen={memberPickerOpen}
         onClose={() => setMemberPickerOpen(false)}
-        title="Assign Items — Select a Member"
+        title="Distribute Items — Select a Member"
         onSelect={(member) => {
           setMemberPickerOpen(false);
           setAssignTarget(member);
@@ -463,7 +463,7 @@ export const InventoryAdminHub: React.FC = () => {
       <InventoryScanModal
         isOpen={assignTarget !== null}
         onClose={() => setAssignTarget(null)}
-        mode="checkout"
+        mode="distribute"
         userId={assignTarget?.userId ?? ''}
         memberName={assignTarget?.memberName ?? ''}
         onComplete={() => {
