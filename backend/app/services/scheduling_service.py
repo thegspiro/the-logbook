@@ -2049,6 +2049,17 @@ class SchedulingService:
             if tracking.get("mode") != CallTrackingMode.DETAILED:
                 return None, "Detailed call records are disabled for this organization"
 
+            # responding_members is a client-supplied list of user ids stored
+            # straight into JSON — validate in-org before persisting (Pitfall
+            # #14c), same discipline as manual_hours/attendance user ids
+            # elsewhere in this file. compute_member_call_counts sums this
+            # column across a shift's calls, so a foreign id would otherwise
+            # silently inflate another org's user's call-count credit if the
+            # id happened to collide.
+            for uid in call_data.get("responding_members") or []:
+                if not await self._user_in_org(uid, organization_id):
+                    return None, "One or more members are not in your organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
@@ -2096,6 +2107,11 @@ class SchedulingService:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return None, "Shift call not found"
+
+            if "responding_members" in update_data:
+                for uid in update_data["responding_members"] or []:
+                    if not await self._user_in_org(uid, organization_id):
+                        return None, "One or more members are not in your organization"
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
