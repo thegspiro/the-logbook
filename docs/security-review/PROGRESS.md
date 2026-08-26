@@ -16,13 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1902 (feature 20, compliance) — open, subscribed. 7 fixes: silent
-500-record cap on `get_incomplete_records`, null-clear bug on
-`update_compliance_config`/`update_compliance_profile`, a config first-write
-race, `report_type` schema drift, dict-key id-normalization parity, and an
-attestation percentage range check. CS-8 attestation dual-control and CS-9
-monthly windowing remain flagged (product decisions). See
-`docs/security-review/CMP-20-compliance.md`.
+PR #1903 (feature 21, admin hours) — open, subscribed. 8 fixes: cross-org
+`get_user_hours_compliance` leak, `clock_out` org scoping,
+`update_category` null-clear bug, a `clock_in` race, event-hour-mapping
+percentage race, `edit_pending_entry` guard parity, 4 `fromisoformat`
+500s, and 3 `source_rsvp_id` org filters. Per-org SoD toggle and a resync
+approval-integrity gap remain flagged (product decisions). See
+`docs/security-review/AH-21-admin-hours.md`.
 
 ---
 
@@ -70,8 +70,8 @@ data-carrying modules, then the supporting infrastructure.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳ #1902        |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳ #1903        |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
@@ -744,3 +744,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
     migrations validated, 269/269 compliance-scoped and 8833/8833 full backend
     suite pass. Findings doc: `docs/security-review/CMP-20-compliance.md`. PR
     #1902 opened and subscribed. Next: 21 admin hours, once #1902 merges.
+- **20 Compliance ✅ merged** — PR #1902 merged 2026-08-26. Codex review
+  caught one real regression in the CMP-4 fix before merge: the SQL
+  location predicate checked only `location IS NULL`, but the Python
+  fallback logic (`not r.location`) also treats `location=""` as missing —
+  a value the training schemas allow — so a completed record with
+  `location=""` and no `location_id` was silently excluded from the new SQL
+  scan, the opposite of what the fix was for. Corrected to
+  `location IS NULL OR location = ''`, matching the Python check exactly;
+  replied and resolved the review thread. Full local completion gate
+  re-verified green (270/270 compliance-scoped, 8834/8834 full suite)
+  before the final push; CI came back 16/16 green with no further comments.
+  Next: 21 admin hours.
+- **21 Admin hours ⏳** — this HIGH-sensitivity module (self-credit/SoD risk)
+  already had thorough prior coverage (module-audit iteration 15 + 4
+  app-review passes through 2026-08-09); read `admin_hours.py` and
+  `admin_hours_service.py` in full via 3 parallel background agents,
+  re-confirming AH-1 through AH-6 all still intact. **AH-7 (HIGH)**
+  `get_user_hours_compliance` resolved a client-supplied `user_id` with no
+  `organization_id` filter — a caller with compliance access could pull
+  compliance/membership data for a member of a different organization;
+  independently flagged by two agents. **AH-8** `clock_out` was the one
+  query in this module not yet org-scoped — literally deferred to this
+  exact rotation turn by a same-day sibling commit
+  (`clock_out_by_category`'s own fix). **AH-9** `update_category`'s blind
+  `setattr` loop → `apply_updates`. **AH-10** `clock_in` was a read-then-
+  write race with no lock (Pitfall #27) — fixed with a lock on the user's
+  own row plus a locking active-session read. **AH-11** event-hour-mapping
+  percentage totals could race past 100% — `FOR UPDATE` added, residual
+  first-insert gap noted rather than hidden. **AH-12** `edit_pending_entry`
+  now applies the same future/24h-cap/overlap guards `create_manual_entry`
+  already had (closes a "parity nit" prior passes explicitly left open).
+  **AH-13** 4 unguarded `datetime.fromisoformat` call sites → clean 400s.
+  **AH-14** 3 `source_rsvp_id`-keyed queries (new since last audit) gained
+  `organization_id` filters. Per-org SoD toggle and a resync
+  approval-integrity gap (documented as deliberate in the code) remain
+  flagged as product decisions. Full local completion gate green:
+  flake8/black/isort clean, migrations validated, 604/604 admin_hours+event
+  scoped and 8845/8845 full backend suite pass. Findings doc:
+  `docs/security-review/AH-21-admin-hours.md`. PR #1903 opened and
+  subscribed. Next: 22 grants & fundraising, once #1903 merges.
