@@ -65,6 +65,11 @@ def _rank_rows(entries):
     )
 
 
+def _qual_rows(codes=()):
+    """Qualification codes, as _get_qualification_positions selects them."""
+    return _rows([(code,) for code in codes])
+
+
 def _held_rows(slugs):
     """The member's own position slugs, as _get_held_position_slugs sees them."""
     return _rows([(slug,) for slug in slugs])
@@ -135,6 +140,7 @@ class TestGetEligiblePositions:
                 _one(org),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([("officer",)]),
             ]
         )
@@ -151,6 +157,7 @@ class TestGetEligiblePositions:
                 _one(org),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows(["emt", "member"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -163,7 +170,9 @@ class TestGetEligiblePositions:
         # An org onboarded before "emt" joined DEFAULT_RANKS has no row for it
         # — seed_defaults only fires on an empty table — so the built-in
         # default answers rather than leaving the member with nothing.
-        db = _db([_one(_org()), _rank_rows([]), _held_rows(["emt"]), _rows([])])
+        db = _db(
+            [_one(_org()), _rank_rows([]), _held_rows(["emt"]), _qual_rows(), _rows([])]
+        )
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(rank=None), "org-1"
         )
@@ -176,6 +185,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([("emt", ["ems"])]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -191,6 +201,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([("emt", ["ems", "firefighter"], False)]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -206,6 +217,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([]),
                 _held_rows(["treasurer", "member"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -223,6 +235,7 @@ class TestGetEligiblePositions:
                 _one(shift),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([("officer",)]),
             ]
         )
@@ -244,6 +257,7 @@ class TestGetEligiblePositions:
                 _one(shift),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -350,9 +364,20 @@ class TestPositionRoster:
     roster that disagrees with what signup enforces is worse than none.
     """
 
-    def _db_for(self, users, ranks, training, operators, org=None, held=None):
+    def _db_for(
+        self,
+        users,
+        ranks,
+        training,
+        operators,
+        org=None,
+        held=None,
+        qualifications=None,
+    ):
         # ranks feeds two queries: the display-name map (active rows only) and
         # the slug->positions map the eligibility decision reads.
+        # ``qualifications`` is (user_id, qualification_code) rows, as
+        # QualificationService.get_codes_by_member selects them.
         return _db(
             [
                 _one(org if org is not None else _org()),
@@ -362,8 +387,44 @@ class TestPositionRoster:
                 _rows(held or []),
                 _rows(training),
                 _rows(operators),
+                _rows(qualifications or []),
             ]
         )
+
+    async def test_a_qualification_only_member_appears_on_the_roster(self):
+        """The roster must not list a different set of people than signup accepts.
+
+        A member whose only basis for a seat is a current qualification — a
+        Captain who is also a Paramedic, say — is accepted by
+        ``get_eligible_positions``. If the roster omitted them, an officer
+        looking for cover would not be offered somebody the signup endpoint
+        would happily take, and ``SchedulingService.get_trade_candidates``
+        reads the same roster.
+        """
+        db = self._db_for(
+            users=[_member("u1", rank="unranked")],
+            ranks=[],
+            training=[],
+            operators=[],
+            qualifications=[("u1", "paramedic")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
+        assert [m["user_id"] for m in out["members"]] == ["u1"]
+        sources = out["members"][0]["sources"]
+        assert {"type": "qualification", "label": "Paramedic"} in sources
+
+    async def test_a_qualification_for_another_seat_does_not_list_them(self):
+        db = self._db_for(
+            users=[_member("u1", rank="unranked")],
+            ranks=[],
+            training=[],
+            operators=[],
+            qualifications=[("u1", "paramedic")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster(
+            "org-1", "firefighter"
+        )
+        assert out["members"] == []
 
     async def test_org_not_found_returns_empty(self):
         out = await ShiftEligibilityService(_db([_one(None)])).get_position_roster(
@@ -700,6 +761,7 @@ class TestAmbulanceEmtSeatIsFillable:
                 _one(shift),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -725,6 +787,7 @@ class TestAmbulanceEmtSeatIsFillable:
                 _one(shift),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([]),
             ]
         )

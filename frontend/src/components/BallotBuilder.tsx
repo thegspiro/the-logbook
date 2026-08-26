@@ -64,17 +64,34 @@ const BALLOT_TYPE_LABELS: Record<string, string> = {
 
 // ─── Shared constants ───────────────────────────────────────────
 
-// These categories correspond to the member's membership_type field,
-// NOT their assigned role/position slugs.  See MembershipType enum and
-// ElectionService._user_has_role_type() for the authoritative mapping.
+// Two different questions, deliberately labelled as such.
+//
+// `operational`, `administrative` and `social` are the member's **class** —
+// what kind of member they are — and are answered for every standing, so
+// "operational" includes probationary, life and retired members. `regular`,
+// `life` and `probationary` are the member's **status**, and mean only
+// themselves.
+//
+// The labels have to say which is which. "Operational Members (Active)" was
+// accurate only while the two facts shared one column and "operational" could
+// not mean anything wider than active; keeping that wording now would have an
+// administrator choose what reads as active-only and send the ballot to a
+// materially broader electorate.
+//
+// See ElectionService._user_has_role_type() for the authoritative mapping and
+// app/utils/membership.py for the vocabulary.
 const VOTER_TYPE_OPTIONS = [
   { value: 'all', label: 'All Members' },
-  { value: 'regular', label: 'Regular Members (Active + Life)' },
-  { value: 'life', label: 'Life Members' },
-  { value: 'regular,life', label: 'Regular + Life Members' },
-  { value: 'probationary', label: 'Probationary Members' },
-  { value: 'operational', label: 'Operational Members (Active)' },
-  { value: 'administrative', label: 'Administrative Members' },
+  { value: 'regular', label: 'Regular Members (status)' },
+  { value: 'life', label: 'Life Members (status)' },
+  { value: 'regular,life', label: 'Regular + Life Members (status)' },
+  { value: 'probationary', label: 'Probationary Members (status)' },
+  {
+    value: 'operational',
+    label: 'Operational Members — any status, incl. probationary & life',
+  },
+  { value: 'administrative', label: 'Administrative Members — any status' },
+  { value: 'social', label: 'Social / Associate Members — any status' },
 ];
 
 const VICTORY_CONDITION_OPTIONS: { value: VictoryCondition; label: string }[] = [

@@ -15,10 +15,25 @@ Taxonomy
   President, Vice President, Treasurer, Secretary, IT Manager, etc.
   Positions are the *primary* source of permissions.
 
-- **Department Membership** (one per member, ``User.membership_type``):
-  Prospective, Probationary, Active, Life, Retired, Honorary,
-  Administrative.  Membership types carry **no** permissions; they are
-  purely organisational classification.
+- **Member Class and Status** (one each per member, ``User.member_class`` /
+  ``User.member_status``):  *Class* is what kind of member somebody is —
+  operational, administrative, social.  *Status* is where they sit on the
+  membership ladder — prospective, probationary, regular, life, retired
+  (also honorary, junior).  They are independent questions: an administrative
+  member can be probationary, and a life member can still ride.  Neither
+  carries permissions; both are organisational classification.
+
+  ``User.membership_type`` is the single legacy field that held both at once,
+  and is why "operational" could only ever be answered as ``== "active"``.
+  It is still stored, still read by ~160 call sites, and now *derived* from
+  the pair — see ``app/utils/membership.py``.  When the two disagree with it,
+  the pair is right.
+
+- **Qualification** (many per member, ``member_qualifications``):
+  What a member is trained and certified to *do* — EMT, Paramedic,
+  Driver/Operator, Firefighter I/II — as distinct from where they sit in the
+  chain of command.  A Captain may also be a Paramedic.  Unlike a rank, a
+  qualification expires, and shift eligibility reads it as of the shift date.
 
 - **Prospect** (separate lightweight table):
   Individuals who have expressed interest in joining but have not yet
@@ -42,6 +57,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    event,
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -51,6 +67,12 @@ from sqlalchemy.sql import and_, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
+from app.utils.membership import (
+    DEFAULT_CLASS,
+    DEFAULT_STATUS,
+    derive_membership_type,
+    split_membership_type,
+)
 
 
 class UserStatus(str, enum.Enum):
@@ -285,7 +307,23 @@ class User(Base):
     notification_preferences = Column(JSON, default=dict)
 
     # Department Membership (one per member, no permissions – purely classification)
+    #
+    # Three columns, two facts. ``member_class`` (operational / administrative
+    # / social) and ``member_status`` (prospective → retired) are the
+    # authority; ``membership_type`` is the single legacy field that held both
+    # at once and is now derived from them, because ~160 call sites still read
+    # it. ``app/utils/membership.py`` owns the derivation, and the
+    # ``_reconcile_membership`` listener below keeps the three consistent no
+    # matter which of them a caller writes.
     membership_type = Column(String(50), default="active")  # See MembershipType enum
+    # No column default, for the same reason the migration sets no server
+    # default: a default would be applied to writes that name only
+    # `membership_type`, and would be wrong for precisely the members who are
+    # not plain operational regulars. NULL means "nobody has set this", and a
+    # reader derives from `membership_type` when it sees one. ORM writes never
+    # leave it NULL — `_reconcile_membership` below fills both.
+    member_class = Column(String(20), index=True)
+    member_status = Column(String(20), index=True)
     membership_type_changed_at = Column(
         DateTime(timezone=True)
     )  # When membership tier last changed
@@ -462,6 +500,51 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(username={self.username}, email={self.email})>"
+
+
+def _reconcile_membership(_mapper, _connection, target: "User") -> None:
+    """Keep ``member_class``/``member_status`` and ``membership_type`` agreeing.
+
+    Reconciled at flush rather than on attribute assignment, because the three
+    fields set each other: a ``@validates`` hook on any one of them would
+    re-enter the others' hooks and recurse. One pass here, after every
+    assignment in the transaction has landed, has no such ordering problem.
+
+    Whichever side the caller wrote is the side that wins. New code sets class
+    and status; the ~160 existing call sites set ``membership_type`` and keep
+    working unchanged. When both are written in the same flush the two new
+    columns win, because they can express standings the legacy field cannot —
+    an administrative probationer collapses to plain "administrative" on the
+    way back out, and letting that derived value overwrite the real one would
+    silently discard the status.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    state = sa_inspect(target)
+
+    def _was_set(field: str) -> bool:
+        history = state.attrs[field].history
+        return bool(history.added)
+
+    class_written = _was_set("member_class") or _was_set("member_status")
+    legacy_written = _was_set("membership_type")
+
+    if class_written:
+        target.member_class = target.member_class or DEFAULT_CLASS
+        target.member_status = target.member_status or DEFAULT_STATUS
+        target.membership_type = derive_membership_type(
+            target.member_class, target.member_status
+        )
+        return
+
+    if legacy_written or target.member_class is None or target.member_status is None:
+        member_class, member_status = split_membership_type(target.membership_type)
+        target.member_class = member_class
+        target.member_status = member_status
+
+
+event.listen(User, "before_insert", _reconcile_membership)
+event.listen(User, "before_update", _reconcile_membership)
 
 
 class Position(Base):

@@ -1404,6 +1404,12 @@ async def update_user_profile(
         "station",
         "platoon",
         "membership_number",
+        # Membership classification decides who is in the operational body and
+        # therefore who receives which ballot. Left out of this set, any holder
+        # of the broader users.edit grant could move themselves from social or
+        # administrative into operational and vote on what they liked.
+        "member_class",
+        "member_status",
     }
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
@@ -1420,8 +1426,8 @@ async def update_user_profile(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
                     "Only leadership, the secretary, or the membership coordinator "
-                    "can update hire date, rank, station, platoon, or membership "
-                    "number"
+                    "can update hire date, rank, station, platoon, membership "
+                    "number, or membership class and status"
                 ),
             )
 
