@@ -33,12 +33,15 @@ import {
   Sparkles,
   ArrowRight,
   Building2,
+  AlertTriangle,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import type {
@@ -47,7 +50,104 @@ import type {
   LowStockAlert,
   ReturnRequestItem,
   EquipmentRequestItem,
+  InventoryItem,
+  UserCheckoutItem,
+  WriteOffRequestItem,
+  ReorderRequest,
 } from '../types';
+
+type AttentionSeverity = 'Critical' | 'High' | 'Medium';
+interface AttentionRow {
+  key: string;
+  subject: string;
+  party: string;
+  when: string;
+  severity: AttentionSeverity;
+  rank: number;
+  action: string;
+  href: string;
+}
+
+// `dateOnly` fields (next_inspection_due, expected_delivery_date) come from
+// the backend as calendar dates ("YYYY-MM-DD"), not instants -- formatDate's
+// tz-aware Intl formatting would parse that as UTC midnight and then render
+// it a day early west of UTC. formatCalendarDate anchors and renders in UTC
+// so the date on screen matches the string, for every viewer.
+const dateLabel = (value: string | undefined, fallback: string, tz: string, dateOnly = false) => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
+  const formatted = dateOnly ? formatCalendarDate(value) : formatDate(date, tz);
+  return days > 0 ? `${days}d overdue · due ${formatted}` : `Due ${formatted}`;
+};
+
+const NeedsAttention: React.FC<{
+  rows: AttentionRow[];
+  loading: boolean;
+  failedSources: string[];
+  onRetry: () => void;
+}> = ({ rows, loading, failedSources, onRetry }) => (
+  <section aria-labelledby="inventory-needs-attention" className="card mb-8 overflow-hidden">
+    <div className="border-theme-surface-border flex items-center gap-2 border-b px-4 py-3 sm:px-5">
+      <AlertTriangle className="h-5 w-5 text-red-600" aria-hidden="true" />
+      <h2 id="inventory-needs-attention" className="text-theme-text-primary font-semibold">
+        Needs attention
+      </h2>
+      {!loading && (
+        <span
+          className="rounded-full bg-red-800 px-2 py-0.5 text-xs font-bold text-white"
+          aria-label={`${rows.length} work items awaiting action`}
+        >
+          {rows.length}
+        </span>
+      )}
+      <span className="text-theme-text-muted ml-auto text-xs">Work awaiting a decision or action</span>
+    </div>
+    {failedSources.length > 0 && (
+      <div
+        className="border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text flex items-center gap-2 border-b px-4 py-3 text-sm"
+        role="alert"
+      >
+        <span className="flex-1">
+          Some inventory services did not respond ({failedSources.join(', ')}). This queue may be incomplete.
+        </span>
+        <button type="button" className="font-semibold underline" onClick={onRetry}>
+          Retry
+        </button>
+      </div>
+    )}
+    {loading ? (
+      <p className="text-theme-text-muted px-5 py-6 text-sm" role="status">
+        Loading actionable work…
+      </p>
+    ) : rows.length === 0 && failedSources.length === 0 ? (
+      <p className="text-theme-text-muted px-5 py-6 text-sm">
+        Nothing needs attention. All inventory work is up to date.
+      </p>
+    ) : (
+      <ul className="divide-theme-surface-border divide-y">
+        {rows.map((row) => (
+          <li
+            key={row.key}
+            className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto_auto] sm:items-center sm:px-5"
+          >
+            <span className="text-theme-text-primary font-semibold">{row.subject}</span>
+            <span className="text-theme-text-secondary text-sm">{row.party}</span>
+            <span className="text-theme-text-muted text-sm">{row.when}</span>
+            <span
+              className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${row.severity === 'Critical' ? 'bg-red-500/15 text-red-700 dark:text-red-300' : row.severity === 'High' ? 'bg-orange-500/15 text-orange-700 dark:text-orange-300' : 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300'}`}
+            >
+              {row.severity}
+            </span>
+            <Link to={row.href} className="btn-secondary min-h-[36px] text-sm font-semibold">
+              {row.action}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
 interface NavCardProps {
   to: string;
   icon: React.ReactNode;
@@ -145,6 +245,7 @@ export const InventoryAdminHub: React.FC = () => {
   // set up that members could never see, since their side nav reads the same
   // module flag this card was ignoring.
   const canOpenStore = isModuleOn('storefront') && checkPermission('storefront.manage');
+  const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
@@ -156,6 +257,8 @@ export const InventoryAdminHub: React.FC = () => {
   const [pendingReturns, setPendingReturns] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [setupStatus, setSetupStatus] = useState<InventorySetupStatus | null>(null);
+  const [attentionRows, setAttentionRows] = useState<AttentionRow[]>([]);
+  const [failedSources, setFailedSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Quick-assign flow: pick a member, then assign items to them via the scan modal.
@@ -164,27 +267,149 @@ export const InventoryAdminHub: React.FC = () => {
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
-    try {
-      const [summaryData, lowStock, returns, requests, setup] = await Promise.all([
-        inventoryService.getSummary(),
-        inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
-        inventoryService.getReturnRequests({ status: 'pending' }).catch(() => [] as ReturnRequestItem[]),
-        inventoryService
-          .getEquipmentRequests({ status: 'pending' })
-          .catch(() => ({ requests: [] as EquipmentRequestItem[], total: 0 })),
-        inventoryService.getSetupStatus().catch(() => null),
-      ]);
-      setSummary(summaryData);
-      setLowStockAlerts(lowStock);
-      setPendingReturns(Array.isArray(returns) ? returns.length : 0);
-      setPendingRequests(requests.total);
-      setSetupStatus(setup);
-    } catch {
-      // Non-critical — page still navigable
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const sources = [
+      ['summary', inventoryService.getSummary()],
+      ['low stock', inventoryService.getLowStockItems()],
+      ['returns', inventoryService.getReturnRequests({ status: 'pending' })],
+      ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
+      ['setup', inventoryService.getSetupStatus()],
+      ['temporary loans', inventoryService.getOverdueCheckouts()],
+      ['maintenance', inventoryService.getMaintenanceDueItems(30)],
+      ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
+      ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
+      ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
+    ] as const;
+    const results = await Promise.allSettled(sources.map(([, promise]) => promise));
+    const failed = results.flatMap((result, index) => (result.status === 'rejected' ? [sources[index]![0]] : []));
+    setFailedSources(failed);
+    const value = <T,>(index: number, fallback: T): T => {
+      const result = results[index];
+      return result?.status === 'fulfilled' ? (result.value as T) : fallback;
+    };
+    const summaryData = value<InventorySummary | null>(0, null);
+    const lowStock = value<LowStockAlert[]>(1, []);
+    const returns = value<ReturnRequestItem[]>(2, []);
+    const requests = value<{ requests: EquipmentRequestItem[]; total: number }>(3, { requests: [], total: 0 });
+    const setup = value<InventorySetupStatus | null>(4, null);
+    const checkouts = value<{ checkouts: UserCheckoutItem[] }>(5, { checkouts: [] }).checkouts;
+    const maintenance = value<InventoryItem[]>(6, []);
+    const writeOffs = value<WriteOffRequestItem[]>(7, []);
+    const deliveries = value<ReorderRequest[]>(8, []);
+    const clearances = value<{
+      clearances: Array<{
+        id: string;
+        user_id: string;
+        items_outstanding: number;
+        initiated_at: string;
+        return_deadline?: string;
+      }>;
+    }>(9, { clearances: [] }).clearances;
+
+    setSummary(summaryData);
+    setLowStockAlerts(lowStock);
+    setPendingReturns(returns.length);
+    setPendingRequests(requests.total);
+    setSetupStatus(setup);
+
+    const now = Date.now();
+    const rows: AttentionRow[] = [
+      ...maintenance.map((item) => ({
+        key: `maintenance-${item.id}`,
+        subject: 'Maintenance due or overdue',
+        party: item.name,
+        when: dateLabel(item.next_inspection_due, 'Due now', tz, true),
+        severity:
+          item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now
+            ? ('Critical' as const)
+            : ('High' as const),
+        rank: item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now ? 0 : 2,
+        action: 'Open item',
+        href: `/inventory/admin/items/${item.id}`,
+      })),
+      ...checkouts.map((checkout) => ({
+        key: `loan-${checkout.checkout_id}`,
+        subject: 'Overdue temporary loan',
+        party: `${checkout.user_name ?? 'Member'} · ${checkout.item_name}`,
+        when: dateLabel(checkout.expected_return_at, dateLabel(checkout.checked_out_at, 'Overdue', tz), tz),
+        severity: 'High' as const,
+        rank: 1,
+        action: 'Check in',
+        href: `/inventory/checkouts?checkout=${checkout.checkout_id}`,
+      })),
+      ...deliveries
+        .filter(
+          (delivery) => delivery.expected_delivery_date && new Date(delivery.expected_delivery_date).getTime() < now
+        )
+        .map((delivery) => ({
+          key: `delivery-${delivery.id}`,
+          subject: 'Overdue purchase delivery',
+          party: delivery.item_name,
+          when: dateLabel(delivery.expected_delivery_date, 'Overdue', tz, true),
+          severity: 'High' as const,
+          rank: 1,
+          action: 'Receive',
+          href: `/inventory/admin/reorder/${delivery.id}`,
+        })),
+      ...requests.requests.map((request) => ({
+        key: `request-${request.id}`,
+        subject: 'Pending gear request',
+        party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
+        when: dateLabel(request.created_at, 'Awaiting review', tz),
+        // RequestPriority tops out at "high" (low/normal/high); the earlier
+        // "urgent" comparison matched a value the backend cannot emit, so a
+        // top-priority gear request never got escalated in this queue.
+        severity: request.priority === 'high' ? ('High' as const) : ('Medium' as const),
+        rank: request.priority === 'high' ? 2 : 4,
+        action: 'Review',
+        href: `/inventory/admin/requests?request=${request.id}`,
+      })),
+      ...returns.map((request) => ({
+        key: `return-${request.id}`,
+        subject: 'Pending return',
+        party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
+        when: dateLabel(request.created_at, 'Awaiting review', tz),
+        severity: 'Medium' as const,
+        rank: 4,
+        action: 'Review',
+        href: `/inventory/admin/returns?request=${request.id}`,
+      })),
+      ...writeOffs.map((request) => ({
+        key: `writeoff-${request.id}`,
+        subject: 'Pending write-off',
+        party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
+        when: dateLabel(request.created_at, 'Awaiting review', tz),
+        severity: 'Medium' as const,
+        rank: 4,
+        action: 'Review',
+        href: `/inventory/admin/write-offs?request=${request.id}`,
+      })),
+      ...lowStock.map((alert) => ({
+        key: `stock-${alert.category_id}`,
+        subject: 'Low-stock item',
+        party: alert.category_name,
+        when: `${alert.current_stock} on hand · par ${alert.threshold}`,
+        severity: alert.current_stock === 0 ? ('High' as const) : ('Medium' as const),
+        rank: alert.current_stock === 0 ? 2 : 5,
+        action: 'Open item',
+        href: `/inventory/admin/reorder?category=${alert.category_id}`,
+      })),
+      ...clearances.map((clearance) => ({
+        key: `clearance-${clearance.id}`,
+        subject: 'Unresolved departure clearance',
+        party: `Member ${clearance.user_id} · ${clearance.items_outstanding} outstanding`,
+        when: dateLabel(clearance.return_deadline, dateLabel(clearance.initiated_at, 'In progress', tz), tz),
+        severity:
+          clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now
+            ? ('High' as const)
+            : ('Medium' as const),
+        rank: clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now ? 1 : 4,
+        action: 'Review',
+        href: `/inventory/admin/members?user=${clearance.user_id}`,
+      })),
+    ];
+    setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));
+    setLoading(false);
+  }, [tz]);
 
   useEffect(() => {
     void loadSummary();
@@ -223,6 +448,7 @@ export const InventoryAdminHub: React.FC = () => {
       activeTab={activeTab}
       onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab })}
       refreshToken={frameToken}
+      showAttentionQueue={false}
     >
       {activeTab === 'settings' ? (
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -235,6 +461,12 @@ export const InventoryAdminHub: React.FC = () => {
         </div>
       ) : (
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+          <NeedsAttention
+            rows={attentionRows}
+            loading={loading}
+            failedSources={failedSources}
+            onRetry={() => void loadSummary()}
+          />
           {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
             three dropdowns that have nothing in them. */}
@@ -454,7 +686,7 @@ export const InventoryAdminHub: React.FC = () => {
       <MemberPickerModal
         isOpen={memberPickerOpen}
         onClose={() => setMemberPickerOpen(false)}
-        title="Assign Items — Select a Member"
+        title="Distribute Items — Select a Member"
         onSelect={(member) => {
           setMemberPickerOpen(false);
           setAssignTarget(member);
@@ -463,7 +695,7 @@ export const InventoryAdminHub: React.FC = () => {
       <InventoryScanModal
         isOpen={assignTarget !== null}
         onClose={() => setAssignTarget(null)}
-        mode="checkout"
+        mode="distribute"
         userId={assignTarget?.userId ?? ''}
         memberName={assignTarget?.memberName ?? ''}
         onComplete={() => {

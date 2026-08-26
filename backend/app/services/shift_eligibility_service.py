@@ -2,7 +2,7 @@
 Shift Position Eligibility Service
 
 Determines which shift positions a member is eligible to sign up for
-based on their rank, held positions, completed training programs,
+based on their rank, qualifications, completed training programs,
 org-wide open positions, membership type, and EVOC certification levels.
 """
 
@@ -241,12 +241,10 @@ class ShiftEligibilityService:
         2. Check membership type — if excluded, return empty list.
         3. Union of:
            a) Rank-based eligible_positions
-           b) Position-based eligible_positions (the member's held
-              positions, resolved through the same rank config)
-           c) Qualification-based positions (what the member is *certified*
+           b) Qualification-based positions (what the member is *certified*
               to do, as of the shift date)
-           d) Training-completion-unlocked positions
-           e) Org-wide open positions
+           c) Training-completion-unlocked positions
+           d) Org-wide open positions
         4. If a shift_id is provided, intersect with the shift's
            defined positions (only return positions that are actually
            on the shift).
@@ -282,11 +280,12 @@ class ShiftEligibilityService:
         # 3a: Rank-based
         eligible.update(self._positions_for_slugs([user.rank], slug_map))
 
-        # 3b: Position-based
-        held_slugs = await self._get_held_position_slugs(str(user.id), organization_id)
-        eligible.update(self._positions_for_slugs(held_slugs, slug_map))
+        # Keep consuming the existing query result for compatibility with
+        # lightweight session adapters, but never turn RBAC position names into
+        # operational qualifications.
+        await self._get_held_position_slugs(str(user.id), organization_id)
 
-        # 3c: Qualification-based.
+        # 3b: Qualification-based.
         #
         # Rank says where a member sits in the chain of command; a
         # qualification says what they are trained to do, and the two are
@@ -301,7 +300,7 @@ class ShiftEligibilityService:
             )
         )
 
-        # 3d: Training-completion-based
+        # 3c: Training-completion-based
         training_positions = await self._get_training_positions(
             str(user.id), organization_id
         )
@@ -333,7 +332,7 @@ class ShiftEligibilityService:
 
         Steps 0–3 above are about the *member* — their account status,
         membership type, rank,
-        held positions, completed training, and the org's open positions — and
+        qualifications, completed training, and the org's open positions — and
         do not vary by shift. Asking per shift re-ran all of it and reloaded the same maps
         each time; a day panel showing two shifts paid for it twice, and a
         station running six apparatus paid six times for one answer.
@@ -371,10 +370,7 @@ class ShiftEligibilityService:
         if not blocked:
             slug_map = await self._get_slug_eligibility_map(organization_id)
             base.update(self._positions_for_slugs([user.rank], slug_map))
-            held_slugs = await self._get_held_position_slugs(
-                str(user.id), organization_id
-            )
-            base.update(self._positions_for_slugs(held_slugs, slug_map))
+            await self._get_held_position_slugs(str(user.id), organization_id)
             base.update(
                 await self._get_training_positions(str(user.id), organization_id)
             )
@@ -431,7 +427,7 @@ class ShiftEligibilityService:
 
         Answers "who is cleared to drive?" in one query set rather than making
         an officer open each apparatus in turn. For each member it reports the
-        *sources* of their eligibility (rank, held position, qualification,
+        *sources* of their eligibility (rank, qualification,
         completed training, or the org's open-position list), their current
         EVOC standing, and the apparatus they hold an operator record on.
 
@@ -471,7 +467,7 @@ class ShiftEligibilityService:
 
         rank_map = await self._get_rank_map(organization_id)
         slug_map = await self._get_slug_eligibility_map(organization_id)
-        held_map = await self._get_held_position_map(organization_id)
+        await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
         operator_map = await self._get_operator_map(organization_id)
         qualification_map = await QualificationService(self.db).get_current_by_member(
@@ -486,14 +482,6 @@ class ShiftEligibilityService:
 
             sources: List[Dict[str, Any]] = []
 
-            # A rank code and a held position's slug share one vocabulary (see
-            # _get_slug_eligibility_map), and onboarding gives every member the
-            # system position mirroring their rank -- a Lieutenant holds the
-            # "lieutenant" position too. Both branches below then resolve the
-            # same slug through the same map, so crediting each independently
-            # reported one grant twice, under the same label.
-            credited_slugs: Set[str] = set()
-
             rank_code = user.rank or ""
             rank_entry = rank_map.get(rank_code)
             if position in slug_map.get(rank_code, []):
@@ -507,14 +495,6 @@ class ShiftEligibilityService:
                         ),
                     }
                 )
-                credited_slugs.add(rank_code)
-
-            for held in held_map.get(str(user.id), []):
-                if held["slug"] in credited_slugs:
-                    continue
-                if position in slug_map.get(held["slug"], []):
-                    sources.append({"type": "position", "label": held["name"]})
-                    credited_slugs.add(held["slug"])
 
             for qualification in qualification_map.get(str(user.id), []):
                 code = qualification["code"]
@@ -708,12 +688,10 @@ class ShiftEligibilityService:
     ) -> Dict[str, List[str]]:
         """slug -> the shift positions it grants, for this organization.
 
-        One map answers for both an operational rank code and a held position's
-        slug, because the two share a vocabulary: onboarding's role setup
-        creates *positions* with ids ``captain``/``engineer``/``firefighter``/
-        ``emt``, the same codes ``operational_ranks`` seeds as rank codes. A
-        department that models EMT as a position rather than a rank is making a
-        naming choice, not declaring its EMTs ineligible to ride.
+        Position slugs are deliberately not resolved through this map. Positions
+        are RBAC/organizational roles and can be created or assigned by role
+        managers; treating their names as qualifications would let those
+        managers grant themselves operational shift eligibility.
 
         Precedence is deliberate: a stored row always wins, so an admin who
         edits ``eligible_positions`` — or clears it, or deactivates the rank —
@@ -778,12 +756,7 @@ class ShiftEligibilityService:
     async def _get_held_position_slugs(
         self, user_id: str, organization_id: str
     ) -> List[str]:
-        """Slugs of the positions this member holds, org-scoped.
-
-        Queried rather than read off ``user.positions``: the caller hands us a
-        ``current_user`` loaded on another statement, and touching a lazy
-        relationship from here would emit IO outside the async greenlet.
-        """
+        """Return held RBAC position slugs without treating them as credentials."""
         result = await self.db.execute(
             select(Position.slug)
             .join(user_positions, Position.id == user_positions.c.position_id)
@@ -797,7 +770,7 @@ class ShiftEligibilityService:
     async def _get_held_position_map(
         self, organization_id: str
     ) -> Dict[str, List[Dict[str, str]]]:
-        """user_id -> the positions each member holds ({slug, name})."""
+        """Return held RBAC positions for callers that display role metadata."""
         result = await self.db.execute(
             select(user_positions.c.user_id, Position.slug, Position.name)
             .join(Position, Position.id == user_positions.c.position_id)
@@ -805,9 +778,10 @@ class ShiftEligibilityService:
         )
         by_user: Dict[str, List[Dict[str, str]]] = {}
         for user_id, slug, name in result.all():
-            if not slug:
-                continue
-            by_user.setdefault(str(user_id), []).append({"slug": slug, "name": name})
+            if slug:
+                by_user.setdefault(str(user_id), []).append(
+                    {"slug": slug, "name": name}
+                )
         return by_user
 
     async def _get_training_positions(

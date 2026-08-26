@@ -63,7 +63,10 @@ async def update_compliance_config(
     """Create or update compliance requirements configuration."""
     async with handle_service_errors("Failed to update compliance config"):
         service = ComplianceConfigService(db)
-        update_data = data.model_dump(exclude_none=True)
+        # exclude_unset, not exclude_none: an omitted field means "leave this
+        # alone," while an explicit null means "clear it" (nullable columns
+        # only — apply_updates rejects a null against a NOT NULL column).
+        update_data = data.model_dump(exclude_unset=True)
         config = await service.create_or_update_config(
             organization_id=current_user.organization_id,
             data=update_data,
@@ -150,10 +153,13 @@ async def update_compliance_profile(
     """Update a compliance profile."""
     async with handle_service_errors("Failed to update profile"):
         service = ComplianceConfigService(db)
+        # exclude_unset, not exclude_none: an omitted field means "leave this
+        # alone," while an explicit null means "clear it" (e.g. resetting
+        # compliant_threshold_override back to the org default).
         profile = await service.update_profile(
             profile_id=profile_id,
             organization_id=current_user.organization_id,
-            data=data.model_dump(exclude_none=True),
+            data=data.model_dump(exclude_unset=True),
         )
         await db.commit()
         return ComplianceProfileResponse.model_validate(profile)

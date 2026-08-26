@@ -2589,9 +2589,9 @@ async def signup_for_shift(
             status_code=403,
             detail=(
                 "You are not eligible to sign up for this shift. None of its "
-                "positions are covered by your rank, the positions you hold, "
-                "or your completed training. Ask a scheduling admin to review "
-                "your rank and positions, or the positions on this shift."
+                "positions are covered by your rank, qualifications, or your "
+                "completed training. Ask a scheduling admin to review your "
+                "qualifications and rank, or the positions on this shift."
             ),
         )
     if position_value not in eligible:
@@ -3132,8 +3132,7 @@ async def get_eligible_positions_bulk(
         raise HTTPException(
             status_code=400,
             detail=(
-                "At most "
-                f"{MAX_BULK_ELIGIBILITY_SHIFTS} shifts can be checked at once."
+                f"At most {MAX_BULK_ELIGIBILITY_SHIFTS} shifts can be checked at once."
             ),
         )
 
