@@ -1064,6 +1064,12 @@ export interface OperationalRankResponse {
   sort_order: number;
   is_active: boolean;
   eligible_positions: string[] | null;
+  /**
+   * How many permissions this rank confers on its own. Rank defaults resolve
+   * from a code-level registry keyed by rank_code, not from the rank row, so a
+   * rank a department invents for itself confers nothing and reports 0.
+   */
+  default_permission_count: number;
   created_at: string;
   updated_at: string;
 }

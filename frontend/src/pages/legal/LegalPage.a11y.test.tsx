@@ -21,7 +21,8 @@ describe('LegalPage accessibility', () => {
         organizationName: 'Test FD',
         privacyPolicy: null,
         termsOfService: null,
-        lastUpdated: null,
+        privacyPolicyLastUpdated: null,
+        termsOfServiceLastUpdated: null,
       },
     });
   });

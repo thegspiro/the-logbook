@@ -9,9 +9,17 @@ that is not a seat list. Readers had to tell those apart, and the templates
 screen did not, rendering an object as a React child. Pure logic; no DB.
 """
 
+import re
+from pathlib import Path
+
 import pytest
 
-from app.utils.positions import normalize_stored_positions
+from app.schemas.scheduling import ShiftPosition
+from app.utils.positions import (
+    CANONICAL_POSITIONS,
+    canonical_position,
+    normalize_stored_positions,
+)
 
 
 class TestFlatSeatLists:
@@ -289,3 +297,100 @@ class TestMigrationTransform:
         normalize = self._migration()._normalize
         once = normalize(["officer", {"position": "ems", "count": 2}])
         assert normalize(once) == once
+
+
+class TestSeatNameCanonicalization:
+    """The seat name is part of the canonical shape, not just the structure.
+
+    The apparatus editor wrote ``"EMT"`` where every other writer wrote
+    ``"ems"``. Nothing grants ``"EMT"`` and ``ShiftPosition`` cannot name it, so
+    an ambulance built from the defaults had an EMT seat no EMT could fill.
+    """
+
+    @pytest.mark.parametrize("spelling", ["EMT", "emt", "EMS", "ems", " ems ", "Ems"])
+    def test_every_emt_spelling_settles_on_ems(self, spelling):
+        assert canonical_position(spelling) == "ems"
+        assert normalize_stored_positions([spelling]) == [
+            {"position": "ems", "required": True}
+        ]
+
+    def test_the_ambulance_default_becomes_fillable(self):
+        # ApparatusBasicPage's DEFAULT_POSITIONS_BY_TYPE['ambulance'].
+        assert normalize_stored_positions(["driver", "ems"]) == [
+            {"position": "driver", "required": True},
+            {"position": "ems", "required": True},
+        ]
+
+    @pytest.mark.parametrize("seat", sorted(CANONICAL_POSITIONS))
+    def test_canonical_seats_are_fixed_points(self, seat):
+        assert canonical_position(seat) == seat
+
+    def test_case_variants_of_builtin_seats_fold(self):
+        assert canonical_position("Firefighter") == "firefighter"
+        assert canonical_position("OFFICER") == "officer"
+
+    def test_a_departments_custom_seat_round_trips_verbatim(self):
+        # A custom position's value is chosen by an admin; folding its case
+        # would silently rename their seat.
+        assert canonical_position("Medic") == "Medic"
+        assert canonical_position("Safety Officer") == "Safety Officer"
+
+    def test_blank_names_are_still_dropped(self):
+        assert canonical_position("   ") == ""
+        assert normalize_stored_positions(["  ", {"position": ""}]) == []
+
+    def test_required_flag_survives_renaming(self):
+        assert normalize_stored_positions([{"position": "EMT", "required": False}]) == [
+            {"position": "ems", "required": False}
+        ]
+
+
+class TestSeatVocabularyMatchesTheWire:
+    """A seat outside ``ShiftPosition`` cannot be signed up for by anyone.
+
+    ``signup_for_shift`` sends a ``ShiftPosition`` and refuses anything the
+    member's eligible set does not contain, so a stored seat with no matching
+    enum member is unfillable no matter how the department is configured. The
+    two lists must not drift apart again.
+    """
+
+    def test_canonical_set_is_exactly_the_signup_enum(self):
+        assert CANONICAL_POSITIONS == {p.value for p in ShiftPosition}
+
+    def test_apparatus_page_seat_values_are_all_canonical(self):
+        # The frontend list that caused this bug, asserted from source so a
+        # non-canonical seat value cannot be reintroduced there unnoticed.
+        source = (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "pages"
+            / "ApparatusBasicPage.tsx"
+        ).read_text()
+        block = re.search(r"const POSITION_OPTIONS = \[(.*?)\];", source, re.S)
+        assert block, "POSITION_OPTIONS not found in ApparatusBasicPage.tsx"
+        seats = re.findall(r"'([^']+)'", block.group(1))
+        assert seats, "no seat values parsed"
+        assert (
+            set(seats) <= CANONICAL_POSITIONS
+        ), f"non-canonical apparatus seat values: {set(seats) - CANONICAL_POSITIONS}"
+
+    def test_apparatus_type_defaults_are_all_canonical(self):
+        source = (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "pages"
+            / "ApparatusBasicPage.tsx"
+        ).read_text()
+        block = re.search(
+            r"const DEFAULT_POSITIONS_BY_TYPE: Record<string, string\[\]> = \{(.*?)\n\};",
+            source,
+            re.S,
+        )
+        assert block, "DEFAULT_POSITIONS_BY_TYPE not found"
+        seats = set(re.findall(r"'([^']+)'", block.group(1)))
+        # Keys (apparatus types) appear unquoted, so everything parsed is a seat.
+        assert (
+            seats <= CANONICAL_POSITIONS
+        ), f"non-canonical default seats: {seats - CANONICAL_POSITIONS}"

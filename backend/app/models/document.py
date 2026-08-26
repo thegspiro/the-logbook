@@ -388,5 +388,18 @@ class Document(Base):
         Index("ix_documents_source", "source_type", "source_id"),
     )
 
+    @property
+    def has_file(self) -> bool:
+        """Whether this row has a downloadable file on disk.
+
+        A generated document (published minutes, a property return) carries
+        ``content_html`` and no ``file_path`` at all — the download endpoint
+        404s on it, same as an upload whose file was somehow lost. Exposed so
+        the frontend can hide the Download action for a document type it
+        knows in advance will never succeed, rather than showing an action
+        that deterministically fails.
+        """
+        return bool(self.file_path)
+
     def __repr__(self):
         return f"<Document(name={self.name}, type={self.file_type})>"

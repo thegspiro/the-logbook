@@ -10,6 +10,7 @@ another org's facility.
 Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -17,14 +18,18 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.dialects import mysql
 
+from app.models.facilities import Facility, FacilityPhoto
 from app.schemas.facilities import (
     FacilityAccessKeyUpdate,
     FacilityCapitalProjectUpdate,
     FacilityComplianceItemUpdate,
+    FacilityDocumentResponse,
     FacilityOccupantUpdate,
+    FacilityPhotoResponse,
     FacilityRoomUpdate,
 )
 from app.services.facilities_service import FacilitiesService
+from app.utils.model_updates import apply_updates
 
 
 @pytest.fixture
@@ -228,3 +233,55 @@ class TestUpdateWithoutReparentingSkipsCheck:
             )
         assert result is occupant
         mock_get.assert_not_awaited()
+
+
+class TestNullabilityGuard:
+    """FAC-7: an explicit null on a NOT NULL column must fail clean (a
+    ValueError the endpoint turns into 400), not reach flush and raise a raw
+    IntegrityError (500). `Facility.name` and `FacilityPhoto.is_primary` are
+    the two columns a Codex review on PR #1836 named as reachable via
+    `update_facility`/`update_photo`'s (former) blind `setattr` loops.
+    """
+
+    def test_facility_name_cannot_be_nulled(self):
+        facility = Facility(name="Station 1", organization_id=str(uuid4()))
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            apply_updates(facility, {"name": None})
+
+    def test_photo_is_primary_cannot_be_nulled(self):
+        photo = FacilityPhoto(is_primary=True)
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            apply_updates(photo, {"is_primary": None})
+
+    @pytest.mark.parametrize(
+        "method_name",
+        [
+            "_apply_updates",
+            "update_facility",
+            "update_photo",
+            "update_maintenance_record",
+            "update_inspection",
+            "update_capital_project",
+            "update_insurance_policy",
+        ],
+    )
+    def test_update_methods_route_through_the_shared_guard(self, method_name):
+        """Every update path that used to hand-roll `for field, value in
+        update_data.items(): setattr(...)` must route through the shared
+        `apply_updates` utility instead, or a future edit can silently
+        reintroduce the null-on-NOT-NULL 500."""
+        source = inspect.getsource(getattr(FacilitiesService, method_name))
+        assert "apply_updates(" in source
+        assert "for field, value in update_data.items()" not in source
+
+
+class TestFacilityFileResponseRedaction:
+    """FAC-8: `file_path` is an internal storage location, not something a
+    baseline `facilities.view` holder should learn — mirrors the generic
+    Documents module's `DocumentResponse`, which excludes the same field."""
+
+    def test_photo_response_excludes_file_path(self):
+        assert "file_path" not in FacilityPhotoResponse.model_fields
+
+    def test_document_response_excludes_file_path(self):
+        assert "file_path" not in FacilityDocumentResponse.model_fields

@@ -28,8 +28,11 @@ from app.schemas.base import UTCResponseBase
 from app.utils.embroidery import (
     DEFAULT_THREAD_COLOR_HEX,
     EmbroideryThreadColor,
+    PersonalizationMethod,
+    normalize_personalization_method,
     normalize_thread_color,
     thread_color_hex,
+    uses_thread_color,
 )
 from app.utils.storefront_payments import normalize_cashtag, normalize_zelle_handle
 
@@ -268,6 +271,7 @@ class StoreProductBase(BaseModel):
     personalization_max_length: int = Field(default=30, ge=1, le=200)
     personalization_price: Decimal = Field(default=Decimal("0"), ge=0)
     personalization_thread_color: EmbroideryThreadColor = EmbroideryThreadColor.GOLD
+    personalization_method: PersonalizationMethod = PersonalizationMethod.EMBROIDERY
     track_stock: bool = False
     stock_quantity: Optional[int] = Field(None, ge=0)
     requires_variant: bool = False
@@ -315,6 +319,7 @@ class StoreProductUpdate(BaseModel):
     personalization_max_length: Optional[int] = Field(None, ge=1, le=200)
     personalization_price: Optional[Decimal] = Field(None, ge=0)
     personalization_thread_color: Optional[EmbroideryThreadColor] = None
+    personalization_method: Optional[PersonalizationMethod] = None
     track_stock: Optional[bool] = None
     stock_quantity: Optional[int] = Field(None, ge=0)
     requires_variant: Optional[bool] = None
@@ -348,6 +353,7 @@ class StoreProductResponse(UTCResponseBase):
     personalization_price: Decimal
     personalization_thread_color: EmbroideryThreadColor = EmbroideryThreadColor.GOLD
     personalization_thread_color_hex: str = DEFAULT_THREAD_COLOR_HEX
+    personalization_method: PersonalizationMethod = PersonalizationMethod.EMBROIDERY
     track_stock: bool
     stock_quantity: Optional[int] = None
     requires_variant: bool
@@ -363,6 +369,12 @@ class StoreProductResponse(UTCResponseBase):
     def _default_thread_color(cls, value):
         """A product predating the setting stores NULL and means gold."""
         return normalize_thread_color(value)
+
+    @field_validator("personalization_method", mode="before")
+    @classmethod
+    def _default_method(cls, value):
+        """A product predating the setting stores NULL and means embroidery."""
+        return normalize_personalization_method(value)
 
     @model_validator(mode="after")
     def _resolve_thread_color_hex(self):
@@ -406,6 +418,7 @@ class StorefrontProductOffer(UTCResponseBase):
     personalization_price: Decimal = Decimal("0")
     personalization_thread_color: EmbroideryThreadColor = EmbroideryThreadColor.GOLD
     personalization_thread_color_hex: str = DEFAULT_THREAD_COLOR_HEX
+    personalization_method: PersonalizationMethod = PersonalizationMethod.EMBROIDERY
     available_quantity: Optional[int] = None
     is_available: bool
     variants: List[StorefrontVariantOption] = Field(default_factory=list)
@@ -415,6 +428,12 @@ class StorefrontProductOffer(UTCResponseBase):
     def _default_thread_color(cls, value):
         """A product predating the setting stores NULL and means gold."""
         return normalize_thread_color(value)
+
+    @field_validator("personalization_method", mode="before")
+    @classmethod
+    def _default_method(cls, value):
+        """A product predating the setting stores NULL and means embroidery."""
+        return normalize_personalization_method(value)
 
     @model_validator(mode="after")
     def _resolve_thread_color_hex(self):
@@ -683,6 +702,7 @@ class StoreOrderItemResponse(UTCResponseBase):
     personalization_text: Optional[str] = None
     personalization_thread_color: Optional[EmbroideryThreadColor] = None
     personalization_thread_color_hex: Optional[str] = None
+    personalization_method: Optional[PersonalizationMethod] = None
     unit_price: Decimal
     quantity: int
     line_total: Decimal
@@ -698,7 +718,16 @@ class StoreOrderItemResponse(UTCResponseBase):
         #
         # A line with nothing stitched stays unset, so the UI can still tell
         # "stitched in gold" from "nothing stitched".
-        if self.personalization_text:
+        if not self.personalization_text:
+            self.personalization_method = None
+            self.personalization_thread_color = None
+            self.personalization_thread_color_hex = None
+            return self
+
+        self.personalization_method = normalize_personalization_method(
+            self.personalization_method
+        )
+        if uses_thread_color(self.personalization_method):
             self.personalization_thread_color = normalize_thread_color(
                 self.personalization_thread_color
             )
@@ -706,6 +735,7 @@ class StoreOrderItemResponse(UTCResponseBase):
                 self.personalization_thread_color
             )
         else:
+            # Engraved: there is no thread, so the swatch must not render one.
             self.personalization_thread_color = None
             self.personalization_thread_color_hex = None
         return self
@@ -973,6 +1003,7 @@ class StoreWindowProductTally(UTCResponseBase):
     # What to stitch it in — the sheet is handed to the vendor, and a name with
     # no thread color named is a phone call.
     personalization_thread_color: Optional[EmbroideryThreadColor] = None
+    personalization_method: Optional[PersonalizationMethod] = None
     quantity: int
     unit_price: Decimal
     line_total: Decimal

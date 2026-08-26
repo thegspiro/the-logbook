@@ -7,6 +7,203 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
+
+**Fixed**
+
+- **A seeded rank that conferred no permissions at all.** Operational ranks
+  are seeded from `DEFAULT_RANKS` but resolve their permissions from a
+  separate registry, `OPERATIONAL_RANKS`, and the two had drifted: `emt` was
+  in the first and missing from the second. `get_rank_default_permissions("emt")`
+  answered `[]`, so a member whose only standing was the EMT rank held
+  nothing.
+
+  Unlike Firefighter there is no mirroring entry in `DEFAULT_POSITIONS`, so
+  nothing made up the difference — every other seeded rank had that backstop,
+  which is why the gap stayed invisible. EMT now carries the same
+  rank-and-file grants as Firefighter, from one shared list rather than two
+  that can drift.
+
+  **Firefighter and EMT are independent ranks, not a progression.** Plenty of
+  firefighters never certify as EMTs and plenty of EMTs never ride the engine;
+  neither implies the other. They share a permission list only because
+  standing at the bottom of the operational ladder is what decides what a
+  member may _see_, and that is the same question for both.
+
+- **An EMS-only agency was seeded a fire department's rank ladder.**
+  `seed_defaults` wrote the same eight ranks to every organization regardless
+  of `organization_type`, so an EMS-only service was handed "Fire Chief",
+  "Engineer" and "Firefighter" — a rank nobody there can ever hold. The seed
+  only ever fires into an empty table, so whatever it wrote on day one was
+  what the department lived with.
+
+  Ranks are now chosen by agency type: every agency gets the full officer
+  ladder, an EMS-only service gets EMT without Firefighter, and its
+  fire-specific labels are renamed (Chief, Driver / Operator). The rank
+  _codes_ stay shared across agency types deliberately — they key the
+  permission registry and the shift-eligibility fallback, so a code must mean
+  the same thing everywhere — and only the selection and labels vary. An
+  unknown or missing type falls back to the full set, because a department
+  seeded one rank too many can delete it while one seeded too few has no
+  indication anything is absent.
+
+- **A custom rank silently conferred nothing.** Rank defaults resolve from a
+  code-level registry keyed by `rank_code`, so a rank a department invents for
+  itself — Battalion Chief, Firefighter II — grants no permissions. That is
+  the intended design (positions are the primary source), but the editor
+  rendered a custom rank identically to a seeded one, leaving an admin to
+  discover it from a member who could not see anything. `RankResponse` now
+  reports `default_permission_count` and the rank editor marks a rank that
+  grants none.
+
+**Removed**
+
+- `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
+  `core.constants`. Each had exactly one reference in the codebase — its own
+  definition. They were not harmless: they read as a third authority on the
+  rank vocabulary and agreed with neither real one, listing `chief` where the
+  seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
+  not ranks at all and grant nothing.
+
+`tests/test_rank_registry_agreement.py` now asserts the seed and the
+permission registry describe the same set in both directions, so a rank cannot
+again be offered to departments while conferring nothing.
+
+### Embroidery and engraving are not the same job (2026-08-26)
+
+**Fixed**
+
+- **`alembic upgrade head` could not run at all.** Three migrations took
+  `c4a91b7e2f08` as their parent — the size-order settle (#1819), a second
+  storefront grant backfill, and the notifications.view revoke (#1829) — so the
+  chain had three heads and every database job on `main` failed before a test
+  ran. Relinearized rather than merged, because the order changes the outcome:
+  the two storefront backfills guard each other, and running them the other way
+  round leaves `storefront.manage` off the Quartermaster on every existing
+  department.
+
+- **An engraved item was sent to the vendor as gold thread.** Personalization
+  was modelled as one process. A cloth item is embroidered and the thread has a
+  colour; a metal item is engraved and there is none. With only a thread colour
+  on the model, a challenge coin reached the purchase order and the CSV export
+  reading "Gold" — an instruction the engraver cannot follow — and the member's
+  preview stitched a coin in gold. Products now carry a personalization method,
+  set per item by the quartermaster, and thread belongs to embroidery alone.
+
+- **The Command Palette offered the store where the route would refuse it.**
+  `My Store Orders` carried no gate at all while `/store/orders` requires
+  `storefront.view` and the storefront module, so it answered Access Denied to
+  every member without the grant and to every department with the store
+  switched off. `Department Store` was permission-gated but not module-gated.
+  `navGateIntegrity.test.ts` now covers the storefront paths; it existed for
+  this class of defect but listed only `/medical-supplies` and `/inventory`.
+
+- **Thirteen corporate positions could not reach the store.** Treasurer,
+  secretary, board of directors, EMS supply officer, public outreach,
+  communications officer, historian, membership coordinator, training officer,
+  fundraising chair, assistant secretary, scheduling officer and meeting hall
+  coordinator held no storefront grant. The store is a member amenity, not an
+  officer tool. The omission hid because permissions union across positions and
+  every operational rank grants the store, so it only bit a member whose sole
+  position was one of these and who had no rank recorded.
+
+### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
+
+**Fixed**
+
+- **The apparatus editor wrote a seat name nothing in the system grants.**
+  `ApparatusBasicPage` offered the EMT seat as the literal string `"EMT"`, and
+  built every ambulance from `['driver', 'EMT']`. Every other writer — the
+  shift template form, the scheduling settings, `ShiftPosition` on the wire,
+  `operational_ranks.eligible_positions`, the rank editor — spells that seat
+  `"ems"`.
+
+  Nothing grants `"EMT"`: not a rank, not a held position, not a completed
+  training program. `ShiftEligibilityService` intersects the member's granted
+  seats with the shift's own seats case-sensitively, so the intersection was
+  always empty and `POST /scheduling/shifts/{id}/signup` answered 403. An
+  ambulance created from the defaults had an EMT seat that no EMT could take.
+
+  **No setting could unblock it.** Adding `EMT` to the org's `open_positions`,
+  or marking the shift `open_to_all_members` — the flag that bypasses the rank
+  and membership-type checks entirely — both put `"EMT"` into the eligible set
+  and still failed, because `ShiftPosition` has no `EMT` member and the client
+  can only ever send `ems`. The seat was unnameable by the API that had to
+  fill it.
+
+  It was invisible on screen, which is why it read as the application being
+  broken rather than as a configuration problem: `POSITION_LABELS` maps `EMT`,
+  `EMS` and `ems` all to the label "EMT", so the seat rendered normally. The
+  label was also where the bad value came from — the editor built its option
+  text by capitalising the raw value, so `'ems'` would have displayed as "Ems"
+  and someone stored the label as the value to fix the display.
+
+  The seat _name_ is now settled on write by `canonical_position` in
+  `app/utils/positions.py`, alongside the seat _shape_ that helper already
+  owned, so no writer can reintroduce a spelling the signup API cannot name.
+  `ApparatusBasicPage` stores canonical values and takes its option text from
+  the shared `POSITION_LABELS`. `20260826_1200_d7a4e9c31b60` settles the rows
+  already stored across `basic_apparatus.positions`, `shifts.positions`,
+  `shift_templates.positions` and `apparatus.crew_positions` — the half a
+  write-side fix cannot do, since an ambulance created last month keeps its
+  unfillable seat until its row is rewritten. A department's own custom seat
+  round-trips verbatim; only known spellings fold.
+
+  `tests/test_position_slots.py` asserts the canonical set is exactly
+  `ShiftPosition` and parses `ApparatusBasicPage.tsx` for a non-canonical seat
+  value, so the two vocabularies cannot drift apart again.
+
+### Documents could be uploaded but never downloaded, and a dozen other Documents/Legal fixes (2026-08-26)
+
+**Added**
+
+- A Download action is now available wherever a document is listed —
+  members with `documents.manage` could previously upload and delete a
+  file but never open or download what was uploaded. It is hidden on
+  generated documents (published meeting minutes, property returns) that
+  have no separate file to download, and it applies the same folder access
+  rules as viewing the document.
+- A document uploaded with no folder previously had no way to be seen,
+  downloaded, or managed afterward — the upload succeeded, but the file
+  vanished from the page. An "All Documents" view now lists every document
+  the caller can see, including ones with no folder.
+
+**Fixed**
+
+- A malformed folder or document id in a request returned a server error
+  instead of a clean rejection.
+- Editing a folder to clear its parent, its owner, or a document's folder
+  reported success but silently left the old value in place. Clearing now
+  actually clears.
+- A folder could be moved into itself or one of its own sub-folders,
+  making it disappear from folder navigation. This is now rejected with a
+  clear error.
+- Clearing a folder's color or icon to blank could leave it in a state
+  that broke every later attempt to list or view it. Both fields now
+  require a value, matching how every folder already has one.
+- Uploading a document with the Document Name field left blank
+  (advertised in the UI as optional) returned an error instead of
+  defaulting to the file name, as promised.
+- A failed receipt-printer connection returned the printer's configured
+  network address to whoever triggered the print, including staff with no
+  access to printer settings. It now returns a generic message.
+- Publishing two proposed revisions of the same legal document (privacy
+  policy or terms of service) at nearly the same time could leave both
+  marked live, with the public page showing whichever write happened to
+  land last. Publishing is now serialized.
+- A department publishing custom privacy-policy and terms-of-service text
+  with different revision dates could have publishing one silently change
+  the date shown on the other. Each document keeps its own date, and an
+  org that migrated from the old shared-date format no longer has a stale
+  date resurface after it republishes.
+- The public legal-text endpoint keeps returning its original `lastUpdated`
+  field alongside the newer per-document dates, so an external client built
+  against the documented shape does not lose a field it may still rely on.
+- A tampered or corrupted document record could theoretically resolve to a
+  file outside the caller's own organization's upload directory; the
+  download endpoint now confines every resolved path to that directory.
+- Downloading a document is now recorded in the audit log.
+
 ### Every member could read every other member's notifications (2026-08-25)
 
 **Fixed**

@@ -42,15 +42,6 @@ normalizer in ``20260819_2037_1eeb053d59b7`` is: a migration must keep matching
 the rows it was written to match after the registry moves on.
 ``test_storefront_grant_backfill.py`` fails if the two drift.
 
-Frozen against the rows as they are **when this revision runs**, which is not
-the same thing as when it was written. ``20260825_2015_a1f7c34e9b02`` strips
-``notifications.view`` from the ``member``, ``firefighter`` and ``engineer``
-positions, and the merge that reconciled the three heads left that revision
-ahead of this one. Those three snapshots therefore describe the row after the
-revocation. Leaving the grant in would have been the silent-no-op failure this
-guard exists to catch: the sets would never compare equal and the backfill
-would report success having rewritten nothing.
-
 Idempotent: a row already carrying the grants no longer equals the prior
 default, so it is skipped — which is also why this is safe to re-run.
 
@@ -115,6 +106,7 @@ _PRIOR_DEFAULTS: dict[str, set[str]] = {
         "meetings.view",
         "members.view",
         "minutes.view",
+        "notifications.view",
         "organization.view",
         "scheduling.swap",
         "scheduling.view",
@@ -132,6 +124,7 @@ _PRIOR_DEFAULTS: dict[str, set[str]] = {
         "meetings.view",
         "members.view",
         "minutes.view",
+        "notifications.view",
         "organization.view",
         "scheduling.swap",
         "scheduling.view",
@@ -151,6 +144,7 @@ _PRIOR_DEFAULTS: dict[str, set[str]] = {
         "meetings.view",
         "members.view",
         "minutes.view",
+        "notifications.view",
         "organization.view",
         "scheduling.swap",
         "scheduling.view",

@@ -33,7 +33,7 @@ Scoped to ``is_system = True``: a department that has customized a position of
 its own keeps whatever it put there.
 
 Revision ID: a1f7c34e9b02
-Revises: c4a91b7e2f08
+Revises: c4f8a2e70d19
 Create Date: 2026-08-25 20:15:00.000000
 """
 
@@ -43,7 +43,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a1f7c34e9b02"
-down_revision = "c4a91b7e2f08"
+down_revision = "c4f8a2e70d19"
 branch_labels = None
 depends_on = None
 

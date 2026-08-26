@@ -1783,6 +1783,28 @@ SQL-level pagination is a response-envelope/frontend-contract change, not a
 drop-in. Mirrored here for the first time in this security review pass.
 (Security review MS-6, `docs/security-review/MS-09-medical-screening.md`.)
 
+## Inventory — Two Cross-Member Reads Sit Behind the Baseline `.view` Grant (2026-08-26)
+
+`GET /allowances/check/{user_id}/{category_id}` (allowance usage count) and
+`GET /members/{user_id}/size-preferences` (stored uniform/PPE measurements)
+both let any authenticated member look up another named member's data by id
+using only `inventory.view` — the permission every seeded Member position
+holds. This is the same class of gap the `ccea2576`/`d7be097b` commits closed
+across most of this module (item history, active/overdue checkouts, the
+members-inventory roster) and that this review's own INV-7 finding closed on
+the departure-clearance-by-id route, but these two were not part of either
+sweep.
+
+Not fixed here because, unlike INV-7, this module has no established
+precedent for what the intended gate is: INV-7 had an identically-shaped
+sibling route (`/users/{user_id}/clearance`) already gated
+self-or-quartermaster, making the fix mechanical. Allowance usage and size
+data may be legitimately visible to more roles than clearance/checkout
+detail (e.g. an officer approving an allowance request, or a future
+supply-ordering workflow needing a colleague's size) — narrowing the gate is
+a product decision about who should see it, not a mechanical match. (Security
+review INV-8/INV-9, `docs/security-review/INV-11-inventory.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
@@ -2036,6 +2058,40 @@ migration. Two things make it worth recording rather than ignoring:
 2. **The downgrade is not symmetric.** Each `downgrade()` narrows the column
    back to `VARCHAR(200)`. **A downgrade past both will truncate deep
    compartment paths** — the exact data the widening was added to hold.
+
+## Documents — Legal Revision History Is Unbounded (2026-08-25)
+
+`LegalDocumentService.list_revisions` (`legal_service.py`) runs `.all()` with
+no pagination or limit, and `GET /legal-documents` (`get_legal_documents`,
+`legal_documents.py`) returns every draft and every archived revision's full
+body (capped at 100,000 characters each) and change note, for both document
+types, on every load of the Governance -> Legal Documents screen. Access
+control is sound — org-scoped, `legal.propose`/`legal.publish`/
+`settings.manage`-gated — so this is the same scaling concern as the entries
+below, not a leak: a department with years of proposal history, or a
+`legal.propose` holder repeatedly creating drafts (there is no per-user or
+per-org cap on draft creation), pays a growing query and response cost on
+every load, with no ceiling.
+
+Not fixed for the same reason as the entries below: pagination changes the
+response envelope this screen currently expects (full `drafts`/`history`
+arrays inline per document type), a frontend-contract change rather than a
+drop-in. (Security review DOC-8, `docs/security-review/DOC-10-documents-legal.md`.)
+
+## Documents — Folder Listing Is Unbounded and N+1 (2026-08-25)
+
+`get_folders` (`documents_service.py`) loads every folder at a given level
+(root, or under one `parent_id`) with no `LIMIT`, then issues one additional
+`func.count` query per folder to populate its document count — N+1, not just
+unpaginated. Access control is sound — org-scoped and filtered through the
+same folder-visibility rules the listing enforces — so this is a scaling
+concern, not a leak: any `documents.manage` holder can create folders with no
+per-org cap, so both the row count and the query count grow with however many
+folders a department has created, with no ceiling.
+
+Not fixed for the same reason as the entries above and below: pagination is a
+response-envelope/frontend-contract change, not a drop-in. (Security review
+DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
 
 ## Process
 

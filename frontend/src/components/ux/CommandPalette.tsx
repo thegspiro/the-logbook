@@ -50,18 +50,18 @@ interface CommandItem {
    */
   hideWhenModuleOn?: string;
   /**
-   * Hide this command unless the named module is on for the organization.
+   * Hide this command unless the named module is enabled — the mirror of
+   * `hideWhenModuleOn`, for a page whose route carries `requiredModule`.
+   * Permissive while the config is unconfigured or still loading, matching
+   * `isModuleOn` and every navigation bar.
    *
-   * The mirror of `hideWhenModuleOn`, and the one that matters now that every
-   * module's routes carry a `requiredModule` gate: without it the palette is
-   * the last surface still offering Training, Inventory, Elections and the
-   * rest to a department that retired them, and every one of those offers is
-   * a navigation into the "module is not enabled" refusal. Permissive while
-   * the module config is loading or absent, exactly as the navigation is —
-   * a module flag is not an access control, so an unknown answer shows the
-   * command rather than hiding it.
+   * Now that every module's routes carry that gate, an untagged command is
+   * the last surface still offering a retired module, and the offer lands on
+   * the "module is not enabled" refusal rather than on a page. So a command
+   * whose destination belongs to a module gets tagged here, not only the
+   * ones that would also fail on a permission.
    */
-  requiredModule?: string;
+  requiresModule?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -85,7 +85,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'training',
-    requiredModule: 'training',
+    requiresModule: 'training',
     label: 'My Training',
     path: '/training/my-training',
     icon: GraduationCap,
@@ -94,7 +94,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'inventory',
-    requiredModule: 'inventory',
+    requiresModule: 'inventory',
     label: 'Inventory',
     path: '/inventory',
     icon: Package,
@@ -107,20 +107,21 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'store',
-    requiredModule: 'storefront',
     label: 'Department Store',
     path: '/store',
     icon: Package,
     section: 'Navigation',
     // Same reasoning as Gear & Uniforms above: the route requires
     // storefront.view, so offering it ungated makes the palette a route to
-    // Access Denied.
+    // Access Denied. The route carries `requiredModule` too, so a department
+    // with the store switched off must not be offered it either.
     permission: 'storefront.view',
+    requiresModule: 'storefront',
     keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'],
   },
   {
     id: 'scheduling',
-    requiredModule: 'scheduling',
+    requiresModule: 'scheduling',
     label: 'Scheduling',
     path: '/scheduling',
     icon: Clock,
@@ -129,7 +130,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'facilities',
-    requiredModule: 'facilities',
+    requiresModule: 'facilities',
     label: 'Facilities',
     path: '/facilities',
     icon: Building2,
@@ -166,7 +167,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'elections',
-    requiredModule: 'elections',
+    requiresModule: 'elections',
     label: 'Elections',
     path: '/elections',
     icon: Vote,
@@ -175,7 +176,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'minutes',
-    requiredModule: 'minutes',
+    requiresModule: 'minutes',
     label: 'Meeting Minutes',
     path: '/minutes',
     icon: ClipboardList,
@@ -184,7 +185,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'notifications',
-    requiredModule: 'notifications',
+    requiresModule: 'notifications',
     label: 'Notifications',
     path: '/notifications',
     icon: Bell,
@@ -211,7 +212,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'submit-training',
-    requiredModule: 'training',
+    requiresModule: 'training',
     label: 'Submit Training',
     path: '/training/submit',
     icon: GraduationCap,
@@ -219,7 +220,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'my-equipment',
-    requiredModule: 'inventory',
+    requiresModule: 'inventory',
     label: 'My Issued Gear',
     path: '/inventory/my-equipment',
     icon: Package,
@@ -227,11 +228,16 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'my-store-orders',
-    requiredModule: 'storefront',
     label: 'My Store Orders',
     path: '/store/orders',
     icon: Package,
     section: 'Actions',
+    // /store/orders carries the same route gate as /store. This entry had
+    // neither, so it offered Access Denied to every member without the grant
+    // and to every department with the store switched off. ('My Issued Gear'
+    // above is genuinely ungated — its route has no ProtectedRoute at all.)
+    permission: 'storefront.view',
+    requiresModule: 'storefront',
   },
 
   // Admin
@@ -245,7 +251,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'reports',
-    requiredModule: 'reports',
+    requiresModule: 'reports',
     label: 'Reports',
     path: '/reports',
     icon: BarChart3,
@@ -266,7 +272,7 @@ export const CommandPalette: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const { enabledModules } = useEnabledModules();
 
-  // Filter commands by permissions, module enablement, and search query
+  // Filter commands by permissions, module supersession, and search query
   const filteredCommands = useMemo(() => {
     const accessible = COMMANDS.filter(
       (cmd) =>
@@ -274,7 +280,10 @@ export const CommandPalette: React.FC = () => {
         (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
         // enabledModules is null while loading/unconfigured — hide nothing then
         !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn)) &&
-        (!cmd.requiredModule || enabledModules === null || enabledModules.has(cmd.requiredModule))
+        // Same rule as `isModuleOn`, read off the state rather than the
+        // helper: the helper is rebuilt every render, so depending on it here
+        // would recompute this memo every render too.
+        (!cmd.requiresModule || enabledModules === null || enabledModules.has(cmd.requiresModule))
     );
 
     if (!query.trim()) return accessible;

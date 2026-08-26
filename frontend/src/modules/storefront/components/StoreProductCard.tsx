@@ -14,8 +14,14 @@ import React, { useMemo, useState } from 'react';
 import { Check, Minus, Plus } from 'lucide-react';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import { productGlyph } from '../utils/productGlyph';
-import { threadPreviewCaption, threadPreviewSurface } from '../utils/threadPreview';
-import { DEFAULT_EMBROIDERY_THREAD_COLOR_HEX } from '../types';
+import {
+  ENGRAVED_CAPTION,
+  ENGRAVED_SURFACE,
+  ENGRAVED_TEXT,
+  threadPreviewCaption,
+  threadPreviewSurface,
+} from '../utils/threadPreview';
+import { DEFAULT_EMBROIDERY_THREAD_COLOR_HEX, personalizationPrompt, usesThreadColor } from '../types';
 import type { StorefrontProductOffer, StorefrontVariantOption } from '../types';
 
 /** Below this, the "only n left" nudge is worth the anxiety it creates. */
@@ -61,7 +67,9 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
 
   const Glyph = productGlyph(offer);
   const canAdd = !soldOut && !(offer.requiresVariant && !variantId) && !missingRequiredText;
-  const personalizationLabel = offer.personalizationLabel || 'Add name embroidery';
+  // The prompt names the process, so a coin does not ask to be embroidered.
+  const personalizationLabel = offer.personalizationLabel || personalizationPrompt(offer.personalizationMethod);
+  const stitched = usesThreadColor(offer.personalizationMethod);
   // Falls back to the historical gold for an offer served by a backend that
   // predates the setting, so the preview never renders with no color at all.
   const threadHex = offer.personalizationThreadColorHex || DEFAULT_EMBROIDERY_THREAD_COLOR_HEX;
@@ -187,10 +195,14 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
                 {trimmedText && (
                   <div
                     aria-hidden="true"
-                    className={`mt-2.5 flex items-center gap-2.5 rounded-lg border px-3 py-2.5 ${threadPreviewSurface(threadHex)}`}
+                    className={`mt-2.5 flex items-center gap-2.5 rounded-lg border px-3 py-2.5 ${
+                      stitched ? threadPreviewSurface(threadHex) : ENGRAVED_SURFACE
+                    }`}
                   >
                     <span
-                      className={`text-[10px] font-bold tracking-[.1em] uppercase ${threadPreviewCaption(threadHex)}`}
+                      className={`text-[10px] font-bold tracking-[.1em] uppercase ${
+                        stitched ? threadPreviewCaption(threadHex) : ENGRAVED_CAPTION
+                      }`}
                     >
                       Preview
                     </span>
@@ -199,7 +211,7 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
                         the API, so there is no class name to compile ahead. */}
                     <span
                       className="font-mono text-sm font-bold tracking-[.14em] uppercase"
-                      style={{ color: threadHex }}
+                      style={{ color: stitched ? threadHex : ENGRAVED_TEXT }}
                     >
                       {trimmedText}
                     </span>

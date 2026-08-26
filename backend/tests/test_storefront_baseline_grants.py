@@ -26,12 +26,16 @@ _MIGRATION = (
 )
 
 
-def _load_migration():
-    spec = importlib.util.spec_from_file_location("_storefront_backfill", _MIGRATION)
+def _load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _load_migration():
+    return _load_module(_MIGRATION, "_storefront_backfill")
 
 
 @pytest.mark.parametrize("permission", STOREFRONT_BASELINE)
@@ -52,10 +56,23 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
     missing from the backfill repeats the original bug for that position:
     fresh installs get it, every existing department does not.
     """
+    # Thirteen corporate positions gained the grants in a later revision, which
+    # carries its own backfill — they are not this migration's to cover.
+    later = set(
+        _load_module(
+            (
+                Path(__file__).resolve().parents[1]
+                / "alembic"
+                / "versions"
+                / "20260826_0345_b3e8d1f45a27_grant_corporate_storefront_access.py"
+            ),
+            "_corp_storefront",
+        )._PRIOR_DEFAULTS
+    )
     expected = {
         slug
         for slug, definition in DEFAULT_POSITIONS.items()
-        if "storefront.view" in definition["permissions"]
+        if slug not in later and "storefront.view" in definition["permissions"]
         # A wildcard row already covers the grants and the backfill skips it.
         and "*" not in definition["permissions"]
     }

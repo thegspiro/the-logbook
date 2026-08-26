@@ -14,10 +14,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.schemas.scheduling import ShiftPosition
 from app.services.shift_eligibility_service import (
     DEFAULT_EXCLUDED_MEMBERSHIP_TYPES,
     ShiftEligibilityService,
 )
+from app.utils.positions import normalize_stored_positions
 
 
 def _one(obj):
@@ -663,3 +665,70 @@ class TestEvocEnforcementSetting:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestAmbulanceEmtSeatIsFillable:
+    """The reported defect: an EMT blocked from the EMT seat on an ambulance.
+
+    ``ApparatusBasicPage`` wrote the seat as ``"EMT"`` while ranks, held
+    positions and training all grant ``"ems"``. Step 4 intersects the two
+    case-sensitively, so the intersection was empty and the endpoint answered
+    403 — for a member who was, by every configured rule, qualified to ride.
+
+    No setting could unblock it: ``open_positions`` and ``open_to_all_members``
+    both put ``"EMT"`` into the eligible set, and the signup API can only send
+    ``ShiftPosition.EMS``. The seat itself had to be settled, which is what
+    ``normalize_stored_positions`` now does on write and the
+    ``d7a4e9c31b60`` migration did to the rows already stored.
+    """
+
+    @staticmethod
+    def _ambulance_shift():
+        # Exactly what the apparatus default produces once normalized, which is
+        # what SchedulingPage copies into the shift.
+        return SimpleNamespace(
+            id="s1",
+            positions=normalize_stored_positions(["driver", "EMT"]),
+            open_to_all_members=False,
+        )
+
+    async def test_emt_can_take_the_ambulance_ems_seat(self):
+        shift = self._ambulance_shift()
+        db = _db(
+            [
+                _one(_org()),
+                _one(shift),
+                _rank_rows([("emt", ["ems", "firefighter"])]),
+                _held_rows(["emt"]),
+                _rows([]),
+            ]
+        )
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1", "s1"
+        )
+        assert "ems" in eligible
+
+    async def test_the_seat_is_nameable_by_the_signup_api(self):
+        # The other half of the block: even a non-empty eligible set is refused
+        # when the client cannot name the seat, since signup_for_shift compares
+        # ShiftPosition's value against it.
+        seats = {
+            slot["position"] for slot in normalize_stored_positions(["driver", "EMT"])
+        }
+        assert seats <= {p.value for p in ShiftPosition}
+
+    async def test_an_emt_by_rank_rather_than_position_also_fits(self):
+        shift = self._ambulance_shift()
+        db = _db(
+            [
+                _one(_org()),
+                _one(shift),
+                _rank_rows([("emt", ["ems", "firefighter"])]),
+                _held_rows([]),
+                _rows([]),
+            ]
+        )
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank="emt"), "org-1", "s1"
+        )
+        assert "ems" in eligible
