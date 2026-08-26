@@ -18,8 +18,11 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.api.v1.endpoints import skills_testing as endpoint
 from app.api.v1.endpoints.skills_testing import _authorize_test_write
+from app.models.skills_testing import SkillTestStatus
 from app.models.training import RequirementProgressStatus
+from app.schemas.skills_testing import SkillTestVoidRequest
 from app.services.skills_testing_service import revert_test_pass_from_pipeline
 from app.services.training_program_service import TrainingProgramService
 
@@ -231,3 +234,36 @@ class TestAuthorizeTestWrite:
                 self._test("examiner-1", "cand-1", True), self._user("stranger", [])
             )
         assert exc.value.status_code == 403
+
+
+def _scalar(value):
+    r = MagicMock()
+    r.scalar_one_or_none.return_value = value
+    return r
+
+
+class TestVoidSelfDealingGuard:
+    """Same self-dealing risk validate_test blocks (CS-8): an officer-candidate
+    could otherwise void their own unfavorable result and walk it out of the
+    pass-rate/average-score totals themselves."""
+
+    async def test_an_officer_may_not_void_their_own_test(self):
+        officer_id = uuid4()
+        current_user = SimpleNamespace(id=officer_id, organization_id=uuid4())
+        test = SimpleNamespace(
+            candidate_id=str(officer_id),
+            is_practice=False,
+            status=SkillTestStatus.COMPLETED.value,
+        )
+        session = MagicMock()
+        session.execute = AsyncMock(return_value=_scalar(test))
+
+        with pytest.raises(HTTPException) as exc:
+            await endpoint.void_test(
+                test_id=uuid4(),
+                void_data=SkillTestVoidRequest(reason="Officer trying to self-void"),
+                db=session,
+                current_user=current_user,
+            )
+        assert exc.value.status_code == 400
+        assert "cannot void your own" in exc.value.detail.lower()

@@ -573,6 +573,44 @@ class AttemptLimitReached(Exception):
     """Raised when a candidate has used every attempt a requirement allows."""
 
 
+async def lock_attempt_capacity(db: AsyncSession, requirement_id: str):
+    """Acquire the attempt-cap serialization lock for a requirement.
+
+    Locks the ``TrainingRequirement`` row itself — the one row guaranteed to
+    exist for every requirement_id that reaches ``assert_attempts_remaining``,
+    unlike a candidate's ``RequirementProgress`` row (see that function's own
+    docstring). Returns the row (or ``None`` if the id does not resolve) so
+    callers that already need it, like ``assert_attempts_remaining``, do not
+    have to fetch it twice.
+
+    Safe to call more than once for the same requirement within one
+    transaction — re-acquiring a row lock you already hold is a no-op, not a
+    self-deadlock.
+
+    ``validate_test`` calls this *before* ``_lock_test_for_transition`` locks
+    the specific ``SkillTest`` row being validated, and
+    ``assert_attempts_remaining`` calls it again internally (a no-op by the
+    time it runs there). That order matters: without it, two officers
+    validating two different pending tests for the same candidate+requirement
+    could each hold their own test row locked and then deadlock waiting on
+    this lock in the opposite order, because the attempt count's own locking
+    read (below) walks every test row for that candidate+requirement,
+    including whichever one the other transaction is holding (Codex review,
+    PR #1901).
+    """
+    from sqlalchemy import select
+
+    from app.models.training import TrainingRequirement
+
+    return (
+        await db.execute(
+            select(TrainingRequirement)
+            .where(TrainingRequirement.id == str(requirement_id))
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+
 async def assert_attempts_remaining(
     db: AsyncSession,
     candidate_id: str,
@@ -616,16 +654,18 @@ async def assert_attempts_remaining(
         ProgramEnrollment,
         RequirementProgress,
         RequirementProgressStatus,
-        TrainingRequirement,
     )
 
-    requirement = (
-        await db.execute(
-            select(TrainingRequirement).where(
-                TrainingRequirement.id == str(requirement_id)
-            )
-        )
-    ).scalar_one_or_none()
+    # Locks TrainingRequirement.id, not the candidate's RequirementProgress
+    # row: a RequirementProgress row only exists once the candidate has an
+    # active enrollment, which nothing on the link-a-requirement-to-a-test
+    # path requires (Codex review, PR #1901) — locking it would sometimes
+    # lock nothing at all, and two concurrent validations would still both
+    # read "spent" before either commits (Pitfall #27). TrainingRequirement
+    # exists for every requirement_id that reaches this point, because the
+    # link was validated against the organization's own requirements when the
+    # test (or its template) was created.
+    requirement = await lock_attempt_capacity(db, requirement_id)
 
     max_attempts = getattr(requirement, "max_attempts", None) if requirement else None
     if not max_attempts:
@@ -657,9 +697,14 @@ async def assert_attempts_remaining(
     if satisfied:
         return
 
+    # A locking read, not a plain SELECT: under REPEATABLE READ, acquiring the
+    # TrainingRequirement lock above does not by itself refresh this
+    # transaction's snapshot, so a plain count here could still answer with
+    # the count from before the other transaction committed (Pitfall #27).
     spent = (
         await db.execute(
-            select(func.count(SkillTest.id)).where(
+            select(func.count(SkillTest.id))
+            .where(
                 SkillTest.organization_id == str(organization_id),
                 SkillTest.candidate_id == str(candidate_id),
                 SkillTest.requirement_id == str(requirement_id),
@@ -667,6 +712,7 @@ async def assert_attempts_remaining(
                 SkillTest.status == SkillTestStatus.COMPLETED.value,
                 SkillTest.validated_at.isnot(None),
             )
+            .with_for_update(of=SkillTest)
         )
     ).scalar() or 0
 

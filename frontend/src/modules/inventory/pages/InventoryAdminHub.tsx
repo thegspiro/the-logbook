@@ -41,7 +41,7 @@ import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import type {
@@ -68,12 +68,17 @@ interface AttentionRow {
   href: string;
 }
 
-const dateLabel = (value: string | undefined, fallback: string, timezone?: string) => {
+// `dateOnly` fields (next_inspection_due, expected_delivery_date) come from
+// the backend as calendar dates ("YYYY-MM-DD"), not instants -- formatDate's
+// tz-aware Intl formatting would parse that as UTC midnight and then render
+// it a day early west of UTC. formatCalendarDate anchors and renders in UTC
+// so the date on screen matches the string, for every viewer.
+const dateLabel = (value: string | undefined, fallback: string, tz: string, dateOnly = false) => {
   if (!value) return fallback;
   const date = new Date(value);
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
-  const due = formatDate(date, timezone);
-  return days > 0 ? `${days}d overdue · due ${due}` : `Due ${due}`;
+  const formatted = dateOnly ? formatCalendarDate(value) : formatDate(date, tz);
+  return days > 0 ? `${days}d overdue · due ${formatted}` : `Due ${formatted}`;
 };
 
 const NeedsAttention: React.FC<{
@@ -231,7 +236,6 @@ const TABS: AdminHubTab<AdminTab>[] = [
 ];
 
 export const InventoryAdminHub: React.FC = () => {
-  const tz = useTimezone();
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
   const { isModuleOn } = useEnabledModules();
@@ -241,6 +245,7 @@ export const InventoryAdminHub: React.FC = () => {
   // set up that members could never see, since their side nav reads the same
   // module flag this card was ignoring.
   const canOpenStore = isModuleOn('storefront') && checkPermission('storefront.manage');
+  const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
@@ -312,7 +317,7 @@ export const InventoryAdminHub: React.FC = () => {
         key: `maintenance-${item.id}`,
         subject: 'Maintenance due or overdue',
         party: item.name,
-        when: dateLabel(item.next_inspection_due, 'Due now', tz),
+        when: dateLabel(item.next_inspection_due, 'Due now', tz, true),
         severity:
           item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now
             ? ('Critical' as const)
@@ -339,7 +344,7 @@ export const InventoryAdminHub: React.FC = () => {
           key: `delivery-${delivery.id}`,
           subject: 'Overdue purchase delivery',
           party: delivery.item_name,
-          when: dateLabel(delivery.expected_delivery_date, 'Overdue', tz),
+          when: dateLabel(delivery.expected_delivery_date, 'Overdue', tz, true),
           severity: 'High' as const,
           rank: 1,
           action: 'Receive',
@@ -350,11 +355,8 @@ export const InventoryAdminHub: React.FC = () => {
         subject: 'Pending gear request',
         party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
         when: dateLabel(request.created_at, 'Awaiting review', tz),
-        // RequestPriority tops out at "high" (low/normal/high); the earlier
-        // "urgent" comparison matched a value the backend cannot emit, so a
-        // top-priority gear request never got escalated in this queue.
-        severity: request.priority === 'high' ? ('High' as const) : ('Medium' as const),
-        rank: request.priority === 'high' ? 2 : 4,
+        severity: request.priority === 'urgent' ? ('High' as const) : ('Medium' as const),
+        rank: request.priority === 'urgent' ? 2 : 4,
         action: 'Review',
         href: `/inventory/admin/requests?request=${request.id}`,
       })),
