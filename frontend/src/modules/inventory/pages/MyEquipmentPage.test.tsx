@@ -200,7 +200,13 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  it('submits an equipment request after searching and selecting an item', async () => {
+  // This branch replaces the request-type picker with a duration picker: the
+  // member states how long they need the item and the quartermaster decides
+  // how to fulfill it. #1876's parameterized request-type test goes with the
+  // control it exercised — there is no request-type combobox on this form any
+  // more — but its "no priority combobox" assertion is carried into the first
+  // test below so #1875's removal still cannot be silently undone.
+  it('submits a temporary duration intent after searching and selecting an item', async () => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);

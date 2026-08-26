@@ -947,6 +947,10 @@ export interface StorageAreaCreate {
   sort_order?: number | null | undefined;
 }
 
+/** Values accepted by the backend's inventory EquipmentRequestCreate schema. */
+export type RequestTypeLiteral = 'checkout' | 'issuance' | 'purchase' | 'return';
+export type RequestPriorityLiteral = 'low' | 'normal' | 'high';
+
 export interface EquipmentRequestItem {
   id: string;
   requester_id: string;
@@ -955,9 +959,9 @@ export interface EquipmentRequestItem {
   item_id?: string;
   category_id?: string;
   quantity: number;
-  request_type: string;
+  request_type: RequestTypeLiteral;
   requested_duration: 'temporary' | 'ongoing';
-  priority: string;
+  priority: RequestPriorityLiteral;
   reason?: string;
   status: string;
   reviewed_by?: string;
@@ -1538,6 +1542,27 @@ export interface DistributeItemsResultItem {
   action: string;
   success: boolean;
   error?: string;
+  conflict?: InventoryHoldingConflict;
+}
+
+export interface InventoryHoldingConflict {
+  holder_id: string;
+  holder_name: string;
+  holding_type: 'assignment' | 'checkout';
+  record_id: string;
+  held_since: string;
+  expected_return_date?: string;
+}
+
+export interface InventoryTransferRequest {
+  item_id: string;
+  new_holder_id: string;
+  current_holder_id: string;
+  current_record_id: string;
+  holding_type: 'assignment' | 'checkout';
+  return_condition: string;
+  transfer_reason: string;
+  immediate: boolean;
 }
 
 export interface DistributeItemsResponse {

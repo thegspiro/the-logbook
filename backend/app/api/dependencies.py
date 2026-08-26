@@ -105,6 +105,23 @@ async def get_current_user(
     1. HttpOnly ``access_token`` cookie (preferred — immune to XSS).
     2. ``Authorization: Bearer <token>`` header (API / non-browser clients).
     """
+    # Resolved at most once per request. FastAPI's dependency cache dedupes
+    # `Depends(get_current_user)` against itself, but not against the plain
+    # call inside `get_optional_current_user` — and `require_module` hangs off
+    # the optional one so that public token routes inside gated routers still
+    # answer. Without this, every authenticated request to a gated router ran
+    # the session lookup, the user/role query, the activity-timestamp flush
+    # and sometimes the MFA organization query twice before the handler began.
+    #
+    # Keyed on nothing because it needs no key: the credentials are fixed for
+    # the life of a request, so the second resolution can only reach the same
+    # user. Cached on `request.state` rather than in a module-level dict for
+    # the reason CLAUDE.md pitfall 9 gives — a process-lifetime cache of user
+    # objects is an unbounded one.
+    cached_user = getattr(request.state, "authenticated_user", None)
+    if cached_user is not None:
+        return cached_user
+
     # Two curated codes for the same 401: "no credentials at all" and
     # "credentials present but rejected" send IT down different paths
     # (cookie/browser problems vs expired or revoked sessions).
@@ -192,6 +209,9 @@ async def get_current_user(
                     headers={"X-MFA-Enrollment-Required": "true"},
                 )
 
+    # Cached only here, past every rejection above, so a refusal is never
+    # short-circuited into an approval on the second resolution.
+    request.state.authenticated_user = user
     return user
 
 
