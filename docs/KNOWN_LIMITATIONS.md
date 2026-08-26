@@ -2071,24 +2071,6 @@ Not fixed for the same reason as the entries above and below: pagination is a
 response-envelope/frontend-contract change, not a drop-in. (Security review
 DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
 
-## Documents — No Authorized Way To Retrieve An Uploaded File's Bytes (2026-08-25)
-
-`DocumentResponse` deliberately excludes `file_path`, and no
-`/documents/{id}/download` (or equivalent) endpoint exists anywhere in the
-backend — nor does the Documents frontend page ever request a document's
-bytes. A member with `documents.manage` can upload a file and later delete
-it, but nothing in the application can open or download what was uploaded.
-This is a missing-feature gap, not an access-control defect in what exists:
-`get_document`'s by-id read (which does enforce the folder ACL correctly) was
-previously mischaracterized as "a direct content read," which assumed a
-download path existed to be sound or unsound.
-
-Needs an owner decision on scope and approach: a correctly-ACL-checked
-download endpoint reusing `can_access_document`'s folder-ACL logic, a choice
-between streaming the file or a signed-URL redirect, and the corresponding
-frontend affordance are a real feature addition, not a small fix. (Security
-review DOC-18, `docs/security-review/DOC-10-documents-legal.md`.)
-
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

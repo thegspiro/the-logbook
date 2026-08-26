@@ -1,6 +1,6 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-25 · **PR:** #1821 (original), fixes landed in #1826 (follow-up — see revision note)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 · **PR:** #1821 (original), fixes landed in #1826 (follow-up, survivor of a two-PR consolidation with #1827 — see revision notes)
 
 **Backend:** `endpoints/documents.py` (462 L, 11 routes), `services/documents_service.py` (998 L), `endpoints/station_documents.py` (102 L, 2 routes, new to this rotation), `services/print_document_service.py` (515 L, new), `endpoints/legal_documents.py` (340 L, 6 routes, new), `services/legal_service.py` (241 L, new), `schemas/legal.py`, `schemas/documents.py`, `models/document.py`, `models/legal.py`
 **Frontend:** `pages/legal/LegalPage.tsx` (public consumption path, read for XSS — see Verified good), `modules/governance/pages/LegalDocumentsPage.tsx` (not read in full — backend-only pass)
@@ -90,27 +90,28 @@ anonymous `GET /api/public/v1/legal` endpoint, which is out of scope here and
 carries no `/v1` segment inside its own prefix by coincidence of naming, not
 because the two share a boundary).
 
-| Method | Path                                               | Permission                                                                   | Org-scoped                                |
-| ------ | -------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
-| GET    | /documents/folders                                 | documents.view                                                               | yes                                       |
-| POST   | /documents/folders                                 | documents.manage                                                             | yes (+FK validation, DOC-6)               |
-| PATCH  | /documents/folders/{folder_id}                     | documents.manage                                                             | yes (+FK validation DOC-6, +cycle DOC-16) |
-| DELETE | /documents/folders/{folder_id}                     | documents.manage                                                             | yes                                       |
-| GET    | /documents                                         | documents.view                                                               | yes                                       |
-| POST   | /documents/upload                                  | documents.manage                                                             | yes (+folder-ACL check)                   |
-| GET    | /documents/my-folder                               | documents.view                                                               | yes (self-scoped)                         |
-| GET    | /documents/{document_id}                           | documents.view                                                               | yes (+folder-ACL check)                   |
-| PATCH  | /documents/{document_id}                           | documents.manage                                                             | yes (+FK validation, DOC-6)               |
-| DELETE | /documents/{document_id}                           | documents.manage                                                             | yes                                       |
-| GET    | /documents/stats/summary                           | documents.view                                                               | yes (DOC-4: ignores folder ACL)           |
-| POST   | /station-documents/preview                         | any permission the requested `document` accepts (see note)                   | yes                                       |
-| POST   | /station-documents/print                           | same                                                                         | yes                                       |
-| GET    | /legal-documents                                   | legal.propose / legal.publish / settings.manage                              | yes                                       |
-| POST   | /legal-documents/revisions                         | legal.propose / legal.publish / settings.manage                              | yes                                       |
-| PUT    | /legal-documents/revisions/{revision_id}           | legal.propose / legal.publish / settings.manage (+own-draft check, see note) | yes                                       |
-| DELETE | /legal-documents/revisions/{revision_id}           | legal.propose / legal.publish / settings.manage (+own-draft check)           | yes                                       |
-| POST   | /legal-documents/revisions/{revision_id}/publish   | legal.publish / settings.manage                                              | yes (+row lock, DOC-15)                   |
-| POST   | /legal-documents/{document_type}/revert-to-default | legal.publish / settings.manage                                              | yes (+row lock, DOC-15)                   |
+| Method | Path                                               | Permission                                                                   | Org-scoped                                        |
+| ------ | -------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| GET    | /documents/folders                                 | documents.view                                                               | yes                                               |
+| POST   | /documents/folders                                 | documents.manage                                                             | yes (+FK validation, DOC-6)                       |
+| PATCH  | /documents/folders/{folder_id}                     | documents.manage                                                             | yes (+FK validation DOC-6, +cycle DOC-16)         |
+| DELETE | /documents/folders/{folder_id}                     | documents.manage                                                             | yes                                               |
+| GET    | /documents                                         | documents.view                                                               | yes                                               |
+| POST   | /documents/upload                                  | documents.manage                                                             | yes (+folder-ACL check)                           |
+| GET    | /documents/my-folder                               | documents.view                                                               | yes (self-scoped)                                 |
+| GET    | /documents/{document_id}                           | documents.view                                                               | yes (+folder-ACL check)                           |
+| GET    | /documents/{document_id}/download                  | documents.view                                                               | yes (+folder-ACL check, +path containment DOC-24) |
+| PATCH  | /documents/{document_id}                           | documents.manage                                                             | yes (+FK validation, DOC-6)                       |
+| DELETE | /documents/{document_id}                           | documents.manage                                                             | yes                                               |
+| GET    | /documents/stats/summary                           | documents.view                                                               | yes (DOC-4: ignores folder ACL)                   |
+| POST   | /station-documents/preview                         | any permission the requested `document` accepts (see note)                   | yes                                               |
+| POST   | /station-documents/print                           | same                                                                         | yes                                               |
+| GET    | /legal-documents                                   | legal.propose / legal.publish / settings.manage                              | yes                                               |
+| POST   | /legal-documents/revisions                         | legal.propose / legal.publish / settings.manage                              | yes                                               |
+| PUT    | /legal-documents/revisions/{revision_id}           | legal.propose / legal.publish / settings.manage (+own-draft check, see note) | yes                                               |
+| DELETE | /legal-documents/revisions/{revision_id}           | legal.propose / legal.publish / settings.manage (+own-draft check)           | yes                                               |
+| POST   | /legal-documents/revisions/{revision_id}/publish   | legal.publish / settings.manage                                              | yes (+row lock, DOC-15)                           |
+| POST   | /legal-documents/{document_type}/revert-to-default | legal.publish / settings.manage                                              | yes (+row lock, DOC-15)                           |
 
 **Note on `/station-documents/{preview,print}`:** no `require_permission`
 dependency — the permission set is a function of the request body's
@@ -518,28 +519,150 @@ with the separate anonymous `GET /api/public/v1/legal` endpoint (already
 reviewed under feature 03), which shares no code path with it. No code
 change; the table above now shows the corrected paths.
 
-### DOC-18 — P1 — No authorized path exists to retrieve an uploaded document's bytes — 🚩 flagged, not fixed
+### DOC-18 — P1 — No authorized path exists to retrieve an uploaded document's bytes — ✅ FIXED
 
 `DocumentResponse` deliberately excludes `file_path`, and a repo-wide search
-of `endpoints/`, `services/`, and the Documents frontend page turns up no
+of `endpoints/`, `services/`, and the Documents frontend page turned up no
 `/documents/{id}/download` or any other file-serving route — and the
-frontend's document cards never request the bytes either. A member with
-`documents.manage` can upload a file and later delete it, but nothing in
-the application can ever open or download what was uploaded. The previous
-version of this file characterized `get_document` as "a direct content
-read" and described the surface as "sound" against injection/exposure
-dimensions; that framing assumed a download path existed to be sound or
-unsound. It does not exist, so there is nothing to secure yet — this is a
-missing-feature gap, not an access-control defect in what's there.
+frontend's document cards never requested the bytes either. A member with
+`documents.manage` could upload a file and later delete it, but nothing in
+the application could ever open or download what was uploaded. The version
+of this file before this round characterized `get_document` as "a direct
+content read" and described the surface as "sound" against
+injection/exposure dimensions; that framing assumed a download path existed
+to be sound or unsound. It did not exist, so there was nothing to secure —
+this was a missing-feature gap, not an access-control defect in what
+existed.
 
-Not implemented in this pass: a correctly-ACL-checked download endpoint
-(reusing `can_access_document`'s folder-ACL logic) plus the frontend
-affordance to call it is a real feature addition — new route, new
-permission-check surface, a decision about whether to stream the file or
-redirect to a signed URL, and UI work — not a small, verifiable fix in the
-spirit of this rotation's "fix what's safe and small" rule. Flagged for an
-owner decision on scope and approach, same treatment as the existing
-DOC-4/DOC-5 flagged items. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+**Fixed in this round** (ported from a competing PR, #1827, that implemented
+this independently — see the revision note below): `GET
+/documents/{document_id}/download` in `documents.py`, using the exact same
+by-id fetch and `can_access_document` folder-ACL check as `GET
+/{document_id}`, so a caller who cannot see a document cannot download it
+either (a restricted document 404s, matching the existing "don't confirm
+existence" behavior). The frontend gained a Download action wherever a
+document is listed, plus the "All Documents" and has-file-aware gating
+covered under DOC-22/DOC-23 below.
+
+Recorded here rather than reopening `docs/KNOWN_LIMITATIONS.md`'s note,
+which is removed as part of this fix.
+
+---
+
+**Round-3 addendum (2026-08-26):** Two competing PRs both fixed DOC-10
+through DOC-17 independently. #1827 additionally implemented DOC-18 (this
+finding) and had it Codex-reviewed on its own, which found five further
+issues plus flagged the two round-2 regressions (DOC-19/DOC-20) again since
+#1827's branch had diverged from this one before those landed. This PR
+(#1826) was chosen as the survivor — more complete regression coverage, a
+green full-suite run recorded at every round — and DOC-18's download
+endpoint, ACL check, and frontend affordance were ported onto it here, with
+all five new findings fixed before landing (never porting a half-reviewed
+feature). #1827 is closed as superseded. Findings below are numbered DOC-22
+through DOC-26, continuing this file's own sequence rather than reusing
+#1827's (which collided with this file's DOC-19-21 for unrelated issues).
+
+### DOC-22 — P1 — A folderless document was unreachable in the UI once uploaded — ✅ FIXED
+
+DOC-11's fix made the upload form's "Folder" field actually optional at the
+API layer (previously the frontend always sent a folder, even a fake
+`"general"` placeholder value) — but `DocumentsPage.tsx` only ever fetched
+documents while a real folder was selected, so a genuinely folderless
+upload became invisible immediately after creation. A member could upload a
+document, see the success state, and then never find it again through this
+page — worse than the pre-fix state, where at least every document ended up
+somewhere folder-shaped.
+
+Fixed by adding an "All Documents" pseudo-folder (`DocumentsPage.tsx`) that
+lists every document the caller can see, folderless ones included: selecting
+it calls `getDocuments({})` (no `folder_id` filter) rather than
+`getDocuments({ folder_id })`. The upload form's folder select also gained
+an explicit "No folder" option so choosing no folder is a deliberate action,
+not merely leaving a field blank.
+
+### DOC-23 — P2 — The Download action was offered on documents that could never succeed — ✅ FIXED
+
+A generated document (published meeting minutes, a property return) is
+stored with `content_html` and no `file_path` at all — by design, it has no
+separate file on disk. Rendering a Download button unconditionally on every
+row would have shown one on these too, guaranteed to 404 the moment it was
+clicked, with no indication beforehand that it would fail.
+
+Fixed by adding `Document.has_file` (`models/document.py`), a `bool(
+self.file_path)` property exposed on `DocumentResponse` and
+`DocumentRecord`, and gating the frontend's Download button on it. The
+download endpoint's own `if not document.file_path: raise HTTPException(404,
+...)` stays as defence-in-depth — `has_file` only controls whether the
+button renders, never access.
+
+### DOC-24 — P1 (security) — Download's path-containment check was scoped to the shared root, not the caller's own org directory — ✅ FIXED
+
+`upload_document` writes every file under `UPLOAD_DIR/<organization_id>` —
+every organization gets its own subdirectory under one shared root. A
+containment check that only confirmed the resolved path stayed inside
+`UPLOAD_DIR` (the root) would still accept a `file_path` value pointing at
+_another org's_ subdirectory: `UPLOAD_DIR/org-b/theirs.pdf` passes a
+root-level check just as easily as `UPLOAD_DIR/org-a/mine.pdf` does. Since
+`Document.file_path` is plain unvalidated text with no application code
+path that would ever legitimately write a cross-org value into it, this is
+defence-in-depth rather than an exploitable path today — but a corrupted
+row, a future bulk-import script, or a bug elsewhere that ever let
+`file_path` be influenced would have served the wrong organization's file
+with no additional check catching it. Treated with the rigor this rotation
+gives tenant-isolation findings (CLAUDE.md Pitfall #14 shape), since the
+consequence — one org's document served to another — is the same shape as
+those.
+
+Fixed in `download_document` (`documents.py`): the allowed base is
+`os.path.realpath(os.path.join(UPLOAD_DIR, str(current_user.organization_id)))`,
+not `os.path.realpath(UPLOAD_DIR)`. A resolved path that doesn't fall inside
+the caller's own org subdirectory is rejected with 403, logged as a path
+traversal attempt.
+
+Covered by `tests/test_documents_access.py::TestDownloadDocument::test_path_inside_another_orgs_upload_directory_is_rejected`
+(a `file_path` pointing at a different, real org's own subdirectory) and
+`::test_path_outside_upload_dir_is_rejected` (a `file_path` outside
+`UPLOAD_DIR` entirely).
+
+### DOC-25 — P2 — Removing `lastUpdated` from the public legal endpoint broke a documented response field — ✅ FIXED
+
+DOC-10 replaced the public legal endpoint's single shared `lastUpdated`
+field with `privacyPolicyLastUpdated` / `termsOfServiceLastUpdated`, which is
+the right shape going forward (one shared date across two independent
+documents was finding #3 of this file). But `wiki/API-Reference.md` — the
+in-repository reference for `GET /api/public/v1/legal` — documents the
+response as `{ organizationName, privacyPolicy, termsOfService, lastUpdated
+}`. An external v1 client built against that documented shape, whether
+reading the field or strictly decoding the response, loses or breaks on a
+field the docs say exists.
+
+This is pre-1.0 internal tooling for department deployments rather than a
+platform with a versioned external developer ecosystem, and there is no
+evidence in the repo of an actual deprecation policy or versioned-contract
+promise beyond this one wiki page — but the wiki page is itself evidence
+that the shape was documented as a contract, which is enough to fix rather
+than merely flag.
+
+Fixed by keeping `lastUpdated` in the response (`api/public/legal.py`),
+deprecated, aliased to whichever per-document date is set (privacy
+policy preferred) — the same ambiguity the original shared key always had,
+not a new one. No migration or frontend change: the org's own `LegalPage.tsx`
+already reads the per-type fields and never looks at `lastUpdated`.
+
+### DOC-26 — P3 — No audit log entry for a document download — ✅ FIXED
+
+`SECURITY.md` calls for audit coverage of sensitive data access, and
+`document_uploaded` / `document_deleted` events already exist for the other
+document lifecycle actions — but the new download endpoint had no
+corresponding entry, so there was no record of who retrieved a given
+document's contents.
+
+Fixed by adding a `document_downloaded` audit event (`documents.py`,
+`log_audit_event`, `severity="info"`, matching `document_uploaded`) on a
+successful download, recording the document id, actor, and organization
+(the last two resolved by `log_audit_event` from `current_user` the same
+way every other call site in this file does) — not the filesystem path,
+per the finding's own guidance.
 
 ---
 
@@ -702,18 +825,49 @@ backend tests total this pass, all passing.
 passing; full `pytest tests/` — 8156 passed, 22 skipped (pre-existing Docker
 skips, daemon unavailable in this environment), 0 failed.
 
+**Round-3 additions (2026-08-26, DOC-18 port + DOC-22 through DOC-26):**
+
+- `tests/test_documents_access.py::TestDownloadDocument` — new class, 6
+  cases (integration, against a real database and a real `tmp_path`
+  filesystem, matching `upload_document`'s own `UPLOAD_DIR/<org_id>` save
+  convention): accessible document downloads, a leadership-restricted
+  document 404s rather than 403 (matches `get_document`), a generated
+  document with no `file_path` 404s (DOC-23), a missing file on disk 404s,
+  a `file_path` outside `UPLOAD_DIR` entirely is rejected 403, and —
+  DOC-24's guard test specifically — a `file_path` inside a _different,
+  real_ organization's own upload subdirectory is rejected 403.
+- `tests/test_public_legal.py::TestGetLegalText` — extended every existing
+  case with a `lastUpdated` assertion (DOC-25): present as the deprecated
+  back-compat alias when a per-type or legacy date exists, `None` when
+  neither does, and continuing to prefer the privacy policy's date when
+  both are set.
+- `frontend/src/services/documentsService.test.ts` — 2 new cases for
+  `downloadDocument` (blob response, error propagation).
+- `frontend/src/pages/DocumentsPage.test.tsx` — new file, 3 cases: a
+  folderless document is reachable via "All Documents" (DOC-22), the
+  Download action is hidden on a `has_file: false` document and shown on a
+  real one (DOC-23), and clicking Download calls the service with the
+  document id.
+
+`tests/test_documents_access.py`, `tests/test_legal_documents.py`,
+`tests/test_print_documents.py`, `tests/test_changelog_fixes.py`,
+`tests/test_public_legal.py` — 177 backend tests total this round, all
+passing; full `pytest tests/` — 8162 passed, 22 skipped (pre-existing Docker
+skips, daemon unavailable in this environment), 0 failed.
+
 ## Completion gate
 
-| Check                                                                                                                                                        | Result                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| `flake8`                                                                                                                                                     | pass (`app/`, `tests/`, `alembic/`)           |
-| `black --check`                                                                                                                                              | pass                                          |
-| `isort --check-only`                                                                                                                                         | pass                                          |
-| `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (358 migrations, single head)            |
-| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_changelog_fixes.py tests/test_public_legal.py` | 171 passed                                    |
-| `pytest tests/` (full backend suite)                                                                                                                         | 8156 passed, 22 skipped, 0 failed             |
-| `npx tsc --noEmit` (frontend)                                                                                                                                | not run this round — no frontend file changed |
-| `npx eslint .` (frontend)                                                                                                                                    | not run this round — no frontend file changed |
+| Check                                                                                                                                                        | Result                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8`                                                                                                                                                     | pass (`app/`, `tests/`, `alembic/`)                                                                                                                                                                                                                                       |
+| `black --check`                                                                                                                                              | pass                                                                                                                                                                                                                                                                      |
+| `isort --check-only`                                                                                                                                         | pass                                                                                                                                                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (358 migrations, single head)                                                                                                                                                                                                                                        |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_changelog_fixes.py tests/test_public_legal.py` | 177 passed                                                                                                                                                                                                                                                                |
+| `pytest tests/` (full backend suite)                                                                                                                         | 8162 passed, 22 skipped, 0 failed                                                                                                                                                                                                                                         |
+| `npx tsc --noEmit` (frontend)                                                                                                                                | pass                                                                                                                                                                                                                                                                      |
+| `npx eslint .` (frontend)                                                                                                                                    | pass (0 errors, 1 pre-existing warning in `MyTrainingPage.tsx`, unrelated to this feature and untouched)                                                                                                                                                                  |
+| `npx vitest run` (frontend, full suite)                                                                                                                      | 5138 passed (incl. 5 new), 27 pre-existing failures in `shiftBoard.test.ts`/`ShiftSeatList.test.tsx` (scheduling module, confirmed failing on this branch _before_ this round's changes via `git stash`) — out of scope for this consolidation, flagged rather than fixed |
 
 ## Next
 

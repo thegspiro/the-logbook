@@ -32,6 +32,7 @@ class TestGetLegalText:
             "termsOfService": None,
             "privacyPolicyLastUpdated": None,
             "termsOfServiceLastUpdated": None,
+            "lastUpdated": None,
         }
 
     async def test_single_org_without_custom_text(self, db_session):
@@ -42,6 +43,7 @@ class TestGetLegalText:
         assert result["termsOfService"] is None
         assert result["privacyPolicyLastUpdated"] is None
         assert result["termsOfServiceLastUpdated"] is None
+        assert result["lastUpdated"] is None
 
     async def test_single_org_with_custom_text_and_per_type_dates(self, db_session):
         await _make_org(
@@ -62,6 +64,10 @@ class TestGetLegalText:
         # misdates the other (DOC-10 finding #3).
         assert result["privacyPolicyLastUpdated"] == "March 3, 2026"
         assert result["termsOfServiceLastUpdated"] == "Jan 1, 2026"
+        # Deprecated back-compat field for external v1 clients (DOC-25):
+        # prefers the privacy policy's date, same ambiguity the original
+        # shared key always had.
+        assert result["lastUpdated"] == "March 3, 2026"
 
     async def test_legacy_shared_date_falls_back_for_both_types(self, db_session):
         # An install that published under the pre-DOC-10 shared key, and
@@ -80,6 +86,7 @@ class TestGetLegalText:
         result = await get_legal_text(request=None, db=db_session, _=None)
         assert result["privacyPolicyLastUpdated"] == "March 3, 2026"
         assert result["termsOfServiceLastUpdated"] == "March 3, 2026"
+        assert result["lastUpdated"] == "March 3, 2026"
 
     async def test_republishing_one_document_stops_its_legacy_fallback(
         self, db_session
@@ -103,6 +110,8 @@ class TestGetLegalText:
         result = await get_legal_text(request=None, db=db_session, _=None)
         assert result["privacyPolicyLastUpdated"] is None
         assert result["termsOfServiceLastUpdated"] == "Jan 1, 2026"
+        # Back-compat field falls through to whichever document has a date.
+        assert result["lastUpdated"] == "Jan 1, 2026"
 
     async def test_multiple_orgs_returns_defaults(self, db_session):
         # Anonymous endpoint has no org context on a multi-tenant install:
@@ -116,6 +125,7 @@ class TestGetLegalText:
             "termsOfService": None,
             "privacyPolicyLastUpdated": None,
             "termsOfServiceLastUpdated": None,
+            "lastUpdated": None,
         }
 
     async def test_blank_and_whitespace_text_falls_back_to_defaults(self, db_session):
