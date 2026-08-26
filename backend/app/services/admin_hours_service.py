@@ -1436,27 +1436,40 @@ class AdminHoursService:
             raise ValueError("Mapping not found")
 
         if percentage is not None:
-            # Validate new total won't exceed 100. A locking read for the
-            # same reason as create_event_hour_mapping (Pitfall #27).
-            existing_query = (
-                select(func.coalesce(func.sum(EventHourMapping.percentage), 0))
-                .where(
-                    EventHourMapping.organization_id == organization_id,
-                    EventHourMapping.is_active.is_(True),
-                    EventHourMapping.id != mapping_id,
-                )
-                .with_for_update(of=EventHourMapping)
+            # Lock the complete set of mappings for this source — including
+            # the target row itself — in one query, ordered consistently by
+            # id, before reading or writing any of them. Locking only the
+            # *other* mappings (excluding the target, as an earlier version
+            # of this fix did) lets two concurrent updates for two different
+            # mappings under the same source each lock the row the other is
+            # about to write to, then each block writing their own row at
+            # flush — a lock-order inversion InnoDB resolves by killing one
+            # side as a deadlock (Codex review, PR #1903). Locking the same
+            # full set in the same order on every call means the second
+            # transaction to reach it simply queues behind the first, rather
+            # than each holding what the other needs.
+            source_query = select(EventHourMapping).where(
+                EventHourMapping.organization_id == organization_id,
             )
             if mapping.event_type:
-                existing_query = existing_query.where(
+                source_query = source_query.where(
                     EventHourMapping.event_type == mapping.event_type
                 )
             else:
-                existing_query = existing_query.where(
+                source_query = source_query.where(
                     EventHourMapping.custom_category == mapping.custom_category
                 )
-            result = await self.db.execute(existing_query)
-            other_total = result.scalar() or 0
+            source_query = source_query.order_by(EventHourMapping.id).with_for_update(
+                of=EventHourMapping
+            )
+            source_result = await self.db.execute(source_query)
+            source_mappings = source_result.scalars().all()
+
+            other_total = sum(
+                m.percentage
+                for m in source_mappings
+                if m.id != mapping_id and m.is_active
+            )
             if other_total + percentage > 100:
                 raise ValueError(
                     f"Total percentage would be {other_total + percentage}%. "

@@ -642,11 +642,16 @@ class TestEventHourMappingPercentageLocking:
         )
         captured = []
 
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
         async def execute(stmt, *_a, **_kw):
             captured.append(stmt)
             if len(captured) == 1:
                 return _one(mapping)  # mapping fetch
-            return MagicMock(scalar=MagicMock(return_value=0))
+            return _scalars([mapping])  # locked source set
 
         db = MagicMock()
         db.execute = execute
@@ -658,6 +663,48 @@ class TestEventHourMappingPercentageLocking:
         )
 
         assert "FOR UPDATE" in str(captured[-1])
+
+    async def test_locked_set_includes_the_target_row_itself(self):
+        """Codex review (PR #1903): locking only the *other* mappings
+        (excluding the target) let two concurrent updates for two different
+        mappings under the same source each lock the row the other was
+        about to write to, then deadlock at flush. The target must be part
+        of the same locked set, not excluded from it."""
+        mapping = SimpleNamespace(
+            id="map-1",
+            organization_id="org-1",
+            event_type="drill",
+            custom_category=None,
+            percentage=50,
+            is_active=True,
+        )
+        captured = []
+
+        def _scalars(items):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = items
+            return r
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(mapping)
+            return _scalars([mapping])
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await AdminHoursService(db).update_event_hour_mapping(
+            mapping_id="map-1", organization_id="org-1", percentage=60
+        )
+
+        locking_query = captured[-1]
+        assert "map-1" not in str(
+            locking_query.compile(compile_kwargs={"literal_binds": True})
+        ), "the target's own id must not be excluded from the locked set"
+        assert "ORDER BY" in str(locking_query).upper()
 
 
 class TestUserHoursComplianceOrgScoped:
