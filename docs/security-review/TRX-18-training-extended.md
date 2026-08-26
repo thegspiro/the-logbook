@@ -1,6 +1,6 @@
 # Security Review 18 — Training Extended
 
-**Prefix:** `TRX` · **Iteration:** 18 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `TRX` · **Iteration:** 18 · **Reviewed:** 2026-08-26 · **PR:** [#1873](https://github.com/thegspiro/the-logbook/pull/1873)
 
 **Backend:** `api/v1/endpoints/training_submissions.py` (730 L),
 `api/v1/endpoints/training_waivers.py` (238 L),

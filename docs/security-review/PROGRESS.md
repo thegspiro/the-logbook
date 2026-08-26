@@ -16,8 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1851 (feature 17, training core) merged. Next iteration starts
-feature 18 (training extended).
+| Field       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR          | [#1873](https://github.com/thegspiro/the-logbook/pull/1873)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Branch      | `claude/security-review-training-extended`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Feature     | 18 Training extended                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| CI          | pending — just opened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Threads     | none yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Last tended | 2026-08-26 — opened. Read all twelve in-scope files in full across four parallel reads (training_submissions.py, training_waivers.py, training_enhancements.py, external_training.py, course_cohorts.py, course_syllabus.py + their 6 backing services). `course_cohorts.py`/`course_syllabus.py` had never been read by any prior pass. 10 findings fixed: TRX-1 (HIGH, confirmed live — bulk_enroll_members name leak), TRX-2/5/5b (blind setattr on NOT NULL columns), TRX-3 (effectiveness-evaluations org-wide PII leak, no gate), TRX-4 (cohort-class mutate-before-validate + audit-evasion), TRX-6..10 (6 unvalidated client FK ids). Corrected a stale count in the SCH-10 KNOWN_LIMITATIONS entry (7→8 sites). Full write-up in `docs/security-review/TRX-18-training-extended.md`. Full completion gate green, full 8778-test backend suite. |
 
 ---
 
@@ -63,7 +69,7 @@ data-carrying modules, then the supporting infrastructure.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅ #1846, #1847 |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅ #1848        |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | 🔄              |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳ #1873        |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜              |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜              |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
@@ -606,3 +612,38 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 - **17 Training core ✅ merged** — PR #1851 merged 2026-08-26. No review
   threads (Codex reported it had hit its usage limit for security reviews,
   same as #1835); CI ran clean. Next: 18 training extended.
+- **18 Training extended — PR #1873 opened.** The other half of the
+  training module's module-audit unit: `training_submissions.py`,
+  `training_waivers.py`, `training_enhancements.py`, `external_training.py`,
+  and `course_cohorts.py`/`course_syllabus.py` — the last two never read by
+  any prior audit or review pass at all (~10,000 L across 12 files
+  combined). Read in full across 4 parallel reads, each briefed with the
+  specific prior findings/flagged items for its files so the pass
+  re-verified rather than re-derived. 10 findings, all fixed: **TRX-1
+  (HIGH, confirmed live)** — `bulk_enroll_members`'s prerequisite-gate
+  error strings resolved a foreign org member's real name via an unscoped
+  batch `User` lookup; not caught by the TR-17 pass despite
+  `training_program_service.py` being in that iteration's file list, since
+  this is an error-message path, not a by-id read/update/delete. **TRX-2 /
+  TRX-5 / TRX-5b** — blind `setattr` on NOT NULL columns (external-provider,
+  cohort, syllabus-class updates), routed through `apply_updates`. **TRX-3**
+  — `GET /effectiveness/evaluations` had no permission gate at all and
+  leaked every member's free-text self-evaluations org-wide; confined
+  non-officers to their own submissions, mirroring the file's own
+  `get_member_competencies`/`.../me` split. **TRX-4 (MEDIUM)** — cohort
+  class reschedule/cancel mutated and **committed** before checking the
+  class belonged to the URL's cohort, and cancel's audit-log call sat after
+  that check — a cross-cohort request cancelled a real class with zero
+  audit trail while telling the caller 404; fixed by scoping the fetch to
+  `cohort_id` before any write. **TRX-6 through TRX-10** — six
+  client-supplied FK ids unvalidated in-org (waiver `requirement_ids` —
+  also corrected a stale "not projected" premise, it is projected;
+  submission `category_id`; 5 recertification-pathway FKs; 2
+  multi-agency-exercise FKs; xAPI `source_provider_id`). Verified good, no
+  code change: the cohort-generation transaction's full id chain, and the
+  roster-membership-gated cohort read's org-scoping + PII redaction.
+  Corrected a stale count in the SCH-10 `KNOWN_LIMITATIONS.md` entry
+  (`external_training_service.py`'s own httpx client is an 8th affected
+  site, not among the original 7). Full completion gate green, full
+  8778-test backend suite. See `TRX-18-training-extended.md` for the
+  complete write-up.
