@@ -880,6 +880,31 @@ class TestGetIncompleteRecords:
         assert "hours_completed" in compiled
         assert "course_name" in compiled
 
+    async def test_empty_string_location_is_included_in_the_sql_predicate(self):
+        """Codex review (PR #1902): the Python fallback treats
+        location="" the same as location=None ("not r.location"), so the SQL
+        predicate must too — matching only "location IS NULL" would silently
+        drop a completed record with location="" and no location_id from
+        the results, the opposite of what this endpoint is for."""
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        db = AsyncMock()
+        db.execute = execute
+
+        service = RecordCompletenessService(db)
+        await service.get_incomplete_records("org-1")
+
+        compiled = captured[0].compile(compile_kwargs={"literal_binds": True})
+        rendered = str(compiled)
+        assert "location = ''" in rendered
+        assert "location IS NULL" in rendered
+
     async def test_reports_which_fields_are_missing_per_record(self):
         record = MagicMock()
         record.id = "rec-1"

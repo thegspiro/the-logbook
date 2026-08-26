@@ -585,7 +585,10 @@ class RecordCompletenessService:
             TrainingRecord.instructor.is_(None),
             TrainingRecord.instructor == "",
             and_(
-                TrainingRecord.location.is_(None),
+                or_(
+                    TrainingRecord.location.is_(None),
+                    TrainingRecord.location == "",
+                ),
                 TrainingRecord.location_id.is_(None),
             ),
             TrainingRecord.hours_completed.is_(None),
