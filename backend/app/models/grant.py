@@ -315,9 +315,21 @@ class GrantOpportunity(Base):
         onupdate=func.now(),
     )
 
-    # Relationships
+    # Relationships. No cascade, and passive_deletes=True:
+    # GrantApplication.opportunity_id is ondelete="SET NULL" (an
+    # application is deliberately allowed to outlive the opportunity it
+    # was linked from — "may be a custom/manual entry"). Without
+    # passive_deletes, SQLAlchemy's unit-of-work would try to null out (or,
+    # with the cascade this line used to carry, delete-orphan and actually
+    # delete) every linked application in Python before issuing the
+    # DELETE — an implicit lazy-load of `applications` in an async session
+    # (MissingGreenlet) at best, or, under the old cascade, silently erasing
+    # every linked application's full financial history (budget items,
+    # expenditures, compliance tasks, notes) at worst — the opposite of
+    # what the FK's own ondelete says. passive_deletes=True leaves this
+    # entirely to the DB's own ON DELETE SET NULL.
     applications = relationship(
-        "GrantApplication", back_populates="opportunity", cascade="all, delete-orphan"
+        "GrantApplication", back_populates="opportunity", passive_deletes=True
     )
 
     __table_args__ = (
@@ -398,6 +410,15 @@ class GrantApplication(Base):
     )
     next_report_due = Column(Date, nullable=True)
     final_report_due = Column(Date, nullable=True)
+
+    # Set once `_generate_compliance_tasks` has generated the standard
+    # report/closeout/inventory task set for this application (GF-14) — not
+    # inferable from the tasks table's own contents, since `task_type` on a
+    # manually-created task is fully client-chosen and can collide with the
+    # auto-generated set's types.
+    compliance_tasks_generated = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Assignment
     assigned_to = Column(
