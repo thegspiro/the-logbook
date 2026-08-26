@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.permissions import (
-    DEFAULT_ROLES,
+    default_positions_for,
     get_all_permissions,
     get_rank_default_permissions,
     permission_matches,
@@ -734,22 +734,29 @@ class RoleManagementService:
         db: AsyncSession,
         organization_id: str,
         created_by: str,
+        organization_type: str,
     ) -> List[Role]:
         """
         Initialize default roles for an organization.
 
         Should be called when creating a new organization.
 
+        Nothing calls this today — ``OnboardingService._create_default_roles``
+        is the live path. It takes ``organization_type`` anyway, and requires
+        it, because an uncalled seeder that hands every agency a fire ladder is
+        how the bug this closes would come back the day somebody wires it up.
+
         Args:
             organization_id: Organization ID
             created_by: User ID creating the roles
+            organization_type: Agency type, deciding which positions apply
 
         Returns:
             List of created Role objects
         """
         created_roles = []
 
-        for slug, role_def in DEFAULT_ROLES.items():
+        for slug, role_def in default_positions_for(organization_type).items():
             # Check if role already exists
             existing = await self.get_role_by_slug(db, slug, organization_id)
             if existing:

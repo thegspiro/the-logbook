@@ -1232,6 +1232,78 @@ OPERATIONAL_RANKS: dict[str, dict] = {
 }
 
 
+# ============================================
+# Agency Type — what a department's discipline changes about this vocabulary
+# ============================================
+# Ranks and positions share one code vocabulary, and an agency type changes two
+# things about it: which discipline rungs exist at all, and what a couple of
+# them are called. Both live here, once, because both registries live here —
+# a second copy in the rank service is how ``chief`` and ``fire_chief`` came to
+# name the same thing in two files.
+#
+# **Only disciplines are listed.** Every agency has a chief, captains and
+# lieutenants, so officer codes are absent from these sets and are seeded
+# everywhere by construction. That is deliberate: a code added to a registry
+# and forgotten here is seeded to everybody, which is the recoverable
+# direction. The alternative — enumerating the officers and filtering to that
+# list — silently drops any rung nobody remembered to add.
+
+_FIRE_DISCIPLINES = frozenset({"engineer", "firefighter", "emt"})
+
+# An EMS-only service has the same officer ladder as anyone else and no fire
+# line at all. Firefighter and EMT are independent ranks, not two rungs of one
+# ladder, so dropping one says nothing about the other.
+_EMS_DISCIPLINES = frozenset({"engineer", "emt"})
+
+DISCIPLINE_CODES_BY_ORG_TYPE: dict[str, frozenset[str]] = {
+    "fire_department": _FIRE_DISCIPLINES,
+    "fire_ems_combined": _FIRE_DISCIPLINES,
+    "ems_only": _EMS_DISCIPLINES,
+}
+
+#: Every code that is a discipline for *some* agency. A code outside this set is
+#: universal.
+ALL_DISCIPLINE_CODES: frozenset[str] = frozenset().union(
+    *DISCIPLINE_CODES_BY_ORG_TYPE.values()
+)
+
+# What an agency calls a code, where it differs from the registry's own wording.
+#
+# One map for ranks and positions together, on purpose: a department that calls
+# the rank "Chief" calls the position "Chief" too, and the two screens sit next
+# to each other in settings. The base wording differs between the registries
+# (the rank is "Engineer", the position "Engineer / Driver Operator"); the
+# override does not, which is precisely why it is written once.
+LABELS_BY_ORG_TYPE: dict[str, dict[str, str]] = {
+    "ems_only": {
+        "fire_chief": "Chief",
+        "engineer": "Driver / Operator",
+    },
+}
+
+
+def disciplines_for(organization_type: str | None) -> frozenset[str]:
+    """The discipline codes an agency of this type actually has.
+
+    Falls back to the full fire set for an unknown or missing type: a
+    department handed one rung too many can delete it, while one handed too few
+    has no indication anything is absent.
+    """
+    return DISCIPLINE_CODES_BY_ORG_TYPE.get(organization_type or "", _FIRE_DISCIPLINES)
+
+
+def is_seeded_for(code: str, organization_type: str | None) -> bool:
+    """Whether a rank code / position slug is seeded to this kind of agency."""
+    return code not in ALL_DISCIPLINE_CODES or code in disciplines_for(
+        organization_type
+    )
+
+
+def label_for(code: str, organization_type: str | None, default: str) -> str:
+    """What this agency calls ``code``, or the registry's own wording."""
+    return LABELS_BY_ORG_TYPE.get(organization_type or "", {}).get(code, default)
+
+
 def get_rank_default_permissions(rank: str) -> list[str]:
     """
     Get the default permissions for an operational rank.
@@ -2031,6 +2103,31 @@ DEFAULT_POSITIONS: dict[str, dict] = {
         ],
     },
 }
+
+
+def default_positions_for(organization_type: str | None) -> dict[str, dict]:
+    """The default positions an agency of this type should be seeded.
+
+    An EMS-only service has no firefighters and never will, and its chief is a
+    Chief rather than a Fire Chief. Everything else in the registry is
+    administrative or universal and is seeded to every agency.
+
+    The returned definitions are **shallow** copies, and must stay that way:
+    ``DEFAULT_POSITIONS[slug]["permissions"]`` *is* the rank registry's list
+    object for the seven rank-mirroring slugs (pitfall #23), and copying the
+    list would quietly end the aliasing that
+    ``tests/test_rank_registry_agreement.py`` asserts. Only ``name`` is
+    rewritten, so a caller reading ``permissions`` still gets the shared list.
+    """
+    return {
+        slug: {
+            **definition,
+            "name": label_for(slug, organization_type, definition["name"]),
+        }
+        for slug, definition in DEFAULT_POSITIONS.items()
+        if is_seeded_for(slug, organization_type)
+    }
+
 
 # Backward-compatible alias
 DEFAULT_ROLES = DEFAULT_POSITIONS

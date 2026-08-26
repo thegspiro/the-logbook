@@ -34,10 +34,18 @@ export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps>
   const [editPositions, setEditPositions] = useState<string[]>([]);
   const [editMinStaffing, setEditMinStaffing] = useState(1);
 
-  // Collect all known apparatus types from both the defaults and current apparatus
+  // The types this department is offered: whatever the server sent, plus the
+  // vehicles it actually owns.
+  //
+  // The frontend's own DEFAULT_APPARATUS_TYPE_POSITIONS keys used to be unioned
+  // in as well, which defeated the point of the server narrowing them — an
+  // EMS-only service would still be shown Engine, Ladder, Tanker, Brush, Tower
+  // and Hazmat, with no control to remove them. The server always returns a
+  // complete set, so the union could only ever add back a type it had
+  // deliberately left out. An EMS agency that does own an engine still sees it,
+  // via apparatusList.
   const knownApparatusTypes = useMemo(() => {
     const types = new Set(Object.keys(settings.apparatusTypeDefaults));
-    Object.keys(DEFAULT_APPARATUS_TYPE_POSITIONS).forEach((t) => types.add(t));
     apparatusList.forEach((a) => types.add(a.apparatus_type));
     return Array.from(types).sort();
   }, [settings.apparatusTypeDefaults, apparatusList]);

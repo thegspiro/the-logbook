@@ -4,13 +4,14 @@ Operational Rank Service
 Business logic for per-organization operational rank management.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import is_seeded_for, label_for
 from app.models.operational_rank import OperationalRank
 from app.models.user import Organization, User, UserStatus
 from app.schemas.operational_rank import RankCreate, RankUpdate
@@ -83,6 +84,9 @@ DEFAULT_RANKS = [
 #: row for it while the eligibility fallback still honours it. Validating
 #: against stored rows alone would refuse a rank the rest of the system treats
 #: as valid — the shape of the EMT bug in #1833.
+#:
+#: Note it spans every agency type on purpose, unlike ``default_ranks_for``
+#: below: what a department may *hold* is broader than what it is seeded.
 DEFAULT_RANK_CODES = frozenset(code for code, _l, _o, _p in DEFAULT_RANKS)
 
 
@@ -100,74 +104,42 @@ def rank_not_configured_message(rank: str) -> str:
     )
 
 
-# Rank codes seeded for each agency type, and the labels that differ.
+# Which ranks an agency of each type is seeded, and what it calls them, are one
+# decision shared with the position registry — ``app/core/permissions`` owns it
+# (``is_seeded_for`` / ``label_for``). Two copies is how ``chief`` and
+# ``fire_chief`` came to name the same thing in two files.
 #
-# Firefighter and EMT are independent ranks, not two rungs of one ladder: a
-# member may hold either without the other, and many departments expect both
-# in time without either implying the other. So the discipline ranks are
-# seeded per agency rather than assumed.
+# The rank *codes* are shared across agency types on purpose: they key the
+# permission registry and the shift-eligibility fallback, so a code that exists
+# for one agency must mean the same thing for every other. Only the selection
+# and the labels vary.
 #
-# An EMS-only service is the case that makes this matter. It has the same
-# officer ladder as anyone else, but no firefighters at all, and its chief is
-# a Chief rather than a Fire Chief. The rank *codes* are shared across agency
-# types on purpose — they key the permission registry and the shift-eligibility
-# fallback, so a code that exists for one agency must mean the same thing for
-# every other — and only the labels and the selection vary.
-_FIRE_DISCIPLINE_RANKS = ("engineer", "firefighter", "emt")
-_EMS_DISCIPLINE_RANKS = ("engineer", "emt")
-
-RANK_CODES_BY_ORG_TYPE: Dict[str, Tuple[str, ...]] = {
-    "fire_department": _FIRE_DISCIPLINE_RANKS,
-    "fire_ems_combined": _FIRE_DISCIPLINE_RANKS,
-    "ems_only": _EMS_DISCIPLINE_RANKS,
-}
-
-# Labels an agency type renames. Anything absent keeps its DEFAULT_RANKS label.
-RANK_LABELS_BY_ORG_TYPE: Dict[str, Dict[str, str]] = {
-    "ems_only": {
-        "fire_chief": "Chief",
-        "engineer": "Driver / Operator",
-    },
-}
-
-# The officer ladder every agency gets, whatever it responds to.
-#
-# ``sort_order`` is a flat ranking, not a tree, and deliberately so: who
-# reports to whom is the org chart's job (``OrgChartNode`` carries both a
-# ``parent_id`` and a ``rank_code``), not this list's. That separation is what
-# lets a large department run parallel discipline chiefs — a Fire Chief and an
-# EMS Chief both reporting to a Chief of Department, as FDNY does — by giving
-# the two the same ``sort_order`` and letting the chart record the branch.
-# Nothing is seeded for that shape: it belongs to a handful of very large
-# organizations, and seeding two chiefs to every combined agency would be
-# wrong for the volunteer departments this list is sized for. Those ranks are
-# added in the rank editor, where they will report no default permissions
-# until a position supplies them.
-_COMMAND_RANK_CODES = (
-    "fire_chief",
-    "deputy_chief",
-    "assistant_chief",
-    "captain",
-    "lieutenant",
-)
+# ``sort_order`` is a flat ranking, not a tree, and deliberately so: who reports
+# to whom is the org chart's job (``OrgChartNode`` carries both a ``parent_id``
+# and a ``rank_code``), not this list's. That separation is what lets a large
+# department run parallel discipline chiefs — a Fire Chief and an EMS Chief both
+# reporting to a Chief of Department, as FDNY does — by giving the two the same
+# ``sort_order`` and letting the chart record the branch. Nothing is seeded for
+# that shape: it belongs to a handful of very large organizations, and seeding
+# two chiefs to every combined agency would be wrong for the volunteer
+# departments this list is sized for. Those ranks are added in the rank editor,
+# where they will report no default permissions until a position supplies them.
 
 
 def default_ranks_for(organization_type: Optional[str]) -> List[tuple]:
     """The DEFAULT_RANKS entries an agency of this type should be seeded.
 
-    Falls back to the full fire-department set for an unknown or missing type:
-    a department that ends up with one rank too many can delete it, whereas one
-    seeded too few has no indication anything is absent.
+    Officer ranks are universal and are not enumerated anywhere: ``is_seeded_for``
+    keeps any code that is not a discipline, so a rung added to DEFAULT_RANKS is
+    seeded to every agency until somebody says otherwise. Unknown or missing
+    types fall back to the full fire set for the same reason — a department that
+    ends up with one rank too many can delete it, whereas one seeded too few has
+    no indication anything is absent.
     """
-    discipline = RANK_CODES_BY_ORG_TYPE.get(
-        organization_type or "", _FIRE_DISCIPLINE_RANKS
-    )
-    wanted = set(_COMMAND_RANK_CODES) | set(discipline)
-    labels = RANK_LABELS_BY_ORG_TYPE.get(organization_type or "", {})
     return [
-        (code, labels.get(code, label), order, positions)
+        (code, label_for(code, organization_type, label), order, positions)
         for code, label, order, positions in DEFAULT_RANKS
-        if code in wanted
+        if is_seeded_for(code, organization_type)
     ]
 
 
@@ -242,10 +214,12 @@ class OperationalRankService:
     async def _seed_set(self, organization_id: str) -> List[tuple]:
         """The rank entries to seed, chosen by the organization's agency type.
 
-        Read here rather than taken as an argument so the two existing callers
-        (the ranks endpoint and the apparatus bootstrap) need no change and
-        cannot disagree about it. A missing organization falls back to the full
-        set via ``default_ranks_for``.
+        Read here rather than taken as an argument because the caller is the
+        ranks endpoint, which holds a ``current_user`` and not the organization
+        row. (Positions go the other way: ``create_organization`` already has
+        the org in memory, so ``_create_default_roles`` takes the type as an
+        argument.) A missing organization falls back to the full set via
+        ``default_ranks_for``.
         """
         result = await self.db.execute(
             select(Organization.organization_type).where(

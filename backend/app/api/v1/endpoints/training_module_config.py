@@ -138,8 +138,14 @@ async def get_my_training_summary(
         )
         user_with_roles = user_result.scalar_one_or_none()
         if user_with_roles and user_with_roles.roles:
-            role_names = [r.name for r in user_with_roles.roles]
-            is_officer = any(r in role_names for r in TRAINING_OFFICER_ROLE_SLUGS)
+            # Slugs, not names. This compared TRAINING_OFFICER_ROLE_SLUGS
+            # against Position.name until 2026-08-26 — the seeded names are
+            # "Training Officer" and "Fire Chief", so the check was
+            # unconditionally False on every installation and a training
+            # officer opening /my-training got the plain member's visibility
+            # policy: their own history, hours and narrative hidden from them.
+            role_slugs = [r.slug for r in user_with_roles.roles]
+            is_officer = any(r in role_slugs for r in TRAINING_OFFICER_ROLE_SLUGS)
     except Exception as e:
         logger.warning(
             f"Failed to check training officer role for user {current_user.id}: {e}"
