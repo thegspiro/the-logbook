@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Megaphone, Pin, CheckCheck, ChevronRight, AlertCircle } from 'lucide-react';
+import { Megaphone, Pin, CheckCheck, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
 import { Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
 import { messagesService } from '../../../services/api';
 import type { InboxMessage } from '../../../services/adminServices';
@@ -19,24 +19,46 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { MESSAGE_PRIORITY_BADGE } from '../constants/messages';
 
 const MessagesInboxPage: React.FC = () => {
+  const pageSize = 20;
   const tz = useTimezone();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [includeRead, setIncludeRead] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await messagesService.getInbox({ include_read: includeRead });
+      const data = await messagesService.getInbox({ include_read: includeRead, skip: 0, limit: pageSize });
       setMessages(data);
+      setHasMore(data.length === pageSize);
     } catch {
       setError('Unable to load your messages. Please try again.');
     } finally {
       setIsLoading(false);
     }
   }, [includeRead]);
+
+  const loadMore = async () => {
+    setIsLoadingMore(true);
+    setError(null);
+    try {
+      const data = await messagesService.getInbox({
+        include_read: includeRead,
+        skip: messages.length,
+        limit: pageSize,
+      });
+      setMessages((current) => [...current, ...data]);
+      setHasMore(data.length === pageSize);
+    } catch {
+      setError('Unable to load more messages. Please try again.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -125,6 +147,20 @@ const MessagesInboxPage: React.FC = () => {
             </li>
           ))}
         </ul>
+      )}
+
+      {messages.length > 0 && hasMore && (
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={() => void loadMore()}
+            disabled={isLoadingMore}
+            className="btn-secondary inline-flex items-center gap-2 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60 max-md:min-h-[44px]"
+          >
+            {isLoadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {isLoadingMore ? 'Loading…' : 'Load more messages'}
+          </button>
+        </div>
       )}
     </div>
   );

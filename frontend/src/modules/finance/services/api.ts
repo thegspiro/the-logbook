@@ -21,6 +21,7 @@ import type {
   MemberDues,
   PendingApproval,
   PurchaseRequest,
+  MonetaryAmount,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -116,7 +117,7 @@ export const budgetService = {
   async create(data: {
     fiscalYearId: string;
     categoryId: string;
-    amountBudgeted: number;
+    amountBudgeted: MonetaryAmount;
     notes?: string;
     stationId?: string;
   }): Promise<Budget> {
@@ -190,7 +191,7 @@ export const approvalChainService = {
     await api.delete(`/finance/approval-chains/${chainId}/steps/${stepId}`);
   },
 
-  async preview(params: { entityType: string; amount: number; categoryId?: string }): Promise<ApprovalChain> {
+  async preview(params: { entityType: string; amount: MonetaryAmount; categoryId?: string }): Promise<ApprovalChain> {
     const response = await api.get<ApprovalChain>('/finance/approval-chains/preview', {
       params: {
         entity_type: params.entityType,
@@ -272,7 +273,7 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  async markPaid(id: string, actualAmount?: number): Promise<PurchaseRequest> {
+  async markPaid(id: string, actualAmount?: MonetaryAmount): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/mark-paid`, undefined, {
       params: { actual_amount: actualAmount },
     });
@@ -410,7 +411,7 @@ export const duesService = {
   async recordPayment(
     duesId: string,
     data: {
-      amountPaid: number;
+      amountPaid: MonetaryAmount;
       paymentMethod?: string;
       transactionReference?: string;
       notes?: string;

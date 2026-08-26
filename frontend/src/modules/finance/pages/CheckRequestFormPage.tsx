@@ -72,7 +72,7 @@ const CheckRequestFormPage: React.FC = () => {
     try {
       const payload: Partial<CheckRequest> = {
         payeeName: data.payeeName,
-        amount: data.amount,
+        amount: data.amount.toFixed(2),
         fiscalYearId: data.fiscalYearId,
       };
       if (data.payeeAddress?.trim()) payload.payeeAddress = data.payeeAddress.trim();
@@ -165,7 +165,8 @@ const CheckRequestFormPage: React.FC = () => {
               {budgets.map((b) => (
                 <option key={b.id} value={b.id}>
                   {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {formatCurrencyWhole(b.amountBudgeted - b.amountSpent - b.amountEncumbered)} remaining
+                  {formatCurrencyWhole(Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered))}{' '}
+                  remaining
                 </option>
               ))}
             </select>

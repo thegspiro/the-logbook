@@ -71,13 +71,13 @@ const InventoryMembersPage: React.FC = () => {
   const [memberDetail, setMemberDetail] = useState<UserInventoryResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Barcode scan modal (assign / checkout)
+  // Barcode scan modal (distribution / return)
   const [scanModal, setScanModal] = useState<{
     isOpen: boolean;
-    mode: 'checkout' | 'return';
+    mode: 'distribute' | 'return';
     userId: string;
     memberName: string;
-  }>({ isOpen: false, mode: 'checkout', userId: '', memberName: '' });
+  }>({ isOpen: false, mode: 'distribute', userId: '', memberName: '' });
 
   // Return modal
   const [returnModal, setReturnModal] = useState<{
@@ -141,7 +141,7 @@ const InventoryMembersPage: React.FC = () => {
   const openScanModal = (m: MemberInventorySummary) => {
     setScanModal({
       isOpen: true,
-      mode: 'checkout',
+      mode: 'distribute',
       userId: m.user_id,
       memberName: m.full_name || m.username,
     });
@@ -151,7 +151,7 @@ const InventoryMembersPage: React.FC = () => {
     setMemberScannerOpen(false);
     setScanModal({
       isOpen: true,
-      mode: 'checkout',
+      mode: 'distribute',
       userId: scanned.userId,
       memberName: scanned.memberName,
     });
