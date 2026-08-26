@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1905 (feature 23, medical supplies) — open, awaiting CI/review.
+None — PR #1905 (feature 23, medical supplies) merged. Next iteration starts feature 24 (meetings & minutes).
 
 ---
 
@@ -67,7 +67,7 @@ data-carrying modules, then the supporting infrastructure.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳              |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
@@ -872,3 +872,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   and 8897/8897 full backend suite pass. Findings doc:
   `docs/security-review/MSUP-23-medical-supplies.md`. PR #1905 opened and
   subscribed. Next: 24 meetings & minutes, once #1905 merges.
+- **23 Medical supplies ✅ merged** — PR #1905 merged 2026-08-26. Codex was
+  over its usage limit for security reviews on this PR (no review
+  produced); CI passed clean on the first push, no fix round needed.
+  Next: 24 meetings & minutes.
