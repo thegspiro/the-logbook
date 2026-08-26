@@ -74,7 +74,7 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
     expect(screen.getByText('pending')).toBeInTheDocument();
-    expect(screen.getByText('checkout')).toBeInTheDocument();
+    expect(screen.getByText('Temporary loan')).toBeInTheDocument();
     expect(screen.getByText(/John Doe/)).toBeInTheDocument();
     expect(screen.getByText(/Need for shift/)).toBeInTheDocument();
   });

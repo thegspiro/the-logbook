@@ -2,10 +2,10 @@
  * Inventory Scan Modal
  *
  * A modal that lets the quartermaster scan barcodes (or type codes manually)
- * to build a list of items, then submit them as a batch checkout or batch return.
+ * to build a list of items, then submit a distribution or batch return.
  *
  * Flow:
- *  1. Open modal from a member's profile ("Check-out Items" or "Return Items")
+ *  1. Open the distribution or return scanner from a member's profile
  *  2. Scan/type a code → item appears in the list instantly
  *  3. Repeat for all items
  *  4. Review the list, then tap "Confirm" to submit the batch
@@ -578,7 +578,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
     try {
       if (mode === 'checkout') {
-        const response = await inventoryService.batchCheckout({
+        const response = await inventoryService.distributeItems({
           user_id: userId,
           items: scannedItems.map((si) => ({
             code: si.code,
@@ -610,18 +610,23 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
   // ── Render ───────────────────────────────────────────────────
 
-  const title = mode === 'checkout' ? 'Assign Items' : 'Return Items';
+  const title = mode === 'checkout' ? 'Distribute Gear' : 'Receive Returns';
   const showResults = results !== null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg" closeOnClickOutside={false}>
       <div className="space-y-4">
+        <p className="text-theme-text-secondary text-sm">
+          {mode === 'checkout'
+            ? 'Distribution is the umbrella action: each scanned item becomes an assignment, temporary loan, or issuance based on how it is tracked.'
+            : 'A return physically receives assigned or issued gear; a check-in closes a temporary loan.'}
+        </p>
         {/* Member info */}
         <div className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-3">
           <Package className="text-theme-text-muted h-5 w-5" />
           <div>
             <span className="text-theme-text-muted text-sm">
-              {mode === 'checkout' ? 'Assigning to' : 'Returning from'}:
+              {mode === 'checkout' ? 'Distributing to' : 'Receiving from'}:
             </span>
             <span className="text-theme-text-primary ml-2 font-medium">{memberName}</span>
           </div>
@@ -938,7 +943,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   {mode === 'checkout'
-                    ? `Assign ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
+                    ? `Distribute ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
                     : `Return ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`}
                 </button>
               </div>
@@ -950,11 +955,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/50">
             <DialogPanel onClose={() => setShowConfirm(false)} className="mx-4 max-w-sm p-5">
               <h4 className="text-theme-text-primary mb-2 font-medium">
-                Confirm {mode === 'checkout' ? 'Assignment' : 'Return'}
+                Confirm {mode === 'checkout' ? 'Distribution' : 'Return'}
               </h4>
               <p className="text-theme-text-secondary mb-4 text-sm">
                 {mode === 'checkout'
-                  ? `Assign ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
+                  ? `Distribute ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
                   : `Return ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} from ${memberName}?`}
               </p>
               <div className="flex justify-end gap-3">

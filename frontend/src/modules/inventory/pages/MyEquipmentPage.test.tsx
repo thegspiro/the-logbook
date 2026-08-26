@@ -139,7 +139,8 @@ describe('MyEquipmentPage', () => {
   it('shows empty section messaging when nothing is assigned', async () => {
     renderWithRouter(<MyEquipmentPage />);
     expect(await screen.findByText('No permanent assignments.')).toBeInTheDocument();
-    expect(screen.getByText('No active checkouts.')).toBeInTheDocument();
+    expect(screen.getByText('No active temporary loans.')).toBeInTheDocument();
+    expect(screen.getByText('Active Temporary Loans')).toBeInTheDocument();
     expect(screen.getByText('No issued items.')).toBeInTheDocument();
   });
 

@@ -157,7 +157,7 @@ describe('InventoryAdminHub', () => {
       'Categories',
       'Members',
       'Maintenance',
-      'Checkouts',
+      'Temporary Loans',
       'Charges',
       'Return Requests',
       'Storage Areas',

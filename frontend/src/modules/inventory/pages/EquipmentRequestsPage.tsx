@@ -27,6 +27,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
+import { equipmentRequestTypeLabel } from '../terminology';
 
 const EquipmentRequestsPage: React.FC = () => {
   const pageSize = 25;
@@ -220,7 +221,7 @@ const EquipmentRequestsPage: React.FC = () => {
                         {req.status}
                       </span>
                       <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
-                        {req.request_type}
+                        {equipmentRequestTypeLabel(req.request_type)}
                       </span>
                     </div>
                     <p className="text-theme-text-muted text-xs">
@@ -341,7 +342,7 @@ const EquipmentRequestsPage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {reviewModal.request.requester_name ?? 'Unknown'}</p>
-                <p>Type: {reviewModal.request.request_type}</p>
+                <p>Type: {equipmentRequestTypeLabel(reviewModal.request.request_type)}</p>
                 <p>Quantity: {reviewModal.request.quantity}</p>
                 {reviewModal.request.reason && <p className="mt-1">Reason: {reviewModal.request.reason}</p>}
               </div>
@@ -397,7 +398,7 @@ const EquipmentRequestsPage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {fulfillModal.request.requester_name ?? 'Unknown'}</p>
-                <p>Type: {fulfillModal.request.request_type}</p>
+                <p>Type: {equipmentRequestTypeLabel(fulfillModal.request.request_type)}</p>
               </div>
 
               <div>
@@ -423,8 +424,8 @@ const EquipmentRequestsPage: React.FC = () => {
                   })}
                 </select>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  Pool items are issued; individual items are{' '}
-                  {fulfillModal.request.request_type === 'checkout' ? 'checked out' : 'assigned'}.
+                  Quantity-tracked stock creates an issuance; serialized gear creates a{' '}
+                  {fulfillModal.request.request_type === 'checkout' ? 'temporary loan' : 'assignment'}.
                 </p>
               </div>
 
