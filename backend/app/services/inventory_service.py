@@ -742,9 +742,7 @@ class InventoryService:
                     label="parent category",
                 )
 
-            for key, value in update_data.items():
-                if hasattr(category, key):
-                    setattr(category, key, value)
+            apply_updates(category, update_data, skip={"id", "organization_id"})
 
             await self.db.commit()
             await self.db.refresh(category)
@@ -1777,8 +1775,7 @@ class InventoryService:
             # must be in the caller's org.
             await self._assert_item_fks_in_org(update_data, organization_id)
 
-            for key, value in update_data.items():
-                setattr(item, key, value)
+            apply_updates(item, update_data, skip={"id", "organization_id"})
 
             # Keep current_value in sync when purchase_price changes
             if "purchase_price" in update_data and "current_value" not in update_data:
@@ -5637,13 +5634,17 @@ class InventoryService:
         organization_id: str,
         data: Dict[str, Any],
     ) -> Optional[InventoryLot]:
-        """Update a stock lot."""
+        """Update a stock lot.
+
+        Raises ``ValueError`` if `data` sends an explicit null against a
+        NOT NULL column (`quantity`) — callers already catch `ValueError`
+        from the sibling `add_lots_bulk` on this same router and convert it
+        to a 400.
+        """
         lot = await self._get_lot(lot_id, organization_id)
         if not lot:
             return None
-        for key, value in data.items():
-            if hasattr(lot, key):
-                setattr(lot, key, value)
+        apply_updates(lot, data, skip={"id", "organization_id", "inventory_item_id"})
         await self.db.commit()
         await self.db.refresh(lot)
         return lot
