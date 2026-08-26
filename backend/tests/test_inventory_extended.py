@@ -1367,11 +1367,11 @@ class TestBarcodeLabels:
 # ── Additional Batch Checkout Tests ────────────────────────────────
 
 
-class TestBatchCheckoutExtended:
+class TestItemDistributionExtended:
 
     @pytest.mark.asyncio
-    async def test_batch_checkout_pool_items(self, db_session, setup_org_and_user):
-        """Batch checkout issues pool items correctly."""
+    async def test_distribute_items_pool_items(self, db_session, setup_org_and_user):
+        """Item distribution issues pool items according to pool policy."""
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -1388,11 +1388,17 @@ class TestBatchCheckoutExtended:
             created_by=uuid.UUID(user_id),
         )
 
-        result = await svc.batch_checkout(
+        result = await svc.distribute_items(
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
-            items=[{"code": "BC-POOL-001", "quantity": 5}],
+            items=[
+                {
+                    "code": "BC-POOL-001",
+                    "quantity": 5,
+                    "operation": "permanent_assignment",
+                }
+            ],
         )
 
         assert result["successful"] == 1
@@ -1403,10 +1409,10 @@ class TestBatchCheckoutExtended:
         assert refreshed.quantity_issued == 5
 
     @pytest.mark.asyncio
-    async def test_batch_checkout_unavailable_item(
+    async def test_distribute_items_unavailable_item(
         self, db_session, setup_org_and_user
     ):
-        """Batch checkout fails for items in maintenance."""
+        """Item distribution fails for items in maintenance."""
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -1421,11 +1427,17 @@ class TestBatchCheckoutExtended:
             created_by=uuid.UUID(user_id),
         )
 
-        result = await svc.batch_checkout(
+        result = await svc.distribute_items(
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
-            items=[{"code": "BC-BROKEN", "quantity": 1}],
+            items=[
+                {
+                    "code": "BC-BROKEN",
+                    "quantity": 1,
+                    "operation": "permanent_assignment",
+                }
+            ],
         )
 
         assert result["failed"] == 1

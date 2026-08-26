@@ -27,8 +27,8 @@ import type {
   CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
-  BatchCheckoutRequest,
-  BatchCheckoutResponse,
+  DistributeItemsRequest,
+  DistributeItemsResponse,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -460,8 +460,8 @@ export const inventoryService = {
     return response.data;
   },
 
-  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
-    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+  async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
+    const response = await api.post<DistributeItemsResponse>('/inventory/distribute-items', data);
     return response.data;
   },
 
