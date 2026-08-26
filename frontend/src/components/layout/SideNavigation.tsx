@@ -294,7 +294,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
           : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
-        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }] : []),
+        ...(isModuleOn('facilities')
+          ? [
+              {
+                label: 'Facilities',
+                path: '/facilities',
+                icon: Building2,
+                anyPermission: ['facilities.view', 'facilities.manage'],
+              },
+            ]
+          : []),
       ],
     },
     // When Facilities module is off, show a lightweight Locations page

@@ -136,6 +136,7 @@ const COMMANDS: CommandItem[] = [
     icon: Building2,
     section: 'Navigation',
     keywords: ['buildings', 'stations'],
+    anyPermission: ['facilities.view', 'facilities.manage'],
   },
   {
     id: 'locations',

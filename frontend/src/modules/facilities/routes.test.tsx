@@ -21,9 +21,13 @@ vi.mock('../../components/ProtectedRoute', () => ({
   },
 }));
 
-import { getFacilitiesRoutes } from './routes';
+import { FACILITIES_ACCESS_PERMISSIONS, getFacilitiesRoutes } from './routes';
 
 describe('getFacilitiesRoutes', () => {
+  it('defines facility workspace access for authorized readers and managers', () => {
+    expect(FACILITIES_ACCESS_PERMISSIONS).toEqual(['facilities.view', 'facilities.manage']);
+  });
+
   it('restricts the bulk QR code directory to managers and apparatus viewers', async () => {
     capturedAnyPermissions.length = 0;
     render(

@@ -184,7 +184,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
-        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities' }] : []),
+        ...(isModuleOn('facilities')
+          ? [
+              {
+                label: 'Facilities',
+                path: '/facilities',
+                anyPermission: ['facilities.view', 'facilities.manage'],
+              },
+            ]
+          : []),
       ],
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),

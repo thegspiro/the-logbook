@@ -181,6 +181,23 @@ room-owned rather than bidirectional, which is a sound design but narrower than
 
 ## Active gaps and improvement opportunities
 
+### FAC-P10 — HIGH access boundary — Facilities was seeded as a member workspace — ✅ FIXED (2026-08-26)
+
+The backend routes were permission-gated, but both rank-and-file operational
+ranks and the default Member position were seeded with `facilities.view`.
+Consequently the nominal permission boundary still admitted every regular
+member to facility records. The baseline grant has been removed from Member,
+Firefighter, EMT, and Engineer defaults and a migration revokes it from their
+existing system positions. Leadership continues to inherit
+`facilities.view`; the Facilities Manager retains `facilities.manage` and the
+full workflow.
+
+The side navigation, top navigation, and command palette now apply the same
+view-or-manage entry check as the protected routes. This avoids advertising a
+page that will reject the user, reduces unnecessary route prefetch/API work,
+and keeps authorization enforcement on the backend rather than relying on
+hidden UI alone.
+
 ### FAC-P2 — MEDIUM correctness/scale — Counts and dashboard rows have different scopes
 
 **✅ Fixed 2026-08-20:** `/facilities/dashboard` now returns organization-wide
