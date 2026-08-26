@@ -150,6 +150,30 @@ class TestRankIsConfigured:
         update_src = inspect.getsource(users_ep.update_user_profile)
         assert 'update_data["rank"] = await _canonical_rank_or_400' in update_src
 
+    async def test_writers_check_the_canonical_rank_against_the_ceiling(self):
+        """Formatting variants must not bypass the permission grant ceiling.
+
+        Rank resolution intentionally accepts case and surrounding whitespace.
+        Both endpoint writers must therefore resolve the value before checking
+        the permissions that its canonical form grants.
+        """
+        import inspect
+
+        from app.api.v1.endpoints import users as users_ep
+
+        create_src = inspect.getsource(users_ep.create_member)
+        assert create_src.index("canonical_rank = await") < create_src.index(
+            "_enforce_rank_grant_ceiling("
+        )
+        assert "current_user, canonical_rank," in create_src
+
+        update_src = inspect.getsource(users_ep.update_user_profile)
+        canonicalize = 'update_data["rank"] = await _canonical_rank_or_400'
+        assert update_src.index(canonicalize) < update_src.index(
+            "_enforce_rank_grant_ceiling("
+        )
+        assert 'perm_user, update_data["rank"],' in update_src
+
     async def test_the_prospect_transfer_path_checks_too(self):
         """The third writer, and the one furthest from the users endpoints.
 
